@@ -4498,6 +4498,22 @@ select.form-input {
   align-items: stretch;
   position: relative; /* anchor for absolutely-positioned tab */
   height: clamp(560px, 88vh, 860px); /* must match .submit-modal height */
+  /* Compensate for flex re-centering when pane opens: shift group right by half the pane width
+     so the modal stays at its original visual position and the pane grows rightward only.
+     Must match the pane-open transform below and the doc-pane width (300px / 2 = 150px). */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.step-modal-group.pane-open {
+  transform: translateX(150px); /* 300px pane ÷ 2 — keep in sync with .doc-pane.is-open width */
+}
+
+/* Pin modal to a fixed flex width so it never narrows during loading or content changes */
+.step-modal-group .submit-modal {
+  flex: 0 0 640px;
+}
+.step-modal-group .submit-modal.submit-modal-wide {
+  flex-basis: 920px;
 }
 
 /* Modal right corners square off seamlessly when pane is open */
