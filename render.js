@@ -2095,7 +2095,27 @@ function buildImproveSubmissionSection(platformId) {
   const metGrade = ana?.scores?.metadata || null;
   const mergedGrade = _worseGrade(spGrade, _worseGrade(assGrade, metGrade));
 
-  // Truncate long text values for display in choice boxes
+  // For description fields: find the first word where current and fix diverge,
+  // then show context around that point so the actual change is visible.
+  function _relevantExcerpt(current, fix, maxLen) {
+    const words = current.split(' ');
+    const fixWords = fix.split(' ');
+    let diffWord = 0;
+    for (let i = 0; i < Math.min(words.length, fixWords.length); i++) {
+      if (words[i] !== fixWords[i]) { diffWord = i; break; }
+    }
+    // Find char offset of the differing word, back up a few words for context
+    const contextWords = Math.max(0, diffWord - 4);
+    const charStart = words.slice(0, contextWords).join(' ').length + (contextWords ? 1 : 0);
+    const prefix = charStart > 0 ? '…' : '';
+    const cExcerpt = prefix + current.slice(charStart);
+    const fExcerpt = prefix + fix.slice(charStart);
+    // Truncate to maxLen
+    const trunc = (s) => s.length > maxLen ? s.slice(0, maxLen) + '…' : s;
+    return { current: trunc(cExcerpt), fix: trunc(fExcerpt) };
+  }
+
+  // Simple truncate for short fields (title, subtitle)
   function _trunc(s, max) { return s.length > max ? s.slice(0, max) + '…' : s; }
 
   let spPageContent = '', spPageFooter = '';
@@ -2119,8 +2139,16 @@ function buildImproveSubmissionSection(platformId) {
           : cur.field === 'subtitle' ? (state.formData.subtitle || state.formData.description?.slice(0,80) || '')
           : cur.field === 'title'    ? (state.formData.title || '')
           : '';
-        const currentDisplay = escHtml(_trunc(fieldCurrentValue || '(empty)', 180));
-        const fixDisplay     = escHtml(_trunc(cur.fixedValue, 180));
+        // For long description fields, show the excerpt around where the change is
+        let currentDisplay, fixDisplay;
+        if (cur.field === 'description' && fieldCurrentValue && cur.fixedValue) {
+          const ex = _relevantExcerpt(fieldCurrentValue, cur.fixedValue, 180);
+          currentDisplay = escHtml(ex.current);
+          fixDisplay     = escHtml(ex.fix);
+        } else {
+          currentDisplay = escHtml(_trunc(fieldCurrentValue || '(empty)', 180));
+          fixDisplay     = escHtml(_trunc(cur.fixedValue, 180));
+        }
 
         // Side-by-side choice boxes — clicking selects that option and advances
         spPageContent = `

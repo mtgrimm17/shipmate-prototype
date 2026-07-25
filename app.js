@@ -1166,16 +1166,25 @@ function _doFinalSubmit(platformId, trackId) {
     // Flip-in: start from -90deg, ease to 0deg
     const newCard = document.getElementById('active-card-' + platformId);
     if (newCard) {
+      // Pin height to prevent layout shift while animating
+      if (cardHeight > 0) newCard.style.minHeight = cardHeight + 'px';
       newCard.style.transform = 'perspective(700px) rotateY(-90deg)';
       newCard.style.transition = 'none';
       // Double rAF ensures the starting state is painted before the transition begins
       requestAnimationFrame(() => requestAnimationFrame(() => {
         newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
-        setTimeout(() => { newCard.style.transition = ''; newCard.style.transform = ''; }, 340);
+        setTimeout(() => {
+          newCard.style.transition = '';
+          newCard.style.transform  = '';
+          newCard.style.minHeight  = ''; // release pin once animation ends
+        }, 340);
       }));
     }
   }
+
+  // Capture height before flip so submitted card can match it (prevents layout shift)
+  const cardHeight = card ? card.offsetHeight : 0;
 
   if (card) {
     // Flip-out: rotate to 90deg, then swap
@@ -1210,18 +1219,24 @@ function cancelSubmission(pid) {
 
   // Reverse-flip animation: rotate out → swap content → rotate in
   const card = document.getElementById('active-card-' + pid);
+  const cardHeight = card ? card.offsetHeight : 0;
 
   function _applyUnflip() {
     if (state.platformFlipped) delete state.platformFlipped[pid];
     renderDashboard();
     const newCard = document.getElementById('active-card-' + pid);
     if (newCard) {
+      if (cardHeight > 0) newCard.style.minHeight = cardHeight + 'px';
       newCard.style.transform = 'perspective(700px) rotateY(90deg)';
       newCard.style.transition = 'none';
       requestAnimationFrame(() => requestAnimationFrame(() => {
         newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
-        setTimeout(() => { newCard.style.transition = ''; newCard.style.transform = ''; }, 340);
+        setTimeout(() => {
+          newCard.style.transition = '';
+          newCard.style.transform  = '';
+          newCard.style.minHeight  = '';
+        }, 340);
       }));
     }
   }
@@ -2280,23 +2295,32 @@ async function runStorePageInsights() {
   const title = fd.title || '(no title)';
   const desc  = fd.description || '(no description)';
 
-  const prompt = `You are a professional App Store listing consultant reviewing a mobile game's store page.
+  const subtitle = state.formData.subtitle || '';
+  const prompt = `You are a senior App Store listing consultant. Review this mobile game listing and identify up to 5 HIGH-IMPACT improvements that would meaningfully increase downloads.
 
-Game: "${title}"
-Description: "${desc.slice(0, 800)}${desc.length > 800 ? '…' : ''}"
+GAME: "${title}"
+SUBTITLE (current, max 30 chars): "${subtitle}"
+DESCRIPTION (current): "${desc.slice(0, 1200)}${desc.length > 1200 ? '…' : ''}"
 
-Identify up to 5 specific, actionable improvements for this listing. Focus on what would most increase downloads.
-Each issue should target a specific field: "subtitle" (max 30 chars) or "description" (max 4000 chars).
+STRICT RULES — violations result in the suggestion being discarded:
+1. Every suggestion MUST include a concrete "fixedValue" — the exact replacement text ready to copy-paste. No "fixedValue" = omit the suggestion.
+2. Each suggestion must target a DISTINCT weakness. No overlapping or redundant issues.
+3. Changes must be SUBSTANTIAL, not cosmetic. Minor rephrasing ("one to eight" → "1–8") does not qualify.
+4. "fixedValue" for subtitle: max 30 characters. "fixedValue" for description: preserve the overall length, making targeted insertions or replacements that add the missing information.
+5. Do NOT suggest removing content — only adding or replacing.
+6. Prioritize: missing gameplay specifics > weak hook > absent genre signal > unclear audience > missing key feature.
 
-Respond ONLY with valid JSON — an array of objects, no extra text, no markdown:
+Respond ONLY with valid JSON — a JSON array, no markdown, no preamble:
 [
   {
     "field": "subtitle",
-    "issue": "One sentence describing the specific problem",
-    "suggestion": "One sentence explaining what makes a great version",
-    "fixedValue": "The improved text"
+    "issue": "One sentence naming the specific gap (e.g., 'Subtitle doesn't mention the core mechanic')",
+    "suggestion": "One sentence explaining what the fix achieves",
+    "fixedValue": "Exact replacement text"
   }
-]`;
+]
+
+Return an EMPTY ARRAY [] if no high-impact improvements exist. Return FEWER than 5 if you cannot find 5 distinct, substantial improvements.`;
 
   try {
     const res = await fetch(CLAUDE_ENDPOINT, {
@@ -2336,25 +2360,20 @@ function _getCurrentMergedStoreItems() {
 
   const spItems = (!spi?.loading && !spi?.error && spi?.issues)
     ? spi.issues
-        .filter(iss => !iss.field || !(iss.field in accepted)) // skip already-accepted fixes
+        .filter(iss => !!iss.fixedValue)                        // must have a concrete fix
+        .filter(iss => !iss.field || !(iss.field in accepted))  // skip already-accepted
         .map(iss => ({
           tag: { subtitle:'Subtitle', description:'Description', title:'Title' }[iss.field] || 'Store Page',
           title: iss.issue || iss.title || '',
           body:  iss.suggestion || iss.body || '',
-          fixedValue: iss.fixedValue || null,
+          fixedValue: iss.fixedValue,
           field: iss.field || null,
           type:  'sp',
         }))
     : [];
 
-  const anaItems = (!ana?.loading && !ana?.error && ana?.items)
-    ? (ana.items || [])
-        .filter(t => ['store','asset','icon','screenshot','metadata','tag','keyword']
-          .some(k => (t.area || '').toLowerCase().includes(k)))
-        .map(item => ({ tag: item.area || 'Store Page', title: item.title || '', body: item.body || '', type: 'ana' }))
-    : [];
-
-  const all = [...spItems, ...anaItems].slice(0, 5);
+  // anaItems are informational only (no fixedValue) — omitted per policy
+  const all = spItems.slice(0, 5);
   // Remove dismissed items by identity (title + field) — robust against index shifts
   return all.filter(item => !dismissed.has(item.title + '||' + (item.field || '')));
 }

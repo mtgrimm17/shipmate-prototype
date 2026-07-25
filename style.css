@@ -1692,6 +1692,14 @@ body {
   display: block;
 }
 
+/* Text-only wordmark shown until a proper Shipmate logo is provided */
+.topbar-wordmark {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
 .logo {
   display: flex;
   align-items: center;
@@ -2798,11 +2806,20 @@ body {
 /* Screenshots */
 .ias-shots-scroll {
   display: flex; gap: 8px;
-  padding: 14px 16px 10px;
-  overflow-x: auto; scrollbar-width: none;
+  padding: 14px 16px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) transparent;
   align-items: flex-start;
+  /* Scroll-snap for a store-like feel */
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
-.ias-shots-scroll::-webkit-scrollbar { display: none; }
+.ias-shots-scroll::-webkit-scrollbar { height: 4px; }
+.ias-shots-scroll::-webkit-scrollbar-track { background: transparent; }
+.ias-shots-scroll::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+.ias-shot-frame { scroll-snap-align: start; }
 .ias-shot-frame {
   flex-shrink: 0; height: 230px; width: auto; min-width: 80px; max-width: 420px;
   border-radius: 12px; overflow: hidden;
@@ -4329,7 +4346,7 @@ select.form-input {
 .submit-modal-subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
 .submit-modal-scroll {
-  flex: 1; overflow-y: auto;
+  flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 20px 24px 4px;
   min-height: 0;
 }

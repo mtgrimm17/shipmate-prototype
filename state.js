@@ -1041,8 +1041,8 @@ function computeIOSSectionRisk(sectionId) {
   }
 
   if (sectionId === 'privacy') {
-    const url = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
-    if (!url) return 'HIGH';
+    // Privacy URL completeness is surfaced via required-field alerts (after Save & Close),
+    // not via the risk dot — so we only evaluate the data-collection answer here.
     return evalFields(['collectsData']);
   }
 
