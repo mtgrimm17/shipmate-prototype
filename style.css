@@ -28,7 +28,7 @@
   --sel-border:    #60a5fa;
   --sel-shadow:    rgba(96, 165, 250, 0.25);
 
-  /* ── Subwoofer tip tokens ── */
+  /* ── Shipmate tip tokens ── */
   --sw-tip-color:  #fb923c;
   --sw-tip-bg:     rgba(251, 146, 60, 0.06);
   --sw-tip-border: rgba(251, 146, 60, 0.20);
@@ -1110,10 +1110,10 @@ body {
    CANONICAL UI COMPONENTS — reuse these everywhere
    ═══════════════════════════════════════════════════════
 
-   sw-tip-box              Green informational box (Subwoofer Tips & AI pre-pop banner)
+   sw-tip-box              Green informational box (Shipmate Tips & AI pre-pop banner)
    ├── sw-tip-icon-circle  17px green circle with icon text (use "!" or "✦")
    ├── sw-tip-text         Body text (color: text-dim)
-   ├── sw-tip-bold         Bold label inside tip text (color: sw-tip-color green)
+   ├── sw-tip-bold         Bold label inside tip text (color: sw-tip-color)
    └── ai-see-prompt-btn   Subtle green button inside AI tip box (no underline)
 
    alert-box               Red/magenta rejection-risk warning (same structure as sw-tip-box)
@@ -1233,9 +1233,9 @@ body {
   margin-left: -14px;
 }
 
-/* ─── Subwoofer tip system ────────────────────────────── */
+/* ─── Shipmate tip system ────────────────────────────── */
 
-/* Subwoofer tip icon — ! version of tooltip-icon */
+/* Shipmate tip icon — ! version of tooltip-icon */
 .sw-tip-icon {
   width: 15px;
   height: 15px;
@@ -1262,8 +1262,8 @@ body {
   height: 13px;
   border-radius: 50%;
   background: transparent;
-  border: 1px solid #4ade80;
-  color: #4ade80;
+  border: 1px solid var(--sw-tip-color);
+  color: var(--sw-tip-color);
   font-size: 8px;
   font-weight: 700;
   cursor: default;
@@ -1271,7 +1271,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Always-visible Subwoofer tip box */
+/* Always-visible Shipmate tip box */
 .sw-tip-box {
   display: flex;
   align-items: flex-start;
@@ -1301,7 +1301,7 @@ body {
   padding-left: 23px; /* aligns with text after icon */
 }
 
-/* Subwoofer logo icon — replaces the ! circle in tip boxes */
+/* Shipmate logo icon — replaces the ! circle in tip boxes */
 .sw-tip-logo {
   flex-shrink: 0;
   width: 17px;
@@ -7111,7 +7111,7 @@ body.is-splash .profile-wrap        { display: none; }
   height: 100%;
 }
 
-/* Subwoofer Fix button */
+/* Shipmate Fix button */
 .iys-fix-btn {
   display: inline-flex;
   align-items: center;
@@ -7138,6 +7138,55 @@ body.is-splash .profile-wrap        { display: none; }
 }
 .iys-fix-btn-goto:hover { background: var(--panel-3); color: var(--text); }
 .iys-fix-btn-goto img { opacity: 0.5; }
+
+/* ── Current / New suggestion rows ─────────────────── */
+.iys-current-new {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.iys-cn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.iys-cn-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.iys-cn-current {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.iys-cn-textarea {
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--sw-tip-color);
+  border-radius: 6px;
+  padding: 7px 9px;
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.iys-cn-textarea:focus {
+  outline: none;
+  border-color: var(--sw-tip-color);
+  box-shadow: 0 0 0 2px rgba(251,146,60,0.18);
+}
 
 /* Applied state tag */
 .iys-applied-tag {
@@ -7346,4 +7395,38 @@ body.is-splash .profile-wrap        { display: none; }
 .submitted-ts {
   font-size: 11px;
   color: var(--text-faint);
+}
+
+/* Cancel submission button inside submitted card */
+.cancel-submission-btn {
+  margin-top: 18px;
+  padding: 7px 16px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--red, #ff3d61);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s;
+}
+.cancel-submission-btn:hover { opacity: 0.85; }
+.cancel-submission-btn:active { opacity: 0.7; }
+
+/* Inline error chip when submitting without a track */
+.submit-track-err {
+  font-size: 11px;
+  color: var(--red, #ff3d61);
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: rgba(255,61,97,0.08);
+  border: 1px solid rgba(255,61,97,0.25);
+  border-radius: 6px;
+  animation: fadeInDown 0.18s ease;
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

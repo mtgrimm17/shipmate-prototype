@@ -399,6 +399,14 @@ async function openStepModal(pid, stepId) {
 }
 
 function closeStepModal() {
+  // Record that this step has been saved/attempted at least once
+  // (drives red-dot visibility and required-field alert visibility)
+  const sm = state.stepModal;
+  if (sm?.platformId && sm?.stepId) {
+    if (!state.stepSaveAttempted) state.stepSaveAttempted = new Set();
+    state.stepSaveAttempted.add(`${sm.platformId}-${sm.stepId}`);
+  }
+
   // Tear down doc pane group wrapper if present
   const overlay = document.getElementById('submit-overlay');
   const group   = document.getElementById('step-modal-group');
@@ -1093,9 +1101,21 @@ function confirmSubmit(pid) {
   if (!state.selectedTracks) state.selectedTracks = {};
   const trackId = state.selectedTracks[pid] || null;
   if (!trackId) {
-    // Pulse the dropdown to signal the user must choose a track first
+    // Pulse the dropdown AND show a brief inline message
     const sel = document.getElementById('track-sel-' + pid);
-    if (sel) { sel.classList.add('pulse-error'); setTimeout(() => sel.classList.remove('pulse-error'), 600); }
+    if (sel) {
+      sel.classList.add('pulse-error');
+      setTimeout(() => sel.classList.remove('pulse-error'), 700);
+    }
+    // Show a temporary "Choose Track first" chip near the submit card
+    const card = document.getElementById(`${pid}-step-card-submit`);
+    if (card && !card.querySelector('.submit-track-err')) {
+      const err = document.createElement('div');
+      err.className = 'submit-track-err';
+      err.textContent = 'Select a track before submitting';
+      card.appendChild(err);
+      setTimeout(() => err.remove(), 2500);
+    }
     return;
   }
   _doFinalSubmit(pid, trackId);
@@ -1170,6 +1190,49 @@ function _doFinalSubmit(platformId, trackId) {
 // Legacy alias kept for any paths that still call finalSubmit directly.
 function finalSubmit(platformId) {
   openTrackSubmitModal(platformId);
+}
+
+// Cancels a submission — removes the flip state and release record, returns card to pre-submission.
+function cancelSubmission(pid) {
+  const proj = state.projects.find(p => p.id === state.activeProjectId);
+  const ver  = proj?.versions.find(v => v.id === state.activeVersionId);
+
+  // Remove the release record that was minted on submit
+  if (ver?.platformReleases?.[pid]) {
+    ver.platformReleases[pid].pop();
+    if (ver.platformReleases[pid].length === 0) delete ver.platformReleases[pid];
+  }
+
+  // Reset submit step status
+  if (state.platformStepStatus?.[pid]) {
+    state.platformStepStatus[pid]['submit'] = 'not_started';
+  }
+
+  // Reverse-flip animation: rotate out → swap content → rotate in
+  const card = document.getElementById('active-card-' + pid);
+
+  function _applyUnflip() {
+    if (state.platformFlipped) delete state.platformFlipped[pid];
+    renderDashboard();
+    const newCard = document.getElementById('active-card-' + pid);
+    if (newCard) {
+      newCard.style.transform = 'perspective(700px) rotateY(90deg)';
+      newCard.style.transition = 'none';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
+        setTimeout(() => { newCard.style.transition = ''; newCard.style.transform = ''; }, 340);
+      }));
+    }
+  }
+
+  if (card) {
+    card.style.transition = 'transform 0.28s cubic-bezier(0.55, 0, 1, 0.45)';
+    card.style.transform  = 'perspective(700px) rotateY(-90deg)';
+    setTimeout(_applyUnflip, 290);
+  } else {
+    _applyUnflip();
+  }
 }
 
 
@@ -1489,7 +1552,7 @@ function toggleObLang(lang) {
   const idx = arr.indexOf(lang);
   if (idx === -1) arr.push(lang); else arr.splice(idx, 1);
   state.formData.localizations = arr;
-  // Full re-render so the Subwoofer tip ! badge moves to the next best candidate
+  // Full re-render so the Shipmate tip ! badge moves to the next best candidate
   updateObLangListWrap();
 }
 
@@ -2268,16 +2331,20 @@ Respond ONLY with valid JSON — an array of objects, no extra text, no markdown
 function _getCurrentMergedStoreItems() {
   const spi = state.storePageInsights;
   const ana = state.improveSubmissionAnalysis;
+  const accepted   = state.acceptedFixes   || {};  // field → accepted value
+  const dismissed  = state.dismissedFixes  || new Set(); // indices into the ORIGINAL array
 
   const spItems = (!spi?.loading && !spi?.error && spi?.issues)
-    ? spi.issues.map(iss => ({
-        tag: { subtitle:'Subtitle', description:'Description', title:'Title' }[iss.field] || 'Store Page',
-        title: iss.issue || iss.title || '',
-        body:  iss.suggestion || iss.body || '',
-        fixedValue: iss.fixedValue || null,
-        field: iss.field || null,
-        type:  'sp',
-      }))
+    ? spi.issues
+        .filter(iss => !iss.field || !(iss.field in accepted)) // skip already-accepted fixes
+        .map(iss => ({
+          tag: { subtitle:'Subtitle', description:'Description', title:'Title' }[iss.field] || 'Store Page',
+          title: iss.issue || iss.title || '',
+          body:  iss.suggestion || iss.body || '',
+          fixedValue: iss.fixedValue || null,
+          field: iss.field || null,
+          type:  'sp',
+        }))
     : [];
 
   const anaItems = (!ana?.loading && !ana?.error && ana?.items)
@@ -2287,7 +2354,9 @@ function _getCurrentMergedStoreItems() {
         .map(item => ({ tag: item.area || 'Store Page', title: item.title || '', body: item.body || '', type: 'ana' }))
     : [];
 
-  return [...spItems, ...anaItems].slice(0, 5);
+  const all = [...spItems, ...anaItems].slice(0, 5);
+  // Remove individually dismissed items
+  return all.filter((_, i) => !dismissed.has(i));
 }
 
 /* Auto-trigger both analyses when the Improve Your Submission step opens */
@@ -2295,8 +2364,9 @@ function _autoRunImproveSubmission(pid) {
   const needsSP = !state.storePageInsights || !!state.storePageInsights.error;
   const needsAI = !state.improveSubmissionAnalysis || !!state.improveSubmissionAnalysis.error;
 
-  // Reset cycling index on fresh analysis run
+  // Reset cycling index and dismissed/accepted on fresh analysis run
   state.improveSubmissionIdx = { storePage: 0 };
+  state.dismissedFixes = new Set();
 
   if (needsSP) state.storePageInsights        = { loading: true };
   if (needsAI) state.improveSubmissionAnalysis = { loading: true };
@@ -2307,33 +2377,83 @@ function _autoRunImproveSubmission(pid) {
   if (needsAI) runImproveSubmissionAnalysis(pid);
 }
 
-/* Apply the current store page fix, then advance */
+/* Apply a value to a store-page field and record it as accepted so it won't resurface */
+function _applyFieldValue(field, value) {
+  if (!value) return;
+  if (!state.acceptedFixes) state.acceptedFixes = {};
+  state.acceptedFixes[field] = value;
+
+  if (field === 'description') {
+    state.formData.description = value;
+    const el = document.getElementById('ob-desc');
+    if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
+  } else if (field === 'subtitle') {
+    state.formData.subtitle = value;
+    const el = document.getElementById('ob-subtitle');
+    if (el) { el.value = value; charCount('ob-subtitle-count', value, 30); }
+  } else if (field === 'title') {
+    state.formData.title = value;
+    const el = document.getElementById('ob-title');
+    if (el) { el.value = value; charCount('ob-title-count', value, 30); }
+  }
+}
+
+/* Accept the Shipmate-suggested fix for the current item */
 function applyStorePageFix() {
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
   const items = _getCurrentMergedStoreItems();
   const i   = state.improveSubmissionIdx.storePage || 0;
   const cur = items[i];
   if (!cur?.fixedValue || cur.type !== 'sp') return;
-
-  if (cur.field === 'description') {
-    state.formData.description = cur.fixedValue;
-    const el = document.getElementById('ob-desc');
-    if (el) { el.value = cur.fixedValue; charCount('ob-desc-count', cur.fixedValue, 4000); }
-  } else if (cur.field === 'subtitle') {
-    state.formData.subtitle = cur.fixedValue;
-    const el = document.getElementById('ob-subtitle');
-    if (el) { el.value = cur.fixedValue; charCount('ob-subtitle-count', cur.fixedValue, 30); }
-  } else if (cur.field === 'title') {
-    state.formData.title = cur.fixedValue;
-    const el = document.getElementById('ob-title');
-    if (el) { el.value = cur.fixedValue; charCount('ob-title-count', cur.fixedValue, 30); }
-  }
-
-  state.improveSubmissionIdx.storePage = i + 1;
+  _applyFieldValue(cur.field, cur.fixedValue);
+  // After accepting, filter removes this item so index doesn't need to advance
+  state.improveSubmissionIdx.storePage = 0;
   renderStepModal();
 }
 
-/* Advance to next item without applying a fix */
+/* Accept a user-edited value for the current item */
+function acceptEditedFix() {
+  const textarea = document.getElementById('iys-edit-textarea');
+  if (!textarea) return;
+  const items = _getCurrentMergedStoreItems();
+  const i   = (state.improveSubmissionIdx?.storePage) || 0;
+  const cur = items[i];
+  if (!cur?.field) return;
+  _applyFieldValue(cur.field, textarea.value.trim());
+  if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
+  state.improveSubmissionIdx.storePage = 0;
+  renderStepModal();
+}
+
+/* Dismiss the current item WITHOUT applying or improving the grade */
+function keepExistingFix() {
+  if (!state.dismissedFixes) state.dismissedFixes = new Set();
+  const items = _getCurrentMergedStoreItems();
+  const i = (state.improveSubmissionIdx?.storePage) || 0;
+  if (i < items.length) state.dismissedFixes.add(i);
+  if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
+  state.improveSubmissionIdx.storePage = 0;
+  renderStepModal();
+}
+
+/* Called when user edits the suggestion textarea — changes button label */
+function _onFixEdit(textarea) {
+  const btn = document.getElementById('iys-accept-btn');
+  if (!btn) return;
+  const items = _getCurrentMergedStoreItems();
+  const i   = (state.improveSubmissionIdx?.storePage) || 0;
+  const cur = items[i];
+  const original = cur?.fixedValue || '';
+  if (textarea.value.trim() !== original.trim()) {
+    btn.textContent = 'Accept New';
+    btn.setAttribute('onclick', 'acceptEditedFix()');
+  } else {
+    btn.textContent = 'Accept Shipmate Fix';
+    btn.setAttribute('onclick', 'applyStorePageFix()');
+  }
+}
+
+/* Advance to next item without applying a fix (legacy — kept for compatibility) */
 function _nextImprovementItem(section) {
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
   if (section === 'storePage') {

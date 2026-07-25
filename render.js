@@ -1452,10 +1452,13 @@ function buildIOSActiveCard(pid) {
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
   const stepCards = p.steps.map((step, i) => {
-    const done = isIOSSectionComplete(step.id);
-    const risk = computeIOSSectionRisk(step.id);
-    const numClass = 'ios-step-num' + (done ? ' is-done' : '');
-    const riskDot  = (done || risk === 'LOW' || risk === 'NONE') ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
+    const done      = isIOSSectionComplete(step.id);
+    const risk      = computeIOSSectionRisk(step.id);
+    const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
+    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+    // Only show risk dot after the user has attempted to save/close this step at least once
+    const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
+      ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="ios-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -1496,10 +1499,12 @@ function buildAndroidActiveCard(pid) {
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
   const stepCards = p.steps.map((step, i) => {
-    const done = isAndroidSectionComplete(step.id);
-    const risk = computeAndroidSectionRisk(step.id);
-    const numClass = 'ios-step-num' + (done ? ' is-done' : '');
-    const riskDot  = (done || risk === 'LOW' || risk === 'NONE') ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
+    const done      = isAndroidSectionComplete(step.id);
+    const risk      = computeAndroidSectionRisk(step.id);
+    const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
+    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+    const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
+      ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="android-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -2060,9 +2065,11 @@ function buildImproveSubmissionSection(platformId) {
   const mergedItems = (typeof _getCurrentMergedStoreItems === 'function')
     ? _getCurrentMergedStoreItems() : [];
   const idxNow  = idx.storePage || 0;
-  const remaining = Math.max(0, mergedItems.length - idxNow);
+  const remaining = mergedItems.length; // after filtering dismissed/accepted items
 
-  // Grade reflects REMAINING issues (drops as the user applies Shipmate Fixes)
+  // Grade only improves as fixes are ACCEPTED (not dismissed)
+  const acceptedCount = Object.keys(state.acceptedFixes || {}).length;
+  const totalOriginal = remaining + acceptedCount; // original issue count approximation
   const spGrade  = (!spi?.loading && !spi?.error)
     ? (remaining === 0 ? 'A' : remaining === 1 ? 'B' : remaining <= 3 ? 'C' : 'D')
     : null;
@@ -2078,25 +2085,44 @@ function buildImproveSubmissionSection(platformId) {
     spPageFooter  = `<button class="iys-fix-btn" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Retry</button>`;
   } else {
     const n = mergedItems.length;
-    const i = idxNow;
+    // Always show item at index 0 after accepted/dismissed items are filtered out
+    const i = 0;
 
-    if (!n || i >= n) {
+    if (!n) {
       spPageContent = _allGood('Store page, assets & metadata all look strong');
     } else {
       const cur = mergedItems[i];
+      const hasFix = cur.type === 'sp' && !!cur.fixedValue;
+
+      // Get current value of the field for the "Current:" row
+      const fieldCurrentValue = cur.field === 'description' ? (state.formData.description || '')
+        : cur.field === 'subtitle' ? (state.formData.subtitle || state.formData.description?.slice(0,80) || '')
+        : cur.field === 'title'    ? (state.formData.title || '')
+        : '';
+
       spPageContent = `
         <div class="iys-issue-content">
           ${cur.tag ? `<div class="iys-issue-field-tag">${escHtml(cur.tag)}</div>` : ''}
           <div class="iys-issue-title">${escHtml(cur.title)}</div>
           <div class="iys-issue-body">${escHtml(cur.body)}</div>
+          ${hasFix ? `
+            <div class="iys-current-new">
+              <div class="iys-cn-row">
+                <span class="iys-cn-label">Current</span>
+                <div class="iys-cn-value iys-cn-current">${escHtml(fieldCurrentValue || '(empty)')}</div>
+              </div>
+              <div class="iys-cn-row">
+                <span class="iys-cn-label">New</span>
+                <textarea id="iys-edit-textarea" class="iys-cn-textarea" oninput="_onFixEdit(this)">${escHtml(cur.fixedValue)}</textarea>
+              </div>
+            </div>` : ''}
         </div>`;
-      const hasFix  = cur.type === 'sp' && !!cur.fixedValue;
-      const hasNext = i < n - 1;
+
       spPageFooter = `
-        <span class="iys-section-counter">${i + 1} / ${n}</span>
+        <span class="iys-section-counter">${n} remaining</span>
         <div class="iys-section-actions">
-          ${hasFix ? `<button class="iys-fix-btn" onclick="applyStorePageFix()"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Shipmate Fix</button>` : ''}
-          ${hasNext ? `<button class="btn btn-ghost btn-sm" onclick="_nextImprovementItem('storePage')">Next</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="keepExistingFix()">Keep Existing</button>
+          ${hasFix ? `<button class="iys-fix-btn" id="iys-accept-btn" onclick="applyStorePageFix()"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Accept Shipmate Fix</button>` : ''}
         </div>`;
     }
   }
@@ -2188,7 +2214,18 @@ function buildStorePreviewSection() {
   const ups   = state.uploads;
   const a     = state.iosSubmitAnswers;
   const icon  = ups.appIcon;
-  const shots = ups.screenshots || [];
+  const pid   = state.stepModal?.platformId || 'ios';
+
+  // Use the screenshots selected in the Select Screenshots step,
+  // falling back to all uploaded screenshots if none selected yet.
+  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
+  const allUploaded = ups.screenshots || [];
+  const selectedIds = new Set(ps.selected);
+  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
+  const customShots = ps.custom || [];
+  const shots = selectedUploaded.length > 0 || customShots.length > 0
+    ? [...selectedUploaded, ...customShots]
+    : allUploaded; // fall back to all if none selected yet
 
   const title     = escHtml(fd.title || 'Your Game Title');
   const category  = escHtml(fd.genre || 'Games');
@@ -2303,8 +2340,9 @@ function buildStorePreviewSection() {
         </svg>
       </div>`;
 
+  // Show all selected shots (no cap) — scroll container handles overflow
   const shotHtml = shots.length > 0
-    ? shots.slice(0, 5).map(s =>
+    ? shots.map(s =>
         `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
@@ -2614,6 +2652,11 @@ function takeFilterSnapshot(platformId) {
     const s = new Set();
     IOS_INTENSITY_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
     IOS_CONTENT_YN_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
+    // Also snapshot business / export-compliance fields so they are hidden in Unanswered view
+    if (a.hasIAP        !== null && a.hasIAP        !== undefined) s.add('hasIAP');
+    if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
+    if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
+    if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
     state.iosAnsweredAtInference = s;
   } else if (platformId === 'android') {
     const androidQs = CQ_QUESTIONS.filter(q => q.platforms.includes('android'));
@@ -2809,6 +2852,13 @@ function _buildPrivacyPresetChips() {
     </div>`;
 }
 
+/* Returns true once the user has saved/closed this step at least once.
+   Used to suppress required-field alerts on first entry. */
+function _stepAttempted(stepId) {
+  const pid = state.stepModal?.platformId;
+  return !!(pid && state.stepSaveAttempted?.has(`${pid}-${stepId}`));
+}
+
 function buildPrivacySection() {
   const a = state.iosSubmitAnswers;
   const noUrl = !a.privacyPolicyUrl.trim();
@@ -2848,7 +2898,7 @@ function buildPrivacySection() {
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${noUrl ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
+      ${(noUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsData === null ? iosYNRow(t('ios.privacy.collects.label') || 'Does your app collect any data from users?', 'collectsData',
@@ -3821,7 +3871,7 @@ function buildAndroidBusinessSection() {
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Title</label>
       <div class="form-input is-complete" style="background:var(--bg-2);cursor:default;color:var(--text);">${escHtml(fd.title || '')}</div>
-      ${!titleOk ? '<div class="ios-risk-note risk-HIGH">Title is required — add it in Game Details.</div>' : ''}
+      ${(!titleOk && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Title is required — add it in Game Details.</div>' : ''}
     </div>
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Short description <span style="color:var(--text-faint);font-weight:400;">(first 80 chars of description)</span></label>
@@ -3830,7 +3880,7 @@ function buildAndroidBusinessSection() {
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Full description</label>
       <div class="form-input is-complete" style="background:var(--bg-2);cursor:default;color:var(--text);min-height:72px;white-space:pre-wrap;">${escHtml(fd.description || '')}</div>
-      ${!descOk ? '<div class="ios-risk-note risk-HIGH">Description is required — add it in Game Details.</div>' : ''}
+      ${(!descOk && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Description is required — add it in Game Details.</div>' : ''}
     </div>`;
 }
 
@@ -3888,7 +3938,7 @@ function buildAndroidDataSafetySection() {
              value="${escHtml(a.deleteAccountUrl)}"
              placeholder="https://yourgame.com/delete-account"
              oninput="answerAndroidTextField('deleteAccountUrl', this.value)">
-      ${!a.deleteAccountUrl.trim() ? '<div class="ios-risk-note risk-HIGH">Required. Provide a URL where users can request account deletion.</div>' : ''}
+      ${(!a.deleteAccountUrl.trim() && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. Provide a URL where users can request account deletion.</div>' : ''}
     </div>` : '';
 
   const otherField = a.accountMethod === 'other' ? `
@@ -3986,7 +4036,7 @@ function buildAndroidDataSafetySection() {
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${!privUrl ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL will block your submission.</div>' : ''}
+      ${(!privUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL will block your submission.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsOrSharesData === null ? androidYNRow('Collects or shares user data', 'collectsOrSharesData',
@@ -4099,10 +4149,12 @@ function buildSteamActiveCard(pid) {
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
   const stepCards = p.steps.map((step, i) => {
-    const done = isSteamSectionComplete(step.id);
-    const risk = computeSteamSectionRisk(step.id);
-    const numClass = 'ios-step-num' + (done ? ' is-done' : '');
-    const riskDot  = (done || risk === 'LOW' || risk === 'NONE') ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
+    const done      = isSteamSectionComplete(step.id);
+    const risk      = computeSteamSectionRisk(step.id);
+    const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
+    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+    const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
+      ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="steam-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -4345,7 +4397,7 @@ function buildSteamStoreTagsSection() {
     <div class="ios-content-step-label" style="margin-top:0;">Top-Level Genre
       <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Required. Choose one or two top-level genres to categorize your title on Steam.</span></span>
     </div>
-    ${topCount === 0 ? '<div class="ios-risk-note risk-HIGH" style="margin-bottom:8px;">Required — select at least one.</div>' : ''}
+    ${(topCount === 0 && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH" style="margin-bottom:8px;">Required — select at least one.</div>' : ''}
     <div class="cq-check-list">${topGenreChecks}</div>
 
     <div class="ios-q-divider"></div>
@@ -4464,7 +4516,7 @@ function buildSteamStorePreviewSection() {
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${!privUrl ? '<div class="ios-risk-note risk-HIGH">Required. Add your privacy policy URL before submitting to Steam.</div>' : ''}
+      ${(!privUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. Add your privacy policy URL before submitting to Steam.</div>' : ''}
     </div>
     <p style="font-size:12px;color:var(--text-faint);margin:0 0 14px;">Approximate Steam store listing appearance.</p>
     <div style="background:#1b2838;border-radius:6px;padding:14px;font-family:inherit;">
@@ -4605,8 +4657,9 @@ function buildSubmittedCard(pid, flipData) {
         </div>
         <div class="submitted-meta">
           ${trackLabel ? `<span class="submitted-track-chip">${escHtml(trackLabel)}</span>` : ''}
-          ${ts ? `<span class="submitted-ts">${ts}</span>` : ''}
+          ${ts ? `<span class="submitted-ts">Submitted ${ts}</span>` : ''}
         </div>
+        <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">Cancel Submission</button>
       </div>
     </div>`;
 }

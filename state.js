@@ -714,20 +714,22 @@ function makeEmptyPlatformSteps() {
 
 function platformStepCount(platformId) {
   const p = PLATFORMS[platformId];
+  // Binary build upload is required for submit unlock on iOS/Android/Steam
+  const hasBuild = !!(state.platformBuilds?.[platformId]);
   // iOS: completion is computed from submission answers, not manual task status
   if (platformId === 'ios') {
     const complete = p.steps.filter(s => isIOSSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length && hasBuild };
   }
   // Android: completion is computed from androidSubmitAnswers
   if (platformId === 'android') {
     const complete = p.steps.filter(s => isAndroidSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length && hasBuild };
   }
   // Steam: completion is computed from steamSubmitAnswers
   if (platformId === 'steam') {
     const complete = p.steps.filter(s => isSteamSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length && hasBuild };
   }
   const required = p.steps.filter(s => !s.isSubmit);
   const statuses = state.platformStepStatus[platformId];
