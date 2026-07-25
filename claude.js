@@ -1164,6 +1164,17 @@ async function inferAllQuestionnaires() {
   const activePids = [...state.activePlatforms].filter(p => ['ios','android','steam'].includes(p));
   if (!activePids.length) return;
 
+  // Guard: skip inference entirely if there is no meaningful game data to reason about.
+  // Without title, description, or screenshots the model defaults to generic heuristics
+  // (e.g. "all apps use HTTPS") which produces confident but baseless answers.
+  const fd = state.formData;
+  const hasData = !!(fd.title?.trim()) || !!(fd.description?.trim())
+               || (state.uploads.screenshots || []).length > 0;
+  if (!hasData) {
+    console.log('[Unified] Skipping inference — no game data available yet.');
+    return;
+  }
+
   // Clear stale AI-inferred meta (preserve human-confirmed answers)
   state.iosAnswerMeta   = Object.fromEntries(Object.entries(state.iosAnswerMeta).filter(([,v])   => v.humanConfirmed));
   state.cqAnswerMeta    = Object.fromEntries(Object.entries(state.cqAnswerMeta).filter(([,v])    => v.humanConfirmed));

@@ -2355,8 +2355,8 @@ function _getCurrentMergedStoreItems() {
     : [];
 
   const all = [...spItems, ...anaItems].slice(0, 5);
-  // Remove individually dismissed items
-  return all.filter((_, i) => !dismissed.has(i));
+  // Remove dismissed items by identity (title + field) — robust against index shifts
+  return all.filter(item => !dismissed.has(item.title + '||' + (item.field || '')));
 }
 
 /* Auto-trigger both analyses when the Improve Your Submission step opens */
@@ -2425,12 +2425,15 @@ function acceptEditedFix() {
   renderStepModal();
 }
 
-/* Dismiss the current item WITHOUT applying or improving the grade */
+/* Dismiss the current item WITHOUT applying or improving the grade.
+   Uses the item's title+field identity as the key so index shifts don't break it. */
 function keepExistingFix() {
   if (!state.dismissedFixes) state.dismissedFixes = new Set();
   const items = _getCurrentMergedStoreItems();
-  const i = (state.improveSubmissionIdx?.storePage) || 0;
-  if (i < items.length) state.dismissedFixes.add(i);
+  if (items.length > 0) {
+    const cur = items[0];
+    state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
+  }
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
   state.improveSubmissionIdx.storePage = 0;
   renderStepModal();

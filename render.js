@@ -3,6 +3,13 @@
    ============================================================ */
 
 /* ── Shared: HTML escape helper ──────────────────────── */
+/* Inline ship-wheel SVG used everywhere the old SubwooferIcon_Orange.png appeared */
+function _shipmateIcon(size) {
+  const s = size || 14;
+  const c = `var(--sw-tip-color,#fb923c)`;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="3.5" stroke="${c}" stroke-width="2"/><circle cx="12" cy="12" r="9" stroke="${c}" stroke-width="1.5"/><line x1="12" y1="2.5" x2="12" y2="8.5" stroke="${c}" stroke-width="1.5"/><line x1="12" y1="15.5" x2="12" y2="21.5" stroke="${c}" stroke-width="1.5"/><line x1="2.5" y1="12" x2="8.5" y2="12" stroke="${c}" stroke-width="1.5"/><line x1="15.5" y1="12" x2="21.5" y2="12" stroke="${c}" stroke-width="1.5"/></svg>`;
+}
+
 function escHtml(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -261,7 +268,7 @@ function buildDistributionTab() {
         </div>
 
         <div class="sw-tip-box" style="margin-bottom:10px;">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+          ${_shipmateIcon(17)}
           <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</span>
         </div>
 
@@ -275,7 +282,7 @@ function buildDistributionTab() {
         <div class="ob-section-hdr">${t('ob.section.localization') || 'Localization'}</div>
 
         <div class="sw-tip-box" style="margin-bottom:12px;">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+          ${_shipmateIcon(17)}
           <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.distribution.languages') || 'On average, games see 30–50% more revenue in markets where they support the local language vs. English-only releases. The highest-impact localization for your selected markets is highlighted below.'}</span>
         </div>
 
@@ -628,7 +635,7 @@ function _legacyScenarioWidget_unused() {
     } else if (ls.status === 'done' && ls.found) {
       resultHtml = `
         <div class="sw-tip-box" style="margin-bottom:0;">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+          ${_shipmateIcon(17)}
           <div class="sw-tip-text">
             <div><strong class="sw-tip-bold">Shipmate Tip:</strong> We found this on ${escHtml(ls.source || 'the store')}.</div>
             <div class="ob-live-found-desc" style="margin-top:6px;">${escHtml(ls.description || '')}</div>
@@ -1430,6 +1437,10 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
 
   // When not locked the whole card (except dropdown) is clickable.
   const cardClick = !locked ? `onclick="confirmSubmit('${pid}')"` : '';
+  // Dedicated Submit button gives a clear click target when a track is selected
+  const submitBtn = (!locked && !submitDone && selTrack)
+    ? `<button class="submit-step-btn" onclick="event.stopPropagation();confirmSubmit('${pid}')">Submit →</button>`
+    : '';
 
   return `
     <div class="ios-step-card submit-step-card ${submitDone ? 'is-complete' : ''} ${locked ? 'submit-step-locked' : 'submit-step-ready'}"
@@ -1439,6 +1450,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
         <div class="ios-step-name">Submit</div>
       </div>
       ${trackSelect}
+      ${submitBtn}
     </div>`;
 }
 
@@ -1734,7 +1746,7 @@ function renderStepModal() {
           <div class="inf-ring inf-ring-1"></div>
           <div class="inf-ring inf-ring-2"></div>
           <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
+          ${_shipmateIcon(24)}
         </div>
         <div class="inf-headline">Shipmate is working…</div>
         <div class="inf-steps">
@@ -1754,7 +1766,7 @@ function renderStepModal() {
           <div class="inf-ring inf-ring-1"></div>
           <div class="inf-ring inf-ring-2"></div>
           <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
+          ${_shipmateIcon(24)}
         </div>
         <div class="inf-headline">Shipmate is working…</div>
         <div class="inf-steps">
@@ -1917,7 +1929,7 @@ function buildStoreInsightsPanel() {
   if (!ins) return `
     <div class="sp-insights-panel sp-insights-idle">
       <div class="sp-insights-badge">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
+        ${_shipmateIcon(14)}
         <span>Shipmate AI</span>
       </div>
       <p class="sp-insights-prompt">Get an AI-powered evaluation of your store page listing with one-click fixes.</p>
@@ -1928,7 +1940,7 @@ function buildStoreInsightsPanel() {
   if (ins.loading) return `
     <div class="sp-insights-panel sp-insights-loading">
       <div class="sp-insights-badge">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
+        ${_shipmateIcon(14)}
         <span>Shipmate AI</span>
       </div>
       <div class="sp-ins-spinner-row"><span class="ai-spinner"></span> Evaluating your listing…</div>
@@ -1938,7 +1950,7 @@ function buildStoreInsightsPanel() {
   if (ins.error) return `
     <div class="sp-insights-panel sp-insights-error">
       <div class="sp-insights-badge">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
+        ${_shipmateIcon(14)}
         <span>Shipmate AI</span>
       </div>
       <div class="sp-ins-error-msg">${escHtml(ins.error)}</div>
@@ -1952,7 +1964,7 @@ function buildStoreInsightsPanel() {
   if (ins.done) return `
     <div class="sp-insights-panel sp-insights-done">
       <div class="sp-insights-badge">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
+        ${_shipmateIcon(14)}
         <span>Shipmate AI</span>
       </div>
       <div class="sp-ins-applied">
@@ -1975,7 +1987,7 @@ function buildStoreInsightsPanel() {
     return `
       <div class="sp-insights-panel sp-insights-result">
         <div class="sp-insights-badge">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
+          ${_shipmateIcon(14)}
           <span>Shipmate AI</span>
           <span class="sp-ins-field-tag">${escHtml(fieldLabel)}</span>
           ${progress}
@@ -2068,62 +2080,75 @@ function buildImproveSubmissionSection(platformId) {
   const remaining = mergedItems.length; // after filtering dismissed/accepted items
 
   // Grade only improves as fixes are ACCEPTED (not dismissed)
-  const acceptedCount = Object.keys(state.acceptedFixes || {}).length;
-  const totalOriginal = remaining + acceptedCount; // original issue count approximation
+  const acceptedCount  = Object.keys(state.acceptedFixes || {}).length;
+  const dismissedCount = state.dismissedFixes?.size || 0;
+  const handledCount   = acceptedCount + dismissedCount;
+  const totalItems     = remaining + handledCount;
+  const currentNum     = handledCount + 1; // 1-indexed position in the sequence
+
+  // Grade: only accepted fixes improve it — dismissed items remain as "unfixed"
+  const gradeBase = remaining + dismissedCount; // un-accepted items count
   const spGrade  = (!spi?.loading && !spi?.error)
-    ? (remaining === 0 ? 'A' : remaining === 1 ? 'B' : remaining <= 3 ? 'C' : 'D')
+    ? (gradeBase === 0 ? 'A' : gradeBase === 1 ? 'B' : gradeBase <= 3 ? 'C' : 'D')
     : null;
   const assGrade = ana?.scores?.assets   || null;
   const metGrade = ana?.scores?.metadata || null;
   const mergedGrade = _worseGrade(spGrade, _worseGrade(assGrade, metGrade));
+
+  // Truncate long text values for display in choice boxes
+  function _trunc(s, max) { return s.length > max ? s.slice(0, max) + '…' : s; }
 
   let spPageContent = '', spPageFooter = '';
   if (loading) {
     spPageContent = _loadingBody();
   } else if (hasError) {
     spPageContent = `<div class="iys-issue-content"><div class="iys-issue-title">Analysis failed</div><div class="iys-issue-body">${escHtml(spi?.error || ana?.error)}</div></div>`;
-    spPageFooter  = `<button class="iys-fix-btn" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Retry</button>`;
+    spPageFooter  = `<button class="iys-fix-btn" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">${_shipmateIcon(12)}Retry</button>`;
   } else {
     const n = mergedItems.length;
-    // Always show item at index 0 after accepted/dismissed items are filtered out
-    const i = 0;
-
     if (!n) {
       spPageContent = _allGood('Store page, assets & metadata all look strong');
     } else {
-      const cur = mergedItems[i];
+      const cur = mergedItems[0];
       const hasFix = cur.type === 'sp' && !!cur.fixedValue;
+      const counterHtml = `<span class="iys-section-counter">${currentNum} of ${totalItems}</span>`;
 
-      // Get current value of the field for the "Current:" row
-      const fieldCurrentValue = cur.field === 'description' ? (state.formData.description || '')
-        : cur.field === 'subtitle' ? (state.formData.subtitle || state.formData.description?.slice(0,80) || '')
-        : cur.field === 'title'    ? (state.formData.title || '')
-        : '';
+      if (hasFix) {
+        // Get current stored value for this field
+        const fieldCurrentValue = cur.field === 'description' ? (state.formData.description || '')
+          : cur.field === 'subtitle' ? (state.formData.subtitle || state.formData.description?.slice(0,80) || '')
+          : cur.field === 'title'    ? (state.formData.title || '')
+          : '';
+        const currentDisplay = escHtml(_trunc(fieldCurrentValue || '(empty)', 180));
+        const fixDisplay     = escHtml(_trunc(cur.fixedValue, 180));
 
-      spPageContent = `
-        <div class="iys-issue-content">
-          ${cur.tag ? `<div class="iys-issue-field-tag">${escHtml(cur.tag)}</div>` : ''}
-          <div class="iys-issue-title">${escHtml(cur.title)}</div>
-          <div class="iys-issue-body">${escHtml(cur.body)}</div>
-          ${hasFix ? `
-            <div class="iys-current-new">
-              <div class="iys-cn-row">
-                <span class="iys-cn-label">Current</span>
-                <div class="iys-cn-value iys-cn-current">${escHtml(fieldCurrentValue || '(empty)')}</div>
+        // Side-by-side choice boxes — clicking selects that option and advances
+        spPageContent = `
+          <div class="iys-issue-content">
+            ${cur.tag ? `<div class="iys-issue-field-tag">${escHtml(cur.tag)}</div>` : ''}
+            <div class="iys-issue-body">${escHtml(cur.body)}</div>
+            <div class="iys-choice-row">
+              <div class="iys-choice-box iys-choice-current" onclick="keepExistingFix()">
+                <span class="iys-choice-label">Current</span>
+                <div class="iys-choice-value">${currentDisplay}</div>
               </div>
-              <div class="iys-cn-row">
-                <span class="iys-cn-label">New</span>
-                <textarea id="iys-edit-textarea" class="iys-cn-textarea" oninput="_onFixEdit(this)">${escHtml(cur.fixedValue)}</textarea>
+              <div class="iys-choice-box iys-choice-fix" onclick="applyStorePageFix()">
+                <span class="iys-choice-label">Shipmate Fix</span>
+                <div class="iys-choice-value">${fixDisplay}</div>
               </div>
-            </div>` : ''}
-        </div>`;
-
-      spPageFooter = `
-        <span class="iys-section-counter">${n} remaining</span>
-        <div class="iys-section-actions">
-          <button class="btn btn-ghost btn-sm" onclick="keepExistingFix()">Keep Existing</button>
-          ${hasFix ? `<button class="iys-fix-btn" id="iys-accept-btn" onclick="applyStorePageFix()"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Accept Shipmate Fix</button>` : ''}
-        </div>`;
+            </div>
+          </div>`;
+        spPageFooter = counterHtml; // no buttons needed — boxes ARE the action
+      } else {
+        // Informational item — no side-by-side fix to offer, just acknowledge
+        spPageContent = `
+          <div class="iys-issue-content">
+            ${cur.tag ? `<div class="iys-issue-field-tag">${escHtml(cur.tag)}</div>` : ''}
+            <div class="iys-issue-title">${escHtml(cur.title)}</div>
+            <div class="iys-issue-body">${escHtml(cur.body)}</div>
+          </div>`;
+        spPageFooter = `${counterHtml}<button class="btn btn-ghost btn-sm" onclick="keepExistingFix()">Got it</button>`;
+      }
     }
   }
   const spPageSection = _section('Store Page', mergedGrade, spPageContent, spPageFooter);
@@ -3853,7 +3878,7 @@ function buildAndroidStubSection(title, note) {
     <div class="ios-section-head">${title}</div>
     <div class="sw-tip-box" style="margin-bottom:16px;">
       <div class="sw-tip-box-row">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+        ${_shipmateIcon(17)}
         <span class="sw-tip-text">${note}</span>
       </div>
     </div>`;
@@ -4005,7 +4030,7 @@ function buildAndroidDataSafetySection() {
       'Select Yes ONLY if children under 13 are the primary intended audience of your app — not merely because children might also play it. This is a meaningful legal and policy distinction.')}
     <div class="sw-tip-box" style="margin-top:6px;margin-bottom:4px;">
       <div class="sw-tip-box-row">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+        ${_shipmateIcon(17)}
         <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.ios.kids_audience') || 'Many developers select this by mistake — choose Yes only if children under 13 are your primary intended audience.'}</span>
       </div>
     </div>

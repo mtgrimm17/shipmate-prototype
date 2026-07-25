@@ -7139,6 +7139,65 @@ body.is-splash .profile-wrap        { display: none; }
 .iys-fix-btn-goto:hover { background: var(--panel-3); color: var(--text); }
 .iys-fix-btn-goto img { opacity: 0.5; }
 
+/* ── Side-by-side choice boxes (Current vs Shipmate Fix) ─────── */
+.iys-choice-row {
+  display: flex;
+  gap: 7px;
+  margin-top: 9px;
+}
+.iys-choice-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 54px;
+  text-align: left;
+  user-select: none;
+}
+.iys-choice-current { background: var(--panel); }
+.iys-choice-fix     { background: rgba(251,146,60,0.04); }
+.iys-choice-box:hover { border-color: var(--text-faint); background: var(--panel-2); }
+.iys-choice-fix:hover { border-color: var(--sw-tip-color,#fb923c); background: rgba(251,146,60,0.10); }
+.iys-choice-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  display: block;
+}
+.iys-choice-fix .iys-choice-label { color: var(--sw-tip-color,#fb923c); }
+.iys-choice-value {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.iys-choice-fix .iys-choice-value { color: var(--text); }
+
+/* ── Submit button inside the submit step card ─────── */
+.submit-step-btn {
+  flex-shrink: 0;
+  padding: 5px 11px;
+  background: var(--green,#2FDC80);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.submit-step-btn:hover { opacity: 0.85; }
+.submit-step-btn:active { opacity: 0.7; }
+
 /* ── Current / New suggestion rows ─────────────────── */
 .iys-current-new {
   display: flex;
