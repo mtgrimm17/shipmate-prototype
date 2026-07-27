@@ -1686,15 +1686,9 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.topbar-logo {
-  height: 28px;
-  width: auto;
-  display: block;
-}
-
 /* Shipmate logo image in topbar */
 .topbar-logo {
-  height: 26px;
+  height: 40px;
   width: auto;
   display: block;
   object-fit: contain;
