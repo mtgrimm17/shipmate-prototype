@@ -3,13 +3,6 @@
    ============================================================ */
 
 /* ── Shared: HTML escape helper ──────────────────────── */
-/* Inline ship-wheel SVG used everywhere the old SubwooferIcon_Orange.png appeared */
-function _shipmateIcon(size) {
-  const s = size || 14;
-  const c = `var(--sw-tip-color,#fb923c)`;
-  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="3.5" stroke="${c}" stroke-width="2"/><circle cx="12" cy="12" r="9" stroke="${c}" stroke-width="1.5"/><line x1="12" y1="2.5" x2="12" y2="8.5" stroke="${c}" stroke-width="1.5"/><line x1="12" y1="15.5" x2="12" y2="21.5" stroke="${c}" stroke-width="1.5"/><line x1="2.5" y1="12" x2="8.5" y2="12" stroke="${c}" stroke-width="1.5"/><line x1="15.5" y1="12" x2="21.5" y2="12" stroke="${c}" stroke-width="1.5"/></svg>`;
-}
-
 function escHtml(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -268,7 +261,7 @@ function buildDistributionTab() {
         </div>
 
         <div class="sw-tip-box" style="margin-bottom:10px;">
-          ${_shipmateIcon(17)}
+          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
           <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</span>
         </div>
 
@@ -282,7 +275,7 @@ function buildDistributionTab() {
         <div class="ob-section-hdr">${t('ob.section.localization') || 'Localization'}</div>
 
         <div class="sw-tip-box" style="margin-bottom:12px;">
-          ${_shipmateIcon(17)}
+          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
           <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.distribution.languages') || 'On average, games see 30–50% more revenue in markets where they support the local language vs. English-only releases. The highest-impact localization for your selected markets is highlighted below.'}</span>
         </div>
 
@@ -635,7 +628,7 @@ function _legacyScenarioWidget_unused() {
     } else if (ls.status === 'done' && ls.found) {
       resultHtml = `
         <div class="sw-tip-box" style="margin-bottom:0;">
-          ${_shipmateIcon(17)}
+          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
           <div class="sw-tip-text">
             <div><strong class="sw-tip-bold">Shipmate Tip:</strong> We found this on ${escHtml(ls.source || 'the store')}.</div>
             <div class="ob-live-found-desc" style="margin-top:6px;">${escHtml(ls.description || '')}</div>
@@ -1746,7 +1739,7 @@ function renderStepModal() {
           <div class="inf-ring inf-ring-1"></div>
           <div class="inf-ring inf-ring-2"></div>
           <div class="inf-ring inf-ring-3"></div>
-          ${_shipmateIcon(24)}
+          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
         </div>
         <div class="inf-headline">Shipmate is working…</div>
         <div class="inf-steps">
@@ -1766,7 +1759,7 @@ function renderStepModal() {
           <div class="inf-ring inf-ring-1"></div>
           <div class="inf-ring inf-ring-2"></div>
           <div class="inf-ring inf-ring-3"></div>
-          ${_shipmateIcon(24)}
+          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
         </div>
         <div class="inf-headline">Shipmate is working…</div>
         <div class="inf-steps">
@@ -1929,7 +1922,7 @@ function buildStoreInsightsPanel() {
   if (!ins) return `
     <div class="sp-insights-panel sp-insights-idle">
       <div class="sp-insights-badge">
-        ${_shipmateIcon(14)}
+        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
         <span>Shipmate AI</span>
       </div>
       <p class="sp-insights-prompt">Get an AI-powered evaluation of your store page listing with one-click fixes.</p>
@@ -1940,7 +1933,7 @@ function buildStoreInsightsPanel() {
   if (ins.loading) return `
     <div class="sp-insights-panel sp-insights-loading">
       <div class="sp-insights-badge">
-        ${_shipmateIcon(14)}
+        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
         <span>Shipmate AI</span>
       </div>
       <div class="sp-ins-spinner-row"><span class="ai-spinner"></span> Evaluating your listing…</div>
@@ -1950,7 +1943,7 @@ function buildStoreInsightsPanel() {
   if (ins.error) return `
     <div class="sp-insights-panel sp-insights-error">
       <div class="sp-insights-badge">
-        ${_shipmateIcon(14)}
+        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
         <span>Shipmate AI</span>
       </div>
       <div class="sp-ins-error-msg">${escHtml(ins.error)}</div>
@@ -1964,7 +1957,7 @@ function buildStoreInsightsPanel() {
   if (ins.done) return `
     <div class="sp-insights-panel sp-insights-done">
       <div class="sp-insights-badge">
-        ${_shipmateIcon(14)}
+        <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
         <span>Shipmate AI</span>
       </div>
       <div class="sp-ins-applied">
@@ -1987,7 +1980,7 @@ function buildStoreInsightsPanel() {
     return `
       <div class="sp-insights-panel sp-insights-result">
         <div class="sp-insights-badge">
-          ${_shipmateIcon(14)}
+          <img src="Assets/SubwooferIcon_Orange.png" class="sp-ins-logo" onerror="this.style.display='none'">
           <span>Shipmate AI</span>
           <span class="sp-ins-field-tag">${escHtml(fieldLabel)}</span>
           ${progress}
@@ -2123,7 +2116,7 @@ function buildImproveSubmissionSection(platformId) {
     spPageContent = _loadingBody();
   } else if (hasError) {
     spPageContent = `<div class="iys-issue-content"><div class="iys-issue-title">Analysis failed</div><div class="iys-issue-body">${escHtml(spi?.error || ana?.error)}</div></div>`;
-    spPageFooter  = `<button class="iys-fix-btn" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">${_shipmateIcon(12)}Retry</button>`;
+    spPageFooter  = `<button class="iys-fix-btn" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Retry</button>`;
   } else {
     const n = mergedItems.length;
     if (!n) {
@@ -3906,7 +3899,7 @@ function buildAndroidStubSection(title, note) {
     <div class="ios-section-head">${title}</div>
     <div class="sw-tip-box" style="margin-bottom:16px;">
       <div class="sw-tip-box-row">
-        ${_shipmateIcon(17)}
+        <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
         <span class="sw-tip-text">${note}</span>
       </div>
     </div>`;
@@ -4058,7 +4051,7 @@ function buildAndroidDataSafetySection() {
       'Select Yes ONLY if children under 13 are the primary intended audience of your app — not merely because children might also play it. This is a meaningful legal and policy distinction.')}
     <div class="sw-tip-box" style="margin-top:6px;margin-bottom:4px;">
       <div class="sw-tip-box-row">
-        ${_shipmateIcon(17)}
+        <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
         <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.ios.kids_audience') || 'Many developers select this by mistake — choose Yes only if children under 13 are your primary intended audience.'}</span>
       </div>
     </div>
@@ -4621,7 +4614,7 @@ function buildScreenshotsSection(pid) {
 
   const checkMark = `<div class="shot-check">✓</div>`;
 
-  // Onboarding screenshots row
+  // Onboarding screenshots row — thumbnails are draggable into the crop zone
   let onboardingHtml;
   if (onboardingShots.length > 0) {
     onboardingHtml = onboardingShots.map(s => {
@@ -4629,9 +4622,13 @@ function buildScreenshotsSection(pid) {
       const sel = selectedSet.has(s.id);
       return `
         <div class="shot-thumb${sel ? ' is-selected' : ''}"
-             onclick="togglePlatformScreenshot('${pid}','${s.id}')" title="${escHtml(s.name)}">
+             draggable="true"
+             ondragstart="shotDragStart(event,'${pid}','${s.id}')"
+             onclick="togglePlatformScreenshot('${pid}','${s.id}')"
+             title="${escHtml(s.name)}">
           <img src="${src}" alt="${escHtml(s.name)}">
           ${sel ? checkMark : ''}
+          <div class="shot-drag-hint">drag to preview</div>
         </div>`;
     }).join('');
   } else {
@@ -4655,11 +4652,15 @@ function buildScreenshotsSection(pid) {
 
   const total = ps.selected.length + (ps.custom?.length || 0);
 
+  // Inline crop edit zone (persists crop state across renders via _shotCropState)
+  const editZoneHtml = _buildShotEditZoneHtml(pid);
+
   return `
     <div class="screenshots-step">
       <p class="shot-intro">
         Select screenshots to include with your ${platLabel(pid)} submission.
         ${total > 0 ? `<strong>${total} selected.</strong>` : ''}
+        <span class="shot-intro-hint">Click a screenshot to select it, or drag it down to preview the crop.</span>
       </p>
 
       <div class="shot-group-label">From your uploads</div>
@@ -4667,15 +4668,64 @@ function buildScreenshotsSection(pid) {
 
       ${customHtml}
 
+      <!-- Inline crop preview zone -->
+      <div class="shot-edit-zone" id="shot-edit-zone-${pid}"
+           ondragover="shotDragOver(event,'${pid}')"
+           ondragleave="shotDragLeave(event,'${pid}')"
+           ondrop="shotDrop(event,'${pid}')">
+        ${editZoneHtml}
+      </div>
+
       <div class="shot-actions">
         <label class="btn btn-ghost btn-sm shot-upload-btn" style="cursor:pointer;">
           <input type="file" accept="image/*" multiple hidden
                  onchange="handlePlatformScreenshotFiles('${pid}', this.files)">
           + Upload New
         </label>
-        <a href="screenshot-tool.html" target="_blank" class="btn btn-ghost btn-sm">
-          Crop &amp; Adjust ↗
-        </a>
+      </div>
+    </div>`;
+}
+
+/* Build the HTML content of the crop preview zone (called on render and on drag events) */
+function _buildShotEditZoneHtml(pid) {
+  const cs = (typeof _shotCropState !== 'undefined') ? _shotCropState[pid] : null;
+  if (!cs || !cs.shotId) {
+    return `
+      <div class="shot-edit-placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="30" height="30" style="opacity:.4">
+          <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 4-5 7 7"/>
+        </svg>
+        <span>Drag a screenshot here to preview &amp; crop</span>
+      </div>`;
+  }
+
+  const aspect = cs.aspect || 'original';
+  const arBtns = ['original', '9:16', '16:9', '1:1'].map(a =>
+    `<button class="shot-ar-btn${a === aspect ? ' active' : ''}" onclick="setShotAspect('${pid}','${a}')">${a === 'original' ? 'Original' : a}</button>`
+  ).join('');
+
+  const isSelected = (() => {
+    const ps = state.platformScreenshots?.[pid];
+    return ps?.selected?.includes(cs.shotId);
+  })();
+
+  return `
+    <div class="shot-edit-active">
+      <button class="shot-edit-close" onclick="shotEditClose('${pid}')" title="Close preview">×</button>
+      <div class="shot-edit-preview-wrap" id="shot-edit-wrap-${pid}">
+        <img src="${cs.src}" class="shot-edit-img" id="shot-edit-img-${pid}"
+             alt="${escHtml(cs.name || '')}"
+             onload="_updateShotCropFrame('${pid}')">
+        <div class="shot-crop-frame" id="shot-crop-frame-${pid}" style="display:none;"></div>
+      </div>
+      <div class="shot-edit-controls">
+        <div class="shot-edit-label">${escHtml(cs.name || 'Screenshot')}</div>
+        <div class="shot-ar-btns">${arBtns}</div>
+        <button class="btn ${isSelected ? 'btn-ghost' : 'btn-primary'} btn-sm"
+                onclick="togglePlatformScreenshot('${pid}','${cs.shotId}');_renderShotEditZone('${pid}')">
+          ${isSelected ? '✓ Selected' : '+ Select screenshot'}
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="shotEditClose('${pid}')">Close</button>
       </div>
     </div>`;
 }

@@ -1161,12 +1161,18 @@ function _doFinalSubmit(platformId, trackId) {
   const flipData = { track: trackId, time: Date.now() };
 
   function _applyFlip() {
+    // Lock the entire active-cards-grid height BEFORE re-rendering so the row
+    // doesn't shift as the submitted card (shorter) replaces the active card.
+    const grid = document.querySelector('.active-cards-grid');
+    const gridHeight = grid ? grid.offsetHeight : 0;
+    if (grid && gridHeight > 0) grid.style.minHeight = gridHeight + 'px';
+
     state.platformFlipped[platformId] = flipData;
     renderDashboard();
     // Flip-in: start from -90deg, ease to 0deg
     const newCard = document.getElementById('active-card-' + platformId);
     if (newCard) {
-      // Pin height to prevent layout shift while animating
+      // Pin card height too, as a secondary guard
       if (cardHeight > 0) newCard.style.minHeight = cardHeight + 'px';
       newCard.style.transform = 'perspective(700px) rotateY(-90deg)';
       newCard.style.transition = 'none';
@@ -1177,9 +1183,13 @@ function _doFinalSubmit(platformId, trackId) {
         setTimeout(() => {
           newCard.style.transition = '';
           newCard.style.transform  = '';
-          newCard.style.minHeight  = ''; // release pin once animation ends
+          newCard.style.minHeight  = '';
+          if (grid) grid.style.minHeight = ''; // release grid pin after animation
         }, 340);
       }));
+    } else {
+      // No card to animate — release grid pin immediately
+      setTimeout(() => { if (grid) grid.style.minHeight = ''; }, 340);
     }
   }
 
@@ -2495,6 +2505,108 @@ function _screenshotSrc(s) {
     return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
   }
   return s.url;
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREENSHOT CROP PREVIEW — inline drag-and-drop editor
+   ══════════════════════════════════════════════════════ */
+
+// Persists across renderStepModal() calls (not in state — UI-only ephemeral)
+var _shotCropState = {}; // { [pid]: { shotId, src, name, aspect } }
+
+function shotDragStart(event, pid, shotId) {
+  event.dataTransfer.setData('text/plain', JSON.stringify({ pid, shotId }));
+  event.dataTransfer.effectAllowed = 'copy';
+}
+
+function shotDragOver(event, pid) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+  const zone = document.getElementById('shot-edit-zone-' + pid);
+  if (zone) zone.classList.add('dragover');
+}
+
+function shotDragLeave(event, pid) {
+  // Only remove class if leaving the zone itself (not a child element)
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    const zone = document.getElementById('shot-edit-zone-' + pid);
+    if (zone) zone.classList.remove('dragover');
+  }
+}
+
+function shotDrop(event, pid) {
+  event.preventDefault();
+  const zone = document.getElementById('shot-edit-zone-' + pid);
+  if (zone) zone.classList.remove('dragover');
+
+  let data;
+  try { data = JSON.parse(event.dataTransfer.getData('text/plain')); } catch (e) { return; }
+  if (!data || data.pid !== pid) return;
+
+  const shots = state.uploads?.screenshots || [];
+  const shot  = shots.find(s => s.id === data.shotId);
+  if (!shot) return;
+
+  if (!_shotCropState[pid]) _shotCropState[pid] = {};
+  _shotCropState[pid].shotId = data.shotId;
+  _shotCropState[pid].src    = _screenshotSrc(shot);
+  _shotCropState[pid].name   = shot.name;
+  // Default aspect ratio by platform type
+  if (!_shotCropState[pid].aspect) {
+    _shotCropState[pid].aspect = ['ios', 'android', 'amazon'].includes(pid) ? '9:16' : '16:9';
+  }
+  _renderShotEditZone(pid);
+}
+
+function shotEditClose(pid) {
+  if (_shotCropState[pid]) _shotCropState[pid].shotId = null;
+  _renderShotEditZone(pid);
+}
+
+function setShotAspect(pid, aspect) {
+  if (!_shotCropState[pid]) _shotCropState[pid] = {};
+  _shotCropState[pid].aspect = aspect;
+  _renderShotEditZone(pid);
+}
+
+function _renderShotEditZone(pid) {
+  const zone = document.getElementById('shot-edit-zone-' + pid);
+  if (!zone) return;
+  zone.innerHTML = _buildShotEditZoneHtml(pid);
+}
+
+// Called by img onload to position the crop frame overlay
+function _updateShotCropFrame(pid) {
+  const cs = _shotCropState[pid];
+  if (!cs || !cs.aspect || cs.aspect === 'original') return;
+
+  const img   = document.getElementById('shot-edit-img-' + pid);
+  const frame = document.getElementById('shot-crop-frame-' + pid);
+  if (!img || !frame) return;
+
+  const arMap = { '9:16': 9/16, '16:9': 16/9, '1:1': 1 };
+  const ar = arMap[cs.aspect];
+  if (!ar) { frame.style.display = 'none'; return; }
+
+  const dw = img.offsetWidth;
+  const dh = img.offsetHeight;
+  if (!dw || !dh) return;
+
+  let fw, fh;
+  if (ar < dw / dh) {
+    // Frame is portrait-ish relative to displayed image — constrain by height
+    fh = dh;
+    fw = fh * ar;
+  } else {
+    fw = dw;
+    fh = fw / ar;
+  }
+
+  frame.style.display = 'block';
+  frame.style.width   = Math.round(fw) + 'px';
+  frame.style.height  = Math.round(fh) + 'px';
+  frame.style.left    = Math.round((dw - fw) / 2) + 'px';
+  frame.style.top     = Math.round((dh - fh) / 2) + 'px';
 }
 
 function renderScreenshotGridInto(grid) {
