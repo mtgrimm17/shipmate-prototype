@@ -2069,21 +2069,31 @@ function buildImproveSubmissionSection(platformId) {
   // Compute merged items first so the grade reflects fixes already applied
   const mergedItems = (typeof _getCurrentMergedStoreItems === 'function')
     ? _getCurrentMergedStoreItems() : [];
-  const idxNow  = idx.storePage || 0;
   const remaining = mergedItems.length; // after filtering dismissed/accepted items
 
-  // Grade only improves as fixes are ACCEPTED (not dismissed)
-  const acceptedCount  = Object.keys(state.acceptedFixes || {}).length;
-  const dismissedCount = state.dismissedFixes?.size || 0;
-  const handledCount   = acceptedCount + dismissedCount;
-  const totalItems     = remaining + handledCount;
-  const currentNum     = handledCount + 1; // 1-indexed position in the sequence
+  // Total valid suggestions from this AI run (before dismiss/accept filtering)
+  // This drives the counter ("1 of 2", not "1 of 5" when 3 lacked fixedValue)
+  const allValidFromRun = (!spi?.loading && !spi?.error && spi?.issues)
+    ? spi.issues.filter(iss => !!iss.fixedValue).length
+    : remaining;
+  const totalItems = allValidFromRun || remaining;
+  const handledInRun = Math.max(0, totalItems - remaining);
+  const currentNum = handledInRun + 1; // 1-indexed position
 
-  // Grade: only accepted fixes improve it — dismissed items remain as "unfixed"
-  const gradeBase = remaining + dismissedCount; // un-accepted items count
-  const spGrade  = (!spi?.loading && !spi?.error)
-    ? (gradeBase === 0 ? 'A' : gradeBase === 1 ? 'B' : gradeBase <= 3 ? 'C' : 'D')
-    : null;
+  // Grade: starts based on total valid suggestions found; each ACCEPTED fix moves up one letter.
+  // D(4+) → C(3) → B(2) → A(1 or 0)
+  // Dismissed fixes don't improve grade.
+  const acceptedCount = Object.keys(state.acceptedFixes || {}).length;
+  const GRADE_LETTERS = ['A', 'B', 'C', 'D'];
+  function _initialGradeTier(n) {
+    if (n <= 1) return 0; // A — nearly or fully perfect
+    if (n === 2) return 1; // B
+    if (n === 3) return 2; // C
+    return 3;              // D — 4 or more suggestions
+  }
+  const startTier   = _initialGradeTier(totalItems);
+  const currentTier = Math.max(0, startTier - acceptedCount);
+  const spGrade = (!spi?.loading && !spi?.error) ? GRADE_LETTERS[currentTier] : null;
   const assGrade = ana?.scores?.assets   || null;
   const metGrade = ana?.scores?.metadata || null;
   const mergedGrade = _worseGrade(spGrade, _worseGrade(assGrade, metGrade));
@@ -4786,9 +4796,12 @@ function buildSubmittedCard(pid, flipData) {
   const ts         = (flipData && flipData.time)
     ? new Date(flipData.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '';
+  // Maintain the height of the pre-flip active card to prevent visual snap on re-renders
+  const savedH = state.platformFlippedCardHeight?.[pid];
+  const heightStyle = savedH ? ` style="min-height:${savedH}px"` : '';
 
   return `
-    <div class="active-card submitted-card" id="active-card-${pid}">
+    <div class="active-card submitted-card" id="active-card-${pid}"${heightStyle}>
       <div class="active-card-head" style="border-bottom:none;">
         <div class="active-card-platform">
           <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>

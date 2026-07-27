@@ -1157,6 +1157,7 @@ function _doFinalSubmit(platformId, trackId) {
 
   // Card-flip animation: rotate out → swap content → rotate in
   if (!state.platformFlipped) state.platformFlipped = {};
+  if (!state.platformFlippedCardHeight) state.platformFlippedCardHeight = {};
   const card = document.getElementById('active-card-' + platformId);
   const flipData = { track: trackId, time: Date.now() };
 
@@ -1183,8 +1184,10 @@ function _doFinalSubmit(platformId, trackId) {
         setTimeout(() => {
           newCard.style.transition = '';
           newCard.style.transform  = '';
-          newCard.style.minHeight  = '';
-          if (grid) grid.style.minHeight = ''; // release grid pin after animation
+          // Don't clear newCard.style.minHeight — card must stay at pre-flip height.
+          // buildSubmittedCard already set the correct min-height via state;
+          // clearing here would cause the post-animation snap the user sees.
+          if (grid) grid.style.minHeight = '';
         }, 340);
       }));
     } else {
@@ -1193,8 +1196,9 @@ function _doFinalSubmit(platformId, trackId) {
     }
   }
 
-  // Capture height before flip so submitted card can match it (prevents layout shift)
+  // Capture height before flip — saved to state so buildSubmittedCard can persist it across re-renders
   const cardHeight = card ? card.offsetHeight : 0;
+  if (cardHeight > 0) state.platformFlippedCardHeight[platformId] = cardHeight;
 
   if (card) {
     // Flip-out: rotate to 90deg, then swap
@@ -1233,6 +1237,7 @@ function cancelSubmission(pid) {
 
   function _applyUnflip() {
     if (state.platformFlipped) delete state.platformFlipped[pid];
+    if (state.platformFlippedCardHeight) delete state.platformFlippedCardHeight[pid];
     renderDashboard();
     const newCard = document.getElementById('active-card-' + pid);
     if (newCard) {
