@@ -2348,27 +2348,67 @@ function buildStorePreviewSection() {
       });
     }
 
-    // Render one label bucket
-    function _bucket(label, ids) {
+    // SVG icon per Apple data group (matches App Store icon style)
+    function _groupIcon(groupName) {
+      const icons = {
+        'Purchases':        `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="4" y="7" width="12" height="10" rx="2" stroke="white" stroke-width="1.4"/><path d="M7 7V5.5a3 3 0 0 1 6 0V7" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+        'Contact Info':     `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="8.25" stroke="white" stroke-width="1.4"/><path d="M10 9v5" stroke="white" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="6.5" r="0.9" fill="white"/></svg>`,
+        'Identifiers':      `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="2.5" y="5.5" width="15" height="9" rx="2" stroke="white" stroke-width="1.4"/><path d="M6 9h2M6 11.5h5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="14" cy="10.25" r="1.75" stroke="white" stroke-width="1.2"/></svg>`,
+        'Usage Data':       `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M4 14V10M8 14V7M12 14V9M16 14V5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Diagnostics':      `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a8 8 0 1 1 0 16A8 8 0 0 1 10 2z" stroke="white" stroke-width="1.4"/><path d="M10 6v4l2.5 2.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        'Location':         `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a5.5 5.5 0 0 1 5.5 5.5c0 4-5.5 10.5-5.5 10.5S4.5 11.5 4.5 7.5A5.5 5.5 0 0 1 10 2z" stroke="white" stroke-width="1.4"/><circle cx="10" cy="7.5" r="1.8" stroke="white" stroke-width="1.3"/></svg>`,
+        'Financial Info':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="7.5" stroke="white" stroke-width="1.4"/><path d="M10 6v8M8 7.5h3a1.5 1.5 0 0 1 0 3H9a1.5 1.5 0 0 0 0 3h3" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        'Health & Fitness': `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 16s-7-4.5-7-8.5a4 4 0 0 1 7-2.65A4 4 0 0 1 17 7.5C17 11.5 10 16 10 16z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+        'User Content':     `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M5 3h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="white" stroke-width="1.4"/><path d="M7 8h6M7 11h4" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        'Browsing History': `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="7.5" stroke="white" stroke-width="1.4"/><path d="M2.5 10h15M10 2.5a12 12 0 0 1 0 15M10 2.5a12 12 0 0 0 0 15" stroke="white" stroke-width="1.3"/></svg>`,
+        'Search History':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="9" cy="9" r="5.5" stroke="white" stroke-width="1.4"/><path d="M13 13l3.5 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Sensitive Info':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2l7 3.5V10c0 4-3.5 7-7 8-3.5-1-7-4-7-8V5.5L10 2z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+        'Contacts':         `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="8" cy="7.5" r="3" stroke="white" stroke-width="1.4"/><path d="M2 17c0-3.3 2.7-5 6-5" stroke="white" stroke-width="1.4" stroke-linecap="round"/><path d="M14 11v6M11 14h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Other Data':       `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="5" cy="10" r="1.5" fill="white"/><circle cx="10" cy="10" r="1.5" fill="white"/><circle cx="15" cy="10" r="1.5" fill="white"/></svg>`,
+      };
+      return icons[groupName] || icons['Other Data'];
+    }
+
+    // Person icon for the card header (blue circle)
+    const personIcon = `
+      <div class="ias-pp-person-icon">
+        <svg viewBox="0 0 44 44" fill="none" width="44" height="44">
+          <circle cx="22" cy="22" r="22" fill="#0a84ff"/>
+          <circle cx="22" cy="17" r="6" fill="white"/>
+          <path d="M8 38c0-7.7 6.3-13 14-13s14 5.3 14 13" fill="white"/>
+        </svg>
+      </div>`;
+
+    // Render one App Store-style nutrition label card
+    function _ppCard(bucketTitle, bucketSubtitle, ids) {
       if (!ids.length) return '';
       const groups = _groups(ids);
-      const shown  = groups.slice(0, 4);
-      const extra  = groups.length - 4;
       return `
-        <div class="ias-nl-bucket">
-          <div class="ias-nl-bucket-label">${label}</div>
-          <div class="ias-nl-tags">
-            ${shown.map(g => `<span class="ias-nl-tag">${escHtml(g)}</span>`).join('')}
-            ${extra > 0 ? `<span class="ias-nl-tag ias-nl-tag-more">+${extra} more</span>` : ''}
+        <div class="ias-pp-card">
+          ${personIcon}
+          <div class="ias-pp-card-title">${bucketTitle}</div>
+          <div class="ias-pp-card-subtitle">${bucketSubtitle}</div>
+          <div class="ias-pp-grid">
+            ${groups.map(g => `
+              <div class="ias-pp-grid-item">
+                ${_groupIcon(g)}
+                <span>${escHtml(g)}</span>
+              </div>`).join('')}
           </div>
         </div>`;
     }
 
-    const bucketsHtml = _bucket('Data Used to Track You', tracking)
-                      + _bucket('Data Linked to You',     linked)
-                      + _bucket('Data Not Linked to You', notLinked);
+    const cardsHtml = _ppCard('Data Used to Track You',
+        'The following data may be used to track you across apps and websites owned by other companies:',
+        tracking)
+      + _ppCard('Data Linked to You',
+        'The following data may be collected and linked to your identity:',
+        linked)
+      + _ppCard('Data Not Linked to You',
+        'The following data may be collected but it is not linked to your identity:',
+        notLinked);
 
-    return `<div class="ias-nl-card">${bucketsHtml}</div>`;
+    return cardsHtml || `<div class="ias-privacy-card ias-privacy-pending"><div class="ias-privacy-pending-msg">No data types configured.</div></div>`;
   })();
 
   // What's New section
@@ -2507,8 +2547,9 @@ function buildStorePreviewSection() {
             <span class="ias-section-head">App Privacy</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
+          <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below. For more information, see the <span class="ias-privacy-link">developer's privacy policy</span>.</div>
           ${privacyHtml}
-          <div class="ias-privacy-footer">Privacy practices may vary based on features you use or your age.</div>
+          <div class="ias-privacy-footer">Privacy practices may vary, for example, based on the features you use or your age. <span class="ias-privacy-link">Learn More</span></div>
         </div>
 
         <div class="ias-section-divider"></div>
@@ -3263,6 +3304,7 @@ function buildContentRatingSection() {
     </div>
     ${kidsFollowUp}
     ${overrideFollowUp}
+    ${(collapseMode && !showAll) ? '' : `
     <div class="form-group" style="margin-top:14px;">
       <label class="form-label">${t('ios.age.suitability.label') || 'Age Suitability URL'} <span class="form-section-note">${t('ob.field.optional_tag') || 'Optional'}</span>
         <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${t('ios.age.suitability.tooltip') || 'A URL with additional age suitability information for Apple reviewers.'}</span></span>
@@ -3271,7 +3313,7 @@ function buildContentRatingSection() {
              placeholder="${t('ios.age.suitability.placeholder') || 'https://yourgame.com/age-suitability'}"
              oninput="updateIOSTextField('ageSuitabilityUrl', this.value)"
              onblur="reRenderStepModal()">
-    </div>`;
+    </div>`}`;
 
   return togglePill + questionsHtml + additionalSection;
 }
@@ -3341,11 +3383,13 @@ function buildExportComplianceSection() {
 function buildBusinessSection() {
   const a = state.iosSubmitAnswers;
 
-  // Unanswered/All filter — hide hasIAP row when it's already been answered by AI
+  // Unanswered/All filter — hide answered rows in Unanswered view
   const bsAnswered    = state.iosAnsweredAtInference;
   const bsCollapse    = bsAnswered !== null;
   const bsShowAll     = state.iosContentRatingExpanded;
   const hideIAP       = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
+  // Tax category defaults to 'games' — always hide in Unanswered view if it has a value
+  const hideTaxCat    = bsCollapse && !bsShowAll && !!a.taxCategory;
 
   const IAP_TYPES = [
     { id: 'consumable',     label: 'Consumable',         desc: 'Coins, lives, boosts' },
@@ -3387,6 +3431,7 @@ function buildBusinessSection() {
     ${hideIAP ? '' : iosYNRow('Does your app include in-app purchases?', 'hasIAP',
       'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.')}
     ${hideIAP ? '' : iapFollowUp}
+    ${hideTaxCat ? '' : `
     <div class="form-group" style="margin-top:14px;">
       <label class="form-label">Tax Category
         <span class="tooltip-anchor">
@@ -3398,7 +3443,7 @@ function buildBusinessSection() {
         <option value="">Select a category</option>
         ${TAX_CATS.map(c => `<option value="${c.toLowerCase()}" ${a.taxCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
       </select>
-    </div>`;
+    </div>`}`;
 }
 
 /* ── Distribution ────────────────────────────────────── */
