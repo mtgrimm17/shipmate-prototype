@@ -1093,7 +1093,16 @@ function confirmAndSubmit(platformId) {
 function selectTrack(pid, trackId) {
   if (!state.selectedTracks) state.selectedTracks = {};
   state.selectedTracks[pid] = trackId;
-  // No re-render needed — the select element already reflects the new value
+  // Re-render just the submit step card so the "Submit →" button appears now that a track is chosen
+  const cardEl = document.getElementById(pid + '-step-card-submit');
+  if (cardEl && typeof buildSubmitStepCard === 'function') {
+    const p        = PLATFORMS[pid];
+    const counts   = platformStepCount(pid);
+    const locked   = !counts.allRequired;
+    const done     = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+    const newHtml  = buildSubmitStepCard(pid, p ? p.steps.length : 0, locked, done);
+    cardEl.outerHTML = newHtml;
+  }
 }
 
 /* Confirm and execute the submit from the inline step card */
