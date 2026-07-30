@@ -1898,6 +1898,12 @@ const state = {
     steam:   false,
   },
 
+  // Binary finding navigation — which finding is currently shown (0-indexed per platform)
+  binFindingIdx: { ios: 0, android: 0, steam: 0 },
+
+  // Whether the "View Fix" panel is currently expanded for the active finding
+  binFindingFixExpanded: { ios: false, android: false, steam: false },
+
   // Per-platform screenshot selections: which onboarding shots are selected,
   // plus any platform-specific uploads
   platformScreenshots: {

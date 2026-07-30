@@ -3818,6 +3818,24 @@ function _refreshBuildUI(pid) {
   }
 }
 
+/* ── Binary findings navigation ─────────────────────────────────────────────── */
+
+// Advance to the next binary finding (called by "Got it" button)
+function acknowledgeBinFinding(pid) {
+  if (!state.binFindingIdx) state.binFindingIdx = { ios: 0, android: 0, steam: 0 };
+  state.binFindingIdx[pid] = (state.binFindingIdx[pid] || 0) + 1;
+  if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
+  state.binFindingFixExpanded[pid] = false;
+  reRenderStepModal();
+}
+
+// Toggle the "View Fix" panel for the current binary finding
+function toggleBinFindingFix(pid) {
+  if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
+  state.binFindingFixExpanded[pid] = !state.binFindingFixExpanded[pid];
+  reRenderStepModal();
+}
+
 /* ══════════════════════════════════════════════════════
    SCREENSHOT STEP  (per-platform selection + uploads)
    ══════════════════════════════════════════════════════ */

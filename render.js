@@ -2214,30 +2214,87 @@ function buildImproveSubmissionSection(platformId) {
   const binProcessing = !!(state.platformBuildProcessing?.[platformId]);
   const binAnalyzed   = binBuild && !binProcessing;
 
-  // Fake binary findings — platform-specific
+  // Fake binary findings — platform-specific, each with a "View Fix" payload
   const BIN_FINDINGS = {
     ios: [
-      { title: 'Privacy manifest missing entries', body: 'PrivacyInfo.xcprivacy lacks required NSPrivacyAccessedAPITypes entries for UserDefaults (CA92.1) and FileTimestamp (3C8A.1) access. Builds without complete privacy manifests are rejected by App Store Connect.' },
-      { title: 'Deprecated UIWebView usage detected', body: '2 references to UIWebView found (likely in an embedded SDK). UIWebView was removed in iOS 15. Replace with WKWebView or update the offending SDK.' },
-      { title: 'IDFA accessed without ATT prompt', body: 'AdSupport.framework is linked but no ATTrackingManager.requestTrackingAuthorization() call was found. Accessing the IDFA without user permission results in App Store rejection.' },
+      {
+        title: 'Privacy manifest missing entries',
+        body:  'PrivacyInfo.xcprivacy lacks required NSPrivacyAccessedAPITypes entries for UserDefaults (CA92.1) and FileTimestamp (3C8A.1) access. Builds without complete privacy manifests are rejected by App Store Connect.',
+        fixLabel: 'Add to PrivacyInfo.xcprivacy',
+        fix: `<key>NSPrivacyAccessedAPITypes</key>\n<array>\n  <dict>\n    <key>NSPrivacyAccessedAPIType</key>\n    <string>NSPrivacyAccessedAPICategoryUserDefaults</string>\n    <key>NSPrivacyAccessedAPITypeReasons</key>\n    <array><string>CA92.1</string></array>\n  </dict>\n  <dict>\n    <key>NSPrivacyAccessedAPIType</key>\n    <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>\n    <key>NSPrivacyAccessedAPITypeReasons</key>\n    <array><string>3C8A.1</string></array>\n  </dict>\n</array>`,
+        fixIsCode: true,
+      },
+      {
+        title: 'Deprecated UIWebView usage detected',
+        body:  '2 references to UIWebView found in an embedded analytics SDK. UIWebView was removed in iOS 15. Replace with WKWebView or update the offending SDK.',
+        fixLabel: 'What to update',
+        fix:  'UIWebView references are coming from a third-party SDK — not your own code. Check which SDK version you\'re using against these known culprits:\n\n• Unity Analytics ≤ 3.x  →  update to Unity Analytics 4.x\n• Facebook SDK ≤ 6.x  →  update to Facebook SDK 14+\n• Firebase Analytics ≤ 6.x  →  update to Firebase 9+\n\nRun a new build after updating and re-upload to confirm the reference is gone.',
+        fixIsCode: false,
+      },
+      {
+        title: 'IDFA accessed without ATT prompt',
+        body:  'AdSupport.framework is linked but no ATTrackingManager.requestTrackingAuthorization() call was found. Accessing the IDFA without user permission results in App Store rejection.',
+        fixLabel: 'Two-step fix',
+        fix: `Step 1 — Add to Info.plist:\n<key>NSUserTrackingUsageDescription</key>\n<string>This identifier helps us show you relevant ads and improve your experience.</string>\n\nStep 2 — Call before any IDFA access:\nATTrackingManager.requestTrackingAuthorization { status in\n    // proceed with or without IDFA based on status\n}`,
+        fixIsCode: true,
+      },
     ],
     android: [
-      { title: 'Target SDK below minimum (API 34)', body: 'targetSdkVersion is set to 31. Google Play now requires API 34+ for new submissions. Update your build.gradle and test for behavioral differences.' },
-      { title: 'Cleartext traffic enabled', body: 'android:usesCleartextTraffic="true" in AndroidManifest.xml. This allows unencrypted HTTP traffic and may cause Google Play policy warnings. Migrate all endpoints to HTTPS.' },
-      { title: 'Legacy storage permission not migrated', body: 'READ_EXTERNAL_STORAGE is declared but not paired with READ_MEDIA_IMAGES / READ_MEDIA_VIDEO (required for Android 13+). On API 33+ devices this permission is silently ignored.' },
+      {
+        title: 'Target SDK below minimum (API 34)',
+        body:  'targetSdkVersion is set to 31. Google Play now requires API 34+ for all new submissions and updates.',
+        fixLabel: 'Update build.gradle',
+        fix: `// app/build.gradle\nandroid {\n    compileSdk 34\n    defaultConfig {\n        targetSdk 34\n        // Test on API 34 emulator before submitting —\n        // foreground service types must now be declared explicitly.\n    }\n}`,
+        fixIsCode: true,
+      },
+      {
+        title: 'Cleartext HTTP traffic enabled',
+        body:  'android:usesCleartextTraffic="true" in AndroidManifest.xml. This permits unencrypted HTTP traffic and may trigger Google Play policy warnings.',
+        fixLabel: 'Update AndroidManifest.xml',
+        fix: `<!-- Remove or set to false on the <application> tag -->\n<application\n    android:usesCleartextTraffic="false"\n    ... >\n\n<!-- If specific internal domains need HTTP, use a network security config\n     and reference it with android:networkSecurityConfig="@xml/network_security_config" -->`,
+        fixIsCode: true,
+      },
+      {
+        title: 'Legacy storage permission not migrated',
+        body:  'READ_EXTERNAL_STORAGE is declared without the Android 13+ replacements. On API 33+ devices this permission is silently ignored.',
+        fixLabel: 'Update AndroidManifest.xml',
+        fix: `<!-- Replace READ_EXTERNAL_STORAGE with granular permissions -->\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\n\n<!-- Keep legacy permission for devices running Android 12L or lower -->\n<uses-permission\n    android:name="android.permission.READ_EXTERNAL_STORAGE"\n    android:maxSdkVersion="32" />`,
+        fixIsCode: true,
+      },
     ],
     steam: [
-      { title: 'Steamworks SDK out of date (1.55 → 1.61)', body: 'Your build links Steamworks SDK 1.55. The current release is 1.61, which includes critical fixes for overlay injection on Windows 11 24H2 and macOS 14.' },
-      { title: 'No Steam Achievements registered', body: 'The Steamworks Achievements API is initialized but ISteamUserStats::SetAchievement() is never called. Players expect achievement support — Steam Discovery algorithms also factor this in.' },
-      { title: 'Steam Cloud save not integrated', body: 'ISteamRemoteStorage API is absent from the binary. Steam Cloud saves improve player retention and cross-device play. Add ISteamRemoteStorage::FileWrite() calls for save data.' },
+      {
+        title: 'Steamworks SDK out of date (1.55 → 1.61)',
+        body:  'Your build links Steamworks SDK 1.55. The current release is 1.61, which includes critical fixes for overlay injection on Windows 11 24H2 and macOS 14.',
+        fixLabel: 'How to update',
+        fix:  '1. Download Steamworks SDK 1.61 from the Steamworks Partner Portal (partner.steamgames.com → SDK Downloads).\n\n2. Replace the sdk/ folder in your project with the new version.\n\n3. Rebuild and run your game locally with Steam running to verify the overlay still works.\n\n4. Re-upload the new build to Shipmate.',
+        fixIsCode: false,
+      },
+      {
+        title: 'No Steam Achievements registered',
+        body:  'The Steamworks Stats API is initialized but SetAchievement() is never called. Players expect achievement support, and Steam Discovery factors this into game visibility.',
+        fixLabel: 'Implementation steps',
+        fix:  '1. Define achievements in Steamworks Partner Portal → App Admin → Stats & Achievements. Publish the changes.\n\n2. After a player earns an achievement, call:\n   SteamUserStats()->SetAchievement("ACH_YOUR_NAME");\n   SteamUserStats()->StoreStats();\n\n3. On game launch, call SteamUserStats()->RequestCurrentStats() to sync the player\'s existing progress before any SetAchievement calls.',
+        fixIsCode: false,
+      },
+      {
+        title: 'Steam Cloud save not integrated',
+        body:  'ISteamRemoteStorage API is absent from the binary. Cloud saves improve cross-device play and are a key factor in Steam player retention.',
+        fixLabel: 'Implementation overview',
+        fix:  'Writing a save file to Steam Cloud:\n   SteamRemoteStorage()->FileWrite("save.dat", buffer, bufferSize);\n\nReading it back:\n   int32 fileSize = SteamRemoteStorage()->GetFileSize("save.dat");\n   SteamRemoteStorage()->FileRead("save.dat", buffer, fileSize);\n\nSteam handles sync automatically. The Steamworks SDK ships a CloudEnabled sample app — use it as a reference for the full init/quota-check flow.',
+        fixIsCode: false,
+      },
     ],
   };
-  const findings = BIN_FINDINGS[platformId] || BIN_FINDINGS.ios;
+  const findings    = BIN_FINDINGS[platformId] || BIN_FINDINGS.ios;
+  const binIdx      = state.binFindingIdx?.[platformId] || 0;
+  const binFixOpen  = !!(state.binFindingFixExpanded?.[platformId]);
+  const binRemaining = Math.max(0, findings.length - binIdx);
 
   // Build the binary upload pill (same control as card header, using modal variant)
   const binUploadPill = buildBuildDropdown(platformId, true);
 
-  let binContent;
+  let binContent, binFooter = '';
   if (!binBuild && !binProcessing) {
     // No binary yet — show upload control + description
     binContent = `
@@ -2255,21 +2312,46 @@ function buildImproveSubmissionSection(platformId) {
           <span>Analyzing binary… this takes about 10 seconds.</span>
         </div>
       </div>`;
-  } else {
-    // Analysis complete — show upload pill + 3 findings
-    const findingItems = findings.map(f => `
-      <div class="iys-issue-content" style="margin-top:10px;">
-        <div class="iys-issue-title">${escHtml(f.title)}</div>
-        <div class="iys-issue-body">${escHtml(f.body)}</div>
-      </div>`).join('');
+  } else if (binRemaining === 0) {
+    // All findings acknowledged
     binContent = `
-      <div class="iys-bin-row">
-        ${binUploadPill}
-      </div>
-      ${findingItems}`;
+      <div class="iys-bin-row" style="margin-bottom:8px;">${binUploadPill}</div>
+      ${_allGood('No binary issues detected')}`;
+  } else {
+    // Show one finding at a time
+    const cur       = findings[binIdx];
+    const total     = findings.length;
+    const numShown  = binIdx + 1; // 1-indexed
+    const counterHtml = `<span class="iys-section-counter">${numShown} of ${total}</span>`;
+
+    // Fix panel (toggled by "View Fix" button)
+    const fixPanel = binFixOpen ? `
+      <div class="iys-bin-fix-panel">
+        <div class="iys-bin-fix-label">${escHtml(cur.fixLabel)}</div>
+        ${cur.fixIsCode
+          ? `<pre class="iys-bin-fix-code">${escHtml(cur.fix)}</pre>`
+          : `<div class="iys-bin-fix-desc">${escHtml(cur.fix).replace(/\n/g, '<br>')}</div>`
+        }
+      </div>` : '';
+
+    binContent = `
+      <div class="iys-bin-row" style="margin-bottom:10px;">${binUploadPill}</div>
+      <div class="iys-issue-content">
+        <div class="iys-issue-title">${escHtml(cur.title)}</div>
+        <div class="iys-issue-body">${escHtml(cur.body)}</div>
+        ${fixPanel}
+      </div>`;
+    binFooter = `
+      ${counterHtml}
+      <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
+              onclick="toggleBinFindingFix('${platformId}')">
+        ${binFixOpen ? 'Hide Fix' : 'View Fix'}
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>`;
   }
-  const binGrade   = binAnalyzed ? 'B' : null;
-  const binSection = _section('Binary', binGrade, binContent, '');
+
+  const binGrade   = !binAnalyzed ? null : binRemaining === 0 ? 'A' : 'B';
+  const binSection = _section('Binary', binGrade, binContent, binFooter);
 
   // ── Re-analyze footer ─────────────────────────────────
   const hasResults = (spi && !spi.loading) || (ana && !ana.loading);
