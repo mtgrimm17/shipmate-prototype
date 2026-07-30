@@ -714,13 +714,13 @@ function buildObCountryList() { return buildObCountryChips(); }
 /* ── Platform chips (text-only multi-select, same style as lang chips) ── */
 function buildObPlatTilesHTML() {
   const PLATFORMS_OB = [
-    { id:'ios',      label:'App Store',         comingSoon: false },
-    { id:'android',  label:'Google Play',        comingSoon: false },
     { id:'steam',    label:'Steam',              comingSoon: false },
+    { id:'ios',      label:'App Store',          comingSoon: false },
+    { id:'android',  label:'Google Play',        comingSoon: false },
     { id:'egs',      label:'Epic Games Store',   comingSoon: true  },
-    { id:'nintendo', label:'Nintendo eShop',     comingSoon: true  },
     { id:'psn',      label:'PlayStation Store',  comingSoon: true  },
     { id:'xbox',     label:'Xbox Store',         comingSoon: true  },
+    { id:'nintendo', label:'Nintendo eShop',     comingSoon: true  },
   ];
   const lockSVG = `<svg class="ob-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
   const tiles = PLATFORMS_OB.map(({ id, label, comingSoon }) => {
@@ -1301,14 +1301,17 @@ function buildConsolidatedBanner() {
     </div>`;
 }
 
+// Canonical display order for platform cards (active and inactive sections)
+const PLATFORM_ORDER = ['steam', 'ios', 'android', 'egs', 'psn', 'xbox', 'nintendo'];
+
 function renderDashboard() {
   const el = document.getElementById('dashboard');
   if (!el) return;
 
   renderProjectBar();
 
-  const active   = [...state.activePlatforms];
-  const inactive = Object.keys(PLATFORMS).filter(pid => !state.activePlatforms.has(pid));
+  const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
+  const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid));
 
   let h = '';
 
@@ -1456,6 +1459,7 @@ function buildIOSActiveCard(pid) {
 
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+  const binProc = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
     const done      = isIOSSectionComplete(step.id);
     const risk      = computeIOSSectionRisk(step.id);
@@ -1464,6 +1468,10 @@ function buildIOSActiveCard(pid) {
     // Only show risk dot after the user has attempted to save/close this step at least once
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
+    // Binary processing indicator on the Improve Your Submission step row
+    const trailingEl = (step.id === 'improveSubmission' && binProc)
+      ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
+      : `<span class="ios-step-arrow">›</span>`;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="ios-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -1472,7 +1480,7 @@ function buildIOSActiveCard(pid) {
           <div class="ios-step-name">${stepLabel(pid, step)}</div>
         </div>
         ${riskDot}
-        <span class="ios-step-arrow">›</span>
+        ${trailingEl}
       </div>`;
   }).join('');
 
@@ -1503,6 +1511,7 @@ function buildAndroidActiveCard(pid) {
 
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+  const binProcAndroid = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
     const done      = isAndroidSectionComplete(step.id);
     const risk      = computeAndroidSectionRisk(step.id);
@@ -1510,6 +1519,9 @@ function buildAndroidActiveCard(pid) {
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
+    const trailingEl = (step.id === 'improveSubmission' && binProcAndroid)
+      ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
+      : `<span class="ios-step-arrow">›</span>`;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="android-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -1518,7 +1530,7 @@ function buildAndroidActiveCard(pid) {
           <div class="ios-step-name">${stepLabel(pid, step)}</div>
         </div>
         ${riskDot}
-        <span class="ios-step-arrow">›</span>
+        ${trailingEl}
       </div>`;
   }).join('');
 
@@ -2198,12 +2210,66 @@ function buildImproveSubmissionSection(platformId) {
   const locSection = _section('Localization', locGrade, locContent, '');
 
   // ── BINARY SECTION ────────────────────────────────────
-  const binContent = `
-    <div class="iys-issue-content">
-      <div class="iys-issue-title">Pending binary upload</div>
-      <div class="iys-issue-body">Shipmate will scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>
-    </div>`;
-  const binSection = _section('Binary', 'N/A', binContent, '');
+  const binBuild      = state.platformBuilds?.[platformId] || null;
+  const binProcessing = !!(state.platformBuildProcessing?.[platformId]);
+  const binAnalyzed   = binBuild && !binProcessing;
+
+  // Fake binary findings — platform-specific
+  const BIN_FINDINGS = {
+    ios: [
+      { title: 'Privacy manifest missing entries', body: 'PrivacyInfo.xcprivacy lacks required NSPrivacyAccessedAPITypes entries for UserDefaults (CA92.1) and FileTimestamp (3C8A.1) access. Builds without complete privacy manifests are rejected by App Store Connect.' },
+      { title: 'Deprecated UIWebView usage detected', body: '2 references to UIWebView found (likely in an embedded SDK). UIWebView was removed in iOS 15. Replace with WKWebView or update the offending SDK.' },
+      { title: 'IDFA accessed without ATT prompt', body: 'AdSupport.framework is linked but no ATTrackingManager.requestTrackingAuthorization() call was found. Accessing the IDFA without user permission results in App Store rejection.' },
+    ],
+    android: [
+      { title: 'Target SDK below minimum (API 34)', body: 'targetSdkVersion is set to 31. Google Play now requires API 34+ for new submissions. Update your build.gradle and test for behavioral differences.' },
+      { title: 'Cleartext traffic enabled', body: 'android:usesCleartextTraffic="true" in AndroidManifest.xml. This allows unencrypted HTTP traffic and may cause Google Play policy warnings. Migrate all endpoints to HTTPS.' },
+      { title: 'Legacy storage permission not migrated', body: 'READ_EXTERNAL_STORAGE is declared but not paired with READ_MEDIA_IMAGES / READ_MEDIA_VIDEO (required for Android 13+). On API 33+ devices this permission is silently ignored.' },
+    ],
+    steam: [
+      { title: 'Steamworks SDK out of date (1.55 → 1.61)', body: 'Your build links Steamworks SDK 1.55. The current release is 1.61, which includes critical fixes for overlay injection on Windows 11 24H2 and macOS 14.' },
+      { title: 'No Steam Achievements registered', body: 'The Steamworks Achievements API is initialized but ISteamUserStats::SetAchievement() is never called. Players expect achievement support — Steam Discovery algorithms also factor this in.' },
+      { title: 'Steam Cloud save not integrated', body: 'ISteamRemoteStorage API is absent from the binary. Steam Cloud saves improve player retention and cross-device play. Add ISteamRemoteStorage::FileWrite() calls for save data.' },
+    ],
+  };
+  const findings = BIN_FINDINGS[platformId] || BIN_FINDINGS.ios;
+
+  // Build the binary upload pill (same control as card header, using modal variant)
+  const binUploadPill = buildBuildDropdown(platformId, true);
+
+  let binContent;
+  if (!binBuild && !binProcessing) {
+    // No binary yet — show upload control + description
+    binContent = `
+      <div class="iys-bin-row">
+        ${binUploadPill}
+        <div class="iys-issue-body" style="margin-top:8px;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>
+      </div>`;
+  } else if (binProcessing) {
+    // Currently analyzing
+    binContent = `
+      <div class="iys-bin-row">
+        ${binUploadPill}
+        <div class="iys-bin-analyzing">
+          <span class="build-proc-spin"></span>
+          <span>Analyzing binary… this takes about 10 seconds.</span>
+        </div>
+      </div>`;
+  } else {
+    // Analysis complete — show upload pill + 3 findings
+    const findingItems = findings.map(f => `
+      <div class="iys-issue-content" style="margin-top:10px;">
+        <div class="iys-issue-title">${escHtml(f.title)}</div>
+        <div class="iys-issue-body">${escHtml(f.body)}</div>
+      </div>`).join('');
+    binContent = `
+      <div class="iys-bin-row">
+        ${binUploadPill}
+      </div>
+      ${findingItems}`;
+  }
+  const binGrade   = binAnalyzed ? 'B' : null;
+  const binSection = _section('Binary', binGrade, binContent, '');
 
   // ── Re-analyze footer ─────────────────────────────────
   const hasResults = (spi && !spi.loading) || (ana && !ana.loading);
@@ -4249,6 +4315,7 @@ function buildSteamActiveCard(pid) {
   const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+  const binProcSteam = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
     const done      = isSteamSectionComplete(step.id);
     const risk      = computeSteamSectionRisk(step.id);
@@ -4256,6 +4323,9 @@ function buildSteamActiveCard(pid) {
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
+    const trailingEl = (step.id === 'improveSubmission' && binProcSteam)
+      ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
+      : `<span class="ios-step-arrow">›</span>`;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="steam-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -4264,7 +4334,7 @@ function buildSteamActiveCard(pid) {
           <div class="ios-step-name">${stepLabel(pid, step)}</div>
         </div>
         ${riskDot}
-        <span class="ios-step-arrow">›</span>
+        ${trailingEl}
       </div>`;
   }).join('');
 
@@ -4641,18 +4711,30 @@ function buildSteamStorePreviewSection() {
 /* ══════════════════════════════════════════════════════
    BUILD DROPDOWN  (platform card header)
    ══════════════════════════════════════════════════════ */
-function buildBuildDropdown(pid) {
-  const build  = state.platformBuilds?.[pid] || null;
-  const accept = pid === 'ios'     ? '.ipa'
-               : pid === 'android' ? '.apk,.aab'
-               :                     '.exe,.zip';
+function buildBuildDropdown(pid, inModal) {
+  const build      = state.platformBuilds?.[pid] || null;
+  const processing = !!(state.platformBuildProcessing?.[pid]);
+  const accept     = pid === 'ios'     ? '.ipa'
+                   : pid === 'android' ? '.apk,.aab'
+                   :                     '.exe,.zip';
+  // Unique file input id — avoid clash between card header and modal instances
+  const inputId    = inModal ? `build-file-modal-${pid}` : `build-file-${pid}`;
+  const uploadSVG  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;opacity:0.6"><path d="M8 11V2M4 5l4-4 4 4M2 13v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const checkSVG   = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="flex-shrink:0;color:var(--accent-green,#2FDC80)"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const spinHTML   = `<span class="build-proc-spin" style="flex-shrink:0;"></span>`;
+
+  if (processing) {
+    return `
+      <div class="build-pill is-processing" title="Analyzing binary…">
+        ${spinHTML}
+        <span class="build-pill-label">Analyzing…</span>
+      </div>`;
+  }
   const noBuild = !build;
-  const uploadSVG = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;opacity:0.6"><path d="M8 11V2M4 5l4-4 4 4M2 13v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const checkSVG = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="flex-shrink:0;color:var(--accent-green,#2FDC80)"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   return `
     <div class="build-pill ${noBuild ? 'no-build' : 'has-build'}"
-         onclick="event.stopPropagation();document.getElementById('build-file-${pid}').click()" title="${noBuild ? 'Upload build' : 'Change build'}">
-      <input type="file" id="build-file-${pid}" accept="${accept}" hidden
+         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${noBuild ? 'Upload build' : 'Change build'}">
+      <input type="file" id="${inputId}" accept="${accept}" hidden
              onchange="handleBuildUpload('${pid}', this.files)">
       ${noBuild ? uploadSVG : checkSVG}
       <span class="build-pill-label">${noBuild ? 'Upload Build' : escHtml(build.name)}</span>

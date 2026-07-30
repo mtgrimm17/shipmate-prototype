@@ -624,6 +624,15 @@ const PLATFORM_ICONS = {
 /* ── Platforms ───────────────────────────────────────── */
 
 const PLATFORMS = {
+  steam: {
+    id: 'steam', label: 'Steam Store', color: '#4c6b8a',
+    steps: [
+      { id: 'questionnaire',     label: 'Questionnaire',           hasInference: true  },
+      { id: 'screenshots',       label: 'Select Screenshots'                           },
+      { id: 'storePreview',      label: 'Store Page Preview',      hasInference: false },
+      { id: 'improveSubmission', label: 'Improve Your Submission' },
+    ],
+  },
   ios: {
     id: 'ios', label: 'App Store', color: '#007AFF',
     steps: [
@@ -639,15 +648,6 @@ const PLATFORMS = {
       { id: 'questionnaire',     label: 'Questionnaire',           hasInference: true  },
       { id: 'screenshots',       label: 'Select Screenshots'                           },
       { id: 'storePreview',      label: 'Store Listing Preview',   hasInference: false },
-      { id: 'improveSubmission', label: 'Improve Your Submission' },
-    ],
-  },
-  steam: {
-    id: 'steam', label: 'Steam Store', color: '#4c6b8a',
-    steps: [
-      { id: 'questionnaire',     label: 'Questionnaire',           hasInference: true  },
-      { id: 'screenshots',       label: 'Select Screenshots'                           },
-      { id: 'storePreview',      label: 'Store Page Preview',      hasInference: false },
       { id: 'improveSubmission', label: 'Improve Your Submission' },
     ],
   },
@@ -1889,6 +1889,13 @@ const state = {
     ios:     null,
     android: null,
     steam:   null,
+  },
+
+  // Per-platform binary processing flag (true for 10s after upload while fake analysis runs)
+  platformBuildProcessing: {
+    ios:     false,
+    android: false,
+    steam:   false,
   },
 
   // Per-platform screenshot selections: which onboarding shots are selected,

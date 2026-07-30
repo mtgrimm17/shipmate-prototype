@@ -3787,14 +3787,34 @@ function handleBuildUpload(pid, files) {
   if (!file) return;
   state.platformBuilds = state.platformBuilds || { ios: null, android: null, steam: null };
   state.platformBuilds[pid] = { name: file.name, size: file.size };
-  // Re-render the active card to reflect the new build
+
+  // Start 10-second fake binary analysis
+  if (!state.platformBuildProcessing) state.platformBuildProcessing = { ios: false, android: false, steam: false };
+  state.platformBuildProcessing[pid] = true;
+
+  // Re-render immediately to show processing state
+  _refreshBuildUI(pid);
+
+  // Also re-render the open step modal (if Improve Your Submission is open)
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+
+  setTimeout(() => {
+    // Analysis complete — clear processing flag
+    state.platformBuildProcessing[pid] = false;
+    _refreshBuildUI(pid);
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  }, 10000);
+}
+
+// Re-render just the active platform card to reflect build/processing state changes
+function _refreshBuildUI(pid) {
   const card = document.getElementById('active-card-' + pid);
   if (card) {
-    if (pid === 'ios')     card.outerHTML = buildIOSActiveCard(pid);
+    if (pid === 'ios')          card.outerHTML = buildIOSActiveCard(pid);
     else if (pid === 'android') card.outerHTML = buildAndroidActiveCard(pid);
     else if (pid === 'steam')   card.outerHTML = buildSteamActiveCard(pid);
   } else {
-    renderDash();
+    renderDashboard();
   }
 }
 
