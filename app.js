@@ -3837,6 +3837,48 @@ function toggleBinFindingFix(pid) {
 }
 
 /* ══════════════════════════════════════════════════════
+   STORE PREVIEW FLIP NAVIGATION
+   ══════════════════════════════════════════════════════ */
+
+function openStorePreviewSection(pid, target) {
+  if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
+
+  const modal = document.getElementById('submit-modal');
+  if (modal) {
+    modal.classList.add('is-flip-exit');
+    setTimeout(() => {
+      state.storePreviewFlipTarget[pid] = target;
+      reRenderStepModal();
+      modal.classList.remove('is-flip-exit');
+      modal.classList.add('is-flip-enter');
+      setTimeout(() => modal.classList.remove('is-flip-enter'), 300);
+    }, 160);
+  } else {
+    state.storePreviewFlipTarget[pid] = target;
+    reRenderStepModal();
+  }
+}
+
+function closeStorePreviewSection(pid) {
+  if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
+
+  const modal = document.getElementById('submit-modal');
+  if (modal) {
+    modal.classList.add('is-flip-exit');
+    setTimeout(() => {
+      state.storePreviewFlipTarget[pid] = null;
+      reRenderStepModal();
+      modal.classList.remove('is-flip-exit');
+      modal.classList.add('is-flip-enter');
+      setTimeout(() => modal.classList.remove('is-flip-enter'), 300);
+    }, 160);
+  } else {
+    state.storePreviewFlipTarget[pid] = null;
+    reRenderStepModal();
+  }
+}
+
+/* ══════════════════════════════════════════════════════
    SCREENSHOT STEP  (per-platform selection + uploads)
    ══════════════════════════════════════════════════════ */
 

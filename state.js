@@ -627,28 +627,25 @@ const PLATFORMS = {
   steam: {
     id: 'steam', label: 'Steam Store', color: '#4c6b8a',
     steps: [
-      { id: 'questionnaire',     label: 'Questionnaire',           hasInference: true  },
-      { id: 'screenshots',       label: 'Select Screenshots'                           },
-      { id: 'storePreview',      label: 'Store Page Preview',      hasInference: false },
-      { id: 'improveSubmission', label: 'Improve Your Submission' },
+      { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'storePreview',      label: 'Store Page Preview'                           },
+      { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
   ios: {
     id: 'ios', label: 'App Store', color: '#007AFF',
     steps: [
-      { id: 'questionnaire',     label: 'Questionnaire',           hasInference: true  },
-      { id: 'screenshots',       label: 'Select Screenshots'                           },
-      { id: 'storePreview',      label: 'Product Page Preview',    hasInference: false },
-      { id: 'improveSubmission', label: 'Improve Your Submission' },
+      { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'storePreview',      label: 'Product Page Preview'                         },
+      { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
   android: {
     id: 'android', label: 'Google Play', color: '#34A853',
     steps: [
-      { id: 'questionnaire',     label: 'Questionnaire',           hasInference: true  },
-      { id: 'screenshots',       label: 'Select Screenshots'                           },
-      { id: 'storePreview',      label: 'Store Listing Preview',   hasInference: false },
-      { id: 'improveSubmission', label: 'Improve Your Submission' },
+      { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'storePreview',      label: 'Store Listing Preview'                        },
+      { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
   egs: {
@@ -719,17 +716,18 @@ function platformStepCount(platformId) {
   // iOS: completion is computed from submission answers, not manual task status
   if (platformId === 'ios') {
     const complete = p.steps.filter(s => isIOSSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length && hasBuild };
+    // uploadBuild step completion already requires hasBuild, so no separate hasBuild check needed
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   // Android: completion is computed from androidSubmitAnswers
   if (platformId === 'android') {
     const complete = p.steps.filter(s => isAndroidSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length && hasBuild };
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   // Steam: completion is computed from steamSubmitAnswers
   if (platformId === 'steam') {
     const complete = p.steps.filter(s => isSteamSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length && hasBuild };
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   const required = p.steps.filter(s => !s.isSubmit);
   const statuses = state.platformStepStatus[platformId];
@@ -1072,13 +1070,27 @@ function computeIOSSectionRisk(sectionId) {
 }
 
 function isIOSSectionComplete(sectionId) {
+  // Upload Build step is complete when a build is uploaded and not processing
+  if (sectionId === 'uploadBuild') {
+    return !!(state.platformBuilds?.ios) && !state.platformBuildProcessing?.ios;
+  }
+
+  // Screenshots (now embedded inside storePreview flow)
   if (sectionId === 'screenshots') {
     const ps = state.platformScreenshots?.ios;
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.iosSubmitAnswers.improveSubmissionSeen;
 
-  // Questionnaire combines contentRating + privacy + business
+  // storePreview is complete when all 4 sub-sections are done
+  if (sectionId === 'storePreview') {
+    return isIOSSectionComplete('contentRating') &&
+           isIOSSectionComplete('privacy') &&
+           isIOSSectionComplete('business') &&
+           isIOSSectionComplete('screenshots');
+  }
+
+  // Questionnaire (legacy — kept for backward compat)
   if (sectionId === 'questionnaire') {
     return isIOSSectionComplete('contentRating') &&
            isIOSSectionComplete('privacy') &&
@@ -1272,11 +1284,22 @@ function androidCqProgress() {
 }
 
 function isAndroidSectionComplete(sectionId) {
+  if (sectionId === 'uploadBuild') {
+    return !!(state.platformBuilds?.android) && !state.platformBuildProcessing?.android;
+  }
+
   if (sectionId === 'screenshots') {
     const ps = state.platformScreenshots?.android;
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.androidSubmitAnswers.improveSubmissionSeen;
+
+  if (sectionId === 'storePreview') {
+    return isAndroidSectionComplete('contentRating') &&
+           isAndroidSectionComplete('dataSafety') &&
+           isAndroidSectionComplete('business') &&
+           isAndroidSectionComplete('screenshots');
+  }
 
   if (sectionId === 'questionnaire') {
     return isAndroidSectionComplete('contentRating') &&
@@ -1898,6 +1921,10 @@ const state = {
     steam:   false,
   },
 
+  // Which store preview sub-section is currently open in the flip animation
+  // null = showing preview; 'content'|'business'|'data'|'screenshots' = flipped to sub-section
+  storePreviewFlipTarget: { ios: null, android: null, steam: null },
+
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)
   binFindingIdx: { ios: 0, android: 0, steam: 0 },
 
@@ -2202,11 +2229,22 @@ function makeBlankSteamAnswers() {
 }
 
 function isSteamSectionComplete(sectionId) {
+  if (sectionId === 'uploadBuild') {
+    return !!(state.platformBuilds?.steam) && !state.platformBuildProcessing?.steam;
+  }
+
   if (sectionId === 'screenshots') {
     const ps = state.platformScreenshots?.steam;
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
+
+  if (sectionId === 'storePreview') {
+    return isSteamSectionComplete('contentRating') &&
+           isSteamSectionComplete('storeTags') &&
+           isSteamSectionComplete('technical') &&
+           isSteamSectionComplete('screenshots');
+  }
 
   if (sectionId === 'questionnaire') {
     return isSteamSectionComplete('contentRating') &&

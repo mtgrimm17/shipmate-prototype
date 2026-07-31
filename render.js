@@ -1535,9 +1535,22 @@ function buildIOSActiveCard(pid) {
   const binProc = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
     const done      = isIOSSectionComplete(step.id);
+    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+
+    // Upload Build step — inline, no modal
+    if (step.id === 'uploadBuild') {
+      return `
+        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="ios-step-card-${step.id}">
+          <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+          <div class="ios-step-info">
+            <div class="ios-step-name">${stepLabel(pid, step)}</div>
+          </div>
+          ${buildBuildDropdown(pid)}
+        </div>`;
+    }
+
     const risk      = computeIOSSectionRisk(step.id);
     const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
-    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
     // Only show risk dot after the user has attempted to save/close this step at least once
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
@@ -1566,7 +1579,6 @@ function buildIOSActiveCard(pid) {
           <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
           <div class="active-card-name-row">
             <div class="active-card-name">${platLabel(pid)}</div>
-            ${buildBuildDropdown(pid)}
           </div>
         </div>
       </div>
@@ -1587,9 +1599,21 @@ function buildAndroidActiveCard(pid) {
   const binProcAndroid = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
     const done      = isAndroidSectionComplete(step.id);
+    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+
+    if (step.id === 'uploadBuild') {
+      return `
+        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="android-step-card-${step.id}">
+          <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+          <div class="ios-step-info">
+            <div class="ios-step-name">${stepLabel(pid, step)}</div>
+          </div>
+          ${buildBuildDropdown(pid)}
+        </div>`;
+    }
+
     const risk      = computeAndroidSectionRisk(step.id);
     const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
-    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     const trailingEl = (step.id === 'improveSubmission' && binProcAndroid)
@@ -1616,7 +1640,6 @@ function buildAndroidActiveCard(pid) {
           <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
           <div class="active-card-name-row">
             <div class="active-card-name">${platLabel(pid)}</div>
-            ${buildBuildDropdown(pid)}
           </div>
         </div>
       </div>
@@ -1814,6 +1837,19 @@ function renderStepModal() {
     }
   }
 
+  // Store Preview flip — which sub-section is currently showing inside the preview modal
+  const flipTarget = stepId === 'storePreview'
+    ? (state.storePreviewFlipTarget?.[platformId] || null)
+    : null;
+  const FLIP_LABELS = {
+    content:     'Content Questions',
+    business:    'Business Questions',
+    data:        'Data Collection Questions',
+    screenshots: 'Screenshots',
+  };
+  const isFlipped = !!flipTarget;
+  const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
+
   // Step body
   let body = '';
   if (inferenceStatus === 'loading') {
@@ -1852,29 +1888,29 @@ function renderStepModal() {
         </div>
       </div>`;
   } else if (platformId === 'android') {
-    if (stepId === 'questionnaire')           body = buildQuestionnaireSection(platformId);
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'storePreview')       body = buildAndroidStorePreviewSection();
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-    // Legacy individual step fallbacks (for backward-compat with saved state)
+    // Legacy / questionnaire kept for backward-compat
+    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
     else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
     else if (stepId === 'business')           body = buildAndroidBusinessSection();
   } else if (platformId === 'steam') {
-    if (stepId === 'questionnaire')           body = buildQuestionnaireSection(platformId);
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'storePreview')       body = buildSteamStorePreviewSection();
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-    // Legacy fallbacks
+    // Legacy / questionnaire kept for backward-compat
+    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
     else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
-  } else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
-  else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
-  else if (stepId === 'distribution')         body = buildDistributionSection();
-  else if (stepId === 'storePreview')         body = buildStorePreviewSection();
+  } else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildStorePreviewSection();
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
-  // iOS legacy fallbacks
+  else if (stepId === 'distribution')         body = buildDistributionSection();
+  // iOS legacy / questionnaire kept for backward-compat
+  else if (stepId === 'questionnaire')        body = buildQuestionnaireSection(platformId);
+  else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
   else if (stepId === 'contentRating')        body = buildContentRatingSection();
   else if (stepId === 'privacy')              body = buildPrivacySection();
   else if (stepId === 'business')             body = buildBusinessSection() + buildExportComplianceSection();
@@ -1888,7 +1924,7 @@ function renderStepModal() {
       <div class="submit-modal-title-row">
         <div class="submit-modal-hicon">${platformIcon(platformId, 30, 'white')}</div>
         <div>
-          <div class="submit-modal-title">${step?.label || ''}</div>
+          <div class="submit-modal-title">${displayStepLabel || ''}</div>
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
@@ -1902,9 +1938,11 @@ function renderStepModal() {
     </div>
     <div class="submit-modal-footer">
       ${inferenceFooterNote}
-      <button class="btn btn-primary" onclick="closeStepModal()">
-        ${complete ? 'Done' : 'Save & Close'}
-      </button>
+      ${isFlipped
+        ? `<button class="btn btn-ghost" onclick="closeStorePreviewSection('${platformId}')">← Back to Preview</button>
+           <button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save & Return</button>`
+        : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save & Close'}</button>`
+      }
     </div>`;
 
   // Init distribution map after render if this is the distribution step
@@ -1943,6 +1981,40 @@ function _syncDocPane(stepId) {
     overlay.insertBefore(modal, existingGroup);
     existingGroup.remove();
   }
+}
+
+/* ── Store Preview flip: content for each sub-section modal ── */
+function buildStorePreviewFlipSection(platformId, target) {
+  if (target === 'content') {
+    if (platformId === 'android') return buildAndroidContentRatingSection();
+    if (platformId === 'steam')   return buildSteamContentRatingSection();
+    return buildContentRatingSection();
+  }
+  if (target === 'business') {
+    if (platformId === 'android') return buildAndroidBusinessSection();
+    if (platformId === 'steam') {
+      return `<div class="qs-section"><div class="qs-section-header">Store Tags</div>${buildSteamStoreTagsSection()}</div>
+              <div class="qs-section qs-section-divided"><div class="qs-section-header">Technical</div>${buildSteamTechnicalSection()}</div>`;
+    }
+    return buildBusinessSection() + buildExportComplianceSection();
+  }
+  if (target === 'data') {
+    if (platformId === 'android') return buildAndroidDataSafetySection();
+    if (platformId === 'steam') return `
+      <div class="qs-section">
+        <div class="qs-section-header">Privacy</div>
+        <p style="padding:8px 0 16px;color:var(--text-muted);font-size:13px;line-height:1.5;">
+          Steam privacy data is configured in the Steamworks Partner Portal.
+          Add your privacy policy URL here to satisfy the Steam store requirement.
+        </p>
+        ${buildSteamStorePreviewSection()}
+      </div>`;
+    return buildPrivacySection();
+  }
+  if (target === 'screenshots') {
+    return buildScreenshotsSection(platformId);
+  }
+  return '';
 }
 
 function buildDocPaneContent() {
@@ -2608,6 +2680,97 @@ function buildStorePreviewSection() {
       <span class="ias-info-value">${r.value}</span>
     </div>`).join('');
 
+  // Section completion status for DocuSign navigation
+  const contentDone     = isIOSSectionComplete('contentRating');
+  const businessDone    = isIOSSectionComplete('business');
+  const dataDone        = isIOSSectionComplete('privacy');
+  const screenshotsDone = isIOSSectionComplete('screenshots');
+
+  // Section button helper — orange pulsing tab when incomplete, green check when done
+  function _sppBtn(target, label, sub, isDone) {
+    if (isDone) {
+      return `<div class="spp-section-done">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        ${label}
+      </div>`;
+    }
+    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
+      <div>
+        <div class="spp-section-btn-title">${label}</div>
+        <div class="spp-section-btn-sub">${sub}</div>
+      </div>
+      <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto"><path d="M1 1l6 5-6 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>`;
+  }
+
+  // DocuSign-style "next required" nav bar
+  const SPP_SECTIONS = [
+    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
+    { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'             },
+    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
+    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  ];
+  const nextSection = SPP_SECTIONS.find(s => !s.done);
+  const navBar = nextSection ? `
+    <div class="spp-nav-bar">
+      <span class="spp-nav-label">Next required</span>
+      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
+        ${nextSection.label} →
+      </button>
+    </div>` : `
+    <div class="spp-nav-bar spp-nav-bar--done">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      All sections complete — ready to save
+    </div>`;
+
+  // Age meta cell (content questions)
+  const ageCell = contentDone
+    ? `<div class="ias-meta-cell">
+         <div class="ias-meta-top ias-meta-age">${ageRating}</div>
+         <div class="ias-meta-bot">Age</div>
+       </div>`
+    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+         <div class="ias-meta-top ias-meta-action-icon">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
+         </div>
+         <div class="ias-meta-bot ias-meta-bot--action">Content</div>
+       </div>`;
+
+  // Price meta cell (business questions)
+  const priceCell = businessDone
+    ? `<div class="ias-meta-cell">
+         <div class="ias-meta-top">${priceText}</div>
+         <div class="ias-meta-bot">Price</div>
+       </div>`
+    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+         <div class="ias-meta-top ias-meta-action-icon">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
+         </div>
+         <div class="ias-meta-bot ias-meta-bot--action">Business</div>
+       </div>`;
+
+  // Screenshots area
+  const screenshotsArea = screenshotsDone
+    ? `<div class="ias-shots-scroll">${shotHtml}</div>
+       <div class="ias-device-compat">
+         <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+         <span>iPhone, iPad</span>
+         <button class="spp-edit-link" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>
+       </div>`
+    : _sppBtn('screenshots', 'Select Screenshots', 'Add app screenshots to your listing', false);
+
+  // Privacy section
+  const privacySection = dataDone
+    ? `<div class="ias-section-head-row">
+         <span class="ias-section-head">App Privacy</span>
+         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+       </div>
+       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+       ${privacyHtml}
+       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
+
   return `
     <div class="ias-device-wrap">
       <div class="ias-label-row">
@@ -2633,22 +2796,16 @@ function buildStorePreviewSection() {
           </div>
         </div>
 
-        <!-- ── Meta strip ── -->
+        <!-- ── Meta strip (Age → Content Qs, Price → Business Qs) ── -->
         <div class="ias-meta-strip">
           <div class="ias-meta-cell">
             <div class="ias-meta-top">—</div>
             <div class="ias-meta-bot">Ratings</div>
           </div>
           <div class="ias-meta-divider"></div>
-          <div class="ias-meta-cell">
-            <div class="ias-meta-top ias-meta-age">${ageRating}</div>
-            <div class="ias-meta-bot">Age</div>
-          </div>
+          ${ageCell}
           <div class="ias-meta-divider"></div>
-          <div class="ias-meta-cell">
-            <div class="ias-meta-top">${priceText}</div>
-            <div class="ias-meta-bot">Price</div>
-          </div>
+          ${priceCell}
           <div class="ias-meta-divider"></div>
           <div class="ias-meta-cell ias-meta-cell-wide">
             <div class="ias-meta-top">${category}</div>
@@ -2656,15 +2813,8 @@ function buildStorePreviewSection() {
           </div>
         </div>
 
-        <!-- ── Screenshots ── -->
-        <div class="ias-shots-scroll">
-          ${shotHtml}
-        </div>
-        <div class="ias-device-compat">
-          <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-          <span>iPhone, iPad</span>
-          <svg viewBox="0 0 8 14" fill="none" width="6" height="10" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
+        <!-- ── Screenshots (or Select Screenshots button) ── -->
+        ${screenshotsArea}
 
         <!-- ── Description ── -->
         <div class="ias-section">
@@ -2700,15 +2850,9 @@ function buildStorePreviewSection() {
 
         <div class="ias-section-divider"></div>
 
-        <!-- ── App Privacy ── -->
+        <!-- ── App Privacy (or Data Collection button) ── -->
         <div class="ias-section">
-          <div class="ias-section-head-row">
-            <span class="ias-section-head">App Privacy</span>
-            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below. For more information, see the <span class="ias-privacy-link">developer's privacy policy</span>.</div>
-          ${privacyHtml}
-          <div class="ias-privacy-footer">Privacy practices may vary, for example, based on the features you use or your age. <span class="ias-privacy-link">Learn More</span></div>
+          ${privacySection}
         </div>
 
         <div class="ias-section-divider"></div>
@@ -2723,6 +2867,8 @@ function buildStorePreviewSection() {
 
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
+
+    ${navBar}
   `;
 }
 
@@ -4136,6 +4282,7 @@ function buildAndroidBusinessSection() {
 
 /* Android Store Preview — simple placeholder */
 function buildAndroidStorePreviewSection() {
+  const pid  = 'android';
   const fd   = state.formData;
   const ups  = state.uploads;
   const icon = ups.appIcon;
@@ -4148,30 +4295,91 @@ function buildAndroidStorePreviewSection() {
     ? `<img src="${icon.dataUrl}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
     : `<div style="width:60px;height:60px;border-radius:14px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px;">Icon</div>`;
 
-  const screenshotStrip = shots.length
-    ? `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-top:10px;">${shots.slice(0,5).map(s => `<img src="${_screenshotSrc(s)}" style="height:120px;border-radius:8px;flex-shrink:0;">`).join('')}</div>`
-    : `<div style="height:80px;background:var(--bg-2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:12px;margin-top:10px;">No screenshots uploaded</div>`;
-
   // Mark as seen
   state.androidSubmitAnswers.storePreviewSeen = true;
 
+  // Section completion
+  const contentDone     = isAndroidSectionComplete('contentRating');
+  const businessDone    = isAndroidSectionComplete('business');
+  const dataDone        = isAndroidSectionComplete('dataSafety');
+  const screenshotsDone = isAndroidSectionComplete('screenshots');
+
+  function _sppBtn(target, label, sub, isDone) {
+    if (isDone) {
+      return `<div class="spp-section-done">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        ${label}
+      </div>`;
+    }
+    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
+      <div>
+        <div class="spp-section-btn-title">${label}</div>
+        <div class="spp-section-btn-sub">${sub}</div>
+      </div>
+      <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto"><path d="M1 1l6 5-6 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>`;
+  }
+
+  const SPP_SECTIONS = [
+    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'        },
+    { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'              },
+    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'       },
+    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  ];
+  const nextSection = SPP_SECTIONS.find(s => !s.done);
+  const navBar = nextSection ? `
+    <div class="spp-nav-bar">
+      <span class="spp-nav-label">Next required</span>
+      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
+        ${nextSection.label} →
+      </button>
+    </div>` : `
+    <div class="spp-nav-bar spp-nav-bar--done">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      All sections complete — ready to save
+    </div>`;
+
+  const screenshotsArea = screenshotsDone
+    ? `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-top:10px;">${shots.slice(0,5).map(s => `<img src="${_screenshotSrc(s)}" style="height:120px;border-radius:8px;flex-shrink:0;">`).join('')}</div>
+       <button class="spp-edit-link" style="margin-top:6px;" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>`
+    : `<div style="margin-top:10px;">${_sppBtn('screenshots','Select Screenshots','Add screenshots for your Google Play listing', false)}</div>`;
+
   return `
-    <div class="ios-section-head">Store Page Preview</div>
+    <div class="ios-section-head">Store Listing Preview</div>
     <p class="ios-section-desc" style="margin-bottom:14px;">This is an approximation of how your game will appear on Google Play.</p>
     <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:14px;">
       <div style="display:flex;gap:12px;align-items:flex-start;">
         ${iconHtml}
-        <div>
+        <div style="flex:1;min-width:0;">
           <div style="font-size:15px;font-weight:600;color:var(--text);">${title}</div>
           <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">Games</div>
-          <div style="display:flex;gap:6px;margin-top:8px;">
+          <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
             <button style="background:#01875f;color:#fff;border:none;border-radius:20px;padding:6px 20px;font-size:13px;font-weight:500;cursor:pointer;">Install</button>
+            ${contentDone
+              ? `<span style="font-size:11px;color:var(--text-faint);margin-left:4px;">Rated ${_androidRatingLabel()}</span>`
+              : `<button class="ias-meta-cell--action" style="margin-left:4px;padding:4px 8px;border-radius:6px;border:1px dashed var(--accent);background:transparent;cursor:pointer;font-size:11px;color:var(--accent);" onclick="openStorePreviewSection('${pid}','content')">+ Content Rating</button>`}
           </div>
         </div>
       </div>
-      ${screenshotStrip}
+      ${screenshotsArea}
       <div style="font-size:12px;color:var(--text-faint);margin-top:12px;line-height:1.5;">${descShort}</div>
-    </div>`;
+    </div>
+
+    <div class="spp-sections-list" style="margin-top:14px;">
+      ${_sppBtn('content',     'Answer Content Questions',        'Set your Google Play content rating',          contentDone)}
+      ${_sppBtn('business',    'Answer Business Questions',       'Title, description and store listing details', businessDone)}
+      ${_sppBtn('data',        'Answer Data Collection Questions','Complete your Data Safety disclosure',         dataDone)}
+    </div>
+
+    ${navBar}
+  `;
+}
+
+function _androidRatingLabel() {
+  // Simple helper — returns rating label based on content rating answers
+  const a = state.androidSubmitAnswers;
+  return a.contentRatingResult || 'Everyone';
 }
 
 /* ── Android Data Safety ─────────────────────────────── */
@@ -4401,9 +4609,21 @@ function buildSteamActiveCard(pid) {
   const binProcSteam = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
     const done      = isSteamSectionComplete(step.id);
+    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+
+    if (step.id === 'uploadBuild') {
+      return `
+        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="steam-step-card-${step.id}">
+          <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+          <div class="ios-step-info">
+            <div class="ios-step-name">${stepLabel(pid, step)}</div>
+          </div>
+          ${buildBuildDropdown(pid)}
+        </div>`;
+    }
+
     const risk      = computeSteamSectionRisk(step.id);
     const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
-    const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     const trailingEl = (step.id === 'improveSubmission' && binProcSteam)
@@ -4430,7 +4650,6 @@ function buildSteamActiveCard(pid) {
           <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
           <div class="active-card-name-row">
             <div class="active-card-name">${platLabel(pid)}</div>
-            ${buildBuildDropdown(pid)}
           </div>
         </div>
       </div>
@@ -4736,6 +4955,7 @@ function buildSteamTechnicalSection() {
 
 /* ── Steam: Store Page Preview ──────────────────────── */
 function buildSteamStorePreviewSection() {
+  const pid  = 'steam';
   const fd   = state.formData;
   const ups  = state.uploads;
   const icon = ups.appIcon;
@@ -4749,29 +4969,57 @@ function buildSteamStorePreviewSection() {
     ? `<img src="${icon.dataUrl}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
     : `<div style="width:108px;height:50px;border-radius:4px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:9px;">Capsule</div>`;
 
-  const screenshotStrip = shots.length
-    ? `<div style="display:flex;gap:4px;overflow-x:auto;margin-top:10px;">${shots.slice(0,5).map(s => `<img src="${s.url || s.dataUrl}" style="height:90px;border-radius:4px;flex-shrink:0;">`).join('')}</div>`
-    : `<div style="height:60px;background:var(--bg-2);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:12px;margin-top:10px;">No screenshots uploaded</div>`;
-
   state.steamSubmitAnswers.storePreviewSeen = true;
 
-  const privUrl = (state.steamSubmitAnswers.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+  // Section completion
+  const contentDone     = isSteamSectionComplete('contentRating');
+  const businessDone    = isSteamSectionComplete('storeTags') && isSteamSectionComplete('technical');
+  const privUrl         = (state.steamSubmitAnswers.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+  const dataDone        = !!privUrl;
+  const screenshotsDone = isSteamSectionComplete('screenshots');
+
+  function _sppBtn(target, label, sub, isDone) {
+    if (isDone) {
+      return `<div class="spp-section-done">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        ${label}
+      </div>`;
+    }
+    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
+      <div>
+        <div class="spp-section-btn-title">${label}</div>
+        <div class="spp-section-btn-sub">${sub}</div>
+      </div>
+      <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto"><path d="M1 1l6 5-6 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>`;
+  }
+
+  const SPP_SECTIONS = [
+    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'        },
+    { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'              },
+    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'       },
+    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  ];
+  const nextSection = SPP_SECTIONS.find(s => !s.done);
+  const navBar = nextSection ? `
+    <div class="spp-nav-bar">
+      <span class="spp-nav-label">Next required</span>
+      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
+        ${nextSection.label} →
+      </button>
+    </div>` : `
+    <div class="spp-nav-bar spp-nav-bar--done">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      All sections complete — ready to save
+    </div>`;
+
+  const screenshotsArea = screenshotsDone
+    ? `<div style="display:flex;gap:4px;overflow-x:auto;margin-top:10px;">${shots.slice(0,5).map(s => `<img src="${s.url || s.dataUrl}" style="height:90px;border-radius:4px;flex-shrink:0;">`).join('')}</div>
+       <button class="spp-edit-link" style="margin-top:6px;color:#8f98a0;" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>`
+    : `<div style="margin-top:10px;">${_sppBtn('screenshots','Select Screenshots','Add screenshots for your Steam store page', false)}</div>`;
 
   return `
-    <div class="form-group" style="margin-bottom:18px;">
-      <label class="form-label">Privacy Policy URL
-        <span class="tooltip-anchor">
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">Steam requires a privacy policy URL in your store page settings. Setting it here syncs across all platforms.</span>
-        </span>
-      </label>
-      <input class="form-input" type="url" id="steam-privacy-url"
-             value="${escHtml(privUrl)}"
-             placeholder="https://yourgame.com/privacy"
-             oninput="setPrivacyUrl(this.value)"
-             onblur="reRenderStepModal()">
-      ${(!privUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. Add your privacy policy URL before submitting to Steam.</div>' : ''}
-    </div>
     <p style="font-size:12px;color:var(--text-faint);margin:0 0 14px;">Approximate Steam store listing appearance.</p>
     <div style="background:#1b2838;border-radius:6px;padding:14px;font-family:inherit;">
       <div style="display:flex;gap:12px;align-items:flex-start;">
@@ -4785,9 +5033,18 @@ function buildSteamStorePreviewSection() {
           </div>
         </div>
       </div>
-      ${screenshotStrip}
+      ${screenshotsArea}
       <div style="font-size:12px;color:#8f98a0;margin-top:10px;line-height:1.5;">${descShort}</div>
-    </div>`;
+    </div>
+
+    <div class="spp-sections-list" style="margin-top:14px;">
+      ${_sppBtn('content',  'Answer Content Questions',        'Mature content, AI usage, and IARC rating',    contentDone)}
+      ${_sppBtn('business', 'Answer Business Questions',       'Store tags, genre, and technical details',     businessDone)}
+      ${_sppBtn('data',     'Answer Data Collection Questions','Add your privacy policy URL',                  dataDone)}
+    </div>
+
+    ${navBar}
+  `;
 }
 
 
