@@ -2517,8 +2517,9 @@ function buildStorePreviewSection() {
 
   const title     = escHtml(fd.title || 'Your Game Title');
   const category  = escHtml(fd.genre || 'Games');
-  const price     = (fd.price && fd.price !== '0') ? `$${fd.price}` : 'GET';
-  const priceText = (fd.price && fd.price !== '0') ? `$${fd.price}` : 'Free';
+  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
+  const price     = isFree ? 'GET' : `$${fd.price}`;
+  const priceText = isFree ? 'Free' : `$${fd.price}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
@@ -2700,10 +2701,14 @@ function buildStorePreviewSection() {
   // Section button helper — orange pulsing tab when incomplete, green check when done
   function _sppBtn(target, label, sub, isDone) {
     if (isDone) {
-      return `<div class="spp-section-done">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        ${label}
-      </div>`;
+      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="spp-section-btn-title">${label}</div>
+          <div class="spp-section-btn-sub">Tap to edit</div>
+        </div>
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>`;
     }
     return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
@@ -2761,19 +2766,15 @@ function buildStorePreviewSection() {
          <div class="ias-meta-bot ias-meta-bot--action">Business</div>
        </div>`;
 
-  // Screenshots area — always show shots if any exist; prompt to confirm/select if not done
+  // Screenshots area — always show shots; full-width Select/Edit button below
   const screenshotsArea = `
     <div class="ias-shots-scroll">${shotHtml}</div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
       <span>iPhone, iPad</span>
-      ${screenshotsDone
-        ? `<button class="spp-edit-link" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>`
-        : `<button class="spp-section-btn spp-section-btn--compact" onclick="openStorePreviewSection('${pid}','screenshots')">
-             <svg width="11" height="11" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
-             Select Screenshots
-           </button>`
-      }
+    </div>
+    <div style="padding:0 16px 10px;">
+      ${_sppBtn('screenshots', 'Select Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
     </div>`;
 
   // Privacy section
@@ -4322,10 +4323,14 @@ function buildAndroidStorePreviewSection() {
 
   function _sppBtn(target, label, sub, isDone) {
     if (isDone) {
-      return `<div class="spp-section-done">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        ${label}
-      </div>`;
+      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="spp-section-btn-title">${label}</div>
+          <div class="spp-section-btn-sub">Tap to edit</div>
+        </div>
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>`;
     }
     return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
@@ -4996,10 +5001,14 @@ function buildSteamStorePreviewSection() {
 
   function _sppBtn(target, label, sub, isDone) {
     if (isDone) {
-      return `<div class="spp-section-done">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        ${label}
-      </div>`;
+      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="spp-section-btn-title">${label}</div>
+          <div class="spp-section-btn-sub">Tap to edit</div>
+        </div>
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>`;
     }
     return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
@@ -5192,9 +5201,16 @@ function _buildShotEditZoneHtml(pid) {
       </div>`;
   }
 
-  const aspect = cs.aspect || 'original';
-  const arBtns = ['original', '9:16', '16:9', '1:1'].map(a =>
-    `<button class="shot-ar-btn${a === aspect ? ' active' : ''}" onclick="setShotAspect('${pid}','${a}')">${a === 'original' ? 'Original' : a}</button>`
+  const aspect = (cs.aspect && cs.aspect !== 'auto') ? cs.aspect : '6.7" iPhone';
+  // iOS App Store supported device aspect ratios (portrait dimensions, auto-flipped for landscape images)
+  const IOS_AR_OPTIONS = [
+    { key: 'original',    label: 'Original' },
+    { key: '6.7" iPhone', label: '6.7" iPhone' },
+    { key: '5.5" iPhone', label: '5.5" iPhone' },
+    { key: 'iPad 13"',    label: 'iPad 13"' },
+  ];
+  const arBtns = IOS_AR_OPTIONS.map(a =>
+    `<button class="shot-ar-btn${a.key === aspect ? ' active' : ''}" onclick="setShotAspect('${pid}','${a.key}')">${a.label}</button>`
   ).join('');
 
   const isSelected = (() => {

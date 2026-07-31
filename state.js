@@ -1841,31 +1841,32 @@ const PRIVACY_PRESETS = [
     id:    'accounts',
     label: 'User Accounts',
     sub:   'Email, username & password',
-    description: 'We collect email addresses, usernames, and hashed passwords to create and authenticate user accounts. This data is used solely for login, account recovery, and personalizing the player experience.',
+    // Structured description with explicit Apple data-type label names for reliable AI mapping
+    description: 'App Store privacy data types collected: "Email Address" (Contact Info group) for App Functionality and Account Management — required for account creation, login, and recovery. "User ID" (Identifiers group) for App Functionality — account ID linked to the user. "Name" (Contact Info group) for App Functionality — display name. All data encrypted in transit. Linked to user identity. NOT used for advertising or tracking.',
   },
   {
     id:    'analytics',
     label: 'Game Analytics',
     sub:   'Gameplay events & crash reports',
-    description: 'We collect gameplay events, session duration, level progression, feature usage, and device crash reports through analytics SDKs to measure performance and improve the game. This data is not linked to personal identity.',
+    description: 'App Store privacy data types collected: "Crash Data" (Diagnostics group) for Analytics and App Functionality — crash logs and error reports. "Performance Data" (Diagnostics group) for Analytics — launch time, frame rate, memory usage. "Product Interaction" (Usage Data group) for Analytics — feature usage, session duration, level progression. NOT linked to user identity. NOT used for advertising or tracking. NOT shared with third parties.',
   },
   {
     id:    'ads',
     label: 'Advertising',
     sub:   'Ad network & device identifiers',
-    description: 'We collect advertising identifiers (IDFA/GAID) and device information through our third-party ad network to serve relevant advertisements. This data may be used for cross-app tracking and targeted advertising.',
+    description: 'App Store privacy data types collected: "Device ID" (Identifiers group) for Third-Party Advertising — advertising identifier (IDFA) shared with ad network. "Advertising Data" (Usage Data group) for Third-Party Advertising — ad impressions and interactions. Data is SHARED with third-party advertising partners. May be used for cross-app tracking and targeted advertising.',
   },
   {
     id:    'cloudsave',
     label: 'Cloud Save',
     sub:   'Game progress synced to cloud',
-    description: "We collect user identifiers and game save data — including progress, achievements, and settings — to synchronize the player's game state across devices. This data is linked to the player's account.",
+    description: 'App Store privacy data types collected: "User ID" (Identifiers group) for App Functionality — account identifier used to sync data. "Gameplay Content" (User Content group) for App Functionality — game save data including progress, achievements, and settings synced across devices. Data linked to user account. Encrypted in transit. NOT used for advertising.',
   },
   {
     id:    'leaderboards',
     label: 'Leaderboards',
     sub:   'Usernames & scores',
-    description: 'We collect player usernames and game scores to power leaderboards and achievement tracking. Usernames and high scores may be displayed publicly within the game.',
+    description: 'App Store privacy data types collected: "User ID" (Identifiers group) for App Functionality — player identifier displayed on leaderboards. "Gameplay Content" (User Content group) for App Functionality — scores and achievements visible to other players. Data is publicly displayed within the game. NOT used for advertising or tracking.',
   },
 ];
 

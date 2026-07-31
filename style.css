@@ -3094,6 +3094,16 @@ body {
 .spp-section-btn:active { transform: translateY(0); }
 .spp-section-btn-title { font-weight: 600; font-size: 13px; line-height: 1.2; }
 .spp-section-btn-sub   { font-size: 11px; opacity: 0.8; margin-top: 2px; }
+/* Completed section button — still clickable, green styling, no pulse */
+.spp-section-btn--done {
+  background: rgba(52,199,89,0.08);
+  border: 1px solid rgba(52,199,89,0.3);
+  color: var(--text-dim);
+  animation: none !important;
+}
+.spp-section-btn--done:hover { opacity: 0.85; background: rgba(52,199,89,0.14); }
+.spp-section-btn--done .spp-section-btn-title { color: var(--text); }
+.spp-section-btn--done .spp-section-btn-sub   { color: var(--text-faint); }
 .spp-section-done {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px; font-size: 13px; color: var(--text-faint);

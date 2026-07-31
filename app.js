@@ -308,6 +308,12 @@ function seedOnboardingToIOS() {
 }
 
 async function openStepModal(pid, stepId) {
+  // Always reset storePreview sub-section — never restore last flip position
+  if (stepId === 'storePreview') {
+    if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = {};
+    state.storePreviewFlipTarget[pid] = null;
+  }
+
   if (pid === 'android') {
     seedOnboardingToAndroid();
     state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
@@ -2590,6 +2596,13 @@ function _renderShotEditZone(pid) {
   zone.innerHTML = _buildShotEditZoneHtml(pid);
 }
 
+// Portrait width/height ratios for iOS App Store devices
+const IOS_DEVICE_PORTRAIT_RATIOS = {
+  '6.7" iPhone': 1290 / 2796,   // ≈ 0.4613
+  '5.5" iPhone': 9 / 16,         // = 0.5625
+  'iPad 13"':    2064 / 2752,    // ≈ 0.75
+};
+
 // Called by img onload to position the crop frame overlay
 function _updateShotCropFrame(pid) {
   const cs = _shotCropState[pid];
@@ -2599,17 +2612,24 @@ function _updateShotCropFrame(pid) {
   const frame = document.getElementById('shot-crop-frame-' + pid);
   if (!img || !frame) return;
 
-  // Auto-detect orientation from natural image dimensions
+  // Auto-detect: default to 6.7" iPhone (handled in render for button UI)
   if (cs.aspect === 'auto') {
-    cs.aspect = (img.naturalWidth > img.naturalHeight) ? '16:9' : '9:16';
-    _renderShotEditZone(pid); // re-render to update aspect toggle buttons
-    return; // onload will fire again with the resolved aspect
+    cs.aspect = '6.7" iPhone';
+    _renderShotEditZone(pid);
+    return;
   }
 
-  if (cs.aspect === 'original') return;
+  if (cs.aspect === 'original') { frame.style.display = 'none'; return; }
 
+  // Device-specific portrait ratio — auto-flip for landscape images
+  const portraitRatio = IOS_DEVICE_PORTRAIT_RATIOS[cs.aspect];
   const arMap = { '9:16': 9/16, '16:9': 16/9, '1:1': 1 };
-  const ar = arMap[cs.aspect];
+  if (portraitRatio) {
+    const isLandscape = img.naturalWidth > img.naturalHeight;
+    ar = isLandscape ? (1 / portraitRatio) : portraitRatio;
+  } else {
+    ar = arMap[cs.aspect];
+  }
   if (!ar) { frame.style.display = 'none'; return; }
 
   const dw = img.offsetWidth;
@@ -3859,18 +3879,29 @@ async function openStorePreviewSection(pid, target) {
     && CLAUDE_API_KEY
     && !state.platformInferenceCache?.['unified:questionnaire'];
 
-  // Start flip-out animation
+  // PHASE 1: flip-exit (card rotates away)
   if (modal) {
     modal.classList.add('is-flip-exit');
     await new Promise(r => setTimeout(r, 160));
     modal.classList.remove('is-flip-exit');
   }
 
+  // PHASE 2: render content (loading screen or final), then flip-enter (card rotates in)
   if (needsInference) {
-    // Show loading screen inside the flipped modal
     state.stepModal = state.stepModal || {};
     state.stepModal.inferenceStatus = 'loading';
-    reRenderStepModal();
+  }
+  reRenderStepModal();
+
+  if (modal) {
+    modal.classList.add('is-flip-enter');
+    await new Promise(r => setTimeout(r, 300)); // wait for enter animation to finish
+    modal.classList.remove('is-flip-enter');
+  }
+
+  // PHASE 3: run inference with minimum 2s loading display
+  if (needsInference) {
+    const startTime = Date.now();
     try {
       delete state.platformInferenceCache['unified:questionnaire'];
       await runInference(pid, 'questionnaire');
@@ -3880,13 +3911,10 @@ async function openStorePreviewSection(pid, target) {
       state.stepModal.inferenceStatus = 'error';
       state.stepModal.inferenceError = err.message === 'NO_KEY' ? 'No API key set.' : err.message;
     }
-  }
-
-  reRenderStepModal();
-
-  if (modal) {
-    modal.classList.add('is-flip-enter');
-    setTimeout(() => modal.classList.remove('is-flip-enter'), 300);
+    // Enforce minimum 2s loading screen display
+    const elapsed = Date.now() - startTime;
+    if (elapsed < 2000) await new Promise(r => setTimeout(r, 2000 - elapsed));
+    reRenderStepModal();
   }
 }
 
