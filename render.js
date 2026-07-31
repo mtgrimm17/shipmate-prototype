@@ -1921,10 +1921,6 @@ function _syncDocPane(stepId) {
   const modal         = document.getElementById('submit-modal');
   const existingGroup = document.getElementById('step-modal-group');
 
-  const chevronSvg = `<svg width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.5 1.5L6.5 7L1.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-
   if (stepId === 'questionnaire') {
     if (!existingGroup) {
       const group = document.createElement('div');
@@ -1937,58 +1933,16 @@ function _syncDocPane(stepId) {
           <div class="doc-pane-inner">${buildDocPaneContent()}</div>
         </div>
         <button class="doc-pane-tab" id="doc-pane-tab" onclick="toggleDocPane()" aria-label="Toggle documentation pane">
-          ${chevronSvg}
-        </button>`);
-    }
-  } else if (stepId === 'improveSubmission') {
-    if (!existingGroup) {
-      const group = document.createElement('div');
-      group.id        = 'step-modal-group';
-      group.className = 'step-modal-group';
-      overlay.insertBefore(group, modal);
-      group.appendChild(modal);
-      group.insertAdjacentHTML('beforeend', `
-        <div class="doc-pane" id="doc-pane">
-          <div class="doc-pane-inner" id="bin-fix-pane-inner"></div>
-        </div>
-        <button class="doc-pane-tab" id="doc-pane-tab" onclick="toggleDocPane()" aria-label="Toggle fix pane">
-          ${chevronSvg}
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1.5 1.5L6.5 7L1.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </button>`);
     }
   } else if (existingGroup) {
-    // Leaving a pane-enabled step — restore modal to overlay directly
+    // Leaving questionnaire — restore modal to overlay directly
     overlay.insertBefore(modal, existingGroup);
     existingGroup.remove();
   }
-}
-
-function buildBinFixPaneContent(pid) {
-  const findings = BIN_FINDINGS[pid] || BIN_FINDINGS.ios;
-  const idx = state.binFindingIdx?.[pid] || 0;
-  if (idx >= findings.length) {
-    return `
-      <div class="doc-pane-header">
-        <div class="doc-pane-title">Binary Analysis</div>
-        <div class="doc-pane-subtitle">All findings resolved</div>
-      </div>
-      <div class="doc-pane-body">
-        <div class="doc-section" style="color:var(--text-muted);font-size:13px;padding:16px 0;">
-          No further fixes needed ✓
-        </div>
-      </div>`;
-  }
-  const cur = findings[idx];
-  const fixBody = cur.fixIsCode
-    ? `<pre class="iys-bin-fix-code">${escHtml(cur.fix)}</pre>`
-    : `<div class="iys-bin-fix-desc">${escHtml(cur.fix).replace(/\n/g, '<br>')}</div>`;
-  return `
-    <div class="doc-pane-header">
-      <div class="doc-pane-title">Suggested Fix</div>
-      <div class="doc-pane-subtitle">${escHtml(cur.fixLabel)}</div>
-    </div>
-    <div class="doc-pane-body">
-      <div class="doc-section">${fixBody}</div>
-    </div>`;
 }
 
 function buildDocPaneContent() {
@@ -2371,16 +2325,26 @@ function buildImproveSubmissionSection(platformId) {
     const numShown  = binIdx + 1; // 1-indexed
     const counterHtml = `<span class="iys-section-counter">${numShown} of ${total}</span>`;
 
+    // Fix panel (toggled by "View Fix" button)
+    const fixPanel = binFixOpen ? `
+      <div class="iys-bin-fix-panel">
+        <div class="iys-bin-fix-label">${escHtml(cur.fixLabel)}</div>
+        ${cur.fixIsCode
+          ? `<pre class="iys-bin-fix-code">${escHtml(cur.fix)}</pre>`
+          : `<div class="iys-bin-fix-desc">${escHtml(cur.fix).replace(/\n/g, '<br>')}</div>`
+        }
+      </div>` : '';
+
     binContent = `
       <div class="iys-bin-row" style="margin-bottom:10px;">${binUploadPill}</div>
       <div class="iys-issue-content">
         <div class="iys-issue-title">${escHtml(cur.title)}</div>
         <div class="iys-issue-body">${escHtml(cur.body)}</div>
+        ${fixPanel}
       </div>`;
     binFooter = `
       ${counterHtml}
       <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
-              data-bin-fix-btn="${platformId}"
               onclick="toggleBinFindingFix('${platformId}')">
         ${binFixOpen ? 'Hide Fix' : 'View Fix'}
       </button>
