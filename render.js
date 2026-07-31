@@ -1489,38 +1489,50 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   const num = stepCount + 1;
   const numClass = 'ios-step-num' + (submitDone ? ' is-done' : '');
 
-  const tracks = PLATFORM_TRACKS[pid] || [{ id: 'production', label: 'Production' }];
-  // null until the user explicitly selects one — forces an intentional choice
+  const tracks   = PLATFORM_TRACKS[pid] || [{ id: 'production', label: 'Production' }];
   const selTrack = (state.selectedTracks || {})[pid] ?? null;
 
-  // Track dropdown is always visible so the user can pre-select a track.
-  // The rest of the card is the submit action — no separate button needed.
-  const trackSelect = `
-    <select class="submit-track-select ${!selTrack ? 'no-track' : ''}"
-            id="track-sel-${pid}"
-            onclick="event.stopPropagation()"
-            onchange="selectTrack('${pid}', this.value)">
-      <option value="" disabled ${!selTrack ? 'selected' : ''}>Choose Track</option>
-      ${tracks.map(tr => `<option value="${tr.id}"${selTrack === tr.id ? ' selected' : ''}>${escHtml(tr.label)}</option>`).join('')}
-    </select>`;
+  // "Ready to submit" = all steps done AND a track has been chosen
+  const readyToSubmit = !locked && !!selTrack && !submitDone;
 
-  // When not locked the whole card (except dropdown) is clickable.
-  const cardClick = !locked ? `onclick="confirmSubmit('${pid}')"` : '';
-  // Dedicated Submit button gives a clear click target when a track is selected
-  const submitBtn = (!locked && !submitDone && selTrack)
-    ? `<button class="submit-step-btn" onclick="event.stopPropagation();confirmSubmit('${pid}')">Submit →</button>`
-    : '';
+  // Track picker pill — mirrors buildBuildDropdown style
+  // Gray when no track; green check when track selected; whole card clicks submit when ready
+  const trackPill = `
+    <div class="submit-track-pill ${!selTrack ? 'no-track' : 'has-track'}"
+         onclick="event.stopPropagation();_openTrackMenu('${pid}')" title="${selTrack ? 'Change track' : 'Choose a release track'}">
+      ${selTrack
+        ? `${checkSVG}<span class="submit-track-label">${escHtml(tracks.find(t => t.id === selTrack)?.label || selTrack)}</span>`
+        : `<svg width="9" height="9" viewBox="0 0 12 12" fill="none" style="opacity:0.5"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+           <span class="submit-track-label">Choose Track</span>`
+      }
+      <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style="margin-left:2px;opacity:0.5"><path d="M1 1l2.5 2.5L6 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <select id="track-sel-${pid}" class="submit-track-select-hidden"
+              onchange="selectTrack('${pid}', this.value);this.value=''">
+        <option value="" disabled selected></option>
+        ${tracks.map(tr => `<option value="${tr.id}">${escHtml(tr.label)}</option>`).join('')}
+      </select>
+    </div>`;
+
+  // Whole card is clickable to submit when ready
+  const cardClick = readyToSubmit ? `onclick="confirmSubmit('${pid}')"` : '';
+  const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
 
   return `
-    <div class="ios-step-card submit-step-card ${submitDone ? 'is-complete' : ''} ${locked ? 'submit-step-locked' : 'submit-step-ready'}"
-         id="${pid}-step-card-submit" ${cardClick}>
+    <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${locked ? 'submit-step-locked' : 'submit-step-ready'}"
+         id="${pid}-step-card-submit" style="${readyToSubmit ? 'cursor:pointer;' : ''}" ${cardClick}>
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
         <div class="ios-step-name">Submit</div>
       </div>
-      ${trackSelect}
-      ${submitBtn}
+      ${trackPill}
     </div>`;
+}
+
+function _openTrackMenu(pid) {
+  const sel = document.getElementById('track-sel-' + pid);
+  if (sel) sel.focus();
+  // Trigger a real click on the native select to open the picker
+  try { sel.size = 1; sel.click(); } catch(e) {}
 }
 
 function buildIOSActiveCard(pid) {
@@ -1939,9 +1951,8 @@ function renderStepModal() {
     <div class="submit-modal-footer">
       ${inferenceFooterNote}
       ${isFlipped
-        ? `<button class="btn btn-ghost" onclick="closeStorePreviewSection('${platformId}')">← Back to Preview</button>
-           <button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save & Return</button>`
-        : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save & Close'}</button>`
+        ? `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
+        : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
 
@@ -2750,15 +2761,20 @@ function buildStorePreviewSection() {
          <div class="ias-meta-bot ias-meta-bot--action">Business</div>
        </div>`;
 
-  // Screenshots area
-  const screenshotsArea = screenshotsDone
-    ? `<div class="ias-shots-scroll">${shotHtml}</div>
-       <div class="ias-device-compat">
-         <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-         <span>iPhone, iPad</span>
-         <button class="spp-edit-link" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>
-       </div>`
-    : _sppBtn('screenshots', 'Select Screenshots', 'Add app screenshots to your listing', false);
+  // Screenshots area — always show shots if any exist; prompt to confirm/select if not done
+  const screenshotsArea = `
+    <div class="ias-shots-scroll">${shotHtml}</div>
+    <div class="ias-device-compat">
+      <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span>iPhone, iPad</span>
+      ${screenshotsDone
+        ? `<button class="spp-edit-link" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>`
+        : `<button class="spp-section-btn spp-section-btn--compact" onclick="openStorePreviewSection('${pid}','screenshots')">
+             <svg width="11" height="11" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
+             Select Screenshots
+           </button>`
+      }
+    </div>`;
 
   // Privacy section
   const privacySection = dataDone

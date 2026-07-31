@@ -2644,14 +2644,12 @@ body {
 /* Locked: reduced opacity but dropdown is still interactive */
 .submit-step-card.submit-step-locked { opacity: 0.45; }
 .submit-step-card.submit-step-locked:hover { background: transparent; }
-/* Ready: card is clickable. The green border is on .active-card.submit-ready above.
-   A subtle green tint + separator on the submit row itself adds extra emphasis. */
+/* Ready: steps complete. Separator and subtle tint. Cursor/click only when track also chosen. */
 .submit-step-card.submit-step-ready {
-  cursor: pointer;
   background: rgba(47, 220, 128, 0.04);
   border-top: 1px solid rgba(47, 220, 128, 0.25) !important;
 }
-.submit-step-card.submit-step-ready:hover { background: rgba(47, 220, 128, 0.08); }
+.submit-step-pulse.submit-step-ready:hover { background: rgba(255,149,0,0.06); }
 /* Track dropdown inside submit step */
 .submit-track-select {
   font-family: inherit;
@@ -3132,13 +3130,62 @@ body {
 .spp-edit-link {
   background: none; border: none; padding: 0;
   font-size: 12px; color: #0a84ff; cursor: pointer;
-  display: inline-block; margin-top: 4px;
+  display: inline-block; margin-top: 4px; margin-left: auto;
 }
 .spp-edit-link:hover { text-decoration: underline; }
+
+/* ── Compact "Select Screenshots" button inside device compat row ── */
+.spp-section-btn--compact {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-bottom: 0; padding: 5px 10px;
+  border-radius: 6px; font-size: 11px;
+  animation: spp-pulse 2s ease-in-out infinite;
+  margin-left: auto;
+}
+.spp-section-btn--compact .spp-section-btn-title { font-size: 11px; }
 
 /* ── Inline upload step card (no click-to-open modal) ── */
 .ios-step-card--inline { cursor: default; }
 .ios-step-card--inline:hover { background: transparent !important; }
+
+/* ── Submit step track pill ── */
+.submit-track-pill {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px 4px 7px;
+  border-radius: 20px;
+  font-size: 11px; font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+.submit-track-pill:hover { opacity: 0.8; }
+.submit-track-pill.no-track {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+}
+.submit-track-pill.has-track {
+  background: rgba(52,199,89,0.12);
+  border: 1px solid rgba(52,199,89,0.35);
+  color: #34c759;
+}
+.submit-track-label { white-space: nowrap; }
+.submit-track-select-hidden {
+  position: absolute; inset: 0; opacity: 0;
+  width: 100%; cursor: pointer; font-size: 14px;
+}
+
+/* ── Submit step orange pulse when ready ── */
+@keyframes submit-step-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.3); }
+  50%       { box-shadow: 0 0 0 5px rgba(255,149,0,0); }
+}
+.submit-step-pulse {
+  animation: submit-step-pulse 2s ease-in-out infinite;
+  border-radius: 8px;
+}
 
 /* ── Store preview flip animation on submit-modal ── */
 @keyframes modal-flip-exit {

@@ -2561,13 +2561,14 @@ function shotDrop(event, pid) {
   const shot  = shots.find(s => s.id === data.shotId);
   if (!shot) return;
 
+  const prevShotId = _shotCropState[pid]?.shotId;
   if (!_shotCropState[pid]) _shotCropState[pid] = {};
   _shotCropState[pid].shotId = data.shotId;
   _shotCropState[pid].src    = _screenshotSrc(shot);
   _shotCropState[pid].name   = shot.name;
-  // Default aspect ratio by platform type
-  if (!_shotCropState[pid].aspect) {
-    _shotCropState[pid].aspect = ['ios', 'android', 'amazon'].includes(pid) ? '9:16' : '16:9';
+  // Reset to auto-detect orientation whenever a different shot is dropped
+  if (prevShotId !== data.shotId) {
+    _shotCropState[pid].aspect = 'auto';
   }
   _renderShotEditZone(pid);
 }
@@ -2592,11 +2593,20 @@ function _renderShotEditZone(pid) {
 // Called by img onload to position the crop frame overlay
 function _updateShotCropFrame(pid) {
   const cs = _shotCropState[pid];
-  if (!cs || !cs.aspect || cs.aspect === 'original') return;
+  if (!cs || !cs.aspect) return;
 
   const img   = document.getElementById('shot-edit-img-' + pid);
   const frame = document.getElementById('shot-crop-frame-' + pid);
   if (!img || !frame) return;
+
+  // Auto-detect orientation from natural image dimensions
+  if (cs.aspect === 'auto') {
+    cs.aspect = (img.naturalWidth > img.naturalHeight) ? '16:9' : '9:16';
+    _renderShotEditZone(pid); // re-render to update aspect toggle buttons
+    return; // onload will fire again with the resolved aspect
+  }
+
+  if (cs.aspect === 'original') return;
 
   const arMap = { '9:16': 9/16, '16:9': 16/9, '1:1': 1 };
   const ar = arMap[cs.aspect];
@@ -3840,22 +3850,43 @@ function toggleBinFindingFix(pid) {
    STORE PREVIEW FLIP NAVIGATION
    ══════════════════════════════════════════════════════ */
 
-function openStorePreviewSection(pid, target) {
+async function openStorePreviewSection(pid, target) {
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
+  state.storePreviewFlipTarget[pid] = target;
 
   const modal = document.getElementById('submit-modal');
+  const needsInference = (target === 'content' || target === 'business')
+    && CLAUDE_API_KEY
+    && !state.platformInferenceCache?.['unified:questionnaire'];
+
+  // Start flip-out animation
   if (modal) {
     modal.classList.add('is-flip-exit');
-    setTimeout(() => {
-      state.storePreviewFlipTarget[pid] = target;
-      reRenderStepModal();
-      modal.classList.remove('is-flip-exit');
-      modal.classList.add('is-flip-enter');
-      setTimeout(() => modal.classList.remove('is-flip-enter'), 300);
-    }, 160);
-  } else {
-    state.storePreviewFlipTarget[pid] = target;
+    await new Promise(r => setTimeout(r, 160));
+    modal.classList.remove('is-flip-exit');
+  }
+
+  if (needsInference) {
+    // Show loading screen inside the flipped modal
+    state.stepModal = state.stepModal || {};
+    state.stepModal.inferenceStatus = 'loading';
     reRenderStepModal();
+    try {
+      delete state.platformInferenceCache['unified:questionnaire'];
+      await runInference(pid, 'questionnaire');
+      state.stepModal.inferenceStatus = 'done';
+      _postInferenceSetup('questionnaire');
+    } catch (err) {
+      state.stepModal.inferenceStatus = 'error';
+      state.stepModal.inferenceError = err.message === 'NO_KEY' ? 'No API key set.' : err.message;
+    }
+  }
+
+  reRenderStepModal();
+
+  if (modal) {
+    modal.classList.add('is-flip-enter');
+    setTimeout(() => modal.classList.remove('is-flip-enter'), 300);
   }
 }
 
