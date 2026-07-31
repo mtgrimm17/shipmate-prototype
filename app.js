@@ -2572,9 +2572,11 @@ function shotDrop(event, pid) {
   _shotCropState[pid].shotId = data.shotId;
   _shotCropState[pid].src    = _screenshotSrc(shot);
   _shotCropState[pid].name   = shot.name;
-  // Reset to auto-detect orientation whenever a different shot is dropped
+  // Reset aspect and pan position whenever a different shot is dropped
   if (prevShotId !== data.shotId) {
     _shotCropState[pid].aspect = 'auto';
+    _shotCropState[pid].panX   = 0;
+    _shotCropState[pid].panY   = 0;
   }
   _renderShotEditZone(pid);
 }
@@ -2590,10 +2592,53 @@ function setShotAspect(pid, aspect) {
   _renderShotEditZone(pid);
 }
 
+/* ── Screenshot image pan/drag ── */
+var _shotPanActive = null; // { pid, startX, startY, origPanX, origPanY }
+
+function shotPanStart(event, pid) {
+  if (event.button !== 0) return; // left-click only
+  const cs = _shotCropState[pid];
+  if (!cs?.shotId) return;
+  event.preventDefault();
+  _shotPanActive = {
+    pid,
+    startX: event.clientX, startY: event.clientY,
+    origPanX: cs.panX || 0, origPanY: cs.panY || 0,
+  };
+  const wrap = document.getElementById('shot-edit-wrap-' + pid);
+  if (wrap) wrap.style.cursor = 'grabbing';
+  document.addEventListener('mousemove', _onShotPanMove, { passive: false });
+  document.addEventListener('mouseup',   _onShotPanEnd);
+}
+
+function _onShotPanMove(event) {
+  if (!_shotPanActive) return;
+  const { pid, startX, startY, origPanX, origPanY } = _shotPanActive;
+  const cs = _shotCropState[pid];
+  if (!cs) return;
+  cs.panX = origPanX + (event.clientX - startX);
+  cs.panY = origPanY + (event.clientY - startY);
+  // Update transform directly — no full re-render needed for smooth dragging
+  const img = document.getElementById('shot-edit-img-' + pid);
+  if (img) img.style.transform = `translate(${cs.panX}px,${cs.panY}px)`;
+}
+
+function _onShotPanEnd() {
+  if (!_shotPanActive) return;
+  const { pid } = _shotPanActive;
+  _shotPanActive = null;
+  document.removeEventListener('mousemove', _onShotPanMove);
+  document.removeEventListener('mouseup',   _onShotPanEnd);
+  const wrap = document.getElementById('shot-edit-wrap-' + pid);
+  if (wrap) wrap.style.cursor = 'grab';
+}
+
 function _renderShotEditZone(pid) {
   const zone = document.getElementById('shot-edit-zone-' + pid);
   if (!zone) return;
   zone.innerHTML = _buildShotEditZoneHtml(pid);
+  // rAF ensures the crop frame updates even when the image is cached and onload doesn't re-fire
+  requestAnimationFrame(() => _updateShotCropFrame(pid));
 }
 
 // Portrait width/height ratios for iOS App Store devices

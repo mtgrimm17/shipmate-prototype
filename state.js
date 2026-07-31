@@ -1924,7 +1924,9 @@ const state = {
 
   // Which store preview sub-section is currently open in the flip animation
   // null = showing preview; 'content'|'business'|'data'|'screenshots' = flipped to sub-section
-  storePreviewFlipTarget: { ios: null, android: null, steam: null },
+  storePreviewFlipTarget:   { ios: null, android: null, steam: null },
+  // Tracks which sub-sections the user has actually visited (gates "done" state)
+  storePreviewSectionSeen:  { ios: {}, android: {}, steam: {} },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)
   binFindingIdx: { ios: 0, android: 0, steam: 0 },

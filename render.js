@@ -1996,6 +1996,11 @@ function _syncDocPane(stepId) {
 
 /* ── Store Preview flip: content for each sub-section modal ── */
 function buildStorePreviewFlipSection(platformId, target) {
+  // Mark this sub-section as visited so "done" state is only shown after the user has been here
+  if (!state.storePreviewSectionSeen) state.storePreviewSectionSeen = {};
+  if (!state.storePreviewSectionSeen[platformId]) state.storePreviewSectionSeen[platformId] = {};
+  state.storePreviewSectionSeen[platformId][target] = true;
+
   if (target === 'content') {
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
@@ -2693,8 +2698,11 @@ function buildStorePreviewSection() {
     </div>`).join('');
 
   // Section completion status for DocuSign navigation
-  const contentDone     = isIOSSectionComplete('contentRating');
-  const businessDone    = isIOSSectionComplete('business');
+  // content/business require the user to have actually visited the sub-section
+  // (prevents auto-marking done from onboarding data without user review)
+  const seenSections    = state.storePreviewSectionSeen?.ios || {};
+  const contentDone     = !!(seenSections.content  && isIOSSectionComplete('contentRating'));
+  const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
   const dataDone        = isIOSSectionComplete('privacy');
   const screenshotsDone = isIOSSectionComplete('screenshots');
 
@@ -2740,9 +2748,9 @@ function buildStorePreviewSection() {
       All sections complete — ready to save
     </div>`;
 
-  // Age meta cell (content questions)
+  // Age meta cell — always clickable; orange pulse when not done, green hover when done
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
          <div class="ias-meta-bot">Age</div>
        </div>`
@@ -2753,9 +2761,9 @@ function buildStorePreviewSection() {
          <div class="ias-meta-bot ias-meta-bot--action">Content</div>
        </div>`;
 
-  // Price meta cell (business questions)
+  // Price meta cell — always clickable; orange pulse when not done, green hover when done
   const priceCell = businessDone
-    ? `<div class="ias-meta-cell">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
          <div class="ias-meta-top">${priceText}</div>
          <div class="ias-meta-bot">Price</div>
        </div>`
@@ -5218,12 +5226,17 @@ function _buildShotEditZoneHtml(pid) {
     return ps?.selected?.includes(cs.shotId);
   })();
 
+  const panX = cs.panX || 0;
+  const panY = cs.panY || 0;
+
   return `
     <div class="shot-edit-active">
       <button class="shot-edit-close" onclick="shotEditClose('${pid}')" title="Close preview">×</button>
-      <div class="shot-edit-preview-wrap" id="shot-edit-wrap-${pid}">
+      <div class="shot-edit-preview-wrap" id="shot-edit-wrap-${pid}"
+           style="cursor:grab" onmousedown="shotPanStart(event,'${pid}')">
         <img src="${cs.src}" class="shot-edit-img" id="shot-edit-img-${pid}"
              alt="${escHtml(cs.name || '')}"
+             style="transform:translate(${panX}px,${panY}px);pointer-events:none;"
              onload="_updateShotCropFrame('${pid}')">
         <div class="shot-crop-frame" id="shot-crop-frame-${pid}" style="display:none;"></div>
       </div>
@@ -5250,9 +5263,10 @@ function buildSubmittedCard(pid, flipData) {
   const ts         = (flipData && flipData.time)
     ? new Date(flipData.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '';
-  // Maintain the height of the pre-flip active card to prevent visual snap on re-renders
+  // Lock to the exact pre-flip active card height — prevents CSS Grid from stretching
+  // sibling platform cards after submission (min-height alone would allow growth)
   const savedH = state.platformFlippedCardHeight?.[pid];
-  const heightStyle = savedH ? ` style="min-height:${savedH}px"` : '';
+  const heightStyle = savedH ? ` style="height:${savedH}px;max-height:${savedH}px;overflow:hidden"` : '';
 
   return `
     <div class="active-card submitted-card" id="active-card-${pid}"${heightStyle}>

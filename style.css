@@ -3064,11 +3064,21 @@ body {
 }
 
 /* ── Store Preview action cells in meta strip ── */
+@keyframes ias-meta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(255,149,0,0); }
+}
 .ias-meta-cell--action {
   cursor: pointer; border-radius: 6px;
   transition: background 0.12s;
+  animation: ias-meta-pulse 2s ease-in-out infinite;
 }
 .ias-meta-cell--action:hover { background: var(--panel-2); }
+/* Visited/done — still clickable but no pulse, green hover */
+.ias-meta-cell--seen {
+  animation: none;
+}
+.ias-meta-cell--seen:hover { background: rgba(52,199,89,0.08) !important; }
 .ias-meta-action-icon {
   display: flex; align-items: center; justify-content: center;
   color: var(--accent); font-size: 14px; line-height: 1;
