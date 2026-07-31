@@ -3826,14 +3826,45 @@ function acknowledgeBinFinding(pid) {
   state.binFindingIdx[pid] = (state.binFindingIdx[pid] || 0) + 1;
   if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
   state.binFindingFixExpanded[pid] = false;
+
+  // Collapse the fix pane
+  const pane  = document.getElementById('doc-pane');
+  const tab   = document.getElementById('doc-pane-tab');
+  const group = document.getElementById('step-modal-group');
+  if (pane)  pane.classList.remove('is-open');
+  if (tab)   tab.classList.remove('is-open');
+  if (group) group.classList.remove('pane-open');
+
+  // Re-render modal body for updated counter / next finding
   reRenderStepModal();
 }
 
-// Toggle the "View Fix" panel for the current binary finding
+// Toggle the "View Fix" right pane for the current binary finding
 function toggleBinFindingFix(pid) {
   if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
   state.binFindingFixExpanded[pid] = !state.binFindingFixExpanded[pid];
-  reRenderStepModal();
+  const isOpen = state.binFindingFixExpanded[pid];
+
+  // Populate (or clear) the pane content
+  const inner = document.getElementById('bin-fix-pane-inner');
+  if (inner && typeof buildBinFixPaneContent === 'function') {
+    inner.innerHTML = buildBinFixPaneContent(pid);
+  }
+
+  // Toggle the pane open/closed
+  const pane  = document.getElementById('doc-pane');
+  const tab   = document.getElementById('doc-pane-tab');
+  const group = document.getElementById('step-modal-group');
+  if (pane)  pane.classList.toggle('is-open', isOpen);
+  if (tab)   tab.classList.toggle('is-open', isOpen);
+  if (group) group.classList.toggle('pane-open', isOpen);
+
+  // Update button label + active state in place (avoids full re-render)
+  const btn = document.querySelector(`[data-bin-fix-btn="${pid}"]`);
+  if (btn) {
+    btn.textContent = isOpen ? 'Hide Fix' : 'View Fix';
+    btn.classList.toggle('is-active', isOpen);
+  }
 }
 
 /* ══════════════════════════════════════════════════════
