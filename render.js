@@ -186,7 +186,7 @@ function buildAboutTab() {
           <div class="title-search-wrap">
             <div class="form-group">
               <input class="form-input" id="ob-title" type="text" maxlength="50" required
-                     placeholder="${t('ob.field.title.placeholder') || 'e.g. Go Ape Ship!'}"
+                     placeholder="${t('ob.field.title.placeholder') || 'e.g., Go Ape Ship!'}"
                      autocomplete="off"
                      oninput="syncField('title', this.value); charCount('ob-title-count', this.value, 30); _onTitleInputScenario(this.value)"
                      onfocus="_onTitleFocus(this.value)"
@@ -3296,7 +3296,7 @@ function buildPrivacySection() {
           <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${t('ios.privacy.desc.tooltip') || 'Describe every data type your app collects and why. Shipmate will translate this into the required Apple privacy label selections.'}</span></span>
         </label>
         <textarea class="form-input prv-nlp-textarea"
-                  placeholder="${t('ios.privacy.desc.placeholder') || 'e.g. We collect email addresses for account creation, device crash reports to fix bugs, and advertising IDs to serve relevant ads through our ad network.'}"
+                  placeholder="${t('ios.privacy.desc.placeholder') || 'e.g., We collect email addresses for account creation, device crash reports to fix bugs, and advertising IDs to serve relevant ads through our ad network.'}"
                   onblur="updatePrivacyDescription(this.value)">${descVal}</textarea>
         ${statusHtml}
         ${buildPrivacyMatrix(a)}
@@ -4432,7 +4432,7 @@ function buildAndroidDataSafetySection() {
     <div class="form-group" style="margin-top:8px;">
       <label class="form-label">Describe your authentication method</label>
       <input class="form-input" type="text" value="${escHtml(a.accountMethodOther)}"
-             placeholder="e.g. Biometric login, SSO"
+             placeholder="e.g., Biometric login, SSO"
              oninput="answerAndroidTextField('accountMethodOther', this.value)">
     </div>` : '';
 
@@ -4461,7 +4461,7 @@ function buildAndroidDataSafetySection() {
 
   const detailsBlock = collectsYes ? `
     ${androidYNRow('Encrypted in transit', 'encryptedInTransit',
-      'All user data transmitted between the app and your servers is encrypted (e.g. HTTPS/TLS).')}
+      'All user data transmitted between the app and your servers is encrypted (e.g., HTTPS/TLS).')}
     <div class="form-group" style="margin-top:2px;">
       <label class="form-label">Sign-in method
         <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">The authentication method your app uses when users create an account.</span></span>
@@ -4502,7 +4502,7 @@ function buildAndroidDataSafetySection() {
         <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Describe every data type your app collects or shares and why. Shipmate will translate this into the required Google Play Data Safety selections.</span></span>
       </label>
       <textarea class="form-input prv-nlp-textarea"
-                placeholder="e.g. We collect email addresses for account creation, device crash reports to fix bugs, and advertising IDs to serve relevant ads through our ad network."
+                placeholder="e.g., We collect email addresses for account creation, device crash reports to fix bugs, and advertising IDs to serve relevant ads through our ad network."
                 onblur="updateAndroidDataDescription(this.value)">${descVal}</textarea>
       ${statusHtml}
       ${buildAndroidDataMatrix(a)}
@@ -4784,7 +4784,7 @@ function buildSteamContentRatingSection() {
           <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Not visible to customers. Is the content on a specific map? Does the player need to reach a certain level?</span></span>
         </label>
         <textarea class="form-input" rows="2"
-                  placeholder="e.g. Content is accessible after reaching level 10…"
+                  placeholder="e.g., Content is accessible after reaching level 10…"
                   oninput="answerSteamTextField('matureAccess', this.value)">${escHtml(a.matureAccess)}</textarea>
         ${!a.matureAccess.trim() ? '<div class="ios-risk-note risk-HIGH">Required when General mature content is selected.</div>' : ''}
       </div>
@@ -4835,7 +4835,7 @@ function buildSteamContentRatingSection() {
         <div class="ios-followup">
           <div class="form-group" style="margin-bottom:8px;"><label class="form-label">Service name <span style="color:var(--text-faint);">(shown on store page)</span></label>
             <input class="form-input" type="text" value="${escHtml(a.aiThirdPartyName)}"
-                   placeholder="e.g. OpenAI" oninput="answerSteamTextField('aiThirdPartyName', this.value)"></div>
+                   placeholder="e.g., OpenAI" oninput="answerSteamTextField('aiThirdPartyName', this.value)"></div>
           <div class="form-group" style="margin-bottom:8px;"><label class="form-label">Service URL <span style="color:var(--text-faint);">(shown on store page)</span></label>
             <input class="form-input" type="url" value="${escHtml(a.aiThirdPartyUrl)}"
                    placeholder="https://" oninput="answerSteamTextField('aiThirdPartyUrl', this.value)"></div>

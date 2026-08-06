@@ -1195,7 +1195,7 @@ const ANDROID_DATA_TYPES = [
     { id: 'other_audio',       label: 'Other audio files',     desc: 'Any other audio files created or provided by a user' },
   ]},
   { group: 'Files and docs', types: [
-    { id: 'files_docs',        label: 'Files and docs',        desc: "A user's files or documents, or info about them (e.g. file names)" },
+    { id: 'files_docs',        label: 'Files and docs',        desc: "A user's files or documents, or info about them (e.g., file names)" },
   ]},
   { group: 'Calendar', types: [
     { id: 'calendar_events',   label: 'Calendar events',       desc: 'Events, event notes, and attendees' },
@@ -2065,7 +2065,7 @@ const STEAM_CONTENT_CATEGORIES = [
     { id: 'rv_minorities',label: 'Violence against minorities or vulnerable groups' },
   ]},
   { group: 'High Impact Violence / Cruelty', items: [
-    { id: 'hiv_extreme',    label: 'Contains extremely violent or gory content (e.g. mutilation; torture; detailed deaths)' },
+    { id: 'hiv_extreme',    label: 'Contains extremely violent or gory content (e.g., mutilation; torture; detailed deaths)' },
     { id: 'hiv_glorify',    label: 'Glamorization of / incitement to violence' },
     { id: 'hiv_gratuitous', label: 'Realistic excessive/gratuitous violence; grotesque violence' },
   ]},
@@ -2111,7 +2111,7 @@ const STEAM_CONTENT_CATEGORIES = [
     { id: 'social_abortion', label: 'References to abortion' },
   ]},
   { group: 'Elements of Extremism', items: [
-    { id: 'ext_nazi',     label: 'Includes symbols of Nazi organizations (e.g. swastikas, SS runes). NOTE: may prevent sale in Germany.' },
+    { id: 'ext_nazi',     label: 'Includes symbols of Nazi organizations (e.g., swastikas, SS runes). NOTE: may prevent sale in Germany.' },
     { id: 'ext_hateful',  label: 'Disparaging or hateful messages directed at certain population groups' },
     { id: 'ext_genocide', label: 'Glorification, denial, or gross trivialization of the Holocaust or other events of genocide' },
   ]},
@@ -2180,7 +2180,7 @@ const STEAM_ACCESSIBILITY_FEATURES = [
   { id: 'adj_text_size',   label: 'Adjustable Text Size',           desc: 'Players can adjust in-game text, menu text, subtitles' },
   { id: 'subtitle_opts',   label: 'Subtitle Options',               desc: 'Players can customize subtitle display including background opacity, text color and size' },
   { id: 'color_alt',       label: 'Color Alternatives',             desc: "Gameplay doesn't rely on colors, or players can adjust distinguishing colors" },
-  { id: 'contrast',        label: 'Contrast Controls',              desc: 'Contrast is adjustable, e.g. dark/light mode' },
+  { id: 'contrast',        label: 'Contrast Controls',              desc: 'Contrast is adjustable, e.g., dark/light mode' },
   { id: 'camera_comfort',  label: 'Camera Comfort',                 desc: 'Players can adjust or disable screen shaking, camera bob, motion blur' },
   { id: 'no_vision',       label: 'Playable without Vision',        desc: 'Players can play fully without ever seeing the screen' },
   { id: 'keyboard_only',   label: 'Keyboard Only Option',           desc: 'Game can be played with just a keyboard' },
