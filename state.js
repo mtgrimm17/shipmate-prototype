@@ -619,6 +619,7 @@ const PLATFORM_ICONS = {
   psn:      'M8.985.001C7.078.001 5.108.344 5.108.344l-.003 17.717 4.388 1.151V4.645s2.038-.481 3.217.16c1.178.641 1.344 2.224 1.344 2.224v5.385s-.2 2.617-2.806 3.146c-2.606.528-3.2.238-3.2.238v1.71l5.606 1.483.002.001c2.05-.53 4.944-2.094 4.944-5.985V7.38C18.6 3.14 14.8.032 8.985.001zM3.048 19.02L.002 17.98l.003-16.94 3.045.945v17.035zm16.956-2.024l-5.75 2.01v-2.01l5.75-2.008v2.008z',
   xbox:     'M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zM7.272 5.663l4.714 5.065-4.638 5.266L3.6 12c0-2.729 1.547-5.115 3.672-6.337zm9.456 0C18.853 6.885 20.4 9.271 20.4 12l-3.748 3.994-4.638-5.266 4.714-5.065zM12 6.745l4.812 5.498-4.812 5.44-4.812-5.44L12 6.745zm0 11.726l-3.239-3.669.036-.022H12l3.203 3.691L12 18.471z',
   nintendo: 'M7.979 0C3.572 0 0 3.572 0 7.979v8.042C0 20.428 3.572 24 7.979 24h8.042C20.428 24 24 20.428 24 16.021V7.979C24 3.572 20.428 0 16.021 0H7.979zm-.47 4.75h2.16l5.21 8.093V4.75h2.592v14.5h-2.133l-5.237-8.118v8.118H7.509V4.75z',
+  web:      'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z',
 };
 
 /* ── Platforms ───────────────────────────────────────── */
@@ -696,6 +697,13 @@ const PLATFORMS = {
       { id: 'submit',             label: 'Submit to Nintendo',    isSubmit: true },
     ],
   },
+  web: {
+    id: 'web', label: 'Web', color: '#0EA5A4',
+    steps: [
+      { id: 'storePreview',       label: 'Preview Website' },
+      { id: 'submit',             label: 'Deploy',                isSubmit: true },
+    ],
+  },
 };
 
 /* ── Helpers ─────────────────────────────────────────── */
@@ -730,7 +738,7 @@ function platformStepCount(platformId) {
     return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   const required = p.steps.filter(s => !s.isSubmit);
-  const statuses = state.platformStepStatus[platformId];
+  const statuses = state.platformStepStatus[platformId] || {};
   const complete = required.filter(s => statuses[s.id] === 'complete').length;
   return {
     total:      required.length,
@@ -1924,9 +1932,12 @@ const state = {
 
   // Which store preview sub-section is currently open in the flip animation
   // null = showing preview; 'content'|'business'|'data'|'screenshots' = flipped to sub-section
-  storePreviewFlipTarget:   { ios: null, android: null, steam: null },
+  storePreviewFlipTarget:   { ios: null, android: null, steam: null, web: null },
   // Tracks which sub-sections the user has actually visited (gates "done" state)
-  storePreviewSectionSeen:  { ios: {}, android: {}, steam: {} },
+  storePreviewSectionSeen:  { ios: {}, android: {}, steam: {}, web: {} },
+
+  // Web self-distribution site — editable fields shown in the Preview Website step
+  webSite: { headline: '', tagline: '', ctaLabel: 'Download', accent: '#0EA5A4' },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)
   binFindingIdx: { ios: 0, android: 0, steam: 0 },

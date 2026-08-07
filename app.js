@@ -314,6 +314,18 @@ async function openStepModal(pid, stepId) {
     state.storePreviewFlipTarget[pid] = null;
   }
 
+  if (pid === 'web') {
+    state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
+    document.getElementById('submit-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    // Visiting the Preview Website step marks it complete (unlocks Deploy)
+    if (stepId === 'storePreview' && state.platformStepStatus?.web) {
+      state.platformStepStatus.web.storePreview = 'complete';
+    }
+    renderStepModal();
+    return;
+  }
+
   if (pid === 'android') {
     seedOnboardingToAndroid();
     state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
@@ -426,6 +438,7 @@ function closeStepModal() {
   updateIOSCard();
   updateAndroidCard();
   updateSteamCard();
+  if (sm?.platformId === 'web') renderDashboard();
 }
 
 function toggleDocPane() {
@@ -1113,6 +1126,8 @@ function selectTrack(pid, trackId) {
 
 /* Confirm and execute the submit from the inline step card */
 function confirmSubmit(pid) {
+  // Web has no release track — deploy directly.
+  if (pid === 'web') { _doFinalSubmit('web', 'production'); return; }
   if (!state.selectedTracks) state.selectedTracks = {};
   const trackId = state.selectedTracks[pid] || null;
   if (!trackId) {
@@ -3980,6 +3995,20 @@ function closeStorePreviewSection(pid) {
     state.storePreviewFlipTarget[pid] = null;
     reRenderStepModal();
   }
+}
+
+/* ── Web self-distribution site field setters ─────────────
+   Text fields update state silently (no re-render → no focus loss);
+   the preview reflects changes when the user flips back. Accent
+   swatch clicks re-render so the selection ring updates immediately. */
+function setWebSiteField(key, value) {
+  if (!state.webSite) state.webSite = {};
+  state.webSite[key] = value;
+}
+function setWebAccent(color) {
+  if (!state.webSite) state.webSite = {};
+  state.webSite.accent = color;
+  reRenderStepModal();
 }
 
 /* ══════════════════════════════════════════════════════

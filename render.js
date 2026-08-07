@@ -717,6 +717,7 @@ function buildObPlatTilesHTML() {
     { id:'steam',    label:'Steam',              comingSoon: false },
     { id:'ios',      label:'App Store',          comingSoon: false },
     { id:'android',  label:'Google Play',        comingSoon: false },
+    { id:'web',      label:'Web',                comingSoon: false },
     { id:'egs',      label:'Epic Games Store',   comingSoon: true  },
     { id:'psn',      label:'PlayStation Store',  comingSoon: true  },
     { id:'xbox',     label:'Xbox Store',         comingSoon: true  },
@@ -1302,7 +1303,7 @@ function buildConsolidatedBanner() {
 }
 
 // Canonical display order for platform cards (active and inactive sections)
-const PLATFORM_ORDER = ['steam', 'ios', 'android', 'egs', 'psn', 'xbox', 'nintendo'];
+const PLATFORM_ORDER = ['steam', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -1447,6 +1448,9 @@ function buildActiveCard(pid) {
   if (pid === 'android') return buildAndroidActiveCard(pid);
   if (pid === 'steam')   return buildSteamActiveCard(pid);
 
+  // Deploy/Submit flip: once flipped, show the submitted (post-deploy) card
+  if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
+
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
   const locked = !counts.allRequired;
@@ -1454,15 +1458,21 @@ function buildActiveCard(pid) {
 
   const steps = p.steps.filter(s => !s.isSubmit).map(step => {
     const done = state.platformStepStatus[pid][step.id] === 'complete';
+    // Web's "Preview Website" uses the rich step-modal + flip preview (like App Store/Steam);
+    // other generic-platform steps use the plain task modal.
+    const openFn = (pid === 'web' && step.id === 'storePreview') ? 'openStepModal' : 'openTaskModal';
     return `
-      <div class="card-task ${done ? 'is-done' : ''}" onclick="openTaskModal('${pid}','${step.id}')">
+      <div class="card-task ${done ? 'is-done' : ''}" onclick="${openFn}('${pid}','${step.id}')">
         <div class="task-dot ${done ? 'is-complete' : ''}" id="dot-${pid}-${step.id}"></div>
         <span class="task-label">${stepLabel(pid, step)}</span>
         <span class="task-arrow">›</span>
       </div>`;
   }).join('');
 
-  const submitStepCard = buildSubmitStepCard(pid, p.steps.length, locked, submitDone);
+  // Deploy/Submit badge number = count of non-submit steps + 1 (this platform's
+  // steps array includes the submit step, so exclude it from the count).
+  const nonSubmitCount = p.steps.filter(s => !s.isSubmit).length;
+  const submitStepCard = buildSubmitStepCard(pid, nonSubmitCount, locked, submitDone);
 
   return `
     <div class="active-card" id="active-card-${pid}">
@@ -1492,8 +1502,9 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   const tracks   = PLATFORM_TRACKS[pid] || [{ id: 'production', label: 'Production' }];
   const selTrack = (state.selectedTracks || {})[pid] ?? null;
 
-  // "Ready to submit" = all steps done AND a track has been chosen
-  const readyToSubmit = !locked && !!selTrack && !submitDone;
+  // Web deploys with a single action (no release track); other platforms require a chosen track.
+  const isWeb = pid === 'web';
+  const readyToSubmit = isWeb ? (!locked && !submitDone) : (!locked && !!selTrack && !submitDone);
 
   // Track picker pill — mirrors buildBuildDropdown style
   // Gray when no track; green check when track selected; whole card clicks submit when ready
@@ -1522,9 +1533,9 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
          id="${pid}-step-card-submit" style="${readyToSubmit ? 'cursor:pointer;' : ''}" ${cardClick}>
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
-        <div class="ios-step-name">Submit</div>
+        <div class="ios-step-name">${isWeb ? 'Deploy' : 'Submit'}</div>
       </div>
-      ${trackPill}
+      ${isWeb ? '' : trackPill}
     </div>`;
 }
 
@@ -1858,6 +1869,7 @@ function renderStepModal() {
     business:    'Business Questions',
     data:        'Data Collection Questions',
     screenshots: 'Screenshots',
+    siteInfo:    'Site Details',
   };
   const isFlipped = !!flipTarget;
   const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
@@ -1917,6 +1929,8 @@ function renderStepModal() {
     else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
     else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
+  } else if (platformId === 'web') {
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
   } else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildStorePreviewSection();
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
@@ -1929,6 +1943,7 @@ function renderStepModal() {
 
   const complete = platformId === 'android' ? isAndroidSectionComplete(stepId)
                : platformId === 'steam'   ? isSteamSectionComplete(stepId)
+               : platformId === 'web'     ? (state.platformStepStatus?.web?.[stepId] === 'complete')
                : isIOSSectionComplete(stepId);
 
   modal.innerHTML = `
@@ -2001,6 +2016,9 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (!state.storePreviewSectionSeen[platformId]) state.storePreviewSectionSeen[platformId] = {};
   state.storePreviewSectionSeen[platformId][target] = true;
 
+  if (target === 'siteInfo') {
+    return buildWebSiteEditSection();
+  }
   if (target === 'content') {
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
@@ -2031,6 +2049,121 @@ function buildStorePreviewFlipSection(platformId, target) {
     return buildScreenshotsSection(platformId);
   }
   return '';
+}
+
+/* ── Web: self-distribution site preview + edit panel ──────────────
+   The "Preview Website" step. Shows an editable template of a simple
+   self-hosted landing page for the game. Formatting is intentionally
+   lightweight for now — iterate later. Clicking "Edit site details"
+   flips (via openStorePreviewSection) to buildWebSiteEditSection().
+   ─────────────────────────────────────────────────────────────────── */
+function buildWebSitePreviewSection() {
+  const fd  = state.formData || {};
+  const ups = state.uploads || {};
+  const ws  = state.webSite || {};
+  const accent = ws.accent || '#0EA5A4';
+
+  const title = escHtml((ws.headline && ws.headline.trim()) || fd.title || 'Your Game');
+  const descRaw = fd.description || '';
+  const firstDot = descRaw.search(/[.!?]/);
+  const autoTagline = firstDot > 10 && firstDot < 120 ? descRaw.slice(0, firstDot + 1) : (descRaw.slice(0, 90) || '');
+  const tagline = escHtml((ws.tagline && ws.tagline.trim()) || autoTagline || 'An unforgettable adventure awaits.');
+  const cta = escHtml(ws.ctaLabel || 'Download');
+  const descFull = descRaw ? escHtml(descRaw) : 'Your game description will appear here once you fill in the Description field in Game Details.';
+
+  const isFree = !fd.price || parseFloat(fd.price) === 0 || String(fd.price).trim() === '' || String(fd.price).trim() === '0';
+  const priceText = isFree ? 'Free' : `$${escHtml(String(fd.price))}`;
+
+  const shots = ups.screenshots || [];
+  const heroShot = shots.length ? `<img src="${_screenshotSrc(shots[0])}" alt="hero" style="width:100%;height:100%;object-fit:cover;display:block;">` : '';
+  const heroBg = heroShot
+    ? heroShot
+    : `<div style="width:100%;height:100%;background:linear-gradient(135deg, ${accent}, #1b2430);"></div>`;
+
+  const gallery = shots.length > 1
+    ? `<div style="display:flex;gap:8px;overflow:hidden;padding:0 20px 4px;">
+         ${shots.slice(1, 5).map(s => `<img src="${_screenshotSrc(s)}" alt="shot" style="height:74px;border-radius:6px;flex:0 0 auto;object-fit:cover;">`).join('')}
+       </div>`
+    : '';
+
+  const slug = ((fd.title || 'your-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || 'your-game';
+
+  return `
+    <div class="web-preview-wrap" style="padding:4px 2px 8px;">
+      <p style="margin:0 0 12px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        A simple self-hosted landing page for your game. Edit the headline, tagline and button, then mark this step complete to unlock <strong>Deploy</strong>.
+      </p>
+
+      <div style="border:1px solid rgba(0,0,0,0.12);border-radius:10px;overflow:hidden;background:#0f1520;box-shadow:0 6px 24px rgba(0,0,0,0.18);">
+        <!-- fake browser chrome -->
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:#1b2430;">
+          <span style="width:10px;height:10px;border-radius:50%;background:#ff5f57;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#28c840;"></span>
+          <span style="margin-left:10px;flex:1;background:#0f1520;color:#9aa4b2;font-size:11px;padding:4px 10px;border-radius:6px;">https://${escHtml(slug)}.example.com</span>
+        </div>
+
+        <!-- hero -->
+        <div style="position:relative;height:190px;">
+          ${heroBg}
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(15,21,32,0.15), rgba(15,21,32,0.85));"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:18px 20px;">
+            <div style="color:#fff;font-size:24px;font-weight:800;line-height:1.1;letter-spacing:-0.01em;">${title}</div>
+            <div style="color:#d6dbe4;font-size:13px;margin-top:6px;max-width:88%;">${tagline}</div>
+            <div style="margin-top:14px;display:flex;align-items:center;gap:12px;">
+              <span style="display:inline-block;background:${accent};color:#fff;font-weight:700;font-size:13px;padding:9px 18px;border-radius:8px;">${cta}</span>
+              <span style="color:#cbd2dc;font-size:12px;">${priceText}</span>
+            </div>
+          </div>
+        </div>
+
+        ${gallery}
+
+        <!-- about -->
+        <div style="padding:16px 20px 20px;">
+          <div style="color:#9aa4b2;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">About</div>
+          <div style="color:#c9d1dc;font-size:13px;line-height:1.6;">${descFull}</div>
+        </div>
+      </div>
+
+      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="openStorePreviewSection('web','siteInfo')">
+        Edit site details ›
+      </button>
+    </div>`;
+}
+
+function buildWebSiteEditSection() {
+  const ws = state.webSite || {};
+  const accent = ws.accent || '#0EA5A4';
+  const swatches = ['#0EA5A4', '#4B7BEC', '#8B5CF6', '#EC4899', '#F59E0B', '#22C55E'];
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Customize the landing page. Changes appear in the preview when you return.
+      </p>
+
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">Headline</label>
+      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${escHtml(ws.headline || '')}"
+             placeholder="Defaults to your game title" oninput="setWebSiteField('headline', this.value)">
+
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">Tagline</label>
+      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${escHtml(ws.tagline || '')}"
+             placeholder="A short hook shown under the title" oninput="setWebSiteField('tagline', this.value)">
+
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">Download button label</label>
+      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${escHtml(ws.ctaLabel || 'Download')}"
+             placeholder="Download" oninput="setWebSiteField('ctaLabel', this.value)">
+
+      <label class="task-content-label" style="display:block;margin-bottom:8px;">Accent color</label>
+      <div style="display:flex;gap:10px;">
+        ${swatches.map(c => `
+          <button onclick="setWebAccent('${c}')" title="${c}"
+                  style="width:30px;height:30px;border-radius:50%;background:${c};cursor:pointer;
+                         border:2px solid ${c.toLowerCase() === accent.toLowerCase() ? '#fff' : 'transparent'};
+                         box-shadow:0 0 0 ${c.toLowerCase() === accent.toLowerCase() ? '2px ' + c : '1px rgba(0,0,0,0.15)'};"></button>
+        `).join('')}
+      </div>
+    </div>`;
 }
 
 function buildDocPaneContent() {
@@ -5260,6 +5393,7 @@ function buildSubmittedCard(pid, flipData) {
   const tracks     = PLATFORM_TRACKS[pid] || [];
   const track      = tracks.find(t => t.id === trackId);
   const trackLabel = track ? track.label : trackId;
+  const isWeb      = pid === 'web';
   const ts         = (flipData && flipData.time)
     ? new Date(flipData.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '';
@@ -5281,14 +5415,14 @@ function buildSubmittedCard(pid, flipData) {
           <span class="submitted-status-dot"></span>
           <div class="submitted-status-text">
             <div class="submitted-status-label">Current Status</div>
-            <div class="submitted-status-value">Waiting for Review</div>
+            <div class="submitted-status-value">${isWeb ? 'Live' : 'Waiting for Review'}</div>
           </div>
         </div>
         <div class="submitted-meta">
-          ${trackLabel ? `<span class="submitted-track-chip">${escHtml(trackLabel)}</span>` : ''}
-          ${ts ? `<span class="submitted-ts">Submitted ${ts}</span>` : ''}
+          ${(!isWeb && trackLabel) ? `<span class="submitted-track-chip">${escHtml(trackLabel)}</span>` : ''}
+          ${ts ? `<span class="submitted-ts">${isWeb ? 'Deployed' : 'Submitted'} ${ts}</span>` : ''}
         </div>
-        <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">Cancel Submission</button>
+        <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">${isWeb ? 'Take Down' : 'Cancel Submission'}</button>
       </div>
     </div>`;
 }
