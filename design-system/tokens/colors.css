@@ -1,0 +1,108 @@
+:root {
+  /* ── Surfaces (dark terminal stack) ───────────────────── */
+  --bg:            #0a0a0a;   /* app canvas */
+  --bg-marketing:  #000000;   /* splash / marketing pages sit on pure black */
+  --panel:         #141414;   /* cards, modals, dropdowns */
+  --panel-2:       #1c1c1c;   /* inset rows, hover fills, inputs-on-panel */
+  --panel-3:       #242424;   /* chips, ghost buttons, icon wells */
+  --border:        #2a2a2a;
+  --border-hover:  #3a3a3a;
+  --hover-veil:    rgba(255, 255, 255, 0.06);
+  --hover-veil-strong: rgba(255, 255, 255, 0.10);
+  --well:          rgba(255, 255, 255, 0.03);  /* icon-button / selector rest fill */
+  --scrim:         rgba(0, 0, 0, 0.75);        /* modal overlay, blurred 4px */
+
+  /* ── Text ─────────────────────────────────────────────── */
+  --text:          #f5f5f5;
+  --text-dim:      #a0a0a0;
+  --text-faint:    #555555;
+  --text-on-green: #05130a;   /* dark ink used on green CTAs */
+
+  /* ── Brand ────────────────────────────────────────────── */
+  --green-brand:   #2FDC80;   /* logo green, marketing CTA, build/ship affirmatives */
+
+  /* Shipmate purple — the product's own voice. Anything Shipmate did FOR the
+     developer wears this: AI-inferred answers, pre-answer banners, tips. */
+  --shipmate:        #9F68F0;
+  --shipmate-bright: #8359FF;   /* purple wordmark, strong emphasis */
+  --shipmate-glyph:  #A072D4;   /* the ✦ sparkle and tip icons */
+  --shipmate-bg:     rgba(159, 104, 240, 0.10);
+  --shipmate-border: rgba(159, 104, 240, 0.28);
+  --shipmate-wash:   linear-gradient(90deg, rgba(159, 104, 240, 0.22), rgba(159, 104, 240, 0.05)); /* @kind other */
+
+  /* Shippy the octopus, as drawn in assets/brand/shippy.svg. Head and tentacles
+     are two different purples — that separation is what makes him read. */
+  --shippy-purple:      #9F68F0;   /* head and eye pods */
+  --shippy-tentacle:    #873AFF;   /* tentacles, suckers, collar base */
+  --shippy-collar-deep: #512399;   /* top of the collar gradient */
+  --shippy-rim:         #D599F2;   /* inner rim light, sucker rings, crown star */
+  --shippy-sclera:      #D9D9D9;
+  --shippy-pupil:       #000000;
+  --shippy-pupil-glow:  #2200FF;   /* the blue that rises from the bottom of each pupil */
+  --shippy-mouth:       #2E1851;
+  --shippy-legacy:      #727BF0;   /* the previous periwinkle Shippy — splash page only */
+
+  /* ── Signal colors ────────────────────────────────────── */
+  --green:         #4ade80;   /* done / success */
+  --green-soft:    rgba(74, 222, 128, 0.20);
+  --orange:        #fb923c;   /* needs attention, required, Shipmate tips */
+  --orange-soft:   rgba(251, 146, 60, 0.15);
+  --magenta:       #FF3B76;   /* rejection risk, destructive */
+  --magenta-soft:  rgba(255, 59, 118, 0.20);
+  --blue:          #60a5fa;   /* selection — never a semantic state */
+  --blue-soft:     rgba(96, 165, 250, 0.12);
+  --amber:         #fbbf24;   /* starred / primary-language marker */
+  --processing:    rgba(255, 200, 80, 0.85); /* build analysis in flight */
+
+  /* ── Selection (blue means "selected", everywhere) ────── */
+  --sel-color:     #60a5fa;
+  --sel-bg:        rgba(96, 165, 250, 0.10);
+  --sel-bg-strong: rgba(96, 165, 250, 0.20);
+  --sel-border:    #60a5fa;
+  --sel-shadow:    rgba(96, 165, 250, 0.25);
+
+  /* ── Shipmate tip (advice from the product) ─────────────
+     Purple as of the 2026 unification — orange now means only
+     "you still need to answer this", never "Shipmate has a note". */
+  --sw-tip-color:  var(--shipmate-glyph);
+  --sw-tip-bg:     var(--shipmate-bg);
+  --sw-tip-border: var(--shipmate-border);
+
+  /* ── Alert (rejection-risk warning) ───────────────────── */
+  --alert-color:   #FF3B76;
+  --alert-bg:      rgba(255, 59, 118, 0.08);
+  --alert-border:  rgba(255, 59, 118, 0.30);
+
+  /* ── Improve Your Submission — action-card impact bars ──
+     Saturated header bars, each with its own ink. These are the only
+     large blocks of pure colour anywhere in the product. */
+  --impact-high:      #EB3B3B;  /* will get you rejected */
+  --impact-high-ink:  #ffffff;
+  --impact-medium:    #D05017;  /* costs you reach or revenue */
+  --impact-medium-ink:#ffffff;
+  --impact-notice:    #ECBE49;  /* optional, informational */
+  --impact-notice-ink:#241b06;
+  --impact-done:      #92FE85;  /* resolved */
+  --impact-done-ink:  #10380c;
+
+  /* Suggestion panel — Shipmate's proposed replacement, beside the current value */
+  --suggest-border: #7A56AE;
+  --suggest-bg:     rgba(122, 86, 174, 0.16);
+  --suggest-label:  #8958D0;
+
+  --link:       #0099F8;   /* partner and documentation links */
+  --link-hover: #34A7FF;
+
+  /* ── Semantic aliases ─────────────────────────────────── */
+  --surface-app:      var(--bg);
+  --surface-card:     var(--panel);
+  --surface-inset:    var(--panel-2);
+  --surface-chip:     var(--panel-3);
+  --text-body:        var(--text);
+  --text-secondary:   var(--text-dim);
+  --text-muted:       var(--text-faint);
+  --border-default:   var(--border);
+  --accent:           var(--green-brand);
+  --accent-shipmate:  var(--shipmate);
+  --danger:           var(--magenta);
+}

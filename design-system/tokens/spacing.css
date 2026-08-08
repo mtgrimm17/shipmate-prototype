@@ -1,0 +1,50 @@
+:root {
+  /* Spacing is a 2px-resolution scale, not a strict 4/8 grid — the product
+     uses 5, 6, 7, 9, 11, 14 and 18 deliberately. Do not snap these. */
+  --space-1:  4px;
+  --space-2:  6px;
+  --space-3:  8px;
+  --space-4:  10px;
+  --space-5:  12px;
+  --space-6:  14px;
+  --space-7:  16px;
+  --space-8:  18px;
+  --space-9:  20px;
+  --space-10: 24px;
+  --space-11: 28px;
+  --space-12: 32px;
+
+  /* Common composites */
+  --pad-card:        18px 18px 12px; /* @kind spacing */   /* active-card head */
+  --pad-row:         11px 16px; /* @kind spacing */        /* step / task rows */
+  --pad-modal-body:  24px 28px; /* @kind spacing */
+  --pad-modal-foot:  14px 24px; /* @kind spacing */
+  --pad-app-gutter:  12px 32px; /* @kind spacing */        /* topbar */
+  --pad-dashboard:   28px 32px 80px; /* @kind spacing */
+
+  /* Widths */
+  --w-dashboard:  1100px; /* @kind spacing */
+  --w-modal:      640px; /* @kind spacing */
+  --w-modal-sm:   460px; /* @kind spacing */
+  --w-form:       600px; /* @kind spacing */
+  --w-card-min:   320px; /* @kind spacing */
+
+  /* Radii */
+  --r-xs:      4px;
+  --r-sm:      5px;
+  --r-md:      6px;
+  --r-md-plus: 7px;
+  --r-lg:      8px;
+  --r-xl:      10px;
+  --r-2xl:     12px;
+  --r-3xl:     14px;   /* modals */
+  --r-mk-card: 22px;   /* marketing cards */
+  --r-mk-pill: 48px;   /* marketing container pill */
+  --r-full:    999px;
+
+  /* Borders */
+  --bw-hairline: 1px; /* @kind spacing */
+  --bw-control:  1.5px; /* @kind spacing */   /* pills, dropzones, toggles-in-outline */
+  --bw-rail:     2px; /* @kind spacing */     /* left accent rails, tab progress */
+  --border-line: 1px solid var(--border); /* @kind other */
+}

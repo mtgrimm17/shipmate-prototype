@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Shipmate app screen" description="Dark app shell with topbar, project bar and a platform-card dashboard grid." -->
+<helmet><script src="./ds-base.js"></script><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f5f5f5;font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.4}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:3px}a{color:#2FDC80}a:hover{color:#fff}</style></helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;background:#0a0a0a">
+<header style="display:flex;align-items:center;justify-content:space-between;padding:12px 32px;gap:20px;flex-shrink:0;background:#0a0a0a;border-bottom:1px solid #2a2a2a">
+<img src="../../assets/logos/shipmate-logo.png" alt="Shipmate" style="height:40px;width:auto;display:block;object-fit:contain">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="width:28px;height:28px;border-radius:50%;background:#4ade80"></span>
+<span style="font-size:13px;font-weight:500;color:#a0a0a0">Developer</span>
+</div>
+</header>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;margin:16px 24px;gap:8px;background:#141414;border:1px solid #2a2a2a;border-radius:12px">
+<div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);border-radius:8px;height:40px;padding:0 16px;min-width:200px"><span style="flex:1;font-weight:700;font-size:14px">My Game</span><span style="color:#a0a0a0">⌄</span></div>
+<div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);border-radius:8px;height:40px;padding:0 16px;min-width:180px"><span style="flex:1;font-size:14px">v1.0</span><span style="color:#a0a0a0">⌄</span></div>
+</div>
+<div style="padding:28px 32px 80px;max-width:1100px;margin:0 auto;width:100%">
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+
+<div style="background:#141414;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 18px 12px;gap:12px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:40px;border-radius:10px;background:#242424;display:flex;align-items:center;justify-content:center;flex-shrink:0"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.PlatformIcon" platform="ios" hint-size="28px,28px"></x-import></span>
+<div><div style="font-size:14px;font-weight:600">App Store</div><div style="font-size:11px;color:#555;margin-top:3px">2 / 4 steps</div></div>
+</div>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.Toggle" checked="{{ true }}" hint-size="30px,17px"></x-import>
+</div>
+<div style="padding:0 16px 12px"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.ProgressBar" value="{{ 50 }}" hint-size="100%,3px"></x-import></div>
+<div style="border-top:1px solid #2a2a2a">
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 1 }}" name="Content Rating" done="{{ true }}" hint-size="100%,42px"></x-import>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 2 }}" name="Data Privacy" done="{{ true }}" hint-size="100%,42px"></x-import>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 3 }}" name="Product Page Preview" state="risk-warn" hint-size="100%,42px"></x-import>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 4 }}" name="Review Submission" hint-size="100%,42px"></x-import>
+</div>
+</div>
+
+<div style="background:#141414;border:1px solid rgba(47,220,128,0.55);border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(47,220,128,0.12)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 18px 12px;gap:12px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:40px;border-radius:10px;background:#242424;display:flex;align-items:center;justify-content:center;flex-shrink:0"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.PlatformIcon" platform="android" hint-size="28px,28px"></x-import></span>
+<div><div style="font-size:14px;font-weight:600">Google Play</div><div style="font-size:11px;color:#555;margin-top:3px">3 / 3 steps</div></div>
+</div>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.Toggle" checked="{{ true }}" hint-size="30px,17px"></x-import>
+</div>
+<div style="padding:0 16px 10px;display:flex;gap:6"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.StatusPill" tone="prod" hint-size="80px,18px">Prod: v1.3</x-import></div>
+<div style="padding:0 16px 12px"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.ProgressBar" value="{{ 100 }}" hint-size="100%,3px"></x-import></div>
+<div style="border-top:1px solid #2a2a2a">
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 1 }}" name="Content Rating" done="{{ true }}" hint-size="100%,42px"></x-import>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 2 }}" name="Data Safety" done="{{ true }}" hint-size="100%,42px"></x-import>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.StepRow" index="{{ 3 }}" name="Store Listing Preview" done="{{ true }}" hint-size="100%,42px"></x-import>
+<div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:rgba(47,220,128,0.04);border-top:1px solid rgba(47,220,128,0.25)">
+<span style="width:20px;height:20px;border-radius:50%;border:1.5px solid #555;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#555;flex-shrink:0">4</span>
+<span style="flex:1;font-size:13px;font-weight:600">Submit</span>
+<x-import component-from-global-scope="ShipmateDesignSystem_f314df.Pill" tone="ready" hint-size="90px,22px">Production</x-import>
+</div>
+</div>
+</div>
+
+</div>
+<div style="margin-top:32px">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #2a2a2a">Available platforms</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<span style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid #2a2a2a;background:#141414;color:#a0a0a0;font-size:13px;cursor:pointer"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.PlatformIcon" platform="steam" size="{{ 18 }}" hint-size="18px,18px"></x-import>Steam Store<span style="color:#555">+</span></span>
+<span style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid #2a2a2a;background:#141414;color:#a0a0a0;font-size:13px;cursor:pointer"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.PlatformIcon" platform="xbox" size="{{ 18 }}" hint-size="18px,18px"></x-import>Xbox Store<span style="color:#555">+</span></span>
+<span style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid #2a2a2a;background:#141414;color:#a0a0a0;font-size:13px;cursor:pointer"><x-import component-from-global-scope="ShipmateDesignSystem_f314df.PlatformIcon" platform="nintendo" size="{{ 18 }}" hint-size="18px,18px"></x-import>Nintendo eShop<span style="color:#555">+</span></span>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+</body>
+</html>

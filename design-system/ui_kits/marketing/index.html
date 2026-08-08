@@ -1,0 +1,28 @@
+<!-- @dsCard group="Marketing" viewport="1464x900" name="Splash page" subtitle="Hero, three-card pill and Shippy" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Shipmate</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{background:var(--bg-marketing);color:#fff;font-family:var(--font-sans);min-height:100vh;overflow-x:hidden}
+body{zoom:.78;display:flex;flex-direction:column}#root{display:flex;flex-direction:column;flex:1;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;width:1464px;margin:0 auto;padding:28px 0}
+@keyframes octo-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes octo-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(2.4deg)}}
+a{color:var(--green-brand)}a:hover{color:#fff}</style>
+</head><body><div id="root"></div>
+<script type="text/babel" src="Splash.jsx"></script>
+<script type="text/babel">
+const { Wordmark, Splash } = { ...window.ShipmateDesignSystem_f314df, ...window };
+function Page(){
+  return <>
+    <header>
+      <Wordmark height={52} base="../../assets" />
+      <button style={{cursor:'pointer',background:'none',border:'1px solid rgba(255,255,255,0.18)',borderRadius:8,padding:'6px 16px',color:'rgba(255,255,255,0.7)',fontSize:13,fontWeight:600,letterSpacing:'0.04em',fontFamily:'var(--font-mono)'}}>Sign In</button>
+    </header>
+    <Splash onStart={()=>{}} />
+  </>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Page/>);
+</script></body></html>

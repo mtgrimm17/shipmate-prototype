@@ -1,0 +1,60 @@
+:root {
+  /* ── Families ─────────────────────────────────────────────
+     The app's default body face is JetBrains Mono — the terminal
+     feel is the baseline, not an accent. Inter carries headlines
+     and the wordmark. IBM Plex Mono is the marketing display face. */
+  --font-mono:         'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans:         'Inter', sans-serif;
+  --font-display-mono: 'IBM Plex Mono', monospace;
+  --font-code:         'JetBrains Mono', 'Menlo', 'Monaco', monospace;
+
+  /* ── App scale (px, as authored in the product) ───────── */
+  --fs-micro:   10px;  /* uppercase section + form labels, step numbers */
+  --fs-tiny:    11px;  /* helper text, pills, progress captions */
+  --fs-small:   12px;  /* secondary body, chips, tips */
+  --fs-body:    13px;  /* default control + body text */
+  --fs-base:    14px;  /* app base, card titles, selectors */
+  --fs-lg:      15px;  /* wordmark in modal headers */
+  --fs-title:   18px;  /* modal titles */
+  --fs-headline:20px;  /* onboarding headline */
+
+  /* ── Marketing scale ──────────────────────────────────── */
+  --fs-hero:        118px;
+  --fs-hero-sub:    48.2px;
+  --fs-mk-card:     32px;
+  --fs-mk-body:     25px;
+  --fs-mk-cta:      25px;
+  --lh-hero:        132.75px;
+  --lh-hero-sub:    62.4px;
+  --lh-mk-card:     42.5px;
+
+  /* ── Weights ──────────────────────────────────────────── */
+  --fw-light:    300;  /* @kind font */
+  --fw-regular:  400;  /* @kind font */
+  --fw-medium:   500;  /* @kind font */
+  --fw-semibold: 600;  /* @kind font */
+  --fw-bold:     700;  /* @kind font */
+  --fw-black:    800;  /* @kind font */
+
+  /* ── Line heights ─────────────────────────────────────── */
+  --lh-tight:  1.2; /* @kind font */
+  --lh-snug:   1.4; /* @kind font */   /* app body default */
+  --lh-normal: 1.55; /* @kind font */
+  --lh-relaxed:1.6; /* @kind font */
+
+  /* ── Letter spacing ───────────────────────────────────── */
+  --ls-hero:    -0.02em; /* @kind font */
+  --ls-title:   -0.3px; /* @kind font */
+  --ls-normal:  0; /* @kind font */
+  --ls-wordmark:0.04em; /* @kind font */
+  --ls-label:   0.08em; /* @kind font */  /* 10px uppercase form labels */
+  --ls-section: 0.10em; /* @kind font */  /* 10px uppercase section headers */
+  --ls-header:  0.12em; /* @kind font */  /* questionnaire section headers */
+  --ls-loc:     0.20em; /* @kind font */  /* localization rail labels */
+  --ls-cta:     0.08em; /* @kind font */
+
+  /* ── Semantic aliases ─────────────────────────────────── */
+  --text-label:   var(--fs-micro);
+  --text-caption: var(--fs-tiny);
+  --text-control: var(--fs-body);
+}

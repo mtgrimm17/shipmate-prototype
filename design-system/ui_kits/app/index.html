@@ -1,0 +1,52 @@
+<!-- @dsCard group="App" viewport="1280x820" name="Shipmate app" subtitle="Onboarding → dashboard → step editor → submit" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Shipmate — Dashboard</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="data.js"></script>
+<style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:var(--fs-base);line-height:var(--lh-snug)}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}a{color:var(--green-brand)}a:hover{color:#fff}
+.build-badge{position:fixed;left:10px;bottom:8px;font-size:10px;color:var(--text-faint)}
+.ai-disclaimer{position:fixed;right:14px;bottom:8px;font-size:10px;color:var(--text-faint)}</style>
+</head><body>
+<div id="root"></div>
+<div class="build-badge">v2.33</div>
+<div class="ai-disclaimer">Please review all inferred answers before submitting</div>
+<script type="text/babel" src="Topbar.jsx"></script>
+<script type="text/babel" src="ProjectBar.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
+<script type="text/babel" src="Onboarding.jsx"></script>
+<script type="text/babel" src="StepModal.jsx"></script>
+<script type="text/babel">
+const D = window.SHIPMATE_DATA;
+function App(){
+  const [phase, setPhase] = React.useState('onboarding');
+  const [active, setActive] = React.useState(['ios','android','steam']);
+  const [done, setDone] = React.useState({ ios:['Content Rating','Data Privacy','Business','Product Page Preview'], android:['Content Rating'], steam:[] });
+  const [tracks, setTracks] = React.useState({});
+  const [step, setStep] = React.useState(null);
+  const complete = () => {
+    setDone(d => ({ ...d, [step.p]: [...new Set([...(d[step.p]||[]), step.s])] }));
+    setStep(null);
+  };
+  const cycleTrack = (id) => setTracks(t => {
+    const list = D.platforms[id].tracks;
+    const cur = list.indexOf(t[id]);
+    return { ...t, [id]: list[(cur + 1) % list.length] };
+  });
+  return <div style={{minHeight:'100vh',display:'flex',flexDirection:'column'}}>
+    <Topbar signedIn={phase!=='onboarding'} onSignIn={()=>setPhase('app')} />
+    {phase!=='onboarding' && <>
+      <div style={{marginTop:16}}><ProjectBar project={D.project} version={D.version} onEdit={()=>setPhase('onboarding')} /></div>
+      <Dashboard data={D} active={active} done={done} tracks={tracks}
+        onStep={(p,s)=>setStep({p,s})} onTrack={cycleTrack}
+        onSubmit={(id)=>setPhase('submitted:'+id)}
+        onActivate={(id)=>setActive(a=>[...a,id])} />
+    </>}
+    {phase==='onboarding' && <Onboarding onDone={()=>setPhase('app')} />}
+    {step && <StepModal platform={step.p} step={step.s} questions={D.questions} onClose={()=>setStep(null)} onComplete={complete} />}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>
