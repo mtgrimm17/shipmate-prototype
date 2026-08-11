@@ -4197,208 +4197,105 @@ function androidYNRow(label, fieldId, desc) {
     desc);
 }
 
-/* Android Content Rating */
+/* Android Content Rating — Google Play Content Questions (IARC tree)
+   Renders the full 95-question IARC tree (GOOGLE_IARC_QUESTIONS, defined in
+   state.js) recursively. A question and all of its follow-ups collapse into
+   a compact summary row once the whole branch is answered (see
+   giarcIsSubtreeComplete); clicking a collapsed row re-expands it. */
 function buildAndroidContentRatingSection() {
-  const { total, answered } = androidCqProgress();
 
-  /* Short labels and section name overrides for IARC/Google Play questions */
-  const SECTION_NAMES = {
-    'Blood, Violence, or Gory Images':                          'Violence & Gore',
-    'Fear':                                                     'Fear & Horror',
-    'Language':                                                 'Language',
-    'Crude Humor':                                              'Crude Humor',
-    'Nudity or Sexual Content':                                 'Nudity & Sexual Content',
-    'Controlled Substances':                                    'Controlled Substances',
-    'Gambling & Speculative Acts':                              'Gambling',
-    'Digital Purchases, Cash Convertible Rewards, or NFTs':     'Digital Purchases',
-    'Interactive Elements':                                     'Interactive Elements',
-    'Elements of Extremism':                                    'Extremism',
-  };
-
-  const Q_LABELS = {
-    cq_violence:          'Violence or gory images',
-    cq_violence_types:    'Types of violence',
-    cq_violence_setting:  'Setting',
-    cq_violence_pixelated:'Art style',
-    cq_vh_reactions:      'Reactions to violence',
-    cq_vh_presentation:   'How violence is shown',
-    cq_vh_gore_level:     'Blood & gore level',
-    cq_vh_war:            'Realistic war setting',
-    cq_vh_innocents:      'Harm to innocents',
-    cq_vh_fierce:         'Intense or sinister elements',
-    cq_vnh_reactions:     'Reactions to non-human violence',
-    cq_vnh_gore_level:    'Non-human blood & gore level',
-    cq_vnh_human_like:    'Human-like creatures',
-    cq_vnh_real_animals:  'Violence against real animals',
-    cq_gore_assoc:        'Associated with violent acts',
-    cq_gore_explicitness: 'Explicitness',
-    cq_fear:              'Scary or horrifying content',
-    cq_fear_types:        'Types of fear content',
-    cq_fear_scary_freq:   'Frequency of scary elements',
-    cq_fear_horror_freq:  'Frequency of horrifying elements',
-    cq_fear_imminent:     'Intense unrelenting threat',
-    cq_language:          'Offensive language',
-    cq_language_types:    'Types of language',
-    cq_lang_minor_freq:   'Minor profanity frequency',
-    cq_lang_moderate_freq:'Moderate swearing frequency',
-    cq_lang_discrim_freq: 'Discriminatory language frequency',
-    cq_lang_sexual_freq:  'Sexual expletive frequency',
-    cq_crude:             'Crude humor',
-    cq_crude_bodily:      'Bodily humor types',
-    cq_sexual:            'Sexual or nudity content',
-    cq_sexual_types:      'Types of sexual content',
-    cq_sex_act_freq:      'Frequency of sexual acts',
-    cq_sex_act_depiction: 'How sexual acts are depicted',
-    cq_sex_act_minors:    'Characters under 18',
-    cq_sex_nudity_types:  'Nudity or revealing attire',
-    cq_sex_suggestive_desc:'Suggestive content description',
-    cq_sex_dating_focus:  'Dating games as primary focus',
-    cq_sex_violence_pres: 'Sexual violence depiction',
-    cq_substances:        'Drugs, alcohol, or tobacco',
-    cq_sub_types:         'Substance types',
-    cq_sub_drugs:         'Illegal drug depiction',
-    cq_sub_fantasy:       'Fantasy drug depiction',
-    cq_sub_medical:       'Medical drug depiction',
-    cq_sub_alcohol:       'Alcohol depiction',
-    cq_sub_tobacco:       'Tobacco depiction',
-    cq_gambling:          'Gambling or speculative acts',
-    cq_gamb_types:        'Gambling types',
-    cq_gamb_themes_focus: 'Gambling as primary focus',
-    cq_gamb_bingo_cash:   'Bingo with cash payouts',
-    cq_gamb_casino_cash:  'Casino with cash payouts',
-    cq_digital:           'Digital purchases',
-    cq_digital_types:     'Purchase types',
-    cq_digital_lootbox:   'Chance-based (loot boxes)',
-    cq_location:          'Live location sharing',
-    cq_user_interact:     'User-to-user interaction',
-    cq_interact_types:    'Interaction safeguards',
-    cq_extremism:         'Extremist content',
-  };
-
-  /* Render a single CQ question in Content Rating style */
-  function renderCRQuestion(q) {
-    const label   = Q_LABELS[q.id] || q.text;
-    const tooltip = q.text;
-    const ans     = state.cqAnswers[q.id];
-    const ttHTML  = `<span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(tooltip)}</span></span>`;
-
-    if (q.type === 'yn') {
-      const yc2 = _platformAIClass('android', q.id, 'yes').trim();
-      const nc2 = _platformAIClass('android', q.id, 'no').trim();
-      const yb2 = 'YES' + _platformAIBadge('android', q.id, 'yes');
-      const nb2 = 'NO'  + _platformAIBadge('android', q.id, 'no');
-      // Ensure label is one line (long text → tooltip)
-      const qShort = label.length > 52 ? label.slice(0, 52).replace(/[;,]?\s*$/, '') + '…' : label;
-      return ynRow(qShort + ttHTML, ans,
-        `answerAndroidCR('${q.id}','yes')`,
-        `answerAndroidCR('${q.id}','no')`,
-        '', false, yc2.trim(), nc2.trim(), yb2, nb2);
-    }
-
-    if (q.type === 'single') {
-      const opts = q.options;
-      if (opts.length <= 4) {
-        // Intensity-style buttons — map options to None/mild/etc via index
-        const selClasses = ['is-sel-none','is-sel-infrequent','is-sel-frequent','is-sel-frequent'];
-        const answered = ans !== null && ans !== undefined && ans !== '';
-        const btns = opts.map((o, i) => {
-          const sel = ans === o;
-          return `<button class="intensity-btn${sel ? ' ' + selClasses[i] : ''}"
-                          onclick="answerAndroidCRSingle('${q.id}',${i})">${escHtml(o)}</button>`;
-        }).join('');
-        return `
-          <div class="ios-q-row ios-q-row-intensity" data-answered="${answered ? '1' : '0'}">
-            <div class="ios-q-label ios-q-label-sm">${label}${ttHTML}</div>
-            <div class="intensity-group">${btns}</div>
-          </div>`;
-      } else {
-        // Dropdown for many options
-        const isNull = ans === null || ans === undefined || ans === '';
-        const currentLabel = isNull ? 'Select…' : escHtml(ans);
-        const ddItems = opts.map((o, i) => `
-          <button class="loc-dd-item${ans === o ? ' is-current' : ''}"
-                  onclick="answerAndroidCRSingle('${q.id}',${i}); closeAllDropdowns()">
-            <span class="loc-dd-name">${escHtml(o)}</span>
-          </button>`).join('');
-        const chevSvg = `<svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
-        const answered = !isNull;
-        return `
-          <div class="ios-q-row" data-answered="${answered ? '1' : '0'}">
-            <div class="ios-q-left"><div class="ios-q-label">${label}${ttHTML}</div></div>
-            <div class="loc-primary-wrap sw-select-wrap" id="swsel-cr-${q.id}" style="width:220px;flex-shrink:0;">
-              <button class="loc-primary-pill" onclick="toggleSwSelect(event,'cr-${q.id}')">
-                <span class="loc-primary-name${isNull ? ' is-placeholder' : ''}">${currentLabel}</span>
-                ${chevSvg}
-              </button>
-              <div class="loc-dropdown" style="right:0;left:auto;">${ddItems}</div>
-            </div>
-          </div>`;
-      }
-    }
-
-    if (q.type === 'multi') {
-      const current = Array.isArray(ans) ? ans : [];
-      const answered = current.length > 0;
-      // Render each option as its own ynRow — skip "None" option since not-selected = none
-      const checks = q.options.filter(o => !/^none$/i.test(o.trim())).map((o, optIdx) => {
-        const val   = current.includes(o) ? 'yes' : null;
-        const short = o.length > 48 ? o.slice(0, 48).replace(/[;,]?\s*$/, '') + '…' : o;
-        const tip   = o.length > 48 ? o : '';
-        const yc    = _platformAIClass('android', q.id, o).trim();
-        const nb2   = 'YES' + _platformAIBadge('android', q.id, o);
-        return ynRow(escHtml(short), val,
-          `answerAndroidCRMultiOpt('${q.id}',${optIdx},'yes')`,
-          `answerAndroidCRMultiOpt('${q.id}',${optIdx},'no')`,
-          tip, false, yc.trim(), '', nb2);
-      }).join('');
-      return `
-        <div class="ios-q-row" data-answered="${answered ? '1' : '0'}" style="flex-direction:column;">
-          <div class="ios-q-label" style="margin-bottom:8px;">${label}${ttHTML}</div>
-          <div class="cq-check-list">${checks}</div>
-        </div>`;
-    }
-
-    return '';
+  function giarcTooltip(text) {
+    return `<span class="tooltip-anchor" data-tip="${escHtml(text)}"><span class="tooltip-icon">?</span></span>`;
   }
 
-  /* Group android-visible questions by section and render */
-  const androidQs    = CQ_QUESTIONS.filter(q => q.platforms.includes('android'));
-  const sections     = [...new Set(androidQs.map(q => q.section))];
-  const showAll      = state.androidContentRatingExpanded;
-  const collapseMode = state.androidAnswerSnapshot !== null;
+  const CHECK_SVG = `<svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-  const togglePill = buildCRTogglePill(collapseMode, showAll,
-    'toggleAndroidContentRatingExpanded(false)', 'toggleAndroidContentRatingExpanded(true)');
-
-  let html = togglePill;
-
-  sections.forEach(section => {
-    const visibleQs = androidQs.filter(q => q.section === section && cqIsVisible(q));
-    if (!visibleQs.length) return;
-
-    // Use snapshot so questions don't vanish while the user is actively answering
-    const filteredQs = (collapseMode && !showAll)
-      ? visibleQs.filter(q => !state.androidAnswerSnapshot?.has(q.id))
-      : visibleQs;
-    if (!filteredQs.length) return;
-
-    // no divider between sections — section label underline is sufficient
-    html += `<div class="ios-content-step-label">${SECTION_NAMES[section] || section}</div>`;
-    firstSection = false;
-
-    filteredQs.forEach(q => {
-      const wrap = q.indent > 0
-        ? `<div class="ios-followup">${renderCRQuestion(q)}</div>`
-        : renderCRQuestion(q);
-      html += wrap;
-    });
-  });
-
-  if (!html) {
-    html = `<div class="ios-risk-note risk-HIGH">No questions applicable. Make sure Google Play is activated as a platform.</div>`;
+  function buildGIARCOption(q, opt, key) {
+    const isMulti = q.data_type === 'picklist_multi';
+    const current = state.cqAnswers[key];
+    const checked = isMulti
+      ? Array.isArray(current) && current.includes(opt.index)
+      : current === opt.index;
+    const onclick = isMulti
+      ? `answerGIARCMultiOpt('${key}',${opt.index})`
+      : `answerGIARCSingle('${key}',${opt.index})`;
+    return `
+      <div class="giarc-option${checked ? ' is-checked' : ''}" onclick="${onclick}">
+        <span class="giarc-${isMulti ? 'checkbox' : 'radio'}"></span>
+        <span class="giarc-option-text">${escHtml(opt.text)}</span>
+      </div>`;
   }
 
-  return html;
+  /* Compact single-row view of a fully-answered question (and, implicitly,
+     all of its follow-ups). Clicking it re-expands the full question. */
+  function buildGIARCCollapsedRow(key, depth, index) {
+    const q = GOOGLE_IARC_BY_KEY[key];
+    const indexBadge = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
+    const summary = escHtml(giarcAnswerSummaryText(key));
+    return `
+      <div class="giarc-card giarc-depth-${depth} is-collapsed is-answered" data-key="${key}"
+           onclick="toggleGIARCExpand('${key}',true)" tabindex="0" role="button" aria-label="Expand to review this answer">
+        <div class="giarc-header giarc-header-collapsed">
+          ${indexBadge}
+          <span class="giarc-title giarc-title-collapsed">${escHtml(q.title)}</span>
+          <span class="giarc-collapsed-summary">${summary}</span>
+          <span class="giarc-check is-visible">${CHECK_SVG}</span>
+          <span class="giarc-collapse-chevron">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+        </div>
+      </div>`;
+  }
+
+  function renderGIARCQuestion(key, depth, index) {
+    const q = GOOGLE_IARC_BY_KEY[key];
+    if (!q) return '';
+    const complete = giarcIsSubtreeComplete(key);
+
+    if (complete && !state.giarcManuallyExpanded.has(key)) {
+      return buildGIARCCollapsedRow(key, depth, index);
+    }
+
+    const answered    = giarcIsAnswered(key);
+    const indexBadge  = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
+    const tooltipHTML = q.tooltip ? giarcTooltip(q.tooltip) : '';
+    const checkHTML   = `<span class="giarc-check${answered ? ' is-visible' : ''}">${CHECK_SVG}</span>`;
+
+    // This branch is complete but the user reopened it — offer a way to
+    // collapse it again without touching the answer itself.
+    const collapseBtnHTML = (complete && state.giarcManuallyExpanded.has(key))
+      ? `<button type="button" class="giarc-collapse-btn" aria-label="Collapse this question"
+                 onclick="event.stopPropagation(); toggleGIARCExpand('${key}',false)">
+           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+         </button>`
+      : '';
+
+    const noteHTML = q.data_type === 'picklist_multi'
+      ? `<div class="giarc-data-type-note">Select all that apply</div>` : '';
+
+    const optsHTML = giarcOptionEntries(q).map(opt => buildGIARCOption(q, opt, key)).join('');
+
+    const kids = giarcActiveChildKeys(key);
+    const childrenHTML = kids.length
+      ? `<div class="giarc-children is-visible">${kids.map(ck => renderGIARCQuestion(ck, depth + 1)).join('')}</div>`
+      : '';
+
+    return `
+      <div class="giarc-card giarc-depth-${depth}${answered ? ' is-answered' : ''}" data-key="${key}">
+        <div class="giarc-header">
+          ${indexBadge}
+          <span class="giarc-title">${escHtml(q.title)}</span>
+          ${tooltipHTML}
+          ${checkHTML}
+          ${collapseBtnHTML}
+        </div>
+        ${noteHTML}
+        <div class="giarc-options">${optsHTML}</div>
+      </div>
+      ${childrenHTML}`;
+  }
+
+  return `<div class="giarc-root">${GOOGLE_IARC_TOP_LEVEL_KEYS.map((key, i) => renderGIARCQuestion(key, 1, i + 1)).join('')}</div>`;
 }
 
 /* Stub section for steps not yet implemented */

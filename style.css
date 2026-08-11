@@ -5362,6 +5362,119 @@ select.form-input {
 /* Indented follow-up block */
 .ios-followup { margin-top: 10px; padding-left: 14px; border-left: 2px solid var(--border); }
 
+/* ── Google Play Content Questions (IARC) ────────────────
+   Android's contentRating step. A recursive question tree — each answer
+   can reveal follow-up questions nested below it; a question and all of
+   its follow-ups collapse into a compact summary row once fully answered. */
+
+.giarc-root { display: flex; flex-direction: column; }
+
+.giarc-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 14px rgba(0,0,0,0.25);
+}
+
+.giarc-depth-1 { margin-bottom: 10px; }
+.giarc-depth-2, .giarc-depth-3, .giarc-depth-4, .giarc-depth-5 { border-radius: 10px; }
+.giarc-depth-3, .giarc-depth-4, .giarc-depth-5 { background: var(--panel-3); }
+
+.giarc-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+
+.giarc-index {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--sel-bg); color: var(--sel-color);
+  font-size: 11.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+
+.giarc-title { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--text); flex: 1; }
+.giarc-depth-1 .giarc-title { font-size: 15.5px; }
+
+.giarc-check {
+  flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%;
+  background: var(--green); display: none; align-items: center; justify-content: center;
+}
+.giarc-check svg { width: 10px; height: 10px; }
+.giarc-check.is-visible { display: flex; }
+
+.giarc-collapse-btn {
+  flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel-3); color: var(--text-faint);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.giarc-collapse-btn:hover { border-color: var(--border-hover); color: var(--text-dim); }
+
+/* Collapsed (fully-answered) row */
+.giarc-card.is-collapsed { padding: 12px 16px; cursor: pointer; transition: border-color 0.12s ease; }
+.giarc-card.is-collapsed:hover { border-color: var(--border-hover); }
+.giarc-card.is-collapsed:focus-visible { outline: none; border-color: var(--sel-color); }
+
+.giarc-header-collapsed { margin-bottom: 0; align-items: center; }
+.giarc-title-collapsed { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.giarc-collapsed-summary {
+  flex: none; max-width: 220px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-size: 13px; color: var(--text-dim);
+}
+
+.giarc-collapse-chevron {
+  flex: none; width: 16px; height: 16px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center; color: var(--text-faint);
+}
+
+/* Options */
+.giarc-options { display: flex; flex-direction: column; gap: 6px; }
+
+.giarc-option {
+  position: relative; display: flex; align-items: center; gap: 11px;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px;
+  cursor: pointer; background: var(--panel-3);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.giarc-option:hover { background: var(--sel-bg); border-color: var(--border-hover); }
+.giarc-option.is-checked { background: var(--sel-bg); border-color: var(--sel-border); }
+
+.giarc-radio, .giarc-checkbox {
+  position: relative; flex: none; width: 17px; height: 17px;
+  border: 2px solid var(--border-hover); background: var(--panel-3);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.giarc-radio { border-radius: 50%; }
+.giarc-checkbox { border-radius: 5px; }
+
+.giarc-radio::after {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--sel-color);
+  transform: translate(-50%, -50%) scale(0.4); opacity: 0; transition: all 0.12s ease;
+}
+.giarc-checkbox::after {
+  content: ''; position: absolute; top: 2px; left: 5px; width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0.5); opacity: 0; transition: all 0.12s ease;
+}
+.giarc-option.is-checked .giarc-radio { border-color: var(--sel-color); }
+.giarc-option.is-checked .giarc-radio::after { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.giarc-option.is-checked .giarc-checkbox { border-color: var(--sel-color); background: var(--sel-color); }
+.giarc-option.is-checked .giarc-checkbox::after { opacity: 1; transform: rotate(45deg) scale(1); }
+
+.giarc-option-text { font-size: 13.5px; line-height: 1.45; color: var(--text); }
+
+.giarc-data-type-note {
+  font-size: 11px; color: var(--text-faint); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.04em; margin: -6px 0 8px;
+}
+
+/* Children — indented, connected with a rule, revealed once a parent option selects them */
+.giarc-children {
+  display: flex; flex-direction: column; gap: 10px;
+  margin: 6px 0 14px 20px; padding: 2px 0 2px 20px;
+  border-left: 2px solid var(--border);
+}
+
 /* ── Callout notes ───────────────────────────────────── */
 
 .ios-risk-note {

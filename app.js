@@ -3466,6 +3466,67 @@ function toggleAndroidCRMulti(qid, opt, checked) {
   updateAndroidCard();
 }
 
+/* ── Google Play Content Questions (IARC) — answer handlers ──
+   Mutate state.cqAnswers using the google.content.* keys (namespaced,
+   so no collision with the cq_* ids used by CQ_QUESTIONS above). Answers
+   are stored as 1-based option indices (radio) or arrays of indices
+   (picklist_multi) — see giarcOptionEntries/giarcIsAnswered in state.js. */
+
+function giarcClearAnswersRecursively(key) {
+  // Clear this key's answer and every descendant's answer (used when a
+  // branch is hidden again so re-revealing it starts fresh).
+  const kids = giarcActiveChildKeys(key);
+  delete state.cqAnswers[key];
+  state.giarcManuallyExpanded.delete(key);
+  kids.forEach(giarcClearAnswersRecursively);
+}
+
+function answerGIARCSingle(key, optIndex) {
+  const q = GOOGLE_IARC_BY_KEY[key];
+  if (!q) return;
+  const current = state.cqAnswers[key];
+  if (current === optIndex) {
+    // Clicking the already-selected option again clears it (and whatever
+    // it revealed) rather than leaving it stuck selected.
+    giarcClearAnswersRecursively(key);
+  } else {
+    // Switching a radio answer should clear whatever the previous
+    // selection had revealed, so stale sub-answers don't linger.
+    if (current !== undefined && current !== null) {
+      const prevOpt = giarcOptionEntries(q).find(o => o.index === current);
+      if (prevOpt) giarcChildKeysForOption(prevOpt.child).forEach(giarcClearAnswersRecursively);
+    }
+    state.cqAnswers[key] = optIndex;
+  }
+  reRenderAndroidStepModal();
+  updateAndroidCard();
+}
+
+function answerGIARCMultiOpt(key, optIndex) {
+  const q = GOOGLE_IARC_BY_KEY[key];
+  if (!q) return;
+  const opt     = giarcOptionEntries(q).find(o => o.index === optIndex);
+  const current = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key].slice() : [];
+  if (current.includes(optIndex)) {
+    state.cqAnswers[key] = current.filter(x => x !== optIndex);
+    // Deselecting an option should also clear whatever it revealed.
+    if (opt) giarcChildKeysForOption(opt.child).forEach(giarcClearAnswersRecursively);
+  } else {
+    current.push(optIndex);
+    state.cqAnswers[key] = current;
+  }
+  reRenderAndroidStepModal();
+  updateAndroidCard();
+}
+
+/* expand=true reopens a fully-answered (auto-collapsed) branch for review;
+   expand=false manually re-collapses it without touching the answer. */
+function toggleGIARCExpand(key, expand) {
+  if (expand) state.giarcManuallyExpanded.add(key);
+  else state.giarcManuallyExpanded.delete(key);
+  reRenderAndroidStepModal();
+}
+
 function seedOnboardingToAndroid() {
   const a  = state.androidSubmitAnswers;
   const fd = state.formData;
