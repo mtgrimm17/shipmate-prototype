@@ -1825,8 +1825,10 @@ function renderStepModal() {
   const modal = document.getElementById('submit-modal');
   if (!modal) return;
   const { platformId, stepId, inferenceStatus, inferenceError } = state.stepModal || {};
-  // Questionnaire contains privacy matrix — needs extra width for iOS and Android
-  const isWide = stepId === 'questionnaire' && (platformId === 'ios' || platformId === 'android');
+  // Questionnaire contains privacy matrix — needs extra width for iOS and Android.
+  // Preview Website needs extra width for the two-column presskit layout.
+  const isWide = (stepId === 'questionnaire' && (platformId === 'ios' || platformId === 'android'))
+              || (stepId === 'storePreview' && platformId === 'web');
   modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
@@ -2052,11 +2054,51 @@ function buildStorePreviewFlipSection(platformId, target) {
 }
 
 /* ── Web: self-distribution site preview + edit panel ──────────────
-   The "Preview Website" step. Shows an editable template of a simple
-   self-hosted landing page for the game. Formatting is intentionally
-   lightweight for now — iterate later. Clicking "Edit site details"
-   flips (via openStorePreviewSection) to buildWebSiteEditSection().
+   The "Preview Website" step. Renders a "presskit()"-style press page —
+   Factsheet / Description / History / Videos / Images /
+   Awards & Recognition / Selected Articles / Additional Links / Team /
+   Contact — populated from Shipmate's game data plus the extra fields in
+   state.webSite. List-type fields (awards, articles, team, links, social)
+   are stored as plain newline-separated text and parsed here; a section
+   is only rendered once the user has put something in it, so an
+   unfilled-in Preview Website step doesn't show a wall of empty blocks.
+   Clicking "Edit site details" flips (via openStorePreviewSection) to
+   buildWebSiteEditSection().
    ─────────────────────────────────────────────────────────────────── */
+
+/* Split a textarea's contents into trimmed, non-empty lines. */
+function _pkLines(text) {
+  return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
+}
+
+/* Wrap bare URLs in a line with <a> tags; escapes everything else. */
+function _pkAutolink(text) {
+  const urlRe = /(https?:\/\/[^\s]+)/g;
+  return text.split(urlRe).map((part, i) => {
+    if (i % 2 === 0) return escHtml(part);
+    const label = part.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    return `<a href="${escHtml(part)}" target="_blank" rel="noopener">${escHtml(label)}</a>`;
+  }).join('');
+}
+
+/* Splits a "Label: value" or "Label - value" line into parts; falls back
+   to { label:'', value: line } when no separator is found. Used for the
+   Team / Selected Articles / Additional Links / Social list fields.
+   The colon form deliberately skips a colon that's part of a URL scheme
+   (the "://" in "https://…") so a line like "Name - Role, https://x.com"
+   isn't mis-split at the scheme colon before ever trying the " - " form. */
+function _pkSplitLabelValue(line) {
+  let m = line.match(/^(.{1,80}?):(?!\/\/)\s*(.+)$/);
+  if (m) return { label: _pkStripQuotes(m[1].trim()), value: m[2].trim() };
+  m = line.match(/^(.{1,80}?)\s+[-–—]\s+(.+)$/);
+  if (m) return { label: _pkStripQuotes(m[1].trim()), value: m[2].trim() };
+  return { label: '', value: line };
+}
+
+function _pkStripQuotes(text) {
+  return text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+}
+
 function buildWebSitePreviewSection() {
   const fd  = state.formData || {};
   const ups = state.uploads || {};
@@ -2065,64 +2107,163 @@ function buildWebSitePreviewSection() {
 
   const title = escHtml((ws.headline && ws.headline.trim()) || fd.title || 'Your Game');
   const descRaw = fd.description || '';
-  const firstDot = descRaw.search(/[.!?]/);
-  const autoTagline = firstDot > 10 && firstDot < 120 ? descRaw.slice(0, firstDot + 1) : (descRaw.slice(0, 90) || '');
-  const tagline = escHtml((ws.tagline && ws.tagline.trim()) || autoTagline || 'An unforgettable adventure awaits.');
-  const cta = escHtml(ws.ctaLabel || 'Download');
-  const descFull = descRaw ? escHtml(descRaw) : 'Your game description will appear here once you fill in the Description field in Game Details.';
+  const descFull = descRaw ? escHtml(descRaw).replace(/\n/g, '<br>') : 'Your game description will appear here once you fill in the Description field in Game Details.';
 
   const isFree = !fd.price || parseFloat(fd.price) === 0 || String(fd.price).trim() === '' || String(fd.price).trim() === '0';
   const priceText = isFree ? 'Free' : `$${escHtml(String(fd.price))}`;
 
   const shots = ups.screenshots || [];
-  const heroShot = shots.length ? `<img src="${_screenshotSrc(shots[0])}" alt="hero" style="width:100%;height:100%;object-fit:cover;display:block;">` : '';
-  const heroBg = heroShot
-    ? heroShot
-    : `<div style="width:100%;height:100%;background:linear-gradient(135deg, ${accent}, #1b2430);"></div>`;
-
-  const gallery = shots.length > 1
-    ? `<div style="display:flex;gap:8px;overflow:hidden;padding:0 20px 4px;">
-         ${shots.slice(1, 5).map(s => `<img src="${_screenshotSrc(s)}" alt="shot" style="height:74px;border-radius:6px;flex:0 0 auto;object-fit:cover;">`).join('')}
-       </div>`
-    : '';
 
   const slug = ((fd.title || 'your-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || 'your-game';
+  const siteUrl = (ws.website && ws.website.trim()) || `${slug}.example.com`;
+
+  const dash = `<span class="pk-fact-empty">—</span>`;
+  const factRow = (label, value) => `
+    <div class="pk-fact-label">${escHtml(label)}</div>
+    <div class="pk-fact-value">${value || dash}</div>`;
+
+  const socialLines = _pkLines(ws.socialLinks);
+  const socialHTML = socialLines.length
+    ? socialLines.map(l => _pkAutolink(l)).join('<br>')
+    : '';
+
+  const factsheetHTML = `
+    <div class="pk-factsheet" id="pk-factsheet">
+      <h2 class="pk-h2">Factsheet</h2>
+      <div class="pk-fact-grid">
+        ${factRow('Developer', ws.developer ? escHtml(ws.developer) : '')}
+        ${factRow('Based in', ws.basedIn ? escHtml(ws.basedIn) : '')}
+        ${factRow('Founding date', ws.foundingDate ? escHtml(ws.foundingDate) : '')}
+        ${factRow('Release date', fd.releaseDate ? escHtml(fd.releaseDate) : '')}
+        ${factRow('Price', priceText)}
+        ${factRow('Website', `<a href="#" onclick="return false;">${escHtml(siteUrl)}</a>`)}
+        ${factRow('Press contact', ws.pressContact ? _pkAutolink(ws.pressContact) : '')}
+        ${factRow('Business contact', ws.businessContact ? _pkAutolink(ws.businessContact) : '')}
+        ${factRow('Social', socialHTML)}
+        ${factRow('Address', ws.address ? escHtml(ws.address).replace(/\n/g, '<br>') : '')}
+        ${factRow('Phone', ws.phone ? escHtml(ws.phone) : '')}
+      </div>
+    </div>`;
+
+  const historyLines = _pkLines(ws.history);
+  const historyHTML = historyLines.length
+    ? `<h3 class="pk-h3">History</h3><p class="pk-p">${historyLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
+    : '';
+
+  const descriptionHTML = `
+    <div class="pk-description" id="pk-description">
+      <h2 class="pk-h2">Description</h2>
+      <p class="pk-p">${descFull}</p>
+      ${historyHTML}
+    </div>`;
+
+  const videosHTML = fd.trailerUrl ? `
+    <section class="pk-section" id="pk-videos">
+      <h2 class="pk-h2">Videos</h2>
+      <div class="pk-video-frame">
+        <a href="${escHtml(fd.trailerUrl)}" target="_blank" rel="noopener" class="pk-video-link">
+          <span class="pk-video-play">▶</span>
+          <span>${title} — Trailer</span>
+        </a>
+      </div>
+    </section>` : '';
+
+  const imagesHTML = shots.length ? `
+    <section class="pk-section" id="pk-images">
+      <h2 class="pk-h2">Images</h2>
+      <div class="pk-image-grid">
+        ${shots.map(s => `<div class="pk-image-cell"><img src="${_screenshotSrc(s)}" alt="${escHtml(s.name || 'Screenshot')}"></div>`).join('')}
+      </div>
+    </section>` : '';
+
+
+  const awardsLines = _pkLines(ws.awards);
+  const awardsHTML = awardsLines.length ? `
+    <section class="pk-section" id="pk-awards">
+      <h2 class="pk-h2">Awards &amp; Recognition</h2>
+      <ul class="pk-list">${awardsLines.map(l => `<li>${escHtml(l)}</li>`).join('')}</ul>
+    </section>` : '';
+
+  const articleLines = _pkLines(ws.articles);
+  const articlesHTML = articleLines.length ? `
+    <section class="pk-section" id="pk-articles">
+      <h2 class="pk-h2">Selected Articles</h2>
+      <ul class="pk-list">
+        ${articleLines.map(l => {
+          const { label, value } = _pkSplitLabelValue(l);
+          return label
+            ? `<li>"${escHtml(label)}" - ${_pkAutolink(value)}</li>`
+            : `<li>${_pkAutolink(value)}</li>`;
+        }).join('')}
+      </ul>
+    </section>` : '';
+
+  const linkLines = _pkLines(ws.additionalLinks);
+  const linksHTML = linkLines.length ? `
+    <section class="pk-section" id="pk-links">
+      <h2 class="pk-h2">Additional Links</h2>
+      <ul class="pk-list">
+        ${linkLines.map(l => {
+          const { label, value } = _pkSplitLabelValue(l);
+          return `<li>${label ? escHtml(label) + ': ' : ''}${_pkAutolink(value)}</li>`;
+        }).join('')}
+      </ul>
+    </section>` : '';
+
+  const teamLines = _pkLines(ws.team);
+  const teamHTML = teamLines.length ? `
+    <section class="pk-section" id="pk-team">
+      <h2 class="pk-h2">Team &amp; Repeating Collaborators</h2>
+      <ul class="pk-list pk-team-list">
+        ${teamLines.map(l => {
+          const { label, value } = _pkSplitLabelValue(l);
+          return label
+            ? `<li><strong>${escHtml(label)}</strong><br><span class="pk-muted">${_pkAutolink(value)}</span></li>`
+            : `<li>${_pkAutolink(value)}</li>`;
+        }).join('')}
+      </ul>
+    </section>` : '';
+
+  const contactHTML = `
+    <section class="pk-section" id="pk-contact">
+      <h2 class="pk-h2">Contact</h2>
+      <p class="pk-p">
+        ${ws.developer ? escHtml(ws.developer) + '<br>' : ''}
+        ${ws.pressContact ? _pkAutolink(ws.pressContact) + '<br>' : ''}
+        ${ws.businessContact ? _pkAutolink(ws.businessContact) : ''}
+        ${!ws.developer && !ws.pressContact && !ws.businessContact ? '<span class="pk-muted">Add contact details in Edit site details.</span>' : ''}
+      </p>
+    </section>`;
 
   return `
     <div class="web-preview-wrap" style="padding:4px 2px 8px;">
       <p style="margin:0 0 12px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        A simple self-hosted landing page for your game. Edit the headline, tagline and button, then mark this step complete to unlock <strong>Deploy</strong>.
+        A press-kit style page for your game, built from your game details and the fields below. Fill in more of the optional sections in <strong>Edit site details</strong> — a section only appears here once it has content.
       </p>
 
-      <div style="border:1px solid rgba(0,0,0,0.12);border-radius:10px;overflow:hidden;background:#0f1520;box-shadow:0 6px 24px rgba(0,0,0,0.18);">
+      <div class="pk-browser-frame">
         <!-- fake browser chrome -->
-        <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:#1b2430;">
+        <div class="pk-browser-chrome">
           <span style="width:10px;height:10px;border-radius:50%;background:#ff5f57;"></span>
           <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;"></span>
           <span style="width:10px;height:10px;border-radius:50%;background:#28c840;"></span>
-          <span style="margin-left:10px;flex:1;background:#0f1520;color:#9aa4b2;font-size:11px;padding:4px 10px;border-radius:6px;">https://${escHtml(slug)}.example.com</span>
+          <span class="pk-browser-url">https://${escHtml(siteUrl)}</span>
         </div>
 
-        <!-- hero -->
-        <div style="position:relative;height:190px;">
-          ${heroBg}
-          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(15,21,32,0.15), rgba(15,21,32,0.85));"></div>
-          <div style="position:absolute;left:0;right:0;bottom:0;padding:18px 20px;">
-            <div style="color:#fff;font-size:24px;font-weight:800;line-height:1.1;letter-spacing:-0.01em;">${title}</div>
-            <div style="color:#d6dbe4;font-size:13px;margin-top:6px;max-width:88%;">${tagline}</div>
-            <div style="margin-top:14px;display:flex;align-items:center;gap:12px;">
-              <span style="display:inline-block;background:${accent};color:#fff;font-weight:700;font-size:13px;padding:9px 18px;border-radius:8px;">${cta}</span>
-              <span style="color:#cbd2dc;font-size:12px;">${priceText}</span>
-            </div>
+        <div class="pk-page" style="--pk-accent:${accent};">
+          <div class="pk-main">
+            <section class="pk-section pk-fact-desc-grid">
+              ${factsheetHTML}
+              ${descriptionHTML}
+            </section>
+            ${videosHTML}
+            ${imagesHTML}
+            ${awardsHTML}
+            ${articlesHTML}
+            ${linksHTML}
+            ${teamHTML}
+            ${contactHTML}
           </div>
-        </div>
-
-        ${gallery}
-
-        <!-- about -->
-        <div style="padding:16px 20px 20px;">
-          <div style="color:#9aa4b2;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">About</div>
-          <div style="color:#c9d1dc;font-size:13px;line-height:1.6;">${descFull}</div>
         </div>
       </div>
 
@@ -2136,26 +2277,36 @@ function buildWebSiteEditSection() {
   const ws = state.webSite || {};
   const accent = ws.accent || '#0EA5A4';
   const swatches = ['#0EA5A4', '#4B7BEC', '#8B5CF6', '#EC4899', '#F59E0B', '#22C55E'];
+
+  const field = (labelText, key, placeholder, opts) => {
+    opts = opts || {};
+    const val = escHtml(ws[key] || '');
+    if (opts.textarea) {
+      return `
+        <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
+        <textarea class="qs-input" rows="${opts.rows || 3}" style="width:100%;margin-bottom:16px;resize:vertical;"
+                  placeholder="${escHtml(placeholder)}"
+                  oninput="setWebSiteField('${key}', this.value)">${val}</textarea>`;
+    }
+    return `
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
+      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${val}"
+             placeholder="${escHtml(placeholder)}" oninput="setWebSiteField('${key}', this.value)">`;
+  };
+
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Customize the landing page. Changes appear in the preview when you return.
+        Customize the press page. Changes appear in the preview when you return — list fields (one entry per line) only show up once you add something.
       </p>
 
-      <label class="task-content-label" style="display:block;margin-bottom:6px;">Headline</label>
-      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${escHtml(ws.headline || '')}"
-             placeholder="Defaults to your game title" oninput="setWebSiteField('headline', this.value)">
-
-      <label class="task-content-label" style="display:block;margin-bottom:6px;">Tagline</label>
-      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${escHtml(ws.tagline || '')}"
-             placeholder="A short hook shown under the title" oninput="setWebSiteField('tagline', this.value)">
-
-      <label class="task-content-label" style="display:block;margin-bottom:6px;">Download button label</label>
-      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${escHtml(ws.ctaLabel || 'Download')}"
-             placeholder="Download" oninput="setWebSiteField('ctaLabel', this.value)">
+      <div class="pk-edit-group-label">Basics</div>
+      ${field('Headline', 'headline', 'Defaults to your game title')}
+      ${field('Tagline', 'tagline', 'A short hook shown under the title')}
+      ${field('Download button label', 'ctaLabel', 'Download')}
 
       <label class="task-content-label" style="display:block;margin-bottom:8px;">Accent color</label>
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;margin-bottom:20px;">
         ${swatches.map(c => `
           <button onclick="setWebAccent('${c}')" title="${c}"
                   style="width:30px;height:30px;border-radius:50%;background:${c};cursor:pointer;
@@ -2163,6 +2314,32 @@ function buildWebSiteEditSection() {
                          box-shadow:0 0 0 ${c.toLowerCase() === accent.toLowerCase() ? '2px ' + c : '1px rgba(0,0,0,0.15)'};"></button>
         `).join('')}
       </div>
+
+      <div class="pk-edit-group-label">Factsheet</div>
+      ${field('Developer / Studio', 'developer', 'Your studio name')}
+      ${field('Based in', 'basedIn', 'City, Country')}
+      ${field('Founding date', 'foundingDate', 'e.g. January 1, 2020')}
+      ${field('Website', 'website', 'yourgame.com')}
+      ${field('Press contact', 'pressContact', 'press@yourstudio.com')}
+      ${field('Business contact', 'businessContact', 'business@yourstudio.com')}
+      ${field('Phone', 'phone', '+1 555 555 5555')}
+      ${field('Address', 'address', '123 Main St\nCity, Country', { textarea: true, rows: 2 })}
+      ${field('Social links', 'socialLinks', 'Twitter: https://twitter.com/yourgame\nDiscord: https://discord.gg/…', { textarea: true, rows: 3 })}
+
+      <div class="pk-edit-group-label">History</div>
+      ${field('Studio / game history', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}
+
+      <div class="pk-edit-group-label">Awards &amp; Recognition</div>
+      ${field('Awards', 'awards', 'One per line, e.g. "Best Indie Game — IndieCade 2024"', { textarea: true, rows: 3 })}
+
+      <div class="pk-edit-group-label">Selected Articles</div>
+      ${field('Articles', 'articles', 'One per line: "Quote or title - Publication, https://…"', { textarea: true, rows: 3 })}
+
+      <div class="pk-edit-group-label">Additional Links</div>
+      ${field('Links', 'additionalLinks', 'One per line: "Label: https://…"', { textarea: true, rows: 3 })}
+
+      <div class="pk-edit-group-label">Team &amp; Repeating Collaborators</div>
+      ${field('Team', 'team', 'One per line: "Name - Role, https://…"', { textarea: true, rows: 3 })}
     </div>`;
 }
 
@@ -4199,9 +4376,14 @@ function androidYNRow(label, fieldId, desc) {
 
 /* Android Content Rating — Google Play Content Questions (IARC tree)
    Renders the full 95-question IARC tree (GOOGLE_IARC_QUESTIONS, defined in
-   state.js) recursively. A question and all of its follow-ups collapse into
-   a compact summary row once the whole branch is answered (see
-   giarcIsSubtreeComplete); clicking a collapsed row re-expands it. */
+   state.js) recursively. A radio question and all of its follow-ups
+   collapse into a compact summary row once the whole branch is answered
+   (see giarcIsSubtreeComplete); clicking a collapsed row re-expands it.
+   picklist_multi ("select all that apply") questions are the exception —
+   they never auto-collapse just because one option was checked, since the
+   user may still be selecting more; they only collapse via an explicit
+   collapse button, and clicking their collapsed row re-expands them the
+   same way. */
 function buildAndroidContentRatingSection() {
 
   function giarcTooltip(text) {
@@ -4250,9 +4432,19 @@ function buildAndroidContentRatingSection() {
   function renderGIARCQuestion(key, depth, index) {
     const q = GOOGLE_IARC_BY_KEY[key];
     if (!q) return '';
+    const isMulti  = q.data_type === 'picklist_multi';
     const complete = giarcIsSubtreeComplete(key);
 
-    if (complete && !state.giarcManuallyExpanded.has(key)) {
+    // radio questions auto-collapse as soon as they're complete, unless the
+    // user manually reopened them. picklist_multi ("select all that apply")
+    // questions must NOT auto-collapse the moment one option is checked —
+    // the user may still be picking more — so they only collapse once the
+    // user explicitly collapses them.
+    const showCollapsedRow = isMulti
+      ? (complete && state.giarcManuallyCollapsed.has(key))
+      : (complete && !state.giarcManuallyExpanded.has(key));
+
+    if (showCollapsedRow) {
       return buildGIARCCollapsedRow(key, depth, index);
     }
 
@@ -4261,9 +4453,12 @@ function buildAndroidContentRatingSection() {
     const tooltipHTML = q.tooltip ? giarcTooltip(q.tooltip) : '';
     const checkHTML   = `<span class="giarc-check${answered ? ' is-visible' : ''}">${CHECK_SVG}</span>`;
 
-    // This branch is complete but the user reopened it — offer a way to
-    // collapse it again without touching the answer itself.
-    const collapseBtnHTML = (complete && state.giarcManuallyExpanded.has(key))
+    // Offer a manual "collapse" affordance once the branch is complete: for
+    // radio questions only after the user reopened an auto-collapsed row
+    // (so it doesn't instantly collapse again); for picklist_multi
+    // questions as soon as it's complete, since it never auto-collapses.
+    const showCollapseBtn = isMulti ? complete : (complete && state.giarcManuallyExpanded.has(key));
+    const collapseBtnHTML = showCollapseBtn
       ? `<button type="button" class="giarc-collapse-btn" aria-label="Collapse this question"
                  onclick="event.stopPropagation(); toggleGIARCExpand('${key}',false)">
            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>

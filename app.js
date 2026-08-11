@@ -3481,6 +3481,7 @@ function giarcClearAnswersRecursively(key) {
   const kids = giarcActiveChildKeys(key);
   delete state.cqAnswers[key];
   state.giarcManuallyExpanded.delete(key);
+  state.giarcManuallyCollapsed.delete(key);
   kids.forEach(giarcClearAnswersRecursively);
 }
 
@@ -3522,11 +3523,21 @@ function answerGIARCMultiOpt(key, optIndex) {
   updateAndroidCard();
 }
 
-/* expand=true reopens a fully-answered (auto-collapsed) branch for review;
-   expand=false manually re-collapses it without touching the answer. */
+/* expand=true reopens a collapsed branch for review; expand=false manually
+   collapses it without touching the answer. radio questions auto-collapse
+   once answered, so expand=true there means "reopen it" (tracked in
+   giarcManuallyExpanded). picklist_multi questions never auto-collapse —
+   they only collapse once the user asks to (tracked in the opposite sense,
+   giarcManuallyCollapsed), so expand=true there means "undo that". */
 function toggleGIARCExpand(key, expand) {
-  if (expand) state.giarcManuallyExpanded.add(key);
-  else state.giarcManuallyExpanded.delete(key);
+  const q = GOOGLE_IARC_BY_KEY[key];
+  if (q && q.data_type === 'picklist_multi') {
+    if (expand) state.giarcManuallyCollapsed.delete(key);
+    else state.giarcManuallyCollapsed.add(key);
+  } else {
+    if (expand) state.giarcManuallyExpanded.add(key);
+    else state.giarcManuallyExpanded.delete(key);
+  }
   reRenderAndroidStepModal();
 }
 

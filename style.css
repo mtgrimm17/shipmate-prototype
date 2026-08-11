@@ -5484,6 +5484,86 @@ select.form-input {
   border-left: 2px solid var(--border);
 }
 
+/* ── Web: "Preview Website" presskit-style page ──────────
+   This is a preview of an external, self-hosted page — deliberately a
+   plain light theme (not Shipmate's dark app chrome), wrapped in a fake
+   browser bar so it reads as "what your site will look like" rather than
+   part of the app itself. Modelled on the classic presskit() layout. */
+
+.pk-browser-frame {
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+}
+
+.pk-browser-chrome {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; background: #1b2430;
+}
+
+.pk-browser-url {
+  margin-left: 10px; flex: 1; background: #0f1520; color: #9aa4b2;
+  font-size: 11px; padding: 4px 10px; border-radius: 6px;
+}
+
+.pk-page {
+  background: #fff; color: #1a1a1a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+.pk-main { padding: 22px 24px 32px; }
+.pk-section { margin-bottom: 30px; }
+.pk-section:last-child { margin-bottom: 0; }
+
+.pk-fact-desc-grid { display: grid; grid-template-columns: 220px 1fr; gap: 32px; }
+
+.pk-h2 {
+  font-size: 15px; font-weight: 700; color: #111; margin: 0 0 12px;
+  padding-bottom: 6px; border-bottom: 2px solid var(--pk-accent, #e5e7eb);
+}
+.pk-h3 { font-size: 13px; font-weight: 700; color: #111; margin: 16px 0 6px; }
+.pk-p { font-size: 13px; line-height: 1.65; color: #374151; margin: 0 0 10px; }
+.pk-p:last-child { margin-bottom: 0; }
+.pk-muted { color: #9ca3af; }
+
+.pk-fact-grid { display: grid; grid-template-columns: 108px 1fr; gap: 7px 10px; font-size: 12.5px; }
+.pk-fact-label { color: #6b7280; font-weight: 600; }
+.pk-fact-value { color: #111; }
+.pk-fact-value a { color: #2563eb; text-decoration: none; }
+.pk-fact-value a:hover { text-decoration: underline; }
+.pk-fact-empty { color: #d1d5db; }
+
+.pk-video-link {
+  display: flex; align-items: center; gap: 10px; background: #111; color: #fff;
+  padding: 14px 18px; border-radius: 8px; text-decoration: none; font-size: 13px;
+  width: fit-content;
+}
+.pk-video-play {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.15);
+  font-size: 11px;
+}
+
+.pk-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.pk-image-cell img { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; display: block; }
+
+.pk-list { margin: 0; padding-left: 18px; font-size: 13px; color: #374151; line-height: 1.75; }
+.pk-list a { color: #2563eb; text-decoration: none; }
+.pk-list a:hover { text-decoration: underline; }
+.pk-team-list { list-style: none; padding-left: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .pk-fact-desc-grid { grid-template-columns: 1fr; }
+}
+
+.pk-edit-group-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); margin: 20px 0 10px;
+}
+.pk-edit-group-label:first-child { margin-top: 0; }
+
 /* ── Callout notes ───────────────────────────────────── */
 
 .ios-risk-note {
