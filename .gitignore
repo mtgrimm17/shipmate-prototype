@@ -2,3 +2,9 @@
 config.js
 logo1.png
 push-demo.sh
+
+# Local scratch / tooling (never commit)
+node_modules/
+package.json
+package-lock.json
+.staging/

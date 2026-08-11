@@ -16,15 +16,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 /* ── Splash screen ───────────────────────────────────── */
 
 function showSplash() {
-  document.getElementById('splash-screen').classList.remove('hidden');
+  document.getElementById('splash-section').classList.remove('hidden');
   document.getElementById('onboarding-overlay').classList.add('hidden');
   document.getElementById('main-app').classList.add('hidden');
   document.body.classList.add('is-splash');
+  document.body.classList.remove('signed-in');
+  if (window.__splashFitZoom) window.__splashFitZoom();
   renderLangMenu();
 }
 
 function hideSplash() {
-  document.getElementById('splash-screen').classList.add('hidden');
+  document.getElementById('splash-section').classList.add('hidden');
   document.body.classList.remove('is-splash');
 }
 
@@ -47,6 +49,7 @@ function signInFromSplash() {
 function showMainApp() {
   document.getElementById('onboarding-overlay').classList.add('hidden');
   document.getElementById('main-app').classList.remove('hidden');
+  document.body.classList.add('signed-in');
   seedOnboardingToIOS();
   seedOnboardingToAndroid();
   renderDashboard();

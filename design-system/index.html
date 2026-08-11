@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shipmate Design System</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:var(--fs-body);line-height:var(--lh-snug);padding-bottom:80px}
+  a{color:var(--green-brand);text-decoration:none}
+  header.top{position:sticky;top:0;z-index:10;background:rgba(10,10,10,.92);backdrop-filter:blur(8px);border-bottom:var(--border-line);padding:16px 28px}
+  header.top h1{font-family:var(--font-sans);font-size:var(--fs-title);font-weight:var(--fw-bold);letter-spacing:var(--ls-wordmark)}
+  header.top h1 .g{color:var(--green-brand)}
+  header.top p{color:var(--text-dim);font-size:var(--fs-tiny);margin-top:4px}
+  nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  nav a{font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:var(--ls-section);color:var(--text-dim);border:var(--border-line);border-radius:var(--r-full);padding:4px 12px}
+  nav a:hover{color:var(--text);border-color:var(--border-hover)}
+  .grp{padding:28px 28px 8px;scroll-margin-top:120px}
+  .grp h2{font-family:var(--font-sans);font-size:var(--fs-lg);font-weight:var(--fw-semibold);margin-bottom:14px;color:var(--text)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px}
+  .card{background:var(--panel);border:var(--border-line);border-radius:var(--r-2xl);overflow:hidden;position:relative}
+  figcaption{padding:12px 14px 8px;display:flex;flex-direction:column;gap:2px}
+  .cname{font-family:var(--font-sans);font-size:var(--fs-body);font-weight:var(--fw-semibold)}
+  .csub{font-size:var(--fs-micro);color:var(--text-faint);line-height:var(--lh-snug)}
+  .frame{overflow:auto;border-top:var(--border-line);background:var(--bg)}
+  .frame iframe{border:0;display:block;max-width:none}
+  .open{position:absolute;top:10px;right:12px;font-size:var(--fs-micro);color:var(--text-faint)}
+  .open:hover{color:var(--green-brand)}
+</style>
+</head><body>
+<header class="top">
+  <h1>Shipmate <span class="g">Design System</span></h1>
+  <p>Every card reads the shared tokens in <code>tokens/*.css</code> via <code>styles.css</code>. Edit a token, refresh — everything here updates. Best served over http (design-system/).</p>
+  <nav><a href="#g-Colors">Colors</a><a href="#g-Type">Type</a><a href="#g-Spacing">Spacing</a><a href="#g-Elevation">Elevation</a><a href="#g-Motion">Motion</a><a href="#g-Brand">Brand</a><a href="#g-Components">Components</a><a href="#g-App">App</a><a href="#g-Marketing">Marketing</a><a href="#g-Templates">Templates</a></nav>
+</header>
+<section class="grp" id="g-Colors"><h2>Colors</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Brand</span><span class="csub">Ship green and Shippy periwinkle</span></figcaption>
+      <div class="frame" style="height:132px">
+        <iframe loading="lazy" src="guidelines/colors-brand.card.html" style="width:700px;height:130px" title="Brand"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-brand.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Impact bars</span><span class="csub">Action-card headers — the only large blocks of pure colour</span></figcaption>
+      <div class="frame" style="height:152px">
+        <iframe loading="lazy" src="guidelines/colors-impact.card.html" style="width:700px;height:150px" title="Impact bars"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-impact.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Selection</span><span class="csub">Blue means selected — never good or bad</span></figcaption>
+      <div class="frame" style="height:132px">
+        <iframe loading="lazy" src="guidelines/colors-selection.card.html" style="width:700px;height:130px" title="Selection"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-selection.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Shipmate purple</span><span class="csub">Anything the product did for you wears this</span></figcaption>
+      <div class="frame" style="height:152px">
+        <iframe loading="lazy" src="guidelines/colors-shipmate.card.html" style="width:700px;height:150px" title="Shipmate purple"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-shipmate.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Signal</span><span class="csub">Green done · orange attention · magenta risk · blue selected</span></figcaption>
+      <div class="frame" style="height:132px">
+        <iframe loading="lazy" src="guidelines/colors-signal.card.html" style="width:700px;height:130px" title="Signal"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-signal.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Tip &amp; alert</span><span class="csub">Orange guidance, magenta rejection risk</span></figcaption>
+      <div class="frame" style="height:152px">
+        <iframe loading="lazy" src="guidelines/colors-status-boxes.card.html" style="width:700px;height:150px" title="Tip &amp; alert"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-status-boxes.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Surfaces</span><span class="csub">The dark stack every screen is built on</span></figcaption>
+      <div class="frame" style="height:132px">
+        <iframe loading="lazy" src="guidelines/colors-surfaces.card.html" style="width:700px;height:130px" title="Surfaces"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-surfaces.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Text</span><span class="csub">Three greys carry the whole hierarchy</span></figcaption>
+      <div class="frame" style="height:132px">
+        <iframe loading="lazy" src="guidelines/colors-text.card.html" style="width:700px;height:130px" title="Text"></iframe>
+      </div>
+      <a class="open" href="guidelines/colors-text.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Type"><h2>Type</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">App scale</span><span class="csub">10 → 20px. Nothing in the product is larger.</span></figcaption>
+      <div class="frame" style="height:232px">
+        <iframe loading="lazy" src="guidelines/type-app-scale.card.html" style="width:700px;height:230px" title="App scale"></iframe>
+      </div>
+      <a class="open" href="guidelines/type-app-scale.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Families</span><span class="csub">Mono is the default; Inter is the exception</span></figcaption>
+      <div class="frame" style="height:192px">
+        <iframe loading="lazy" src="guidelines/type-families.card.html" style="width:700px;height:190px" title="Families"></iframe>
+      </div>
+      <a class="open" href="guidelines/type-families.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Labels &amp; tracking</span><span class="csub">Uppercase micro-type does all the structural work</span></figcaption>
+      <div class="frame" style="height:182px">
+        <iframe loading="lazy" src="guidelines/type-labels.card.html" style="width:700px;height:180px" title="Labels &amp; tracking"></iframe>
+      </div>
+      <a class="open" href="guidelines/type-labels.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Marketing scale</span><span class="csub">Hero type runs an order of magnitude larger</span></figcaption>
+      <div class="frame" style="height:222px">
+        <iframe loading="lazy" src="guidelines/type-marketing-scale.card.html" style="width:700px;height:220px" title="Marketing scale"></iframe>
+      </div>
+      <a class="open" href="guidelines/type-marketing-scale.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Spacing"><h2>Spacing</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Spacing in use</span><span class="csub">A platform card's real padding</span></figcaption>
+      <div class="frame" style="height:202px">
+        <iframe loading="lazy" src="guidelines/spacing-in-use.card.html" style="width:700px;height:200px" title="Spacing in use"></iframe>
+      </div>
+      <a class="open" href="guidelines/spacing-in-use.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Radii</span><span class="csub">4 → 14 in the app; 22 and 48 on marketing; 999 for pills</span></figcaption>
+      <div class="frame" style="height:152px">
+        <iframe loading="lazy" src="guidelines/spacing-radii.card.html" style="width:700px;height:150px" title="Radii"></iframe>
+      </div>
+      <a class="open" href="guidelines/spacing-radii.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Scale</span><span class="csub">2px resolution — 5, 7, 9, 11 and 18 are deliberate</span></figcaption>
+      <div class="frame" style="height:152px">
+        <iframe loading="lazy" src="guidelines/spacing-scale.card.html" style="width:700px;height:150px" title="Scale"></iframe>
+      </div>
+      <a class="open" href="guidelines/spacing-scale.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Elevation"><h2>Elevation</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Glows &amp; rings</span><span class="csub">Emphasis is a glow, not a drop shadow</span></figcaption>
+      <div class="frame" style="height:172px">
+        <iframe loading="lazy" src="guidelines/elevation-glows.card.html" style="width:700px;height:170px" title="Glows &amp; rings"></iframe>
+      </div>
+      <a class="open" href="guidelines/elevation-glows.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Shadows</span><span class="csub">Shadow only when a surface floats — never at rest</span></figcaption>
+      <div class="frame" style="height:172px">
+        <iframe loading="lazy" src="guidelines/elevation.card.html" style="width:700px;height:170px" title="Shadows"></iframe>
+      </div>
+      <a class="open" href="guidelines/elevation.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Motion"><h2>Motion</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Durations &amp; easings</span><span class="csub">Fast, short, no bounce except the tab fill</span></figcaption>
+      <div class="frame" style="height:182px">
+        <iframe loading="lazy" src="guidelines/motion.card.html" style="width:700px;height:180px" title="Durations &amp; easings"></iframe>
+      </div>
+      <a class="open" href="guidelines/motion.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Brand"><h2>Brand</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Logo lockup</span><span class="csub">Ship in white, mate in green, Shippy on top</span></figcaption>
+      <div class="frame" style="height:172px">
+        <iframe loading="lazy" src="guidelines/brand-logo.card.html" style="width:700px;height:170px" title="Logo lockup"></iframe>
+      </div>
+      <a class="open" href="guidelines/brand-logo.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Shippy</span><span class="csub">The mascot peeks over surfaces, he never stands on them</span></figcaption>
+      <div class="frame" style="height:212px">
+        <iframe loading="lazy" src="guidelines/brand-shippy.card.html" style="width:700px;height:210px" title="Shippy"></iframe>
+      </div>
+      <a class="open" href="guidelines/brand-shippy.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Components"><h2>Components</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Brand</span><span class="csub">Wordmark, Shippy and the seven storefront marks</span></figcaption>
+      <div class="frame" style="height:242px">
+        <iframe loading="lazy" src="components/brand/brand.card.html" style="width:700px;height:240px" title="Brand"></iframe>
+      </div>
+      <a class="open" href="components/brand/brand.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Core controls</span><span class="csub">Buttons, chips, pills and switches</span></figcaption>
+      <div class="frame" style="height:302px">
+        <iframe loading="lazy" src="components/core/core.card.html" style="width:700px;height:300px" title="Core controls"></iframe>
+      </div>
+      <a class="open" href="components/core/core.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Feedback</span><span class="csub">Tips, alerts and loading states</span></figcaption>
+      <div class="frame" style="height:262px">
+        <iframe loading="lazy" src="components/feedback/feedback.card.html" style="width:700px;height:260px" title="Feedback"></iframe>
+      </div>
+      <a class="open" href="components/feedback/feedback.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Forms</span><span class="csub">Labels, inputs, dropzone and rule tooltips</span></figcaption>
+      <div class="frame" style="height:342px">
+        <iframe loading="lazy" src="components/forms/forms.card.html" style="width:700px;height:340px" title="Forms"></iframe>
+      </div>
+      <a class="open" href="components/forms/forms.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Progress</span><span class="csub">Step rows, task rows, bar and onboarding dots</span></figcaption>
+      <div class="frame" style="height:302px">
+        <iframe loading="lazy" src="components/progress/progress.card.html" style="width:700px;height:300px" title="Progress"></iframe>
+      </div>
+      <a class="open" href="components/progress/progress.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Improve Your Submission</span><span class="csub">Action cards, insight rail, partners, notices and code fixes</span></figcaption>
+      <div class="frame" style="height:562px">
+        <iframe loading="lazy" src="components/submission/submission.card.html" style="width:700px;height:560px" title="Improve Your Submission"></iframe>
+      </div>
+      <a class="open" href="components/submission/submission.card.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Surfaces</span><span class="csub">Platform card, modal shell and dropdown menu</span></figcaption>
+      <div class="frame" style="height:402px">
+        <iframe loading="lazy" src="components/surfaces/surfaces.card.html" style="width:700px;height:400px" title="Surfaces"></iframe>
+      </div>
+      <a class="open" href="components/surfaces/surfaces.card.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-App"><h2>App</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Shipmate app</span><span class="csub">Onboarding → dashboard → step editor → submit</span></figcaption>
+      <div class="frame" style="height:822px">
+        <iframe loading="lazy" src="ui_kits/app/index.html" style="width:1280px;height:820px" title="Shipmate app"></iframe>
+      </div>
+      <a class="open" href="ui_kits/app/index.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Marketing"><h2>Marketing</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Splash page</span><span class="csub">Hero, three-card pill and Shippy</span></figcaption>
+      <div class="frame" style="height:902px">
+        <iframe loading="lazy" src="ui_kits/marketing/index.html" style="width:1464px;height:900px" title="Splash page"></iframe>
+      </div>
+      <a class="open" href="ui_kits/marketing/index.html" target="_blank">open ↗</a>
+    </figure></div></section><section class="grp" id="g-Templates"><h2>Templates</h2><div class="cards"><figure class="card">
+      <figcaption><span class="cname">Shipmate app screen</span><span class="csub">Dark app shell with topbar, project bar and a platform-card dashboard grid.</span></figcaption>
+      <div class="frame" style="height:520px">
+        <iframe loading="lazy" src="templates/app-screen/AppScreen.dc.html" style="width:1280px;height:800px" title="Shipmate app screen"></iframe>
+      </div>
+      <a class="open" href="templates/app-screen/AppScreen.dc.html" target="_blank">open ↗</a>
+    </figure><figure class="card">
+      <figcaption><span class="cname">Shipmate marketing page</span><span class="csub">Black landing page: oversized hero, three-card pill with Shippy peeking over it, green CTA.</span></figcaption>
+      <div class="frame" style="height:520px">
+        <iframe loading="lazy" src="templates/marketing-page/MarketingPage.dc.html" style="width:1280px;height:800px" title="Shipmate marketing page"></iframe>
+      </div>
+      <a class="open" href="templates/marketing-page/MarketingPage.dc.html" target="_blank">open ↗</a>
+    </figure></div></section>
+</body></html>

@@ -37,6 +37,10 @@
   --alert-color:   #FF3B76;
   --alert-bg:      rgba(255, 59, 118, 0.08);
   --alert-border:  rgba(255, 59, 118, 0.30);
+
+  /* ── Persistent chrome (shared header + footer) ── */
+  --header-h: 65px;
+  --footer-h: 46px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1660,8 +1664,9 @@ body {
 #main-app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
+  height: calc(100vh - var(--header-h) - var(--footer-h));
+  height: calc(100dvh - var(--header-h) - var(--footer-h));
+  margin-top: var(--header-h);
   overflow: hidden;
 }
 
@@ -1680,8 +1685,12 @@ body {
   padding: 12px 32px;
   gap: 20px;
   flex-shrink: 0;
-  position: relative;
-  z-index: 200; /* always above modals (z-index:100) */
+  position: fixed;   /* persistent across splash / onboarding / app */
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-h);
+  z-index: 200; /* always above modals (z-index:100) and the splash (z-index:1) */
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -6910,19 +6919,16 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
    SPLASH SCREEN
    ============================================================ */
 
-/* ─── Splash (v2.00): full-screen iframe ─────────────────────
-   The splash is now rendered by splash.html inside an <iframe>.
-   All we need here is z-index handling and the sign-in visibility
-   toggle for when the user returns to the app from the splash.
+/* ─── Splash (v2.34): inline #splash-section, no iframe ───────
+   The splash is now a section inside index.html that shares the
+   persistent header + footer. Header shows Sign In until the user
+   is signed in (onboarding complete), then swaps to the profile.
 ─────────────────────────────────────────────────────────────── */
-#splash-screen {
-  /* iframe inherits position:fixed;inset:0 from inline style */
-  z-index: 9999;
-}
 
-/* Show Sign In / hide profile during splash (topbar, z-index below iframe) */
-body.is-splash .splash-signin-btn  { display: flex; align-items: center; }
-body.is-splash .profile-wrap        { display: none; }
+/* Sign In visible until signed in; profile/username visible after. */
+body:not(.signed-in) .splash-signin-btn { display: flex; align-items: center; }
+body:not(.signed-in) .profile-wrap      { display: none; }
+body.signed-in       .splash-signin-btn { display: none; }
 
 .splash-signin-btn {
   display: none;
@@ -7162,7 +7168,7 @@ body.is-splash .profile-wrap        { display: none; }
    ============================================================ */
 .ai-disclaimer {
   position: fixed;
-  bottom: 9px;
+  bottom: calc(var(--footer-h) + 8px);
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
@@ -7172,6 +7178,50 @@ body.is-splash .profile-wrap        { display: none; }
   z-index: 200;
   pointer-events: none;
   white-space: nowrap;
+}
+/* The disclaimer is an app-only note — hide it on the splash. */
+body.is-splash .ai-disclaimer { display: none; }
+
+/* ============================================================
+   PERSISTENT FOOTER  (v2.34) — shared across splash / app
+   ============================================================ */
+.app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--footer-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;   /* tagline centered in the full width */
+  gap: 16px;
+  padding: 0 24px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  z-index: 200;
+}
+.app-footer-tagline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-footer-heart { color: #FF5961; flex-shrink: 0; }
+.app-footer-version {
+  position: absolute;        /* pinned right, independent of the centered tagline */
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  opacity: 0.65;
 }
 
 /* ============================================================
