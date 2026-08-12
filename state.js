@@ -818,10 +818,6 @@ const PLATFORM_LOGIN = {
     portal: 'Steamworks', provider: 'Steam',
     userLabel: 'Steam Account', userType: 'text', userPlaceholder: 'account name or email',
   },
-  web: {
-    portal: 'your host', provider: 'Host',
-    userLabel: 'Email', userType: 'email', userPlaceholder: 'you@studio.com',
-  },
   egs: {
     portal: 'Epic Developer Portal', provider: 'Epic',
     userLabel: 'Epic Account', userType: 'email', userPlaceholder: 'you@studio.com',

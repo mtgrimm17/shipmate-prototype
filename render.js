@@ -1458,7 +1458,9 @@ function buildReleasePills(pid) {
    The ACCOUNT face is pinned to the STEPS face height so flips are size-stable. */
 
 // True when the card should currently render its ACCOUNT face instead of STEPS.
+// Web has no developer-portal credentials step, so it never shows the login face.
 function showAccountFace(pid) {
+  if (pid === 'web') return false;
   if (!state.activePlatforms.has(pid)) return false;
   const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
   const face = state.platformFace?.[pid] || (loggedIn ? 'steps' : 'account');
@@ -1495,6 +1497,8 @@ function _gearBtn(onclick, label, active) {
      • linked      (steps face)                  — gear flips to the signed-in face
    Every state also shows a power button that deactivates the platform. */
 function _platformHeadActions(pid, face) {
+  // Web has no developer-portal login, so its header is power-only (no gear).
+  if (pid === 'web') return `<div class="active-card-actions">${_powerBtn(pid)}</div>`;
   const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
   let gear;
   if (face === 'steps') {
