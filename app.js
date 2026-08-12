@@ -1311,20 +1311,59 @@ function blinkComingSoon(pid) {
 function activatePlatform(platformId) {
   state.activePlatforms.add(platformId);
   renderDashboard();
+  // Measure the steps face now so the credentials face can match its height on
+  // the very first flip (before any steps face has actually been shown).
+  _cacheStepsFaceHeight(platformId);
 }
 
 function deactivatePlatform(platformId) {
   state.activePlatforms.delete(platformId);
+  // Reset transient face state (keep platformAuth so sign-in persists).
+  if (state.platformFace)     delete state.platformFace[platformId];
+  if (state.platformCredForm) delete state.platformCredForm[platformId];
   renderDashboard();
 }
 
 
 /* ── Platform developer-portal auth (prototype/faked) ─────────────────────────
-   A freshly-activated platform card shows a login face. On sign-in the card
-   flips to reveal the submission steps; the steps face's settings gear flips
-   back to login. Credentials are faked — any non-empty pair is accepted and
-   nothing is stored or transmitted. The flip mirrors the submit flip in
-   _doFinalSubmit: rotate the live card out, swap content, rotate the new one in. */
+   Each active card has two faces on one shell: STEPS and ACCOUNT (credentials).
+   • Not signed in → ACCOUNT face shows the login form. Submitting flips to STEPS.
+   • Signed in     → card rests on STEPS. The steps gear flips to the ACCOUNT face,
+                     which shows a compact "signed in" summary; the account gear
+                     reveals the login boxes again to change credentials.
+   Credentials are faked — any non-empty pair is accepted, nothing is stored/sent.
+   Sign-in persists for the session. Flip mirrors the submit flip in _doFinalSubmit.
+   The ACCOUNT face is pinned to the cached STEPS height so flips stay size-stable. */
+
+function _setPlatformFace(pid, face) {
+  if (!state.platformFace) state.platformFace = {};
+  state.platformFace[pid] = face;
+}
+function _setPlatformCredForm(pid, v) {
+  if (!state.platformCredForm) state.platformCredForm = {};
+  state.platformCredForm[pid] = v;
+}
+
+// Measure the STEPS face height off-screen and cache it (px) for height parity.
+function _cacheStepsFaceHeight(pid) {
+  const live = document.getElementById('active-card-' + pid);
+  if (!live) return;
+  const width = live.offsetWidth;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;'
+    + (width ? ('width:' + width + 'px;') : '');
+  probe.innerHTML = buildActiveCard(pid, true); // force STEPS face
+  document.body.appendChild(probe);
+  const inner = probe.querySelector('.active-card');
+  const h = inner ? inner.offsetHeight : 0;
+  probe.remove();
+  if (h > 0) {
+    if (!state.platformCardHeight) state.platformCardHeight = {};
+    state.platformCardHeight[pid] = h;
+    // If the credentials face is currently on screen, apply the new height now.
+    if (live.classList.contains('platform-account-card')) live.style.minHeight = h + 'px';
+  }
+}
 
 function submitPlatformLogin(pid) {
   const userEl = document.getElementById('login-user-' + pid);
@@ -1341,27 +1380,66 @@ function submitPlatformLogin(pid) {
   }
 
   if (!state.platformAuth) state.platformAuth = {};
-  // Prototype: accept any credentials; keep the username to prefill the login face.
+  // Prototype: accept any credentials; keep the username to prefill / summarize.
   state.platformAuth[pid] = { loggedIn: true, username };
-  _flipPlatformAuthCard(pid, 1); // login → steps
+  _setPlatformCredForm(pid, false);
+  _flipPlatformCard(pid, 'steps', 1); // credentials → steps
 }
 
-function showPlatformLogin(pid) {
-  if (!state.platformAuth) state.platformAuth = {};
-  if (state.platformAuth[pid]) state.platformAuth[pid].loggedIn = false;
-  else state.platformAuth[pid] = { loggedIn: false, username: '' };
-  _flipPlatformAuthCard(pid, -1); // steps → login
+// Steps gear → flip to the ACCOUNT face (signed-in summary when logged in).
+function platformGearFromSteps(pid) {
+  _setPlatformCredForm(pid, false);
+  _flipPlatformCard(pid, 'account', -1);
 }
 
-// dir = 1 flips one way (login→steps), dir = -1 the reverse (steps→login).
-function _flipPlatformAuthCard(pid, dir) {
+// Account gear → reveal the login boxes (summary → form), or flip back to steps
+// when the boxes are already showing.
+function platformGearFromAccount(pid) {
+  const loggedIn   = !!state.platformAuth?.[pid]?.loggedIn;
+  const showingForm = !loggedIn || !!state.platformCredForm?.[pid];
+  if (loggedIn && !showingForm) {
+    _setPlatformCredForm(pid, true);       // reveal boxes, in place (no flip)
+    _rerenderPlatformCard(pid);
+    const u = document.getElementById('login-user-' + pid); if (u) u.focus();
+  } else if (loggedIn && showingForm) {
+    _setPlatformCredForm(pid, false);      // cancel edit → back to steps
+    _flipPlatformCard(pid, 'steps', 1);
+  }
+}
+
+// Cancel button on the edit form → back to signed-in summary (in place).
+function platformCancelForm(pid) {
+  _setPlatformCredForm(pid, false);
+  _rerenderPlatformCard(pid);
+}
+
+// "Back to steps" link on the signed-in summary → flip to the STEPS face.
+function platformBackToSteps(pid) {
+  _flipPlatformCard(pid, 'steps', 1);
+}
+
+// Re-render a single active card in place (no flip animation).
+function _rerenderPlatformCard(pid) {
+  const card = document.getElementById('active-card-' + pid);
+  if (card) card.outerHTML = buildActiveCard(pid);
+  else renderDashboard();
+}
+
+// Flip a card to the target face. dir = 1 / -1 sets the rotation direction.
+function _flipPlatformCard(pid, toFace, dir) {
   const outDeg = 90 * dir;
   const inDeg  = -90 * dir;
   const card   = document.getElementById('active-card-' + pid);
 
+  // Leaving the STEPS face → cache its live height so the account face matches.
+  if (toFace === 'account' && card && !card.classList.contains('platform-account-card')) {
+    if (!state.platformCardHeight) state.platformCardHeight = {};
+    const h = card.offsetHeight;
+    if (h > 0) state.platformCardHeight[pid] = h;
+  }
+  _setPlatformFace(pid, toFace);
+
   function _apply() {
-    // Pin the grid height so the row doesn't jump while the faces (different
-    // heights) swap mid-flip; released once the enter animation settles.
     const grid = document.querySelector('.active-cards-grid');
     const gridHeight = grid ? grid.offsetHeight : 0;
     if (grid && gridHeight > 0) grid.style.minHeight = gridHeight + 'px';
@@ -1375,8 +1453,9 @@ function _flipPlatformAuthCard(pid, dir) {
       requestAnimationFrame(() => requestAnimationFrame(() => {
         newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
-        // Move focus to the first login field so the user can type immediately.
-        if (dir === -1) { const u = document.getElementById('login-user-' + pid); if (u) u.focus(); }
+        if (toFace === 'account') {
+          const u = document.getElementById('login-user-' + pid); if (u) u.focus();
+        }
         setTimeout(() => {
           newCard.style.transition = '';
           newCard.style.transform  = '';

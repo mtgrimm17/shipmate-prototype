@@ -1443,22 +1443,45 @@ function buildReleasePills(pid) {
   return pills.length ? `<div class="card-release-status">${pills.join('')}</div>` : '';
 }
 
-/* ── Platform auth (prototype login face) ────────────────────────────────────
-   When a platform is activated it first shows this login face. The user enters
-   developer-portal credentials (faked — see PLATFORM_LOGIN in state.js) and the
-   whole card flips to reveal the submission steps. A settings gear on the steps
-   face flips back here. The outer node keeps the same .active-card /
-   id="active-card-<pid>" shell so the flip animation in app.js can target it. */
-function needsPlatformLogin(pid) {
-  return state.activePlatforms.has(pid) && !state.platformAuth?.[pid]?.loggedIn;
+/* ── Platform auth (prototype credentials face) ───────────────────────────────
+   Each active platform card has two faces sharing one .active-card /
+   id="active-card-<pid>" shell (so the flip animation in app.js can target it):
+
+     • STEPS  — the submission steps (Upload Build …).
+     • ACCOUNT — developer-portal credentials. Before sign-in it shows the login
+                 form; after sign-in it shows a compact "signed in" summary, and
+                 the gear reveals the login boxes again to change credentials.
+
+   Both faces carry a power button (activate/deactivate) and a gear (flip / show
+   credentials) in the header; the header body itself is inert. Credentials are
+   faked — any non-empty pair is accepted and nothing is stored or transmitted.
+   The ACCOUNT face is pinned to the STEPS face height so flips are size-stable. */
+
+// True when the card should currently render its ACCOUNT face instead of STEPS.
+function showAccountFace(pid) {
+  if (!state.activePlatforms.has(pid)) return false;
+  const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
+  const face = state.platformFace?.[pid] || (loggedIn ? 'steps' : 'account');
+  return !loggedIn || face === 'account';
 }
 
-// Gear button shown top-right on the steps face — flips the card back to login.
-function platformSettingsBtn(pid) {
+function _powerBtn(pid) {
+  return `
+    <button class="active-card-power" type="button"
+            onclick="event.stopPropagation();deactivatePlatform('${pid}')"
+            title="Deactivate ${escHtml(platLabel(pid))}" aria-label="Deactivate platform">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 3v9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7.5 6.6a7 7 0 1 0 9 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>`;
+}
+
+function _gearBtn(onclick, label) {
   return `
     <button class="active-card-settings" type="button"
-            onclick="event.stopPropagation();showPlatformLogin('${pid}')"
-            title="Sign-in settings" aria-label="Sign-in settings">
+            onclick="event.stopPropagation();${onclick}"
+            title="${label}" aria-label="${label}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1466,46 +1489,101 @@ function platformSettingsBtn(pid) {
     </button>`;
 }
 
-function buildPlatformLoginCard(pid) {
-  const cfg      = platformLoginConfig(pid);
-  const savedUser = state.platformAuth?.[pid]?.username || '';
+// Header actions (power + gear) for either face. Gear intent differs per face.
+function _platformHeadActions(pid, face) {
+  const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
+  let gear = '';
+  if (face === 'steps') {
+    gear = _gearBtn(`platformGearFromSteps('${pid}')`, 'Account & sign-in');
+  } else if (loggedIn) {
+    // On the account face the gear toggles between the signed-in summary and
+    // the editable login boxes. When signed out there is no steps face to
+    // return to, so the gear is omitted (power still shown).
+    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Change credentials');
+  }
+  return `<div class="active-card-actions">${_powerBtn(pid)}${gear}</div>`;
+}
+
+// Shared header used by both faces. Body is inert; only the buttons act.
+function platformCardHead(pid, face) {
   return `
-    <div class="active-card platform-login-card" id="active-card-${pid}">
-      <div class="active-card-head" onclick="deactivatePlatform('${pid}')" title="Click to deactivate" style="cursor:pointer;">
-        <div class="active-card-platform">
-          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
-          <div class="active-card-name-row">
-            <div class="active-card-name">${platLabel(pid)}</div>
-          </div>
+    <div class="active-card-head active-card-head--static">
+      <div class="active-card-platform">
+        <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
+        <div class="active-card-name-row">
+          <div class="active-card-name">${platLabel(pid)}</div>
         </div>
       </div>
-      <form class="platform-login" onsubmit="submitPlatformLogin('${pid}');return false;">
-        <div class="platform-login-title">Sign in to ${escHtml(cfg.portal)}</div>
-        <label class="platform-login-field">
-          <span class="platform-login-label">${escHtml(cfg.userLabel)}</span>
-          <input class="platform-login-input" id="login-user-${pid}" type="${cfg.userType}"
-                 value="${escHtml(savedUser)}" placeholder="${escHtml(cfg.userPlaceholder)}"
-                 autocomplete="off" spellcheck="false"
-                 oninput="this.classList.remove('platform-login-input--error')">
-        </label>
-        <label class="platform-login-field">
-          <span class="platform-login-label">Password</span>
-          <input class="platform-login-input" id="login-pass-${pid}" type="password"
-                 placeholder="••••••••" autocomplete="off"
-                 oninput="this.classList.remove('platform-login-input--error')">
-        </label>
-        <div class="platform-login-error" id="login-error-${pid}"></div>
-        <button class="platform-login-btn" type="submit">Sign In</button>
-        <div class="platform-login-hint">Prototype — credentials aren't stored or sent.</div>
-      </form>
+      ${_platformHeadActions(pid, face)}
     </div>`;
 }
 
-function buildActiveCard(pid) {
-  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
-  if (pid === 'ios')     return buildIOSActiveCard(pid);
-  if (pid === 'android') return buildAndroidActiveCard(pid);
-  if (pid === 'steam')   return buildSteamActiveCard(pid);
+function _accountFormHTML(pid, cfg, savedUser, loggedIn) {
+  const backLink = loggedIn
+    ? `<button class="platform-login-back" type="button" onclick="platformCancelForm('${pid}')">Cancel</button>`
+    : '';
+  return `
+    <form class="platform-login" onsubmit="submitPlatformLogin('${pid}');return false;">
+      <div class="platform-login-title">${loggedIn ? 'Update credentials' : 'Sign in to ' + escHtml(cfg.portal)}</div>
+      <label class="platform-login-field">
+        <span class="platform-login-label">${escHtml(cfg.userLabel)}</span>
+        <input class="platform-login-input" id="login-user-${pid}" type="${cfg.userType}"
+               value="${escHtml(savedUser)}" placeholder="${escHtml(cfg.userPlaceholder)}"
+               autocomplete="off" spellcheck="false"
+               oninput="this.classList.remove('platform-login-input--error')">
+      </label>
+      <label class="platform-login-field">
+        <span class="platform-login-label">Password</span>
+        <input class="platform-login-input" id="login-pass-${pid}" type="password"
+               placeholder="••••••••" autocomplete="off"
+               oninput="this.classList.remove('platform-login-input--error')">
+      </label>
+      <div class="platform-login-error" id="login-error-${pid}"></div>
+      <div class="platform-login-actions">
+        <button class="platform-login-btn" type="submit">${loggedIn ? 'Update' : 'Sign In'}</button>
+        ${backLink}
+      </div>
+      <div class="platform-login-hint">Credentials are encrypted and never shared. They allow Shipmate to send changes directly to the platform.</div>
+    </form>`;
+}
+
+function _accountSummaryHTML(pid, cfg, savedUser) {
+  const checkSVG = `<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `
+    <div class="platform-account-summary">
+      <div class="pas-badge">${checkSVG}</div>
+      <div class="pas-info">
+        <div class="pas-status">Signed in to ${escHtml(cfg.portal)}</div>
+        <div class="pas-user">${escHtml(savedUser || cfg.userLabel)}</div>
+      </div>
+    </div>
+    <div class="platform-login-hint">Credentials are encrypted and never shared. They allow Shipmate to send changes directly to the platform.</div>
+    <button class="platform-login-back platform-login-back--center" type="button" onclick="platformBackToSteps('${pid}')">Back to steps</button>`;
+}
+
+function buildAccountCard(pid) {
+  const cfg       = platformLoginConfig(pid);
+  const auth      = state.platformAuth?.[pid];
+  const loggedIn  = !!auth?.loggedIn;
+  const showForm  = !loggedIn || !!state.platformCredForm?.[pid];
+  const savedUser = auth?.username || '';
+  const h         = state.platformCardHeight?.[pid];
+  const styleAttr = h ? ` style="min-height:${h}px;"` : '';
+  const body = showForm
+    ? _accountFormHTML(pid, cfg, savedUser, loggedIn)
+    : _accountSummaryHTML(pid, cfg, savedUser);
+  return `
+    <div class="active-card platform-account-card ${showForm ? 'is-form' : 'is-summary'}" id="active-card-${pid}"${styleAttr}>
+      ${platformCardHead(pid, 'account')}
+      <div class="platform-account-body">${body}</div>
+    </div>`;
+}
+
+function buildActiveCard(pid, force) {
+  if (!force && showAccountFace(pid)) return buildAccountCard(pid);
+  if (pid === 'ios')     return buildIOSActiveCard(pid, force);
+  if (pid === 'android') return buildAndroidActiveCard(pid, force);
+  if (pid === 'steam')   return buildSteamActiveCard(pid, force);
 
   // Deploy/Submit flip: once flipped, show the submitted (post-deploy) card
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
@@ -1535,15 +1613,7 @@ function buildActiveCard(pid) {
 
   return `
     <div class="active-card" id="active-card-${pid}">
-      <div class="active-card-head" onclick="deactivatePlatform('${pid}')" title="Click to deactivate" style="cursor:pointer;">
-        <div class="active-card-platform">
-          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
-          <div>
-            <div class="active-card-name">${platLabel(pid)}</div>
-          </div>
-        </div>
-        ${platformSettingsBtn(pid)}
-      </div>
+      ${platformCardHead(pid, 'steps')}
       <div class="card-tasks">${steps}</div>
       <div class="ios-step-cards">${submitStepCard}</div>
     </div>`;
@@ -1606,8 +1676,8 @@ function _openTrackMenu(pid) {
   try { sel.size = 1; sel.click(); } catch(e) {}
 }
 
-function buildIOSActiveCard(pid) {
-  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
+function buildIOSActiveCard(pid, force) {
+  if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
@@ -1658,22 +1728,14 @@ function buildIOSActiveCard(pid) {
 
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
-      <div class="active-card-head" onclick="deactivatePlatform('${pid}')" title="Click to deactivate" style="cursor:pointer;">
-        <div class="active-card-platform">
-          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
-          <div class="active-card-name-row">
-            <div class="active-card-name">${platLabel(pid)}</div>
-          </div>
-        </div>
-        ${platformSettingsBtn(pid)}
-      </div>
+      ${platformCardHead(pid, 'steps')}
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
 }
 
-function buildAndroidActiveCard(pid) {
-  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
+function buildAndroidActiveCard(pid, force) {
+  if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
@@ -1721,15 +1783,7 @@ function buildAndroidActiveCard(pid) {
 
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
-      <div class="active-card-head" onclick="deactivatePlatform('${pid}')" title="Click to deactivate" style="cursor:pointer;">
-        <div class="active-card-platform">
-          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
-          <div class="active-card-name-row">
-            <div class="active-card-name">${platLabel(pid)}</div>
-          </div>
-        </div>
-        ${platformSettingsBtn(pid)}
-      </div>
+      ${platformCardHead(pid, 'steps')}
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
@@ -4916,8 +4970,8 @@ function buildAndroidDataMatrix(a) {
    STEAM STEP SECTIONS
    ═══════════════════════════════════════════════════ */
 
-function buildSteamActiveCard(pid) {
-  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
+function buildSteamActiveCard(pid, force) {
+  if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
@@ -4964,15 +5018,7 @@ function buildSteamActiveCard(pid) {
 
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
-      <div class="active-card-head" onclick="deactivatePlatform('${pid}')" title="Click to deactivate" style="cursor:pointer;">
-        <div class="active-card-platform">
-          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
-          <div class="active-card-name-row">
-            <div class="active-card-name">${platLabel(pid)}</div>
-          </div>
-        </div>
-        ${platformSettingsBtn(pid)}
-      </div>
+      ${platformCardHead(pid, 'steps')}
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;

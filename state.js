@@ -2172,11 +2172,21 @@ const state = {
   platformFlipped: {},
 
   // Per-platform developer-portal auth (prototype/faked). Keyed by pid:
-  //   undefined / { loggedIn:false } → card shows the login face
-  //   { loggedIn:true, username }    → card shows the submission steps
-  // Persists for the session so re-activating a platform keeps you signed in;
-  // the card's settings gear flips back to the login face to switch accounts.
+  //   undefined / { loggedIn:false } → card shows the credentials (login) face
+  //   { loggedIn:true, username }    → sign-in persists for the session
   platformAuth: {},
+
+  // Which face each active card is showing: 'steps' | 'account'.
+  // Default when absent: 'steps' if signed in, else 'account'.
+  platformFace: {},
+
+  // On the ACCOUNT face when signed in: true = show editable login boxes,
+  // false = show the compact "signed in" summary.
+  platformCredForm: {},
+
+  // Cached STEPS-face pixel height per pid, so the ACCOUNT face can be pinned to
+  // the same height and flips stay size-stable.
+  platformCardHeight: {},
   androidContentRatingExpanded: false,
   // Google Play Content Questions (IARC tree) — keys the user has explicitly
   // re-opened after their subtree auto-collapsed (fully answered). Purely a
