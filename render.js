@@ -2198,7 +2198,7 @@ function buildStorePreviewFlipSection(platformId, target) {
 
 /* ── Web: self-distribution site preview + edit panel ──────────────
    The "Preview Website" step. Renders a "presskit()"-style press page —
-   Factsheet / Description / History / Videos / Images /
+   Factsheet / Description / History / Videos / Screenshots /
    Awards & Recognition / Selected Articles / Additional Links / Team /
    Contact — populated from Shipmate's game data plus the extra fields in
    state.webSite. List-type fields (awards, articles, team, links, social)
@@ -2242,6 +2242,16 @@ function _pkStripQuotes(text) {
   return text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
 }
 
+/* Formats a "YYYY-MM-DD" release date (as stored in state.formData.releaseDate,
+   synced from the release date picker elsewhere in Shipmate) into "Month D, YYYY",
+   e.g. "February 19, 2026". Returns '' when there's no date set yet. */
+function _pkFmtReleaseDate(dateVal) {
+  if (!dateVal) return '';
+  const d = new Date(dateVal + 'T00:00:00');
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 function buildWebSitePreviewSection() {
   const fd  = state.formData || {};
   const ups = state.uploads || {};
@@ -2252,39 +2262,24 @@ function buildWebSitePreviewSection() {
   const descRaw = fd.description || '';
   const descFull = descRaw ? escHtml(descRaw).replace(/\n/g, '<br>') : 'Your game description will appear here once you fill in the Description field in Game Details.';
 
-  const isFree = !fd.price || parseFloat(fd.price) === 0 || String(fd.price).trim() === '' || String(fd.price).trim() === '0';
-  const priceText = isFree ? 'Free' : `$${escHtml(String(fd.price))}`;
-
   const shots = ups.screenshots || [];
 
-  const slug = ((fd.title || 'your-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || 'your-game';
-  const siteUrl = (ws.website && ws.website.trim()) || `${slug}.example.com`;
+  // Preview URL is always derived from the game's title — "[gamename].shipmate.games" —
+  // not user-editable, so it stays in sync with whatever the title is at the moment.
+  const slug = (fd.title || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'yourgame';
+  const siteUrl = `${slug}.shipmate.games`;
 
   const dash = `<span class="pk-fact-empty">—</span>`;
   const factRow = (label, value) => `
     <div class="pk-fact-label">${escHtml(label)}</div>
     <div class="pk-fact-value">${value || dash}</div>`;
 
-  const socialLines = _pkLines(ws.socialLinks);
-  const socialHTML = socialLines.length
-    ? socialLines.map(l => _pkAutolink(l)).join('<br>')
-    : '';
-
   const factsheetHTML = `
     <div class="pk-factsheet" id="pk-factsheet">
       <h2 class="pk-h2">Factsheet</h2>
       <div class="pk-fact-grid">
         ${factRow('Developer', ws.developer ? escHtml(ws.developer) : '')}
-        ${factRow('Based in', ws.basedIn ? escHtml(ws.basedIn) : '')}
-        ${factRow('Founding date', ws.foundingDate ? escHtml(ws.foundingDate) : '')}
-        ${factRow('Release date', fd.releaseDate ? escHtml(fd.releaseDate) : '')}
-        ${factRow('Price', priceText)}
-        ${factRow('Website', `<a href="#" onclick="return false;">${escHtml(siteUrl)}</a>`)}
-        ${factRow('Press contact', ws.pressContact ? _pkAutolink(ws.pressContact) : '')}
-        ${factRow('Business contact', ws.businessContact ? _pkAutolink(ws.businessContact) : '')}
-        ${factRow('Social', socialHTML)}
-        ${factRow('Address', ws.address ? escHtml(ws.address).replace(/\n/g, '<br>') : '')}
-        ${factRow('Phone', ws.phone ? escHtml(ws.phone) : '')}
+        ${factRow('Release date', _pkFmtReleaseDate(fd.releaseDate))}
       </div>
     </div>`;
 
@@ -2312,8 +2307,8 @@ function buildWebSitePreviewSection() {
     </section>` : '';
 
   const imagesHTML = shots.length ? `
-    <section class="pk-section" id="pk-images">
-      <h2 class="pk-h2">Images</h2>
+    <section class="pk-section" id="pk-screenshots">
+      <h2 class="pk-h2">Screenshots</h2>
       <div class="pk-image-grid">
         ${shots.map(s => `<div class="pk-image-cell"><img src="${_screenshotSrc(s)}" alt="${escHtml(s.name || 'Screenshot')}"></div>`).join('')}
       </div>
@@ -2460,14 +2455,10 @@ function buildWebSiteEditSection() {
 
       <div class="pk-edit-group-label">Factsheet</div>
       ${field('Developer / Studio', 'developer', 'Your studio name')}
-      ${field('Based in', 'basedIn', 'City, Country')}
-      ${field('Founding date', 'foundingDate', 'e.g. January 1, 2020')}
-      ${field('Website', 'website', 'yourgame.com')}
+
+      <div class="pk-edit-group-label">Contact</div>
       ${field('Press contact', 'pressContact', 'press@yourstudio.com')}
       ${field('Business contact', 'businessContact', 'business@yourstudio.com')}
-      ${field('Phone', 'phone', '+1 555 555 5555')}
-      ${field('Address', 'address', '123 Main St\nCity, Country', { textarea: true, rows: 2 })}
-      ${field('Social links', 'socialLinks', 'Twitter: https://twitter.com/yourgame\nDiscord: https://discord.gg/…', { textarea: true, rows: 3 })}
 
       <div class="pk-edit-group-label">History</div>
       ${field('Studio / game history', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}
