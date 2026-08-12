@@ -1489,22 +1489,25 @@ function _gearBtn(onclick, label) {
     </button>`;
 }
 
-// Header actions (power + gear) for either face. Gear intent differs per face.
+/* Header actions (power + gear) for a given face/state. The card has THREE states:
+     • signed-out  (account face, not logged in) — gear highlights the login fields
+     • signed-in   (account face, logged in)     — gear flips to the linked (steps) face
+     • linked      (steps face)                  — gear flips to the signed-in face
+   Every state also shows a power button that deactivates the platform. */
 function _platformHeadActions(pid, face) {
   const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
-  let gear = '';
+  let gear;
   if (face === 'steps') {
-    gear = _gearBtn(`platformGearFromSteps('${pid}')`, 'Account & sign-in');
+    gear = _gearBtn(`platformGearFromSteps('${pid}')`, 'Account settings');
   } else if (loggedIn) {
-    // On the account face the gear toggles between the signed-in summary and
-    // the editable login boxes. When signed out there is no steps face to
-    // return to, so the gear is omitted (power still shown).
-    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Change credentials');
+    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps');
+  } else {
+    gear = _gearBtn(`highlightLoginFields('${pid}')`, 'Highlight sign-in fields');
   }
   return `<div class="active-card-actions">${_powerBtn(pid)}${gear}</div>`;
 }
 
-// Shared header used by both faces. Body is inert; only the buttons act.
+// Shared header used by all states. Body is inert; only the buttons act.
 function platformCardHead(pid, face) {
   return `
     <div class="active-card-head active-card-head--static">
@@ -1518,62 +1521,78 @@ function platformCardHead(pid, face) {
     </div>`;
 }
 
-function _accountFormHTML(pid, cfg, savedUser, loggedIn) {
-  const backLink = loggedIn
-    ? `<button class="platform-login-back" type="button" onclick="platformCancelForm('${pid}')">Cancel</button>`
-    : '';
+/* STATE 1 — Signed out: prompt for developer credentials. Prototype accepts any
+   input (including blank), so the form is novalidate to suppress the browser's
+   native "please include an '@'" email check. */
+function _accountFormHTML(pid, cfg, savedUser) {
   return `
-    <form class="platform-login" onsubmit="submitPlatformLogin('${pid}');return false;">
-      <div class="platform-login-title">${loggedIn ? 'Update credentials' : 'Sign in to ' + escHtml(cfg.portal)}</div>
+    <form class="platform-login" novalidate onsubmit="submitPlatformLogin('${pid}');return false;">
+      <div class="platform-login-title">Sign in to ${escHtml(cfg.portal)}</div>
       <label class="platform-login-field">
         <span class="platform-login-label">${escHtml(cfg.userLabel)}</span>
         <input class="platform-login-input" id="login-user-${pid}" type="${cfg.userType}"
                value="${escHtml(savedUser)}" placeholder="${escHtml(cfg.userPlaceholder)}"
-               autocomplete="off" spellcheck="false"
-               oninput="this.classList.remove('platform-login-input--error')">
+               autocomplete="off" spellcheck="false">
       </label>
       <label class="platform-login-field">
         <span class="platform-login-label">Password</span>
         <input class="platform-login-input" id="login-pass-${pid}" type="password"
-               placeholder="••••••••" autocomplete="off"
-               oninput="this.classList.remove('platform-login-input--error')">
+               placeholder="••••••••" autocomplete="off">
       </label>
-      <div class="platform-login-error" id="login-error-${pid}"></div>
-      <div class="platform-login-actions">
-        <button class="platform-login-btn" type="submit">${loggedIn ? 'Update' : 'Sign In'}</button>
-        ${backLink}
-      </div>
+      <button class="platform-login-btn" type="submit">Sign In</button>
       <div class="platform-login-hint">Credentials are encrypted and never shared. They allow Shipmate to send changes directly to the platform.</div>
     </form>`;
 }
 
-function _accountSummaryHTML(pid, cfg, savedUser) {
+// Faked list of apps "discovered" in the connected developer account.
+function _linkedApps(pid) {
+  return [
+    { id: 'nebula-drift',      label: 'Nebula Drift' },
+    { id: 'nebula-drift-test', label: 'Nebula Drift — Playtest' },
+    { id: 'pixel-forge',       label: 'Pixel Forge' },
+  ];
+}
+
+/* STATE 2 — Signed in: account settings (linked app, etc.). Faked for now. */
+function _accountSettingsHTML(pid, cfg, savedUser) {
   const checkSVG = `<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const caretSVG = `<svg class="platform-select-caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const apps = _linkedApps(pid);
+  const sel  = state.platformLinkedApp?.[pid] || apps[0].id;
   return `
-    <div class="platform-account-summary">
-      <div class="pas-badge">${checkSVG}</div>
-      <div class="pas-info">
-        <div class="pas-status">Signed in to ${escHtml(cfg.portal)}</div>
-        <div class="pas-user">${escHtml(savedUser || cfg.userLabel)}</div>
+    <div class="platform-account-settings">
+      <div class="platform-account-summary">
+        <div class="pas-badge">${checkSVG}</div>
+        <div class="pas-info">
+          <div class="pas-status">Linked to ${escHtml(cfg.portal)}</div>
+          <div class="pas-user">${escHtml(savedUser || cfg.userLabel)}</div>
+        </div>
       </div>
-    </div>
-    <div class="platform-login-hint">Credentials are encrypted and never shared. They allow Shipmate to send changes directly to the platform.</div>
-    <button class="platform-login-back platform-login-back--center" type="button" onclick="platformBackToSteps('${pid}')">Back to steps</button>`;
+      <label class="platform-setting-field">
+        <span class="platform-login-label">Linked App</span>
+        <div class="platform-select-wrap">
+          <select class="platform-select" onchange="selectLinkedApp('${pid}', this.value)">
+            ${apps.map(a => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${escHtml(a.label)}</option>`).join('')}
+          </select>
+          ${caretSVG}
+        </div>
+      </label>
+      <button class="platform-signout" type="button" onclick="platformSignOut('${pid}')">Sign out</button>
+    </div>`;
 }
 
 function buildAccountCard(pid) {
   const cfg       = platformLoginConfig(pid);
   const auth      = state.platformAuth?.[pid];
   const loggedIn  = !!auth?.loggedIn;
-  const showForm  = !loggedIn || !!state.platformCredForm?.[pid];
   const savedUser = auth?.username || '';
   const h         = state.platformCardHeight?.[pid];
   const styleAttr = h ? ` style="min-height:${h}px;"` : '';
-  const body = showForm
-    ? _accountFormHTML(pid, cfg, savedUser, loggedIn)
-    : _accountSummaryHTML(pid, cfg, savedUser);
+  const body = loggedIn
+    ? _accountSettingsHTML(pid, cfg, savedUser)   // STATE 2: signed in
+    : _accountFormHTML(pid, cfg, savedUser);      // STATE 1: signed out
   return `
-    <div class="active-card platform-account-card ${showForm ? 'is-form' : 'is-summary'}" id="active-card-${pid}"${styleAttr}>
+    <div class="active-card platform-account-card ${loggedIn ? 'is-signedin' : 'is-signedout'}" id="active-card-${pid}"${styleAttr}>
       ${platformCardHead(pid, 'account')}
       <div class="platform-account-body">${body}</div>
     </div>`;

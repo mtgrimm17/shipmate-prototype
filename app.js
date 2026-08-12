@@ -1318,9 +1318,8 @@ function activatePlatform(platformId) {
 
 function deactivatePlatform(platformId) {
   state.activePlatforms.delete(platformId);
-  // Reset transient face state (keep platformAuth so sign-in persists).
-  if (state.platformFace)     delete state.platformFace[platformId];
-  if (state.platformCredForm) delete state.platformCredForm[platformId];
+  // Reset the transient face (keep platformAuth so sign-in persists).
+  if (state.platformFace) delete state.platformFace[platformId];
   renderDashboard();
 }
 
@@ -1338,10 +1337,6 @@ function deactivatePlatform(platformId) {
 function _setPlatformFace(pid, face) {
   if (!state.platformFace) state.platformFace = {};
   state.platformFace[pid] = face;
-}
-function _setPlatformCredForm(pid, v) {
-  if (!state.platformCredForm) state.platformCredForm = {};
-  state.platformCredForm[pid] = v;
 }
 
 // Measure the STEPS face height off-screen and cache it (px) for height parity.
@@ -1365,57 +1360,50 @@ function _cacheStepsFaceHeight(pid) {
   }
 }
 
+// STATE 1 → STATE 3: sign in. Prototype accepts anything, including blank fields.
 function submitPlatformLogin(pid) {
   const userEl = document.getElementById('login-user-' + pid);
-  const passEl = document.getElementById('login-pass-' + pid);
-  const errEl  = document.getElementById('login-error-' + pid);
   const username = userEl ? userEl.value.trim() : '';
-  const password = passEl ? passEl.value : '';
-
-  if (!username || !password) {
-    if (errEl) errEl.textContent = 'Enter both fields to continue.';
-    const empty = !username ? userEl : passEl;
-    if (empty) { empty.classList.add('platform-login-input--error'); empty.focus(); }
-    return;
-  }
-
   if (!state.platformAuth) state.platformAuth = {};
-  // Prototype: accept any credentials; keep the username to prefill / summarize.
   state.platformAuth[pid] = { loggedIn: true, username };
-  _setPlatformCredForm(pid, false);
-  _flipPlatformCard(pid, 'steps', 1); // credentials → steps
+  _flipPlatformCard(pid, 'steps', 1); // signed out → platform linked (steps)
 }
 
-// Steps gear → flip to the ACCOUNT face (signed-in summary when logged in).
+// Linked (steps) gear → flip to the signed-in settings face (STATE 3 → STATE 2).
 function platformGearFromSteps(pid) {
-  _setPlatformCredForm(pid, false);
   _flipPlatformCard(pid, 'account', -1);
 }
 
-// Account gear → reveal the login boxes (summary → form), or flip back to steps
-// when the boxes are already showing.
+// Signed-in settings gear → flip back to the linked (steps) face (STATE 2 → STATE 3).
 function platformGearFromAccount(pid) {
-  const loggedIn   = !!state.platformAuth?.[pid]?.loggedIn;
-  const showingForm = !loggedIn || !!state.platformCredForm?.[pid];
-  if (loggedIn && !showingForm) {
-    _setPlatformCredForm(pid, true);       // reveal boxes, in place (no flip)
-    _rerenderPlatformCard(pid);
-    const u = document.getElementById('login-user-' + pid); if (u) u.focus();
-  } else if (loggedIn && showingForm) {
-    _setPlatformCredForm(pid, false);      // cancel edit → back to steps
-    _flipPlatformCard(pid, 'steps', 1);
-  }
-}
-
-// Cancel button on the edit form → back to signed-in summary (in place).
-function platformCancelForm(pid) {
-  _setPlatformCredForm(pid, false);
-  _rerenderPlatformCard(pid);
-}
-
-// "Back to steps" link on the signed-in summary → flip to the STEPS face.
-function platformBackToSteps(pid) {
   _flipPlatformCard(pid, 'steps', 1);
+}
+
+// Signed-out gear → just highlight the login fields (no flip).
+function highlightLoginFields(pid) {
+  const els = ['login-user-' + pid, 'login-pass-' + pid]
+    .map(id => document.getElementById(id)).filter(Boolean);
+  els.forEach(el => {
+    el.classList.remove('platform-login-input--highlight');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('platform-login-input--highlight');
+    setTimeout(() => el.classList.remove('platform-login-input--highlight'), 1200);
+  });
+  if (els[0]) els[0].focus();
+}
+
+// Sign out → return to the signed-out form (STATE 2 → STATE 1), in place.
+function platformSignOut(pid) {
+  if (state.platformAuth?.[pid]) state.platformAuth[pid].loggedIn = false;
+  _setPlatformFace(pid, 'account');
+  _rerenderPlatformCard(pid);
+  const u = document.getElementById('login-user-' + pid); if (u) u.focus();
+}
+
+// Faked "Linked App" selection on the signed-in settings face.
+function selectLinkedApp(pid, val) {
+  if (!state.platformLinkedApp) state.platformLinkedApp = {};
+  state.platformLinkedApp[pid] = val;
 }
 
 // Re-render a single active card in place (no flip animation).

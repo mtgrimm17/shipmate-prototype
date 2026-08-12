@@ -2178,11 +2178,13 @@ const state = {
 
   // Which face each active card is showing: 'steps' | 'account'.
   // Default when absent: 'steps' if signed in, else 'account'.
+  //   signed out           → account face shows the login form  (STATE 1)
+  //   signed in + account  → account face shows settings         (STATE 2)
+  //   signed in + steps    → the submission steps / "linked"     (STATE 3)
   platformFace: {},
 
-  // On the ACCOUNT face when signed in: true = show editable login boxes,
-  // false = show the compact "signed in" summary.
-  platformCredForm: {},
+  // Faked "Linked App" selection per platform on the signed-in settings face.
+  platformLinkedApp: {},
 
   // Cached STEPS-face pixel height per pid, so the ACCOUNT face can be pinned to
   // the same height and flips stay size-stable.
