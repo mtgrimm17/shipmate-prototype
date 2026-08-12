@@ -5,13 +5,15 @@ Assigned work is up top so we can glance at who's on what. Pull anything from **
 ## Active
 
 - **[Adam]** Shipmate Pages — self-distribution to Web; spec + Claude implementation ([doc](https://docs.google.com/document/d/1Mt98iZnxmXmH1ZGVNTrwO7SwnCBvCHfZz1jVKs-o3qQ/edit?tab=t.0#heading=h.i3le10c231b9))
-- **[Adam]** Patch up IARC presentation in the Google workflow
+- **[Adam]** Add Key Art section in some place other than Onboarding
+- **[Adam]** Add scraping for key art from Steam pages
 - **[Jaco]** Localize product page — incl. addressing translation errors + self-auditing translations to minimize user input ([spec](https://docs.google.com/document/d/1O_XMTmVzm405dq3_CGXnN_bsk114YU-v02EAQY6YH2U/edit?tab=t.0#heading=h.gflkx08bf3pq))
 - **[Mark]** Write PRD for headless bot authentication (do first — refine thinking before the official spec)
 - **[Mark]** Add auth to the prototype (follows the PRD above)
 
 ## Unassigned
 
+- Explore superior presentation opportunities for IARC in Google workflow
 - Add progress tracking for inactive platforms
 - Prototype regional pricing tool
 - Description pre-population
@@ -30,3 +32,5 @@ Assigned work is up top so we can glance at who's on what. Pull anything from **
 ## Done
 
 _(move completed tasks here with the assignee kept, newest at top)_
+
+- **[Adam]** Patch up IARC presentation in the Google workflow
