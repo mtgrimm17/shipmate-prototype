@@ -109,16 +109,27 @@ API keys are injected automatically by GitHub Actions at deploy time — contrib
 
 ## Git Workflow
 
-Claude's sandbox cannot push to GitHub (403 from proxy). All `git push` commands must be run from the contributor's local terminal.
+**Claude must NOT run any git command in this repo — no `git add`, `commit`, `pull`,
+`push`, `gc`, or `maintenance`, and no `rm` of `.git/*.lock`.** The Cowork sandbox is
+denied permission to delete files inside `.git` (even ones git itself just created),
+so any git operation Claude runs leaves stale `.git/*.lock` files and half-written
+`.git/objects/tmp_obj_*` behind. Those leftovers then break the human's `./ship.sh`.
+This was the cause of the recurring "index.lock: File exists" failures.
+
+Division of labor:
+- **Claude** edits files only, and bumps the version number (see Versioning). Claude
+  never commits. When done, Claude tells the contributor to run `./ship.sh`.
+- **The contributor** runs everything git via `./ship.sh` from a real terminal (which
+  *can* clean up `.git`, and self-heals any stale locks on startup).
 
 Typical workflow:
-1. Describe changes to Claude in Cowork — Claude edits the files and commits
+1. Describe changes to Claude in Cowork — Claude edits the files (no git).
 2. Test locally: `python3 -m http.server 8080` → open `http://localhost:8080`
-3. Push: `git push origin main`
+3. Publish: `./ship.sh "v2.xx — description of change"` (commits, pulls, pushes).
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Always include the version number in commit messages: `"v2.27 — description of change"`
+Include the version number in the ship note: `./ship.sh "v2.27 — description of change"`.
 
 ---
 

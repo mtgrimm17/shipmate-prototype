@@ -13,6 +13,26 @@
 # Never let git open Vim or any editor — auto-accept default messages.
 export GIT_EDITOR=true
 
+# Always run from the repo root, no matter where you invoke this from.
+cd "$(dirname "$0")" || exit 1
+
+# ── Self-heal: clear stale locks & leftovers before touching git ─────────────
+# Interrupted git — or tools that touch .git behind git's back (iCloud/Dropbox
+# sync, editors, or an agent whose sandbox can't clean up after itself) — leave
+# *.lock files and half-written tmp_obj_* objects that block every future
+# command. These are safe to delete ONLY when no git process is actually
+# running, so we guard on that first.
+if ! pgrep -x git >/dev/null 2>&1; then
+  find .git -name '*.lock' -type f -delete 2>/dev/null
+  find .git/objects -name 'tmp_obj_*' -type f -delete 2>/dev/null
+fi
+
+# Git's background maintenance/auto-gc runs on its own schedule and collides with
+# ordinary commits, leaving maintenance.lock behind. Turn it off for this repo.
+git config maintenance.auto false >/dev/null 2>&1
+git config gc.auto            0   >/dev/null 2>&1
+git maintenance unregister        >/dev/null 2>&1
+
 # Use your note if you gave one, otherwise stamp it with the date/time.
 MESSAGE="${1:-Update — $(date '+%b %-d, %Y at %-I:%M %p')}"
 
