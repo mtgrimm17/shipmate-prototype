@@ -2235,6 +2235,13 @@ body {
   background: var(--surface-hover, rgba(255,255,255,0.06));
   transform: rotate(30deg);
 }
+/* Highlighted while in the signed-in settings view — signals a temporary,
+   reversible state (flip the cog again to return to the steps). */
+.active-card-settings--active,
+.active-card-settings--active:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
 .active-card-power:hover {
   color: #ff6b6b;
   background: rgba(255, 90, 90, 0.12);
@@ -2405,22 +2412,25 @@ body {
   color: var(--text-muted, #8f98a0);
   pointer-events: none;
 }
-.platform-signout {
-  align-self: flex-start;
-  padding: 7px 12px;
-  font-size: 12px;
+/* Destructive action — full width, centered, red alert treatment. */
+.platform-unlink {
+  width: 100%;
+  padding: 10px 14px;
+  margin-top: 2px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-muted, #8f98a0);
-  background: transparent;
-  border: 1px solid var(--border, rgba(255,255,255,0.14));
+  text-align: center;
+  color: #ff6b6b;
+  background: rgba(255, 90, 90, 0.10);
+  border: 1px solid rgba(255, 90, 90, 0.38);
   border-radius: 8px;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.platform-signout:hover {
-  color: #ff6b6b;
-  border-color: rgba(255, 90, 90, 0.5);
-  background: rgba(255, 90, 90, 0.08);
+.platform-unlink:hover {
+  color: #fff;
+  background: rgba(255, 90, 90, 0.85);
+  border-color: rgba(255, 90, 90, 0.9);
 }
 
 /* ── Build Upload Pill ───────────────────────────────── */

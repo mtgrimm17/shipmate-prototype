@@ -1477,9 +1477,9 @@ function _powerBtn(pid) {
     </button>`;
 }
 
-function _gearBtn(onclick, label) {
+function _gearBtn(onclick, label, active) {
   return `
-    <button class="active-card-settings" type="button"
+    <button class="active-card-settings${active ? ' active-card-settings--active' : ''}" type="button"
             onclick="event.stopPropagation();${onclick}"
             title="${label}" aria-label="${label}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1500,11 +1500,13 @@ function _platformHeadActions(pid, face) {
   if (face === 'steps') {
     gear = _gearBtn(`platformGearFromSteps('${pid}')`, 'Account settings');
   } else if (loggedIn) {
-    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps');
+    // Highlighted to signal you're in a temporary, reversible settings view.
+    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
   } else {
     gear = _gearBtn(`highlightLoginFields('${pid}')`, 'Highlight sign-in fields');
   }
-  return `<div class="active-card-actions">${_powerBtn(pid)}${gear}</div>`;
+  // Settings (gear) on the left, power on the right.
+  return `<div class="active-card-actions">${gear}${_powerBtn(pid)}</div>`;
 }
 
 // Shared header used by all states. Body is inert; only the buttons act.
@@ -1540,7 +1542,7 @@ function _accountFormHTML(pid, cfg, savedUser) {
                placeholder="••••••••" autocomplete="off">
       </label>
       <button class="platform-login-btn" type="submit">Sign In</button>
-      <div class="platform-login-hint">Credentials are encrypted and never shared. They allow Shipmate to send changes directly to the platform.</div>
+      <div class="platform-login-hint">Credentials are encrypted and never shared.</div>
     </form>`;
 }
 
@@ -1577,7 +1579,7 @@ function _accountSettingsHTML(pid, cfg, savedUser) {
           ${caretSVG}
         </div>
       </label>
-      <button class="platform-signout" type="button" onclick="platformSignOut('${pid}')">Sign out</button>
+      <button class="platform-unlink" type="button" onclick="platformSignOut('${pid}')">Un-link Account</button>
     </div>`;
 }
 
