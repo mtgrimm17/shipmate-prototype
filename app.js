@@ -1319,6 +1319,85 @@ function deactivatePlatform(platformId) {
 }
 
 
+/* ── Platform developer-portal auth (prototype/faked) ─────────────────────────
+   A freshly-activated platform card shows a login face. On sign-in the card
+   flips to reveal the submission steps; the steps face's settings gear flips
+   back to login. Credentials are faked — any non-empty pair is accepted and
+   nothing is stored or transmitted. The flip mirrors the submit flip in
+   _doFinalSubmit: rotate the live card out, swap content, rotate the new one in. */
+
+function submitPlatformLogin(pid) {
+  const userEl = document.getElementById('login-user-' + pid);
+  const passEl = document.getElementById('login-pass-' + pid);
+  const errEl  = document.getElementById('login-error-' + pid);
+  const username = userEl ? userEl.value.trim() : '';
+  const password = passEl ? passEl.value : '';
+
+  if (!username || !password) {
+    if (errEl) errEl.textContent = 'Enter both fields to continue.';
+    const empty = !username ? userEl : passEl;
+    if (empty) { empty.classList.add('platform-login-input--error'); empty.focus(); }
+    return;
+  }
+
+  if (!state.platformAuth) state.platformAuth = {};
+  // Prototype: accept any credentials; keep the username to prefill the login face.
+  state.platformAuth[pid] = { loggedIn: true, username };
+  _flipPlatformAuthCard(pid, 1); // login → steps
+}
+
+function showPlatformLogin(pid) {
+  if (!state.platformAuth) state.platformAuth = {};
+  if (state.platformAuth[pid]) state.platformAuth[pid].loggedIn = false;
+  else state.platformAuth[pid] = { loggedIn: false, username: '' };
+  _flipPlatformAuthCard(pid, -1); // steps → login
+}
+
+// dir = 1 flips one way (login→steps), dir = -1 the reverse (steps→login).
+function _flipPlatformAuthCard(pid, dir) {
+  const outDeg = 90 * dir;
+  const inDeg  = -90 * dir;
+  const card   = document.getElementById('active-card-' + pid);
+
+  function _apply() {
+    // Pin the grid height so the row doesn't jump while the faces (different
+    // heights) swap mid-flip; released once the enter animation settles.
+    const grid = document.querySelector('.active-cards-grid');
+    const gridHeight = grid ? grid.offsetHeight : 0;
+    if (grid && gridHeight > 0) grid.style.minHeight = gridHeight + 'px';
+
+    renderDashboard();
+
+    const newCard = document.getElementById('active-card-' + pid);
+    if (newCard) {
+      newCard.style.transform  = `perspective(700px) rotateY(${inDeg}deg)`;
+      newCard.style.transition = 'none';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
+        // Move focus to the first login field so the user can type immediately.
+        if (dir === -1) { const u = document.getElementById('login-user-' + pid); if (u) u.focus(); }
+        setTimeout(() => {
+          newCard.style.transition = '';
+          newCard.style.transform  = '';
+          if (grid) grid.style.minHeight = '';
+        }, 340);
+      }));
+    } else if (grid) {
+      setTimeout(() => { grid.style.minHeight = ''; }, 340);
+    }
+  }
+
+  if (card) {
+    card.style.transition = 'transform 0.28s cubic-bezier(0.55, 0, 1, 0.45)';
+    card.style.transform  = `perspective(700px) rotateY(${outDeg}deg)`;
+    setTimeout(_apply, 290);
+  } else {
+    _apply();
+  }
+}
+
+
 /* ── Form helpers ────────────────────────────────────── */
 
 // Auto-round prices to .99 convention (e.g. 5 → 4.99, 10 → 9.99)

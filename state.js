@@ -800,6 +800,51 @@ const PLATFORMS = {
   },
 };
 
+/* ── Platform developer credentials (prototype-only) ─────────────────────────
+   Drives the login face shown when a platform card is first activated. These
+   fields are faked: any non-empty values are accepted and nothing is stored or
+   transmitted. Each entry describes the developer portal the studio signs into
+   and the credential fields that portal asks for. Falls back to GENERIC_LOGIN. */
+const PLATFORM_LOGIN = {
+  ios: {
+    portal: 'App Store Connect', provider: 'Apple',
+    userLabel: 'Apple ID', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
+  android: {
+    portal: 'Google Play Console', provider: 'Google',
+    userLabel: 'Google Account', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
+  steam: {
+    portal: 'Steamworks', provider: 'Steam',
+    userLabel: 'Steam Account', userType: 'text', userPlaceholder: 'account name or email',
+  },
+  web: {
+    portal: 'your host', provider: 'Host',
+    userLabel: 'Email', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
+  egs: {
+    portal: 'Epic Developer Portal', provider: 'Epic',
+    userLabel: 'Epic Account', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
+  psn: {
+    portal: 'PlayStation Partners', provider: 'Sony',
+    userLabel: 'Partner Sign-In ID', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
+  xbox: {
+    portal: 'Partner Center', provider: 'Microsoft',
+    userLabel: 'Microsoft Account', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
+  nintendo: {
+    portal: 'Nintendo Developer Portal', provider: 'Nintendo',
+    userLabel: 'NDID', userType: 'text', userPlaceholder: 'developer ID',
+  },
+};
+const GENERIC_LOGIN = {
+  portal: 'the developer portal', provider: 'Platform',
+  userLabel: 'Email', userType: 'email', userPlaceholder: 'you@studio.com',
+};
+function platformLoginConfig(pid) { return PLATFORM_LOGIN[pid] || GENERIC_LOGIN; }
+
 /* ── Helpers ─────────────────────────────────────────── */
 
 function makeEmptyPlatformSteps() {
@@ -2125,6 +2170,13 @@ const state = {
 
   // Per-platform flip state: null = not submitted; { track, time } = submitted + card flipped
   platformFlipped: {},
+
+  // Per-platform developer-portal auth (prototype/faked). Keyed by pid:
+  //   undefined / { loggedIn:false } → card shows the login face
+  //   { loggedIn:true, username }    → card shows the submission steps
+  // Persists for the session so re-activating a platform keeps you signed in;
+  // the card's settings gear flips back to the login face to switch accounts.
+  platformAuth: {},
   androidContentRatingExpanded: false,
   // Google Play Content Questions (IARC tree) — keys the user has explicitly
   // re-opened after their subtree auto-collapsed (fully answered). Purely a

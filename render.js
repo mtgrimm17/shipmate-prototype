@@ -1443,7 +1443,66 @@ function buildReleasePills(pid) {
   return pills.length ? `<div class="card-release-status">${pills.join('')}</div>` : '';
 }
 
+/* ── Platform auth (prototype login face) ────────────────────────────────────
+   When a platform is activated it first shows this login face. The user enters
+   developer-portal credentials (faked — see PLATFORM_LOGIN in state.js) and the
+   whole card flips to reveal the submission steps. A settings gear on the steps
+   face flips back here. The outer node keeps the same .active-card /
+   id="active-card-<pid>" shell so the flip animation in app.js can target it. */
+function needsPlatformLogin(pid) {
+  return state.activePlatforms.has(pid) && !state.platformAuth?.[pid]?.loggedIn;
+}
+
+// Gear button shown top-right on the steps face — flips the card back to login.
+function platformSettingsBtn(pid) {
+  return `
+    <button class="active-card-settings" type="button"
+            onclick="event.stopPropagation();showPlatformLogin('${pid}')"
+            title="Sign-in settings" aria-label="Sign-in settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>`;
+}
+
+function buildPlatformLoginCard(pid) {
+  const cfg      = platformLoginConfig(pid);
+  const savedUser = state.platformAuth?.[pid]?.username || '';
+  return `
+    <div class="active-card platform-login-card" id="active-card-${pid}">
+      <div class="active-card-head" onclick="deactivatePlatform('${pid}')" title="Click to deactivate" style="cursor:pointer;">
+        <div class="active-card-platform">
+          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
+          <div class="active-card-name-row">
+            <div class="active-card-name">${platLabel(pid)}</div>
+          </div>
+        </div>
+      </div>
+      <form class="platform-login" onsubmit="submitPlatformLogin('${pid}');return false;">
+        <div class="platform-login-title">Sign in to ${escHtml(cfg.portal)}</div>
+        <label class="platform-login-field">
+          <span class="platform-login-label">${escHtml(cfg.userLabel)}</span>
+          <input class="platform-login-input" id="login-user-${pid}" type="${cfg.userType}"
+                 value="${escHtml(savedUser)}" placeholder="${escHtml(cfg.userPlaceholder)}"
+                 autocomplete="off" spellcheck="false"
+                 oninput="this.classList.remove('platform-login-input--error')">
+        </label>
+        <label class="platform-login-field">
+          <span class="platform-login-label">Password</span>
+          <input class="platform-login-input" id="login-pass-${pid}" type="password"
+                 placeholder="••••••••" autocomplete="off"
+                 oninput="this.classList.remove('platform-login-input--error')">
+        </label>
+        <div class="platform-login-error" id="login-error-${pid}"></div>
+        <button class="platform-login-btn" type="submit">Sign In</button>
+        <div class="platform-login-hint">Prototype — credentials aren't stored or sent.</div>
+      </form>
+    </div>`;
+}
+
 function buildActiveCard(pid) {
+  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
   if (pid === 'ios')     return buildIOSActiveCard(pid);
   if (pid === 'android') return buildAndroidActiveCard(pid);
   if (pid === 'steam')   return buildSteamActiveCard(pid);
@@ -1483,6 +1542,7 @@ function buildActiveCard(pid) {
             <div class="active-card-name">${platLabel(pid)}</div>
           </div>
         </div>
+        ${platformSettingsBtn(pid)}
       </div>
       <div class="card-tasks">${steps}</div>
       <div class="ios-step-cards">${submitStepCard}</div>
@@ -1547,6 +1607,7 @@ function _openTrackMenu(pid) {
 }
 
 function buildIOSActiveCard(pid) {
+  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
@@ -1604,6 +1665,7 @@ function buildIOSActiveCard(pid) {
             <div class="active-card-name">${platLabel(pid)}</div>
           </div>
         </div>
+        ${platformSettingsBtn(pid)}
       </div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
@@ -1611,6 +1673,7 @@ function buildIOSActiveCard(pid) {
 }
 
 function buildAndroidActiveCard(pid) {
+  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
@@ -1665,6 +1728,7 @@ function buildAndroidActiveCard(pid) {
             <div class="active-card-name">${platLabel(pid)}</div>
           </div>
         </div>
+        ${platformSettingsBtn(pid)}
       </div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
@@ -4853,6 +4917,7 @@ function buildAndroidDataMatrix(a) {
    ═══════════════════════════════════════════════════ */
 
 function buildSteamActiveCard(pid) {
+  if (needsPlatformLogin(pid)) return buildPlatformLoginCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
   const counts = platformStepCount(pid);
@@ -4906,6 +4971,7 @@ function buildSteamActiveCard(pid) {
             <div class="active-card-name">${platLabel(pid)}</div>
           </div>
         </div>
+        ${platformSettingsBtn(pid)}
       </div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
