@@ -1596,6 +1596,7 @@ function buildAccountCard(pid) {
   return `
     <div class="active-card platform-account-card ${loggedIn ? 'is-signedin' : 'is-signedout'}" id="active-card-${pid}"${styleAttr}>
       ${platformCardHead(pid, 'account')}
+      <div class="active-card-fill"></div>
       <div class="platform-account-body">${body}</div>
     </div>`;
 }
@@ -1635,6 +1636,7 @@ function buildActiveCard(pid, force) {
   return `
     <div class="active-card" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
+      <div class="active-card-fill"></div>
       <div class="card-tasks">${steps}</div>
       <div class="ios-step-cards">${submitStepCard}</div>
     </div>`;
@@ -1750,6 +1752,7 @@ function buildIOSActiveCard(pid, force) {
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
+      <div class="active-card-fill"></div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
@@ -1805,6 +1808,7 @@ function buildAndroidActiveCard(pid, force) {
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
+      <div class="active-card-fill"></div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
@@ -5040,6 +5044,7 @@ function buildSteamActiveCard(pid, force) {
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
+      <div class="active-card-fill"></div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;

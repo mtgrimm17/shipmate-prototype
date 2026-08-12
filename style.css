@@ -2141,7 +2141,14 @@ body {
   border-radius: 12px;
   overflow: hidden;
   transition: border-color 0.15s;
+  display: flex;
+  flex-direction: column;
 }
+/* Flexible spacer placed right after the header. When the grid stretches a card
+   to match a taller sibling (or the min-height pin), this absorbs the slack as
+   space below the header — so all three states stay the same height and the
+   step/settings content stays put instead of a gap opening under the last row. */
+.active-card-fill { flex: 1 1 auto; min-height: 0; }
 
 .active-card:hover { border-color: var(--border-hover); }
 
@@ -2258,10 +2265,8 @@ body {
   flex-direction: column;
 }
 .platform-account-body {
-  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
 
 /* Login form — compact so it fits within the steps-face height */
