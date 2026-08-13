@@ -2141,14 +2141,7 @@ body {
   border-radius: 12px;
   overflow: hidden;
   transition: border-color 0.15s;
-  display: flex;
-  flex-direction: column;
 }
-/* Flexible spacer placed right after the header. When the grid stretches a card
-   to match a taller sibling (or the min-height pin), this absorbs the slack as
-   space below the header — so all three states stay the same height and the
-   step/settings content stays put instead of a gap opening under the last row. */
-.active-card-fill { flex: 1 1 auto; min-height: 0; }
 
 .active-card:hover { border-color: var(--border-hover); }
 
@@ -2264,9 +2257,14 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* Center the (shorter) account faces within the card's pinned height so the
+   small remaining slack splits invisibly top/bottom instead of pooling at the
+   bottom. The card is pinned to the linked/steps height (see platformCardHeight). */
 .platform-account-body {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  justify-content: center;
 }
 
 /* Login form — compact so it fits within the steps-face height */
@@ -2275,12 +2273,6 @@ body {
   flex-direction: column;
   gap: 9px;
   padding: 2px 16px 16px;
-}
-.platform-login-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 1px;
 }
 .platform-login-field {
   display: flex;

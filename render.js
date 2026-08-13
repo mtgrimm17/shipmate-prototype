@@ -1533,7 +1533,6 @@ function platformCardHead(pid, face) {
 function _accountFormHTML(pid, cfg, savedUser) {
   return `
     <form class="platform-login" novalidate onsubmit="submitPlatformLogin('${pid}');return false;">
-      <div class="platform-login-title">Sign in to ${escHtml(cfg.portal)}</div>
       <label class="platform-login-field">
         <span class="platform-login-label">${escHtml(cfg.userLabel)}</span>
         <input class="platform-login-input" id="login-user-${pid}" type="${cfg.userType}"
@@ -1600,7 +1599,6 @@ function buildAccountCard(pid) {
   return `
     <div class="active-card platform-account-card ${loggedIn ? 'is-signedin' : 'is-signedout'}" id="active-card-${pid}"${styleAttr}>
       ${platformCardHead(pid, 'account')}
-      <div class="active-card-fill"></div>
       <div class="platform-account-body">${body}</div>
     </div>`;
 }
@@ -1640,7 +1638,6 @@ function buildActiveCard(pid, force) {
   return `
     <div class="active-card" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
-      <div class="active-card-fill"></div>
       <div class="card-tasks">${steps}</div>
       <div class="ios-step-cards">${submitStepCard}</div>
     </div>`;
@@ -1756,7 +1753,6 @@ function buildIOSActiveCard(pid, force) {
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
-      <div class="active-card-fill"></div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
@@ -1812,7 +1808,6 @@ function buildAndroidActiveCard(pid, force) {
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
-      <div class="active-card-fill"></div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
@@ -5039,7 +5034,6 @@ function buildSteamActiveCard(pid, force) {
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
-      <div class="active-card-fill"></div>
       ${buildReleasePills(pid)}
       <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
     </div>`;
