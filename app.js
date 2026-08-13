@@ -77,7 +77,26 @@ function openOnboarding(tab = 0) {
 
 function closeOnboarding() {
   if (!state.onboardingComplete) return; // can't close if not yet done
+  state.assetsFromWebEdit = false;
   showMainApp();
+}
+
+/* Opens the Assets tab from the "Manage" button in the Web platform's "Edit
+   site details" panel (Trailers/Screenshots sub-sections) — a standalone
+   asset-management detour rather than a step in the normal onboarding flow.
+   See the matching footer treatment in renderOnboardingFooter (render.js). */
+function openAssetsFromWebEdit() {
+  state.assetsFromWebEdit = true;
+  openOnboarding(2);
+}
+
+/* Back button on the Assets tab when it was opened via openAssetsFromWebEdit —
+   returns to "Edit site details" instead of falling back to Distribution. */
+async function backFromAssetsToWebEdit() {
+  state.assetsFromWebEdit = false;
+  closeOnboarding();
+  await openStepModal('web', 'storePreview');
+  await openStorePreviewSection('web', 'siteInfo');
 }
 
 function setOnboardingTab(idx) {
@@ -4229,6 +4248,51 @@ function setWebSiteField(key, value) {
 function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};
   state.webSite.accent = color;
+  reRenderStepModal();
+}
+
+/* Key Art uploads (Vertical Capsule / Hero Banner) — single-image uploads
+   with a live dataURL preview, same pattern as handleFeatureFiles/
+   removeFeatureGraphic above. Each reRenderStepModal() call refreshes both
+   the Key Art flip modal (buildWebKeyArtEditSection) and, once the user
+   flips back, the preview website's hero/capsule (buildWebSitePreviewSection). */
+function handleKeyArtCapsuleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleKeyArtCapsuleFiles(e.dataTransfer.files);
+}
+function handleKeyArtCapsuleFiles(files) {
+  const file = files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.uploads.keyArtCapsule = { name: file.name, dataUrl: ev.target.result };
+    reRenderStepModal();
+  };
+  reader.readAsDataURL(file);
+}
+function removeKeyArtCapsule() {
+  state.uploads.keyArtCapsule = null;
+  reRenderStepModal();
+}
+
+function handleKeyArtHeroDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleKeyArtHeroFiles(e.dataTransfer.files);
+}
+function handleKeyArtHeroFiles(files) {
+  const file = files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.uploads.keyArtHero = { name: file.name, dataUrl: ev.target.result };
+    reRenderStepModal();
+  };
+  reader.readAsDataURL(file);
+}
+function removeKeyArtHero() {
+  state.uploads.keyArtHero = null;
   reRenderStepModal();
 }
 

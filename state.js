@@ -1867,6 +1867,13 @@ function makeBlankUploads() {
     screenshots:    [],
     featureGraphic: null,
     trailer:        null,
+    // Preview website "Key Art" — a vertical capsule and hero banner image,
+    // each { name, dataUrl } like appIcon/featureGraphic. Set via the
+    // Key Art flip modal (buildWebKeyArtEditSection in render.js); shown on
+    // the preview website in place of the placeholder graphics once set
+    // (see buildWebSitePreviewSection's heroHTML/capsuleHTML).
+    keyArtCapsule:  null,
+    keyArtHero:     null,
   };
 }
 
@@ -2015,8 +2022,16 @@ const PRIVACY_PRESETS = [
 const state = {
   // Onboarding
   onboardingComplete: false,
-  onboardingTab: 0,          // 0 = Game Details, 1 = Upload Assets, 2 = Compliance
+  onboardingTab: 0,          // 0 = About, 1 = Distribution, 2 = Assets, 3 = Compliance (unreachable via Next — dead tab)
   _newProjectMode: false,    // true when onboarding is creating a 2nd+ project
+
+  // True while the Assets tab (tab 2) was opened via the "Manage" button in
+  // the Web platform's "Edit site details" (Trailers/Screenshots sub-sections)
+  // rather than through the normal onboarding flow — while true and on tab 2,
+  // the footer hides "Launch Dashboard" and Back returns to Edit site details
+  // instead of Distribution. See openAssetsFromWebEdit/backFromAssetsToWebEdit
+  // in app.js and renderOnboardingFooter in render.js.
+  assetsFromWebEdit: false,
 
   // Modal
   activeModal: null,
@@ -2067,29 +2082,31 @@ const state = {
   // Tracks which sub-sections the user has actually visited (gates "done" state)
   storePreviewSectionSeen:  { ios: {}, android: {}, steam: {}, web: {} },
 
-  // Web self-distribution site — editable fields shown in the Preview Website step.
-  // Preview follows the classic "presskit()" press-page layout (Factsheet,
-  // Description/History, Videos, Images, Logo & Icon, Awards, Articles,
-  // Additional Links, Team, Contact). List-type fields below are stored as
-  // plain newline-separated text (one entry per line) and parsed at render
-  // time — see _pkLines/_pkSplitLabelValue in render.js — matching the
-  // lightweight plain-text style already used for formData.description.
+  // Web self-distribution site — editable fields shown in the Preview Website
+  // step, organized in "Edit site details" into four groups: Factsheet,
+  // Description, Media, About. Preview renders four always-visible main
+  // sections (Factsheet, Description, Media, About), each with sub-sections
+  // that only show once they have content — see buildWebSitePreviewSection
+  // in render.js. Some sub-sections aren't stored here at all, but synced
+  // read-only from elsewhere in Shipmate: Platforms (state.activePlatforms),
+  // Release Date (formData.releaseDate), and Trailers (formData.trailerUrl /
+  // uploads.trailer — the same "Trailer" asset set in the Assets step).
+  // List-type fields below are stored as plain newline-separated text (one
+  // entry per line) and parsed at render time — see _pkLines in render.js —
+  // matching the lightweight plain-text style already used for
+  // formData.description.
   webSite: {
-    headline: '', tagline: '', ctaLabel: 'Download', accent: '#0EA5A4',
-    // Factsheet
-    developer: '', basedIn: '', foundingDate: '', website: '',
-    pressContact: '', businessContact: '', phone: '', address: '',
-    socialLinks: '',      // one per line, e.g. "Twitter: https://twitter.com/…"
-    // Description / History
-    history: '',           // long-form studio/game history, one paragraph per line
-    // Awards & Recognition
-    awards: '',             // one per line
-    // Selected Articles
-    articles: '',           // one per line, "Quote or title - Publication, https://…"
-    // Additional Links
-    additionalLinks: '',    // one per line, "Label: https://…"
-    // Team & Repeating Collaborators
-    team: '',                // one per line, "Name - Role, https://…"
+    accent: '#0EA5A4',
+    // Factsheet — Developer + Location
+    developer: '', basedIn: '',
+    genres: '',             // free text, e.g. "Roguelike, Deckbuilder"
+    // Description
+    description: '',        // "Hook" — overrides the Description field synced from Game Details
+    aboutGame: '',          // "About This Game" — one paragraph per line
+    history: '',            // "Studio/Game History" — one paragraph per line
+    // About
+    aboutDev: '',           // "About the Developer" bio — one paragraph per line
+    website: '', email: '',
   },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)

@@ -160,13 +160,21 @@ function renderOnboardingFooter() {
   const isLast  = state.onboardingTab === 2;
   const isFirst = state.onboardingTab === 0;
   const hasPlat = state.activePlatforms.size > 0;
+
+  // Assets opened via the "Manage" button in "Edit site details" (Trailers/
+  // Screenshots) is a standalone detour, not a step in the linear onboarding
+  // flow — no "Launch Dashboard" action here, and Back returns to Edit site
+  // details instead of Distribution. See openAssetsFromWebEdit /
+  // backFromAssetsToWebEdit in app.js.
+  const fromWebEdit = state.assetsFromWebEdit && state.onboardingTab === 2;
+
   el.innerHTML = `
     <div class="ob-footer-inner">
-      <button class="btn btn-ghost" onclick="prevOnboardingTab()" ${isFirst ? 'style="visibility:hidden"' : ''}>${t('ob.footer.back')}</button>
+      <button class="btn btn-ghost" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : 'prevOnboardingTab()'}" ${isFirst ? 'style="visibility:hidden"' : ''}>${t('ob.footer.back')}</button>
       <div class="ob-step-dots">
         ${[0,1,2,3].map(i => `<span class="ob-dot ${i === state.onboardingTab ? 'is-active' : (i < state.onboardingTab ? 'is-done' : '')}"></span>`).join('')}
       </div>
-      <button class="btn btn-primary" onclick="${isLast ? 'completeOnboarding()' : 'nextOnboardingTab()'}">
+      <button class="btn btn-primary" onclick="${isLast ? 'completeOnboarding()' : 'nextOnboardingTab()'}" ${fromWebEdit ? 'style="visibility:hidden"' : ''}>
         ${isLast ? t('ob.footer.launch') : t('ob.footer.next')}
       </button>
     </div>`;
@@ -2009,11 +2017,16 @@ function renderStepModal() {
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
   const FLIP_LABELS = {
-    content:     'Content Questions',
-    business:    'Business Questions',
-    data:        'Data Collection Questions',
-    screenshots: 'Screenshots',
-    siteInfo:    'Site Details',
+    content:       'Content Questions',
+    business:      'Business Questions',
+    data:          'Data Collection Questions',
+    screenshots:   'Screenshots',
+    siteInfo:      'Site Details',
+    webFactsheet:  'Factsheet',
+    webDescription:'Description',
+    webMedia:      'Media',
+    webAbout:      'About',
+    webKeyArt:     'Key Art',
   };
   const isFlipped = !!flipTarget;
   const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
@@ -2163,6 +2176,14 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'siteInfo') {
     return buildWebSiteEditSection();
   }
+  // Clicking a glow box around one of the preview website's four main
+  // sections flips to a focused modal with just that section's fields,
+  // rather than the full "Edit site details" panel.
+  if (target === 'webFactsheet')   return buildWebFactsheetEditSection();
+  if (target === 'webDescription') return buildWebDescriptionEditSection();
+  if (target === 'webMedia')       return buildWebMediaEditSection();
+  if (target === 'webAbout')       return buildWebAboutEditSection();
+  if (target === 'webKeyArt')      return buildWebKeyArtEditSection();
   if (target === 'content') {
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
@@ -2196,49 +2217,41 @@ function buildStorePreviewFlipSection(platformId, target) {
 }
 
 /* ── Web: self-distribution site preview + edit panel ──────────────
-   The "Preview Website" step. Renders a "presskit()"-style press page —
-   Factsheet / Description / History / Videos / Screenshots /
-   Awards & Recognition / Selected Articles / Additional Links / Team /
-   Contact — populated from Shipmate's game data plus the extra fields in
-   state.webSite. List-type fields (awards, articles, team, links, social)
-   are stored as plain newline-separated text and parsed here; a section
-   is only rendered once the user has put something in it, so an
-   unfilled-in Preview Website step doesn't show a wall of empty blocks.
-   Clicking "Edit site details" flips (via openStorePreviewSection) to
+   The "Preview Website" step. Renders a "presskit()"-style press page with
+   four always-visible main sections (accented h2 headers, via .pk-h2) —
+   Factsheet, Description, Media, About — each containing bold, non-accented
+   sub-section headers (via .pk-h3, see the pkSub() helper) that only render
+   once the user has put something in them — except Developer, Release
+   Date, and Hook, which always show (Developer with a muted dash
+   placeholder when empty; Release Date and Hook already have their own
+   fallback text):
+     Factsheet:    Developer, Location, Release Date, Platforms, Genres
+     Description:  Hook, About This Game, History
+     Media:        Trailers, Screenshots
+     About:        About the Developer, Website, Contact
+   Populated from Shipmate's game data plus the extra fields in
+   state.webSite, which "Edit site details" organizes into the same four
+   groups (Platforms, Release Date, and Trailers sync read-only from
+   elsewhere in Shipmate rather than being their own webSite fields — see
+   the state.js comment above the webSite object). List-type fields are
+   stored as plain newline-separated text and parsed here (see _pkLines). Factsheet and
+   Description sit side by side in a two-column grid (.pk-fact-desc-grid —
+   Factsheet in the narrow column under the capsule, Description in the wide
+   column under the hero); Media and About flow full-width below it. Clicking
+   "Edit site details" flips (via openStorePreviewSection) to
    buildWebSiteEditSection().
    ─────────────────────────────────────────────────────────────────── */
+
+/* Display labels for the Factsheet's "Platforms" sub-section — synced
+   read-only from state.activePlatforms, keyed the same as PLATFORM_ORDER. */
+const PK_PLATFORM_LABELS = {
+  steam: 'PC (Steam)', ios: 'iOS', android: 'Android', web: 'Web',
+  egs: 'PC (Epic Games Store)', psn: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo Switch',
+};
 
 /* Split a textarea's contents into trimmed, non-empty lines. */
 function _pkLines(text) {
   return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
-}
-
-/* Wrap bare URLs in a line with <a> tags; escapes everything else. */
-function _pkAutolink(text) {
-  const urlRe = /(https?:\/\/[^\s]+)/g;
-  return text.split(urlRe).map((part, i) => {
-    if (i % 2 === 0) return escHtml(part);
-    const label = part.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    return `<a href="${escHtml(part)}" target="_blank" rel="noopener">${escHtml(label)}</a>`;
-  }).join('');
-}
-
-/* Splits a "Label: value" or "Label - value" line into parts; falls back
-   to { label:'', value: line } when no separator is found. Used for the
-   Team / Selected Articles / Additional Links / Social list fields.
-   The colon form deliberately skips a colon that's part of a URL scheme
-   (the "://" in "https://…") so a line like "Name - Role, https://x.com"
-   isn't mis-split at the scheme colon before ever trying the " - " form. */
-function _pkSplitLabelValue(line) {
-  let m = line.match(/^(.{1,80}?):(?!\/\/)\s*(.+)$/);
-  if (m) return { label: _pkStripQuotes(m[1].trim()), value: m[2].trim() };
-  m = line.match(/^(.{1,80}?)\s+[-–—]\s+(.+)$/);
-  if (m) return { label: _pkStripQuotes(m[1].trim()), value: m[2].trim() };
-  return { label: '', value: line };
-}
-
-function _pkStripQuotes(text) {
-  return text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
 }
 
 /* Formats a "YYYY-MM-DD" release date (as stored in state.formData.releaseDate,
@@ -2251,131 +2264,202 @@ function _pkFmtReleaseDate(dateVal) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+/* Extracts the 11-char video ID from a YouTube watch/share/embed/shorts URL
+   (youtube.com/watch?v=, youtu.be/, youtube.com/embed/, youtube.com/shorts/,
+   with or without extra query params like &t=10s). Returns '' for anything
+   else, so non-YouTube trailer URLs fall back to a plain link-out card. */
+function _pkYouTubeId(url) {
+  if (!url) return '';
+  const m = String(url).match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : '';
+}
+
 function buildWebSitePreviewSection() {
   const fd  = state.formData || {};
   const ups = state.uploads || {};
   const ws  = state.webSite || {};
   const accent = ws.accent || '#0EA5A4';
 
-  const title = escHtml((ws.headline && ws.headline.trim()) || fd.title || 'Your Game');
-  const descRaw = fd.description || '';
+  const title = escHtml(fd.title || 'Your Game');
+  // Description defaults to (and stays synced with) Game Details' Description
+  // field; "Description" in Edit site details overrides it when set.
+  const descRaw = (ws.description && ws.description.trim()) || fd.description || '';
   const descFull = descRaw ? escHtml(descRaw).replace(/\n/g, '<br>') : 'Your game description will appear here once you fill in the Description field in Game Details.';
 
   const shots = ups.screenshots || [];
+
+  // Hero banner — shows the uploaded image (state.uploads.keyArtHero) once
+  // set via the "Key Art" flip modal (buildWebKeyArtEditSection); falls back
+  // to the placeholder graphic otherwise. Glowing + clickable like the four
+  // main sections (see .pk-glowbox / pk-glow-pulse), opening the same modal.
+  const heroUpload = ups.keyArtHero;
+  const heroHTML = heroUpload ? `
+    <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
+      <img src="${heroUpload.dataUrl}" alt="Hero banner" class="pk-hero-img">
+      <div class="pk-hero-scrim"></div>
+    </div>` : `
+    <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
+      <span class="pk-hero-badge">Placeholder</span>
+      <div class="pk-hero-icon-wrap">
+        <svg class="pk-hero-icon" width="42" height="42" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2.5" y="4.5" width="19" height="15" rx="2" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8" cy="10" r="1.6" fill="currentColor"/>
+          <path d="M21 15.5l-4.8-4.8-4 4-2.7-2.7-5.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="pk-hero-caption">Hero Banner<br>3840 &times; 1240</div>
+      </div>
+      <div class="pk-hero-scrim"></div>
+    </div>`;
 
   // Preview URL is always derived from the game's title — "[gamename].shipmate.games" —
   // not user-editable, so it stays in sync with whatever the title is at the moment.
   const slug = (fd.title || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'yourgame';
   const siteUrl = `${slug}.shipmate.games`;
 
-  const dash = `<span class="pk-fact-empty">—</span>`;
-  const factRow = (label, value) => `
-    <div class="pk-fact-label">${escHtml(label)}</div>
-    <div class="pk-fact-value">${value || dash}</div>`;
-
-  const factsheetHTML = `
-    <div class="pk-factsheet" id="pk-factsheet">
-      <h2 class="pk-h2">Factsheet</h2>
-      <div class="pk-fact-grid">
-        ${factRow('Developer', ws.developer ? escHtml(ws.developer) : '')}
-        ${factRow('Release date', _pkFmtReleaseDate(fd.releaseDate))}
-      </div>
+  // Vertical capsule — a Steam-style cover-art slot (748×896) sized to the
+  // Factsheet column's width (matches the accent underline under the
+  // "Factsheet" heading). Absolutely positioned over the hero (see
+  // .pk-hero-wrap) so roughly half of it overlaps the banner above; the
+  // Factsheet/Description margins below are offset to clear/meet it. Shows
+  // the uploaded image (state.uploads.keyArtCapsule) once set, falling back
+  // to the placeholder graphic otherwise — same "Key Art" flip modal as hero.
+  const capsuleUpload = ups.keyArtCapsule;
+  const capsuleHTML = capsuleUpload ? `
+    <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
+      <img src="${capsuleUpload.dataUrl}" alt="Vertical capsule" class="pk-capsule-img">
+    </div>` : `
+    <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
+      <span class="pk-capsule-badge">Placeholder</span>
+      <svg class="pk-capsule-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="2.5" y="4.5" width="19" height="15" rx="2" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="8" cy="10" r="1.6" fill="currentColor"/>
+        <path d="M21 15.5l-4.8-4.8-4 4-2.7-2.7-5.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="pk-capsule-caption">Vertical Capsule<br>748 &times; 896</div>
     </div>`;
 
+  // Sub-section header (bold, no accent) wrapping already-built inner HTML —
+  // renders nothing when there's no content, so a main section's own header
+  // can still show even when every one of its sub-sections is empty.
+  const pkSub = (label, innerHtml) => innerHtml
+    ? `<h3 class="pk-h3">${escHtml(label)}</h3>${innerHtml}`
+    : '';
+
+  // Developer + Location, Website and Email (from the "Factsheet" and
+  // "About" groups in Edit site details, respectively) — each is its own
+  // sub-section now, independently optional. Developer always shows (with a
+  // muted dash placeholder when empty), unlike the other optional sub-sections.
+  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>`;
+  const devLocationValue = ws.basedIn ? `<p class="pk-p">${escHtml(ws.basedIn)}</p>` : '';
+
+  const websiteRaw = ws.website ? ws.website.trim() : '';
+  const websiteDomain = websiteRaw
+    ? escHtml(websiteRaw.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, ''))
+    : '';
+  const websiteHref = websiteRaw ? (/^https?:\/\//i.test(websiteRaw) ? websiteRaw : `https://${websiteRaw}`) : '';
+  const websiteValue = websiteDomain
+    ? `<p class="pk-p"><a href="${escHtml(websiteHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${websiteDomain}</a></p>`
+    : '';
+
+  const emailValue = ws.email ? `<p class="pk-p">${escHtml(ws.email.trim())}</p>` : '';
+
+  // Platforms — synced read-only from the platforms selected elsewhere in
+  // Shipmate (state.activePlatforms), not a separate field on state.webSite.
+  const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
+  const platformsValue = platformNames.length ? `<p class="pk-p">${escHtml(platformNames.join(', '))}</p>` : '';
+
+  const genresValue = (ws.genres && ws.genres.trim()) ? `<p class="pk-p">${escHtml(ws.genres.trim())}</p>` : '';
+
+  // No date set (or cleared via the Clear button in Edit site details) reads
+  // as "Coming soon" rather than being left blank — so this sub-section
+  // always has content.
+  const releaseDateValue = `<p class="pk-p">${_pkFmtReleaseDate(fd.releaseDate) || 'Coming soon'}</p>`;
+
+  const factsheetHTML = `
+    <div class="pk-factsheet pk-mainsection" id="pk-factsheet" onclick="openStorePreviewSection('web','webFactsheet')">
+      <h2 class="pk-h2">Factsheet</h2>
+      ${pkSub('Developer', devNameValue)}
+      ${pkSub('Location', devLocationValue)}
+      ${pkSub('Release Date', releaseDateValue)}
+      ${pkSub('Platforms', platformsValue)}
+      ${pkSub('Genres', genresValue)}
+    </div>`;
+
+  // "Hook" is the Description field synced from Game Details (with its
+  // placeholder fallback), so it always has content.
+  const hookValue = `<p class="pk-p">${descFull}</p>`;
+
+  const aboutGameLines = _pkLines(ws.aboutGame);
+  const aboutGameValue = aboutGameLines.length
+    ? `<p class="pk-p">${aboutGameLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
+    : '';
+
   const historyLines = _pkLines(ws.history);
-  const historyHTML = historyLines.length
-    ? `<h3 class="pk-h3">History</h3><p class="pk-p">${historyLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
+  const historyValue = historyLines.length
+    ? `<p class="pk-p">${historyLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
     : '';
 
   const descriptionHTML = `
-    <div class="pk-description" id="pk-description">
+    <div class="pk-description pk-mainsection" id="pk-description" onclick="openStorePreviewSection('web','webDescription')">
       <h2 class="pk-h2">Description</h2>
-      <p class="pk-p">${descFull}</p>
-      ${historyHTML}
+      ${pkSub('Hook', hookValue)}
+      ${pkSub('About This Game', aboutGameValue)}
+      ${pkSub('History', historyValue)}
     </div>`;
 
-  const videosHTML = fd.trailerUrl ? `
-    <section class="pk-section" id="pk-videos">
-      <h2 class="pk-h2">Videos</h2>
-      <div class="pk-video-frame">
-        <a href="${escHtml(fd.trailerUrl)}" target="_blank" rel="noopener" class="pk-video-link">
-          <span class="pk-video-play">▶</span>
-          <span>${title} — Trailer</span>
-        </a>
-      </div>
-    </section>` : '';
+  // Trailers — sourced from the same "Trailer" asset set in Shipmate's
+  // Assets step (Onboarding tab 2), not a separate webSite field: either a
+  // pasted video URL (fd.trailerUrl) or an uploaded file (ups.trailer, which
+  // only carries name/size in this prototype — no playable source — so it
+  // renders as plain text rather than a link). The URL takes priority if
+  // both happen to be set, since it's the one that's actually clickable.
+  // A YouTube URL embeds a real player; any other URL falls back to a
+  // plain link-out card.
+  const uploadedTrailer = ups.trailer || null;
+  const ytId = _pkYouTubeId(fd.trailerUrl);
+  const trailersValue = fd.trailerUrl ? (ytId ? `
+    <div class="pk-video-frame pk-video-embed">
+      <iframe src="https://www.youtube.com/embed/${ytId}" title="${title} — Trailer"
+              frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen></iframe>
+    </div>` : `
+    <div class="pk-video-frame">
+      <a href="${escHtml(fd.trailerUrl)}" target="_blank" rel="noopener" class="pk-video-link" onclick="event.stopPropagation()">
+        <span class="pk-video-play">▶</span>
+        <span>${title} — Trailer</span>
+      </a>
+    </div>`) : uploadedTrailer ? `
+    <p class="pk-p">🎬 ${escHtml(uploadedTrailer.name)} <span class="pk-muted">(uploaded — preview not available in this prototype)</span></p>` : '';
 
-  const imagesHTML = shots.length ? `
-    <section class="pk-section" id="pk-screenshots">
-      <h2 class="pk-h2">Screenshots</h2>
-      <div class="pk-image-grid">
-        ${shots.map(s => `<div class="pk-image-cell"><img src="${_screenshotSrc(s)}" alt="${escHtml(s.name || 'Screenshot')}"></div>`).join('')}
-      </div>
-    </section>` : '';
+  const screenshotsValue = shots.length ? `
+    <div class="pk-image-grid">
+      ${shots.map(s => `<div class="pk-image-cell"><img src="${_screenshotSrc(s)}" alt="${escHtml(s.name || 'Screenshot')}"></div>`).join('')}
+    </div>` : '';
 
+  const mediaHTML = `
+    <section class="pk-section pk-mainsection" id="pk-media" onclick="openStorePreviewSection('web','webMedia')">
+      <h2 class="pk-h2">Media</h2>
+      ${pkSub('Trailers', trailersValue)}
+      ${pkSub('Screenshots', screenshotsValue)}
+    </section>`;
 
-  const awardsLines = _pkLines(ws.awards);
-  const awardsHTML = awardsLines.length ? `
-    <section class="pk-section" id="pk-awards">
-      <h2 class="pk-h2">Awards &amp; Recognition</h2>
-      <ul class="pk-list">${awardsLines.map(l => `<li>${escHtml(l)}</li>`).join('')}</ul>
-    </section>` : '';
+  const aboutDevLines = _pkLines(ws.aboutDev);
+  const aboutDevValue = aboutDevLines.length
+    ? `<p class="pk-p">${aboutDevLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
+    : '';
 
-  const articleLines = _pkLines(ws.articles);
-  const articlesHTML = articleLines.length ? `
-    <section class="pk-section" id="pk-articles">
-      <h2 class="pk-h2">Selected Articles</h2>
-      <ul class="pk-list">
-        ${articleLines.map(l => {
-          const { label, value } = _pkSplitLabelValue(l);
-          return label
-            ? `<li>"${escHtml(label)}" - ${_pkAutolink(value)}</li>`
-            : `<li>${_pkAutolink(value)}</li>`;
-        }).join('')}
-      </ul>
-    </section>` : '';
-
-  const linkLines = _pkLines(ws.additionalLinks);
-  const linksHTML = linkLines.length ? `
-    <section class="pk-section" id="pk-links">
-      <h2 class="pk-h2">Additional Links</h2>
-      <ul class="pk-list">
-        ${linkLines.map(l => {
-          const { label, value } = _pkSplitLabelValue(l);
-          return `<li>${label ? escHtml(label) + ': ' : ''}${_pkAutolink(value)}</li>`;
-        }).join('')}
-      </ul>
-    </section>` : '';
-
-  const teamLines = _pkLines(ws.team);
-  const teamHTML = teamLines.length ? `
-    <section class="pk-section" id="pk-team">
-      <h2 class="pk-h2">Team &amp; Repeating Collaborators</h2>
-      <ul class="pk-list pk-team-list">
-        ${teamLines.map(l => {
-          const { label, value } = _pkSplitLabelValue(l);
-          return label
-            ? `<li><strong>${escHtml(label)}</strong><br><span class="pk-muted">${_pkAutolink(value)}</span></li>`
-            : `<li>${_pkAutolink(value)}</li>`;
-        }).join('')}
-      </ul>
-    </section>` : '';
-
-  const contactHTML = `
-    <section class="pk-section" id="pk-contact">
-      <h2 class="pk-h2">Contact</h2>
-      <p class="pk-p">
-        ${ws.developer ? escHtml(ws.developer) + '<br>' : ''}
-        ${ws.pressContact ? _pkAutolink(ws.pressContact) + '<br>' : ''}
-        ${ws.businessContact ? _pkAutolink(ws.businessContact) : ''}
-        ${!ws.developer && !ws.pressContact && !ws.businessContact ? '<span class="pk-muted">Add contact details in Edit site details.</span>' : ''}
-      </p>
+  const aboutHTML = `
+    <section class="pk-section pk-mainsection" id="pk-about" onclick="openStorePreviewSection('web','webAbout')">
+      <h2 class="pk-h2">About</h2>
+      ${pkSub('About the Developer', aboutDevValue)}
+      ${pkSub('Website', websiteValue)}
+      ${pkSub('Contact', emailValue)}
     </section>`;
 
   return `
     <div class="web-preview-wrap" style="padding:4px 2px 8px;">
       <p style="margin:0 0 12px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        A press-kit style page for your game, built from your game details and the fields below. Fill in more of the optional sections in <strong>Edit site details</strong> — a section only appears here once it has content.
+        A press-kit style page for your game, built from your game details and the fields below. Factsheet, Description, Media, and About always show — fill in more of the optional fields in <strong>Edit site details</strong> to fill out their sub-sections.
       </p>
 
       <div class="pk-browser-frame">
@@ -2388,18 +2472,17 @@ function buildWebSitePreviewSection() {
         </div>
 
         <div class="pk-page" style="--pk-accent:${accent};">
+          <div class="pk-hero-wrap">
+            ${heroHTML}
+            ${capsuleHTML}
+          </div>
           <div class="pk-main">
             <section class="pk-section pk-fact-desc-grid">
               ${factsheetHTML}
               ${descriptionHTML}
             </section>
-            ${videosHTML}
-            ${imagesHTML}
-            ${awardsHTML}
-            ${articlesHTML}
-            ${linksHTML}
-            ${teamHTML}
-            ${contactHTML}
+            ${mediaHTML}
+            ${aboutHTML}
           </div>
         </div>
       </div>
@@ -2410,26 +2493,99 @@ function buildWebSitePreviewSection() {
     </div>`;
 }
 
+/* Shared field renderer for the "Edit site details" panel and the four
+   focused per-section modals opened by clicking a glow box on the preview
+   website (buildWeb{Factsheet,Description,Media,About}EditSection below) —
+   both presentations use this exact markup, so a field looks identical
+   wherever it's edited. */
+function _wsField(ws, labelText, key, placeholder, opts) {
+  opts = opts || {};
+  const val = escHtml(ws[key] || '');
+  if (opts.textarea) {
+    return `
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
+      <textarea class="qs-input" rows="${opts.rows || 3}" style="width:100%;margin-bottom:16px;resize:vertical;"
+                placeholder="${escHtml(placeholder)}"
+                oninput="setWebSiteField('${key}', this.value)">${val}</textarea>`;
+  }
+  return `
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
+    <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${val}"
+           placeholder="${escHtml(placeholder)}" oninput="setWebSiteField('${key}', this.value)">`;
+}
+
+/* Factsheet fields: Developer, Location, Release Date, Platforms, Genres.
+   Release Date and Platforms are synced read-only from elsewhere in
+   Shipmate, not stored on state.webSite. */
+function _wsFactsheetFieldsHTML(ws, fd) {
+  const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
+  const platformsText = platformNames.length ? platformNames.join(', ') : 'No platforms selected yet';
+  return `
+    ${_wsField(ws, 'Developer', 'developer', 'Your studio name')}
+    ${_wsField(ws, 'Location', 'basedIn', 'Your general location')}
+
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Release date</label>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input type="date" class="qs-input" id="ws-release-date" style="flex:1;"
+             value="${escHtml(fd.releaseDate || '')}"
+             onchange="syncField('releaseDate', this.value)">
+      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;"
+              onclick="syncField('releaseDate', ''); document.getElementById('ws-release-date').value = '';">Clear</button>
+    </div>
+
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Platforms</label>
+    <div class="qs-input" style="width:100%;margin-bottom:2px;background:var(--bg-subtle,#f4f4f5);color:var(--text-muted,#6b7280);cursor:default;">${escHtml(platformsText)}</div>
+    <p class="pk-muted" style="margin:4px 0 16px;font-size:12px;">Set via your platform selection elsewhere in Shipmate.</p>
+
+    ${_wsField(ws, 'Genres', 'genres', 'e.g. Roguelike, Deckbuilder')}`;
+}
+
+/* Description fields: Hook, About This Game, Studio/Game History. */
+function _wsDescriptionFieldsHTML(ws) {
+  return `
+    ${_wsField(ws, 'Hook', 'description', 'Defaults to the Description field in Game Details', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'About This Game', 'aboutGame', 'One paragraph per line — a longer section shown below Description', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'Studio/Game History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}`;
+}
+
+/* Media fields: Trailers, Screenshots. Both are read-only summaries of the
+   same "Trailer"/"Screenshots" assets managed in Shipmate's Assets step
+   (Onboarding tab 2) — "Manage" jumps there via openAssetsFromWebEdit. */
+function _wsMediaFieldsHTML(fd) {
+  const shotsCount = (state.uploads?.screenshots || []).length;
+  const uploadedTrailer = state.uploads?.trailer || null;
+  const trailerSummary = fd.trailerUrl
+    ? 'Trailer URL set'
+    : uploadedTrailer
+      ? `Trailer uploaded: ${uploadedTrailer.name}`
+      : 'No trailer added yet';
+  return `
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailers</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
+      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(trailerSummary)}</span>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit();">Manage ›</button>
+    </div>
+
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
+      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${shotsCount} screenshot${shotsCount === 1 ? '' : 's'} from your uploads shown on the preview.</span>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit();">Manage ›</button>
+    </div>`;
+}
+
+/* About fields: About the Developer, Website, Email. */
+function _wsAboutFieldsHTML(ws) {
+  return `
+    ${_wsField(ws, 'About the Developer', 'aboutDev', 'One paragraph per line — a short bio about your studio', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'Website', 'website', 'yourstudio.com')}
+    ${_wsField(ws, 'Email', 'email', 'hello@yourstudio.com')}`;
+}
+
 function buildWebSiteEditSection() {
+  const fd = state.formData || {};
   const ws = state.webSite || {};
   const accent = ws.accent || '#0EA5A4';
   const swatches = ['#0EA5A4', '#4B7BEC', '#8B5CF6', '#EC4899', '#F59E0B', '#22C55E'];
-
-  const field = (labelText, key, placeholder, opts) => {
-    opts = opts || {};
-    const val = escHtml(ws[key] || '');
-    if (opts.textarea) {
-      return `
-        <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
-        <textarea class="qs-input" rows="${opts.rows || 3}" style="width:100%;margin-bottom:16px;resize:vertical;"
-                  placeholder="${escHtml(placeholder)}"
-                  oninput="setWebSiteField('${key}', this.value)">${val}</textarea>`;
-    }
-    return `
-      <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
-      <input type="text" class="qs-input" style="width:100%;margin-bottom:16px;" value="${val}"
-             placeholder="${escHtml(placeholder)}" oninput="setWebSiteField('${key}', this.value)">`;
-  };
 
   return `
     <div class="qs-section" style="padding:4px 2px;">
@@ -2438,10 +2594,6 @@ function buildWebSiteEditSection() {
       </p>
 
       <div class="pk-edit-group-label">Basics</div>
-      ${field('Headline', 'headline', 'Defaults to your game title')}
-      ${field('Tagline', 'tagline', 'A short hook shown under the title')}
-      ${field('Download button label', 'ctaLabel', 'Download')}
-
       <label class="task-content-label" style="display:block;margin-bottom:8px;">Accent color</label>
       <div style="display:flex;gap:10px;margin-bottom:20px;">
         ${swatches.map(c => `
@@ -2453,26 +2605,132 @@ function buildWebSiteEditSection() {
       </div>
 
       <div class="pk-edit-group-label">Factsheet</div>
-      ${field('Developer / Studio', 'developer', 'Your studio name')}
+      ${_wsFactsheetFieldsHTML(ws, fd)}
 
-      <div class="pk-edit-group-label">Contact</div>
-      ${field('Press contact', 'pressContact', 'press@yourstudio.com')}
-      ${field('Business contact', 'businessContact', 'business@yourstudio.com')}
+      <div class="pk-edit-group-label">Description</div>
+      ${_wsDescriptionFieldsHTML(ws)}
 
-      <div class="pk-edit-group-label">History</div>
-      ${field('Studio / game history', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}
+      <div class="pk-edit-group-label">Media</div>
+      ${_wsMediaFieldsHTML(fd)}
 
-      <div class="pk-edit-group-label">Awards &amp; Recognition</div>
-      ${field('Awards', 'awards', 'One per line, e.g. "Best Indie Game — IndieCade 2024"', { textarea: true, rows: 3 })}
+      <div class="pk-edit-group-label">About</div>
+      ${_wsAboutFieldsHTML(ws)}
+    </div>`;
+}
 
-      <div class="pk-edit-group-label">Selected Articles</div>
-      ${field('Articles', 'articles', 'One per line: "Quote or title - Publication, https://…"', { textarea: true, rows: 3 })}
+/* Focused edit modals opened by clicking a glow box around one of the
+   preview website's four main sections — same field markup as the matching
+   group in buildWebSiteEditSection (via the shared _ws*FieldsHTML helpers
+   above), just without the other groups. The flip modal's own header shows
+   the section name (see FLIP_LABELS), so these don't repeat a group label. */
+function buildWebFactsheetEditSection() {
+  const fd = state.formData || {};
+  const ws = state.webSite || {};
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Edit the Factsheet fields shown on your preview website.
+      </p>
+      ${_wsFactsheetFieldsHTML(ws, fd)}
+    </div>`;
+}
 
-      <div class="pk-edit-group-label">Additional Links</div>
-      ${field('Links', 'additionalLinks', 'One per line: "Label: https://…"', { textarea: true, rows: 3 })}
+function buildWebDescriptionEditSection() {
+  const ws = state.webSite || {};
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Edit the Description fields shown on your preview website.
+      </p>
+      ${_wsDescriptionFieldsHTML(ws)}
+    </div>`;
+}
 
-      <div class="pk-edit-group-label">Team &amp; Repeating Collaborators</div>
-      ${field('Team', 'team', 'One per line: "Name - Role, https://…"', { textarea: true, rows: 3 })}
+function buildWebMediaEditSection() {
+  const fd = state.formData || {};
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Edit the Media fields shown on your preview website.
+      </p>
+      ${_wsMediaFieldsHTML(fd)}
+    </div>`;
+}
+
+function buildWebAboutEditSection() {
+  const ws = state.webSite || {};
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Edit the About fields shown on your preview website.
+      </p>
+      ${_wsAboutFieldsHTML(ws)}
+    </div>`;
+}
+
+/* Key Art upload row — shared by the Vertical Capsule and Hero Banner
+   sub-sections below. Presentation mirrors the Screenshots/Trailer dropzones
+   in the Assets tab (see buildAssetsTab's .asset-dropzone markup), but with a
+   live dataURL preview once uploaded (like state.uploads.featureGraphic /
+   appIcon), since — unlike the Trailer upload — this is always an image.
+   `kind` is 'Capsule' or 'Hero', matching the handleKeyArt{kind}Drop/Files
+   and removeKeyArt{kind} functions in app.js. Uploading calls
+   reRenderStepModal(), so this modal (and the preview website behind it)
+   always reflect state.uploads.keyArtCapsule/keyArtHero fresh — no separate
+   DOM-toggle hydration needed here.
+
+   Both the empty dropzone and the uploaded-image preview sit inside a box
+   sized to that asset's real aspect ratio (see .pk-keyart-box in style.css —
+   748×896 for the capsule, 3840×1240 for the hero), so the box itself shows
+   what shape/crop the upload will end up as, before and after uploading. */
+function _wsKeyArtUploadHTML(kind, hint, upload) {
+  const dropId   = `ws-keyart-${kind.toLowerCase()}-dropzone`;
+  const inputId  = `ws-keyart-${kind.toLowerCase()}-input`;
+  const boxClass = `pk-keyart-box pk-keyart-box--${kind.toLowerCase()}`;
+  if (upload) {
+    return `
+      <div style="margin-bottom:20px;">
+        <div class="${boxClass}">
+          <img src="${upload.dataUrl}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
+        </div>
+        <div class="feature-preview-meta">
+          <span class="feature-preview-name">${escHtml(upload.name)}</span>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="removeKeyArt${kind}()">Remove</button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="asset-dropzone ${boxClass}" id="${dropId}" style="margin-bottom:20px;"
+         onclick="document.getElementById('${inputId}').click()"
+         ondragover="event.preventDefault(); this.classList.add('is-over')"
+         ondragleave="this.classList.remove('is-over')"
+         ondrop="handleKeyArt${kind}Drop(event); this.classList.remove('is-over')">
+      <div class="asset-dropzone-icon">↑</div>
+      <div class="asset-dropzone-label">Drop an image here or click to upload</div>
+      <div class="asset-dropzone-hint">${hint}</div>
+      <input type="file" id="${inputId}" accept="image/*" style="display:none"
+             onchange="handleKeyArt${kind}Files(this.files); this.value=''">
+    </div>`;
+}
+
+/* Key Art fields: Vertical Capsule, Hero Banner — the placeholder graphics
+   at the top of the preview website (see heroHTML/capsuleHTML in
+   buildWebSitePreviewSection), opened by clicking either glow box. */
+function buildWebKeyArtEditSection() {
+  const ups = state.uploads || {};
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Upload the key art shown at the top of your preview website.
+      </p>
+
+      <div class="pk-edit-group-label">Vertical Capsule</div>
+      <div class="asset-guidance">Recommended 748 &times; 896 (portrait).</div>
+      ${_wsKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.keyArtCapsule)}
+
+      <div class="pk-edit-group-label">Hero Banner</div>
+      <div class="asset-guidance">Recommended 3840 &times; 1240 (widescreen).</div>
+      ${_wsKeyArtUploadHTML('Hero', 'PNG or JPG, up to ~5MB', ups.keyArtHero)}
     </div>`;
 }
 

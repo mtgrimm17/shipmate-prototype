@@ -4654,6 +4654,32 @@ select.form-input {
 }
 .feature-preview-name { font-size: 12px; color: var(--text-dim); }
 
+/* Key Art upload boxes (Vertical Capsule / Hero Banner in the "Key Art" flip
+   modal — see _wsKeyArtUploadHTML in render.js) — both the empty dropzone
+   and the uploaded-image preview are sized to the real asset's aspect ratio
+   (748×896 / 3840×1240), so the box shows the actual shape/crop rather than
+   a generic rectangle. Capsule is capped to the same 220px width as the
+   on-page .pk-capsule so the preview here matches what actually renders. */
+.pk-keyart-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.pk-keyart-box--capsule { width: 220px; aspect-ratio: 748 / 896; }
+.pk-keyart-box--hero    { width: 100%; aspect-ratio: 3840 / 1240; }
+.asset-dropzone.pk-keyart-box--capsule,
+.asset-dropzone.pk-keyart-box--hero {
+  padding: 12px;
+}
+.pk-keyart-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 
 /* ============================================================
    TRAILER
@@ -5739,28 +5765,175 @@ select.form-input {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
+/* Wraps the hero + the capsule that overlaps it, so the capsule's absolute
+   position (below) resolves against the hero's own box instead of the
+   whole page. */
+.pk-hero-wrap { position: relative; }
+
+/* Placeholder hero banner — stands in for a real banner image until one is
+   uploaded via the "Key Art" flip modal (see .pk-hero-img). A diagonal-stripe
+   fill in the site's accent color plus a muted image icon + caption reads
+   clearly as "swap this for real art". Title/CTA were pulled back out of
+   here — see .pk-capsule and the Factsheet/Description margins below for how
+   the layout now reads under the banner. */
+.pk-hero {
+  position: relative;
+  aspect-ratio: 3840 / 1240;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  background-color: var(--pk-accent, #0EA5A4);
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.16) 0 12px, rgba(255,255,255,0.05) 12px 24px);
+}
+/* Centers the icon + caption together as a group (same approach as
+   .pk-capsule's flex-column centering), rather than positioning each
+   separately — see .pk-hero-caption below for the "similar to the vertical
+   capsule" text treatment. */
+.pk-hero-icon-wrap {
+  position: absolute; top: 46%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.pk-hero-icon { color: rgba(255,255,255,0.38); }
+.pk-hero-caption {
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85);
+  text-align: center; line-height: 1.5;
+}
+.pk-hero-badge {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.9);
+  padding: 4px 8px; border-radius: 4px;
+}
+.pk-hero-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0) 65%);
+}
+/* Uploaded hero banner image (state.uploads.keyArtHero) — fills the same
+   box the placeholder graphic used, cropped to match. */
+.pk-hero-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+/* Placeholder vertical capsule — Steam-style cover art (748×896), sized to
+   match the Factsheet column below it (same width as the accent underline
+   under the "Factsheet" heading). Pinned to the bottom of .pk-hero-wrap and
+   pulled down by half its own height so it straddles the hero/main boundary
+   — the Factsheet margin-top below clears its bottom edge, and the
+   Description margin-top pulls that column up to start flush under the
+   hero instead (it isn't sitting under the capsule, so it can). */
+.pk-capsule {
+  position: absolute;
+  left: 24px;
+  bottom: -132px;
+  z-index: 3;
+  width: 220px;
+  aspect-ratio: 748 / 896;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background-color: var(--pk-accent, #0EA5A4);
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.16) 0 12px, rgba(255,255,255,0.05) 12px 24px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+}
+.pk-capsule-badge {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.9);
+  padding: 3px 7px; border-radius: 4px;
+}
+.pk-capsule-icon { color: rgba(255,255,255,0.4); }
+.pk-capsule-caption {
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85);
+  text-align: center; line-height: 1.5;
+}
+/* Uploaded vertical capsule image (state.uploads.keyArtCapsule) — fills the
+   same box the placeholder graphic used, cropped to match. */
+.pk-capsule-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
 .pk-main { padding: 22px 24px 32px; }
 .pk-section { margin-bottom: 30px; }
 .pk-section:last-child { margin-bottom: 0; }
 
 .pk-fact-desc-grid { display: grid; grid-template-columns: 220px 1fr; gap: 32px; }
+/* Factsheet sits below the capsule (which hangs 132px below the hero), so it
+   needs enough top margin to clear it — 120px leaves a 10px buffer under the
+   capsule. Description isn't under the capsule, so it rises independently;
+   its margin is set to leave that same 10px buffer under the hero instead
+   (cancels .pk-main's 22px top padding, then backs off by the buffer).
+   Media and About aren't part of this grid — they flow normally below it. */
+.pk-factsheet { margin-top: 120px; }
+.pk-description { margin-top: -12px; }
+
+@keyframes pk-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pk-accent, #0EA5A4) 35%, transparent); }
+  50%       { box-shadow: 0 0 0 7px color-mix(in srgb, var(--pk-accent, #0EA5A4) 0%, transparent); }
+}
+/* Each of the four main sections (Factsheet, Description, Media, About) sits
+   in its own glowing card — an accent-colored pulsing box-shadow ring,
+   matching the pulsing "Answer Content Questions" / "Select Screenshots" /
+   "Answer Business Questions" / "Answer Data Collection Questions" action
+   buttons on the App Store Product Page Preview (see .spp-section-btn and
+   @keyframes spp-pulse). Clicking a box (see the onclick in
+   buildWebSitePreviewSection) flips the card to a focused modal for just
+   that section's fields — cursor:pointer signals that. */
+.pk-mainsection {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--pk-accent, #0EA5A4) 30%, transparent);
+  animation: pk-glow-pulse 2.4s ease-in-out infinite;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.pk-mainsection:hover { transform: translateY(-1px); }
+
+/* Same glow-box treatment for the placeholder/uploaded hero banner and
+   vertical capsule (clicking either opens the "Key Art" flip modal — see
+   the onclick in buildWebSitePreviewSection). Split into two animations
+   because .pk-capsule already carries its own static drop-shadow for
+   elevation — box-shadow isn't additive across separate rules, so the
+   capsule's pulse keyframes fold that shadow in alongside the ring so it
+   doesn't flicker out mid-pulse; .pk-hero has no such shadow to preserve. */
+.pk-hero.pk-glowbox,
+.pk-capsule.pk-glowbox {
+  border: 1px solid color-mix(in srgb, var(--pk-accent, #0EA5A4) 30%, transparent);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.pk-hero.pk-glowbox:hover,
+.pk-capsule.pk-glowbox:hover { transform: translateY(-1px); }
+.pk-hero.pk-glowbox { animation: pk-glow-pulse 2.4s ease-in-out infinite; }
+.pk-capsule.pk-glowbox { animation: pk-glow-pulse-capsule 2.4s ease-in-out infinite; }
+
+@keyframes pk-glow-pulse-capsule {
+  0%, 100% { box-shadow: 0 10px 24px rgba(0,0,0,0.25), 0 0 0 0 color-mix(in srgb, var(--pk-accent, #0EA5A4) 35%, transparent); }
+  50%       { box-shadow: 0 10px 24px rgba(0,0,0,0.25), 0 0 0 7px color-mix(in srgb, var(--pk-accent, #0EA5A4) 0%, transparent); }
+}
 
 .pk-h2 {
   font-size: 15px; font-weight: 700; color: #111; margin: 0 0 12px;
   padding-bottom: 6px; border-bottom: 2px solid var(--pk-accent, #e5e7eb);
 }
 .pk-h3 { font-size: 13px; font-weight: 700; color: #111; margin: 16px 0 6px; }
+.pk-mainsection .pk-h2 + .pk-h3 { margin-top: 0; }
 .pk-p { font-size: 13px; line-height: 1.65; color: #374151; margin: 0 0 10px; }
 .pk-p:last-child { margin-bottom: 0; }
 .pk-muted { color: #9ca3af; }
 
-.pk-fact-grid { display: grid; grid-template-columns: 108px 1fr; gap: 7px 10px; font-size: 12.5px; }
-.pk-fact-label { color: #6b7280; font-weight: 600; }
-.pk-fact-value { color: #111; }
-.pk-fact-value a { color: #2563eb; text-decoration: none; }
-.pk-fact-value a:hover { text-decoration: underline; }
-.pk-fact-empty { color: #d1d5db; }
-
+.pk-video-frame + .pk-video-frame { margin-top: 10px; }
 .pk-video-link {
   display: flex; align-items: center; gap: 10px; background: #111; color: #fff;
   padding: 14px 18px; border-radius: 8px; text-decoration: none; font-size: 13px;
@@ -5772,13 +5945,16 @@ select.form-input {
   font-size: 11px;
 }
 
+/* Embedded YouTube player for a YouTube trailer URL — 16:9, capped width so
+   it doesn't stretch across the whole (full-width) Media section. */
+.pk-video-embed { max-width: 480px; }
+.pk-video-embed iframe {
+  display: block; width: 100%; aspect-ratio: 16 / 9; height: auto;
+  border: 0; border-radius: 8px;
+}
+
 .pk-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .pk-image-cell img { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; display: block; }
-
-.pk-list { margin: 0; padding-left: 18px; font-size: 13px; color: #374151; line-height: 1.75; }
-.pk-list a { color: #2563eb; text-decoration: none; }
-.pk-list a:hover { text-decoration: underline; }
-.pk-team-list { list-style: none; padding-left: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; font-size: 13px; }
 
 @media (max-width: 640px) {
   .pk-fact-desc-grid { grid-template-columns: 1fr; }
