@@ -8,8 +8,7 @@ Assigned work is up top so we can glance at who's on what. Pull anything from **
 - **[Adam]** Add Key Art section in some place other than Onboarding
 - **[Adam]** Add scraping for key art from Steam pages
 - **[Jaco]** Localize product page — incl. addressing translation errors + self-auditing translations to minimize user input ([spec](https://docs.google.com/document/d/1O_XMTmVzm405dq3_CGXnN_bsk114YU-v02EAQY6YH2U/edit?tab=t.0#heading=h.gflkx08bf3pq))
-- **[Mark]** Write PRD for headless bot authentication (do first — refine thinking before the official spec)
-- **[Mark]** Add auth to the prototype (follows the PRD above)
+- **[Mark]** Write PRD for headless bot authentication (next — prototype auth is done; use it to refine thinking before the official spec)
 
 ## Unassigned
 
@@ -33,4 +32,5 @@ Assigned work is up top so we can glance at who's on what. Pull anything from **
 
 _(move completed tasks here with the assignee kept, newest at top)_
 
+- **[Mark]** Add auth to the prototype — three-state platform card (signed out / signed in / linked), faked sign-in + Linked App, size-matched flip (v2.43)
 - **[Adam]** Patch up IARC presentation in the Google workflow

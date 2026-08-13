@@ -1425,6 +1425,95 @@ function selectLinkedApp(pid, val) {
   state.platformLinkedApp[pid] = val;
 }
 
+
+/* ── Connect flow (prototype, on-card + realistic sign-in modal) ──────────────
+   Connecting is optional up front — cards start on the steps face with an
+   alert-red cog. The cog flips to the connect face, which walks three short
+   stages: install → sign in (opens the browser-framed sign-in modal) → add.
+   Completing "Add" links the bot and flips back to steps. All faked. */
+
+function _setConnectStage(pid, stage) {
+  if (!state.connectStage) state.connectStage = {};
+  state.connectStage[pid] = stage;
+}
+
+// Stage 1 → 2: "Install extension" (sticky global; re-render the connect face).
+function connectInstall(pid) {
+  state.extensionInstalled = true;
+  _setConnectStage(pid, 'signin');
+  _rerenderPlatformCard(pid);
+}
+
+// Open the browser-framed sign-in modal (simulates the real portal via extension).
+function openAscLogin(pid) {
+  state.ascLogin = pid;
+  if (pid === 'android') { state.googleView = 'choose'; state.googleAccount = null; } // reset OAuth chooser
+  renderAscLogin();
+  const overlay = document.getElementById('connect-overlay');
+  if (overlay) { overlay.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  requestAnimationFrame(() => { const u = document.getElementById('asc-user'); if (u) u.focus(); });
+}
+
+/* Google OAuth sub-flow: account chooser → consent. */
+function googleSelectAccount(email) {
+  state.googleAccount = email;
+  state.googleView = 'consent';
+  renderAscLogin();
+}
+function googleUseAnother() {
+  state.googleView = 'add';
+  renderAscLogin();
+  requestAnimationFrame(() => { const e = document.getElementById('gp-email'); if (e) e.focus(); });
+}
+function googleAddNext() {
+  const e = document.getElementById('gp-email');
+  state.googleAccount = (e && e.value.trim()) || 'you@studio.com';
+  state.googleView = 'consent';
+  renderAscLogin();
+}
+// "Allow" on the consent screen → grant, close modal, advance to the add step.
+function googleAllow(pid) {
+  state.connectAccountEmail = state.connectAccountEmail || {};
+  state.connectAccountEmail[pid] = state.googleAccount || shipmateBotEmail();
+  closeAscLogin();
+  _setConnectStage(pid, 'confirm');
+  _rerenderPlatformCard(pid);
+}
+
+function closeAscLogin() {
+  state.ascLogin = null;
+  const overlay = document.getElementById('connect-overlay');
+  if (overlay) { overlay.classList.add('hidden'); document.body.style.overflow = ''; }
+}
+
+function connectOverlayClick(e) {
+  if (e.target === document.getElementById('connect-overlay')) closeAscLogin();
+}
+
+function renderAscLogin() {
+  const m = document.getElementById('connect-modal');
+  if (m) m.innerHTML = buildAscLoginModal();
+}
+
+// Sign-in submitted → close modal, advance the connect face to the "add" stage.
+function ascLoginSubmit(pid) {
+  const u = document.getElementById('asc-user');
+  state.connectAccountEmail = state.connectAccountEmail || {};
+  state.connectAccountEmail[pid] = (u && u.value.trim()) || '';
+  closeAscLogin();
+  _setConnectStage(pid, 'confirm');
+  _rerenderPlatformCard(pid);
+}
+
+// Stage 3: "Add & connect" — link the bot and flip the card back to steps.
+function connectAdd(pid) {
+  if (!state.platformAuth) state.platformAuth = {};
+  const email = state.connectAccountEmail?.[pid] || shipmateBotEmail();
+  state.platformAuth[pid] = { loggedIn: true, username: email };
+  if (state.connectStage) delete state.connectStage[pid];
+  _flipPlatformCard(pid, 'steps', 1); // connect face → steps (now connected)
+}
+
 // Re-render a single active card in place (no flip animation).
 function _rerenderPlatformCard(pid) {
   const card = document.getElementById('active-card-' + pid);

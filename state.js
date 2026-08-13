@@ -841,6 +841,35 @@ const GENERIC_LOGIN = {
 };
 function platformLoginConfig(pid) { return PLATFORM_LOGIN[pid] || GENERIC_LOGIN; }
 
+/* ── Connect flow (prototype onboarding wizard) ──────────────────────────────
+   Per-platform account-connection flow used by the Connect wizard. Mirrors the
+   headless-auth model: install the extension, sign in on the *real* portal
+   (credentials only where the platform needs them), approve Shipmate's bot
+   account, then Shipmate provisions a key / grant. Google Play uses OAuth and
+   skips the extension. All faked — nothing is stored or sent. */
+const CONNECT_FLOWS = {
+  steam:   { needsExtension: true,  auth: 'password', twofa: 'Steam Guard code',        role: 'Partner',          mintsKey: false, oauth: false },
+  ios:     { needsExtension: true,  auth: 'apple',    twofa: 'Apple verification code', role: 'App Manager',      mintsKey: true,  oauth: false },
+  android: { needsExtension: false, auth: 'google',   twofa: null,                      role: 'Service account',  mintsKey: false, oauth: true  },
+};
+function connectFlowConfig(pid) { return CONNECT_FLOWS[pid] || CONNECT_FLOWS.steam; }
+
+// Ordered step ids for a platform's connect wizard. The extension step drops
+// out once the extension is installed; Google Play uses a single OAuth step.
+function connectStepList(pid) {
+  const f = connectFlowConfig(pid);
+  if (f.oauth) return ['intro', 'google', 'done'];
+  const s = ['intro'];
+  if (f.needsExtension && !state.extensionInstalled) s.push('extension');
+  s.push('login', 'approve');
+  if (f.mintsKey) s.push('mint');
+  s.push('done');
+  return s;
+}
+
+// The Shipmate bot account address shown during the approve step.
+function shipmateBotEmail() { return 'shipmate-7864124@sound.games'; }
+
 /* ── Helpers ─────────────────────────────────────────── */
 
 function makeEmptyPlatformSteps() {
@@ -2188,6 +2217,20 @@ const state = {
   //   undefined / { loggedIn:false } → card shows the credentials (login) face
   //   { loggedIn:true, username }    → sign-in persists for the session
   platformAuth: {},
+
+  // Connect-face stage per pid: 'intro' | 'signin' | 'confirm'. Absent = default
+  // (intro, or signin once the extension is installed).
+  connectStage: {},
+  // Which platform's browser-framed sign-in modal is open (pid) or null.
+  ascLogin: null,
+  // Google OAuth sub-view for the Play Console flow: 'choose' | 'add' | 'consent'.
+  googleView: 'choose',
+  googleAccount: null,
+  // Captured (faked) sign-in email per pid, used to label the connected account.
+  connectAccountEmail: {},
+  // Simulated "is the Shipmate browser extension installed?" — global, sticky
+  // for the session so only the first connect prompts to install it.
+  extensionInstalled: false,
 
   // Which face each active card is showing: 'steps' | 'account'.
   // Default when absent: 'steps' if signed in, else 'account'.

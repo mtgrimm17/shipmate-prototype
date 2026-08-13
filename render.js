@@ -1465,14 +1465,17 @@ function buildReleasePills(pid) {
    faked — any non-empty pair is accepted and nothing is stored or transmitted.
    The ACCOUNT face is pinned to the STEPS face height so flips are size-stable. */
 
-// True when the card should currently render its ACCOUNT face instead of STEPS.
-// Web has no developer-portal credentials step, so it never shows the login face.
+// Whether a platform's developer account is connected (Shipmate bot linked).
+function isPlatformConnected(pid) { return !!state.platformAuth?.[pid]?.loggedIn; }
+
+// Cards default to the STEPS face whether or not the platform is connected —
+// connection is optional up front (you can fill steps first, "local save only").
+// The ACCOUNT/connect face only shows when the user flips there via the cog.
+// Web has no developer-portal credentials, so it never shows the connect face.
 function showAccountFace(pid) {
   if (pid === 'web') return false;
   if (!state.activePlatforms.has(pid)) return false;
-  const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
-  const face = state.platformFace?.[pid] || (loggedIn ? 'steps' : 'account');
-  return !loggedIn || face === 'account';
+  return state.platformFace?.[pid] === 'account';
 }
 
 function _powerBtn(pid) {
@@ -1487,9 +1490,12 @@ function _powerBtn(pid) {
     </button>`;
 }
 
-function _gearBtn(onclick, label, active) {
+function _gearBtn(onclick, label, active, alert) {
+  const cls = 'active-card-settings'
+    + (active ? ' active-card-settings--active' : '')
+    + (alert ? ' active-card-settings--alert' : '');
   return `
-    <button class="active-card-settings${active ? ' active-card-settings--active' : ''}" type="button"
+    <button class="${cls}" type="button"
             onclick="event.stopPropagation();${onclick}"
             title="${label}" aria-label="${label}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1507,15 +1513,18 @@ function _gearBtn(onclick, label, active) {
 function _platformHeadActions(pid, face) {
   // Web has no developer-portal login, so its header is power-only (no gear).
   if (pid === 'web') return `<div class="active-card-actions">${_powerBtn(pid)}</div>`;
-  const loggedIn = !!state.platformAuth?.[pid]?.loggedIn;
+  const connected = isPlatformConnected(pid);
   let gear;
   if (face === 'steps') {
-    gear = _gearBtn(`platformGearFromSteps('${pid}')`, 'Account settings');
-  } else if (loggedIn) {
+    // Cog turns alert-red until connected; either way it flips to the account/connect face.
+    gear = _gearBtn(`platformGearFromSteps('${pid}')`,
+      connected ? 'Account settings' : 'Connect account to publish', false, !connected);
+  } else if (connected) {
     // Highlighted to signal you're in a temporary, reversible settings view.
     gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
   } else {
-    gear = _gearBtn(`highlightLoginFields('${pid}')`, 'Highlight sign-in fields');
+    // On the connect face; cog flips back to steps (connecting is optional up front).
+    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
   }
   // Settings (gear) on the left, power on the right.
   return `<div class="active-card-actions">${gear}${_powerBtn(pid)}</div>`;
@@ -1535,26 +1544,187 @@ function platformCardHead(pid, face) {
     </div>`;
 }
 
-/* STATE 1 — Signed out: prompt for developer credentials. Prototype accepts any
-   input (including blank), so the form is novalidate to suppress the browser's
-   native "please include an '@'" email check. */
-function _accountFormHTML(pid, cfg, savedUser) {
+/* Connect face — the concise, on-card connection flow shown when the user flips
+   an unconnected platform card. Three short stages:
+     intro   → what the extension does + Install
+     signin  → sign in on the real portal (opens the larger ASC modal)
+     confirm → confirm the bot's access + Add
+   Credentials never touch Shipmate; the extension hands off to the real site. */
+function _connectStage(pid) {
+  return state.connectStage?.[pid] || (state.extensionInstalled ? 'signin' : 'intro');
+}
+function _connectFaceHTML(pid, cfg) {
+  const f     = connectFlowConfig(pid);
+  const stage = _connectStage(pid);
+  const bot   = shipmateBotEmail();
+
+  if (stage === 'intro') {
+    return `
+      <div class="connect-face">
+        <div class="connect-face-lead">Link a Shipmate bot to publish to <b>${escHtml(cfg.portal)}</b> for you. You sign in once on the real site — we never see your password.</div>
+        <div class="cf-extrow">
+          <div class="cf-ext-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2H7a1 1 0 0 0-1 1v3H4a2 2 0 0 0 0 4h2v3a1 1 0 0 0 1 1h3v-2a2 2 0 0 1 4 0v2h3a1 1 0 0 0 1-1v-3h2a2 2 0 0 0 0-4h-2V8a1 1 0 0 0-1-1z"/></svg></div>
+          <div class="cf-ext-txt"><b>Shipmate extension</b><span>Links your account, in your browser</span></div>
+        </div>
+        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension</button>
+      </div>`;
+  }
+  if (stage === 'signin') {
+    return `
+      <div class="connect-face">
+        <div class="connect-face-lead">Extension ready. Sign in on ${escHtml(cfg.portal)} to link your account.</div>
+        <button class="platform-login-btn" type="button" onclick="openAscLogin('${pid}')">Sign in via extension</button>
+        <div class="platform-login-hint">Opens the real ${escHtml(cfg.portal)} in your browser.</div>
+      </div>`;
+  }
+  // confirm
   return `
-    <form class="platform-login" novalidate onsubmit="submitPlatformLogin('${pid}');return false;">
-      <label class="platform-login-field">
-        <span class="platform-login-label">${escHtml(cfg.userLabel)}</span>
-        <input class="platform-login-input" id="login-user-${pid}" type="${cfg.userType}"
-               value="${escHtml(savedUser)}" placeholder="${escHtml(cfg.userPlaceholder)}"
-               autocomplete="off" spellcheck="false">
-      </label>
-      <label class="platform-login-field">
-        <span class="platform-login-label">Password</span>
-        <input class="platform-login-input" id="login-pass-${pid}" type="password"
-               placeholder="••••••••" autocomplete="off">
-      </label>
-      <button class="platform-login-btn" type="submit">Sign In</button>
-      <div class="platform-login-hint">Credentials are encrypted and never shared.</div>
-    </form>`;
+    <div class="connect-face">
+      <div class="connect-face-lead">Add Shipmate's bot to your ${escHtml(cfg.portal)} team with <b>${escHtml(f.role)}</b> access:</div>
+      <div class="cf-botrow">
+        <div class="cf-bot-email">${bot}</div>
+        <div class="cf-bot-role">${escHtml(f.role)} &middot; least privilege</div>
+      </div>
+      <button class="platform-login-btn" type="button" onclick="connectAdd('${pid}')">Add &amp; connect</button>
+    </div>`;
+}
+
+// URL shown in the simulated browser chrome of the sign-in modal.
+function connectPortalUrl(pid) {
+  return ({ ios: 'appstoreconnect.apple.com', steam: 'partner.steamgames.com', android: 'play.google.com/console' })[pid]
+    || 'developer.portal';
+}
+
+/* Larger, browser-framed sign-in modal — simulates signing in on the real portal
+   via the extension. Rendered into #connect-modal. */
+function buildAscLoginModal() {
+  const pid = state.ascLogin;
+  if (!pid) return '';
+  const cfg = platformLoginConfig(pid);
+  return `
+    <div class="webview">
+      <div class="webview-chrome">
+        <div class="wv-dots"><span></span><span></span><span></span></div>
+        <div class="wv-url"><svg class="wv-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>${connectPortalUrl(pid)}</div>
+        <button class="wv-x" onclick="closeAscLogin()" aria-label="Close">&times;</button>
+      </div>
+      ${_signinPageHTML(pid, cfg)}
+    </div>`;
+}
+
+// Platform-themed sign-in page rendered inside the browser frame.
+function _signinPageHTML(pid, cfg) {
+  if (pid === 'steam')   return _steamSigninPage(cfg);
+  if (pid === 'android') return _googleSigninPage(cfg);
+  return _appleSigninPage(cfg);
+}
+
+function _appleSigninPage(cfg) {
+  const logo = `<svg width="34" height="34" viewBox="0 0 24 24" fill="#111"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`;
+  return `
+    <div class="signin-page sp-apple">
+      <div class="sp-logo">${logo}</div>
+      <div class="sp-title">Sign in to ${escHtml(cfg.portal)}</div>
+      <form class="sp-form" onsubmit="ascLoginSubmit('ios');return false;">
+        <input class="sp-input" id="asc-user" type="text" placeholder="Apple Account" autocomplete="off" spellcheck="false">
+        <input class="sp-input" id="asc-pass" type="password" placeholder="Password" autocomplete="off">
+        <input class="sp-input" id="asc-2fa" type="text" placeholder="Verification code" autocomplete="off">
+        <div class="sp-hint">Enter the 6-digit code sent to your trusted devices.</div>
+        <button class="sp-btn" type="submit">Sign In</button>
+      </form>
+      <div class="sp-foot">Simulated ${escHtml(cfg.portal)} — Shipmate can't read anything you enter here.</div>
+    </div>`;
+}
+
+function _steamSigninPage(cfg) {
+  const logo = `<svg width="42" height="42" viewBox="0 0 24 24" fill="#fff"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>`;
+  return `
+    <div class="signin-page sp-steam">
+      <div class="sp-logo">${logo}</div>
+      <div class="sp-title">Sign in</div>
+      <div class="sp-sub">Sign in with account name</div>
+      <form class="sp-form" onsubmit="ascLoginSubmit('steam');return false;">
+        <input class="sp-input" id="asc-user" type="text" placeholder="Account name" autocomplete="off" spellcheck="false">
+        <input class="sp-input" id="asc-pass" type="password" placeholder="Password" autocomplete="off">
+        <input class="sp-input" id="asc-2fa" type="text" placeholder="Steam Guard code" autocomplete="off">
+        <button class="sp-btn" type="submit">Sign in</button>
+      </form>
+      <div class="sp-foot">Simulated Steamworks — Shipmate can't read anything you enter here.</div>
+    </div>`;
+}
+
+const GOOGLE_LOGO = `<svg width="34" height="34" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+
+// Faked Google accounts shown in the account chooser.
+const GOOGLE_ACCOUNTS = [
+  { email: 'mark@sound.games',       name: 'Mark Grimm',       initial: 'M', color: '#5b9dff' },
+  { email: 'dev@nebuladrift.com',    name: 'Nebula Drift Dev',  initial: 'N', color: '#34a853' },
+];
+
+/* Authentic Google OAuth: account chooser → consent. state.googleView drives it. */
+function _googleSigninPage(cfg) {
+  const view = state.googleView || 'choose';
+  if (view === 'add')     return _googleAddAccount();
+  if (view === 'consent') return _googleConsent();
+  return _googleChooser();
+}
+
+function _googleChooser() {
+  const rows = GOOGLE_ACCOUNTS.map(a => `
+    <button class="gp-acct" type="button" onclick="googleSelectAccount('${a.email}')">
+      <span class="gp-ava" style="background:${a.color}">${a.initial}</span>
+      <span class="gp-acct-txt"><span class="gp-acct-name">${escHtml(a.name)}</span><span class="gp-acct-email">${escHtml(a.email)}</span></span>
+    </button>`).join('');
+  return `
+    <div class="signin-page sp-google">
+      <div class="sp-logo">${GOOGLE_LOGO}</div>
+      <div class="sp-title">Choose an account</div>
+      <div class="sp-sub">to continue to <b>Shipmate</b></div>
+      <div class="gp-accts">
+        ${rows}
+        <button class="gp-acct" type="button" onclick="googleUseAnother()">
+          <span class="gp-ava gp-ava--add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="gp-acct-txt"><span class="gp-acct-name">Use another account</span></span>
+        </button>
+      </div>
+      <div class="sp-foot">Simulated Google sign-in — Shipmate can't read anything you enter here.</div>
+    </div>`;
+}
+
+function _googleAddAccount() {
+  return `
+    <div class="signin-page sp-google">
+      <div class="sp-logo">${GOOGLE_LOGO}</div>
+      <div class="sp-title">Sign in</div>
+      <div class="sp-sub">to continue to <b>Shipmate</b></div>
+      <form class="sp-form" onsubmit="googleAddNext();return false;">
+        <input class="sp-input" id="gp-email" type="text" placeholder="Email or phone" autocomplete="off" spellcheck="false">
+        <button class="sp-btn" type="submit">Next</button>
+      </form>
+      <div class="sp-foot">Simulated Google sign-in — Shipmate can't read anything you enter here.</div>
+    </div>`;
+}
+
+function _googleConsent() {
+  const email = state.googleAccount || GOOGLE_ACCOUNTS[0].email;
+  const initial = (email[0] || 'S').toUpperCase();
+  return `
+    <div class="signin-page sp-google gp-consent">
+      <div class="sp-logo">${GOOGLE_LOGO}</div>
+      <div class="gp-consent-title"><b>Shipmate</b> wants to access your Google Account</div>
+      <div class="gp-acct-chip"><span class="gp-ava-sm">${initial}</span>${escHtml(email)}</div>
+      <div class="gp-scope-label">This will allow Shipmate to:</div>
+      <ul class="gp-scopes">
+        <li>Manage your Google Play Console apps</li>
+        <li>Edit store listings and releases</li>
+        <li>Submit the Data Safety form on your behalf</li>
+      </ul>
+      <div class="gp-consent-note">Make sure you trust Shipmate. You can remove access anytime in your Google Account.</div>
+      <div class="gp-consent-actions">
+        <button class="gp-btn-text" type="button" onclick="closeAscLogin()">Cancel</button>
+        <button class="sp-btn gp-allow" type="button" onclick="googleAllow('android')">Allow</button>
+      </div>
+    </div>`;
 }
 
 // Faked list of apps "discovered" in the connected developer account.
@@ -1602,14 +1772,15 @@ function buildAccountCard(pid) {
   const h         = state.platformCardHeight?.[pid];
   const styleAttr = h ? ` style="min-height:${h}px;"` : '';
   const body = loggedIn
-    ? _accountSettingsHTML(pid, cfg, savedUser)   // STATE 2: signed in
-    : _accountFormHTML(pid, cfg, savedUser);      // STATE 1: signed out
+    ? _accountSettingsHTML(pid, cfg, savedUser)   // connected: account settings
+    : _connectFaceHTML(pid, cfg);                 // not connected: on-card connect flow
   return `
-    <div class="active-card platform-account-card ${loggedIn ? 'is-signedin' : 'is-signedout'}" id="active-card-${pid}"${styleAttr}>
+    <div class="active-card platform-account-card ${loggedIn ? 'is-signedin' : 'is-connect'}" id="active-card-${pid}"${styleAttr}>
       ${platformCardHead(pid, 'account')}
       <div class="platform-account-body">${body}</div>
     </div>`;
 }
+
 
 function buildActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
@@ -1666,7 +1837,9 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
 
   // Web deploys with a single action (no release track); other platforms require a chosen track.
   const isWeb = pid === 'web';
-  const readyToSubmit = isWeb ? (!locked && !submitDone) : (!locked && !!selTrack && !submitDone);
+  // Hard rule: Submit is unavailable until the platform account is connected.
+  const connected = isWeb ? true : isPlatformConnected(pid);
+  const readyToSubmit = connected && (isWeb ? (!locked && !submitDone) : (!locked && !!selTrack && !submitDone));
 
   // Track picker pill — mirrors buildBuildDropdown style
   // Gray when no track; green check when track selected; whole card clicks submit when ready
@@ -1689,16 +1862,29 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   // Whole card is clickable to submit when ready
   const cardClick = readyToSubmit ? `onclick="confirmSubmit('${pid}')"` : '';
   const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
+  const stepLocked = locked || !connected;
+
+  // Trailing control: not connected → a "Connect to submit" prompt; else the track pill.
+  const trailing = !connected
+    ? `<span class="submit-connect-req" onclick="event.stopPropagation();platformGearFromSteps('${pid}')" title="Connect ${escHtml(platLabel(pid))} to submit">Connect to submit</span>`
+    : (isWeb ? '' : trackPill);
 
   return `
-    <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${locked ? 'submit-step-locked' : 'submit-step-ready'}"
+    <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
          id="${pid}-step-card-submit" style="${readyToSubmit ? 'cursor:pointer;' : ''}" ${cardClick}>
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
         <div class="ios-step-name">${isWeb ? 'Deploy' : 'Submit'}</div>
       </div>
-      ${isWeb ? '' : trackPill}
+      ${trailing}
     </div>`;
+}
+
+// Footer note shown on every step modal while the platform isn't connected —
+// signals that edits are saved locally only and can't be published yet.
+function _localSaveNote(pid) {
+  if (!pid || pid === 'web' || isPlatformConnected(pid)) return '';
+  return `<span class="local-save-note"><span class="lsn-dot"></span>Saved locally — connect ${escHtml(platLabel(pid))} in settings to publish</span>`;
 }
 
 function _openTrackMenu(pid) {
@@ -2121,6 +2307,7 @@ function renderStepModal() {
       </div>
     </div>
     <div class="submit-modal-footer">
+      ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
       ${isFlipped
         ? `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
