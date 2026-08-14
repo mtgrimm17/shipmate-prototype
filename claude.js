@@ -508,12 +508,22 @@ async function igdbSearch(title) {
     platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
     // Strict activation list stored separately for selectPicklistItem
     activationPlatforms: _igdbPlatforms(g.platforms, g.websites, g.release_dates, false),
-    // Steam app ID, if IGDB links to a Steam store page (website category 13)
-    // — e.g. "https://store.steampowered.com/app/4037180/Go_Ape_Ship/" → "4037180".
+    // Steam app ID, if IGDB links to a Steam store page — e.g.
+    // "https://store.steampowered.com/app/4037180/Go_Ape_Ship/" → "4037180".
     // Used by _applySteamDbKeyArt (app.js) to look the game up on steamdb.info
     // and pull its hero_capsule/library_hero Key Art assets.
+    //
+    // NOTE: this used to key off `w.category === 13` (IGDB's documented
+    // "Steam" website category). Live testing showed IGDB no longer returns
+    // a `category` field on `websites` entries at all (confirmed via a real
+    // console dump — website objects came back as bare {id, url} with no
+    // category key, even though the query explicitly requests
+    // websites.category), so that check silently never matched and this
+    // feature never fired. Matching directly on the URL sidesteps the
+    // category/type question entirely and is more robust regardless of
+    // which enum (or field name) IGDB is using on a given day.
     steamAppId: (() => {
-      const steamSite = (g.websites || []).find(w => w.category === 13 && w.url);
+      const steamSite = (g.websites || []).find(w => w.url && /store\.steampowered\.com\/app\//i.test(w.url));
       if (!steamSite) return null;
       const m = steamSite.url.match(/\/app\/(\d+)/);
       return m ? m[1] : null;
