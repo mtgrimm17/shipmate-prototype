@@ -439,6 +439,11 @@ async function openStepModal(pid, stepId) {
 }
 
 function closeStepModal() {
+  // Clear the "came from Web's Key Art modal" detour flag whenever the step
+  // modal closes by any means, so a stray future visit to Steam's Key Art
+  // section (not via openSteamKeyArtFromWebEdit) doesn't inherit it.
+  state.steamKeyArtFromWebEdit = false;
+
   // Record that this step has been saved/attempted at least once
   // (drives red-dot visibility and required-field alert visibility)
   const sm = state.stepModal;
@@ -4340,49 +4345,77 @@ function setWebAccent(color) {
   reRenderStepModal();
 }
 
-/* Key Art uploads (Vertical Capsule / Hero Banner) — single-image uploads
-   with a live dataURL preview, same pattern as handleFeatureFiles/
-   removeFeatureGraphic above. Each reRenderStepModal() call refreshes both
-   the Key Art flip modal (buildWebKeyArtEditSection) and, once the user
-   flips back, the preview website's hero/capsule (buildWebSitePreviewSection). */
-function handleKeyArtCapsuleDrop(e) {
+/* Steam: "Select Key Art" uploads (Vertical Capsule / Hero Banner) —
+   single-image uploads with a live dataURL preview, same pattern as
+   handleFeatureFiles/removeFeatureGraphic above. This is the canonical
+   source for state.uploads.steamKeyArtCapsule/steamKeyArtHero — the Web
+   platform's read-only "Key Art" flip modal (buildWebKeyArtEditSection)
+   just links here via openSteamKeyArtFromWebEdit rather than uploading
+   directly, same relationship the Web platform's Trailers/Screenshots
+   sub-sections have with Shipmate's Assets step. Each reRenderStepModal()
+   call refreshes this modal (buildSteamKeyArtEditSection) and, once the
+   user flips back, the Web preview's hero/capsule
+   (buildWebSitePreviewSection) if that's currently open instead. */
+function handleSteamKeyArtCapsuleDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('is-over');
-  handleKeyArtCapsuleFiles(e.dataTransfer.files);
+  handleSteamKeyArtCapsuleFiles(e.dataTransfer.files);
 }
-function handleKeyArtCapsuleFiles(files) {
+function handleSteamKeyArtCapsuleFiles(files) {
   const file = files[0];
   if (!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    state.uploads.keyArtCapsule = { name: file.name, dataUrl: ev.target.result };
+    state.uploads.steamKeyArtCapsule = { name: file.name, dataUrl: ev.target.result };
     reRenderStepModal();
   };
   reader.readAsDataURL(file);
 }
-function removeKeyArtCapsule() {
-  state.uploads.keyArtCapsule = null;
+function removeSteamKeyArtCapsule() {
+  state.uploads.steamKeyArtCapsule = null;
   reRenderStepModal();
 }
 
-function handleKeyArtHeroDrop(e) {
+function handleSteamKeyArtHeroDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('is-over');
-  handleKeyArtHeroFiles(e.dataTransfer.files);
+  handleSteamKeyArtHeroFiles(e.dataTransfer.files);
 }
-function handleKeyArtHeroFiles(files) {
+function handleSteamKeyArtHeroFiles(files) {
   const file = files[0];
   if (!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    state.uploads.keyArtHero = { name: file.name, dataUrl: ev.target.result };
+    state.uploads.steamKeyArtHero = { name: file.name, dataUrl: ev.target.result };
     reRenderStepModal();
   };
   reader.readAsDataURL(file);
 }
-function removeKeyArtHero() {
-  state.uploads.keyArtHero = null;
+function removeSteamKeyArtHero() {
+  state.uploads.steamKeyArtHero = null;
   reRenderStepModal();
+}
+
+/* Jumps from the Web platform's read-only "Key Art" flip modal to Steam's
+   "Select Key Art" section (Store Page Preview step) — a cross-platform
+   detour, same relationship openAssetsFromWebEdit has with the Assets tab.
+   Caller closes Web's step modal first (see _wsKeyArtFieldsHTML's onclick),
+   matching openAssetsFromWebEdit's own calling convention. */
+async function openSteamKeyArtFromWebEdit() {
+  state.steamKeyArtFromWebEdit = true;
+  await openStepModal('steam', 'storePreview');
+  await openStorePreviewSection('steam', 'keyArt');
+}
+
+/* "Save & Return to Web" button on Steam's Key Art flip modal when it was
+   opened via openSteamKeyArtFromWebEdit — returns to Web's Key Art modal
+   instead of Steam's own Store Page Preview. See the submit-modal-footer
+   logic in renderStepModal (render.js). */
+async function backFromSteamKeyArtToWebEdit() {
+  state.steamKeyArtFromWebEdit = false;
+  closeStepModal();
+  await openStepModal('web', 'storePreview');
+  await openStorePreviewSection('web', 'webKeyArt');
 }
 
 /* ══════════════════════════════════════════════════════

@@ -2213,6 +2213,7 @@ function renderStepModal() {
     webMedia:      'Media',
     webAbout:      'About',
     webKeyArt:     'Key Art',
+    keyArt:        'Select Key Art',
   };
   const isFlipped = !!flipTarget;
   const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
@@ -2310,7 +2311,9 @@ function renderStepModal() {
       ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
       ${isFlipped
-        ? `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
+        ? (platformId === 'steam' && flipTarget === 'keyArt' && state.steamKeyArtFromWebEdit)
+          ? `<button class="btn btn-primary" onclick="backFromSteamKeyArtToWebEdit()">Save &amp; Return to Web</button>`
+          : `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
         : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
@@ -2400,6 +2403,14 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'screenshots') {
     return buildScreenshotsSection(platformId);
   }
+  // Steam-only: the "Select Key Art" section of the Store Page Preview step
+  // (see buildSteamStorePreviewSection's spp-sections-list). The Web
+  // platform's Key Art modal reads state.uploads.steamKeyArtCapsule/
+  // steamKeyArtHero read-only rather than dispatching here — see
+  // buildWebKeyArtEditSection.
+  if (target === 'keyArt') {
+    return buildSteamKeyArtEditSection();
+  }
   return '';
 }
 
@@ -2475,11 +2486,19 @@ function buildWebSitePreviewSection() {
 
   const shots = ups.screenshots || [];
 
-  // Hero banner — shows the uploaded image (state.uploads.keyArtHero) once
-  // set via the "Key Art" flip modal (buildWebKeyArtEditSection); falls back
-  // to the placeholder graphic otherwise. Glowing + clickable like the four
-  // main sections (see .pk-glowbox / pk-glow-pulse), opening the same modal.
-  const heroUpload = ups.keyArtHero;
+  // Prepended to the hero/capsule placeholder captions below, only once the
+  // user has actually typed a title in Game Details' About tab (fd.title —
+  // unlike the `title` var above, this has no "Your Game" fallback, since an
+  // empty placeholder shouldn't claim a title that hasn't been set yet).
+  const placeholderTitleLine = fd.title ? `${escHtml(fd.title)}<br>` : '';
+
+  // Hero banner — shows the uploaded image (state.uploads.steamKeyArtHero)
+  // once set via Steam's "Select Key Art" section (Store Page Preview step —
+  // see buildSteamKeyArtEditSection); falls back to the placeholder graphic
+  // otherwise. Glowing + clickable like the four main sections (see
+  // .pk-glowbox / pk-glow-pulse), opening Web's own read-only "Key Art" flip
+  // modal (buildWebKeyArtEditSection), which links to Steam to manage it.
+  const heroUpload = ups.steamKeyArtHero;
   const heroHTML = heroUpload ? `
     <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
       <img src="${heroUpload.dataUrl}" alt="Hero banner" class="pk-hero-img">
@@ -2493,7 +2512,7 @@ function buildWebSitePreviewSection() {
           <circle cx="8" cy="10" r="1.6" fill="currentColor"/>
           <path d="M21 15.5l-4.8-4.8-4 4-2.7-2.7-5.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <div class="pk-hero-caption">Hero Banner<br>3840 &times; 1240</div>
+        <div class="pk-hero-caption">${placeholderTitleLine}Hero Banner<br>3840 &times; 1240</div>
       </div>
       <div class="pk-hero-scrim"></div>
     </div>`;
@@ -2503,14 +2522,16 @@ function buildWebSitePreviewSection() {
   const slug = (fd.title || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'yourgame';
   const siteUrl = `${slug}.shipmate.games`;
 
-  // Vertical capsule — a Steam-style cover-art slot (748×896) sized to the
-  // Factsheet column's width (matches the accent underline under the
-  // "Factsheet" heading). Absolutely positioned over the hero (see
-  // .pk-hero-wrap) so roughly half of it overlaps the banner above; the
-  // Factsheet/Description margins below are offset to clear/meet it. Shows
-  // the uploaded image (state.uploads.keyArtCapsule) once set, falling back
-  // to the placeholder graphic otherwise — same "Key Art" flip modal as hero.
-  const capsuleUpload = ups.keyArtCapsule;
+  // Vertical capsule — a cover-art slot (748×896, matching Steam's own
+  // vertical capsule spec) sized to the Factsheet column's width (matches
+  // the accent underline under the "Factsheet" heading). Absolutely
+  // positioned over the hero (see .pk-hero-wrap) so roughly half of it
+  // overlaps the banner above; the Factsheet/Description margins below are
+  // offset to clear/meet it. Shows the uploaded image
+  // (state.uploads.steamKeyArtCapsule) once set via Steam's "Select Key
+  // Art" section, falling back to the placeholder graphic otherwise — same
+  // "Key Art" flip modal as hero.
+  const capsuleUpload = ups.steamKeyArtCapsule;
   const capsuleHTML = capsuleUpload ? `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
       <img src="${capsuleUpload.dataUrl}" alt="Vertical capsule" class="pk-capsule-img">
@@ -2522,7 +2543,7 @@ function buildWebSitePreviewSection() {
         <circle cx="8" cy="10" r="1.6" fill="currentColor"/>
         <path d="M21 15.5l-4.8-4.8-4 4-2.7-2.7-5.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <div class="pk-capsule-caption">Vertical Capsule<br>748 &times; 896</div>
+      <div class="pk-capsule-caption">${placeholderTitleLine}Vertical Capsule<br>748 &times; 896</div>
     </div>`;
 
   // Sub-section header (bold, no accent) wrapping already-built inner HTML —
@@ -2855,69 +2876,41 @@ function buildWebAboutEditSection() {
     </div>`;
 }
 
-/* Key Art upload row — shared by the Vertical Capsule and Hero Banner
-   sub-sections below. Presentation mirrors the Screenshots/Trailer dropzones
-   in the Assets tab (see buildAssetsTab's .asset-dropzone markup), but with a
-   live dataURL preview once uploaded (like state.uploads.featureGraphic /
-   appIcon), since — unlike the Trailer upload — this is always an image.
-   `kind` is 'Capsule' or 'Hero', matching the handleKeyArt{kind}Drop/Files
-   and removeKeyArt{kind} functions in app.js. Uploading calls
-   reRenderStepModal(), so this modal (and the preview website behind it)
-   always reflect state.uploads.keyArtCapsule/keyArtHero fresh — no separate
-   DOM-toggle hydration needed here.
-
-   Both the empty dropzone and the uploaded-image preview sit inside a box
-   sized to that asset's real aspect ratio (see .pk-keyart-box in style.css —
-   748×896 for the capsule, 3840×1240 for the hero), so the box itself shows
-   what shape/crop the upload will end up as, before and after uploading. */
-function _wsKeyArtUploadHTML(kind, hint, upload) {
-  const dropId   = `ws-keyart-${kind.toLowerCase()}-dropzone`;
-  const inputId  = `ws-keyart-${kind.toLowerCase()}-input`;
-  const boxClass = `pk-keyart-box pk-keyart-box--${kind.toLowerCase()}`;
-  if (upload) {
-    return `
-      <div style="margin-bottom:20px;">
-        <div class="${boxClass}">
-          <img src="${upload.dataUrl}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
-        </div>
-        <div class="feature-preview-meta">
-          <span class="feature-preview-name">${escHtml(upload.name)}</span>
-          <button class="btn btn-ghost btn-sm" type="button" onclick="removeKeyArt${kind}()">Remove</button>
-        </div>
-      </div>`;
-  }
+/* Key Art fields: Vertical Capsule, Hero Banner — read-only summaries of the
+   same assets managed in Steam's "Select Key Art" section (Store Page
+   Preview step, see buildSteamKeyArtEditSection), same relationship as
+   _wsMediaFieldsHTML's Trailers/Screenshots rows have with Shipmate's
+   Assets step. "Manage" jumps to Steam via openSteamKeyArtFromWebEdit. */
+function _wsKeyArtFieldsHTML() {
+  const ups = state.uploads || {};
+  const capsuleSummary = ups.steamKeyArtCapsule ? `Uploaded: ${ups.steamKeyArtCapsule.name}` : 'No vertical capsule added yet';
+  const heroSummary    = ups.steamKeyArtHero    ? `Uploaded: ${ups.steamKeyArtHero.name}`    : 'No hero banner added yet';
   return `
-    <div class="asset-dropzone ${boxClass}" id="${dropId}" style="margin-bottom:20px;"
-         onclick="document.getElementById('${inputId}').click()"
-         ondragover="event.preventDefault(); this.classList.add('is-over')"
-         ondragleave="this.classList.remove('is-over')"
-         ondrop="handleKeyArt${kind}Drop(event); this.classList.remove('is-over')">
-      <div class="asset-dropzone-icon">↑</div>
-      <div class="asset-dropzone-label">Drop an image here or click to upload</div>
-      <div class="asset-dropzone-hint">${hint}</div>
-      <input type="file" id="${inputId}" accept="image/*" style="display:none"
-             onchange="handleKeyArt${kind}Files(this.files); this.value=''">
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Vertical Capsule</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
+      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(capsuleSummary)}</span>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
+    </div>
+
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Hero Banner</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
+      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(heroSummary)}</span>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
     </div>`;
 }
 
 /* Key Art fields: Vertical Capsule, Hero Banner — the placeholder graphics
    at the top of the preview website (see heroHTML/capsuleHTML in
-   buildWebSitePreviewSection), opened by clicking either glow box. */
+   buildWebSitePreviewSection), opened by clicking either glow box. Both
+   sub-sections are managed from Steam's Store Page Preview, not here — see
+   _wsKeyArtFieldsHTML. */
 function buildWebKeyArtEditSection() {
-  const ups = state.uploads || {};
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Upload the key art shown at the top of your preview website.
+        Key art is managed from the Steam Store platform's Store Page Preview — uploading it there also updates this preview website.
       </p>
-
-      <div class="pk-edit-group-label">Vertical Capsule</div>
-      <div class="asset-guidance">Recommended 748 &times; 896 (portrait).</div>
-      ${_wsKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.keyArtCapsule)}
-
-      <div class="pk-edit-group-label">Hero Banner</div>
-      <div class="asset-guidance">Recommended 3840 &times; 1240 (widescreen).</div>
-      ${_wsKeyArtUploadHTML('Hero', 'PNG or JPG, up to ~5MB', ups.keyArtHero)}
+      ${_wsKeyArtFieldsHTML()}
     </div>`;
 }
 
@@ -5803,6 +5796,10 @@ function buildSteamStorePreviewSection() {
   const privUrl         = (state.steamSubmitAnswers.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
   const dataDone        = !!privUrl;
   const screenshotsDone = isSteamSectionComplete('screenshots');
+  // Key Art isn't part of Steam's required-section completeness tracking
+  // (isSteamSectionComplete) — it's optional here, same as the rest of this
+  // preview's own "done" checkmarks are purely local UI state.
+  const keyArtDone      = !!(ups.steamKeyArtCapsule && ups.steamKeyArtHero);
 
   function _sppBtn(target, label, sub, isDone) {
     if (isDone) {
@@ -5828,6 +5825,7 @@ function buildSteamStorePreviewSection() {
   const SPP_SECTIONS = [
     { target: 'content',     done: contentDone,     label: 'Answer Content Questions'        },
     { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'              },
+    { target: 'keyArt',      done: keyArtDone,      label: 'Select Key Art'                  },
     { target: 'business',    done: businessDone,    label: 'Answer Business Questions'       },
     { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
   ];
@@ -5868,6 +5866,7 @@ function buildSteamStorePreviewSection() {
     </div>
 
     <div class="spp-sections-list" style="margin-top:14px;">
+      ${_sppBtn('keyArt',   'Select Key Art',                  'Upload your vertical capsule and hero banner', keyArtDone)}
       ${_sppBtn('content',  'Answer Content Questions',        'Mature content, AI usage, and IARC rating',    contentDone)}
       ${_sppBtn('business', 'Answer Business Questions',       'Store tags, genre, and technical details',     businessDone)}
       ${_sppBtn('data',     'Answer Data Collection Questions','Add your privacy policy URL',                  dataDone)}
@@ -5875,6 +5874,73 @@ function buildSteamStorePreviewSection() {
 
     ${navBar}
   `;
+}
+
+/* Steam: "Select Key Art" — collects the vertical capsule (748×896) and
+   hero banner (3840×1240) shown on the Steam store page. This is the
+   canonical source for state.uploads.steamKeyArtCapsule/steamKeyArtHero —
+   the Web platform's "Key Art" flip modal (buildWebKeyArtEditSection) reads
+   these same values read-only and links back here via "Manage", the same
+   relationship the Web platform's Trailers/Screenshots sub-sections have
+   with Shipmate's Assets step. Uploading calls reRenderStepModal(), so this
+   modal (and the Web preview behind it) always reflect the latest upload. */
+function buildSteamKeyArtEditSection() {
+  const ups = state.uploads || {};
+  return `
+    <div class="qs-section" style="padding:4px 2px;">
+      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Upload the key art for your Steam store page. This also supplies the Key Art shown on your preview website.
+      </p>
+
+      <div class="pk-edit-group-label">Vertical Capsule</div>
+      <div class="asset-guidance">Recommended 748 &times; 896 (portrait).</div>
+      ${_steamKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.steamKeyArtCapsule)}
+
+      <div class="pk-edit-group-label">Hero Banner</div>
+      <div class="asset-guidance">Recommended 3840 &times; 1240 (widescreen).</div>
+      ${_steamKeyArtUploadHTML('Hero', 'PNG or JPG, up to ~5MB', ups.steamKeyArtHero)}
+    </div>`;
+}
+
+/* Key Art upload row — shared by the Vertical Capsule and Hero Banner
+   sub-sections above. Presentation mirrors the Screenshots/Trailer
+   dropzones in the Assets tab (see buildAssetsTab's .asset-dropzone
+   markup), but with a live dataURL preview once uploaded (like
+   state.uploads.featureGraphic/appIcon), since this is always an image.
+   `kind` is 'Capsule' or 'Hero', matching the handleSteamKeyArt{kind}Drop/
+   Files and removeSteamKeyArt{kind} functions in app.js. Both states sit in
+   a box sized to that asset's real aspect ratio (see .pk-keyart-box in
+   style.css), so the box shows the actual shape/crop before and after
+   uploading — same treatment used for Web's Key Art modal before it became
+   a read-only "Manage" link to here. */
+function _steamKeyArtUploadHTML(kind, hint, upload) {
+  const dropId   = `steam-keyart-${kind.toLowerCase()}-dropzone`;
+  const inputId  = `steam-keyart-${kind.toLowerCase()}-input`;
+  const boxClass = `pk-keyart-box pk-keyart-box--${kind.toLowerCase()}`;
+  if (upload) {
+    return `
+      <div style="margin-bottom:20px;">
+        <div class="${boxClass}">
+          <img src="${upload.dataUrl}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
+        </div>
+        <div class="feature-preview-meta">
+          <span class="feature-preview-name">${escHtml(upload.name)}</span>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="removeSteamKeyArt${kind}()">Remove</button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="asset-dropzone ${boxClass}" id="${dropId}" style="margin-bottom:20px;"
+         onclick="document.getElementById('${inputId}').click()"
+         ondragover="event.preventDefault(); this.classList.add('is-over')"
+         ondragleave="this.classList.remove('is-over')"
+         ondrop="handleSteamKeyArt${kind}Drop(event); this.classList.remove('is-over')">
+      <div class="asset-dropzone-icon">↑</div>
+      <div class="asset-dropzone-label">Drop an image here or click to upload</div>
+      <div class="asset-dropzone-hint">${hint}</div>
+      <input type="file" id="${inputId}" accept="image/*" style="display:none"
+             onchange="handleSteamKeyArt${kind}Files(this.files); this.value=''">
+    </div>`;
 }
 
 

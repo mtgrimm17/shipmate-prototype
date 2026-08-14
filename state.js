@@ -1896,13 +1896,20 @@ function makeBlankUploads() {
     screenshots:    [],
     featureGraphic: null,
     trailer:        null,
-    // Preview website "Key Art" — a vertical capsule and hero banner image,
-    // each { name, dataUrl } like appIcon/featureGraphic. Set via the
-    // Key Art flip modal (buildWebKeyArtEditSection in render.js); shown on
-    // the preview website in place of the placeholder graphics once set
-    // (see buildWebSitePreviewSection's heroHTML/capsuleHTML).
-    keyArtCapsule:  null,
-    keyArtHero:     null,
+    // Key Art — a vertical capsule (748×896) and hero banner (3840×1240)
+    // image, each { name, dataUrl } like appIcon/featureGraphic. Set via the
+    // "Select Key Art" section of the Steam Store platform's Store Page
+    // Preview (buildSteamKeyArtEditSection in render.js) — the canonical
+    // source, same role Shipmate's Assets step plays for uploads.trailer/
+    // screenshots. The Web platform's "Key Art" flip modal
+    // (buildWebKeyArtEditSection) reads these read-only, showing them on the
+    // preview website in place of the placeholder graphics once set (see
+    // buildWebSitePreviewSection's heroHTML/capsuleHTML), with a "Manage"
+    // button back to this Steam section — mirroring how the Web platform's
+    // Trailers/Screenshots sub-sections read from and manage-link back to
+    // Shipmate's Assets step.
+    steamKeyArtCapsule: null,
+    steamKeyArtHero:    null,
   };
 }
 
@@ -2061,6 +2068,15 @@ const state = {
   // instead of Distribution. See openAssetsFromWebEdit/backFromAssetsToWebEdit
   // in app.js and renderOnboardingFooter in render.js.
   assetsFromWebEdit: false,
+
+  // True while Steam's "Select Key Art" flip section (Store Page Preview
+  // step) was opened via the "Manage" button in the Web platform's "Key Art"
+  // flip modal, rather than through Steam's own normal navigation — while
+  // true, the flip modal footer's "Save & Return" button returns to Web's
+  // Key Art modal instead of Steam's own Store Page Preview. See
+  // openSteamKeyArtFromWebEdit/backFromSteamKeyArtToWebEdit in app.js and
+  // the submit-modal-footer logic in renderStepModal (render.js).
+  steamKeyArtFromWebEdit: false,
 
   // Modal
   activeModal: null,
