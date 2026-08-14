@@ -508,6 +508,16 @@ async function igdbSearch(title) {
     platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
     // Strict activation list stored separately for selectPicklistItem
     activationPlatforms: _igdbPlatforms(g.platforms, g.websites, g.release_dates, false),
+    // Steam app ID, if IGDB links to a Steam store page (website category 13)
+    // — e.g. "https://store.steampowered.com/app/4037180/Go_Ape_Ship/" → "4037180".
+    // Used by _applySteamDbKeyArt (app.js) to look the game up on steamdb.info
+    // and pull its hero_capsule/library_hero Key Art assets.
+    steamAppId: (() => {
+      const steamSite = (g.websites || []).find(w => w.category === 13 && w.url);
+      if (!steamSite) return null;
+      const m = steamSite.url.match(/\/app\/(\d+)/);
+      return m ? m[1] : null;
+    })(),
     summary:     g.summary || '',
     // Up to 6 screenshots upgraded from t_thumb to t_screenshot_big (889×500)
     // also proxied through wsrv.nl for the same reason.
@@ -520,6 +530,54 @@ async function igdbSearch(title) {
         return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
       }),
   }));
+}
+
+/* ── SteamDB Key Art lookup ──────────────────────────────────
+   Given a Steam app ID, fetches the game's steamdb.info "info" page and
+   pulls the hero_capsule/library_hero asset links out of its Assets
+   table (hero_capsule — not library_capsule — is used for the vertical
+   capsule field; library_capsule tends to be a smaller/lower-res crop).
+   steamdb.info is plain server-rendered HTML (no JS execution needed),
+   proxied through corsproxy.io using the same raw pass-through form as
+   IGDB_ENDPOINT above (corsproxy.io/?<target-url>, no encoding — an
+   earlier, unverified `?url=<encoded>` form was tried and silently
+   failed against the real service). */
+
+function _steamDbInfoUrl(appId) {
+  return `https://steamdb.info/app/${appId}/info/`;
+}
+
+// Each asset row looks like: <td>hero_capsule</td><td>[<a href="...">]{value}[</a>]</td>
+// `value` is sometimes the full absolute CDN URL, sometimes just the bare
+// "{asset code}/hero_capsule.jpg" path steamdb.info shows next to the
+// label — in the latter case the real URL is built as:
+//   https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appId}/{asset code}
+// Matches on the exact closing `</td>` after the key so a row never
+// accidentally matches a differently-named sibling row (e.g. library_hero
+// vs library_hero_2x).
+function _extractSteamDbAsset(html, key, appId) {
+  const rowRe = new RegExp('<td>' + key + '</td>\\s*<td>([\\s\\S]*?)</td>', 'i');
+  const row = html.match(rowRe);
+  if (!row) return null;
+  const cell = row[1];
+
+  const hrefMatch = cell.match(/href="([^"]+)"/i);
+  if (hrefMatch && /^https?:\/\//i.test(hrefMatch[1])) return hrefMatch[1];
+
+  const text = cell.replace(/<[^>]+>/g, '').trim();
+  if (!text) return null;
+  if (/^https?:\/\//i.test(text)) return text;
+  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/${text}`;
+}
+
+async function fetchSteamDbKeyArt(appId) {
+  const res = await fetch('https://corsproxy.io/?' + _steamDbInfoUrl(appId));
+  if (!res.ok) throw new Error('SteamDB request failed (' + res.status + ')');
+  const html = await res.text();
+  return {
+    capsuleUrl: _extractSteamDbAsset(html, 'hero_capsule', appId),
+    heroUrl:    _extractSteamDbAsset(html, 'library_hero', appId),
+  };
 }
 
 /* ── Backward-compat wrapper (used by _triggerScenarioSearch) ── */
