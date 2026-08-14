@@ -971,9 +971,13 @@ function hydrateUploadAssetsTab() {
   if (state.uploads.trailer) {
     const info = document.getElementById('ob-trailer-file-info');
     if (info) {
-      const mb = (state.uploads.trailer.size / 1024 / 1024).toFixed(1);
+      // size is only known for a real local upload (handleTrailerFiles) — a
+      // SteamDB-sourced trailer (_applySteamDbEnrichment in app.js) carries
+      // a url instead, with no byte size to report.
+      const hasSize = typeof state.uploads.trailer.size === 'number';
+      const mb = hasSize ? (state.uploads.trailer.size / 1024 / 1024).toFixed(1) : null;
       info.style.display = 'block';
-      info.innerHTML = trailerFileRowHTML(state.uploads.trailer.name, mb, 'ob-');
+      info.innerHTML = trailerFileRowHTML(state.uploads.trailer.name, mb, 'ob-', state.uploads.trailer.url);
     }
   }
 }
@@ -2501,7 +2505,7 @@ function buildWebSitePreviewSection() {
   const heroUpload = ups.steamKeyArtHero;
   const heroHTML = heroUpload ? `
     <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
-      <img src="${heroUpload.dataUrl}" alt="Hero banner" class="pk-hero-img">
+      <img src="${_screenshotSrc(heroUpload)}" alt="Hero banner" class="pk-hero-img">
       <div class="pk-hero-scrim"></div>
     </div>` : `
     <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
@@ -2534,7 +2538,7 @@ function buildWebSitePreviewSection() {
   const capsuleUpload = ups.steamKeyArtCapsule;
   const capsuleHTML = capsuleUpload ? `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
-      <img src="${capsuleUpload.dataUrl}" alt="Vertical capsule" class="pk-capsule-img">
+      <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img">
     </div>` : `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
       <span class="pk-capsule-badge">Placeholder</span>
@@ -2617,12 +2621,15 @@ function buildWebSitePreviewSection() {
 
   // Trailers — sourced from the same "Trailer" asset set in Shipmate's
   // Assets step (Onboarding tab 2), not a separate webSite field: either a
-  // pasted video URL (fd.trailerUrl) or an uploaded file (ups.trailer, which
-  // only carries name/size in this prototype — no playable source — so it
-  // renders as plain text rather than a link). The URL takes priority if
-  // both happen to be set, since it's the one that's actually clickable.
-  // A YouTube URL embeds a real player; any other URL falls back to a
-  // plain link-out card.
+  // pasted video URL (fd.trailerUrl) or an uploaded file (ups.trailer). A
+  // real local upload only carries name/size — no playable source, so it
+  // renders as plain text. A SteamDB-sourced trailer (_applySteamDbEnrichment
+  // in app.js) carries a url (the hls_h264 stream link) instead, so it gets
+  // a link-out card like fd.trailerUrl's non-YouTube case below. fd.trailerUrl
+  // takes priority if both happen to be set. A YouTube URL embeds a real
+  // player; any other URL (including a SteamDB hls_h264 .m3u8 link) falls
+  // back to a plain link-out card — browsers don't natively play HLS via a
+  // bare <video>/<a> tag, so this is a reference link, not inline playback.
   const uploadedTrailer = ups.trailer || null;
   const ytId = _pkYouTubeId(fd.trailerUrl);
   const trailersValue = fd.trailerUrl ? (ytId ? `
@@ -2636,8 +2643,14 @@ function buildWebSitePreviewSection() {
         <span class="pk-video-play">▶</span>
         <span>${title} — Trailer</span>
       </a>
-    </div>`) : uploadedTrailer ? `
-    <p class="pk-p">🎬 ${escHtml(uploadedTrailer.name)} <span class="pk-muted">(uploaded — preview not available in this prototype)</span></p>` : '';
+    </div>`) : uploadedTrailer ? (uploadedTrailer.url ? `
+    <div class="pk-video-frame">
+      <a href="${escHtml(uploadedTrailer.url)}" target="_blank" rel="noopener" class="pk-video-link" onclick="event.stopPropagation()">
+        <span class="pk-video-play">▶</span>
+        <span>${title} — Trailer</span>
+      </a>
+    </div>` : `
+    <p class="pk-p">🎬 ${escHtml(uploadedTrailer.name)} <span class="pk-muted">(uploaded — preview not available in this prototype)</span></p>`) : '';
 
   const screenshotsValue = shots.length ? `
     <div class="pk-image-grid">
@@ -4895,11 +4908,18 @@ function renderCQModal() {
     </div>`;
 }
 
-function trailerFileRowHTML(name, mb, prefix = '') {
+// mb is null for a SteamDB-sourced trailer (no real byte size — see
+// _applySteamDbEnrichment in app.js), which also passes a url so the name
+// links out to the actual hls_h264 stream instead of sitting as inert text.
+function trailerFileRowHTML(name, mb, prefix = '', url = '') {
+  const nameHTML = url
+    ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${name}</a>`
+    : name;
+  const sizeHTML = mb != null ? `${mb} MB` : 'Streaming link';
   return `
     <div class="trailer-file-row">
-      <span class="trailer-file-name">🎬 ${name}</span>
-      <span class="trailer-file-size">${mb} MB</span>
+      <span class="trailer-file-name">🎬 ${nameHTML}</span>
+      <span class="trailer-file-size">${sizeHTML}</span>
       <button class="btn btn-ghost btn-sm" onclick="removeTrailer('${prefix}')">Remove</button>
     </div>`;
 }
@@ -5921,7 +5941,7 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
     return `
       <div style="margin-bottom:20px;">
         <div class="${boxClass}">
-          <img src="${upload.dataUrl}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
+          <img src="${_screenshotSrc(upload)}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
         </div>
         <div class="feature-preview-meta">
           <span class="feature-preview-name">${escHtml(upload.name)}</span>

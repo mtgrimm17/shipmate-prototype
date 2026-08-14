@@ -508,6 +508,16 @@ async function igdbSearch(title) {
     platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
     // Strict activation list stored separately for selectPicklistItem
     activationPlatforms: _igdbPlatforms(g.platforms, g.websites, g.release_dates, false),
+    // Steam app ID — parsed from IGDB's website links (category 13 = Steam,
+    // per IGDB_WEBSITE_TO_PID above). When present, selectPicklistItem
+    // (app.js) kicks off fetchSteamStoreData below to enrich the selection
+    // with Steam-sourced Description/Developer/About This Game/Genres.
+    steamAppId: (() => {
+      const steamSite = (g.websites || []).find(w => w.category === 13 && w.url);
+      if (!steamSite) return null;
+      const m = steamSite.url.match(/\/app\/(\d+)/);
+      return m ? m[1] : null;
+    })(),
     summary:     g.summary || '',
     // Up to 6 screenshots upgraded from t_thumb to t_screenshot_big (889×500)
     // also proxied through wsrv.nl for the same reason.
@@ -520,6 +530,144 @@ async function igdbSearch(title) {
         return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
       }),
   }));
+}
+
+/* ── Steam store-page enrichment ─────────────────────────────
+   Used by selectPicklistItem (app.js) when the selected IGDB title links
+   to a Steam store page (item.steamAppId, set above). Steam's storefront
+   API and store pages don't send CORS headers, so both requests below
+   route through corsproxy.io (same proxy already used for IGDB), using its
+   `?url=<encoded>` form rather than raw concatenation — appdetails' own
+   query string (?appids=...&l=...) would otherwise collide with corsproxy's
+   own `?`, which is ambiguous under corsproxy's older bare pass-through
+   syntax.
+
+     1. appdetails — Steam's official JSON API. Gives us short_description,
+        developers, about_the_game, and screenshots (up to 10) directly,
+        plus "genres" (Steam's own developer-set categorization) kept only
+        as a fallback for step 2.
+     2. the store page's own HTML — scraped for the "popular user-defined
+        tags" pills, since appdetails doesn't expose those. Tags render as
+        plain <a href="https://store.steampowered.com/tags/en/<Tag Name>/...">
+        links near the top of the page; we collect the first five unique
+        tag names in the order they appear.
+
+   Best-effort throughout: a failure in either fetch (private/delisted app,
+   an age-gate interstitial blocking the proxy's anonymous request, a
+   corsproxy hiccup, etc.) should not corrupt or block the rest of picklist
+   selection — callers should catch and swallow errors from this function. */
+async function fetchSteamStoreData(appId) {
+  const detailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=english`;
+  const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(detailsUrl));
+  if (!res.ok) throw new Error('Steam appdetails failed (' + res.status + ')');
+  const json  = await res.json();
+  const entry = json && json[appId];
+  if (!entry || !entry.success || !entry.data) throw new Error('Steam appdetails: no data');
+  const data = entry.data;
+
+  const shortDescription = data.short_description || '';
+  const developer        = (data.developers || []).filter(Boolean).join(', ');
+  const aboutGame        = _stripSteamHtml(data.about_the_game);
+  const genresFallback   = (data.genres || []).map(g => g.description).filter(Boolean);
+  // Up to 10 screenshots straight from the Steam store page's own gallery —
+  // path_full is the full-resolution image; a handful of very old listings
+  // only carry path_thumbnail, so that's the fallback rather than dropping
+  // the shot entirely.
+  const screenshots = (data.screenshots || [])
+    .slice(0, 10)
+    .map(s => s.path_full || s.path_thumbnail)
+    .filter(Boolean);
+
+  // Popular user-defined tags, scraped from the store page. Falls back to
+  // appdetails' "genres" (above) if scraping comes up empty.
+  let tags = [];
+  try {
+    const pageUrl = `https://store.steampowered.com/app/${appId}/?l=english`;
+    const pageRes = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(pageUrl));
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      const seen = new Set();
+      const re   = /store\.steampowered\.com\/tags\/en\/([^"'\/?]+)/g;
+      let m;
+      while ((m = re.exec(html)) && tags.length < 5) {
+        const tag = decodeURIComponent(m[1].replace(/\+/g, ' '));
+        if (!seen.has(tag)) { seen.add(tag); tags.push(tag); }
+      }
+    }
+  } catch (err) {
+    console.warn('[Steam enrichment] tag scrape failed:', err.message);
+  }
+  if (!tags.length) tags = genresFallback.slice(0, 5);
+
+  return { shortDescription, developer, aboutGame, tags, screenshots };
+}
+
+// Steam's about_the_game field is a chunk of storefront HTML (headings,
+// <br>/<p>/<li> paragraphs, bold/italic spans, occasional inline images).
+// The Web platform's "About This Game" field is plain, newline-separated
+// text (see _wsField/_wsDescriptionFieldsHTML in render.js — "one paragraph
+// per line"), so this strips tags and turns block/line boundaries into
+// newlines rather than trying to preserve any HTML.
+function _stripSteamHtml(html) {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|li|div|h[1-6])>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+/* ── SteamDB asset lookup ─────────────────────────────────────
+   Used by _applySteamDbEnrichment (app.js) to populate the Steam Store
+   platform's "Select Key Art" vertical capsule/hero banner fields, and the
+   Assets step's Trailer field. All pulled from steamdb.info's metadata
+   table (steamdb.info/app/{id}/info/) — one fetch covers all three, since
+   they're all rows in the same table. Key art comes from a guessed flat
+   Steam CDN filename nowhere near as reliably as this: SteamDB's asset
+   links are versioned (a content-hash directory per upload), so they
+   resolve even for apps that never got a "latest" flat-filename alias on
+   Steam's own CDN.
+
+   Confirmed against real pages (see the two _extractSteamDbAsset call sites
+   below): this table is plain server-rendered HTML, not client-JS-rendered,
+   so a plain fetch()+regex reliably finds it (no JS execution
+   needed/possible from here anyway). Each asset is one row:
+     <tr>
+       <td>library_capsule</td>
+       <td><a href="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{id}/{hash}/library_capsule.jpg?t={ts}" ...>...</a></td>
+     </tr>
+   Same shape for library_hero and for the trailer's hls_h264 row (under a
+   video asset's own hash/timestamp path, ending in hls_264_master.m3u8) —
+   _extractSteamDbAsset's regex requires the closing </td> to immediately
+   follow the key, so "library_capsule" can't accidentally match its
+   "_2x" sibling row, and "hls_h264" can't match the neighboring
+   "dash_h264"/"dash_av1" rows for the same trailer. */
+async function fetchSteamDbKeyArt(appId) {
+  const pageUrl = `https://steamdb.info/app/${appId}/info/`;
+  const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(pageUrl));
+  if (!res.ok) throw new Error('SteamDB info page failed (' + res.status + ')');
+  const html = await res.text();
+  return {
+    capsuleUrl: _extractSteamDbAsset(html, 'library_capsule'),
+    heroUrl:    _extractSteamDbAsset(html, 'library_hero'),
+    trailerUrl: _extractSteamDbAsset(html, 'hls_h264'),
+  };
+}
+
+function _extractSteamDbAsset(html, key) {
+  const re = new RegExp('<td>' + key + '</td>\\s*<td>\\s*<a href="([^"]+)"', 'i');
+  const m  = html.match(re);
+  return m ? m[1] : null;
 }
 
 /* ── Backward-compat wrapper (used by _triggerScenarioSearch) ── */
