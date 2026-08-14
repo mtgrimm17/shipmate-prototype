@@ -536,11 +536,17 @@ async function igdbSearch(title) {
    Used by selectPicklistItem (app.js) when the selected IGDB title links
    to a Steam store page (item.steamAppId, set above). Steam's storefront
    API and store pages don't send CORS headers, so both requests below
-   route through corsproxy.io (same proxy already used for IGDB), using its
-   `?url=<encoded>` form rather than raw concatenation — appdetails' own
-   query string (?appids=...&l=...) would otherwise collide with corsproxy's
-   own `?`, which is ambiguous under corsproxy's older bare pass-through
-   syntax.
+   route through corsproxy.io (same proxy already used for IGDB), using the
+   SAME raw pass-through form as IGDB_ENDPOINT above (`?<raw target URL>`,
+   the whole remainder of the string after corsproxy's own `?`) — not the
+   `?url=<encoded>` form an earlier version of this code used. That encoded
+   form was never actually verified against corsproxy.io's real behavior,
+   only assumed, and every Steam-sourced field failing at once (while IGDB
+   search kept working fine) points squarely at it: corsproxy.io apparently
+   doesn't treat `url=` as special, so it was trying to fetch the literal,
+   nonsensical URL "url=https%3A%2F%2F..." instead of the intended target.
+   Matching IGDB_ENDPOINT's proven-working style instead of a second,
+   unverified one removes that whole class of doubt.
 
      1. appdetails — Steam's official JSON API. Gives us short_description,
         developers, about_the_game, and screenshots (up to 10) directly,
@@ -558,7 +564,7 @@ async function igdbSearch(title) {
    selection — callers should catch and swallow errors from this function. */
 async function fetchSteamStoreData(appId) {
   const detailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=english`;
-  const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(detailsUrl));
+  const res = await fetch('https://corsproxy.io/?' + detailsUrl);
   if (!res.ok) throw new Error('Steam appdetails failed (' + res.status + ')');
   const json  = await res.json();
   const entry = json && json[appId];
@@ -583,7 +589,7 @@ async function fetchSteamStoreData(appId) {
   let tags = [];
   try {
     const pageUrl = `https://store.steampowered.com/app/${appId}/?l=english`;
-    const pageRes = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(pageUrl));
+    const pageRes = await fetch('https://corsproxy.io/?' + pageUrl);
     if (pageRes.ok) {
       const html = await pageRes.text();
       const seen = new Set();
@@ -654,7 +660,7 @@ function _stripSteamHtml(html) {
    "dash_h264"/"dash_av1" rows for the same trailer. */
 async function fetchSteamDbKeyArt(appId) {
   const pageUrl = `https://steamdb.info/app/${appId}/info/`;
-  const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(pageUrl));
+  const res = await fetch('https://corsproxy.io/?' + pageUrl);
   if (!res.ok) throw new Error('SteamDB info page failed (' + res.status + ')');
   const html = await res.text();
   return {
