@@ -1897,8 +1897,12 @@ function makeBlankUploads() {
     featureGraphic: null,
     trailer:        null,
     // Key Art — a vertical capsule (748×896) and hero banner (3840×1240)
-    // image, each { name, dataUrl } like appIcon/featureGraphic. Set via the
-    // "Select Key Art" section of the Steam Store platform's Store Page
+    // image, each either { name, dataUrl } for a real upload (like
+    // appIcon/featureGraphic) or { name, url } when auto-populated from the
+    // linked Steam page's own library art (see fetchSteamStoreData in
+    // claude.js and _applySteamStoreEnrichment in app.js) — _screenshotSrc
+    // in app.js resolves either shape to a render-ready <img> src. Set via
+    // the "Select Key Art" section of the Steam Store platform's Store Page
     // Preview (buildSteamKeyArtEditSection in render.js) — the canonical
     // source, same role Shipmate's Assets step plays for uploads.trailer/
     // screenshots. The Web platform's "Key Art" flip modal

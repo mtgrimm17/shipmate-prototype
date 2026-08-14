@@ -2501,7 +2501,7 @@ function buildWebSitePreviewSection() {
   const heroUpload = ups.steamKeyArtHero;
   const heroHTML = heroUpload ? `
     <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
-      <img src="${heroUpload.dataUrl}" alt="Hero banner" class="pk-hero-img">
+      <img src="${_screenshotSrc(heroUpload)}" alt="Hero banner" class="pk-hero-img">
       <div class="pk-hero-scrim"></div>
     </div>` : `
     <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
@@ -2534,7 +2534,7 @@ function buildWebSitePreviewSection() {
   const capsuleUpload = ups.steamKeyArtCapsule;
   const capsuleHTML = capsuleUpload ? `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
-      <img src="${capsuleUpload.dataUrl}" alt="Vertical capsule" class="pk-capsule-img">
+      <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img">
     </div>` : `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
       <span class="pk-capsule-badge">Placeholder</span>
@@ -5921,7 +5921,7 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
     return `
       <div style="margin-bottom:20px;">
         <div class="${boxClass}">
-          <img src="${upload.dataUrl}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
+          <img src="${_screenshotSrc(upload)}" alt="${escHtml(upload.name)}" class="pk-keyart-img">
         </div>
         <div class="feature-preview-meta">
           <span class="feature-preview-name">${escHtml(upload.name)}</span>
