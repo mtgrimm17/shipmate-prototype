@@ -508,16 +508,6 @@ async function igdbSearch(title) {
     platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
     // Strict activation list stored separately for selectPicklistItem
     activationPlatforms: _igdbPlatforms(g.platforms, g.websites, g.release_dates, false),
-    // Steam app ID — parsed from IGDB's website links (category 13 = Steam,
-    // per IGDB_WEBSITE_TO_PID above). When present, selectPicklistItem
-    // (app.js) kicks off fetchSteamStoreData below to enrich the selection
-    // with Steam-sourced description/screenshots/key art/genres.
-    steamAppId: (() => {
-      const steamSite = (g.websites || []).find(w => w.category === 13 && w.url);
-      if (!steamSite) return null;
-      const m = steamSite.url.match(/\/app\/(\d+)/);
-      return m ? m[1] : null;
-    })(),
     summary:     g.summary || '',
     // Up to 6 screenshots upgraded from t_thumb to t_screenshot_big (889×500)
     // also proxied through wsrv.nl for the same reason.
@@ -530,77 +520,6 @@ async function igdbSearch(title) {
         return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
       }),
   }));
-}
-
-/* ── Steam store-page enrichment ─────────────────────────────
-   Used by selectPicklistItem (app.js) when the selected IGDB title links
-   to a Steam store page (item.steamAppId, set above). Steam's storefront
-   API and store pages don't send CORS headers, so both requests below
-   route through the same corsproxy.io proxy already used for IGDB.
-
-     1. appdetails — Steam's official JSON API. Gives us short_description
-        and screenshots directly, plus "genres" (Steam's own developer-set
-        categorization) which we keep only as a fallback for step 2 below.
-     2. the store page's own HTML — scraped for the "popular user-defined
-        tags" pills, since appdetails doesn't expose those. Tags render as
-        plain <a href="https://store.steampowered.com/tags/en/<Tag Name>/...">
-        links near the top of the page; we collect the first five unique
-        tag names in the order they appear.
-
-   Vertical capsule / library hero images aren't part of appdetails either —
-   Steam serves them from a predictable CDN filename per app ID, so we build
-   those URLs directly rather than making a third API call.
-
-   Best-effort throughout: a failure in either fetch (private/delisted app,
-   an age-gate interstitial blocking the proxy's anonymous request, a
-   corsproxy hiccup, etc.) should not corrupt or block the rest of picklist
-   selection — callers should catch and swallow errors from this function. */
-async function fetchSteamStoreData(appId) {
-  const detailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=english`;
-  const res = await fetch('https://corsproxy.io/?' + detailsUrl);
-  if (!res.ok) throw new Error('Steam appdetails failed (' + res.status + ')');
-  const json  = await res.json();
-  const entry = json && json[appId];
-  if (!entry || !entry.success || !entry.data) throw new Error('Steam appdetails: no data');
-  const data = entry.data;
-
-  const shortDescription = data.short_description || '';
-  const screenshots = (data.screenshots || [])
-    .map(s => s.path_full || s.path_thumbnail)
-    .filter(Boolean);
-  const genresFallback = (data.genres || []).map(g => g.description).filter(Boolean);
-
-  // Popular user-defined tags, scraped from the store page. Falls back to
-  // appdetails' "genres" (above) if scraping comes up empty.
-  let tags = [];
-  try {
-    const pageRes = await fetch('https://corsproxy.io/?https://store.steampowered.com/app/' + appId + '/?l=english');
-    if (pageRes.ok) {
-      const html = await pageRes.text();
-      const seen = new Set();
-      const re   = /store\.steampowered\.com\/tags\/en\/([^"'\/?]+)/g;
-      let m;
-      while ((m = re.exec(html)) && tags.length < 5) {
-        const tag = decodeURIComponent(m[1].replace(/\+/g, ' '));
-        if (!seen.has(tag)) { seen.add(tag); tags.push(tag); }
-      }
-    }
-  } catch (err) {
-    console.warn('[Steam enrichment] tag scrape failed:', err.message);
-  }
-  if (!tags.length) tags = genresFallback.slice(0, 5);
-
-  return {
-    shortDescription,
-    screenshots,
-    tags,
-    // Library Capsule (portrait) and Library Hero — Steam's own CDN asset
-    // names for the "Select Key Art" fields (see buildSteamKeyArtEditSection
-    // in render.js). Not every app has these set; a 404 just leaves the
-    // <img> broken, same tolerance already given to IGDB-sourced images.
-    capsuleUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`,
-    heroUrl:    `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`,
-  };
 }
 
 /* ── Backward-compat wrapper (used by _triggerScenarioSearch) ── */

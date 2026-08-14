@@ -2361,84 +2361,6 @@ function selectPicklistItem(igdbId) {
   // Mark title question as answered
   const qTitle = document.getElementById('ob-q-title');
   if (qTitle) qTitle.dataset.answered = '1';
-
-  // If this title links to a Steam store page, kick off best-effort
-  // enrichment (Description, Screenshots, Key Art, Genres) from Steam's
-  // own data — overrides the IGDB-sourced description/screenshots above
-  // once it arrives. Fire-and-forget: the picklist selection above already
-  // leaves the app fully usable, this only upgrades it in place.
-  if (item.steamAppId) {
-    _applySteamStoreEnrichment(item.steamAppId, item.name);
-  }
-}
-
-/* Runs after selectPicklistItem when the picked title has a linked Steam
-   page (item.steamAppId). Fetches fetchSteamStoreData (claude.js) and, if
-   the title hasn't changed since (same guard used in _runTitlePicklist),
-   overrides:
-     - state.formData.description         ← Steam's short_description
-     - state.uploads.screenshots           ← up to 10 Steam screenshots
-     - state.uploads.steamKeyArtCapsule/Hero ← Steam's own library art
-     - state.webSite.genres                ← first 5 popular tags
-   Errors are swallowed — this is a nice-to-have enrichment on top of an
-   already-usable IGDB-sourced fill, not a blocking step. */
-async function _applySteamStoreEnrichment(appId, expectedTitle) {
-  let data;
-  try {
-    data = await fetchSteamStoreData(appId);
-  } catch (err) {
-    console.warn('[Steam enrichment] failed:', err.message);
-    return;
-  }
-
-  // Bail if the title changed since this fetch started (user picked a
-  // different game, or edited the field) — same guard as _runTitlePicklist.
-  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
-
-  // Description — overrides the IGDB summary selectPicklistItem already applied
-  if (data.shortDescription) {
-    state.formData.description = data.shortDescription;
-    const descEl = document.getElementById('ob-desc');
-    if (descEl) {
-      descEl.value = data.shortDescription;
-      charCount('ob-desc-count', data.shortDescription, 4000);
-    }
-  }
-
-  // Screenshots — replace the IGDB-sourced ones (keeping only real uploads,
-  // same filter selectPicklistItem uses) with up to 10 from the Steam page
-  if (data.screenshots && data.screenshots.length) {
-    state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
-    const ts = Date.now();
-    data.screenshots.slice(0, 10).forEach((url, i) => {
-      state.uploads.screenshots.push({ id: 'steam-' + i + '-' + ts, name: `screenshot-${i + 1}.jpg`, url });
-    });
-    const grid = document.getElementById('ob-screenshot-grid');
-    if (grid) renderScreenshotGridInto(grid);
-    updateObSectionStates();
-  }
-
-  // Key Art — Steam Store platform's "Select Key Art" section is the
-  // canonical source (see buildSteamKeyArtEditSection); the Web platform's
-  // Key Art modal reads these same values read-only.
-  if (data.capsuleUrl) {
-    state.uploads.steamKeyArtCapsule = { name: 'steam-vertical-capsule.jpg', url: data.capsuleUrl };
-  }
-  if (data.heroUrl) {
-    state.uploads.steamKeyArtHero = { name: 'steam-library-hero.jpg', url: data.heroUrl };
-  }
-
-  // Web Factsheet Genres — first five popular tags shown on the Steam page
-  if (data.tags && data.tags.length) {
-    state.webSite = state.webSite || {};
-    state.webSite.genres = data.tags.slice(0, 5).join(', ');
-  }
-
-  // Refresh whichever step-modal view happens to be open right now — Preview
-  // Website, Steam's Select Key Art, and Web's Key Art/Factsheet edit views
-  // all read straight from state, so one re-render covers all of them.
-  // renderStepModal() (called inside) is a safe no-op when no modal is open.
-  reRenderStepModal();
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */
@@ -2869,17 +2791,13 @@ function _nextImprovementItem(section) {
   renderStepModal();
 }
 
-// Shared by the screenshot grid AND the Steam Key Art upload boxes/preview-
-// website hero+capsule slots (state.uploads.steamKeyArtCapsule/Hero) — both
-// kinds of upload can carry either a dataUrl (real user upload) or a url
-// (auto-populated from IGDB/Steam), so this same lookup covers both.
 function _screenshotSrc(s) {
   if (s.dataUrl) return s.dataUrl;
   if (!s.url) return '';
-  // IGDB and Steam CDN images: route through wsrv.nl (images.weserv.nl) which is
-  // a dedicated image proxy/CDN that handles hotlink-protected sources reliably.
+  // IGDB CDN images: route through wsrv.nl (images.weserv.nl) which is a dedicated
+  // image proxy/CDN that handles hotlink-protected sources reliably.
   // Strip protocol so wsrv.nl can handle both http and https origins.
-  if (s.url.includes('images.igdb.com') || s.url.includes('steamstatic.com')) {
+  if (s.url.includes('images.igdb.com')) {
     const clean = s.url.replace(/^https?:\/\//, '');
     return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
   }
