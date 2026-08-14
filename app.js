@@ -2361,48 +2361,6 @@ function selectPicklistItem(igdbId) {
   // Mark title question as answered
   const qTitle = document.getElementById('ob-q-title');
   if (qTitle) qTitle.dataset.answered = '1';
-
-  // If this title links to a Steam store page, kick off a best-effort
-  // lookup of its steamdb.info page for Key Art (vertical capsule + hero
-  // banner). Fire-and-forget: the picklist selection above already leaves
-  // the app fully usable, this only fills in Steam's Key Art fields.
-  if (item.steamAppId) {
-    _applySteamDbKeyArt(item.steamAppId, item.name);
-  }
-}
-
-/* Runs after selectPicklistItem when the picked title has a linked Steam
-   page (item.steamAppId). Fetches fetchSteamDbKeyArt (claude.js) and, if
-   the title hasn't changed since (same guard used in _runTitlePicklist),
-   sets:
-     - state.uploads.steamKeyArtCapsule ← steamdb.info's hero_capsule asset
-     - state.uploads.steamKeyArtHero    ← steamdb.info's library_hero asset
-   Each field is left untouched if steamdb.info's page didn't have that
-   asset (fetchSteamDbKeyArt returns null per-field rather than throwing —
-   only a request-level failure throws, caught below). Errors are
-   swallowed — this is a nice-to-have enrichment, not a blocking step. */
-async function _applySteamDbKeyArt(appId, expectedTitle) {
-  let art;
-  try {
-    art = await fetchSteamDbKeyArt(appId);
-  } catch (err) {
-    console.warn('[SteamDB Key Art] failed:', err.message);
-    return;
-  }
-
-  // Bail if the title changed since this fetch started (user picked a
-  // different game, or edited the field) — same guard as _runTitlePicklist.
-  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
-
-  state.uploads = state.uploads || {};
-  if (art.capsuleUrl) state.uploads.steamKeyArtCapsule = { name: 'hero_capsule.jpg', url: art.capsuleUrl };
-  if (art.heroUrl)    state.uploads.steamKeyArtHero    = { name: 'library_hero.jpg',    url: art.heroUrl };
-
-  // Refresh whichever step-modal view happens to be open right now — Preview
-  // Website, Steam's Select Key Art, and Web's Key Art modal all read
-  // straight from state, so one re-render covers all of them.
-  // reRenderStepModal() is a safe no-op when no modal is open.
-  if (art.capsuleUrl || art.heroUrl) reRenderStepModal();
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */
@@ -2833,17 +2791,13 @@ function _nextImprovementItem(section) {
   renderStepModal();
 }
 
-// Shared by the screenshot grid AND the Steam Key Art hero/capsule slots
-// (state.uploads.steamKeyArtCapsule/Hero) — both kinds of upload can carry
-// either a dataUrl (real user upload) or a url (auto-populated from IGDB/
-// steamdb.info), so this same lookup covers both.
 function _screenshotSrc(s) {
   if (s.dataUrl) return s.dataUrl;
   if (!s.url) return '';
-  // IGDB and Steam CDN images: route through wsrv.nl (images.weserv.nl) which is
-  // a dedicated image proxy/CDN that handles hotlink-protected sources reliably.
+  // IGDB CDN images: route through wsrv.nl (images.weserv.nl) which is a dedicated
+  // image proxy/CDN that handles hotlink-protected sources reliably.
   // Strip protocol so wsrv.nl can handle both http and https origins.
-  if (s.url.includes('images.igdb.com') || s.url.includes('steamstatic.com')) {
+  if (s.url.includes('images.igdb.com')) {
     const clean = s.url.replace(/^https?:\/\//, '');
     return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
   }
