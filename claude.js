@@ -547,14 +547,31 @@ async function igdbSearch(title) {
    pulls the hero_capsule/library_hero asset links out of its Assets
    table (hero_capsule — not library_capsule — is used for the vertical
    capsule field; library_capsule tends to be a smaller/lower-res crop).
-   steamdb.info is plain server-rendered HTML (no JS execution needed),
-   proxied through corsproxy.io using the same raw pass-through form as
-   IGDB_ENDPOINT above (corsproxy.io/?<target-url>, no encoding — an
-   earlier, unverified `?url=<encoded>` form was tried and silently
-   failed against the real service). */
+   steamdb.info is plain server-rendered HTML (no JS execution needed).
+
+   Proxied through api.allorigins.win's /raw endpoint rather than
+   corsproxy.io — live testing (real DevTools Network tab, a real
+   Cloudflare challenge page in the response body) showed corsproxy.io's
+   request to steamdb.info was being blocked by steamdb.info's own
+   Cloudflare bot protection before any real page content came back.
+   allorigins.win's /raw endpoint returns the target's body unwrapped (the
+   same shape our regex-based extraction already expects), so this is a
+   drop-in proxy swap, not a parsing change. There's no guarantee this
+   proxy dodges the same bot detection forever — if it also gets
+   challenged, _looksLikeBotChallenge below turns that into a clear,
+   loggable error instead of silently returning null for every asset
+   (which would otherwise be indistinguishable from "this game just
+   doesn't have that asset"). */
 
 function _steamDbInfoUrl(appId) {
   return `https://steamdb.info/app/${appId}/info/`;
+}
+
+// A Cloudflare (or similar) bot-challenge page can come back with a 200
+// status and still not be the real page — check for the usual markers so
+// a blocked request fails loudly rather than silently.
+function _looksLikeBotChallenge(html) {
+  return /cf-browser-verification|cf_chl_|Just a moment|Checking your browser|Attention Required[\s\S]{0,80}Cloudflare|<title>\s*Access denied/i.test(html);
 }
 
 // Each asset row looks like: <td>hero_capsule</td><td>[<a href="...">]{value}[</a>]</td>
@@ -581,9 +598,13 @@ function _extractSteamDbAsset(html, key, appId) {
 }
 
 async function fetchSteamDbKeyArt(appId) {
-  const res = await fetch('https://corsproxy.io/?' + _steamDbInfoUrl(appId));
+  const target = _steamDbInfoUrl(appId);
+  const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(target));
   if (!res.ok) throw new Error('SteamDB request failed (' + res.status + ')');
   const html = await res.text();
+  if (_looksLikeBotChallenge(html)) {
+    throw new Error('SteamDB request was blocked by a bot-protection challenge page');
+  }
   return {
     capsuleUrl: _extractSteamDbAsset(html, 'hero_capsule', appId),
     heroUrl:    _extractSteamDbAsset(html, 'library_hero', appId),
