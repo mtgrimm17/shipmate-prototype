@@ -2361,121 +2361,6 @@ function selectPicklistItem(igdbId) {
   // Mark title question as answered
   const qTitle = document.getElementById('ob-q-title');
   if (qTitle) qTitle.dataset.answered = '1';
-
-  // If this title links to a Steam store page, kick off best-effort
-  // enrichment (Description, Developer, About This Game, Genres) from
-  // Steam's own data — overrides the IGDB-sourced description above once
-  // it arrives. Fire-and-forget: the picklist selection above already
-  // leaves the app fully usable, this only upgrades it in place.
-  if (item.steamAppId) {
-    _applySteamStoreEnrichment(item.steamAppId, item.name);
-    _applySteamDbEnrichment(item.steamAppId, item.name);
-  }
-}
-
-/* Runs after selectPicklistItem when the picked title has a linked Steam
-   page (item.steamAppId). Fetches fetchSteamStoreData (claude.js) and, if
-   the title hasn't changed since (same guard used in _runTitlePicklist),
-   overrides:
-     - state.formData.description  ← Steam's short_description
-     - state.webSite.developer     ← Steam's developers list
-     - state.webSite.aboutGame     ← Steam's about_the_game (HTML stripped)
-     - state.webSite.genres        ← first 5 popular tags shown on the Steam page
-     - state.uploads.screenshots   ← up to 10 screenshots from the Steam page's own gallery
-   Errors are swallowed — this is a nice-to-have enrichment on top of an
-   already-usable IGDB-sourced fill, not a blocking step. */
-async function _applySteamStoreEnrichment(appId, expectedTitle) {
-  let data;
-  try {
-    data = await fetchSteamStoreData(appId);
-  } catch (err) {
-    console.warn('[Steam enrichment] failed:', err.message);
-    return;
-  }
-
-  // Bail if the title changed since this fetch started (user picked a
-  // different game, or edited the field) — same guard as _runTitlePicklist.
-  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
-
-  // Description — overrides the IGDB summary selectPicklistItem already applied
-  if (data.shortDescription) {
-    state.formData.description = data.shortDescription;
-    const descEl = document.getElementById('ob-desc');
-    if (descEl) {
-      descEl.value = data.shortDescription;
-      charCount('ob-desc-count', data.shortDescription, 4000);
-    }
-  }
-
-  state.webSite = state.webSite || {};
-  if (data.developer) state.webSite.developer = data.developer;
-  if (data.aboutGame) state.webSite.aboutGame = data.aboutGame;
-  if (data.tags && data.tags.length) state.webSite.genres = data.tags.slice(0, 5).join(', ');
-
-  // Screenshots — replace the IGDB-sourced ones (keeping only real uploads,
-  // same filter selectPicklistItem uses for its own IGDB fill) with the
-  // Steam page's own gallery, straight from the same appdetails fetch above
-  // (no separate request needed).
-  if (data.screenshots && data.screenshots.length) {
-    state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
-    const ts = Date.now();
-    data.screenshots.forEach((url, i) => {
-      state.uploads.screenshots.push({ id: 'steam-' + i + '-' + ts, name: `screenshot-${i + 1}.jpg`, url });
-    });
-    const grid = document.getElementById('ob-screenshot-grid');
-    if (grid) renderScreenshotGridInto(grid);
-    updateObSectionStates();
-  }
-
-  // Refresh whichever step-modal view happens to be open right now — Preview
-  // Website and Web's Factsheet/Description edit views all read straight
-  // from state, so one re-render covers all of them. renderStepModal()
-  // (called inside) is a safe no-op when no modal is open.
-  reRenderStepModal();
-}
-
-/* Runs after selectPicklistItem alongside _applySteamStoreEnrichment above,
-   as a separate best-effort fetch (independent try/catch — a SteamDB outage
-   shouldn't take down the Steam appdetails-sourced fields, or vice versa).
-   Fetches fetchSteamDbKeyArt (claude.js) and, if the title hasn't changed
-   since (same guard as _runTitlePicklist), sets:
-     - state.uploads.steamKeyArtCapsule ← SteamDB's library_capsule asset
-     - state.uploads.steamKeyArtHero    ← SteamDB's library_hero asset
-     - state.uploads.trailer            ← SteamDB's hls_h264 trailer stream
-   Each field is left untouched if SteamDB's table didn't have that key
-   (fetchSteamDbKeyArt returns null per-field for a missing key rather than
-   throwing — only a request-level failure throws, caught below). The
-   trailer is set as { name, url } — no byte size, since it's a linked HLS
-   stream rather than a downloaded file (see trailerFileRowHTML/the Web
-   preview's Trailers rendering in render.js for how a url-only trailer
-   displays: a clickable link rather than a plain "N MB" row). */
-async function _applySteamDbEnrichment(appId, expectedTitle) {
-  let art;
-  try {
-    art = await fetchSteamDbKeyArt(appId);
-  } catch (err) {
-    console.warn('[SteamDB enrichment] failed:', err.message);
-    return;
-  }
-
-  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
-
-  state.uploads = state.uploads || {};
-  if (art.capsuleUrl) state.uploads.steamKeyArtCapsule = { name: 'library_capsule.jpg', url: art.capsuleUrl };
-  if (art.heroUrl)    state.uploads.steamKeyArtHero    = { name: 'library_hero.jpg',    url: art.heroUrl };
-  if (art.trailerUrl) {
-    state.uploads.trailer = { name: 'trailer.m3u8', url: art.trailerUrl };
-    const info = document.getElementById('ob-trailer-file-info');
-    if (info) {
-      info.style.display = 'block';
-      info.innerHTML = trailerFileRowHTML('trailer.m3u8', null, 'ob-', art.trailerUrl);
-    }
-  }
-
-  // Same rationale as _applySteamStoreEnrichment's final reRenderStepModal —
-  // refreshes Preview Website / Steam's Select Key Art / Web's Key Art
-  // modal, whichever (if any) is currently open.
-  reRenderStepModal();
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */
@@ -2906,17 +2791,13 @@ function _nextImprovementItem(section) {
   renderStepModal();
 }
 
-// Shared by the screenshot grid AND the Steam Key Art upload boxes/preview-
-// website hero+capsule slots (state.uploads.steamKeyArtCapsule/Hero) — both
-// kinds of upload can carry either a dataUrl (real user upload) or a url
-// (auto-populated from IGDB/SteamDB), so this same lookup covers both.
 function _screenshotSrc(s) {
   if (s.dataUrl) return s.dataUrl;
   if (!s.url) return '';
-  // IGDB and Steam CDN images: route through wsrv.nl (images.weserv.nl) which is
-  // a dedicated image proxy/CDN that handles hotlink-protected sources reliably.
+  // IGDB CDN images: route through wsrv.nl (images.weserv.nl) which is a dedicated
+  // image proxy/CDN that handles hotlink-protected sources reliably.
   // Strip protocol so wsrv.nl can handle both http and https origins.
-  if (s.url.includes('images.igdb.com') || s.url.includes('steamstatic.com')) {
+  if (s.url.includes('images.igdb.com')) {
     const clean = s.url.replace(/^https?:\/\//, '');
     return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
   }
