@@ -2553,12 +2553,14 @@ function buildWebSitePreviewSection() {
     ? `<h3 class="pk-h3">${escHtml(label)}</h3>${innerHtml}`
     : '';
 
-  // Developer + Location, Website and Email (from the "Factsheet" and
-  // "About" groups in Edit site details, respectively) — each is its own
-  // sub-section now, independently optional. Developer always shows (with a
-  // muted dash placeholder when empty), unlike the other optional sub-sections.
-  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>`;
-  const devLocationValue = ws.basedIn ? `<p class="pk-p">${escHtml(ws.basedIn)}</p>` : '';
+  // Developer (+ Location, folded in as a line under the developer name
+  // rather than its own sub-section — see devNameValue below), Website and
+  // Email (from the "Factsheet" and "About" groups in Edit site details,
+  // respectively) — each of these is its own sub-section, independently
+  // optional. Developer always shows (with a muted dash placeholder when
+  // empty), unlike the other optional sub-sections.
+  const devLocationLine = ws.basedIn ? `<p class="pk-p">Based in ${escHtml(ws.basedIn)}</p>` : '';
+  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}`;
 
   const websiteRaw = ws.website ? ws.website.trim() : '';
   const websiteDomain = websiteRaw
@@ -2573,8 +2575,24 @@ function buildWebSitePreviewSection() {
 
   // Platforms — synced read-only from the platforms selected elsewhere in
   // Shipmate (state.activePlatforms), not a separate field on state.webSite.
-  const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
-  const platformsValue = platformNames.length ? `<p class="pk-p">${escHtml(platformNames.join(', '))}</p>` : '';
+  // Rendered as icons (the same platformIcon() helper/icon set used for the
+  // platform tiles and step-modal headers elsewhere in Shipmate) rather than
+  // platform-name text. Each icon is wrapped in the shared tooltip-anchor
+  // pattern (data-tip) with its PK_PLATFORM_LABELS name — the same label
+  // text this sub-section used to show outright — so the name is still
+  // available on hover/tap despite there being no visible text.
+  // Note: this wrapper is a <span> (with display:flex), not a <div> — the
+  // Factsheet/Description main sections are themselves <div id="pk-...">
+  // wrappers, and this codebase's own render tests locate a main section
+  // by matching to its FIRST same-tag closing tag; a nested <div> here
+  // would close that match early and hide everything after it (Genres).
+  // <section>-wrapped main sections (Media/About) don't have this hazard.
+  const activePids = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
+  const platformsValue = activePids.length ? `
+    <span class="pk-platform-icons" style="display:flex;flex-wrap:wrap;gap:10px;">
+      ${activePids.map(pid => `
+        <span class="pk-platform-icon tooltip-anchor" data-tip="${escHtml(PK_PLATFORM_LABELS[pid] || pid)}" style="display:inline-flex;">${platformIcon(pid, 24)}</span>`).join('')}
+    </span>` : '';
 
   const genresValue = (ws.genres && ws.genres.trim()) ? `<p class="pk-p">${escHtml(ws.genres.trim())}</p>` : '';
 
@@ -2587,7 +2605,6 @@ function buildWebSitePreviewSection() {
     <div class="pk-factsheet pk-mainsection" id="pk-factsheet" onclick="openStorePreviewSection('web','webFactsheet')">
       <h2 class="pk-h2">Factsheet</h2>
       ${pkSub('Developer', devNameValue)}
-      ${pkSub('Location', devLocationValue)}
       ${pkSub('Release Date', releaseDateValue)}
       ${pkSub('Platforms', platformsValue)}
       ${pkSub('Genres', genresValue)}
