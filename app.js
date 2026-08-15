@@ -2361,6 +2361,42 @@ function selectPicklistItem(igdbId) {
   // Mark title question as answered
   const qTitle = document.getElementById('ob-q-title');
   if (qTitle) qTitle.dataset.answered = '1';
+
+  // If this title links to a Steam store page, try the hero banner's
+  // direct CDN URL (steamLibraryHeroUrl in claude.js) — no proxy, no
+  // steamdb.info lookup needed for this one asset. Fire-and-forget: the
+  // picklist selection above already leaves the app fully usable, this
+  // only fills in the Steam Key Art hero field if it resolves.
+  if (item.steamAppId) {
+    _applySteamHeroBanner(item.steamAppId, item.name);
+  }
+}
+
+/* Runs after selectPicklistItem when the picked title has a linked Steam
+   page (item.steamAppId). Preloads Steam's library_hero image directly
+   from its stable, hash-free CDN URL (steamLibraryHeroUrl, claude.js) —
+   using an off-DOM Image() so a missing asset (some games just don't have
+   one) shows up as a load failure to handle gracefully, rather than a
+   broken <img> the user sees in the app. Only on a successful load, and
+   only if the title hasn't changed since (same guard used elsewhere for
+   this kind of fire-and-forget enrichment), sets:
+     - state.uploads.steamKeyArtHero ← { name: 'library_hero.jpg', url }
+   No network request our own code has to reason about failing/blocking —
+   the browser's own image loading handles the request, and there's no
+   proxy in the loop to get rate-limited or IP-blocked. */
+function _applySteamHeroBanner(appId, expectedTitle) {
+  const url = steamLibraryHeroUrl(appId);
+  const img = new Image();
+  img.onload = () => {
+    if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+    state.uploads = state.uploads || {};
+    state.uploads.steamKeyArtHero = { name: 'library_hero.jpg', url };
+    reRenderStepModal();
+  };
+  img.onerror = () => {
+    console.warn('[Steam Hero Banner] no library_hero.jpg found for app', appId);
+  };
+  img.src = url;
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */

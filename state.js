@@ -1897,10 +1897,20 @@ function makeBlankUploads() {
     featureGraphic: null,
     trailer:        null,
     // Key Art — a vertical capsule (748×896) and hero banner (3840×1240)
-    // image, each { name, dataUrl } like appIcon/featureGraphic. Set via the
-    // "Select Key Art" section of the Steam Store platform's Store Page
-    // Preview (buildSteamKeyArtEditSection in render.js) — the canonical
-    // source, same role Shipmate's Assets step plays for uploads.trailer/
+    // image. steamKeyArtCapsule is manual-upload-only: { name, dataUrl },
+    // like appIcon/featureGraphic — Steam doesn't expose a hash-free CDN
+    // URL for the vertical capsule, and the hash-aware source (steamdb.info)
+    // blocks proxied requests (see claude.js's steamLibraryHeroUrl comment
+    // for the full story), so there's no reliable way to auto-populate it.
+    // steamKeyArtHero can be either { name, dataUrl } for a manual upload,
+    // or { name, url } when auto-populated from Steam's own library_hero
+    // CDN URL (steamLibraryHeroUrl in claude.js, applied by
+    // _applySteamHeroBanner in app.js) — no proxy or lookup needed for
+    // that one asset. _screenshotSrc in app.js resolves either shape to a
+    // render-ready <img> src. Both fields are set via the "Select Key Art"
+    // section of the Steam Store platform's Store Page Preview
+    // (buildSteamKeyArtEditSection in render.js) — the canonical source,
+    // same role Shipmate's Assets step plays for uploads.trailer/
     // screenshots. The Web platform's "Key Art" flip modal
     // (buildWebKeyArtEditSection) reads these read-only, showing them on the
     // preview website in place of the placeholder graphics once set (see

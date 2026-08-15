@@ -508,6 +508,24 @@ async function igdbSearch(title) {
     platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
     // Strict activation list stored separately for selectPicklistItem
     activationPlatforms: _igdbPlatforms(g.platforms, g.websites, g.release_dates, false),
+    // Steam app ID, if IGDB links to a Steam store page — e.g.
+    // "https://store.steampowered.com/app/4037180/Go_Ape_Ship/" → "4037180".
+    // Used by _applySteamHeroBanner (app.js) to build the game's Steam
+    // library_hero CDN URL directly (see steamLibraryHeroUrl below).
+    //
+    // Matches on the URL itself rather than a website "category"/"type"
+    // field — live testing showed IGDB no longer reliably returns a
+    // category on `websites` entries (confirmed via a real console dump:
+    // website objects came back as bare {id, url}, no category key, even
+    // though the query explicitly requests websites.category), so a
+    // category-based check silently never matched. URL matching sidesteps
+    // that entirely.
+    steamAppId: (() => {
+      const steamSite = (g.websites || []).find(w => w.url && /store\.steampowered\.com\/app\//i.test(w.url));
+      if (!steamSite) return null;
+      const m = steamSite.url.match(/\/app\/(\d+)/);
+      return m ? m[1] : null;
+    })(),
     summary:     g.summary || '',
     // Up to 6 screenshots upgraded from t_thumb to t_screenshot_big (889×500)
     // also proxied through wsrv.nl for the same reason.
@@ -520,6 +538,23 @@ async function igdbSearch(title) {
         return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
       }),
   }));
+}
+
+/* ── Steam library_hero direct CDN URL ───────────────────────
+   Steam's library_hero asset (unlike the vertical capsule) is available
+   at a stable, hash-free path keyed only by the app ID — no steamdb.info
+   lookup, no proxy, no CORS concern (it's just an <img> src). Verified
+   live against two different real app IDs (4037180, 2240080): both
+   resolved real image bytes at this exact path with no hash segment.
+   The vertical capsule has no equivalent hash-free path — every filename
+   tried (library_600x900(.jpg/_2x.jpg), library_capsule.jpg,
+   hero_capsule.jpg, capsule_616x353.jpg) 404'd without the per-asset hash
+   steamdb.info exposes, and steamdb.info itself blocks proxied requests
+   with an explicit ASN-based block page (see the app.js/claude.js history
+   around v2.82–v2.87 for the full story) — so the capsule field stays
+   manual-upload-only for now; only library_hero is auto-populated here. */
+function steamLibraryHeroUrl(appId) {
+  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`;
 }
 
 /* ── Backward-compat wrapper (used by _triggerScenarioSearch) ── */
