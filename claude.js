@@ -573,6 +573,56 @@ function steamLibraryHeroUrl(appId) {
   return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`;
 }
 
+/* ── Steam appdetails — short description, developer, "About This Game",
+   and screenshots ─────────────────────────────────────────────────────
+   store.steampowered.com/api/appdetails is undocumented (no official
+   Steamworks Web API reference page, no key required) but stable — it's
+   the same data backing the store page itself, and is what most
+   third-party Steam-library tools rely on. Requires a CORS proxy from the
+   browser since store.steampowered.com doesn't send permissive CORS
+   headers; corsproxy.io is reused here since it's already verified live
+   and working for IGDB itself in this exact app (see this project's
+   appdetails reliability testing — a live-browser fetch() from a real
+   Shipmate page got a clean 200 on the identical corsproxy.io host for
+   the IGDB endpoint, so there's no reason to expect it to behave
+   differently for this target). Used by _applySteamAboutData (app.js). */
+async function fetchSteamAppDetails(appId) {
+  const res = await fetch(`https://corsproxy.io/?https://store.steampowered.com/api/appdetails?appids=${appId}`);
+  if (!res.ok) throw new Error('Steam appdetails fetch failed (' + res.status + ')');
+  const json = await res.json();
+  const entry = json && json[appId];
+  if (!entry || !entry.success || !entry.data) throw new Error('Steam appdetails: no data for app ' + appId);
+  return entry.data;
+}
+
+// Steam's "about_the_game" field is a fragment of raw store-page HTML
+// (<br>/<p> tags, the occasional list, HTML entities) rather than plain
+// text. state.webSite.aboutGame's existing convention (see state.js) is
+// plain text, one paragraph per line — this flattens Steam's HTML down to
+// that shape: block-level breaks become newlines, remaining tags are
+// stripped, common entities are decoded, and blank lines are dropped.
+// Deliberately simple (not a full HTML parser) since this is a one-way,
+// best-effort conversion for a pre-fill the developer can always edit.
+function _steamHtmlToParagraphLines(html) {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 /* ── Backward-compat wrapper (used by _triggerScenarioSearch) ── */
 // STORE_NAME_TO_PID is kept so confirmGameImport still works if called
 // via the old scenario path; IGDB returns our PIDs directly so the

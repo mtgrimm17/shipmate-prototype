@@ -2296,14 +2296,25 @@ function selectPicklistItem(igdbId) {
     charCount('ob-title-count', item.name, 30);
   }
 
-  // Pre-fill description
-  if (item.summary) {
-    state.formData.description = item.summary;
-    const descEl = document.getElementById('ob-desc');
-    if (descEl) {
-      descEl.value = item.summary;
-      charCount('ob-desc-count', item.summary, 4000);
-    }
+  // Where the rest of this game's data comes from depends on whether IGDB
+  // links to a Steam store page for it. If it does, Steam is treated as the
+  // source of truth for Description / Web Factsheet Developer / Web
+  // "About This Game" / screenshots — Steam's own store-page copy and full
+  // screenshot set is generally more complete and current than IGDB's
+  // community-submitted summary/screenshots for a title that's actually
+  // live on Steam. That fetch (fetchSteamAppDetails in claude.js, via
+  // corsproxy.io — verified live and already working for IGDB itself, see
+  // this project's appdetails reliability testing) is async, so
+  // _applySteamAboutData fills these fields in shortly after this function
+  // returns, not immediately; if the fetch fails, it falls back to filling
+  // from IGDB's own summary/screenshots (via the same helpers used in the
+  // no-Steam-link branch below) rather than leaving the About section and
+  // screenshot grid empty.
+  if (item.steamAppId) {
+    _applySteamAboutData(item.steamAppId, item.name, item);
+  } else {
+    if (item.summary) _fillDescriptionField(item.summary);
+    _fillScreenshotGridFromIgdb(item.screenshots || []);
   }
 
   // Auto-activate platforms — use strict activationPlatforms (no unconfirmed console ports)
@@ -2322,28 +2333,6 @@ function selectPicklistItem(igdbId) {
       gridWrap.classList.remove('is-req-empty');
     }
     renderOnboardingFooter();
-  }
-
-  // Auto-populate screenshots from IGDB.
-  // Always clear previously IGDB-sourced screenshots (id starts with 'igdb-') when
-  // a new game is selected, then load the new game's screenshots. User-uploaded
-  // screenshots (those with a dataUrl) are left untouched.
-  // IGDB CDN images route through wsrv.nl to avoid 403s from direct hotlinking.
-  {
-    state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl); // keep only real uploads
-    if (item.screenshots && item.screenshots.length > 0) {
-      const ts = Date.now();
-      item.screenshots.forEach((url, i) => {
-        state.uploads.screenshots.push({
-          id:   'igdb-' + i + '-' + ts,
-          name: `screenshot-${i + 1}.jpg`,
-          url,  // stored as URL; rendering proxies through wsrv.nl
-        });
-      });
-    }
-    const grid = document.getElementById('ob-screenshot-grid');
-    if (grid) renderScreenshotGridInto(grid);
-    updateObSectionStates();
   }
 
   // Show confirmed state in the scenario widget
@@ -2434,6 +2423,110 @@ function _applySteamCapsuleFromCover(url, expectedTitle) {
     console.warn('[Steam Vertical Capsule] failed to load IGDB cover art', url);
   };
   img.src = url;
+}
+
+/* ── About-section data source helpers (IGDB vs. Steam) ──────────────────
+   Shared by selectPicklistItem's two branches (no linked Steam page /
+   Steam fetch failed → IGDB; Steam fetch succeeded → Steam), so both
+   sources fill the Description field and screenshot grid the same way. */
+
+function _fillDescriptionField(text) {
+  state.formData.description = text || '';
+  const descEl = document.getElementById('ob-desc');
+  if (descEl) {
+    descEl.value = text || '';
+    charCount('ob-desc-count', text || '', 4000);
+  }
+}
+
+function _refreshScreenshotGrid() {
+  const grid = document.getElementById('ob-screenshot-grid');
+  if (grid) renderScreenshotGridInto(grid);
+  updateObSectionStates();
+}
+
+// Always clears previously auto-populated screenshots (id starts with
+// 'igdb-' or 'steam-') when a new game is selected, then loads the new
+// game's screenshots. User-uploaded screenshots (those with a dataUrl) are
+// left untouched. IGDB CDN images route through wsrv.nl (via _screenshotSrc
+// at render time) to avoid 403s from direct hotlinking.
+function _fillScreenshotGridFromIgdb(urls) {
+  state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
+  (urls || []).forEach((url, i) => {
+    state.uploads.screenshots.push({
+      id:   'igdb-' + i + '-' + Date.now(),
+      name: `screenshot-${i + 1}.jpg`,
+      url,  // stored as URL; rendering proxies through wsrv.nl
+    });
+  });
+  _refreshScreenshotGrid();
+}
+
+// Same clearing behavior as _fillScreenshotGridFromIgdb, sourced from a
+// Steam appdetails 'screenshots' array ({ id, path_thumbnail, path_full }
+// objects) instead — up to the first 10. Steam's own CDN images load
+// directly with no proxy needed (same reasoning as steamLibraryHeroUrl
+// above: plain <img> loading doesn't require CORS headers).
+function _fillScreenshotGridFromSteam(steamScreenshots) {
+  state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
+  const ts = Date.now();
+  (steamScreenshots || []).slice(0, 10).filter(s => s && s.path_full).forEach((s, i) => {
+    state.uploads.screenshots.push({
+      id:   'steam-' + i + '-' + ts,
+      name: `screenshot-${i + 1}.jpg`,
+      url:  s.path_full,
+    });
+  });
+  _refreshScreenshotGrid();
+}
+
+/* Runs after selectPicklistItem when the picked title has a linked Steam
+   page (item.steamAppId). Fetches Steam's own appdetails (via
+   fetchSteamAppDetails in claude.js, over corsproxy.io — verified live and
+   already working for IGDB itself) and, on success, replaces IGDB as the
+   source of truth for this game's:
+     - About section Description ← Steam's short_description
+     - Web platform Factsheet Developer ← Steam's developers list, joined
+     - Web platform Description "About This Game" ← Steam's about_the_game
+       (HTML flattened to one paragraph per line — see _steamHtmlToParagraphLines
+       in claude.js — matching the plain-text convention state.webSite.aboutGame
+       already uses)
+     - Assets screenshot grid ← Steam's first 10 screenshots
+   Same stale-title guard as _applySteamHeroBanner/_applySteamCapsuleFromCover:
+   if the user has since picked a different title, this silently no-ops.
+   If the fetch itself fails (network error, no Steam data for this app id,
+   etc.), falls back to filling from IGDB's own summary/screenshots — via
+   fallbackItem, the same picklist item passed to selectPicklistItem — so a
+   flaky Steam fetch doesn't leave the About section and screenshot grid
+   empty; it just quietly degrades to the same result as a title with no
+   linked Steam page. */
+async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
+  let data = null;
+  try {
+    data = await fetchSteamAppDetails(appId);
+  } catch (e) {
+    console.warn('[Steam About Data] failed to fetch appdetails for app', appId, e);
+  }
+
+  // Stale guard — bail if the user has since picked a different title.
+  // Note: on fallback we still want to fill in IGDB data for the CURRENT
+  // title, so this guard applies to both branches below, not just success.
+  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+
+  if (data) {
+    // Guarded like item.summary in the no-Steam-link branch below — only
+    // overwrite a field if Steam actually has content for it, rather than
+    // blanking something the developer may have already typed in on the
+    // rare page missing one of these fields.
+    if (data.short_description) _fillDescriptionField(data.short_description);
+    if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
+    if (data.about_the_game) state.webSite.aboutGame = _steamHtmlToParagraphLines(data.about_the_game);
+    _fillScreenshotGridFromSteam(data.screenshots || []);
+  } else {
+    if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
+    _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);
+  }
+  reRenderStepModal();
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */
