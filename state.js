@@ -2159,7 +2159,13 @@ const state = {
     accent: '#0EA5A4',
     // Factsheet — Developer + Location
     developer: '', basedIn: '',
-    genres: '',             // free text, e.g. "Roguelike, Deckbuilder"
+    // Free text, e.g. "Roguelike, Deckbuilder". Auto-populated (when the
+    // picked title links to a Steam page) from Steam's appdetails 'genres'
+    // list, joined — see _applySteamAboutData in app.js. That's Steam's
+    // short, fixed, developer-assigned genre list, not the community-voted
+    // "tags" chips shown on the store page — appdetails has no field for
+    // those (see this project's Steam-tags research).
+    genres: '',
     // Description
     description: '',        // "Hook" — overrides the Description field synced from Game Details
     aboutGame: '',          // "About This Game" — one paragraph per line

@@ -2492,6 +2492,7 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
        in claude.js — matching the plain-text convention state.webSite.aboutGame
        already uses)
      - Assets screenshot grid ← Steam's first 10 screenshots
+     - Web platform Factsheet Genres ← Steam's genres list, joined
    Same stale-title guard as _applySteamHeroBanner/_applySteamCapsuleFromCover:
    if the user has since picked a different title, this silently no-ops.
    If the fetch itself fails (network error, no Steam data for this app id,
@@ -2499,7 +2500,8 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
    fallbackItem, the same picklist item passed to selectPicklistItem — so a
    flaky Steam fetch doesn't leave the About section and screenshot grid
    empty; it just quietly degrades to the same result as a title with no
-   linked Steam page. */
+   linked Steam page. (Genres has no IGDB-sourced fallback/equivalent
+   today, so it's simply left as-is when the Steam fetch fails.) */
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
   try {
@@ -2521,6 +2523,14 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     if (data.short_description) _fillDescriptionField(data.short_description);
     if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
     if (data.about_the_game) state.webSite.aboutGame = _steamHtmlToParagraphLines(data.about_the_game);
+    // Steam's genres are { id, description } objects (e.g. { id: "1",
+    // description: "Action" }) — not the community-voted "tags" chips
+    // shown on the store page (appdetails has no field for those at all,
+    // see this project's Steam-tags research), just the short, fixed,
+    // developer-assigned genre list. webSite.genres is free text (see
+    // state.js), so this joins the descriptions the same way developers
+    // above joins Steam's developers list.
+    if (data.genres && data.genres.length) state.webSite.genres = data.genres.map(g => g.description).filter(Boolean).join(', ');
     _fillScreenshotGridFromSteam(data.screenshots || []);
   } else {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
