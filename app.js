@@ -166,7 +166,22 @@ function completeOnboarding() {
   // Prototype mode: no mandatory fields — launch dashboard freely.
   // Validation infrastructure (OB_TAB_REQUIRED, _setObValidating) retained for future use.
 
-  if (state._newProjectMode) {
+  // Re-entering onboarding on an already-created project (e.g. via the
+  // dashboard's "Edit game details" button, which calls openOnboarding(0)
+  // directly) must update that project in place instead of spawning a
+  // duplicate. The only case that should create a brand-new project is
+  // createNewProject()'s explicit _newProjectMode flag, or there being no
+  // active project yet at all (first-ever onboarding).
+  const existingProj = !state._newProjectMode
+    ? state.projects.find(p => p.id === state.activeProjectId)
+    : null;
+
+  if (existingProj) {
+    // Editing an existing project's details — save the live-edited flat
+    // state (formData/uploads/answers/platforms) back onto it rather than
+    // creating a new project record.
+    saveCurrentToProject();
+  } else if (state._newProjectMode) {
     // Creating a 2nd+ project — preserve activePlatforms selected during onboarding
     const ver  = makeEmptyVersion('1.0');
     const proj = {
