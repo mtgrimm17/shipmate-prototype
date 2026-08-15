@@ -1897,17 +1897,22 @@ function makeBlankUploads() {
     featureGraphic: null,
     trailer:        null,
     // Key Art — a vertical capsule (748×896) and hero banner (3840×1240)
-    // image. steamKeyArtCapsule is manual-upload-only: { name, dataUrl },
-    // like appIcon/featureGraphic — Steam doesn't expose a hash-free CDN
-    // URL for the vertical capsule, and the hash-aware source (steamdb.info)
-    // blocks proxied requests (see claude.js's steamLibraryHeroUrl comment
-    // for the full story), so there's no reliable way to auto-populate it.
-    // steamKeyArtHero can be either { name, dataUrl } for a manual upload,
-    // or { name, url } when auto-populated from Steam's own library_hero
+    // image. Both fields can be either { name, dataUrl } for a manual
+    // upload, or { name, url } when auto-populated from a picklist
+    // selection. steamKeyArtHero's url comes from Steam's own library_hero
     // CDN URL (steamLibraryHeroUrl in claude.js, applied by
-    // _applySteamHeroBanner in app.js) — no proxy or lookup needed for
-    // that one asset. _screenshotSrc in app.js resolves either shape to a
-    // render-ready <img> src. Both fields are set via the "Select Key Art"
+    // _applySteamHeroBanner in app.js) — no proxy or lookup needed for that
+    // one asset. steamKeyArtCapsule's url comes from IGDB's own cover art
+    // (coverBigUrl in claude.js, applied by _applySteamCapsuleFromCover in
+    // app.js) — Steam itself doesn't expose a hash-free CDN URL for its own
+    // capsule asset, and the hash-aware source (steamdb.info) blocks
+    // proxied requests (see steamLibraryHeroUrl's comment for the full
+    // story), so IGDB's cover is used as a fallback instead. It's IGDB's
+    // own crop/resolution (264×374), not Steam's exact asset, so a
+    // developer who wants Steam's precise capsule art can still replace it
+    // with a manual upload. _screenshotSrc in app.js resolves either shape
+    // (dataUrl or url, and proxies images.igdb.com URLs through wsrv.nl)
+    // to a render-ready <img> src. Both fields are set via the "Select Key Art"
     // section of the Steam Store platform's Store Page Preview
     // (buildSteamKeyArtEditSection in render.js) — the canonical source,
     // same role Shipmate's Assets step plays for uploads.trailer/

@@ -2370,6 +2370,18 @@ function selectPicklistItem(igdbId) {
   if (item.steamAppId) {
     _applySteamHeroBanner(item.steamAppId, item.name);
   }
+
+  // Populate the vertical capsule from IGDB's own cover art. Steam has no
+  // hash-free CDN URL for its own capsule asset (see steamLibraryHeroUrl's
+  // comment in claude.js) and steamdb.info scraping is blocked at the
+  // network level (see the v2.82–v2.87 history), so IGDB's cover is the
+  // best available fallback rather than leaving the field manual-upload-
+  // only. Runs independent of item.steamAppId — it only depends on IGDB's
+  // own cover field, which every platform's picklist item can have, not
+  // just ones with a linked Steam page.
+  if (item.coverBigUrl) {
+    _applySteamCapsuleFromCover(item.coverBigUrl, item.name);
+  }
 }
 
 /* Runs after selectPicklistItem when the picked title has a linked Steam
@@ -2395,6 +2407,31 @@ function _applySteamHeroBanner(appId, expectedTitle) {
   };
   img.onerror = () => {
     console.warn('[Steam Hero Banner] no library_hero.jpg found for app', appId);
+  };
+  img.src = url;
+}
+
+/* Runs after selectPicklistItem whenever the picked title has IGDB cover
+   art (item.coverBigUrl). Same off-DOM Image() preload pattern as
+   _applySteamHeroBanner above, so a missing/broken cover URL just logs a
+   warning instead of showing a broken <img>. Only on a successful load,
+   and only if the title hasn't changed since (same stale-response guard),
+   sets:
+     - state.uploads.steamKeyArtCapsule ← { name: 'cover.jpg', url }
+   Note this is IGDB's own cover crop/resolution (t_cover_big, 264×374),
+   not Steam's exact 748×896 capsule asset — it's a placeholder that beats
+   no image, but a developer who wants Steam's precise capsule art should
+   still replace it with a manual upload here. */
+function _applySteamCapsuleFromCover(url, expectedTitle) {
+  const img = new Image();
+  img.onload = () => {
+    if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+    state.uploads = state.uploads || {};
+    state.uploads.steamKeyArtCapsule = { name: 'cover.jpg', url };
+    reRenderStepModal();
+  };
+  img.onerror = () => {
+    console.warn('[Steam Vertical Capsule] failed to load IGDB cover art', url);
   };
   img.src = url;
 }

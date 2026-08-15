@@ -2534,7 +2534,7 @@ function buildWebSitePreviewSection() {
   const capsuleUpload = ups.steamKeyArtCapsule;
   const capsuleHTML = capsuleUpload ? `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
-      <img src="${capsuleUpload.dataUrl}" alt="Vertical capsule" class="pk-capsule-img">
+      <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img">
     </div>` : `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
       <span class="pk-capsule-badge">Placeholder</span>

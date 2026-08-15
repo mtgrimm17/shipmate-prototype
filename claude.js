@@ -504,6 +504,22 @@ async function igdbSearch(title) {
       const clean  = direct.replace(/^https?:\/\//, '');
       return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
     })(),
+    // Cover art at IGDB's largest dedicated "cover" size (t_cover_big,
+    // 264×374 — portrait, the closest native aspect IGDB offers to Steam's
+    // 748×896 vertical capsule). Used by _applySteamCapsuleFromCover
+    // (app.js) to auto-populate the Steam Key Art "Vertical Capsule" field:
+    // Steam itself doesn't expose a hash-free CDN URL for that asset, and
+    // the hash-aware source (steamdb.info) blocks proxied requests (see
+    // steamLibraryHeroUrl's comment below for the full story), so IGDB's own
+    // cover is the best fallback source available without standing up a
+    // dedicated backend. Kept as a raw images.igdb.com URL, not pre-proxied
+    // like coverUrl above — _screenshotSrc (app.js) already proxies any
+    // images.igdb.com URL through wsrv.nl at render time, same as
+    // screenshots elsewhere, so there's no need to double up here.
+    coverBigUrl: (() => {
+      if (!g.cover?.url) return null;
+      return (g.cover.url.startsWith('//') ? 'https:' : '') + g.cover.url.replace('t_thumb', 't_cover_big');
+    })(),
     // forDisplay=true → consoles shown without requiring confirmed release status
     platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
     // Strict activation list stored separately for selectPicklistItem
