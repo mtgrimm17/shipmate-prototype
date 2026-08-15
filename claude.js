@@ -608,23 +608,52 @@ async function fetchSteamAppDetails(appId) {
 // is enough to mark a break no matter how many <br>s/</p>s produced it) —
 // they're the whole point of this conversion now, not noise to discard, so
 // Shipmate's preview reproduces the same two-level spacing Steam's own page
-// shows instead of flattening every line to identical spacing. Still
-// deliberately simple (not a full HTML parser) since this is a one-way,
-// best-effort conversion for a pre-fill the developer can always edit.
+// shows instead of flattening every line to identical spacing.
+//
+// Headings need their own handling: Steam's rich-text editor emits bare
+// <h1>-<h6> tags directly in the content flow, NOT wrapped in their own
+// <p> the way a real paragraph is. Confirmed live against Spilled!'s
+// actual "About This Game" HTML — its sub-headings ("Clean up and relax",
+// "Key features", etc.) came through with zero separation from the text
+// or bullet list right after them ("Key features• Around 1 hour of
+// playtime...", "...cute animalsThere are 16 animals...") because a
+// heading tag, stripped by the old catch-all with no replacement, left
+// nothing behind to separate it from whatever followed. Since this field
+// is plain text with no bold/heading styling available, a heading is
+// treated as its own isolated one-line "paragraph" (a blank line on both
+// sides) — the closest approximation of Steam's visual hierarchy this
+// two-level (tight line vs. paragraph gap) spacing model can express.
+//
+// The other, more defensive change: any tag NOT explicitly handled below
+// (<img>, <strong>, <span>, <div>, <a>, <ul>/<ol>, ...) is now replaced
+// with a single space rather than vanishing with nothing in its place —
+// an embedded screenshot in the middle of a paragraph, for instance, used
+// to disappear and glue the words on either side of it together (with
+// only whatever incidental whitespace happened to exist in the raw source
+// leaking through, which is why the old output had inconsistent gluing:
+// sometimes a stray double space, sometimes none at all). A real word
+// boundary always beats a false one; runs of these inserted spaces are
+// collapsed back down to one afterward.
+//
+// Still deliberately simple (not a full HTML parser) since this is a
+// one-way, best-effort conversion for a pre-fill the developer can always
+// edit.
 function _steamHtmlToParagraphLines(html) {
   if (!html) return '';
   const rawLines = html
+    .replace(/<\/?h[1-6][^>]*>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<li[^>]*>/gi, '• ')
     .replace(/<\/li>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<[^>]+>/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/ {2,}/g, ' ')
     .split('\n')
     .map(line => line.trim());
 
