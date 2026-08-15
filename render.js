@@ -2452,6 +2452,23 @@ function _pkLines(text) {
   return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
 }
 
+/* Splits a textarea's contents into paragraphs on blank-line boundaries —
+   a blank line is a paragraph break; consecutive non-blank lines belong to
+   the same paragraph (soft line breaks within it). Returns an array of
+   paragraphs, each itself an array of trimmed, non-empty lines — callers
+   escape and join each paragraph's lines with <br> (see aboutGameValue),
+   so a real paragraph gets its own <p> (full CSS spacing) while a
+   same-paragraph line break stays tight (no extra margin). Unlike
+   _pkLines above (still used by History), this treats blank lines as
+   meaningful rather than noise to discard — see aboutGame's comment in
+   state.js for why. */
+function _pkParagraphs(text) {
+  return (text || '')
+    .split(/\n\s*\n/)
+    .map(block => block.split('\n').map(l => l.trim()).filter(Boolean))
+    .filter(lines => lines.length);
+}
+
 /* Formats a "YYYY-MM-DD" release date (as stored in state.formData.releaseDate,
    synced from the release date picker elsewhere in Shipmate) into "Month D, YYYY",
    e.g. "February 19, 2026". Returns '' when there's no date set yet. */
@@ -2575,12 +2592,13 @@ function buildWebSitePreviewSection() {
 
   // Platforms — synced read-only from the platforms selected elsewhere in
   // Shipmate (state.activePlatforms), not a separate field on state.webSite.
-  // Rendered as icons (the same platformIcon() helper/icon set used for the
-  // platform tiles and step-modal headers elsewhere in Shipmate) rather than
-  // platform-name text. Each icon is wrapped in the shared tooltip-anchor
-  // pattern (data-tip) with its PK_PLATFORM_LABELS name — the same label
-  // text this sub-section used to show outright — so the name is still
-  // available on hover/tap despite there being no visible text.
+  // Rendered as icons rather than platform-name text, no tooltip — plain,
+  // silent icons. Uses platformIcon(pid, size, 'white') — the same
+  // monochrome/single-tone icon variant (and small neutral badge treatment:
+  // see .pk-platform-icon in style.css, matching .inactive-card-icon's
+  // recipe) used for the Dashboard's platform cards elsewhere in Shipmate,
+  // rather than the full-color brand-logo variant used everywhere else in
+  // this preview website.
   // Note: this wrapper is a <span> (with display:flex), not a <div> — the
   // Factsheet/Description main sections are themselves <div id="pk-...">
   // wrappers, and this codebase's own render tests locate a main section
@@ -2589,9 +2607,9 @@ function buildWebSitePreviewSection() {
   // <section>-wrapped main sections (Media/About) don't have this hazard.
   const activePids = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
   const platformsValue = activePids.length ? `
-    <span class="pk-platform-icons" style="display:flex;flex-wrap:wrap;gap:10px;">
+    <span class="pk-platform-icons" style="display:flex;flex-wrap:wrap;gap:8px;">
       ${activePids.map(pid => `
-        <span class="pk-platform-icon tooltip-anchor" data-tip="${escHtml(PK_PLATFORM_LABELS[pid] || pid)}" style="display:inline-flex;">${platformIcon(pid, 24)}</span>`).join('')}
+        <span class="pk-platform-icon">${platformIcon(pid, 18, 'white')}</span>`).join('')}
     </span>` : '';
 
   const genresValue = (ws.genres && ws.genres.trim()) ? `<p class="pk-p">${escHtml(ws.genres.trim())}</p>` : '';
@@ -2614,9 +2632,15 @@ function buildWebSitePreviewSection() {
   // placeholder fallback), so it always has content.
   const hookValue = `<p class="pk-p">${descFull}</p>`;
 
-  const aboutGameLines = _pkLines(ws.aboutGame);
-  const aboutGameValue = aboutGameLines.length
-    ? `<p class="pk-p">${aboutGameLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
+  // Blank-line-aware (see _pkParagraphs above), unlike every other
+  // multi-line field on this page (Hook is single-line; History still uses
+  // the older _pkLines/one-line-per-paragraph treatment) — this is the one
+  // field where preserving Steam's own paragraph spacing (and giving manual
+  // typing the same two-level spacing) actually matters, per this
+  // project's line-spacing discussion.
+  const aboutGameParas = _pkParagraphs(ws.aboutGame);
+  const aboutGameValue = aboutGameParas.length
+    ? aboutGameParas.map(lines => `<p class="pk-p">${lines.map(escHtml).join('<br>')}</p>`).join('')
     : '';
 
   const historyLines = _pkLines(ws.history);
@@ -2766,7 +2790,7 @@ function _wsFactsheetFieldsHTML(ws, fd) {
 function _wsDescriptionFieldsHTML(ws) {
   return `
     ${_wsField(ws, 'Hook', 'description', 'Defaults to the Description field in Game Details', { textarea: true, rows: 4 })}
-    ${_wsField(ws, 'About This Game', 'aboutGame', 'One paragraph per line — a longer section shown below Description', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'About This Game', 'aboutGame', 'Leave a blank line between paragraphs — a longer section shown below Description', { textarea: true, rows: 4 })}
     ${_wsField(ws, 'Studio/Game History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}`;
 }
 

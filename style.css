@@ -6091,6 +6091,31 @@ select.form-input {
 .pk-p:last-child { margin-bottom: 0; }
 .pk-muted { color: #9ca3af; }
 
+/* Factsheet Platforms sub-section: small neutral icon badges, matching the
+   Dashboard's .active-card-icon / .inactive-card-icon recipe (same
+   background, sizing ratio, and whitening filter for the raster platform
+   assets) so these read as the same "monochrome" icon treatment used for
+   the platform cards elsewhere in Shipmate, rather than this preview
+   website's own full-color brand-logo icons used everywhere else. */
+.pk-platform-icon {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  background: var(--panel-3);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+.pk-platform-icon .plat-img {
+  width: 18px; height: 18px;
+  object-fit: contain;
+  display: block;
+  filter: brightness(0) invert(1);
+}
+.pk-platform-icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 .pk-video-frame + .pk-video-frame { margin-top: 10px; }
 .pk-video-link {
   display: flex; align-items: center; gap: 10px; background: #111; color: #fff;

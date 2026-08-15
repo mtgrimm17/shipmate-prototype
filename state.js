@@ -2168,7 +2168,15 @@ const state = {
     genres: '',
     // Description
     description: '',        // "Hook" — overrides the Description field synced from Game Details
-    aboutGame: '',          // "About This Game" — one paragraph per line
+    // "About This Game" — a blank line marks a paragraph break; consecutive
+    // non-blank lines are soft line breaks within the same paragraph
+    // (rendered with <br>, no extra spacing between them) — see
+    // _pkParagraphs/aboutGameValue in render.js. This lets the preview
+    // reproduce Steam's own two-level spacing (tight lines within a
+    // paragraph vs. a real gap between paragraphs) when auto-filled from a
+    // linked Steam page (_steamHtmlToParagraphLines in claude.js), and gives
+    // manual typing here the same two-level spacing, not just a flat list.
+    aboutGame: '',
     history: '',            // "Studio/Game History" — one paragraph per line
     // About
     aboutDev: '',           // "About the Developer" bio — one paragraph per line

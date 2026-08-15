@@ -2488,9 +2488,10 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
      - About section Description ← Steam's short_description
      - Web platform Factsheet Developer ← Steam's developers list, joined
      - Web platform Description "About This Game" ← Steam's about_the_game
-       (HTML flattened to one paragraph per line — see _steamHtmlToParagraphLines
-       in claude.js — matching the plain-text convention state.webSite.aboutGame
-       already uses)
+       (HTML flattened to blank-line-separated paragraphs — see
+       _steamHtmlToParagraphLines in claude.js and _pkParagraphs in
+       render.js — preserving Steam's own paragraph spacing instead of
+       flattening every line break to identical spacing)
      - Assets screenshot grid ← Steam's first 10 screenshots
      - Web platform Factsheet Genres ← Steam's genres list, joined
    Same stale-title guard as _applySteamHeroBanner/_applySteamCapsuleFromCover:

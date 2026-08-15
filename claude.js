@@ -597,15 +597,23 @@ async function fetchSteamAppDetails(appId) {
 
 // Steam's "about_the_game" field is a fragment of raw store-page HTML
 // (<br>/<p> tags, the occasional list, HTML entities) rather than plain
-// text. state.webSite.aboutGame's existing convention (see state.js) is
-// plain text, one paragraph per line — this flattens Steam's HTML down to
-// that shape: block-level breaks become newlines, remaining tags are
-// stripped, common entities are decoded, and blank lines are dropped.
-// Deliberately simple (not a full HTML parser) since this is a one-way,
+// text. state.webSite.aboutGame's convention (see state.js) is plain text
+// where a blank line marks a paragraph break and consecutive non-blank
+// lines are soft line breaks within the same paragraph (rendered with <br>,
+// no extra spacing — see _pkParagraphs/aboutGameValue in render.js) — this
+// flattens Steam's HTML down to that shape: </p> becomes a real paragraph
+// break (a blank line), plain <br> stays a same-paragraph line break, and
+// remaining tags are stripped, common entities decoded. Blank lines are
+// preserved (collapsing any run of them down to exactly one, since one gap
+// is enough to mark a break no matter how many <br>s/</p>s produced it) —
+// they're the whole point of this conversion now, not noise to discard, so
+// Shipmate's preview reproduces the same two-level spacing Steam's own page
+// shows instead of flattening every line to identical spacing. Still
+// deliberately simple (not a full HTML parser) since this is a one-way,
 // best-effort conversion for a pre-fill the developer can always edit.
 function _steamHtmlToParagraphLines(html) {
   if (!html) return '';
-  return html
+  const rawLines = html
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<li[^>]*>/gi, '• ')
@@ -618,9 +626,18 @@ function _steamHtmlToParagraphLines(html) {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .join('\n');
+    .map(line => line.trim());
+
+  // Collapse runs of consecutive blank lines to exactly one, then trim
+  // leading/trailing blank lines.
+  const lines = [];
+  for (const line of rawLines) {
+    if (line === '' && lines[lines.length - 1] === '') continue;
+    lines.push(line);
+  }
+  while (lines.length && lines[0] === '') lines.shift();
+  while (lines.length && lines[lines.length - 1] === '') lines.pop();
+  return lines.join('\n');
 }
 
 /* ── Backward-compat wrapper (used by _triggerScenarioSearch) ── */
