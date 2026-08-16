@@ -2162,6 +2162,17 @@ const state = {
   // formData.description.
   webSite: {
     accent: '#0EA5A4',
+    // Which Steam Key Art asset backs the preview website's capsule box —
+    // one of 'capsuleImage' (steamCapsuleImage), 'headerImage'
+    // (steamHeaderImage), or 'igdbCoverArt' (steamKeyArtCapsule). Set via
+    // the selector in Web's "Key Art" section (buildWebKeyArtEditSection /
+    // setWebCapsuleSource in app.js); read in buildWebSitePreviewSection
+    // (render.js) via _webCapsuleSourceField. Defaults to 'igdbCoverArt' —
+    // this preview's original, only-ever-had-one-source behavior — so an
+    // existing game's preview capsule doesn't change until the developer
+    // explicitly picks something else. The preview website's hero box has
+    // no equivalent choice; it's always Library Hero (steamKeyArtHero).
+    capsuleSource: 'igdbCoverArt',
     // Factsheet — Developer + Location
     developer: '', basedIn: '',
     // Free text, e.g. "Roguelike, Deckbuilder". Auto-populated (when the

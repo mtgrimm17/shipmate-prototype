@@ -4561,6 +4561,23 @@ function setWebAccent(color) {
   reRenderStepModal();
 }
 
+/* Selector in Web's "Key Art" section (buildWebKeyArtEditSection) choosing
+   which Steam Key Art asset backs the preview website's capsule box —
+   'capsuleImage' (state.uploads.steamCapsuleImage), 'headerImage'
+   (state.uploads.steamHeaderImage), or 'igdbCoverArt'
+   (state.uploads.steamKeyArtCapsule, the default). See
+   _webCapsuleSourceField/buildWebSitePreviewSection in render.js for where
+   this is read. reRenderStepModal() refreshes whichever step-modal content
+   is currently open — the effect on the actual capsule box is only
+   visible once the user flips back to the main preview (this selector
+   lives inside the "Key Art" flip section, not the preview itself), same
+   as setWebAccent above. */
+function setWebCapsuleSource(source) {
+  if (!state.webSite) state.webSite = {};
+  state.webSite.capsuleSource = source;
+  reRenderStepModal();
+}
+
 /* Steam: "Select Key Art" uploads (Capsule Image / Header Image / IGDB
    Cover Art / Library Hero) — single-image uploads with a live dataURL
    preview, same pattern as handleFeatureFiles/removeFeatureGraphic above.

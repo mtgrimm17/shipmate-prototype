@@ -2489,6 +2489,25 @@ function _pkYouTubeId(url) {
   return m ? m[1] : '';
 }
 
+/* Which Steam Key Art asset backs the preview website's capsule box
+   (pk-capsule, below) — user-selectable in Web's "Key Art" section (see
+   the selector rendered by buildWebKeyArtEditSection, and
+   setWebCapsuleSource in app.js). state.webSite.capsuleSource is one of:
+     - 'capsuleImage' → state.uploads.steamCapsuleImage (Steam's own
+       appdetails.capsule_image, 231×87)
+     - 'headerImage'  → state.uploads.steamHeaderImage (Steam's own
+       appdetails.header_image, 460×215)
+     - 'igdbCoverArt' → state.uploads.steamKeyArtCapsule (IGDB's own cover
+       art, 264×374) — the default, matching this preview's original,
+       only-ever-had-one-source behavior.
+   Falls back to 'igdbCoverArt' for any unrecognized/missing value, so an
+   old saved state.webSite without capsuleSource (or a future typo) doesn't
+   silently render no capsule at all. */
+function _webCapsuleSourceField(source) {
+  const map = { capsuleImage: 'steamCapsuleImage', headerImage: 'steamHeaderImage', igdbCoverArt: 'steamKeyArtCapsule' };
+  return map[source] || 'steamKeyArtCapsule';
+}
+
 function buildWebSitePreviewSection() {
   const fd  = state.formData || {};
   const ups = state.uploads || {};
@@ -2544,11 +2563,17 @@ function buildWebSitePreviewSection() {
   // the accent underline under the "Factsheet" heading). Absolutely
   // positioned over the hero (see .pk-hero-wrap) so roughly half of it
   // overlaps the banner above; the Factsheet/Description margins below are
-  // offset to clear/meet it. Shows the uploaded image
-  // (state.uploads.steamKeyArtCapsule) once set via Steam's "Select Key
-  // Art" section, falling back to the placeholder graphic otherwise — same
-  // "Key Art" flip modal as hero.
-  const capsuleUpload = ups.steamKeyArtCapsule;
+  // offset to clear/meet it. Shows whichever of Steam's Key Art assets is
+  // currently selected as the capsule source (state.webSite.capsuleSource —
+  // Capsule Image, Header Image, or IGDB Cover Art, chosen via the
+  // selector in Web's "Key Art" section, see _webCapsuleSourceField above),
+  // falling back to the placeholder graphic if that asset hasn't been
+  // uploaded/auto-filled — same "Key Art" flip modal as hero. Since this is
+  // read fresh from state.uploads on every render (not cached), any
+  // change made in Steam's "Select Key Art" section — a new upload, a
+  // removal, or a fresh auto-fill — shows up here the next time this
+  // section renders, with no extra plumbing needed.
+  const capsuleUpload = ups[_webCapsuleSourceField(ws.capsuleSource)];
   const capsuleHTML = capsuleUpload ? `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
       <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img">
@@ -2954,18 +2979,39 @@ function _wsKeyArtFieldsHTML() {
 }
 
 /* Key Art fields: Capsule Image, Header Image, IGDB Cover Art, Library
-   Hero — IGDB Cover Art/Library Hero are also the placeholder graphics at
-   the top of the preview website (see heroHTML/capsuleHTML in
-   buildWebSitePreviewSection), opened by clicking either glow box; Capsule
-   Image/Header Image have no preview-website counterpart. All four
-   sub-sections are managed from Steam's Store Page Preview, not here — see
-   _wsKeyArtFieldsHTML. */
+   Hero — all four are managed from Steam's Store Page Preview, not here
+   (see _wsKeyArtFieldsHTML), and any change made there (upload, removal,
+   or auto-fill) is reflected on the preview website the next time it
+   renders, since buildWebSitePreviewSection always reads the current
+   upload state fresh rather than a cached copy. Library Hero is always
+   the preview website's hero placeholder; the capsule placeholder's
+   source is a choice among the other three (see the selector below,
+   backed by state.webSite.capsuleSource / setWebCapsuleSource in app.js /
+   _webCapsuleSourceField above buildWebSitePreviewSection) — defaulting
+   to IGDB Cover Art, this section's original sole capsule source, so
+   existing games don't see their preview capsule change without an
+   explicit choice. */
 function buildWebKeyArtEditSection() {
+  const source = (state.webSite && state.webSite.capsuleSource) || 'igdbCoverArt';
+  const CAPSULE_SOURCE_OPTIONS = [
+    { value: 'capsuleImage', label: 'Capsule Image' },
+    { value: 'headerImage',  label: 'Header Image'  },
+    { value: 'igdbCoverArt', label: 'IGDB Cover Art' },
+  ];
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
         Key art is managed from the Steam Store platform's Store Page Preview — uploading it there also updates this preview website.
       </p>
+
+      <div class="form-group" style="margin-bottom:20px;">
+        <label class="task-content-label" style="display:block;margin-bottom:6px;">Preview Website Capsule Image</label>
+        <div class="asset-guidance" style="margin-bottom:8px;">Choose which Key Art asset appears as the capsule image on your preview website.</div>
+        <select class="form-input" onchange="setWebCapsuleSource(this.value)">
+          ${CAPSULE_SOURCE_OPTIONS.map(o => `<option value="${o.value}" ${source === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select>
+      </div>
+
       ${_wsKeyArtFieldsHTML()}
     </div>`;
 }
