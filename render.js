@@ -2532,6 +2532,28 @@ function _webCapsuleSizeLabel(source) {
   return map[source] || map.igdbCoverArt;
 }
 
+/* How far below the hero/main boundary the Factsheet section starts (see
+   the factsheetHTML div below) — used to be a single fixed 120px
+   (.pk-factsheet's CSS default in style.css), tuned only for IGDB Cover
+   Art's tall portrait capsule box. Now that the capsule's actual height
+   varies with the selected source (Capsule Image/Header Image are both
+   far shorter, landscape boxes — see _webCapsuleAspectRatio above),
+   leaving that same fixed 120px under a much shorter box would leave a
+   big, unbalanced gap above the Factsheet heading instead of the same
+   ~10px buffer the portrait case was tuned for. Each value below is that
+   same formula worked out per source:
+     margin-top = (box height / 2) + 10 (the established buffer)
+                  - 22 (.pk-main's own padding-top, since margin-top is
+                  measured from inside that padding, so it has to be
+                  subtracted back out)
+   where box height = 220 (the capsule's fixed width, matching .pk-capsule
+   in style.css) × (asset height / asset width). E.g. for igdbCoverArt:
+   220 × 896/748 = 263.53 tall, half = 131.76, + 10 - 22 = 119.76. */
+function _webCapsuleFactsheetMarginTop(source) {
+  const map = { capsuleImage: 29.43, headerImage: 39.41, igdbCoverArt: 119.76 };
+  return map[source] || map.igdbCoverArt;
+}
+
 function buildWebSitePreviewSection() {
   const fd  = state.formData || {};
   const ups = state.uploads || {};
@@ -2589,9 +2611,12 @@ function buildWebSitePreviewSection() {
   // overlaps the banner above — via a self-computing translateY(50%)
   // straddle rather than a hardcoded pixel offset (see .pk-capsule in
   // style.css), since the box's own height now varies by source (below);
-  // the Factsheet/Description margins below are offset to clear/meet the
-  // tallest (IGDB Cover Art) case, so a shorter box just leaves a bit more
-  // breathing room rather than one they'd need to clear. Shows whichever
+  // the Factsheet's own top margin (see factsheetHTML/
+  // _webCapsuleFactsheetMarginTop below) is computed per source too, so it
+  // clears whichever height is currently in play with the same ~10px
+  // buffer rather than the fixed gap tuned only for IGDB Cover Art's tall
+  // case. Description isn't under the capsule at all, so its margin
+  // doesn't need this per-source treatment. Shows whichever
   // of Steam's Key Art assets is currently selected as the capsule source
   // (state.webSite.capsuleSource — Capsule Image, Header Image, or IGDB
   // Cover Art, chosen via the selector in Web's "Key Art" section, see
@@ -2679,8 +2704,13 @@ function buildWebSitePreviewSection() {
   // always has content.
   const releaseDateValue = `<p class="pk-p">${_pkFmtReleaseDate(fd.releaseDate) || 'Coming soon'}</p>`;
 
+  // Gap above Factsheet tightens/loosens per the capsule's actual height
+  // (see _webCapsuleFactsheetMarginTop above) — a shorter landscape
+  // capsule (Capsule Image/Header Image) no longer leaves the same big
+  // gap the tall IGDB Cover Art box needed.
+  const factsheetMarginTop = _webCapsuleFactsheetMarginTop(ws.capsuleSource);
   const factsheetHTML = `
-    <div class="pk-factsheet pk-mainsection" id="pk-factsheet" onclick="openStorePreviewSection('web','webFactsheet')">
+    <div class="pk-factsheet pk-mainsection" id="pk-factsheet" style="margin-top:${factsheetMarginTop}px;" onclick="openStorePreviewSection('web','webFactsheet')">
       <h2 class="pk-h2">Factsheet</h2>
       ${pkSub('Developer', devNameValue)}
       ${pkSub('Release Date', releaseDateValue)}

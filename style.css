@@ -6051,10 +6051,17 @@ select.form-input {
 .pk-section:last-child { margin-bottom: 0; }
 
 .pk-fact-desc-grid { display: grid; grid-template-columns: 220px 1fr; gap: 32px; }
-/* Factsheet sits below the capsule (which hangs 132px below the hero), so it
-   needs enough top margin to clear it — 120px leaves a 10px buffer under the
-   capsule. Description isn't under the capsule, so it rises independently;
-   its margin is set to leave that same 10px buffer under the hero instead
+/* Factsheet sits below the capsule, so it needs enough top margin to clear
+   it, leaving a ~10px buffer under the capsule's bottom edge. Since the
+   capsule's own height now varies by source (Capsule Image/Header Image
+   are much shorter landscape boxes than IGDB Cover Art's tall portrait
+   one — see .pk-capsule below), render.js sets this inline per source
+   (_webCapsuleFactsheetMarginTop) rather than a single fixed value; 120px
+   here is just a fallback default for the original (IGDB Cover Art)
+   case, same relationship .pk-capsule's own 748/896 default has to its
+   inline aspect-ratio override. Description isn't under the capsule, so
+   it rises independently and doesn't need a per-source margin; its
+   margin is set to leave that same 10px buffer under the hero instead
    (cancels .pk-main's 22px top padding, then backs off by the buffer).
    Media and About aren't part of this grid — they flow normally below it. */
 .pk-factsheet { margin-top: 120px; }
