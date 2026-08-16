@@ -2313,24 +2313,24 @@ function selectPicklistItem(igdbId) {
 
   // Clear whatever's already in Steam's "Select Key Art" section — IGDB
   // Cover Art, Library Capsule, Library Hero, Logo — before this new
-  // selection's own auto-fill (below) has a chance to run. Unconditional:
-  // unlike the screenshot grid (_fillScreenshotGridFromIgdb/FromSteam),
-  // which preserves manually-uploaded shots alongside auto-populated ones,
-  // Key Art is a single slot per asset, and whatever was there belongs to
-  // whichever game was previously selected — manual or auto-filled, it's
-  // still the wrong game's art once a different title is picked. Doing
-  // this eagerly (not inside the async appliers below) also means a
-  // fast re-pick can't race a slow-resolving previous fetch into
-  // clobbering the new selection: by the time any of those promises
-  // settle, the stale-title guard already in each of them (comparing
-  // against state.formData.title) rejects a late write for the old game
-  // anyway, but clearing here means the user never sees the old game's
-  // art flash on screen in the meantime either.
+  // selection's own auto-fill (below) has a chance to run. Only clears
+  // auto-filled art (a { name, url } shape); a manual upload (a
+  // { name, dataUrl } shape) is preserved, same convention the screenshot
+  // grid uses (_fillScreenshotGridFromIgdb/FromSteam filter on `s.dataUrl`)
+  // — a developer who's deliberately uploaded their own art for this slot
+  // shouldn't have it silently wiped just because they picked a different
+  // title in the picklist. Doing this eagerly (not inside the async
+  // appliers below) also means a fast re-pick can't race a slow-resolving
+  // previous fetch into clobbering the new selection: by the time any of
+  // those promises settle, the stale-title guard already in each of them
+  // (comparing against state.formData.title) rejects a late write for the
+  // old game anyway, but clearing here means the user never sees the old
+  // game's auto-filled art flash on screen in the meantime either.
   state.uploads = state.uploads || {};
-  state.uploads.steamKeyArtCapsule  = null;
-  state.uploads.steamLibraryCapsule = null;
-  state.uploads.steamKeyArtHero     = null;
-  state.uploads.steamLogo           = null;
+  if (!state.uploads.steamKeyArtCapsule?.dataUrl)  state.uploads.steamKeyArtCapsule  = null;
+  if (!state.uploads.steamLibraryCapsule?.dataUrl) state.uploads.steamLibraryCapsule = null;
+  if (!state.uploads.steamKeyArtHero?.dataUrl)     state.uploads.steamKeyArtHero     = null;
+  if (!state.uploads.steamLogo?.dataUrl)           state.uploads.steamLogo           = null;
 
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
