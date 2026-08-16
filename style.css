@@ -4873,10 +4873,14 @@ select.form-input {
 /* Steam-sourced trailer preview (Assets tab's "Trailer" section — see
    buildAssetsTab in render.js). A clickable thumbnail auto-filled from the
    linked Steam page's first trailer (_applySteamAboutData/
-   _steamTrailerFromMovies in app.js); click-through opens the full trailer
-   on Steam's own CDN in a new tab. Sits above the manual upload dropzone/
-   YouTube URL row — purely a reference preview, not itself an upload
-   target, so it has no remove control of its own. */
+   _steamTrailerFromMovies in app.js); clicking it swaps the thumbnail for
+   an inline <video> playing the trailer via hls.js/native HLS
+   (playSteamTrailer in app.js) — Steam's appdetails only hands back
+   adaptive-streaming manifest URLs for trailers, not a plain file a link
+   click-through could play, so this streams it in place instead of linking
+   out. Sits above the manual upload dropzone/YouTube URL row — purely a
+   reference preview, not itself an upload target, so it has no remove
+   control of its own. */
 .steam-trailer-preview { margin-bottom: 14px; }
 .steam-trailer-thumb-link {
   display: block;
@@ -4909,6 +4913,30 @@ select.form-input {
   display: flex; align-items: center; justify-content: center;
   font-size: 16px;
   padding-left: 3px; /* optical centering for the ▶ glyph's own whitespace */
+}
+/* The <video> playSteamTrailer swaps in for .steam-trailer-thumb-link once
+   clicked — sized the same as the thumbnail it replaces so nothing jumps. */
+.steam-trailer-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+/* Rare fallback (playSteamTrailer) for a browser with neither native HLS
+   nor hls.js support — a plain link-out so the trailer is still reachable
+   somehow rather than a dead, silent click. */
+.steam-trailer-fallback-link {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px dashed var(--border-hover);
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 12px;
 }
 
 

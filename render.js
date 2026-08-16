@@ -887,15 +887,22 @@ function buildAssetsTab() {
   // replace, block, or get overwritten by either of those, since a
   // developer may still want to upload their own file or paste a different
   // URL for Shipmate's own submission flow.
+  // Clicking plays the trailer inline (playSteamTrailer in app.js, via
+  // hls.js/Safari's native HLS support) rather than linking out — Steam's
+  // appdetails only returns adaptive-streaming manifest URLs for trailers
+  // now (see steamTrailer.hlsUrl/_steamTrailerFromMovies in app.js), which
+  // a plain <a href> click-through can't play in most browsers. The hlsUrl
+  // itself lives in a data attribute rather than an href since it's never
+  // meant to be navigated to directly.
   const steamTrailer = state.uploads.steamTrailer;
   const steamTrailerHTML = steamTrailer ? `
-    <div class="steam-trailer-preview">
-      <a href="${escHtml(steamTrailer.url)}" target="_blank" rel="noopener" class="steam-trailer-thumb-link" title="Watch full trailer on Steam">
+    <div class="steam-trailer-preview" data-hls-url="${escHtml(steamTrailer.hlsUrl)}">
+      <div class="steam-trailer-thumb-link" onclick="playSteamTrailer(this)" role="button" tabindex="0" title="Play trailer">
         <div class="steam-trailer-thumb">
           <img src="${escHtml(steamTrailer.thumbnail)}" alt="${escHtml(steamTrailer.name)}">
           <span class="steam-trailer-play-badge">▶</span>
         </div>
-      </a>
+      </div>
       <div class="feature-preview-meta">
         <span class="feature-preview-name">🎬 ${escHtml(steamTrailer.name)} <span class="pk-muted">(from Steam)</span></span>
       </div>

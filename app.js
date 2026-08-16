@@ -2533,7 +2533,8 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
      - Steam Key Art "Header Image" ← Steam's own header_image
      - Assets "Trailer" section thumbnail ← Steam's own appdetails movies[0]
        (see _steamTrailerFromMovies below) — a clickable preview thumbnail
-       that click-throughs to the full trailer's direct Steam CDN URL
+       that swaps in an inline hls.js player (playSteamTrailer below) on
+       click, streaming the trailer directly from Steam's own CDN
    Same stale-title guard as _applySteamHeroBanner/_applySteamCapsuleFromCover:
    if the user has since picked a different title, this silently no-ops.
    If the fetch itself fails (network error, no Steam data for this app id,
@@ -2545,34 +2546,33 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
    thumbnail have no IGDB-sourced fallback/equivalent today, so they're
    simply left as-is when the Steam fetch fails.) */
 /* Steam's appdetails `movies` array holds the store page's trailer/video
-   entries — long-documented (reverse-engineered, since this API is
-   undocumented/unofficial) as a list of
-   { id, name, thumbnail, highlight, webm: { 480, max }, mp4: { 480, max } }
-   objects, in the same order the store page itself lists them (its first
+   entries — in the same order the store page itself lists them (its first
    entry is the store page's own primary/featured trailer, in practice also
-   the one with highlight: true). This reads defensively rather than
-   assuming that exact shape — Valve can change appdetails' response at any
-   time with no notice, and this project's own live-verification attempts of
-   the current field names came back inconclusive (see this project's Steam
-   appdetails movies-field research), so this tries every URL shape that's
-   been seen in the wild for this field, in order of confidence, rather than
-   hardcoding just one. Only mp4/webm direct file URLs are used — an
-   .m3u8/.mpd manifest URL (dash_h264/hls_h264, if Steam has moved to
-   adaptive streaming for some titles) isn't something a plain link click-
-   through can play in most browsers, so those aren't used as click targets
-   here even if present.
-   Returns { name, thumbnail, url } for the first entry with both a
-   thumbnail and a resolvable direct video URL, or null if there's no
-   trailer at all or its shape doesn't resolve to anything playable. */
+   the one with highlight: true).
+   An earlier version of this function assumed a { webm: { 480, max },
+   mp4: { 480, max } } shape based on long-standing community documentation
+   of this undocumented/unofficial API — but that turned out to be stale.
+   Confirmed live against two real store pages (Go Ape Ship!/4037180 and
+   Spilled!/2240080, both fetched directly during this project's own bug
+   investigation) that today's actual shape is
+   { id, name, thumbnail, highlight, dash_av1, dash_h264, hls_h264 } — Steam
+   has moved entirely to adaptive streaming, with NO plain progressive
+   mp4/webm file at all anymore. That's why the old mp4/webm-only version of
+   this function silently matched nothing for every real game — this is the
+   fix for that bug.
+   hls_h264 (an .m3u8 HLS manifest) is the one used here, since it's what
+   the inline player this feeds (playSteamTrailer/hls.js in this file) is
+   built to consume; the dash_av1/dash_h264 (.mpd DASH manifests) variants
+   are left unused for now. Valve can of course change this shape again with
+   no notice, so this still degrades to null (no trailer shown) rather than
+   throwing if hls_h264 or thumbnail is ever missing.
+   Returns { name, thumbnail, hlsUrl } for the first entry with both a
+   thumbnail and an hls_h264 URL, or null otherwise. */
 function _steamTrailerFromMovies(movies) {
   if (!movies || !movies.length) return null;
   const movie = movies[0];
-  if (!movie || !movie.thumbnail) return null;
-  const url = (movie.mp4  && (movie.mp4.max  || movie.mp4['480']))
-           || (movie.webm && (movie.webm.max || movie.webm['480']))
-           || null;
-  if (!url) return null;
-  return { name: movie.name || 'Trailer', thumbnail: movie.thumbnail, url };
+  if (!movie || !movie.thumbnail || !movie.hls_h264) return null;
+  return { name: movie.name || 'Trailer', thumbnail: movie.thumbnail, hlsUrl: movie.hls_h264 };
 }
 
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
@@ -3313,6 +3313,57 @@ function removeTrailer() {
   state.uploads.trailer = null;
   const info = document.getElementById('ob-trailer-file-info');
   if (info) { info.style.display = 'none'; info.innerHTML = ''; }
+}
+
+/* Click handler for the auto-filled Steam trailer thumbnail (see
+   buildAssetsTab in render.js, state.uploads.steamTrailer/
+   _steamTrailerFromMovies above). `el` is the clicked
+   .steam-trailer-thumb-link element itself; its hlsUrl lives in
+   data-hls-url (set by render.js, escaped like any other attribute value).
+   Steam's own appdetails only hands back adaptive-streaming manifests for
+   trailers now (an .m3u8 HLS manifest — see _steamTrailerFromMovies), not a
+   plain video file a browser can just navigate to, so this plays it inline
+   instead of linking out: swaps the thumbnail for a real <video> element
+   and streams the manifest into it via hls.js (loaded from cdnjs in
+   index.html), or Safari's own native HLS support when that's available
+   (avoids pulling in hls.js at all on browsers that don't need it). If
+   neither playback path is available, falls back to a plain link-out so the
+   trailer is still reachable somehow rather than becoming a dead click.
+   Verified live end-to-end during this project's own trailer-thumbnail bug
+   investigation: hls.js successfully loads and parses a real Steam trailer
+   manifest cross-origin (i.e. from a page on a different domain than
+   steampowered.com, matching how Shipmate itself is hosted). */
+function playSteamTrailer(el) {
+  const wrap = el.closest('.steam-trailer-preview');
+  const hlsUrl = wrap && wrap.dataset.hlsUrl;
+  if (!hlsUrl) return;
+
+  const video = document.createElement('video');
+  video.className = 'steam-trailer-video';
+  video.controls = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  el.replaceWith(video);
+
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari (and some WebKit-based browsers) can play an HLS manifest
+    // natively via a plain <video src>, no player library needed.
+    video.src = hlsUrl;
+  } else if (window.Hls && window.Hls.isSupported()) {
+    const hls = new window.Hls();
+    hls.loadSource(hlsUrl);
+    hls.attachMedia(video);
+  } else {
+    // Neither native HLS nor hls.js is available in this browser — fall
+    // back to a plain link-out rather than leaving a broken/silent player.
+    const link = document.createElement('a');
+    link.href = hlsUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'steam-trailer-fallback-link';
+    link.textContent = 'This browser can’t play the trailer inline — open it on Steam’s CDN instead';
+    video.replaceWith(link);
+  }
 }
 
 
