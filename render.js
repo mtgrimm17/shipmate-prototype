@@ -881,19 +881,22 @@ function buildAssetsTab() {
   // Auto-filled when the picked title (About section's IGDB picklist) has a
   // linked Steam store page with at least one trailer — see
   // _applySteamAboutData/_steamTrailerFromMovies in app.js, sourced from
-  // appdetails' own `movies` array. Shown as a clickable thumbnail above the
-  // manual upload dropzone/YouTube-URL fields below; purely a reference
-  // preview of what's already live on the game's Steam page — it doesn't
-  // replace, block, or get overwritten by either of those, since a
-  // developer may still want to upload their own file or paste a different
-  // URL for Shipmate's own submission flow.
-  // Clicking plays the trailer inline (playSteamTrailer in app.js, via
-  // hls.js/Safari's native HLS support) rather than linking out — Steam's
-  // appdetails only returns adaptive-streaming manifest URLs for trailers
-  // now (see steamTrailer.hlsUrl/_steamTrailerFromMovies in app.js), which
-  // a plain <a href> click-through can't play in most browsers. The hlsUrl
-  // itself lives in a data attribute rather than an href since it's never
-  // meant to be navigated to directly.
+  // appdetails' own `movies` array. Shown beneath the manual upload
+  // dropzone/YouTube-URL fields below, sized roughly like an uploaded
+  // screenshot thumbnail (see .steam-trailer-thumb in style.css, matching
+  // .asset-thumb's 160px/16:9 sizing) rather than a large full-width
+  // preview — purely a compact reference of what's already live on the
+  // game's Steam page, it doesn't replace, block, or get overwritten by
+  // either of those, since a developer may still want to upload their own
+  // file or paste a different URL for Shipmate's own submission flow.
+  // Clicking the small thumbnail "opens up" a larger inline player
+  // (playSteamTrailer in app.js, via hls.js/Safari's native HLS support)
+  // rather than linking out — Steam's appdetails only returns
+  // adaptive-streaming manifest URLs for trailers now (see
+  // steamTrailer.hlsUrl/_steamTrailerFromMovies in app.js), which a plain
+  // <a href> click-through can't play in most browsers. The hlsUrl itself
+  // lives in a data attribute rather than an href since it's never meant to
+  // be navigated to directly.
   const steamTrailer = state.uploads.steamTrailer;
   const steamTrailerHTML = steamTrailer ? `
     <div class="steam-trailer-preview" data-hls-url="${escHtml(steamTrailer.hlsUrl)}">
@@ -937,7 +940,6 @@ function buildAssetsTab() {
       <!-- ── Trailer (optional) ── -->
       <div class="ob-section" id="ob-sec-trailer">
         <div class="ob-section-hdr">${t('ob.section.trailer') || 'Trailer'} <span class="form-optional-tag">${t('ob.field.optional_tag') || 'Optional'}</span></div>
-        ${steamTrailerHTML}
         <div class="asset-guidance">${t('ob.trailer.guidance')}</div>
         <div class="asset-dropzone asset-dropzone-sm" id="ob-trailer-dropzone"
              onclick="document.getElementById('ob-trailer-input').click()"
@@ -950,6 +952,7 @@ function buildAssetsTab() {
           <input type="file" id="ob-trailer-input" accept="video/*" style="display:none"
                  onchange="handleTrailerFiles(this.files); this.value=''">
         </div>
+        ${steamTrailerHTML}
         <div id="ob-trailer-file-info" style="display:none;"></div>
         <div class="asset-url-row">
           <label class="form-label" style="margin-bottom:6px;">${t('ob.field.trailer_url.label') || 'Or paste a YouTube URL'}</label>

@@ -4871,25 +4871,28 @@ select.form-input {
 .trailer-file-size { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 
 /* Steam-sourced trailer preview (Assets tab's "Trailer" section — see
-   buildAssetsTab in render.js). A clickable thumbnail auto-filled from the
+   buildAssetsTab in render.js), sitting beneath the manual upload dropzone
+   ("Drop video file here"). A clickable thumbnail auto-filled from the
    linked Steam page's first trailer (_applySteamAboutData/
-   _steamTrailerFromMovies in app.js); clicking it swaps the thumbnail for
-   an inline <video> playing the trailer via hls.js/native HLS
+   _steamTrailerFromMovies in app.js), sized roughly like an uploaded
+   screenshot thumbnail (160px wide, 16:9 — matching .asset-thumb above)
+   rather than a large full-width preview, since it's just a compact
+   reference rather than the main event. Clicking it "opens up" a much
+   larger inline <video> playing the trailer via hls.js/native HLS
    (playSteamTrailer in app.js) — Steam's appdetails only hands back
    adaptive-streaming manifest URLs for trailers, not a plain file a link
    click-through could play, so this streams it in place instead of linking
-   out. Sits above the manual upload dropzone/YouTube URL row — purely a
-   reference preview, not itself an upload target, so it has no remove
-   control of its own. */
-.steam-trailer-preview { margin-bottom: 14px; }
+   out. Purely a reference preview, not itself an upload target, so it has
+   no remove control of its own. */
+.steam-trailer-preview { margin-top: 14px; }
 .steam-trailer-thumb-link {
-  display: block;
+  display: inline-block;
   border-radius: 8px;
   cursor: pointer;
 }
 .steam-trailer-thumb {
   position: relative;
-  width: 100%;
+  width: 160px;
   aspect-ratio: 16 / 9;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -4906,16 +4909,20 @@ select.form-input {
 .steam-trailer-play-badge {
   position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 44px; height: 44px;
+  width: 32px; height: 32px;
   border-radius: 50%;
   background: rgba(0,0,0,0.55);
   color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-  padding-left: 3px; /* optical centering for the ▶ glyph's own whitespace */
+  font-size: 12px;
+  padding-left: 2px; /* optical centering for the ▶ glyph's own whitespace */
 }
+.steam-trailer-preview .feature-preview-meta { max-width: 160px; }
 /* The <video> playSteamTrailer swaps in for .steam-trailer-thumb-link once
-   clicked — sized the same as the thumbnail it replaces so nothing jumps. */
+   clicked — deliberately much larger than the 160px thumbnail it replaces
+   (full width of the Trailer section), so clicking the small preview
+   visibly "opens up" into an actually watchable player rather than playing
+   at thumbnail size. */
 .steam-trailer-video {
   display: block;
   width: 100%;
@@ -4925,7 +4932,8 @@ select.form-input {
 }
 /* Rare fallback (playSteamTrailer) for a browser with neither native HLS
    nor hls.js support — a plain link-out so the trailer is still reachable
-   somehow rather than a dead, silent click. */
+   somehow rather than a dead, silent click. Same "opens up" full-width
+   sizing as .steam-trailer-video above, for the same reason. */
 .steam-trailer-fallback-link {
   display: flex; align-items: center; justify-content: center;
   width: 100%;
