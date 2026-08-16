@@ -2508,6 +2508,30 @@ function _webCapsuleSourceField(source) {
   return map[source] || 'steamKeyArtCapsule';
 }
 
+/* The preview website's capsule box (.pk-capsule) used to be permanently
+   shaped like IGDB Cover Art (748×896, portrait) — fine when that was the
+   only possible source, but Capsule Image (231×87) and Header Image
+   (460×215) are both wide landscape shapes, and object-fit: cover would
+   crop most of either one away to fill a tall portrait frame. Instead the
+   box itself is sized to whichever source is currently selected (applied
+   as an inline aspect-ratio style below, overriding .pk-capsule's default
+   748/896 in style.css), and .pk-capsule-img uses object-fit: contain
+   (style.css) rather than cover — together, the full asset is always
+   shown uncropped, whatever shape it is, rather than being forced into
+   IGDB Cover Art's own box. */
+function _webCapsuleAspectRatio(source) {
+  const map = { capsuleImage: '231 / 87', headerImage: '460 / 215', igdbCoverArt: '748 / 896' };
+  return map[source] || map.igdbCoverArt;
+}
+
+// Placeholder-caption size label, matching whichever source is selected —
+// kept alongside _webCapsuleAspectRatio so the caption's stated dimensions
+// never drift out of sync with the box's actual shape.
+function _webCapsuleSizeLabel(source) {
+  const map = { capsuleImage: '231 &times; 87', headerImage: '460 &times; 215', igdbCoverArt: '748 &times; 896' };
+  return map[source] || map.igdbCoverArt;
+}
+
 function buildWebSitePreviewSection() {
   const fd  = state.formData || {};
   const ups = state.uploads || {};
@@ -2562,30 +2586,41 @@ function buildWebSitePreviewSection() {
   // vertical capsule spec) sized to the Factsheet column's width (matches
   // the accent underline under the "Factsheet" heading). Absolutely
   // positioned over the hero (see .pk-hero-wrap) so roughly half of it
-  // overlaps the banner above; the Factsheet/Description margins below are
-  // offset to clear/meet it. Shows whichever of Steam's Key Art assets is
-  // currently selected as the capsule source (state.webSite.capsuleSource —
-  // Capsule Image, Header Image, or IGDB Cover Art, chosen via the
-  // selector in Web's "Key Art" section, see _webCapsuleSourceField above),
-  // falling back to the placeholder graphic if that asset hasn't been
-  // uploaded/auto-filled — same "Key Art" flip modal as hero. Since this is
-  // read fresh from state.uploads on every render (not cached), any
-  // change made in Steam's "Select Key Art" section — a new upload, a
-  // removal, or a fresh auto-fill — shows up here the next time this
-  // section renders, with no extra plumbing needed.
+  // overlaps the banner above — via a self-computing translateY(50%)
+  // straddle rather than a hardcoded pixel offset (see .pk-capsule in
+  // style.css), since the box's own height now varies by source (below);
+  // the Factsheet/Description margins below are offset to clear/meet the
+  // tallest (IGDB Cover Art) case, so a shorter box just leaves a bit more
+  // breathing room rather than one they'd need to clear. Shows whichever
+  // of Steam's Key Art assets is currently selected as the capsule source
+  // (state.webSite.capsuleSource — Capsule Image, Header Image, or IGDB
+  // Cover Art, chosen via the selector in Web's "Key Art" section, see
+  // _webCapsuleSourceField above), falling back to the placeholder
+  // graphic if that asset hasn't been uploaded/auto-filled — same "Key
+  // Art" flip modal as hero. Since this is read fresh from state.uploads
+  // on every render (not cached), any change made in Steam's "Select Key
+  // Art" section — a new upload, a removal, or a fresh auto-fill — shows
+  // up here the next time this section renders, with no extra plumbing
+  // needed. The box itself is sized to the selected source's own aspect
+  // ratio (inline style below, via _webCapsuleAspectRatio) rather than
+  // staying locked to IGDB Cover Art's portrait shape, and the image uses
+  // object-fit: contain (style.css) instead of cover — together, the full
+  // asset is always shown, never cropped, whichever of the three (very
+  // differently-shaped) sources is picked.
   const capsuleUpload = ups[_webCapsuleSourceField(ws.capsuleSource)];
+  const capsuleAspect = _webCapsuleAspectRatio(ws.capsuleSource);
   const capsuleHTML = capsuleUpload ? `
-    <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
+    <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="openStorePreviewSection('web','webKeyArt')">
       <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img">
     </div>` : `
-    <div class="pk-capsule pk-glowbox" id="pk-capsule" onclick="openStorePreviewSection('web','webKeyArt')">
+    <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="openStorePreviewSection('web','webKeyArt')">
       <span class="pk-capsule-badge">Placeholder</span>
       <svg class="pk-capsule-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="2.5" y="4.5" width="19" height="15" rx="2" stroke="currentColor" stroke-width="1.5"/>
         <circle cx="8" cy="10" r="1.6" fill="currentColor"/>
         <path d="M21 15.5l-4.8-4.8-4 4-2.7-2.7-5.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <div class="pk-capsule-caption">${placeholderTitleLine}Capsule<br>748 &times; 896</div>
+      <div class="pk-capsule-caption">${placeholderTitleLine}Capsule<br>${_webCapsuleSizeLabel(ws.capsuleSource)}</div>
     </div>`;
 
   // Sub-section header (bold, no accent) wrapping already-built inner HTML —
