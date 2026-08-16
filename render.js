@@ -878,6 +878,28 @@ function buildObLangList() {
 /* Tab 2: Assets */
 function buildAssetsTab() {
   const hasAndroid = state.activePlatforms.has('android');
+  // Auto-filled when the picked title (About section's IGDB picklist) has a
+  // linked Steam store page with at least one trailer — see
+  // _applySteamAboutData/_steamTrailerFromMovies in app.js, sourced from
+  // appdetails' own `movies` array. Shown as a clickable thumbnail above the
+  // manual upload dropzone/YouTube-URL fields below; purely a reference
+  // preview of what's already live on the game's Steam page — it doesn't
+  // replace, block, or get overwritten by either of those, since a
+  // developer may still want to upload their own file or paste a different
+  // URL for Shipmate's own submission flow.
+  const steamTrailer = state.uploads.steamTrailer;
+  const steamTrailerHTML = steamTrailer ? `
+    <div class="steam-trailer-preview">
+      <a href="${escHtml(steamTrailer.url)}" target="_blank" rel="noopener" class="steam-trailer-thumb-link" title="Watch full trailer on Steam">
+        <div class="steam-trailer-thumb">
+          <img src="${escHtml(steamTrailer.thumbnail)}" alt="${escHtml(steamTrailer.name)}">
+          <span class="steam-trailer-play-badge">▶</span>
+        </div>
+      </a>
+      <div class="feature-preview-meta">
+        <span class="feature-preview-name">🎬 ${escHtml(steamTrailer.name)} <span class="pk-muted">(from Steam)</span></span>
+      </div>
+    </div>` : '';
   return `
     <div class="ob-form">
 
@@ -908,6 +930,7 @@ function buildAssetsTab() {
       <!-- ── Trailer (optional) ── -->
       <div class="ob-section" id="ob-sec-trailer">
         <div class="ob-section-hdr">${t('ob.section.trailer') || 'Trailer'} <span class="form-optional-tag">${t('ob.field.optional_tag') || 'Optional'}</span></div>
+        ${steamTrailerHTML}
         <div class="asset-guidance">${t('ob.trailer.guidance')}</div>
         <div class="asset-dropzone asset-dropzone-sm" id="ob-trailer-dropzone"
              onclick="document.getElementById('ob-trailer-input').click()"

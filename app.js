@@ -2331,6 +2331,11 @@ function selectPicklistItem(igdbId) {
   if (!state.uploads.steamHeaderImage?.dataUrl)    state.uploads.steamHeaderImage    = null;
   if (!state.uploads.steamKeyArtCapsule?.dataUrl)  state.uploads.steamKeyArtCapsule  = null;
   if (!state.uploads.steamKeyArtHero?.dataUrl)     state.uploads.steamKeyArtHero     = null;
+  // Trailer preview has no manual-upload variant at all (unlike the four Key
+  // Art slots above, which keep a manual dataUrl upload if the developer set
+  // one) — it's purely derived from whichever title is currently selected,
+  // so it's always safe to clear unconditionally here.
+  state.uploads.steamTrailer = null;
 
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
@@ -2526,6 +2531,9 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
      - Web platform Factsheet Genres ← Steam's genres list, joined
      - Steam Key Art "Capsule Image" ← Steam's own capsule_image
      - Steam Key Art "Header Image" ← Steam's own header_image
+     - Assets "Trailer" section thumbnail ← Steam's own appdetails movies[0]
+       (see _steamTrailerFromMovies below) — a clickable preview thumbnail
+       that click-throughs to the full trailer's direct Steam CDN URL
    Same stale-title guard as _applySteamHeroBanner/_applySteamCapsuleFromCover:
    if the user has since picked a different title, this silently no-ops.
    If the fetch itself fails (network error, no Steam data for this app id,
@@ -2533,9 +2541,40 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
    fallbackItem, the same picklist item passed to selectPicklistItem — so a
    flaky Steam fetch doesn't leave the About section and screenshot grid
    empty; it just quietly degrades to the same result as a title with no
-   linked Steam page. (Genres and Capsule Image/Header Image have no
-   IGDB-sourced fallback/equivalent today, so they're simply left as-is
-   when the Steam fetch fails.) */
+   linked Steam page. (Genres, Capsule Image/Header Image, and the Trailer
+   thumbnail have no IGDB-sourced fallback/equivalent today, so they're
+   simply left as-is when the Steam fetch fails.) */
+/* Steam's appdetails `movies` array holds the store page's trailer/video
+   entries — long-documented (reverse-engineered, since this API is
+   undocumented/unofficial) as a list of
+   { id, name, thumbnail, highlight, webm: { 480, max }, mp4: { 480, max } }
+   objects, in the same order the store page itself lists them (its first
+   entry is the store page's own primary/featured trailer, in practice also
+   the one with highlight: true). This reads defensively rather than
+   assuming that exact shape — Valve can change appdetails' response at any
+   time with no notice, and this project's own live-verification attempts of
+   the current field names came back inconclusive (see this project's Steam
+   appdetails movies-field research), so this tries every URL shape that's
+   been seen in the wild for this field, in order of confidence, rather than
+   hardcoding just one. Only mp4/webm direct file URLs are used — an
+   .m3u8/.mpd manifest URL (dash_h264/hls_h264, if Steam has moved to
+   adaptive streaming for some titles) isn't something a plain link click-
+   through can play in most browsers, so those aren't used as click targets
+   here even if present.
+   Returns { name, thumbnail, url } for the first entry with both a
+   thumbnail and a resolvable direct video URL, or null if there's no
+   trailer at all or its shape doesn't resolve to anything playable. */
+function _steamTrailerFromMovies(movies) {
+  if (!movies || !movies.length) return null;
+  const movie = movies[0];
+  if (!movie || !movie.thumbnail) return null;
+  const url = (movie.mp4  && (movie.mp4.max  || movie.mp4['480']))
+           || (movie.webm && (movie.webm.max || movie.webm['480']))
+           || null;
+  if (!url) return null;
+  return { name: movie.name || 'Trailer', thumbnail: movie.thumbnail, url };
+}
+
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
   try {
@@ -2572,6 +2611,10 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // path directly (see this project's appdetails field enumeration).
     if (data.capsule_image) state.uploads.steamCapsuleImage = { name: 'capsule.jpg', url: data.capsule_image };
     if (data.header_image)  state.uploads.steamHeaderImage  = { name: 'header.jpg',  url: data.header_image };
+    // Assets "Trailer" section thumbnail — Steam's own first listed trailer
+    // (appdetails' movies[0]), rather than anything IGDB provides.
+    const trailer = _steamTrailerFromMovies(data.movies);
+    if (trailer) state.uploads.steamTrailer = trailer;
   } else {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
     _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);

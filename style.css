@@ -4870,6 +4870,47 @@ select.form-input {
 .trailer-file-name { font-size: 13px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .trailer-file-size { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 
+/* Steam-sourced trailer preview (Assets tab's "Trailer" section — see
+   buildAssetsTab in render.js). A clickable thumbnail auto-filled from the
+   linked Steam page's first trailer (_applySteamAboutData/
+   _steamTrailerFromMovies in app.js); click-through opens the full trailer
+   on Steam's own CDN in a new tab. Sits above the manual upload dropzone/
+   YouTube URL row — purely a reference preview, not itself an upload
+   target, so it has no remove control of its own. */
+.steam-trailer-preview { margin-bottom: 14px; }
+.steam-trailer-thumb-link {
+  display: block;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.steam-trailer-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.steam-trailer-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.15s;
+}
+.steam-trailer-thumb-link:hover .steam-trailer-thumb img { transform: scale(1.03); }
+.steam-trailer-play-badge {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  padding-left: 3px; /* optical centering for the ▶ glyph's own whitespace */
+}
+
 
 /* ============================================================
    COMPLIANCE / KEY QUESTIONS

@@ -1930,6 +1930,18 @@ function makeBlankUploads() {
     steamHeaderImage:    null,
     steamKeyArtCapsule:  null,
     steamKeyArtHero:     null,
+    // Trailer preview (Assets tab's "Trailer" section — see buildAssetsTab in
+    // render.js) — auto-filled from the linked Steam page's own appdetails
+    // `movies` array (first entry, Steam's own primary trailer) by
+    // _applySteamAboutData/_steamTrailerFromMovies in app.js. Always a plain
+    // { name, thumbnail, url } object (never a manual upload — there's no
+    // dataUrl variant of this field, unlike the Key Art slots above), where
+    // `thumbnail` is the preview image shown and `url` is the full trailer's
+    // direct Steam CDN link the thumbnail's click-through opens. No
+    // IGDB-sourced fallback/equivalent (same as Genres/Capsule Image/Header
+    // Image), so this is simply left null if the Steam fetch fails or the
+    // game has no trailer listed.
+    steamTrailer:        null,
   };
 }
 
