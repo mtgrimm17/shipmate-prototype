@@ -2914,30 +2914,30 @@ function buildWebAboutEditSection() {
     </div>`;
 }
 
-/* Key Art fields: Vertical Capsule, Hero Banner — read-only summaries of the
+/* Key Art fields: IGDB Cover Art, Library Hero — read-only summaries of the
    same assets managed in Steam's "Select Key Art" section (Store Page
    Preview step, see buildSteamKeyArtEditSection), same relationship as
    _wsMediaFieldsHTML's Trailers/Screenshots rows have with Shipmate's
    Assets step. "Manage" jumps to Steam via openSteamKeyArtFromWebEdit. */
 function _wsKeyArtFieldsHTML() {
   const ups = state.uploads || {};
-  const capsuleSummary = ups.steamKeyArtCapsule ? `Uploaded: ${ups.steamKeyArtCapsule.name}` : 'No vertical capsule added yet';
-  const heroSummary    = ups.steamKeyArtHero    ? `Uploaded: ${ups.steamKeyArtHero.name}`    : 'No hero banner added yet';
+  const capsuleSummary = ups.steamKeyArtCapsule ? `Uploaded: ${ups.steamKeyArtCapsule.name}` : 'No IGDB cover art added yet';
+  const heroSummary    = ups.steamKeyArtHero    ? `Uploaded: ${ups.steamKeyArtHero.name}`    : 'No library hero added yet';
   return `
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Vertical Capsule</label>
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">IGDB Cover Art</label>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
       <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(capsuleSummary)}</span>
       <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
     </div>
 
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Hero Banner</label>
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Library Hero</label>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
       <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(heroSummary)}</span>
       <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
     </div>`;
 }
 
-/* Key Art fields: Vertical Capsule, Hero Banner — the placeholder graphics
+/* Key Art fields: IGDB Cover Art, Library Hero — the placeholder graphics
    at the top of the preview website (see heroHTML/capsuleHTML in
    buildWebSitePreviewSection), opened by clicking either glow box. Both
    sub-sections are managed from Steam's Store Page Preview, not here — see
@@ -5915,7 +5915,7 @@ function buildSteamStorePreviewSection() {
 }
 
 /* Steam: "Select Key Art" — collects four Key Art images, in this order:
-     - IGDB Cover Art  (748×896)  — state.uploads.steamKeyArtCapsule
+     - IGDB Cover Art  (264×374)  — state.uploads.steamKeyArtCapsule
      - Library Capsule (600×900) — state.uploads.steamLibraryCapsule
      - Library Hero    (3840×1240) — state.uploads.steamKeyArtHero
      - Logo                       — state.uploads.steamLogo
@@ -5939,7 +5939,7 @@ function buildSteamKeyArtEditSection() {
       </p>
 
       <div class="pk-edit-group-label">IGDB Cover Art</div>
-      <div class="asset-guidance">Recommended 748 &times; 896 (portrait).</div>
+      <div class="asset-guidance">Recommended 264 &times; 374 (portrait).</div>
       ${_steamKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.steamKeyArtCapsule)}
 
       <div class="pk-edit-group-label">Library Capsule</div>
