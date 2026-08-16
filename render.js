@@ -2845,8 +2845,8 @@ function buildWebSitePreviewSection() {
   const mediaHTML = `
     <section class="pk-section pk-mainsection" id="pk-media" onclick="openStorePreviewSection('web','webMedia')">
       <h2 class="pk-h2">Media</h2>
-      ${pkSub('Trailers', trailersValue)}
       ${pkSub('Screenshots', screenshotsValue)}
+      ${pkSub('Trailers', trailersValue)}
     </section>`;
 
   const aboutDevLines = _pkLines(ws.aboutDev);
