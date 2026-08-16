@@ -1897,10 +1897,17 @@ function makeBlankUploads() {
     featureGraphic: null,
     trailer:        null,
     // Key Art (Steam Store platform's "Select Key Art" section — see
-    // buildSteamKeyArtEditSection in render.js) — two image slots, shown
-    // in this order: IGDB Cover Art, Library Hero. Every field can be
-    // either { name, dataUrl } for a manual upload, or { name, url } when
-    // auto-populated. Auto-fill sources:
+    // buildSteamKeyArtEditSection in render.js) — four image slots, shown
+    // in alphabetical order: Capsule Image, Header Image, IGDB Cover Art,
+    // Library Hero. Every field can be either { name, dataUrl } for a
+    // manual upload, or { name, url } when auto-populated. Auto-fill
+    // sources:
+    //   - steamCapsuleImage ("Capsule Image", 231×87) ← Steam's own
+    //     appdetails.capsule_image, fetched by _applySteamAboutData in
+    //     app.js (same fetchSteamAppDetails call already used for
+    //     Description/Developer/About This Game/Screenshots/Genres).
+    //   - steamHeaderImage ("Header Image", 460×215) ← Steam's own
+    //     appdetails.header_image, fetched the same way.
     //   - steamKeyArtCapsule ("IGDB Cover Art", 264×374) ← IGDB's own cover
     //     art (coverBigUrl in claude.js, applied by
     //     _applySteamCapsuleFromCover in app.js).
@@ -1912,11 +1919,15 @@ function makeBlankUploads() {
     //     manual-upload-only rather than erroring.
     // _screenshotSrc in app.js resolves either shape (dataUrl or url,
     // proxying images.igdb.com URLs through wsrv.nl) to a render-ready
-    // <img> src. Both fields are mirrored read-only on the Web platform's
-    // "Key Art" flip modal (buildWebKeyArtEditSection).
+    // <img> src. All four fields are mirrored read-only on the Web
+    // platform's "Key Art" flip modal (buildWebKeyArtEditSection); only
+    // IGDB Cover Art/Library Hero also feed the public preview website's
+    // hero/capsule glow boxes.
     // (A "Library Capsule"/"Logo" pair, auto-filled from Steam's own
     // library_600x900.jpg/logo.png, briefly lived here as well — removed by
     // request; see git history around v3.02 if reviving that is ever needed.)
+    steamCapsuleImage:   null,
+    steamHeaderImage:    null,
     steamKeyArtCapsule:  null,
     steamKeyArtHero:     null,
   };

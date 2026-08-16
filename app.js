@@ -2311,13 +2311,13 @@ function selectPicklistItem(igdbId) {
     charCount('ob-title-count', item.name, 30);
   }
 
-  // Clear whatever's already in Steam's "Select Key Art" section — IGDB
-  // Cover Art, Library Hero — before this new selection's own auto-fill
-  // (below) has a chance to run. Only clears auto-filled art (a
-  // { name, url } shape); a manual upload (a { name, dataUrl } shape) is
-  // preserved, same convention the screenshot grid uses
-  // (_fillScreenshotGridFromIgdb/FromSteam filter on `s.dataUrl`) — a
-  // developer who's deliberately uploaded their own art for this slot
+  // Clear whatever's already in Steam's "Select Key Art" section — Capsule
+  // Image, Header Image, IGDB Cover Art, Library Hero — before this new
+  // selection's own auto-fill (below) has a chance to run. Only clears
+  // auto-filled art (a { name, url } shape); a manual upload (a
+  // { name, dataUrl } shape) is preserved, same convention the screenshot
+  // grid uses (_fillScreenshotGridFromIgdb/FromSteam filter on `s.dataUrl`)
+  // — a developer who's deliberately uploaded their own art for this slot
   // shouldn't have it silently wiped just because they picked a different
   // title in the picklist. Doing this eagerly (not inside the async
   // appliers below) also means a fast re-pick can't race a slow-resolving
@@ -2327,6 +2327,8 @@ function selectPicklistItem(igdbId) {
   // old game anyway, but clearing here means the user never sees the old
   // game's auto-filled art flash on screen in the meantime either.
   state.uploads = state.uploads || {};
+  if (!state.uploads.steamCapsuleImage?.dataUrl)   state.uploads.steamCapsuleImage   = null;
+  if (!state.uploads.steamHeaderImage?.dataUrl)    state.uploads.steamHeaderImage    = null;
   if (!state.uploads.steamKeyArtCapsule?.dataUrl)  state.uploads.steamKeyArtCapsule  = null;
   if (!state.uploads.steamKeyArtHero?.dataUrl)     state.uploads.steamKeyArtHero     = null;
 
@@ -2522,6 +2524,8 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
        flattening every line break to identical spacing)
      - Assets screenshot grid ← Steam's first 10 screenshots
      - Web platform Factsheet Genres ← Steam's genres list, joined
+     - Steam Key Art "Capsule Image" ← Steam's own capsule_image
+     - Steam Key Art "Header Image" ← Steam's own header_image
    Same stale-title guard as _applySteamHeroBanner/_applySteamCapsuleFromCover:
    if the user has since picked a different title, this silently no-ops.
    If the fetch itself fails (network error, no Steam data for this app id,
@@ -2529,8 +2533,9 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
    fallbackItem, the same picklist item passed to selectPicklistItem — so a
    flaky Steam fetch doesn't leave the About section and screenshot grid
    empty; it just quietly degrades to the same result as a title with no
-   linked Steam page. (Genres has no IGDB-sourced fallback/equivalent
-   today, so it's simply left as-is when the Steam fetch fails.) */
+   linked Steam page. (Genres and Capsule Image/Header Image have no
+   IGDB-sourced fallback/equivalent today, so they're simply left as-is
+   when the Steam fetch fails.) */
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
   try {
@@ -2561,6 +2566,12 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // above joins Steam's developers list.
     if (data.genres && data.genres.length) state.webSite.genres = data.genres.map(g => g.description).filter(Boolean).join(', ');
     _fillScreenshotGridFromSteam(data.screenshots || []);
+    // Steam Key Art "Capsule Image"/"Header Image" — appdetails' own
+    // capsule_image (231×87)/header_image (460×215), no CDN URL guessing
+    // needed since appdetails hands back the exact, already-hash-resolved
+    // path directly (see this project's appdetails field enumeration).
+    if (data.capsule_image) state.uploads.steamCapsuleImage = { name: 'capsule.jpg', url: data.capsule_image };
+    if (data.header_image)  state.uploads.steamHeaderImage  = { name: 'header.jpg',  url: data.header_image };
   } else {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
     _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);
@@ -4550,17 +4561,20 @@ function setWebAccent(color) {
   reRenderStepModal();
 }
 
-/* Steam: "Select Key Art" uploads (IGDB Cover Art / Library Hero) —
-   single-image uploads with a live dataURL preview, same pattern as
-   handleFeatureFiles/removeFeatureGraphic above. This is the canonical
-   source for state.uploads.steamKeyArtCapsule/steamKeyArtHero — the Web
-   platform's read-only "Key Art" flip modal (buildWebKeyArtEditSection)
-   links here via openSteamKeyArtFromWebEdit for the same two fields, same
-   relationship the Web platform's Trailers/Screenshots sub-sections have
-   with Shipmate's Assets step. Each reRenderStepModal() call refreshes
-   this modal (buildSteamKeyArtEditSection) and, once the user flips back,
-   the Web preview's hero/capsule (buildWebSitePreviewSection) if that's
-   currently open instead. */
+/* Steam: "Select Key Art" uploads (Capsule Image / Header Image / IGDB
+   Cover Art / Library Hero) — single-image uploads with a live dataURL
+   preview, same pattern as handleFeatureFiles/removeFeatureGraphic above.
+   This is the canonical source for state.uploads.steamCapsuleImage/
+   steamHeaderImage/steamKeyArtCapsule/steamKeyArtHero — the Web platform's
+   read-only "Key Art" flip modal (buildWebKeyArtEditSection) links here
+   via openSteamKeyArtFromWebEdit for all four fields, same relationship
+   the Web platform's Trailers/Screenshots sub-sections have with
+   Shipmate's Assets step. Each reRenderStepModal() call refreshes this
+   modal (buildSteamKeyArtEditSection) and, once the user flips back, the
+   Web preview's hero/capsule (buildWebSitePreviewSection) if that's
+   currently open instead (only IGDB Cover Art/Library Hero feed that
+   preview; Capsule Image/Header Image have no preview-website
+   counterpart). */
 function handleSteamKeyArtCapsuleDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('is-over');
@@ -4598,6 +4612,46 @@ function handleSteamKeyArtHeroFiles(files) {
 }
 function removeSteamKeyArtHero() {
   state.uploads.steamKeyArtHero = null;
+  reRenderStepModal();
+}
+
+function handleSteamKeyArtCapsuleImageDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleSteamKeyArtCapsuleImageFiles(e.dataTransfer.files);
+}
+function handleSteamKeyArtCapsuleImageFiles(files) {
+  const file = files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.uploads.steamCapsuleImage = { name: file.name, dataUrl: ev.target.result };
+    reRenderStepModal();
+  };
+  reader.readAsDataURL(file);
+}
+function removeSteamKeyArtCapsuleImage() {
+  state.uploads.steamCapsuleImage = null;
+  reRenderStepModal();
+}
+
+function handleSteamKeyArtHeaderImageDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleSteamKeyArtHeaderImageFiles(e.dataTransfer.files);
+}
+function handleSteamKeyArtHeaderImageFiles(files) {
+  const file = files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.uploads.steamHeaderImage = { name: file.name, dataUrl: ev.target.result };
+    reRenderStepModal();
+  };
+  reader.readAsDataURL(file);
+}
+function removeSteamKeyArtHeaderImage() {
+  state.uploads.steamHeaderImage = null;
   reRenderStepModal();
 }
 

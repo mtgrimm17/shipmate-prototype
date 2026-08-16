@@ -4811,17 +4811,14 @@ select.form-input {
 }
 .feature-preview-name { font-size: 12px; color: var(--text-dim); }
 
-/* Key Art upload boxes (IGDB Cover Art / Library Capsule / Library Hero /
-   Logo in Steam's "Select Key Art" section — see _steamKeyArtUploadHTML in
-   render.js) — both the empty dropzone and the uploaded-image preview are
-   sized to the real asset's aspect ratio (748×896 / 600×900 / 3840×1240),
-   so the box shows the actual shape/crop rather than a generic rectangle.
-   The two capsule-shaped boxes are capped to the same 220px width as the
-   on-page .pk-capsule, whose 748×896 placeholder shape matches Steam's own
-   IGDB Cover Art spec exactly. Logo has no single official aspect ratio
-   (it's an arbitrary-shaped transparent wordmark, not a fixed-spec photo
-   asset), so it gets a loose landscape box with object-fit: contain
-   instead of cover — a cover crop would clip an irregular logo shape. */
+/* Key Art upload boxes (Capsule Image / Header Image / IGDB Cover Art /
+   Library Hero in Steam's "Select Key Art" section — see
+   _steamKeyArtUploadHTML in render.js) — both the empty dropzone and the
+   uploaded-image preview are sized to the real asset's aspect ratio
+   (231×87 / 460×215 / 748×896 / 3840×1240), so the box shows the actual
+   shape/crop rather than a generic rectangle. The IGDB Cover Art box is
+   capped to the same 220px width as the on-page .pk-capsule, whose
+   748×896 placeholder shape matches Steam's own spec exactly. */
 .pk-keyart-box {
   display: flex;
   flex-direction: column;
@@ -4830,8 +4827,12 @@ select.form-input {
   overflow: hidden;
   border-radius: 8px;
 }
-.pk-keyart-box--capsule        { width: 220px; aspect-ratio: 748 / 896; }
-.pk-keyart-box--hero           { width: 100%;  aspect-ratio: 3840 / 1240; }
+.pk-keyart-box--capsuleimage    { width: 220px; aspect-ratio: 231 / 87; }
+.pk-keyart-box--headerimage     { width: 320px; aspect-ratio: 460 / 215; }
+.pk-keyart-box--capsule         { width: 220px; aspect-ratio: 748 / 896; }
+.pk-keyart-box--hero            { width: 100%;  aspect-ratio: 3840 / 1240; }
+.asset-dropzone.pk-keyart-box--capsuleimage,
+.asset-dropzone.pk-keyart-box--headerimage,
 .asset-dropzone.pk-keyart-box--capsule,
 .asset-dropzone.pk-keyart-box--hero {
   padding: 12px;
