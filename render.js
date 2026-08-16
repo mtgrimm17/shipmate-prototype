@@ -161,21 +161,29 @@ function renderOnboardingFooter() {
   const isFirst = state.onboardingTab === 0;
   const hasPlat = state.activePlatforms.size > 0;
 
-  // Assets opened via the "Manage" button in "Edit site details" (Trailers/
-  // Screenshots) is a standalone detour, not a step in the linear onboarding
-  // flow — no "Launch Dashboard" action here, and Back returns to Edit site
-  // details instead of Distribution. See openAssetsFromWebEdit /
+  // Assets opened via a "Manage" button in the Web platform's Trailers/
+  // Screenshots sub-sections (shown in both "Site Details" and the
+  // standalone "Media" modal — see _wsMediaFieldsHTML) is a standalone
+  // detour, not a step in the linear onboarding flow: no "Launch Dashboard"
+  // action here, no ordinary Back either (there's nowhere in the linear
+  // flow to go back TO — this wasn't reached by stepping forward through
+  // it). Instead the footer's usual Back/Next pair is replaced by a single
+  // "Save & Return" button (bottom-right, same presentation as the
+  // analogous cross-platform detour's own "Save & Return"/"Save & Return to
+  // Web" buttons in the step-modal footer — see renderStepModal) that sends
+  // the user back to whichever of Site Details/Media they clicked "Manage"
+  // from (state.assetsFromWebEditSource). See openAssetsFromWebEdit /
   // backFromAssetsToWebEdit in app.js.
   const fromWebEdit = state.assetsFromWebEdit && state.onboardingTab === 2;
 
   el.innerHTML = `
     <div class="ob-footer-inner">
-      <button class="btn btn-ghost" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : 'prevOnboardingTab()'}" ${isFirst ? 'style="visibility:hidden"' : ''}>${t('ob.footer.back')}</button>
+      <button class="btn btn-ghost" onclick="prevOnboardingTab()" ${(isFirst || fromWebEdit) ? 'style="visibility:hidden"' : ''}>${t('ob.footer.back')}</button>
       <div class="ob-step-dots">
         ${[0,1,2,3].map(i => `<span class="ob-dot ${i === state.onboardingTab ? 'is-active' : (i < state.onboardingTab ? 'is-done' : '')}"></span>`).join('')}
       </div>
-      <button class="btn btn-primary" onclick="${isLast ? 'completeOnboarding()' : 'nextOnboardingTab()'}" ${fromWebEdit ? 'style="visibility:hidden"' : ''}>
-        ${isLast ? t('ob.footer.launch') : t('ob.footer.next')}
+      <button class="btn btn-primary" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : (isLast ? 'completeOnboarding()' : 'nextOnboardingTab()')}">
+        ${fromWebEdit ? 'Save &amp; Return' : (isLast ? t('ob.footer.launch') : t('ob.footer.next'))}
       </button>
     </div>`;
 }
@@ -876,31 +884,36 @@ function buildObLangList() {
 }
 
 /* Tab 2: Assets */
-function buildAssetsTab() {
-  const hasAndroid = state.activePlatforms.has('android');
-  // Auto-filled when the picked title (About section's IGDB picklist) has a
-  // linked Steam store page with at least one trailer — see
-  // _applySteamAboutData/_steamTrailerFromMovies in app.js, sourced from
-  // appdetails' own `movies` array. Shown beneath the manual upload
-  // dropzone/YouTube-URL fields below, sized roughly like an uploaded
-  // screenshot thumbnail (see .steam-trailer-thumb in style.css, matching
-  // .asset-thumb's 160px/16:9 sizing) rather than a large full-width
-  // preview — purely a compact reference of what's already live on the
-  // game's Steam page, it doesn't replace, block, or get overwritten by
-  // either of those, since a developer may still want to upload their own
-  // file or paste a different URL for Shipmate's own submission flow.
-  // Clicking the small thumbnail "opens up" a larger inline player
-  // (playSteamTrailer in app.js, via hls.js/Safari's native HLS support)
-  // rather than linking out — Steam's appdetails only returns
-  // adaptive-streaming manifest URLs for trailers now (see
-  // steamTrailer.hlsUrl/_steamTrailerFromMovies in app.js), which a plain
-  // <a href> click-through can't play in most browsers. The hlsUrl itself
-  // lives in a data attribute rather than an href since it's never meant to
-  // be navigated to directly.
-  const steamTrailer = state.uploads.steamTrailer;
-  const steamTrailerHTML = steamTrailer ? `
+/* Shared by buildAssetsTab (Assets tab's "Trailer" section) and
+   buildWebSitePreviewSection (preview website's "Trailers" sub-section) —
+   the same compact, clickable Steam trailer preview in both places, so the
+   two stay visually and behaviorally identical rather than two hand-copied
+   near-duplicates drifting apart. `steamTrailer` is state.uploads.steamTrailer
+   ({ name, thumbnail, hlsUrl } — see _steamTrailerFromMovies in app.js) or
+   falsy; returns '' when there's nothing to show.
+   Sized roughly like an uploaded screenshot thumbnail (see
+   .steam-trailer-thumb in style.css, matching .asset-thumb's 160px/16:9
+   sizing) rather than a large full-width preview — a compact reference of
+   what's already live on the game's Steam page. Clicking the small
+   thumbnail "opens up" a larger inline player (playSteamTrailer in app.js,
+   via hls.js/Safari's native HLS support) rather than linking out —
+   Steam's appdetails only returns adaptive-streaming manifest URLs for
+   trailers now (see steamTrailer.hlsUrl/_steamTrailerFromMovies in app.js),
+   which a plain <a href> click-through can't play in most browsers. The
+   hlsUrl itself lives in a data attribute rather than an href since it's
+   never meant to be navigated to directly. */
+function _steamTrailerPreviewHTML(steamTrailer) {
+  if (!steamTrailer) return '';
+  // event.stopPropagation() matters on the preview website, where this sits
+  // inside a .pk-mainsection that flips to its own edit modal on click
+  // (see mediaHTML/pk-media in buildWebSitePreviewSection) — without it,
+  // clicking the thumbnail would both play the trailer AND flip to the
+  // Media edit modal underneath it, same reasoning as the existing
+  // pk-video-link click-through above. Harmless in the Assets tab, which
+  // has no such ancestor click handler to guard against.
+  return `
     <div class="steam-trailer-preview" data-hls-url="${escHtml(steamTrailer.hlsUrl)}">
-      <div class="steam-trailer-thumb-link" onclick="playSteamTrailer(this)" role="button" tabindex="0" title="Play trailer">
+      <div class="steam-trailer-thumb-link" onclick="event.stopPropagation(); playSteamTrailer(this)" role="button" tabindex="0" title="Play trailer">
         <div class="steam-trailer-thumb">
           <img src="${escHtml(steamTrailer.thumbnail)}" alt="${escHtml(steamTrailer.name)}">
           <span class="steam-trailer-play-badge">▶</span>
@@ -909,7 +922,23 @@ function buildAssetsTab() {
       <div class="feature-preview-meta">
         <span class="feature-preview-name">🎬 ${escHtml(steamTrailer.name)} <span class="pk-muted">(from Steam)</span></span>
       </div>
-    </div>` : '';
+    </div>`;
+}
+
+function buildAssetsTab() {
+  const hasAndroid = state.activePlatforms.has('android');
+  // Auto-filled when the picked title (About section's IGDB picklist) has a
+  // linked Steam store page with at least one trailer — see
+  // _applySteamAboutData/_steamTrailerFromMovies in app.js, sourced from
+  // appdetails' own `movies` array. Shown beneath the manual upload
+  // dropzone/YouTube-URL fields below via the shared _steamTrailerPreviewHTML
+  // helper above (also used by the preview website's own "Trailers"
+  // sub-section, buildWebSitePreviewSection) — purely a compact reference
+  // of what's already live on the game's Steam page, it doesn't replace,
+  // block, or get overwritten by either of those, since a developer may
+  // still want to upload their own file or paste a different URL for
+  // Shipmate's own submission flow.
+  const steamTrailerHTML = _steamTrailerPreviewHTML(state.uploads.steamTrailer);
   return `
     <div class="ob-form">
 
@@ -2781,12 +2810,19 @@ function buildWebSitePreviewSection() {
 
   // Trailers — sourced from the same "Trailer" asset set in Shipmate's
   // Assets step (Onboarding tab 2), not a separate webSite field: either a
-  // pasted video URL (fd.trailerUrl) or an uploaded file (ups.trailer, shown
-  // as plain text since there's no playable source in this prototype).
-  // fd.trailerUrl takes priority if both happen to be set.
+  // pasted video URL (fd.trailerUrl), an uploaded file (ups.trailer, shown
+  // as plain text since there's no playable source in this prototype), or
+  // an auto-filled Steam trailer (ups.steamTrailer, shown via the same
+  // compact clickable thumbnail as the Assets tab — see
+  // _steamTrailerPreviewHTML above). fd.trailerUrl takes priority over
+  // ups.trailer if both happen to be set, matching the Assets tab's own
+  // "manual entry wins the primary slot" convention — but the Steam
+  // trailer is purely additive on top of whichever of those (if either) is
+  // showing, same as it is in the Assets tab, since it's a separate,
+  // independent source rather than a third alternative for the same slot.
   const uploadedTrailer = ups.trailer || null;
   const ytId = _pkYouTubeId(fd.trailerUrl);
-  const trailersValue = fd.trailerUrl ? (ytId ? `
+  const manualTrailerValue = fd.trailerUrl ? (ytId ? `
     <div class="pk-video-frame pk-video-embed">
       <iframe src="https://www.youtube.com/embed/${ytId}" title="${title} — Trailer"
               frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -2799,6 +2835,7 @@ function buildWebSitePreviewSection() {
       </a>
     </div>`) : uploadedTrailer ? `
     <p class="pk-p">🎬 ${escHtml(uploadedTrailer.name)} <span class="pk-muted">(uploaded — preview not available in this prototype)</span></p>` : '';
+  const trailersValue = manualTrailerValue + _steamTrailerPreviewHTML(ups.steamTrailer);
 
   const screenshotsValue = shots.length ? `
     <div class="pk-image-grid">
@@ -2919,26 +2956,39 @@ function _wsDescriptionFieldsHTML(ws) {
 
 /* Media fields: Trailers, Screenshots. Both are read-only summaries of the
    same "Trailer"/"Screenshots" assets managed in Shipmate's Assets step
-   (Onboarding tab 2) — "Manage" jumps there via openAssetsFromWebEdit. */
-function _wsMediaFieldsHTML(fd) {
+   (Onboarding tab 2) — "Manage" jumps there via openAssetsFromWebEdit.
+   `source` is passed straight through to openAssetsFromWebEdit so its
+   "Save & Return" button (Assets tab footer) knows which of the two
+   places this got called from — this function is shared by both
+   buildWebSiteEditSection ('siteInfo', the combined Site Details panel)
+   and buildWebMediaEditSection ('webMedia', the standalone Media flip
+   modal), so it can't hardcode a single return target itself.
+   The Trailers summary reflects every applicable source, not just one —
+   fd.trailerUrl/state.uploads.trailer (Shipmate's own manual entry) and
+   state.uploads.steamTrailer (auto-filled from the linked Steam page's own
+   trailer, see _steamTrailerFromMovies in app.js) are independent and can
+   coexist, same as they do in the Assets tab itself, so this joins
+   whichever apply rather than treating them as mutually exclusive. */
+function _wsMediaFieldsHTML(fd, source) {
   const shotsCount = (state.uploads?.screenshots || []).length;
   const uploadedTrailer = state.uploads?.trailer || null;
-  const trailerSummary = fd.trailerUrl
-    ? 'Trailer URL set'
-    : uploadedTrailer
-      ? `Trailer uploaded: ${uploadedTrailer.name}`
-      : 'No trailer added yet';
+  const steamTrailer = state.uploads?.steamTrailer || null;
+  const trailerParts = [];
+  if (fd.trailerUrl) trailerParts.push('Trailer URL set');
+  if (uploadedTrailer) trailerParts.push(`Trailer uploaded: ${uploadedTrailer.name}`);
+  if (steamTrailer) trailerParts.push('Steam trailer added');
+  const trailerSummary = trailerParts.length ? trailerParts.join(' · ') : 'No trailer added yet';
   return `
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailers</label>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
       <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(trailerSummary)}</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit();">Manage ›</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit('${source}');">Manage ›</button>
     </div>
 
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
       <span style="font-size:13px;color:var(--text-muted,#6b7280);">${shotsCount} screenshot${shotsCount === 1 ? '' : 's'} from your uploads shown on the preview.</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit();">Manage ›</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit('${source}');">Manage ›</button>
     </div>`;
 }
 
@@ -2980,7 +3030,7 @@ function buildWebSiteEditSection() {
       ${_wsDescriptionFieldsHTML(ws)}
 
       <div class="pk-edit-group-label">Media</div>
-      ${_wsMediaFieldsHTML(fd)}
+      ${_wsMediaFieldsHTML(fd, 'siteInfo')}
 
       <div class="pk-edit-group-label">About</div>
       ${_wsAboutFieldsHTML(ws)}
@@ -3022,7 +3072,7 @@ function buildWebMediaEditSection() {
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
         Edit the Media fields shown on your preview website.
       </p>
-      ${_wsMediaFieldsHTML(fd)}
+      ${_wsMediaFieldsHTML(fd, 'webMedia')}
     </div>`;
 }
 

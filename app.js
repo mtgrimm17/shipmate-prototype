@@ -78,25 +78,41 @@ function openOnboarding(tab = 0) {
 function closeOnboarding() {
   if (!state.onboardingComplete) return; // can't close if not yet done
   state.assetsFromWebEdit = false;
+  state.assetsFromWebEditSource = 'siteInfo';
   showMainApp();
 }
 
-/* Opens the Assets tab from the "Manage" button in the Web platform's "Edit
-   site details" panel (Trailers/Screenshots sub-sections) — a standalone
-   asset-management detour rather than a step in the normal onboarding flow.
-   See the matching footer treatment in renderOnboardingFooter (render.js). */
-function openAssetsFromWebEdit() {
+/* Opens the Assets tab from a "Manage" button in the Web platform's
+   Trailers/Screenshots sub-sections — shown in both the combined "Site
+   Details" edit panel (buildWebSiteEditSection) and the standalone "Media"
+   flip modal (buildWebMediaEditSection), both via the shared
+   _wsMediaFieldsHTML in render.js. A standalone asset-management detour
+   rather than a step in the normal onboarding flow.
+   `source` is which of those two the user clicked "Manage" from —
+   'siteInfo' or 'webMedia' (the same target strings openStorePreviewSection
+   already uses for them) — remembered so the Assets tab's "Save & Return"
+   button (backFromAssetsToWebEdit below) can send the user back to the
+   right one instead of always landing on Site Details regardless of where
+   they came from. Falls back to 'siteInfo' if called without one. See the
+   matching footer treatment in renderOnboardingFooter (render.js). */
+function openAssetsFromWebEdit(source) {
   state.assetsFromWebEdit = true;
+  state.assetsFromWebEditSource = source || 'siteInfo';
   openOnboarding(2);
 }
 
-/* Back button on the Assets tab when it was opened via openAssetsFromWebEdit —
-   returns to "Edit site details" instead of falling back to Distribution. */
+/* "Save & Return" button on the Assets tab footer when it was opened via
+   openAssetsFromWebEdit — returns to whichever of Site Details/Media the
+   user came from (state.assetsFromWebEditSource) instead of always
+   Distribution (the normal Back target) or always Site Details (this
+   function's own previous, source-blind behavior). */
 async function backFromAssetsToWebEdit() {
+  const returnTarget = state.assetsFromWebEditSource || 'siteInfo';
   state.assetsFromWebEdit = false;
+  state.assetsFromWebEditSource = 'siteInfo';
   closeOnboarding();
   await openStepModal('web', 'storePreview');
-  await openStorePreviewSection('web', 'siteInfo');
+  await openStorePreviewSection('web', returnTarget);
 }
 
 function setOnboardingTab(idx) {

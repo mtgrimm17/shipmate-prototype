@@ -2098,13 +2098,23 @@ const state = {
   onboardingTab: 0,          // 0 = About, 1 = Distribution, 2 = Assets, 3 = Compliance (unreachable via Next — dead tab)
   _newProjectMode: false,    // true when onboarding is creating a 2nd+ project
 
-  // True while the Assets tab (tab 2) was opened via the "Manage" button in
-  // the Web platform's "Edit site details" (Trailers/Screenshots sub-sections)
-  // rather than through the normal onboarding flow — while true and on tab 2,
-  // the footer hides "Launch Dashboard" and Back returns to Edit site details
-  // instead of Distribution. See openAssetsFromWebEdit/backFromAssetsToWebEdit
-  // in app.js and renderOnboardingFooter in render.js.
+  // True while the Assets tab (tab 2) was opened via a "Manage" button in
+  // the Web platform's Trailers/Screenshots sub-sections (shown in both the
+  // combined "Site Details" edit panel and the standalone "Media" flip
+  // modal) rather than through the normal onboarding flow — while true and
+  // on tab 2, the footer hides the normal Back/Next pair and shows a single
+  // "Save & Return" button instead. See openAssetsFromWebEdit/
+  // backFromAssetsToWebEdit in app.js and renderOnboardingFooter in
+  // render.js.
   assetsFromWebEdit: false,
+
+  // Which Web flip section to return to when the Assets tab's "Save &
+  // Return" button (above) is clicked — 'siteInfo' (Site Details) or
+  // 'webMedia' (the standalone Media modal), whichever the user clicked
+  // "Manage" from (set by openAssetsFromWebEdit's `source` argument).
+  // Falls back to 'siteInfo' if somehow unset. See _wsMediaFieldsHTML in
+  // render.js for where the two "Manage" buttons pass their own source.
+  assetsFromWebEditSource: 'siteInfo',
 
   // True while Steam's "Select Key Art" flip section (Store Page Preview
   // step) was opened via the "Manage" button in the Web platform's "Key Art"
