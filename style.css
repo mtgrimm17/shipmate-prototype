@@ -4831,22 +4831,15 @@ select.form-input {
   border-radius: 8px;
 }
 .pk-keyart-box--capsule        { width: 220px; aspect-ratio: 748 / 896; }
-.pk-keyart-box--librarycapsule { width: 220px; aspect-ratio: 600 / 900; }
 .pk-keyart-box--hero           { width: 100%;  aspect-ratio: 3840 / 1240; }
-.pk-keyart-box--logo           { width: 220px; aspect-ratio: 3 / 2; background: var(--panel-3, #242424); }
 .asset-dropzone.pk-keyart-box--capsule,
-.asset-dropzone.pk-keyart-box--librarycapsule,
-.asset-dropzone.pk-keyart-box--hero,
-.asset-dropzone.pk-keyart-box--logo {
+.asset-dropzone.pk-keyart-box--hero {
   padding: 12px;
 }
 .pk-keyart-img {
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
-}
-.pk-keyart-box--logo .pk-keyart-img {
-  object-fit: contain;
 }
 
 

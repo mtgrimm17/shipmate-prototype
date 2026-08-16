@@ -505,12 +505,8 @@ async function igdbSearch(title) {
       return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
     })(),
     // Cover art at IGDB's largest dedicated "cover" size (t_cover_big,
-    // 264×374 — portrait, the closest native aspect IGDB offers to Steam's
-    // 748×896 vertical capsule). Used by _applySteamCapsuleFromCover
-    // (app.js) to auto-populate the Steam Key Art "IGDB Cover Art" field —
-    // a deliberately separate slot from "Library Capsule" (Steam's own
-    // library_600x900.jpg, see steamLibraryCapsuleUrl below), since this is
-    // IGDB's own crop/resolution, not Steam's exact library asset. Kept as
+    // 264×374 — portrait). Used by _applySteamCapsuleFromCover (app.js) to
+    // auto-populate the Steam Key Art "IGDB Cover Art" field. Kept as
     // a raw images.igdb.com URL, not pre-proxied
     // like coverUrl above — _screenshotSrc (app.js) already proxies any
     // images.igdb.com URL through wsrv.nl at render time, same as
@@ -555,33 +551,21 @@ async function igdbSearch(title) {
   }));
 }
 
-/* ── Steam library_hero / library_600x900 / logo direct CDN URLs ─────────
-   Steam's Library-view assets (hero banner, vertical library capsule, and
-   logo) are all served from the same stable, hash-free path keyed only by
-   the app ID — no steamdb.info lookup, no proxy, no CORS concern (each is
-   just an <img> src). Verified live in-browser (via Claude in Chrome,
-   reading the real network requests a live store page makes plus direct
-   fetch() checks) against a real app ID (Hades, 1145360): library_hero.jpg,
-   library_600x900.jpg, and logo.png all resolved with a clean 200 at this
-   exact host + path, no hash segment needed for any of the three.
-   Earlier testing (v2.82–v2.87, see app.js/claude.js history) had only
-   confirmed library_hero this way and concluded the other two required a
-   steamdb.info-sourced hash (which that site blocks via proxy) — that
-   conclusion turned out to be specific to the app IDs tried then, not a
-   real limitation of the CDN path itself. Like library_hero, neither
-   library_600x900.jpg nor logo.png is guaranteed to exist for every app —
-   smaller/older titles sometimes never had proper Library art uploaded —
-   so callers (_applySteamLibraryCapsule/_applySteamLogo in app.js, same
-   pattern as _applySteamHeroBanner) must still handle a 404 gracefully
-   rather than assume success. */
+/* ── Steam library_hero direct CDN URL ────────────────────────────────
+   Steam's library_hero.jpg is served from a stable, hash-free path keyed
+   only by the app ID — no steamdb.info lookup, no proxy, no CORS concern
+   (it's just an <img> src). Verified live in-browser (via Claude in
+   Chrome, reading the real network requests a live store page makes plus
+   direct fetch() checks) against a real app ID (Hades, 1145360). Not
+   guaranteed to exist for every app — smaller/older titles sometimes never
+   had proper Library art uploaded — so callers (_applySteamHeroBanner in
+   app.js) must still handle a 404 gracefully rather than assume success.
+   (library_600x900.jpg/logo.png share this same hash-free CDN path and
+   were briefly used here too, via steamLibraryCapsuleUrl/steamLogoUrl —
+   removed along with the "Library Capsule"/"Logo" Key Art fields by
+   request; see git history around v3.02 if reviving that is ever needed.) */
 function steamLibraryHeroUrl(appId) {
   return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`;
-}
-function steamLibraryCapsuleUrl(appId) {
-  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
-}
-function steamLogoUrl(appId) {
-  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/logo.png`;
 }
 
 /* ── Steam appdetails — short description, developer, "About This Game",

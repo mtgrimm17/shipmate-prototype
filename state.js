@@ -1897,39 +1897,28 @@ function makeBlankUploads() {
     featureGraphic: null,
     trailer:        null,
     // Key Art (Steam Store platform's "Select Key Art" section — see
-    // buildSteamKeyArtEditSection in render.js) — four image slots, shown
-    // in this order: IGDB Cover Art, Library Capsule, Library Hero, Logo.
-    // Every field can be either { name, dataUrl } for a manual upload, or
-    // { name, url } when auto-populated. Auto-fill sources:
-    //   - steamKeyArtCapsule ("IGDB Cover Art", 748×896) ← IGDB's own cover
+    // buildSteamKeyArtEditSection in render.js) — two image slots, shown
+    // in this order: IGDB Cover Art, Library Hero. Every field can be
+    // either { name, dataUrl } for a manual upload, or { name, url } when
+    // auto-populated. Auto-fill sources:
+    //   - steamKeyArtCapsule ("IGDB Cover Art", 264×374) ← IGDB's own cover
     //     art (coverBigUrl in claude.js, applied by
-    //     _applySteamCapsuleFromCover in app.js). This is IGDB's own
-    //     crop/resolution (264×374), not one of Steam's own assets — kept
-    //     as a separate slot from Library Capsule below rather than
-    //     conflated with it, so a developer can see (and override) each
-    //     independently.
-    //   - steamLibraryCapsule ("Library Capsule", 600×900) ← Steam's own
-    //     library_600x900.jpg (steamLibraryCapsuleUrl in claude.js, applied
-    //     by _applySteamLibraryCapsule in app.js).
+    //     _applySteamCapsuleFromCover in app.js).
     //   - steamKeyArtHero ("Library Hero", 3840×1240) ← Steam's own
     //     library_hero.jpg (steamLibraryHeroUrl in claude.js, applied by
-    //     _applySteamHeroBanner in app.js).
-    //   - steamLogo ("Logo") ← Steam's own logo.png (steamLogoUrl in
-    //     claude.js, applied by _applySteamLogo in app.js).
-    // Library Capsule/Hero/Logo all come from the same stable, hash-free
-    // per-appid CDN path — no proxy needed for any of the three (see
-    // steamLibraryHeroUrl's comment in claude.js) — and, like Hero, aren't
-    // guaranteed to exist for every app, so a missing asset just leaves
-    // that field manual-upload-only rather than erroring. _screenshotSrc in
-    // app.js resolves any of these shapes (dataUrl or url, proxying
-    // images.igdb.com URLs through wsrv.nl) to a render-ready <img> src.
-    // All four are set via this Steam section only — unlike the original
-    // two-field version, Library Capsule/Logo are not currently mirrored on
-    // the Web platform's read-only "Key Art" flip modal or preview website.
+    //     _applySteamHeroBanner in app.js) — a stable, hash-free per-appid
+    //     CDN path, no proxy needed. Like any auto-fill, isn't guaranteed to
+    //     exist for every app, so a missing asset just leaves this field
+    //     manual-upload-only rather than erroring.
+    // _screenshotSrc in app.js resolves either shape (dataUrl or url,
+    // proxying images.igdb.com URLs through wsrv.nl) to a render-ready
+    // <img> src. Both fields are mirrored read-only on the Web platform's
+    // "Key Art" flip modal (buildWebKeyArtEditSection).
+    // (A "Library Capsule"/"Logo" pair, auto-filled from Steam's own
+    // library_600x900.jpg/logo.png, briefly lived here as well — removed by
+    // request; see git history around v3.02 if reviving that is ever needed.)
     steamKeyArtCapsule:  null,
-    steamLibraryCapsule: null,
     steamKeyArtHero:     null,
-    steamLogo:           null,
   };
 }
 
