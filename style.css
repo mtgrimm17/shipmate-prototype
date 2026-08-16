@@ -6255,7 +6255,45 @@ select.form-input {
 }
 
 .pk-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.pk-image-cell { cursor: zoom-in; }
 .pk-image-cell img { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; display: block; }
+
+/* Screenshot lightbox — opened by openScreenshotLightbox (app.js) when a
+   preview-website screenshot thumbnail is clicked. Same fullscreen-backdrop
+   pattern as .prompt-debug-overlay (see that class below) for consistency. */
+.pk-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.82);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  box-sizing: border-box;
+  cursor: zoom-out;
+}
+.pk-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  cursor: default;
+}
+.pk-lightbox-close {
+  position: absolute;
+  top: 18px; right: 22px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.pk-lightbox-close:hover { background: rgba(255,255,255,0.22); }
 
 @media (max-width: 640px) {
   .pk-fact-desc-grid { grid-template-columns: 1fr; }

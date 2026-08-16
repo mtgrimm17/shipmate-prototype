@@ -2822,8 +2822,14 @@ function buildWebSitePreviewSection() {
   // independent source rather than a third alternative for the same slot.
   const uploadedTrailer = ups.trailer || null;
   const ytId = _pkYouTubeId(fd.trailerUrl);
+  // event.stopPropagation() on both the YouTube embed's wrapper div and the
+  // manual link-out matters here too — same reasoning as the Steam trailer
+  // preview below: this whole block sits inside #pk-media, which flips to
+  // its own edit modal on click, so any click landing on the wrapper itself
+  // (rather than passing through to the iframe's separate document, which
+  // can't bubble here anyway) must not also trigger that flip.
   const manualTrailerValue = fd.trailerUrl ? (ytId ? `
-    <div class="pk-video-frame pk-video-embed">
+    <div class="pk-video-frame pk-video-embed" onclick="event.stopPropagation()">
       <iframe src="https://www.youtube.com/embed/${ytId}" title="${title} — Trailer"
               frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowfullscreen></iframe>
@@ -2837,9 +2843,14 @@ function buildWebSitePreviewSection() {
     <p class="pk-p">🎬 ${escHtml(uploadedTrailer.name)} <span class="pk-muted">(uploaded — preview not available in this prototype)</span></p>` : '';
   const trailersValue = manualTrailerValue + _steamTrailerPreviewHTML(ups.steamTrailer);
 
+  // Each cell both opens a full-size lightbox (openScreenshotLightbox in
+  // app.js) AND stops the click from bubbling to #pk-media's own onclick
+  // below — without stopPropagation, clicking a screenshot to enlarge it
+  // would also flip the whole Media section into edit mode underneath the
+  // lightbox, same reasoning as the trailer previews above/below.
   const screenshotsValue = shots.length ? `
     <div class="pk-image-grid">
-      ${shots.map(s => `<div class="pk-image-cell"><img src="${_screenshotSrc(s)}" alt="${escHtml(s.name || 'Screenshot')}"></div>`).join('')}
+      ${shots.map(s => `<div class="pk-image-cell" onclick="event.stopPropagation(); openScreenshotLightbox(this)"><img src="${_screenshotSrc(s)}" alt="${escHtml(s.name || 'Screenshot')}"></div>`).join('')}
     </div>` : '';
 
   const mediaHTML = `

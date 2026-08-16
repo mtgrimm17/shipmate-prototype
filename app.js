@@ -3354,19 +3354,30 @@ function playSteamTrailer(el) {
   const hlsUrl = wrap && wrap.dataset.hlsUrl;
   if (!hlsUrl) return;
 
+  // Snapshot of the thumbnail link's markup, restored verbatim (via
+  // outerHTML, same pattern as e.g. buildActiveCard's card.outerHTML swaps)
+  // once the user clicks away from the player — see closeOnClickAway below.
+  const thumbHTML = el.outerHTML;
+
   const video = document.createElement('video');
   video.className = 'steam-trailer-video';
   video.controls = true;
   video.autoplay = true;
   video.playsInline = true;
+  // This player can sit inside a clickable preview section elsewhere on the
+  // page (see #pk-media in buildWebSitePreviewSection, render.js) — without
+  // this, clicking the video's own native controls would bubble up and flip
+  // that section into edit mode instead of just operating the player.
+  video.addEventListener('click', e => e.stopPropagation());
   el.replaceWith(video);
 
+  let hls = null;
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
     // Safari (and some WebKit-based browsers) can play an HLS manifest
     // natively via a plain <video src>, no player library needed.
     video.src = hlsUrl;
   } else if (window.Hls && window.Hls.isSupported()) {
-    const hls = new window.Hls();
+    hls = new window.Hls();
     hls.loadSource(hlsUrl);
     hls.attachMedia(video);
   } else {
@@ -3377,9 +3388,55 @@ function playSteamTrailer(el) {
     link.target = '_blank';
     link.rel = 'noopener';
     link.className = 'steam-trailer-fallback-link';
+    link.addEventListener('click', e => e.stopPropagation());
     link.textContent = 'This browser can’t play the trailer inline — open it on Steam’s CDN instead';
     video.replaceWith(link);
+    return; // a plain link-out isn't a player, so there's nothing to close-on-click-away
   }
+
+  // Clicking anywhere outside the player restores the thumbnail and tears
+  // down playback, so a trailer doesn't keep streaming silently in the
+  // background once the user has moved on elsewhere on the page. Registered
+  // on the capture phase so it still runs even though the player's own click
+  // handler (above) calls stopPropagation() during the bubble phase — by
+  // the time bubbling would be stopped, this capture-phase listener has
+  // already fired and already decided (via wrap.contains) whether the click
+  // landed on the player itself or somewhere else.
+  function closeOnClickAway(e) {
+    if (wrap.contains(e.target)) return; // click was on the player itself — keep playing
+    document.removeEventListener('click', closeOnClickAway, true);
+    if (hls) hls.destroy();
+    video.pause();
+    video.outerHTML = thumbHTML;
+  }
+  document.addEventListener('click', closeOnClickAway, true);
+}
+
+/* Click handler for a preview-website screenshot thumbnail (see
+   screenshotsValue in buildWebSitePreviewSection, render.js) — opens it in a
+   fullscreen lightbox so the user can see it at full size. Mirrors the
+   existing "See Prompt" debug overlay's own overlay pattern (same file,
+   showInferencePrompt) for consistency: an overlay appended to <body>,
+   closed either by its own close button or by clicking the backdrop.
+   `cell` is the clicked .pk-image-cell div; its <img> is read directly
+   rather than passing the src/alt through as string arguments, since a
+   screenshot's src is often a large data: URL that's awkward and fragile to
+   inline into an onclick attribute value. */
+function openScreenshotLightbox(cell) {
+  const img = cell.querySelector('img');
+  if (!img) return;
+
+  const existing = document.getElementById('pk-lightbox-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pk-lightbox-overlay';
+  overlay.className = 'pk-lightbox-overlay';
+  overlay.innerHTML = `
+    <img class="pk-lightbox-img" src="${escHtml(img.src)}" alt="${escHtml(img.alt)}">
+    <button class="pk-lightbox-close" onclick="document.getElementById('pk-lightbox-overlay').remove()">✕</button>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 
