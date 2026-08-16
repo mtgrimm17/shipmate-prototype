@@ -3402,8 +3402,21 @@ function playSteamTrailer(el) {
   // the time bubbling would be stopped, this capture-phase listener has
   // already fired and already decided (via wrap.contains) whether the click
   // landed on the player itself or somewhere else.
+  //
+  // That first click-away must ONLY close the player, not also activate
+  // whatever it landed on underneath (e.g. flip #pk-media into edit mode, or
+  // enlarge a screenshot via openScreenshotLightbox) — so once we've decided
+  // to close, we stopPropagation()+preventDefault() the SAME event that
+  // triggered the close. Because this listener runs during the capture
+  // phase (the very first stop on the event's path, before it even reaches
+  // the clicked element), stopping it here prevents the event from ever
+  // reaching that element's own handlers at all — the click is fully
+  // consumed by closing the player, and a second, separate click is needed
+  // to actually act on whatever's underneath.
   function closeOnClickAway(e) {
     if (wrap.contains(e.target)) return; // click was on the player itself — keep playing
+    e.stopPropagation();
+    e.preventDefault();
     document.removeEventListener('click', closeOnClickAway, true);
     if (hls) hls.destroy();
     video.pause();
