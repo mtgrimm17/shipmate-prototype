@@ -4811,13 +4811,17 @@ select.form-input {
 }
 .feature-preview-name { font-size: 12px; color: var(--text-dim); }
 
-/* Key Art upload boxes (Vertical Capsule / Hero Banner in Steam's "Select
-   Key Art" section — see _steamKeyArtUploadHTML in render.js) — both the
-   empty dropzone and the uploaded-image preview are sized to the real
-   asset's aspect ratio (748×896 / 3840×1240), so the box shows the actual
-   shape/crop rather than a generic rectangle. Capsule is capped to the
-   same 220px width as the on-page .pk-capsule, whose 748×896 placeholder
-   shape matches Steam's own capsule spec exactly. */
+/* Key Art upload boxes (IGDB Cover Art / Library Capsule / Library Hero /
+   Logo in Steam's "Select Key Art" section — see _steamKeyArtUploadHTML in
+   render.js) — both the empty dropzone and the uploaded-image preview are
+   sized to the real asset's aspect ratio (748×896 / 600×900 / 3840×1240),
+   so the box shows the actual shape/crop rather than a generic rectangle.
+   The two capsule-shaped boxes are capped to the same 220px width as the
+   on-page .pk-capsule, whose 748×896 placeholder shape matches Steam's own
+   IGDB Cover Art spec exactly. Logo has no single official aspect ratio
+   (it's an arbitrary-shaped transparent wordmark, not a fixed-spec photo
+   asset), so it gets a loose landscape box with object-fit: contain
+   instead of cover — a cover crop would clip an irregular logo shape. */
 .pk-keyart-box {
   display: flex;
   flex-direction: column;
@@ -4826,16 +4830,23 @@ select.form-input {
   overflow: hidden;
   border-radius: 8px;
 }
-.pk-keyart-box--capsule { width: 220px; aspect-ratio: 748 / 896; }
-.pk-keyart-box--hero    { width: 100%; aspect-ratio: 3840 / 1240; }
+.pk-keyart-box--capsule        { width: 220px; aspect-ratio: 748 / 896; }
+.pk-keyart-box--librarycapsule { width: 220px; aspect-ratio: 600 / 900; }
+.pk-keyart-box--hero           { width: 100%;  aspect-ratio: 3840 / 1240; }
+.pk-keyart-box--logo           { width: 220px; aspect-ratio: 3 / 2; background: var(--panel-3, #242424); }
 .asset-dropzone.pk-keyart-box--capsule,
-.asset-dropzone.pk-keyart-box--hero {
+.asset-dropzone.pk-keyart-box--librarycapsule,
+.asset-dropzone.pk-keyart-box--hero,
+.asset-dropzone.pk-keyart-box--logo {
   padding: 12px;
 }
 .pk-keyart-img {
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
+}
+.pk-keyart-box--logo .pk-keyart-img {
+  object-fit: contain;
 }
 
 

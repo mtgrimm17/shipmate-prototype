@@ -5904,7 +5904,7 @@ function buildSteamStorePreviewSection() {
     </div>
 
     <div class="spp-sections-list" style="margin-top:14px;">
-      ${_sppBtn('keyArt',   'Select Key Art',                  'Upload your vertical capsule and hero banner', keyArtDone)}
+      ${_sppBtn('keyArt',   'Select Key Art',                  'Upload your store and library key art', keyArtDone)}
       ${_sppBtn('content',  'Answer Content Questions',        'Mature content, AI usage, and IARC rating',    contentDone)}
       ${_sppBtn('business', 'Answer Business Questions',       'Store tags, genre, and technical details',     businessDone)}
       ${_sppBtn('data',     'Answer Data Collection Questions','Add your privacy policy URL',                  dataDone)}
@@ -5914,43 +5914,60 @@ function buildSteamStorePreviewSection() {
   `;
 }
 
-/* Steam: "Select Key Art" — collects the vertical capsule (748×896) and
-   hero banner (3840×1240) shown on the Steam store page. This is the
-   canonical source for state.uploads.steamKeyArtCapsule/steamKeyArtHero —
-   the Web platform's "Key Art" flip modal (buildWebKeyArtEditSection) reads
-   these same values read-only and links back here via "Manage", the same
-   relationship the Web platform's Trailers/Screenshots sub-sections have
-   with Shipmate's Assets step. Uploading calls reRenderStepModal(), so this
-   modal (and the Web preview behind it) always reflect the latest upload. */
+/* Steam: "Select Key Art" — collects four Key Art images, in this order:
+     - IGDB Cover Art  (748×896)  — state.uploads.steamKeyArtCapsule
+     - Library Capsule (600×900) — state.uploads.steamLibraryCapsule
+     - Library Hero    (3840×1240) — state.uploads.steamKeyArtHero
+     - Logo                       — state.uploads.steamLogo
+   IGDB Cover Art and Library Hero are the two original fields (auto-filled
+   from IGDB's cover art / Steam's library_hero.jpg respectively — see
+   _applySteamCapsuleFromCover/_applySteamHeroBanner in app.js) and are
+   still what the Web platform's "Key Art" flip modal
+   (buildWebKeyArtEditSection) reads read-only and links back here via
+   "Manage" — that mirror hasn't been extended to Library Capsule/Logo.
+   Library Capsule and Logo are auto-filled the same way, from Steam's own
+   library_600x900.jpg/logo.png (_applySteamLibraryCapsule/_applySteamLogo
+   in app.js). Uploading calls reRenderStepModal(), so this modal (and, for
+   the two mirrored fields, the Web preview behind it) always reflect the
+   latest upload. */
 function buildSteamKeyArtEditSection() {
   const ups = state.uploads || {};
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Upload the key art for your Steam store page. This also supplies the Key Art shown on your preview website.
+        Upload the key art for your Steam store page and library listing. IGDB Cover Art and Library Hero are also shown on your preview website.
       </p>
 
-      <div class="pk-edit-group-label">Vertical Capsule</div>
+      <div class="pk-edit-group-label">IGDB Cover Art</div>
       <div class="asset-guidance">Recommended 748 &times; 896 (portrait).</div>
       ${_steamKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.steamKeyArtCapsule)}
 
-      <div class="pk-edit-group-label">Hero Banner</div>
+      <div class="pk-edit-group-label">Library Capsule</div>
+      <div class="asset-guidance">Recommended 600 &times; 900 (portrait).</div>
+      ${_steamKeyArtUploadHTML('LibraryCapsule', 'PNG or JPG, up to ~5MB', ups.steamLibraryCapsule)}
+
+      <div class="pk-edit-group-label">Library Hero</div>
       <div class="asset-guidance">Recommended 3840 &times; 1240 (widescreen).</div>
       ${_steamKeyArtUploadHTML('Hero', 'PNG or JPG, up to ~5MB', ups.steamKeyArtHero)}
+
+      <div class="pk-edit-group-label">Logo</div>
+      <div class="asset-guidance">Transparent PNG recommended.</div>
+      ${_steamKeyArtUploadHTML('Logo', 'PNG or JPG, up to ~5MB', ups.steamLogo)}
     </div>`;
 }
 
-/* Key Art upload row — shared by the Vertical Capsule and Hero Banner
-   sub-sections above. Presentation mirrors the Screenshots/Trailer
-   dropzones in the Assets tab (see buildAssetsTab's .asset-dropzone
-   markup), but with a live dataURL preview once uploaded (like
-   state.uploads.featureGraphic/appIcon), since this is always an image.
-   `kind` is 'Capsule' or 'Hero', matching the handleSteamKeyArt{kind}Drop/
-   Files and removeSteamKeyArt{kind} functions in app.js. Both states sit in
-   a box sized to that asset's real aspect ratio (see .pk-keyart-box in
-   style.css), so the box shows the actual shape/crop before and after
-   uploading — same treatment used for Web's Key Art modal before it became
-   a read-only "Manage" link to here. */
+/* Key Art upload row — shared by the IGDB Cover Art / Library Capsule /
+   Library Hero / Logo sub-sections above. Presentation mirrors the
+   Screenshots/Trailer dropzones in the Assets tab (see buildAssetsTab's
+   .asset-dropzone markup), but with a live dataURL preview once uploaded
+   (like state.uploads.featureGraphic/appIcon), since this is always an
+   image. `kind` is 'Capsule', 'LibraryCapsule', 'Hero', or 'Logo', matching
+   the handleSteamKeyArt{kind}Drop/Files and removeSteamKeyArt{kind}
+   functions in app.js. Each upload sits in a box sized to that asset's
+   real aspect ratio (see .pk-keyart-box in style.css), so the box shows
+   the actual shape/crop before and after uploading — same treatment used
+   for Web's Key Art modal before it became a read-only "Manage" link to
+   here. */
 function _steamKeyArtUploadHTML(kind, hint, upload) {
   const dropId   = `steam-keyart-${kind.toLowerCase()}-dropzone`;
   const inputId  = `steam-keyart-${kind.toLowerCase()}-input`;

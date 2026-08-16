@@ -1896,35 +1896,40 @@ function makeBlankUploads() {
     screenshots:    [],
     featureGraphic: null,
     trailer:        null,
-    // Key Art — a vertical capsule (748×896) and hero banner (3840×1240)
-    // image. Both fields can be either { name, dataUrl } for a manual
-    // upload, or { name, url } when auto-populated from a picklist
-    // selection. steamKeyArtHero's url comes from Steam's own library_hero
-    // CDN URL (steamLibraryHeroUrl in claude.js, applied by
-    // _applySteamHeroBanner in app.js) — no proxy or lookup needed for that
-    // one asset. steamKeyArtCapsule's url comes from IGDB's own cover art
-    // (coverBigUrl in claude.js, applied by _applySteamCapsuleFromCover in
-    // app.js) — Steam itself doesn't expose a hash-free CDN URL for its own
-    // capsule asset, and the hash-aware source (steamdb.info) blocks
-    // proxied requests (see steamLibraryHeroUrl's comment for the full
-    // story), so IGDB's cover is used as a fallback instead. It's IGDB's
-    // own crop/resolution (264×374), not Steam's exact asset, so a
-    // developer who wants Steam's precise capsule art can still replace it
-    // with a manual upload. _screenshotSrc in app.js resolves either shape
-    // (dataUrl or url, and proxies images.igdb.com URLs through wsrv.nl)
-    // to a render-ready <img> src. Both fields are set via the "Select Key Art"
-    // section of the Steam Store platform's Store Page Preview
-    // (buildSteamKeyArtEditSection in render.js) — the canonical source,
-    // same role Shipmate's Assets step plays for uploads.trailer/
-    // screenshots. The Web platform's "Key Art" flip modal
-    // (buildWebKeyArtEditSection) reads these read-only, showing them on the
-    // preview website in place of the placeholder graphics once set (see
-    // buildWebSitePreviewSection's heroHTML/capsuleHTML), with a "Manage"
-    // button back to this Steam section — mirroring how the Web platform's
-    // Trailers/Screenshots sub-sections read from and manage-link back to
-    // Shipmate's Assets step.
-    steamKeyArtCapsule: null,
-    steamKeyArtHero:    null,
+    // Key Art (Steam Store platform's "Select Key Art" section — see
+    // buildSteamKeyArtEditSection in render.js) — four image slots, shown
+    // in this order: IGDB Cover Art, Library Capsule, Library Hero, Logo.
+    // Every field can be either { name, dataUrl } for a manual upload, or
+    // { name, url } when auto-populated. Auto-fill sources:
+    //   - steamKeyArtCapsule ("IGDB Cover Art", 748×896) ← IGDB's own cover
+    //     art (coverBigUrl in claude.js, applied by
+    //     _applySteamCapsuleFromCover in app.js). This is IGDB's own
+    //     crop/resolution (264×374), not one of Steam's own assets — kept
+    //     as a separate slot from Library Capsule below rather than
+    //     conflated with it, so a developer can see (and override) each
+    //     independently.
+    //   - steamLibraryCapsule ("Library Capsule", 600×900) ← Steam's own
+    //     library_600x900.jpg (steamLibraryCapsuleUrl in claude.js, applied
+    //     by _applySteamLibraryCapsule in app.js).
+    //   - steamKeyArtHero ("Library Hero", 3840×1240) ← Steam's own
+    //     library_hero.jpg (steamLibraryHeroUrl in claude.js, applied by
+    //     _applySteamHeroBanner in app.js).
+    //   - steamLogo ("Logo") ← Steam's own logo.png (steamLogoUrl in
+    //     claude.js, applied by _applySteamLogo in app.js).
+    // Library Capsule/Hero/Logo all come from the same stable, hash-free
+    // per-appid CDN path — no proxy needed for any of the three (see
+    // steamLibraryHeroUrl's comment in claude.js) — and, like Hero, aren't
+    // guaranteed to exist for every app, so a missing asset just leaves
+    // that field manual-upload-only rather than erroring. _screenshotSrc in
+    // app.js resolves any of these shapes (dataUrl or url, proxying
+    // images.igdb.com URLs through wsrv.nl) to a render-ready <img> src.
+    // All four are set via this Steam section only — unlike the original
+    // two-field version, Library Capsule/Logo are not currently mirrored on
+    // the Web platform's read-only "Key Art" flip modal or preview website.
+    steamKeyArtCapsule:  null,
+    steamLibraryCapsule: null,
+    steamKeyArtHero:     null,
+    steamLogo:           null,
   };
 }
 

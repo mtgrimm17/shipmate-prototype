@@ -507,12 +507,11 @@ async function igdbSearch(title) {
     // Cover art at IGDB's largest dedicated "cover" size (t_cover_big,
     // 264×374 — portrait, the closest native aspect IGDB offers to Steam's
     // 748×896 vertical capsule). Used by _applySteamCapsuleFromCover
-    // (app.js) to auto-populate the Steam Key Art "Vertical Capsule" field:
-    // Steam itself doesn't expose a hash-free CDN URL for that asset, and
-    // the hash-aware source (steamdb.info) blocks proxied requests (see
-    // steamLibraryHeroUrl's comment below for the full story), so IGDB's own
-    // cover is the best fallback source available without standing up a
-    // dedicated backend. Kept as a raw images.igdb.com URL, not pre-proxied
+    // (app.js) to auto-populate the Steam Key Art "IGDB Cover Art" field —
+    // a deliberately separate slot from "Library Capsule" (Steam's own
+    // library_600x900.jpg, see steamLibraryCapsuleUrl below), since this is
+    // IGDB's own crop/resolution, not Steam's exact library asset. Kept as
+    // a raw images.igdb.com URL, not pre-proxied
     // like coverUrl above — _screenshotSrc (app.js) already proxies any
     // images.igdb.com URL through wsrv.nl at render time, same as
     // screenshots elsewhere, so there's no need to double up here.
@@ -556,21 +555,33 @@ async function igdbSearch(title) {
   }));
 }
 
-/* ── Steam library_hero direct CDN URL ───────────────────────
-   Steam's library_hero asset (unlike the vertical capsule) is available
-   at a stable, hash-free path keyed only by the app ID — no steamdb.info
-   lookup, no proxy, no CORS concern (it's just an <img> src). Verified
-   live against two different real app IDs (4037180, 2240080): both
-   resolved real image bytes at this exact path with no hash segment.
-   The vertical capsule has no equivalent hash-free path — every filename
-   tried (library_600x900(.jpg/_2x.jpg), library_capsule.jpg,
-   hero_capsule.jpg, capsule_616x353.jpg) 404'd without the per-asset hash
-   steamdb.info exposes, and steamdb.info itself blocks proxied requests
-   with an explicit ASN-based block page (see the app.js/claude.js history
-   around v2.82–v2.87 for the full story) — so the capsule field stays
-   manual-upload-only for now; only library_hero is auto-populated here. */
+/* ── Steam library_hero / library_600x900 / logo direct CDN URLs ─────────
+   Steam's Library-view assets (hero banner, vertical library capsule, and
+   logo) are all served from the same stable, hash-free path keyed only by
+   the app ID — no steamdb.info lookup, no proxy, no CORS concern (each is
+   just an <img> src). Verified live in-browser (via Claude in Chrome,
+   reading the real network requests a live store page makes plus direct
+   fetch() checks) against a real app ID (Hades, 1145360): library_hero.jpg,
+   library_600x900.jpg, and logo.png all resolved with a clean 200 at this
+   exact host + path, no hash segment needed for any of the three.
+   Earlier testing (v2.82–v2.87, see app.js/claude.js history) had only
+   confirmed library_hero this way and concluded the other two required a
+   steamdb.info-sourced hash (which that site blocks via proxy) — that
+   conclusion turned out to be specific to the app IDs tried then, not a
+   real limitation of the CDN path itself. Like library_hero, neither
+   library_600x900.jpg nor logo.png is guaranteed to exist for every app —
+   smaller/older titles sometimes never had proper Library art uploaded —
+   so callers (_applySteamLibraryCapsule/_applySteamLogo in app.js, same
+   pattern as _applySteamHeroBanner) must still handle a 404 gracefully
+   rather than assume success. */
 function steamLibraryHeroUrl(appId) {
   return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`;
+}
+function steamLibraryCapsuleUrl(appId) {
+  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
+}
+function steamLogoUrl(appId) {
+  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/logo.png`;
 }
 
 /* ── Steam appdetails — short description, developer, "About This Game",
