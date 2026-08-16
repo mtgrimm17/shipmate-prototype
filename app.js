@@ -2311,6 +2311,27 @@ function selectPicklistItem(igdbId) {
     charCount('ob-title-count', item.name, 30);
   }
 
+  // Clear whatever's already in Steam's "Select Key Art" section — IGDB
+  // Cover Art, Library Capsule, Library Hero, Logo — before this new
+  // selection's own auto-fill (below) has a chance to run. Unconditional:
+  // unlike the screenshot grid (_fillScreenshotGridFromIgdb/FromSteam),
+  // which preserves manually-uploaded shots alongside auto-populated ones,
+  // Key Art is a single slot per asset, and whatever was there belongs to
+  // whichever game was previously selected — manual or auto-filled, it's
+  // still the wrong game's art once a different title is picked. Doing
+  // this eagerly (not inside the async appliers below) also means a
+  // fast re-pick can't race a slow-resolving previous fetch into
+  // clobbering the new selection: by the time any of those promises
+  // settle, the stale-title guard already in each of them (comparing
+  // against state.formData.title) rejects a late write for the old game
+  // anyway, but clearing here means the user never sees the old game's
+  // art flash on screen in the meantime either.
+  state.uploads = state.uploads || {};
+  state.uploads.steamKeyArtCapsule  = null;
+  state.uploads.steamLibraryCapsule = null;
+  state.uploads.steamKeyArtHero     = null;
+  state.uploads.steamLogo           = null;
+
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
   // source of truth for Description / Web Factsheet Developer / Web
