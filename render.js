@@ -1060,10 +1060,16 @@ function renderOnboardingScreenshotGrid() {
   if (reqWrap) reqWrap.classList.toggle('is-req-empty', !state.uploads.screenshots.length);
   updateObSectionStates();
   if (!state.uploads.screenshots.length) { grid.innerHTML = ''; return; }
+  // Clicking a thumbnail enlarges it via the same openScreenshotLightbox
+  // (app.js) the preview website's own screenshot grid uses — same overlay,
+  // same behavior in both places. The Remove button sits inside the same
+  // clickable thumbnail, so it needs its own stopPropagation() or clicking
+  // it would both remove the screenshot AND open the lightbox on the (now
+  // removed) image.
   grid.innerHTML = state.uploads.screenshots.map(shot => `
-    <div class="asset-thumb">
+    <div class="asset-thumb" onclick="openScreenshotLightbox(this)">
       <img src="${_screenshotSrc(shot)}" alt="${escHtml(shot.name)}">
-      <button class="asset-remove" onclick="removeScreenshot('${shot.id}')" title="Remove">×</button>
+      <button class="asset-remove" onclick="event.stopPropagation(); removeScreenshot('${shot.id}')" title="Remove">×</button>
       <div class="asset-name">${escHtml(shot.name)}</div>
     </div>`).join('');
 }

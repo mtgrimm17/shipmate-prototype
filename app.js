@@ -3250,15 +3250,20 @@ function _updateShotCropFrame(pid) {
   frame.style.top     = Math.round((dh - fh) / 2) + 'px';
 }
 
+// Re-render target for the Assets tab's screenshot grid after an add/remove
+// (see removeScreenshot below) — kept markup-identical to
+// renderOnboardingScreenshotGrid in render.js (same openScreenshotLightbox
+// click-to-enlarge, same stopPropagation on Remove) since both draw the same
+// #ob-screenshot-grid element at different points in its lifecycle.
 function renderScreenshotGridInto(grid) {
   if (!state.uploads.screenshots.length) {
     grid.innerHTML = '';
     return;
   }
   grid.innerHTML = state.uploads.screenshots.map(s => `
-    <div class="asset-thumb">
+    <div class="asset-thumb" onclick="openScreenshotLightbox(this)">
       <img src="${_screenshotSrc(s)}" alt="${escHtml(s.name)}">
-      <button class="asset-remove" onclick="removeScreenshot('${s.id}')" title="Remove">×</button>
+      <button class="asset-remove" onclick="event.stopPropagation(); removeScreenshot('${s.id}')" title="Remove">×</button>
       <div class="asset-name">${escHtml(s.name)}</div>
     </div>
   `).join('');
