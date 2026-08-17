@@ -2713,11 +2713,29 @@ function buildWebSitePreviewSection() {
   // object-fit: contain (style.css) instead of cover — together, the full
   // asset is always shown, never cropped, whichever of the three (very
   // differently-shaped) sources is picked.
+  //
+  // _webCapsuleAspectRatio's per-source value is only an initial best
+  // guess, used for the placeholder box (there's no real image there to
+  // measure) and as the first paint before a real image finishes loading.
+  // For an actual uploaded/fetched image, onload="_pkSyncCapsuleAspect(this)"
+  // (app.js) immediately overrides it with the image's own real
+  // naturalWidth/naturalHeight — IGDB's own "cover_big" transform is
+  // documented as 264×374, but doesn't reliably deliver that exact ratio
+  // for every game's actual cover art (confirmed live: some covers render
+  // with thick uneven letterbox bars under a fixed 264/374 box, the
+  // opposite bars depending on whether that game's real cover happens to
+  // be wider or narrower than the guess). Measuring the real, already-
+  // loaded image is the only way to guarantee the box always matches
+  // exactly, whatever any individual game's actual proportions turn out to
+  // be — no static guess (264/374, 748/896, or otherwise) can cover every
+  // case. _pkSyncCapsuleAspect also recomputes the Factsheet's margin-top
+  // to match, since that's derived from the same (otherwise-guessed) box
+  // height (see _webCapsuleFactsheetMarginTop below).
   const capsuleUpload = ups[_webCapsuleSourceField(ws.capsuleSource)];
   const capsuleAspect = _webCapsuleAspectRatio(ws.capsuleSource);
   const capsuleHTML = capsuleUpload ? `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="openStorePreviewSection('web','webKeyArt')">
-      <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img">
+      <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img" onload="_pkSyncCapsuleAspect(this)">
     </div>` : `
     <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="openStorePreviewSection('web','webKeyArt')">
       <span class="pk-capsule-badge">Placeholder</span>

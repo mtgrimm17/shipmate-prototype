@@ -2461,7 +2461,10 @@ function _applySteamHeroBanner(appId, expectedTitle) {
    sets:
      - state.uploads.steamKeyArtCapsule ← { name: 'cover.jpg', url }
    This backs the Key Art "IGDB Cover Art" field — IGDB's own cover
-   crop/resolution (t_cover_big, 264×374). */
+   crop/resolution (t_cover_big, nominally 264×374, though real delivered
+   images don't always land on that exact ratio — see
+   _pkSyncCapsuleAspect below for how the preview website's capsule box
+   handles that). */
 function _applySteamCapsuleFromCover(url, expectedTitle) {
   const img = new Image();
   img.onload = () => {
@@ -3440,6 +3443,49 @@ function playSteamTrailer(el) {
     video.outerHTML = thumbHTML;
   }
   document.addEventListener('click', closeOnClickAway, true);
+}
+
+/* onload handler for the preview website's capsule image (.pk-capsule-img,
+   see capsuleHTML in buildWebSitePreviewSection, render.js) — corrects the
+   box's aspect-ratio to the REAL loaded image's own naturalWidth/
+   naturalHeight, overriding the inline aspect-ratio style that
+   _webCapsuleAspectRatio (render.js) set as an initial best guess before
+   the image had actually loaded.
+   That guess exists for two reasons: the placeholder box (no image at all)
+   needs SOME shape to show, and it avoids a layout jump on first paint for
+   the common case. But it's still only a guess — Steam's Capsule Image/
+   Header Image are delivered at exact, Steam-enforced pixel dimensions, so
+   the guess is normally exact for those; IGDB Cover Art's t_cover_big
+   transform is only nominally 264×374 and doesn't reliably land exactly
+   there for every game's actual cover art (confirmed live: some covers
+   render with thick, uneven letterbox bars under a fixed-ratio box — either
+   left/right or top/bottom depending on whether that particular cover
+   happens to be wider or narrower than the guess). Measuring the real,
+   already-loaded image is the only way to guarantee an exact match
+   regardless of what any individual game's actual proportions turn out to
+   be, rather than chasing an ever-more-specific hardcoded number that will
+   eventually be wrong for some other game too.
+   Also recomputes the Factsheet's margin-top (#pk-factsheet) to match,
+   since that value is derived from the same box-height assumption (see
+   _webCapsuleFactsheetMarginTop in render.js for the formula this mirrors:
+   margin-top = (box height / 2) + 10 (buffer) - 22 (.pk-main's own
+   padding-top, backed out since margin-top is measured inside it)) — box
+   height = 220 (the capsule's fixed width) × (real height / real width),
+   using the image's own dimensions instead of the guess. Guards on
+   #pk-factsheet existing in case that ever changes — this capsule markup
+   only renders inside buildWebSitePreviewSection today, which always
+   includes a Factsheet section alongside it, but there's no reason for
+   this handler to assume that stays true forever. */
+function _pkSyncCapsuleAspect(img) {
+  if (!img.naturalWidth || !img.naturalHeight) return;
+  const box = img.closest('.pk-capsule');
+  if (!box) return;
+  box.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+
+  const realHeight = 220 * (img.naturalHeight / img.naturalWidth);
+  const marginTop = (realHeight / 2) + 10 - 22;
+  const factsheet = document.getElementById('pk-factsheet');
+  if (factsheet) factsheet.style.marginTop = marginTop + 'px';
 }
 
 /* Click handler for a preview-website screenshot thumbnail (see
