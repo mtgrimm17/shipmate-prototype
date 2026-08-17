@@ -2994,12 +2994,14 @@ function _wsFactsheetFieldsHTML(ws, fd) {
     ${_wsField(ws, 'Genres', 'genres', 'e.g. Roguelike, Deckbuilder')}`;
 }
 
-/* Description fields: Hook, About This Game, Studio/Game History. */
+/* Description fields: Hook, About This Game, History (labeled "Studio/Game
+   History" until renamed by request — still backs the same 'history' field
+   and the same "shown under Description" copy on the preview website). */
 function _wsDescriptionFieldsHTML(ws) {
   return `
     ${_wsField(ws, 'Hook', 'description', 'Defaults to the Description field in Game Details', { textarea: true, rows: 4 })}
     ${_wsField(ws, 'About This Game', 'aboutGame', 'Leave a blank line between paragraphs — a longer section shown below Description', { textarea: true, rows: 4 })}
-    ${_wsField(ws, 'Studio/Game History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}`;
+    ${_wsField(ws, 'History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}`;
 }
 
 /* Media fields: Trailers, Screenshots. Both are read-only summaries of the

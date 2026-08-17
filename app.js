@@ -3488,6 +3488,11 @@ function _pkSyncCapsuleAspect(img) {
   if (factsheet) factsheet.style.marginTop = marginTop + 'px';
 }
 
+// Tracks the currently-registered document keydown listener for whichever
+// screenshot lightbox is open (openScreenshotLightbox below), so it can be
+// torn down on close/reopen without ever leaking or stacking duplicates.
+let _pkLightboxKeyHandler = null;
+
 /* Click handler for a preview-website screenshot thumbnail (see
    screenshotsValue in buildWebSitePreviewSection, render.js) — opens it in a
    fullscreen lightbox so the user can see it at full size. Mirrors the
@@ -3497,13 +3502,27 @@ function _pkSyncCapsuleAspect(img) {
    `cell` is the clicked .pk-image-cell div; its <img> is read directly
    rather than passing the src/alt through as string arguments, since a
    screenshot's src is often a large data: URL that's awkward and fragile to
-   inline into an onclick attribute value. */
+   inline into an onclick attribute value.
+   Left/Right arrow keys step through the rest of the gallery while the
+   lightbox is open — the navigable set is every <img> among the clicked
+   cell's own siblings (cell.parentElement.children), which works for both
+   grids this lightbox is shared with: the preview website's
+   .pk-image-grid and the Assets tab's #ob-screenshot-grid are each a flat
+   list of one-<img>-per-cell thumbnails, so no special-casing is needed for
+   either. Navigation wraps around at both ends. The keydown listener is
+   registered on open and torn down on every close path (close button,
+   backdrop click, or opening a second lightbox before closing the first)
+   so it never leaks or stacks. */
 function openScreenshotLightbox(cell) {
   const img = cell.querySelector('img');
   if (!img) return;
 
   const existing = document.getElementById('pk-lightbox-overlay');
   if (existing) existing.remove();
+  if (_pkLightboxKeyHandler) {
+    document.removeEventListener('keydown', _pkLightboxKeyHandler);
+    _pkLightboxKeyHandler = null;
+  }
 
   // Cap the enlarged image to the width of the main modal it's opened
   // inside, rather than letting it grow to the full screen width via
@@ -3524,14 +3543,42 @@ function openScreenshotLightbox(cell) {
   const modal = cell.closest('.submit-modal, .ob-modal');
   const lightboxImgStyle = modal ? ` style="max-width:${Math.round(modal.getBoundingClientRect().width)}px;"` : '';
 
+  const gallery = cell.parentElement
+    ? Array.from(cell.parentElement.children).map(c => c.querySelector && c.querySelector('img')).filter(Boolean)
+    : [img];
+  let index = gallery.indexOf(img);
+  if (index < 0) index = 0;
+
   const overlay = document.createElement('div');
   overlay.id = 'pk-lightbox-overlay';
   overlay.className = 'pk-lightbox-overlay';
   overlay.innerHTML = `
-    <img class="pk-lightbox-img" src="${escHtml(img.src)}" alt="${escHtml(img.alt)}"${lightboxImgStyle}>
-    <button class="pk-lightbox-close" onclick="document.getElementById('pk-lightbox-overlay').remove()">✕</button>`;
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    <img class="pk-lightbox-img" id="pk-lightbox-img" src="${escHtml(img.src)}" alt="${escHtml(img.alt)}"${lightboxImgStyle}>
+    <button class="pk-lightbox-close">✕</button>`;
+
+  function closeLightbox() {
+    document.removeEventListener('keydown', _pkLightboxKeyHandler);
+    _pkLightboxKeyHandler = null;
+    overlay.remove();
+  }
+
+  function showAt(newIndex) {
+    if (gallery.length < 2) return; // nothing else to navigate to
+    index = ((newIndex % gallery.length) + gallery.length) % gallery.length; // wrap both directions
+    const target = gallery[index];
+    const lbImg = document.getElementById('pk-lightbox-img');
+    if (lbImg) { lbImg.src = target.src; lbImg.alt = target.alt; }
+  }
+
+  _pkLightboxKeyHandler = function (e) {
+    if (e.key === 'ArrowLeft')       { e.preventDefault(); showAt(index - 1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); showAt(index + 1); }
+  };
+
+  overlay.querySelector('.pk-lightbox-close').addEventListener('click', closeLightbox);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeLightbox(); });
   document.body.appendChild(overlay);
+  document.addEventListener('keydown', _pkLightboxKeyHandler);
 }
 
 
