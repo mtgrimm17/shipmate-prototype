@@ -3405,8 +3405,20 @@ function playSteamTrailer(el) {
   // on the capture phase so it still runs even though the player's own click
   // handler (above) calls stopPropagation() during the bubble phase — by
   // the time bubbling would be stopped, this capture-phase listener has
-  // already fired and already decided (via wrap.contains) whether the click
-  // landed on the player itself or somewhere else.
+  // already fired and already decided (via video.contains) whether the
+  // click landed on the player itself or somewhere else.
+  //
+  // Deliberately checks video.contains(e.target), NOT wrap.contains — wrap
+  // (.steam-trailer-preview) also contains the caption underneath the player
+  // (.feature-preview-meta, the trailer name/"from Steam" text — see
+  // _steamTrailerPreviewHTML in render.js), which sits below the video as a
+  // sibling, not inside it. Checking the whole wrap would treat a click on
+  // that caption as "on the player" and skip closing entirely, silently
+  // letting the click keep bubbling — straight into #pk-media's flip-to-edit
+  // handler on the preview website. video.contains(e.target) is true only
+  // for the video itself (including its native controls, which retarget
+  // click events to the video element for outside listeners) — a click on
+  // the caption below it correctly counts as "away".
   //
   // That first click-away must ONLY close the player, not also activate
   // whatever it landed on underneath (e.g. flip #pk-media into edit mode, or
@@ -3419,7 +3431,7 @@ function playSteamTrailer(el) {
   // consumed by closing the player, and a second, separate click is needed
   // to actually act on whatever's underneath.
   function closeOnClickAway(e) {
-    if (wrap.contains(e.target)) return; // click was on the player itself — keep playing
+    if (video.contains(e.target)) return; // click was on the player itself — keep playing
     e.stopPropagation();
     e.preventDefault();
     document.removeEventListener('click', closeOnClickAway, true);
