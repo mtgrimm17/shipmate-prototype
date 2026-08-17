@@ -6283,6 +6283,11 @@ select.form-input {
   cursor: zoom-out;
 }
 .pk-lightbox-img {
+  /* max-width: 90vw here is only the fallback for the rare case
+     openScreenshotLightbox (app.js) can't find an ancestor .submit-modal —
+     in the normal case it overrides this with an inline max-width set to
+     that modal's own actual current width, so the enlarged image is capped
+     to the main modal's width rather than growing to fill the screen. */
   max-width: 90vw;
   max-height: 90vh;
   object-fit: contain;

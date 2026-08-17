@@ -3505,11 +3505,27 @@ function openScreenshotLightbox(cell) {
   const existing = document.getElementById('pk-lightbox-overlay');
   if (existing) existing.remove();
 
+  // Cap the enlarged image to the width of the main modal it's opened
+  // inside (.submit-modal — see buildStepModal in render.js, which sizes
+  // this to 100% up to a max-width, 920px for the Web platform's
+  // storePreview step that hosts the preview website), rather than letting
+  // it grow to the full screen width via .pk-lightbox-img's own CSS
+  // max-width: 90vw. The modal itself is responsive (100% up to that cap),
+  // so a hardcoded pixel value here would be wrong on a narrower viewport —
+  // reading the modal's own actual current rendered width keeps this
+  // correct at any window size. Falls back to the CSS default (90vw, via
+  // leaving maxWidth unset) if no ancestor .submit-modal is found — this
+  // same lightbox is only ever opened from inside one today (the preview
+  // website's screenshot grid, or the Assets tab's — both render inside a
+  // .submit-modal), but there's no reason to throw if that ever changes.
+  const modal = cell.closest('.submit-modal');
+  const lightboxImgStyle = modal ? ` style="max-width:${Math.round(modal.getBoundingClientRect().width)}px;"` : '';
+
   const overlay = document.createElement('div');
   overlay.id = 'pk-lightbox-overlay';
   overlay.className = 'pk-lightbox-overlay';
   overlay.innerHTML = `
-    <img class="pk-lightbox-img" src="${escHtml(img.src)}" alt="${escHtml(img.alt)}">
+    <img class="pk-lightbox-img" src="${escHtml(img.src)}" alt="${escHtml(img.alt)}"${lightboxImgStyle}>
     <button class="pk-lightbox-close" onclick="document.getElementById('pk-lightbox-overlay').remove()">✕</button>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
