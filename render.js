@@ -2577,18 +2577,30 @@ function _webCapsuleSourceField(source) {
 }
 
 /* The preview website's capsule box (.pk-capsule) used to be permanently
-   shaped like IGDB Cover Art (748×896, portrait) — fine when that was the
-   only possible source, but Capsule Image (231×87) and Header Image
-   (460×215) are both wide landscape shapes, and object-fit: cover would
-   crop most of either one away to fill a tall portrait frame. Instead the
-   box itself is sized to whichever source is currently selected (applied
-   as an inline aspect-ratio style below, overriding .pk-capsule's default
-   748/896 in style.css), and .pk-capsule-img uses object-fit: contain
-   (style.css) rather than cover — together, the full asset is always
-   shown uncropped, whatever shape it is, rather than being forced into
-   IGDB Cover Art's own box. */
+   shaped like Steam's own official vertical-capsule spec (748×896,
+   portrait) — fine when that was the only possible source, but Capsule
+   Image (231×87) and Header Image (460×215) are both wide landscape
+   shapes, and object-fit: cover would crop most of either one away to fill
+   a tall portrait frame. Instead the box itself is sized to whichever
+   source is currently selected (applied as an inline aspect-ratio style
+   below, overriding .pk-capsule's default in style.css), and
+   .pk-capsule-img uses object-fit: contain (style.css) rather than cover —
+   together, the full asset is always shown uncropped, whatever shape it
+   is, rather than being forced into a mismatched box.
+   igdbCoverArt is 264×374 — IGDB's own "cover_big" image size (see
+   buildSteamKeyArtEditSection's doc comment and _applySteamCapsuleFromCover
+   in app.js), NOT Steam's 748×896 vertical-capsule spec used above; those
+   two numbers describe two different things that happen to occupy the same
+   preview-website box. Using 748/896 here (as this box briefly did) leaves
+   the real 264×374 image proportionally narrower than the box, and since
+   .pk-capsule-img uses object-fit: contain, that mismatch letterboxes with
+   thick empty bars on the LEFT and RIGHT (top/bottom fill edge-to-edge,
+   since height ends up the constraining dimension) — reported as "thick
+   buffers to the left and right" that don't match the top/bottom. Using
+   IGDB's actual 264/374 ratio here makes the box match the real image
+   exactly, so object-fit: contain fills it edge-to-edge on every side. */
 function _webCapsuleAspectRatio(source) {
-  const map = { capsuleImage: '231 / 87', headerImage: '460 / 215', igdbCoverArt: '748 / 896' };
+  const map = { capsuleImage: '231 / 87', headerImage: '460 / 215', igdbCoverArt: '264 / 374' };
   return map[source] || map.igdbCoverArt;
 }
 
@@ -2596,7 +2608,7 @@ function _webCapsuleAspectRatio(source) {
 // kept alongside _webCapsuleAspectRatio so the caption's stated dimensions
 // never drift out of sync with the box's actual shape.
 function _webCapsuleSizeLabel(source) {
-  const map = { capsuleImage: '231 &times; 87', headerImage: '460 &times; 215', igdbCoverArt: '748 &times; 896' };
+  const map = { capsuleImage: '231 &times; 87', headerImage: '460 &times; 215', igdbCoverArt: '264 &times; 374' };
   return map[source] || map.igdbCoverArt;
 }
 
@@ -2615,10 +2627,11 @@ function _webCapsuleSizeLabel(source) {
                   measured from inside that padding, so it has to be
                   subtracted back out)
    where box height = 220 (the capsule's fixed width, matching .pk-capsule
-   in style.css) × (asset height / asset width). E.g. for igdbCoverArt:
-   220 × 896/748 = 263.53 tall, half = 131.76, + 10 - 22 = 119.76. */
+   in style.css) × (asset height / asset width). E.g. for igdbCoverArt
+   (264×374, IGDB's own cover_big size — see _webCapsuleAspectRatio above):
+   220 × 374/264 = 311.67 tall, half = 155.83, + 10 - 22 = 143.83. */
 function _webCapsuleFactsheetMarginTop(source) {
-  const map = { capsuleImage: 29.43, headerImage: 39.41, igdbCoverArt: 119.76 };
+  const map = { capsuleImage: 29.43, headerImage: 39.41, igdbCoverArt: 143.83 };
   return map[source] || map.igdbCoverArt;
 }
 

@@ -6061,23 +6061,31 @@ select.form-input {
   object-fit: cover;
 }
 
-/* Placeholder vertical capsule — Steam-style cover art (748×896 by
-   default; render.js sets an inline aspect-ratio matching whichever
-   source is currently selected — see _webCapsuleAspectRatio in render.js
-   — since Capsule Image/Header Image are both wide landscape shapes, not
-   IGDB Cover Art's portrait one), sized to match the Factsheet column
-   below it (fixed 220px width, same as the accent underline under the
-   "Factsheet" heading — only the height varies, following the aspect
-   ratio). Pinned to the bottom of .pk-hero-wrap and pulled down by half
-   its own height so it straddles the hero/main boundary — bottom:0 plus
-   transform: translateY(50%) computes that half-height offset from the
-   box's OWN rendered height (a translate percentage is relative to the
-   element itself, not its parent), so the straddle stays correct
-   automatically as the aspect ratio (and therefore height) changes,
-   rather than a pixel value hand-tuned for one specific shape. The
-   Factsheet margin-top below clears the tallest (IGDB Cover Art) case; a
-   shorter box from a landscape source just leaves a bit more breathing
-   room instead of exactly meeting it. */
+/* Placeholder vertical capsule — IGDB cover art shaped (264×374, IGDB's own
+   "cover_big" image size, by default; render.js sets an inline aspect-ratio
+   matching whichever source is currently selected — see
+   _webCapsuleAspectRatio in render.js — since Capsule Image/Header Image
+   are both wide landscape shapes, not IGDB Cover Art's portrait one),
+   sized to match the Factsheet column below it (fixed 220px width, same as
+   the accent underline under the "Factsheet" heading — only the height
+   varies, following the aspect ratio). Pinned to the bottom of
+   .pk-hero-wrap and pulled down by half its own height so it straddles the
+   hero/main boundary — bottom:0 plus transform: translateY(50%) computes
+   that half-height offset from the box's OWN rendered height (a translate
+   percentage is relative to the element itself, not its parent), so the
+   straddle stays correct automatically as the aspect ratio (and therefore
+   height) changes, rather than a pixel value hand-tuned for one specific
+   shape. The Factsheet margin-top below clears the tallest (IGDB Cover
+   Art) case; a shorter box from a landscape source just leaves a bit more
+   breathing room instead of exactly meeting it.
+   This aspect-ratio is always overridden by render.js's inline style
+   (_webCapsuleAspectRatio) in practice — kept in sync here only so the
+   static default never drifts out of step and misleads whoever next reads
+   this file. 264/374 (not Steam's own 748/896 vertical-capsule spec) is
+   deliberate: using the wrong ratio here previously caused thick left/right
+   letterbox bars around IGDB cover art on the preview website, since
+   object-fit: contain (.pk-capsule-img below) fits the real, narrower
+   264×374 image inside a box shaped for a different, wider asset. */
 .pk-capsule {
   position: absolute;
   left: 24px;
@@ -6085,7 +6093,7 @@ select.form-input {
   transform: translateY(50%);
   z-index: 3;
   width: 220px;
-  aspect-ratio: 748 / 896;
+  aspect-ratio: 264 / 374;
   border-radius: 8px;
   overflow: hidden;
   display: flex;
@@ -6134,15 +6142,15 @@ select.form-input {
    capsule's own height now varies by source (Capsule Image/Header Image
    are much shorter landscape boxes than IGDB Cover Art's tall portrait
    one — see .pk-capsule below), render.js sets this inline per source
-   (_webCapsuleFactsheetMarginTop) rather than a single fixed value; 120px
-   here is just a fallback default for the original (IGDB Cover Art)
-   case, same relationship .pk-capsule's own 748/896 default has to its
-   inline aspect-ratio override. Description isn't under the capsule, so
-   it rises independently and doesn't need a per-source margin; its
-   margin is set to leave that same 10px buffer under the hero instead
+   (_webCapsuleFactsheetMarginTop) rather than a single fixed value;
+   143.83px here is just a fallback default for the original (IGDB Cover
+   Art, 264×374) case, same relationship .pk-capsule's own 264/374 default
+   has to its inline aspect-ratio override. Description isn't under the
+   capsule, so it rises independently and doesn't need a per-source margin;
+   its margin is set to leave that same 10px buffer under the hero instead
    (cancels .pk-main's 22px top padding, then backs off by the buffer).
    Media and About aren't part of this grid — they flow normally below it. */
-.pk-factsheet { margin-top: 120px; }
+.pk-factsheet { margin-top: 143.83px; }
 .pk-description { margin-top: -12px; }
 
 @keyframes pk-glow-pulse {
