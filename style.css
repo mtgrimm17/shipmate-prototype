@@ -3368,7 +3368,7 @@ body {
 /* Description */
 .ias-desc-text {
   font-size: 13px; color: var(--text-dim); line-height: 1.6;
-  word-break: break-word;
+  word-break: break-word; white-space: pre-wrap;
 }
 .ias-more-btn {
   background: none; border: none; color: #0a84ff;

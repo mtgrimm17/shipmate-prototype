@@ -3729,6 +3729,27 @@ function startIasInlineEdit(field, el, ev) {
   input.select();
 }
 
+/* App Store Product Page Preview — Description "more"/"less" toggle.
+   The full/short text is read from data-full/data-short attributes on the
+   button (set from already-HTML-escaped strings, so the browser decodes
+   them back to plain text — safe to assign via textContent, never
+   innerHTML, since a Description can contain arbitrary user- or
+   Steam-sourced text). The text lives in its own inner span
+   (.ias-desc-text-inner), a sibling of the button rather than a shared
+   parent, so swapping its content never removes the button itself from
+   the DOM. Do NOT build this button's behavior via inline onclick JS that
+   embeds the description text directly (e.g. JSON.stringify(...) inside a
+   double-quoted onclick="..." attribute) — the description can itself
+   contain double-quote characters, which prematurely terminates the
+   attribute and corrupts the button's markup. */
+function toggleIasDescMore(btn) {
+  const inner = btn.previousElementSibling;
+  if (!inner || !inner.classList.contains('ias-desc-text-inner')) return;
+  const expand = btn.textContent.trim() === 'more';
+  inner.textContent = expand ? btn.dataset.full : btn.dataset.short;
+  btn.textContent = expand ? 'less' : 'more';
+}
+
 /* App Store Product Page Preview — top-right language dropdown (swSelect).
    Options are the Distribution section's Primary Language (always first)
    followed by its selected supported languages in alphabetical order,

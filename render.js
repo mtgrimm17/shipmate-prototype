@@ -4179,15 +4179,8 @@ function buildStorePreviewSection() {
         <!-- ── Description ── -->
         <div class="ias-section">
           <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}" id="ias-desc-text"
-               onclick="startIasInlineEdit('description', this, event)" title="Click to edit">${descShort}${descRaw.length > 240
-            ? ` <button class="ias-more-btn" onclick="
-                event.stopPropagation();
-                var el=document.getElementById('ias-desc-text');
-                var full=${JSON.stringify(descFull + ' ')};
-                var short=${JSON.stringify(descShort + ' ')};
-                if(this.textContent==='more'){el.innerHTML=full;this.textContent='less';}
-                else{el.innerHTML=short;this.textContent='more';}
-              ">more</button>` : ''}</div>
+               onclick="startIasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
+            ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
           <div class="ias-dev-row">
             <span class="ias-dev-name">Developer</span>
