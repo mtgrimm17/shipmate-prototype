@@ -3800,20 +3800,13 @@ function buildStorePreviewSection() {
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
   const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
 
-  // Subtitle prefers the developer's own explicit App Store Subtitle
-  // (state.formData.subtitle — the same field Shipmate's "Fix It" subtitle
-  // suggestions already write to via _applyFieldValue in app.js, which
-  // previously had no visible home anywhere in this preview). Falls back to
-  // the first sentence of Description (or its first 80 chars), same
-  // derivation this preview always used, when no subtitle has been typed
-  // yet — and finally to the placeholder text when there's no description
-  // either.
+  // Subtitle is its own independent field (state.formData.subtitle — the
+  // same field Shipmate's "Fix It" subtitle suggestions already write to via
+  // _applyFieldValue in app.js). It is never derived from Description — the
+  // two are edited and stored completely separately, so typing one never
+  // changes the other. Shows the placeholder text only when genuinely empty.
   const descRaw   = fd.description || '';
-  const firstDot  = descRaw.search(/[.!?]/);
-  const derivedSubtitle = firstDot > 10 && firstDot < 120
-    ? descRaw.slice(0, firstDot + 1)
-    : descRaw.slice(0, 80) + (descRaw.length > 80 ? '…' : '');
-  const subtitleRaw = fd.subtitle || derivedSubtitle;
+  const subtitleRaw = fd.subtitle || '';
   const subtitle     = escHtml(subtitleRaw || 'Short subtitle');
 
   const descFull  = descRaw ? escHtml(descRaw) : 'Your game description will appear here once you fill in the Description field in Game Details.';
