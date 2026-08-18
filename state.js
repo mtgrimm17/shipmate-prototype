@@ -2202,6 +2202,25 @@ const state = {
     capsuleSource: 'igdbCoverArt',
     // Factsheet — Developer + Location
     developer: '', basedIn: '',
+    // "Links" sub-section (Factsheet > Developer > Links in the edit form —
+    // _wsFactsheetFieldsHTML, render.js), both rendered as button-style
+    // links beneath Location in the Developer sub-section on the actual
+    // preview website (officialWebsiteBlock/socialLinksBlock in
+    // buildWebSitePreviewSection, render.js). Official Website is a single
+    // URL, auto-populated (when the picked title links to a Steam page)
+    // from Steam's appdetails 'website' field — see _applySteamAboutData in
+    // app.js — same treatment as developer/publisher above, but still
+    // freely editable afterward. Distinct from the 'website' field further
+    // below (which backs the unrelated "Website" field under the About
+    // group, the studio's own general site) — this is the GAME's own
+    // official website.
+    officialWebsite: '',
+    // Array of { id, name, url } — additional social-media links the
+    // developer can freely add/remove (never auto-populated from IGDB or
+    // Steam — no equivalent field exists on either). id minted via
+    // generateId('link') — see addWebLink/removeWebLink/setWebLinkField in
+    // app.js.
+    links: [],
     // Free text. Auto-populated (when the picked title links to a Steam
     // page) from Steam's appdetails 'publishers' list, joined — see
     // _applySteamAboutData in app.js — same source/treatment as developer

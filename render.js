@@ -2491,7 +2491,7 @@ function buildStorePreviewFlipSection(platformId, target) {
    Date, and Hook, which always show (Developer with a muted dash
    placeholder when empty; Release Date and Hook already have their own
    fallback text):
-     Factsheet:    Developer, Location, Publisher, Release Date, Platforms, Genres
+     Factsheet:    Developer, Location, Official Website, Links, Publisher, Release Date, Platforms, Genres
      Description:  Hook, About This Game, History
      Media:        Trailers, Screenshots
      About:        About the Developer, Website, Contact
@@ -2761,7 +2761,42 @@ function buildWebSitePreviewSection() {
   // optional. Developer always shows (with a muted dash placeholder when
   // empty), unlike the other optional sub-sections.
   const devLocationLine = ws.basedIn ? `<p class="pk-p">Based in ${escHtml(ws.basedIn)}</p>` : '';
-  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}`;
+
+  // Turns a raw URL-ish string (with or without a scheme) into a safe
+  // absolute href, same convention as the existing About "Website" field
+  // below (websiteHref) — prepend https:// when the developer typed a bare
+  // domain rather than a full URL.
+  const _pkLinkHref = raw => /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  // "Links" sub-section (Factsheet > Developer > Links in the edit form —
+  // see _wsFactsheetFieldsHTML below): Official Website, a single URL field
+  // auto-populated from Steam's appdetails 'website' field when available
+  // (see _applySteamAboutData in app.js), plus any number of freely
+  // added/removed social-media links (state.webSite.links, each a
+  // { id, name, url } — see addWebLink/removeWebLink/setWebLinkField in
+  // app.js). Both render as button-style links (.pk-link-btn, style.css)
+  // rather than plain inline text, since these read as calls to action
+  // rather than incidental info the way the About section's own Website/
+  // Contact sub-sections do. Distinct from ws.website (the About group's
+  // "Website" field, the studio's own general site) — this is the GAME's
+  // own official website. Each is its own <span class="pk-dev-links"> row
+  // (display:flex via the CSS class, same convention platformsValue below
+  // uses for its own icon wrapper) so Official Website and the social links
+  // wrap independently rather than interleaving into one run if both are
+  // present — a <span>, not a <div>, for the same reason platformsValue
+  // uses one: this whole Factsheet section is itself a <div id="pk-factsheet">
+  // and this codebase's own render tests locate a main section by matching
+  // to its FIRST same-tag closing tag, so a nested <div> here would close
+  // that match early and hide everything rendered after it.
+  const officialWebsiteRaw = ws.officialWebsite ? ws.officialWebsite.trim() : '';
+  const officialWebsiteBlock = officialWebsiteRaw ? `
+    <span class="pk-dev-links"><a href="${escHtml(_pkLinkHref(officialWebsiteRaw))}" target="_blank" rel="noopener" class="pk-link-btn pk-link-btn--official" onclick="event.stopPropagation()">Official Website</a></span>` : '';
+
+  const socialLinks = (ws.links || []).filter(l => l && l.name && l.name.trim() && l.url && l.url.trim());
+  const socialLinksBlock = socialLinks.length ? `
+    <span class="pk-dev-links">${socialLinks.map(l => `<a href="${escHtml(_pkLinkHref(l.url.trim()))}" target="_blank" rel="noopener" class="pk-link-btn pk-link-btn--social" onclick="event.stopPropagation()">${escHtml(l.name.trim())}</a>`).join('')}</span>` : '';
+
+  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}${officialWebsiteBlock}${socialLinksBlock}`;
 
   const websiteRaw = ws.website ? ws.website.trim() : '';
   const websiteDomain = websiteRaw
@@ -2979,19 +3014,50 @@ function _wsField(ws, labelText, key, placeholder, opts) {
            placeholder="${escHtml(placeholder)}" oninput="setWebSiteField('${key}', this.value)">`;
 }
 
-/* Factsheet fields: Developer, Location, Publisher, Release Date, Platforms,
+/* One row of the Links sub-section's social-link list (state.webSite.links,
+   each a { id, name, url } — see addWebLink/removeWebLink/setWebLinkField in
+   app.js): a name field and a URL field side by side, plus a delete button.
+   Mirrors _wsField's own "mutate on oninput, no re-render" convention (see
+   setWebLinkField) so typing in either field doesn't lose focus — only
+   Add/Remove (structural changes) re-render the modal. link.id is
+   program-generated (generateId('link'), state.js) so it's always a plain
+   alnum/underscore string, safe to inline into the onclick attributes
+   below without escaping. */
+function _wsLinkRowHTML(link) {
+  return `
+    <div class="pk-link-edit-row" style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" class="qs-input" style="flex:1;" value="${escHtml(link.name || '')}"
+             placeholder="Social media name" oninput="setWebLinkField('${link.id}', 'name', this.value)">
+      <input type="text" class="qs-input" style="flex:2;" value="${escHtml(link.url || '')}"
+             placeholder="https://..." oninput="setWebLinkField('${link.id}', 'url', this.value)">
+      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;"
+              onclick="removeWebLink('${link.id}')" title="Remove" aria-label="Remove link">✕</button>
+    </div>`;
+}
+
+/* Factsheet fields: Developer, Location, Links (Official Website + any
+   number of added social links), Publisher, Release Date, Platforms,
    Genres. Release Date and Platforms are synced read-only from elsewhere in
-   Shipmate, not stored on state.webSite. Publisher is auto-populated (when
-   the picked title links to a Steam page) from Steam's appdetails
-   'publishers' list, joined — see _applySteamAboutData in app.js — same as
-   Developer/Genres above/below it, but the developer can still freely edit
-   it here afterward like any other text field. */
+   Shipmate, not stored on state.webSite. Publisher/Official Website are
+   auto-populated (when the picked title links to a Steam page) from
+   Steam's appdetails 'publishers' list / 'website' field respectively — see
+   _applySteamAboutData in app.js — same as Developer/Genres above/below
+   them, but the developer can still freely edit either afterward like any
+   other text field. The social links list (state.webSite.links) is never
+   auto-populated — purely a manually added/removed list, see
+   addWebLink/removeWebLink in app.js. */
 function _wsFactsheetFieldsHTML(ws, fd) {
   const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
   const platformsText = platformNames.length ? platformNames.join(', ') : 'No platforms selected yet';
   return `
     ${_wsField(ws, 'Developer', 'developer', 'Your studio name')}
     ${_wsField(ws, 'Location', 'basedIn', 'Your general location')}
+
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Links</label>
+    ${_wsField(ws, 'Official Website', 'officialWebsite', 'Auto-filled from Steam when available')}
+    ${(ws.links || []).map(_wsLinkRowHTML).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" style="margin-bottom:16px;" onclick="addWebLink()">Add</button>
+
     ${_wsField(ws, 'Publisher', 'publisher', 'Auto-filled from Steam when available')}
 
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Release date</label>

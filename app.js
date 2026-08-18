@@ -2356,9 +2356,10 @@ function selectPicklistItem(igdbId) {
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
   // source of truth for Description / Web Factsheet Developer / Web
-  // Factsheet Publisher / Web "About This Game" / screenshots — Steam's own
-  // store-page copy and full screenshot set is generally more complete and
-  // current than IGDB's community-submitted summary/screenshots for a title
+  // Factsheet Publisher / Web Factsheet Links "Official Website" / Web
+  // "About This Game" / screenshots — Steam's own store-page copy and full
+  // screenshot set is generally more complete and current than IGDB's
+  // community-submitted summary/screenshots for a title
   // that's actually live on Steam. That fetch (fetchSteamAppDetails in claude.js, via
   // corsproxy.io — verified live and already working for IGDB itself, see
   // this project's appdetails reliability testing) is async, so
@@ -2542,6 +2543,7 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
      - About section Description ← Steam's short_description
      - Web platform Factsheet Developer ← Steam's developers list, joined
      - Web platform Factsheet Publisher ← Steam's publishers list, joined
+     - Web platform Factsheet Links "Official Website" ← Steam's website field
      - Web platform Description "About This Game" ← Steam's about_the_game
        (HTML flattened to blank-line-separated paragraphs — see
        _steamHtmlToParagraphLines in claude.js and _pkParagraphs in
@@ -2619,6 +2621,13 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // just a different appdetails field (a game can, and often does, have
     // different developer(s) and publisher(s)).
     if (data.publishers && data.publishers.length) state.webSite.publisher = data.publishers.join(', ');
+    // Official Website — Steam's appdetails 'website' field (the game's own
+    // landing page, when the developer has set one on the store page —
+    // Steam leaves this blank more often than not, so this often stays
+    // whatever the developer already typed). Distinct from webSite.website
+    // (the studio's own general site, under the About group) — this backs
+    // Factsheet > Developer > Links > "Official Website" instead.
+    if (data.website) state.webSite.officialWebsite = data.website;
     if (data.about_the_game) state.webSite.aboutGame = _steamHtmlToParagraphLines(data.about_the_game);
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips
@@ -4873,6 +4882,29 @@ function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};
   state.webSite.accent = color;
   reRenderStepModal();
+}
+
+/* Factsheet > Developer > Links sub-section — the social-links list
+   (state.webSite.links, each a { id, name, url } — see _wsLinkRowHTML in
+   render.js and the state.js comment above webSite.links). Structural
+   changes (add/remove a row) re-render the modal, same convention as
+   setWebAccent above; typing into an existing row's name/url field mutates
+   silently like setWebSiteField above, so it doesn't steal focus mid-type. */
+function addWebLink() {
+  if (!state.webSite) state.webSite = {};
+  if (!state.webSite.links) state.webSite.links = [];
+  state.webSite.links.push({ id: generateId('link'), name: '', url: '' });
+  reRenderStepModal();
+}
+function removeWebLink(id) {
+  if (!state.webSite || !state.webSite.links) return;
+  state.webSite.links = state.webSite.links.filter(l => l.id !== id);
+  reRenderStepModal();
+}
+function setWebLinkField(id, key, value) {
+  if (!state.webSite || !state.webSite.links) return;
+  const link = state.webSite.links.find(l => l.id === id);
+  if (link) link[key] = value;
 }
 
 /* Selector in Web's "Key Art" section (buildWebKeyArtEditSection) choosing
