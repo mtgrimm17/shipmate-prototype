@@ -2356,10 +2356,10 @@ function selectPicklistItem(igdbId) {
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
   // source of truth for Description / Web Factsheet Developer / Web
-  // "About This Game" / screenshots — Steam's own store-page copy and full
-  // screenshot set is generally more complete and current than IGDB's
-  // community-submitted summary/screenshots for a title that's actually
-  // live on Steam. That fetch (fetchSteamAppDetails in claude.js, via
+  // Factsheet Publisher / Web "About This Game" / screenshots — Steam's own
+  // store-page copy and full screenshot set is generally more complete and
+  // current than IGDB's community-submitted summary/screenshots for a title
+  // that's actually live on Steam. That fetch (fetchSteamAppDetails in claude.js, via
   // corsproxy.io — verified live and already working for IGDB itself, see
   // this project's appdetails reliability testing) is async, so
   // _applySteamAboutData fills these fields in shortly after this function
@@ -2541,6 +2541,7 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
    source of truth for this game's:
      - About section Description ← Steam's short_description
      - Web platform Factsheet Developer ← Steam's developers list, joined
+     - Web platform Factsheet Publisher ← Steam's publishers list, joined
      - Web platform Description "About This Game" ← Steam's about_the_game
        (HTML flattened to blank-line-separated paragraphs — see
        _steamHtmlToParagraphLines in claude.js and _pkParagraphs in
@@ -2614,6 +2615,10 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // rare page missing one of these fields.
     if (data.short_description) _fillDescriptionField(data.short_description);
     if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
+    // Publisher — same "join Steam's list" treatment as Developer above,
+    // just a different appdetails field (a game can, and often does, have
+    // different developer(s) and publisher(s)).
+    if (data.publishers && data.publishers.length) state.webSite.publisher = data.publishers.join(', ');
     if (data.about_the_game) state.webSite.aboutGame = _steamHtmlToParagraphLines(data.about_the_game);
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips

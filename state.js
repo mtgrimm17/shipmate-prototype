@@ -2202,6 +2202,12 @@ const state = {
     capsuleSource: 'igdbCoverArt',
     // Factsheet — Developer + Location
     developer: '', basedIn: '',
+    // Free text. Auto-populated (when the picked title links to a Steam
+    // page) from Steam's appdetails 'publishers' list, joined — see
+    // _applySteamAboutData in app.js — same source/treatment as developer
+    // above (its 'developers' list). Still a plain editable text field
+    // otherwise, same as every other Factsheet field here.
+    publisher: '',
     // Free text, e.g. "Roguelike, Deckbuilder". Auto-populated (when the
     // picked title links to a Steam page) from Steam's appdetails 'genres'
     // list, joined — see _applySteamAboutData in app.js. That's Steam's

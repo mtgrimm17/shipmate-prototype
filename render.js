@@ -2491,7 +2491,7 @@ function buildStorePreviewFlipSection(platformId, target) {
    Date, and Hook, which always show (Developer with a muted dash
    placeholder when empty; Release Date and Hook already have their own
    fallback text):
-     Factsheet:    Developer, Location, Release Date, Platforms, Genres
+     Factsheet:    Developer, Location, Publisher, Release Date, Platforms, Genres
      Description:  Hook, About This Game, History
      Media:        Trailers, Screenshots
      About:        About the Developer, Website, Contact
@@ -2798,6 +2798,16 @@ function buildWebSitePreviewSection() {
 
   const genresValue = (ws.genres && ws.genres.trim()) ? `<p class="pk-p">${escHtml(ws.genres.trim())}</p>` : '';
 
+  // Publisher — a plain optional text field (own sub-section, unlike
+  // Location which is folded into Developer above). Auto-populated, when the
+  // picked title links to a Steam page, from Steam's appdetails 'publishers'
+  // list, joined — see _applySteamAboutData in app.js — the same
+  // official-API-sourced treatment as Developer (from 'developers') and
+  // Genres (from 'genres') already get. Placed between Developer and Release
+  // Date to mirror the edit form's own field order (_wsFactsheetFieldsHTML,
+  // where Publisher sits between Location and Release Date).
+  const publisherValue = (ws.publisher && ws.publisher.trim()) ? `<p class="pk-p">${escHtml(ws.publisher.trim())}</p>` : '';
+
   // No date set (or cleared via the Clear button in Edit site details) reads
   // as "Coming soon" rather than being left blank — so this sub-section
   // always has content.
@@ -2812,6 +2822,7 @@ function buildWebSitePreviewSection() {
     <div class="pk-factsheet pk-mainsection" id="pk-factsheet" style="margin-top:${factsheetMarginTop}px;" onclick="openStorePreviewSection('web','webFactsheet')">
       <h2 class="pk-h2">Factsheet</h2>
       ${pkSub('Developer', devNameValue)}
+      ${pkSub('Publisher', publisherValue)}
       ${pkSub('Release Date', releaseDateValue)}
       ${pkSub('Platforms', platformsValue)}
       ${pkSub('Genres', genresValue)}
@@ -2968,15 +2979,20 @@ function _wsField(ws, labelText, key, placeholder, opts) {
            placeholder="${escHtml(placeholder)}" oninput="setWebSiteField('${key}', this.value)">`;
 }
 
-/* Factsheet fields: Developer, Location, Release Date, Platforms, Genres.
-   Release Date and Platforms are synced read-only from elsewhere in
-   Shipmate, not stored on state.webSite. */
+/* Factsheet fields: Developer, Location, Publisher, Release Date, Platforms,
+   Genres. Release Date and Platforms are synced read-only from elsewhere in
+   Shipmate, not stored on state.webSite. Publisher is auto-populated (when
+   the picked title links to a Steam page) from Steam's appdetails
+   'publishers' list, joined — see _applySteamAboutData in app.js — same as
+   Developer/Genres above/below it, but the developer can still freely edit
+   it here afterward like any other text field. */
 function _wsFactsheetFieldsHTML(ws, fd) {
   const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
   const platformsText = platformNames.length ? platformNames.join(', ') : 'No platforms selected yet';
   return `
     ${_wsField(ws, 'Developer', 'developer', 'Your studio name')}
     ${_wsField(ws, 'Location', 'basedIn', 'Your general location')}
+    ${_wsField(ws, 'Publisher', 'publisher', 'Auto-filled from Steam when available')}
 
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Release date</label>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
