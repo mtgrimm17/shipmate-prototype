@@ -2497,9 +2497,10 @@ function buildStorePreviewFlipSection(platformId, target) {
      About:        About the Developer, Website, Contact
    Populated from Shipmate's game data plus the extra fields in
    state.webSite, which "Edit site details" organizes into the same four
-   groups (Platforms, Release Date, and Trailers sync read-only from
-   elsewhere in Shipmate rather than being their own webSite fields — see
-   the state.js comment above the webSite object). List-type fields are
+   groups (Platforms and Trailers sync read-only from elsewhere in Shipmate
+   rather than being their own webSite fields — see the state.js comment
+   above the webSite object; Release Date is its own plain text webSite
+   field, same as Publisher/Genres). List-type fields are
    stored as plain newline-separated text and parsed here (see _pkLines). Factsheet and
    Description sit side by side in a two-column grid (.pk-fact-desc-grid —
    Factsheet in the narrow column under the capsule, Description in the wide
@@ -2535,16 +2536,6 @@ function _pkParagraphs(text) {
     .split(/\n\s*\n/)
     .map(block => block.split('\n').map(l => l.trim()).filter(Boolean))
     .filter(lines => lines.length);
-}
-
-/* Formats a "YYYY-MM-DD" release date (as stored in state.formData.releaseDate,
-   synced from the release date picker elsewhere in Shipmate) into "Month D, YYYY",
-   e.g. "February 19, 2026". Returns '' when there's no date set yet. */
-function _pkFmtReleaseDate(dateVal) {
-  if (!dateVal) return '';
-  const d = new Date(dateVal + 'T00:00:00');
-  if (isNaN(d)) return '';
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 /* Extracts the 11-char video ID from a YouTube watch/share/embed/shorts URL
@@ -2847,10 +2838,11 @@ function buildWebSitePreviewSection() {
   // where Publisher sits between Location and Release Date).
   const publisherValue = (ws.publisher && ws.publisher.trim()) ? `<p class="pk-p">${escHtml(ws.publisher.trim())}</p>` : '';
 
-  // No date set (or cleared via the Clear button in Edit site details) reads
-  // as "Coming soon" rather than being left blank — so this sub-section
-  // always has content.
-  const releaseDateValue = `<p class="pk-p">${_pkFmtReleaseDate(fd.releaseDate) || 'Coming soon'}</p>`;
+  // Plain text field (state.webSite.releaseDate — see its state.js comment
+  // for why this is no longer synced from formData.releaseDate). No value
+  // set (or cleared) reads as "Coming soon" rather than being left blank —
+  // so this sub-section always has content, same fallback as before.
+  const releaseDateValue = `<p class="pk-p">${(ws.releaseDate && ws.releaseDate.trim()) ? escHtml(ws.releaseDate.trim()) : 'Coming soon'}</p>`;
 
   // Gap above Factsheet tightens/loosens per the capsule's actual height
   // (see _webCapsuleFactsheetMarginTop above) — a shorter landscape
@@ -3041,20 +3033,25 @@ function _wsLinkRowHTML(link) {
 
 /* Factsheet fields: Developer, Location, Links (Official Website + any
    number of added social links), Publisher, Release Date, Platforms,
-   Genres. Release Date and Platforms are synced read-only from elsewhere in
-   Shipmate, not stored on state.webSite. Publisher/Official Website are
+   Genres. Platforms is synced read-only from elsewhere in Shipmate, not
+   stored on state.webSite. Publisher/Official Website/Release Date are
    auto-populated (when the picked title links to a Steam page) from
-   Steam's appdetails 'publishers' list / 'website' field respectively — see
-   _applySteamAboutData in app.js — same as Developer/Genres above/below
-   them, but the developer can still freely edit either afterward like any
-   other text field. The social links list (state.webSite.links) is ALSO
-   auto-populated when a Steam page is linked, but from a different source
-   entirely — the store page's own HTML, not the appdetails JSON API, which
-   has no field for these at all — see _applySteamSocialLinks in app.js and
-   the state.js comment above webSite.links; the developer can still freely
+   Steam's appdetails 'publishers' list / 'website' / 'release_date' fields
+   respectively — see _applySteamAboutData in app.js — same as
+   Developer/Genres above/below them, but the developer can still freely
+   edit any of them afterward like any other plain text field (Release Date
+   used to be a native date-picker input synced from the shared
+   formData.releaseDate field elsewhere in Shipmate — changed to a plain
+   text field by request, since a store listing's release date is often
+   free text like "Coming Soon" or "Q1 2027", not always an exact date).
+   The social links list (state.webSite.links) is ALSO auto-populated when
+   a Steam page is linked, but from a different source entirely — the
+   store page's own HTML, not the appdetails JSON API, which has no field
+   for these at all — see _applySteamSocialLinks in app.js and the state.js
+   comment above webSite.links; the developer can still freely
    add/remove/edit rows afterward via addWebLink/removeWebLink/
    setWebLinkField in app.js. */
-function _wsFactsheetFieldsHTML(ws, fd) {
+function _wsFactsheetFieldsHTML(ws) {
   const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
   const platformsText = platformNames.length ? platformNames.join(', ') : 'No platforms selected yet';
   return `
@@ -3068,14 +3065,7 @@ function _wsFactsheetFieldsHTML(ws, fd) {
 
     ${_wsField(ws, 'Publisher', 'publisher', 'Auto-filled from Steam when available')}
 
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Release date</label>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <input type="date" class="qs-input" id="ws-release-date" style="flex:1;"
-             value="${escHtml(fd.releaseDate || '')}"
-             onchange="syncField('releaseDate', this.value)">
-      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;"
-              onclick="syncField('releaseDate', ''); document.getElementById('ws-release-date').value = '';">Clear</button>
-    </div>
+    ${_wsField(ws, 'Release Date', 'releaseDate', 'Auto-filled from Steam when available, e.g. "Feb 18, 2026" or "Coming Soon"')}
 
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Platforms</label>
     <div class="qs-input" style="width:100%;margin-bottom:2px;background:var(--bg-subtle,#f4f4f5);color:var(--text-muted,#6b7280);cursor:default;">${escHtml(platformsText)}</div>
@@ -3164,7 +3154,7 @@ function buildWebSiteEditSection() {
       </div>
 
       <div class="pk-edit-group-label">Factsheet</div>
-      ${_wsFactsheetFieldsHTML(ws, fd)}
+      ${_wsFactsheetFieldsHTML(ws)}
 
       <div class="pk-edit-group-label">Description</div>
       ${_wsDescriptionFieldsHTML(ws)}
@@ -3183,14 +3173,13 @@ function buildWebSiteEditSection() {
    above), just without the other groups. The flip modal's own header shows
    the section name (see FLIP_LABELS), so these don't repeat a group label. */
 function buildWebFactsheetEditSection() {
-  const fd = state.formData || {};
   const ws = state.webSite || {};
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
         Edit the Factsheet fields shown on your preview website.
       </p>
-      ${_wsFactsheetFieldsHTML(ws, fd)}
+      ${_wsFactsheetFieldsHTML(ws)}
     </div>`;
 }
 

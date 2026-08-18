@@ -2648,6 +2648,24 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // state.js), so this joins the descriptions the same way developers
     // above joins Steam's developers list.
     if (data.genres && data.genres.length) state.webSite.genres = data.genres.map(g => g.description).filter(Boolean).join(', ');
+    // Release Date — Steam's own appdetails 'release_date' field, shaped
+    // { coming_soon: bool, date: string } (e.g. { coming_soon: false, date:
+    // "Feb 18, 2026" }, confirmed live against this project's own captured
+    // Go Ape Ship! appdetails response). Unlike Developer/Publisher/Genres
+    // above, this ALWAYS sets something whenever Steam returns the field at
+    // all, rather than only overwriting on non-empty content — an
+    // unannounced/TBD title still gets a release_date object back with an
+    // empty `date` string (rather than omitting the field entirely), and by
+    // request that case fills in the literal text "Coming soon" instead of
+    // being left blank, matching webSite.releaseDate's own render-time
+    // fallback for "nothing entered here at all" (see releaseDateValue,
+    // render.js). Only skipped when Steam omits release_date entirely,
+    // which the "only overwrite with real content" guard elsewhere in this
+    // function would also apply to.
+    if (data.release_date) {
+      const rd = (data.release_date.date || '').trim();
+      state.webSite.releaseDate = rd || 'Coming soon';
+    }
     _fillScreenshotGridFromSteam(data.screenshots || []);
     // Steam Key Art "Capsule Image"/"Header Image" — appdetails' own
     // capsule_image (231×87)/header_image (460×215), no CDN URL guessing

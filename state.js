@@ -2180,9 +2180,15 @@ const state = {
   // sections (Factsheet, Description, Media, About), each with sub-sections
   // that only show once they have content — see buildWebSitePreviewSection
   // in render.js. Some sub-sections aren't stored here at all, but synced
-  // read-only from elsewhere in Shipmate: Platforms (state.activePlatforms),
-  // Release Date (formData.releaseDate), and Trailers (formData.trailerUrl /
-  // uploads.trailer — the same "Trailer" asset set in the Assets step).
+  // read-only from elsewhere in Shipmate: Platforms (state.activePlatforms)
+  // and Trailers (formData.trailerUrl / uploads.trailer — the same
+  // "Trailer" asset set in the Assets step). Release Date USED to be one of
+  // these (synced from formData.releaseDate, the shared cross-platform
+  // release-timing picker used elsewhere in Shipmate) — it's now its own
+  // plain text field below (releaseDate), by request, since the shared
+  // date-picker only ever holds a single YYYY-MM-DD value while a store
+  // listing's release date is often free text ("Coming Soon", "Q1 2027",
+  // a Steam-formatted "Feb 18, 2026", etc).
   // List-type fields below are stored as plain newline-separated text (one
   // entry per line) and parsed at render time — see _pkLines in render.js —
   // matching the lightweight plain-text style already used for
@@ -2238,6 +2244,19 @@ const state = {
     // above (its 'developers' list). Still a plain editable text field
     // otherwise, same as every other Factsheet field here.
     publisher: '',
+    // Free text, e.g. "Feb 18, 2026", "Coming Soon", "Q1 2027" — a plain
+    // editable text field, NOT tied to formData.releaseDate (the shared
+    // YYYY-MM-DD date picker used for cross-platform release-timing
+    // elsewhere in Shipmate; see state.js's top-of-webSite comment). Auto-
+    // populated (when the picked title links to a Steam page) from Steam's
+    // appdetails 'release_date' field — see _applySteamAboutData in app.js —
+    // same source/treatment as developer/publisher/genres above. Steam's
+    // release_date is `{ coming_soon: bool, date: string }`; when `date` is
+    // empty (pre-announcement titles often omit it even with
+    // coming_soon:true) this defaults to the literal string "Coming Soon"
+    // rather than being left blank, matching the preview website's own
+    // long-standing "Coming soon" fallback for an unset release date.
+    releaseDate: '',
     // Free text, e.g. "Roguelike, Deckbuilder". Auto-populated (when the
     // picked title links to a Steam page) from Steam's appdetails 'genres'
     // list, joined — see _applySteamAboutData in app.js. That's Steam's
