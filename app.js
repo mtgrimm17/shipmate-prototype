@@ -1962,7 +1962,7 @@ function toggleObLang(lang) {
     // than waiting for those fields to change again.
     _iasPropagateAllFields();
     // If this game is Steam-linked and its store page has been localized
-    // into this language, prefer Steam's own short description for the
+    // into this language, prefer Steam's own "About This Game" copy for the
     // Description field over the Claude translation just triggered above
     // (see _checkSteamLocalizedDescription — it's async and, if it finds a
     // genuine localization, overwrites the field after the fact).
@@ -2636,7 +2636,11 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
    fetchSteamAppDetails in claude.js, over corsproxy.io — verified live and
    already working for IGDB itself) and, on success, replaces IGDB as the
    source of truth for this game's:
-     - About section Description ← Steam's short_description
+     - About section Description ← Steam's about_the_game (HTML flattened to
+       blank-line-separated paragraphs, same conversion as the Web platform
+       Description below — NOT Steam's short_description, which is only a
+       one-or-two-sentence marketing blurb far shorter than what belongs in
+       a store listing's actual Description field)
      - Web platform Factsheet Developer ← Steam's developers list, joined
      - Web platform Factsheet Publisher ← Steam's publishers list, joined
      - Web platform Factsheet Links "Official Website" ← Steam's website field
@@ -2770,22 +2774,23 @@ function _steamSupportsLanguageCandidate(steamLang, supportedLanguagesRaw) {
 }
 
 // Checks whether the currently-selected Steam-linked game's store page has
-// a genuine localized Description for `lang` (a Shipmate language code),
-// and if so, populates that language's Description with Steam's own text
-// — taking priority over an AI-translated guess. Called whenever a
-// supporting language is added (toggleObLang/setObLangPreset/
-// applyObLangPreset) and once up front for every already-selected
-// supporting language as soon as a Steam-linked title is picked
-// (_applySteamAboutData). A complete no-op if the current title isn't
-// Steam-linked, or Steam has no localization support for `lang` at all
-// (STEAM_LOCALIZATION_LANG_MAP has no entry for it).
+// a genuine localized "About This Game" for `lang` (a Shipmate language
+// code), and if so, populates that language's Description with Steam's own
+// text (same about_the_game field and HTML-to-plain-text conversion as the
+// initial Description population — NOT short_description) — taking
+// priority over an AI-translated guess. Called whenever a supporting
+// language is added (toggleObLang/setObLangPreset/applyObLangPreset) and
+// once up front for every already-selected supporting language as soon as
+// a Steam-linked title is picked (_applySteamAboutData). A complete no-op
+// if the current title isn't Steam-linked, or Steam has no localization
+// support for `lang` at all (STEAM_LOCALIZATION_LANG_MAP has no entry for it).
 //
 // Deliberately NOT called from selectLocPrimary for the demoted outgoing
 // primary language: that language's Description there is genuine
 // developer-authored content (it was just the primary field's live value),
 // not an AI-translated placeholder — overwriting it with Steam's own
-// marketing copy would replace real authored text rather than backfilling
-// an empty/translated one, unlike every other call site here.
+// "About This Game" copy would replace real authored text rather than
+// backfilling an empty/translated one, unlike every other call site here.
 async function _checkSteamLocalizedDescription(lang) {
   const info = state.steamLocInfo;
   if (!info || !info.appId) return;
@@ -2806,7 +2811,12 @@ async function _checkSteamLocalizedDescription(lang) {
   if (!state.steamLocInfo || state.steamLocInfo.appId !== info.appId) return;
   if (!(state.formData.localizations || []).includes(lang)) return;
 
-  const localizedDesc = (data && data.short_description || '').trim();
+  // Same field and HTML-to-plain-text conversion as the initial Description
+  // population in _applySteamAboutData (about_the_game, NOT the much
+  // shorter short_description) — kept consistent so this comparison is
+  // apples-to-apples against info.baselineDescription, which was cached
+  // from that same conversion.
+  const localizedDesc = _steamHtmlToParagraphLines(data && data.about_the_game || '').trim();
   const baseline      = (info.baselineDescription || '').trim();
   // Steam silently falls back to the store page's default listing language
   // instead of erroring when it has no real translation for the requested
@@ -2881,11 +2891,21 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
 
   if (data) {
+    // "About This Game" (data.about_the_game) is Steam's own full-length
+    // store-page copy, flattened from HTML to blank-line-separated
+    // paragraphs by _steamHtmlToParagraphLines (claude.js) — used for BOTH
+    // the About section's Description field below AND the Web platform's
+    // own "About This Game" field further down, so it's computed once here
+    // rather than converted twice. Deliberately NOT data.short_description
+    // (Steam's one-or-two-sentence marketing blurb) — that's far shorter
+    // than what belongs in a store listing's actual Description field.
+    const aboutGameText = data.about_the_game ? _steamHtmlToParagraphLines(data.about_the_game) : '';
+
     // Guarded like item.summary in the no-Steam-link branch below — only
     // overwrite a field if Steam actually has content for it, rather than
     // blanking something the developer may have already typed in on the
     // rare page missing one of these fields.
-    if (data.short_description) _fillDescriptionField(data.short_description);
+    if (aboutGameText) _fillDescriptionField(aboutGameText);
     if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
     // Publisher — same "join Steam's list" treatment as Developer above,
     // just a different appdetails field (a game can, and often does, have
@@ -2898,7 +2918,7 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // (the studio's own general site, under the About group) — this backs
     // Factsheet > Developer > Links > "Official Website" instead.
     if (data.website) state.webSite.officialWebsite = data.website;
-    if (data.about_the_game) state.webSite.aboutGame = _steamHtmlToParagraphLines(data.about_the_game);
+    if (aboutGameText) state.webSite.aboutGame = aboutGameText;
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips
     // shown on the store page (appdetails has no field for those at all,
@@ -2937,17 +2957,20 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     const trailer = _steamTrailerFromMovies(data.movies);
     if (trailer) state.uploads.steamTrailer = trailer;
 
-    // Cache this game's default-language ("baseline") short description and
-    // raw supported_languages string so _checkSteamLocalizedDescription can
-    // later (a) tell a genuinely-localized appdetails response apart from
-    // Steam silently falling back to this same baseline text, and (b)
-    // cheaply pre-filter obviously-unsupported languages without an extra
-    // fetch. Reuses this call's own appdetails response rather than issuing
-    // a second one — this function already fetches exactly what's needed.
+    // Cache this game's default-language ("baseline") About This Game text
+    // — the SAME field/conversion just used to populate the Description
+    // field above, so a later localized comparison in
+    // _checkSteamLocalizedDescription is apples-to-apples — plus the raw
+    // supported_languages string, so that function can later (a) tell a
+    // genuinely-localized appdetails response apart from Steam silently
+    // falling back to this same baseline text, and (b) cheaply pre-filter
+    // obviously-unsupported languages without an extra fetch. Reuses this
+    // call's own appdetails response rather than issuing a second one —
+    // this function already fetches exactly what's needed.
     state.steamLocInfo = {
       appId,
-      baselineDescription:   data.short_description   || '',
-      supportedLanguagesRaw: data.supported_languages  || '',
+      baselineDescription:   aboutGameText,
+      supportedLanguagesRaw: data.supported_languages || '',
     };
     // Any supported languages already selected before this game finished
     // loading (e.g. left over from a prior title, or set via a language
