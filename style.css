@@ -3248,6 +3248,26 @@ body {
   letter-spacing: 0.2px; white-space: nowrap;
 }
 
+/* Inline click-to-edit — Title/Subtitle/Description (startIasInlineEdit,
+   app.js). ias-editable is the shared hover affordance; ias-placeholder
+   marks the muted/italic look used only while a field is showing its
+   fallback copy ("Your Game Title", etc.), so it's obvious at a glance
+   which fields are still empty. ias-inline-input is added to the
+   input/textarea that temporarily replaces the clicked element — it keeps
+   that field's own font size/weight/color (carried over via the element's
+   existing class) and layers on just enough border/background to read as
+   "actively editing", sized to blend into this card rather than look like
+   a normal form control. */
+.ias-editable { cursor: pointer; border-radius: 4px; margin: -2px -4px; padding: 2px 4px; transition: background-color .12s ease; }
+.ias-editable:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.ias-placeholder { color: var(--text-faint); font-style: italic; }
+.ias-inline-input {
+  display: block; width: 100%; box-sizing: border-box;
+  font: inherit; color: var(--text); background: var(--panel-3);
+  border: 1px solid #0a84ff; border-radius: 6px;
+  padding: 2px 4px; margin: -2px -4px; outline: none; resize: none;
+}
+
 /* Meta strip */
 .ias-meta-strip {
   display: flex; align-items: center;

@@ -3088,6 +3088,63 @@ function _applyFieldValue(field, value) {
   }
 }
 
+/* ── App Store Product Page Preview — inline click-to-edit ──────────────
+   Title/Subtitle/Description can be edited directly in the live preview
+   (buildStorePreviewSection, render.js), not just in Game Details
+   elsewhere. Clicking any of the three swaps that element for a plain
+   input/textarea in its own place — pre-filled with the REAL underlying
+   state value (state.formData[field]), never whatever placeholder text
+   ("Your Game Title", "Short subtitle", the description fallback
+   sentence) happened to be showing, so clicking a still-empty field never
+   accidentally saves the placeholder copy as real data. Reuses the
+   clicked element's own classes on the input/textarea (minus the hover/
+   placeholder-only ones, which don't apply while actively editing) so it
+   inherits that field's exact font size/weight/color from style.css,
+   layering in only the editing-specific look (border, background) via
+   ias-inline-input — see style.css for both. Committing (blur, or Enter
+   for the single-line Title/Subtitle — Description is multi-line, so
+   Enter there just adds a line break like any textarea, and only blur
+   commits) writes straight to state.formData and re-renders the whole
+   step modal, which naturally swaps the input back out for the styled
+   preview text. maxLength mirrors the real caps already enforced on
+   these same fields in Game Details: 50 for Title (ob-title's own hard
+   cap — 30 there is only a soft recommended-length counter, not an actual
+   limit), 30 for Subtitle (Apple's real App Store subtitle limit, and the
+   same cap _applyFieldValue above already assumes), and no cap at all for
+   Description, matching ob-desc's own textarea (also just a soft 4000
+   counter elsewhere, not a hard limit). */
+function startIasInlineEdit(field, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description';
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+    input.maxLength = field === 'subtitle' ? 30 : 50;
+  }
+  input.value = state.formData[field] || '';
+
+  const commit = () => {
+    state.formData[field] = input.value;
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
 /* Accept the Shipmate-suggested fix for the current item */
 function applyStorePageFix() {
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };

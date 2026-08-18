@@ -3780,7 +3780,16 @@ function buildStorePreviewSection() {
     ? [...selectedUploaded, ...customShots]
     : allUploaded; // fall back to all if none selected yet
 
-  const title     = escHtml(fd.title || 'Your Game Title');
+  // Title/Subtitle/Description are all clickable-to-edit directly in this
+  // preview (startIasInlineEdit, app.js) — each swaps its own element for a
+  // plain input/textarea in place, pre-filled with the real state value
+  // (never the placeholder text below), and writes straight back to
+  // state.formData on commit. ias-placeholder marks the muted/italic style
+  // used only while showing the fallback copy, so it's visually obvious
+  // which fields are still empty; ias-editable is the shared hover
+  // affordance for all three.
+  const titleRaw  = fd.title || '';
+  const title     = escHtml(titleRaw || 'Your Game Title');
   const category  = escHtml(fd.genre || 'Games');
   const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
   const price     = isFree ? 'GET' : `$${fd.price}`;
@@ -3791,12 +3800,21 @@ function buildStorePreviewSection() {
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
   const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
 
-  // Subtitle = first sentence of description or placeholder
+  // Subtitle prefers the developer's own explicit App Store Subtitle
+  // (state.formData.subtitle — the same field Shipmate's "Fix It" subtitle
+  // suggestions already write to via _applyFieldValue in app.js, which
+  // previously had no visible home anywhere in this preview). Falls back to
+  // the first sentence of Description (or its first 80 chars), same
+  // derivation this preview always used, when no subtitle has been typed
+  // yet — and finally to the placeholder text when there's no description
+  // either.
   const descRaw   = fd.description || '';
   const firstDot  = descRaw.search(/[.!?]/);
-  const subtitle  = escHtml(firstDot > 10 && firstDot < 120
+  const derivedSubtitle = firstDot > 10 && firstDot < 120
     ? descRaw.slice(0, firstDot + 1)
-    : descRaw.slice(0, 80) + (descRaw.length > 80 ? '…' : '') || 'Short subtitle');
+    : descRaw.slice(0, 80) + (descRaw.length > 80 ? '…' : '');
+  const subtitleRaw = fd.subtitle || derivedSubtitle;
+  const subtitle     = escHtml(subtitleRaw || 'Short subtitle');
 
   const descFull  = descRaw ? escHtml(descRaw) : 'Your game description will appear here once you fill in the Description field in Game Details.';
   const descShort = descRaw.length > 240
@@ -4072,8 +4090,10 @@ function buildStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name">${title}</div>
-            <div class="ias-app-subtitle">${subtitle}</div>
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}"
+                 onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}"
+                 onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
           </div>
           <div class="ias-header-cta">
@@ -4103,8 +4123,10 @@ function buildStorePreviewSection() {
 
         <!-- ── Description ── -->
         <div class="ias-section">
-          <div class="ias-desc-text" id="ias-desc-text">${descShort}${descRaw.length > 240
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}" id="ias-desc-text"
+               onclick="startIasInlineEdit('description', this, event)" title="Click to edit">${descShort}${descRaw.length > 240
             ? ` <button class="ias-more-btn" onclick="
+                event.stopPropagation();
                 var el=document.getElementById('ias-desc-text');
                 var full=${JSON.stringify(descFull + ' ')};
                 var short=${JSON.stringify(descShort + ' ')};
