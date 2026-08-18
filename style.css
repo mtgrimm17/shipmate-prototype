@@ -3268,6 +3268,24 @@ body {
    form control. */
 .ias-editable { cursor: pointer; border-radius: 4px; margin: -2px -4px; padding: 2px 4px; }
 .ias-placeholder { animation: ias-meta-pulse 2s ease-in-out infinite; }
+
+/* Title and Subtitle sit directly adjacent in normal block flow, so their
+   ias-editable negative top/bottom margins (which exist only to offset
+   ias-editable's own padding so the click-target padding doesn't shift
+   layout) collapse into a slightly negative gap between the two boxes at
+   rest. That's invisible with no highlight, but once either field is empty
+   and pulsing (ias-placeholder → ias-meta-pulse, which grows a box-shadow
+   ring up to 5px past each box's edge), the two rings would touch/overlap
+   in that gap. Open up extra clearance under Title whenever either field
+   still needs the pulse — filled-in fields keep the original tight,
+   App-Store-style spacing untouched. The third selector covers Title being
+   actively edited (temporarily an <input>, so it loses the .ias-placeholder
+   class) while Subtitle is still empty and pulsing. */
+.ias-app-name.ias-placeholder,
+.ias-app-name:has(+ .ias-app-subtitle.ias-placeholder),
+.ias-inline-input:has(+ .ias-app-subtitle.ias-placeholder) {
+  margin-bottom: 14px;
+}
 .ias-inline-input {
   display: block; width: 100%; box-sizing: border-box;
   font: inherit; color: var(--text); background: var(--panel-3);
