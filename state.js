@@ -2348,6 +2348,14 @@ const state = {
   // Distribution after being chosen here).
   iasPreviewLang: null,
 
+  // Auto-translation status per field ('subtitle' | 'description' |
+  // 'releaseNotes') for the App Store Product Page Preview's Subtitle/
+  // Description/What's New auto-translation into supporting languages —
+  // null | 'loading' | 'complete' | 'error'. See _iasTriggerAutoTranslate
+  // in app.js. Session-transient UI state, not submission data, so it
+  // lives at the top level rather than inside formData.
+  iasTranslateStatus: {},
+
   // Whether the privacy matrix is showing all types (default: fully collapsed)
   privacyMatrixExpanded: false,
 

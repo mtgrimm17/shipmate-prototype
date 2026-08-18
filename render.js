@@ -222,7 +222,8 @@ function buildAboutTab() {
           <div class="form-group">
             <textarea class="form-input" id="ob-desc" rows="5" required
                       placeholder="${t('ob.field.desc.placeholder') || 'Tell players what makes your game worth their time...'}"
-                      oninput="syncField('description', this.value); charCount('ob-desc-count', this.value, 4000)"></textarea>
+                      oninput="syncField('description', this.value); charCount('ob-desc-count', this.value, 4000)"
+                      onblur="_iasTriggerAutoTranslate('description', this.value)"></textarea>
             <div class="char-count" id="ob-desc-count">0 / 4000</div>
           </div>
         </div>
@@ -3843,6 +3844,30 @@ function buildStorePreviewSection() {
     ? escHtml(descRaw.slice(0, 240)) + '…'
     : descFull;
 
+  // Subtitle/Description/What's New are auto-translated into every
+  // supporting language from the primary language's text
+  // (_iasTriggerAutoTranslate, app.js). Only surface the loading/error
+  // status for a field here when the currently-previewed language is
+  // actually one of its translation targets — i.e. it's a supporting
+  // language (not the primary itself) that hasn't been manually overridden
+  // for this field — so the indicator never shows up next to the primary
+  // language's own copy, or a language the developer has taken over.
+  const _iasStatusLine = (field, tryAgainLabel) => {
+    if (previewLang === previewPrimaryLang) return '';
+    if (!_iasFieldSynced(field, previewLang)) return '';
+    const status = state.iasTranslateStatus?.[field];
+    if (status === 'loading') {
+      return `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating ${tryAgainLabel} to ${previewLangName}…</div>`;
+    }
+    if (status === 'error') {
+      return `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_iasRetryTranslate('${field}')">Try again</button></div>`;
+    }
+    return '';
+  };
+  const subtitleStatusHtml = _iasStatusLine('subtitle', 'subtitle');
+  const descStatusHtml     = _iasStatusLine('description', 'description');
+  const notesStatusHtml    = _iasStatusLine('releaseNotes', "what's new");
+
   // Age rating from questionnaire
   const ageRating = (function() {
     const cat = a.ageCategory;
@@ -4125,6 +4150,7 @@ function buildStorePreviewSection() {
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
             <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
+            ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
           </div>
           <div class="ias-header-cta">
@@ -4164,6 +4190,7 @@ function buildStorePreviewSection() {
                 if(this.textContent==='more'){el.innerHTML=full;this.textContent='less';}
                 else{el.innerHTML=short;this.textContent='more';}
               ">more</button>` : ''}</div>
+          ${descStatusHtml}
           <div class="ias-dev-row">
             <span class="ias-dev-name">Developer</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -4181,6 +4208,7 @@ function buildStorePreviewSection() {
           <div class="ias-wn-version">Version ${version}</div>
           <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}"
                onclick="startIasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
+          ${notesStatusHtml}
           <div class="ias-wn-edit-hint">
             <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
             Click to edit
