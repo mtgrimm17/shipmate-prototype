@@ -3152,6 +3152,16 @@ function startIasInlineEdit(field, el, ev) {
   input.select();
 }
 
+/* App Store Product Page Preview — top-right language dropdown (swSelect).
+   Options are the Distribution section's Primary Language (always first)
+   followed by its selected supported languages in alphabetical order,
+   rebuilt fresh in buildStorePreviewSection() every render — this setter
+   only needs to persist which one is currently chosen. */
+function setIasPreviewLang(lang) {
+  state.iasPreviewLang = lang;
+  reRenderStepModal();
+}
+
 /* Accept the Shipmate-suggested fix for the current item */
 function applyStorePageFix() {
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };

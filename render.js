@@ -3798,6 +3798,22 @@ function buildStorePreviewSection() {
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
+
+  // Language dropdown (top-right of the preview) — first option is always
+  // the Distribution section's Primary Language (state.formData.primaryLanguage);
+  // the rest are the Distribution section's selected supported languages
+  // (state.formData.localizations), sorted alphabetically by display name.
+  // localizations never contains the primary language itself (selectLocPrimary
+  // removes it on promotion), so there's no dedup to do here.
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
+  const previewLangOptions = previewLangCodes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l }));
+  const previewLang = previewLangCodes.includes(state.iasPreviewLang)
+    ? state.iasPreviewLang
+    : previewPrimaryLang;
   const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
 
   // Subtitle is its own independent field (state.formData.subtitle — the
@@ -4080,7 +4096,10 @@ function buildStorePreviewSection() {
           <svg viewBox="0 0 16 16" fill="none" width="11" height="11" style="margin-right:4px;vertical-align:-1px;"><path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm.75 10.25h-1.5v-5h1.5v5zm0-6.5h-1.5v-1.5h1.5v1.5z" fill="currentColor"/></svg>
           App Store Preview
         </span>
-        <span class="ias-label-note">Reflects your submission data</span>
+        <div class="ias-label-right">
+          <span class="ias-label-note">Reflects your submission data</span>
+          ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px')}
+        </div>
       </div>
 
       <div class="ias-page">

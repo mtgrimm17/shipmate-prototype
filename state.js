@@ -2329,6 +2329,14 @@ const state = {
   // Whether the user has visited Store Page Preview (makes it count as complete)
   iosStorePreviewSeen: false,
 
+  // Which language the App Store Product Page Preview's top-right language
+  // dropdown is currently showing (a language code, e.g. 'en'). null means
+  // "use the Distribution section's primary language" — buildStorePreviewSection
+  // falls back to state.formData.primaryLanguage whenever this is null or no
+  // longer a valid choice (e.g. a supported language was deselected in
+  // Distribution after being chosen here).
+  iasPreviewLang: null,
+
   // Whether the privacy matrix is showing all types (default: fully collapsed)
   privacyMatrixExpanded: false,
 

@@ -3205,6 +3205,14 @@ body {
 }
 .ias-label-note { font-size: 11px; color: var(--text-faint); }
 
+/* Right side of the label row — the "Reflects your submission data" note
+   plus the language dropdown (swSelect, populated from the Distribution
+   section's Primary Language + selected supported languages) sit together
+   so the row's own space-between still reads as "badge -- everything else",
+   and wrap onto their own line together if the modal gets too narrow for
+   both. */
+.ias-label-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
 .ias-page {
   background: var(--panel-2);
   border: 1px solid var(--border);
