@@ -580,9 +580,20 @@ function steamLibraryHeroUrl(appId) {
    appdetails reliability testing — a live-browser fetch() from a real
    Shipmate page got a clean 200 on the identical corsproxy.io host for
    the IGDB endpoint, so there's no reason to expect it to behave
-   differently for this target). Used by _applySteamAboutData (app.js). */
-async function fetchSteamAppDetails(appId) {
-  const res = await fetch(`https://corsproxy.io/?https://store.steampowered.com/api/appdetails?appids=${appId}`);
+   differently for this target). Used by _applySteamAboutData (app.js).
+
+   Optional `lang` (a Steam API language code, e.g. 'french', 'schinese' —
+   see STEAM_LOCALIZATION_LANG_MAP, app.js) requests appdetails localized
+   into that language via Steam's own `l=` query param, used by
+   _checkSteamLocalizedDescription (app.js) to fetch a supporting language's
+   store-page short description. Steam does not error for a language it has
+   no real translation for — it silently falls back to the game's default
+   listing language instead, so a caller requesting a specific language must
+   compare the result's short_description against the default-language
+   baseline itself to tell "genuinely localized" from "silently fell back". */
+async function fetchSteamAppDetails(appId, lang) {
+  const langParam = lang ? `&l=${encodeURIComponent(lang)}` : '';
+  const res = await fetch(`https://corsproxy.io/?https://store.steampowered.com/api/appdetails?appids=${appId}${langParam}`);
   if (!res.ok) throw new Error('Steam appdetails fetch failed (' + res.status + ')');
   const json = await res.json();
   const entry = json && json[appId];

@@ -1916,12 +1916,17 @@ function selectLocPrimary(lang) {
 function setObPrimaryLang(lang) { selectLocPrimary(lang); }
 
 function setObLangPreset(preset) {
+  const beforeLangs = state.formData.localizations || [];
   state.formData.localizationPreset = preset;
   state.formData.localizations      = _computeLangPresetSelections(preset);
   updateObLangListWrap();
   // Bulk selection bypasses toggleObLang entirely, so any newly-added
   // language needs its own initial translation pass triggered here.
   _iasPropagateAllFields();
+  // Same reasoning as toggleObLang — bulk selection also bypasses the
+  // per-language Steam localization check, so run it for every language
+  // this preset newly added.
+  _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, state.formData.localizations);
   // Update pill states
   document.querySelectorAll('.ob-preset-pill').forEach(btn => {
     const presetMap = {
@@ -1936,10 +1941,12 @@ function setObLangPreset(preset) {
 
 function applyObLangPreset() {
   // Re-apply current lang preset when primary language changes
+  const beforeLangs = state.formData.localizations || [];
   const preset = state.formData.localizationPreset || 'recommended';
   state.formData.localizations = _computeLangPresetSelections(preset);
   updateObLangListWrap();
   _iasPropagateAllFields();
+  _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, state.formData.localizations);
 }
 
 function toggleObLang(lang) {
@@ -1954,6 +1961,12 @@ function toggleObLang(lang) {
     // language's current Subtitle/Description/What's New right away rather
     // than waiting for those fields to change again.
     _iasPropagateAllFields();
+    // If this game is Steam-linked and its store page has been localized
+    // into this language, prefer Steam's own short description for the
+    // Description field over the Claude translation just triggered above
+    // (see _checkSteamLocalizedDescription — it's async and, if it finds a
+    // genuine localization, overwrites the field after the fact).
+    _checkSteamLocalizedDescription(lang);
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;
@@ -2428,6 +2441,10 @@ function selectPicklistItem(igdbId) {
   } else {
     if (item.summary) _fillDescriptionField(item.summary);
     _fillScreenshotGridFromIgdb(item.screenshots || []);
+    // Not a Steam-linked title — clear any Steam localization cache left
+    // over from a previously-selected game so a later language-add on THIS
+    // title can't be checked against the wrong game's Steam data.
+    state.steamLocInfo = null;
   }
 
   // Auto-activate platforms — use strict activationPlatforms (no unconfirmed console ports)
@@ -2664,6 +2681,151 @@ function _steamTrailerFromMovies(movies) {
   return { name: movie.name || 'Trailer', thumbnail: movie.thumbnail, hlsUrl: movie.hls_h264 };
 }
 
+/* ── App Store Product Page Preview — Steam-sourced Description
+   localization ───────────────────────────────────────────────────────
+   When a selected title is linked to a Steam store page, Steam's own
+   store-page copy is already the source of truth for the PRIMARY
+   language's Description (_applySteamAboutData above). If the developer's
+   Steam store page has ALSO been localized into one of Shipmate's
+   supported languages, that real, developer-written translation is a
+   better source for that language's Description than an AI (Claude)
+   translation of the primary text — so it's used instead, whenever it's
+   available.
+
+   Steam's appdetails endpoint accepts an `l=<language>` query param
+   (fetchSteamAppDetails, claude.js) using Steam's OWN language codes,
+   which don't match Shipmate's ISO-ish codes (OB_LANG_NAMES, render.js) —
+   STEAM_LOCALIZATION_LANG_MAP bridges the two. Steam has no store-page
+   localization support at all for Malay or Hebrew as of this writing, so
+   those two are deliberately left out of the map (not just unmapped by
+   accident) — a lookup miss is treated as "Steam can't possibly have
+   this", short-circuiting before any network call. */
+const STEAM_LOCALIZATION_LANG_MAP = {
+  en: 'english', fr: 'french', de: 'german', es: 'spanish', 'es-419': 'latam',
+  it: 'italian', pt: 'portuguese', 'pt-BR': 'brazilian', ru: 'russian',
+  ja: 'japanese', ko: 'koreana', zh: 'schinese', 'zh-TW': 'tchinese',
+  pl: 'polish', nl: 'dutch', tr: 'turkish', sv: 'swedish', nb: 'norwegian',
+  da: 'danish', fi: 'finnish', cs: 'czech', hu: 'hungarian', ro: 'romanian',
+  uk: 'ukrainian', el: 'greek', th: 'thai', vi: 'vietnamese', id: 'indonesian',
+  ar: 'arabic',
+};
+
+// Display names Steam's own `supported_languages` field (appdetails) is
+// known to use for each of its language codes — used only as a soft,
+// best-effort pre-filter (see _steamSupportsLanguageCandidate below), never
+// as the actual proof of localization (that always comes from comparing
+// real fetched content, in _checkSteamLocalizedDescription).
+const STEAM_LANG_DISPLAY_NAMES = {
+  english: ['English'], french: ['French'], german: ['German'],
+  spanish: ['Spanish - Spain', 'Spanish'], latam: ['Spanish - Latin America', 'Latin American Spanish'],
+  italian: ['Italian'], portuguese: ['Portuguese'], brazilian: ['Portuguese - Brazil', 'Brazilian Portuguese'],
+  russian: ['Russian'], japanese: ['Japanese'], koreana: ['Korean'],
+  schinese: ['Simplified Chinese'], tchinese: ['Traditional Chinese'],
+  polish: ['Polish'], dutch: ['Dutch'], turkish: ['Turkish'], swedish: ['Swedish'],
+  norwegian: ['Norwegian'], danish: ['Danish'], finnish: ['Finnish'], czech: ['Czech'],
+  hungarian: ['Hungarian'], romanian: ['Romanian'], ukrainian: ['Ukrainian'],
+  greek: ['Greek'], thai: ['Thai'], vietnamese: ['Vietnamese'], indonesian: ['Indonesian'],
+  arabic: ['Arabic'],
+};
+
+// Steam's supported_languages string is a comma-separated list of display
+// names with occasional inline HTML (an asterisk wrapped in <strong> tags
+// flags "full audio support"), followed by a "*languages with full audio
+// support" footnote sentence appended after the list itself — e.g.
+// "English<strong>*</strong>, French, German<br><strong>*</strong>languages
+// with full audio support". Strips the tags and footnote, returning the
+// plain list of names.
+function _steamSupportedLanguageNames(raw) {
+  if (!raw) return [];
+  const noTags = raw.replace(/<[^>]*>/g, '');
+  const beforeFootnote = noTags.split(/\*\s*languages with/i)[0];
+  return beforeFootnote.split(',').map(s => s.replace(/\*/g, '').trim()).filter(Boolean);
+}
+
+// Best-effort check of whether Steam's own supported_languages listing
+// mentions a given Steam language code at all — purely an optimization to
+// skip an unnecessary network fetch for a language the game clearly
+// doesn't support. Deliberately fails OPEN (returns true, "go ahead and
+// check") whenever parsing is inconclusive, since the real answer always
+// comes from _checkSteamLocalizedDescription's own content comparison —
+// this must never be the thing that wrongly rules out a real localization.
+function _steamSupportsLanguageCandidate(steamLang, supportedLanguagesRaw) {
+  const names = _steamSupportedLanguageNames(supportedLanguagesRaw);
+  if (!names.length) return true;
+  const expected = STEAM_LANG_DISPLAY_NAMES[steamLang];
+  if (!expected) return true;
+  return names.some(n => expected.some(e => n.toLowerCase() === e.toLowerCase()));
+}
+
+// Checks whether the currently-selected Steam-linked game's store page has
+// a genuine localized Description for `lang` (a Shipmate language code),
+// and if so, populates that language's Description with Steam's own text
+// — taking priority over an AI-translated guess. Called whenever a
+// supporting language is added (toggleObLang/setObLangPreset/
+// applyObLangPreset) and once up front for every already-selected
+// supporting language as soon as a Steam-linked title is picked
+// (_applySteamAboutData). A complete no-op if the current title isn't
+// Steam-linked, or Steam has no localization support for `lang` at all
+// (STEAM_LOCALIZATION_LANG_MAP has no entry for it).
+//
+// Deliberately NOT called from selectLocPrimary for the demoted outgoing
+// primary language: that language's Description there is genuine
+// developer-authored content (it was just the primary field's live value),
+// not an AI-translated placeholder — overwriting it with Steam's own
+// marketing copy would replace real authored text rather than backfilling
+// an empty/translated one, unlike every other call site here.
+async function _checkSteamLocalizedDescription(lang) {
+  const info = state.steamLocInfo;
+  if (!info || !info.appId) return;
+  const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
+  if (!steamLang) return;
+  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+
+  let data = null;
+  try {
+    data = await fetchSteamAppDetails(info.appId, steamLang);
+  } catch (e) {
+    console.warn('[Steam Localized Description]', lang, e.message);
+    return;
+  }
+
+  // Stale guards — bail if the user switched to a different title, or
+  // deselected this language again, while the fetch was in flight.
+  if (!state.steamLocInfo || state.steamLocInfo.appId !== info.appId) return;
+  if (!(state.formData.localizations || []).includes(lang)) return;
+
+  const localizedDesc = (data && data.short_description || '').trim();
+  const baseline      = (info.baselineDescription || '').trim();
+  // Steam silently falls back to the store page's default listing language
+  // instead of erroring when it has no real translation for the requested
+  // language — comparing against the baseline is the only way to tell
+  // "genuinely localized" from "silently fell back to English (or
+  // whatever the default is)".
+  if (!localizedDesc || localizedDesc === baseline) return;
+
+  _iasSetFieldValue('description', lang, localizedDesc);
+  // Mark this language's Description as already up to date against the
+  // CURRENT primary Description, so a concurrent or later Claude
+  // auto-translate pass (_iasTriggerAutoTranslate) sees nothing stale here
+  // and doesn't overwrite this authoritative Steam-provided text with an
+  // AI guess — until the primary Description actually changes again, at
+  // which point it's translated like any other language, same as always.
+  if (state.formData.localizedStoreText && state.formData.localizedStoreText[lang]) {
+    state.formData.localizedStoreText[lang].descriptionSourceText = state.formData.description || '';
+  }
+  reRenderStepModal();
+}
+
+// Runs _checkSteamLocalizedDescription for every language present in
+// `afterLangs` but not in `beforeLangs` — used by the bulk language-preset
+// paths (setObLangPreset/applyObLangPreset), which set the whole
+// localizations array in one shot rather than adding languages one at a
+// time like toggleObLang.
+function _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, afterLangs) {
+  const before = new Set(beforeLangs || []);
+  (afterLangs || []).forEach(lang => { if (!before.has(lang)) _checkSteamLocalizedDescription(lang); });
+}
+
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
   try {
@@ -2733,9 +2895,33 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // (appdetails' movies[0]), rather than anything IGDB provides.
     const trailer = _steamTrailerFromMovies(data.movies);
     if (trailer) state.uploads.steamTrailer = trailer;
+
+    // Cache this game's default-language ("baseline") short description and
+    // raw supported_languages string so _checkSteamLocalizedDescription can
+    // later (a) tell a genuinely-localized appdetails response apart from
+    // Steam silently falling back to this same baseline text, and (b)
+    // cheaply pre-filter obviously-unsupported languages without an extra
+    // fetch. Reuses this call's own appdetails response rather than issuing
+    // a second one — this function already fetches exactly what's needed.
+    state.steamLocInfo = {
+      appId,
+      baselineDescription:   data.short_description   || '',
+      supportedLanguagesRaw: data.supported_languages  || '',
+    };
+    // Any supported languages already selected before this game finished
+    // loading (e.g. left over from a prior title, or set via a language
+    // preset that ran before this async fetch resolved) haven't had a
+    // chance to be checked against this game's Steam localization yet —
+    // check them now rather than only checking languages added afterward.
+    (state.formData.localizations || []).forEach(lang => _checkSteamLocalizedDescription(lang));
   } else {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
     _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);
+    // No usable Steam data for this title (fetch failed) — clear any stale
+    // cache from a previous game so a later language-add doesn't wrongly
+    // check this new (non-Steam-backed) title against the OLD game's Steam
+    // localization info.
+    state.steamLocInfo = null;
   }
   reRenderStepModal();
 }

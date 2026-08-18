@@ -2356,6 +2356,20 @@ const state = {
   // lives at the top level rather than inside formData.
   iasTranslateStatus: {},
 
+  // Cached Steam store-page localization info for the currently-selected
+  // Steam-linked game — { appId, baselineDescription, supportedLanguagesRaw }
+  // or null when no Steam-linked game is selected (or its appdetails fetch
+  // failed). Populated by _applySteamAboutData (app.js) right after it fetches
+  // the game's default-language appdetails; consumed by
+  // _checkSteamLocalizedDescription (app.js) whenever a supported language is
+  // added, to fetch that language's appdetails and compare its
+  // short_description against the cached baseline — Steam silently falls
+  // back to the default-language listing for languages it hasn't actually
+  // localized, rather than erroring, so this comparison is what tells a real
+  // localization apart from that fallback. Session-transient, not submission
+  // data, so it lives at the top level rather than inside formData.
+  steamLocInfo: null,
+
   // Whether the privacy matrix is showing all types (default: fully collapsed)
   privacyMatrixExpanded: false,
 
