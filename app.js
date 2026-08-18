@@ -2386,6 +2386,15 @@ function selectPicklistItem(igdbId) {
   state.titlePicklist = [];
   _renderTitlePicklist();
 
+  // Any language previously flagged as "Steam-authoritative" for the
+  // Description field (see _checkSteamLocalizedDescription) only means
+  // something for the PREVIOUSLY-selected game's own Steam store page —
+  // clear it before picking up this new title, whether or not it turns out
+  // to be Steam-linked itself, so a stale flag can't permanently block that
+  // language's Description from ever being auto-translated for this new
+  // game.
+  _clearSteamDescriptionAuthority();
+
   // Set game title
   state.formData.title = item.name;
   const titleEl = document.getElementById('ob-title');
@@ -2804,16 +2813,43 @@ async function _checkSteamLocalizedDescription(lang) {
   if (!localizedDesc || localizedDesc === baseline) return;
 
   _iasSetFieldValue('description', lang, localizedDesc);
-  // Mark this language's Description as already up to date against the
-  // CURRENT primary Description, so a concurrent or later Claude
-  // auto-translate pass (_iasTriggerAutoTranslate) sees nothing stale here
-  // and doesn't overwrite this authoritative Steam-provided text with an
-  // AI guess — until the primary Description actually changes again, at
-  // which point it's translated like any other language, same as always.
   if (state.formData.localizedStoreText && state.formData.localizedStoreText[lang]) {
-    state.formData.localizedStoreText[lang].descriptionSourceText = state.formData.description || '';
+    const entry = state.formData.localizedStoreText[lang];
+    // A genuine Steam store-page localization is authoritative over an
+    // AI-translated guess — descriptionFromSteam flags that so
+    // _iasTriggerAutoTranslate excludes this language's Description from
+    // any translation batch from now on (both when deciding what to
+    // translate AND, belt-and-suspenders, right before it writes a result —
+    // see the two checks there), rather than merely getting overwritten by
+    // this once and racing to be overwritten again by the next primary-text
+    // edit. Cleared by _clearSteamDescriptionAuthority whenever a different
+    // game is selected, since the flag only means something for THIS game's
+    // Steam page.
+    entry.descriptionFromSteam  = true;
+    // Also refresh the staleness cache to the CURRENT primary Description,
+    // so a translate pass already in flight when this write lands (or one
+    // that runs before the flag above exists, e.g. this exact call racing
+    // the auto-translate kicked off by the same language-add) still sees
+    // nothing stale here even before the flag check is consulted.
+    entry.descriptionSourceText = state.formData.description || '';
   }
   reRenderStepModal();
+}
+
+// Clears the descriptionFromSteam authority flag (see
+// _checkSteamLocalizedDescription) from every supporting language's stored
+// Description — called whenever a different title is selected from the
+// picklist, since that flag only means "Steam's OWN store page for THIS
+// game genuinely localizes this language's Description" and has no meaning
+// once the user has moved on to a different game. Without this, a language
+// flagged authoritative for a previous Steam-linked game would stay stuck
+// showing that old game's Description forever, permanently refusing all
+// future auto-translation even after the primary Description has changed
+// to describe an entirely different game.
+function _clearSteamDescriptionAuthority() {
+  const lst = state.formData.localizedStoreText;
+  if (!lst) return;
+  Object.keys(lst).forEach(lang => { delete lst[lang].descriptionFromSteam; });
 }
 
 // Runs _checkSteamLocalizedDescription for every language present in
@@ -3420,10 +3456,14 @@ function _iasPropagateTitle(primaryValue) {
    primary-language text than what's current right now (tracked via
    `${field}SourceText`, the exact primary text a stored translation came
    from). This also naturally covers a newly-added supporting language,
-   which has no entry/source-text yet and is therefore always stale. There
-   is no way for a language to opt out of future re-translation — a manual
-   edit for that language is simply overwritten the next time the primary
-   text changes and this fires again. */
+   which has no entry/source-text yet and is therefore always stale. A
+   manual edit for a language is simply overwritten the next time the
+   primary text changes and this fires again — the one exception is the
+   Description field for a language whose entry is flagged
+   descriptionFromSteam (see _checkSteamLocalizedDescription): a genuine
+   Steam store-page localization is authoritative over an AI-translated
+   guess, so that language's Description is excluded from translation
+   entirely until a different game is selected (_clearSteamDescriptionAuthority). */
 const IAS_TRANSLATABLE_FIELDS = ['subtitle', 'description', 'releaseNotes'];
 const IAS_FIELD_LABELS = {
   subtitle:     'subtitle',
@@ -3442,6 +3482,12 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
 
   const eligible = supportedLangs.filter(lang => {
     const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
+    // A language whose Description Steam has genuinely localized (see
+    // _checkSteamLocalizedDescription) is authoritative — never queue it
+    // for an AI-translated guess at all, not even after the primary text
+    // changes again. Only meaningful for the description field; subtitle/
+    // releaseNotes have no Steam-provided source and are unaffected.
+    if (field === 'description' && entry && entry.descriptionFromSteam) return false;
     const cachedSource = entry ? entry[sourceKey] : undefined;
     return cachedSource !== text;
   });
@@ -3519,6 +3565,16 @@ Rules:
       const translated = results[lang];
       if (typeof translated !== 'string' || !translated.trim()) return;
       if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
+      // Re-check authority at write time, not just when this batch was
+      // kicked off. _checkSteamLocalizedDescription's Steam fetch is
+      // typically far faster than this round trip to Claude, so it can
+      // complete and flag this language authoritative WHILE this exact API
+      // call was still in flight — without this guard, this slower-but-
+      // already-in-flight translation would land afterward and silently
+      // clobber the just-arrived, more accurate Steam text. This is exactly
+      // the race that used to let automatic translations override real
+      // Steam localizations.
+      if (field === 'description' && fd.localizedStoreText[lang].descriptionFromSteam) return;
       fd.localizedStoreText[lang][field]     = translated;
       fd.localizedStoreText[lang][sourceKey] = text;
     });
