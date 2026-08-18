@@ -1887,6 +1887,17 @@ function makeBlankFormData() {
     trailerUrl:           '',
     appVersion:           '1.0',
     releaseNotes:         '',
+
+    // App Store Product Page Preview — per-language Title/Subtitle/
+    // Description/What's New. The Primary Language's copy is the flat
+    // title/subtitle/description/releaseNotes fields above (unchanged —
+    // still what Game Details and every other platform's preview read);
+    // every additional language selected in `localizations` gets its own
+    // { title, subtitle, description, releaseNotes } entry here, keyed by
+    // language code. Entries are created lazily on first edit (see
+    // _iasSetFieldValue, app.js), not eagerly when a language is added, so
+    // this stays empty until the developer actually writes a translation.
+    localizedStoreText:   {},
   };
 }
 

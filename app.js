@@ -1859,14 +1859,48 @@ function toggleLocPrimaryDropdown(event) {
 }
 
 function selectLocPrimary(lang) {
-  const oldPrimary = state.formData.primaryLanguage || 'en';
+  const fd = state.formData;
+  const oldPrimary = fd.primaryLanguage || 'en';
   // Demote old primary into supported (if it's in the featured set and not already there)
   if (lang !== oldPrimary) {
-    const locs = new Set(state.formData.localizations || []);
-    if (OB_LANG_FEATURED.includes(oldPrimary)) locs.add(oldPrimary);
+    const locs = new Set(fd.localizations || []);
+    const oldPrimaryKept = OB_LANG_FEATURED.includes(oldPrimary);
+    if (oldPrimaryKept) locs.add(oldPrimary);
     locs.delete(lang); // new primary leaves supported
-    state.formData.localizations  = [...locs];
-    state.formData.primaryLanguage = lang;
+    fd.localizations  = [...locs];
+
+    // Keep each language's App Store Product Page Preview Title/Subtitle/
+    // Description/What's New attached to its own language code rather than
+    // to whichever language happens to be "primary" right now — otherwise
+    // switching Primary Language would make the new primary's preview
+    // suddenly show the OLD primary's text (since the preview always reads
+    // the flat fields for whichever language is primary), silently hiding
+    // any translation already written for the incoming primary language.
+    if (!fd.localizedStoreText) fd.localizedStoreText = {};
+    if (oldPrimaryKept) {
+      // Stash the outgoing primary's copy under its own language code —
+      // only if it's staying around as a supported language; if not (a
+      // non-featured language demoted from primary isn't kept as a
+      // supported language at all, per the logic above), its text has
+      // nowhere left to live in this preview and is dropped, matching the
+      // existing loss of that language's *selection* in the same case.
+      fd.localizedStoreText[oldPrimary] = {
+        title:        fd.title        || '',
+        subtitle:     fd.subtitle     || '',
+        description:  fd.description  || '',
+        releaseNotes: fd.releaseNotes || '',
+      };
+    }
+    // Promote the incoming primary's own stored translation (if any) into
+    // the flat fields Game Details and every other platform's preview read.
+    const incoming = fd.localizedStoreText[lang] || _iasBlankLocalizedText();
+    fd.title        = incoming.title;
+    fd.subtitle     = incoming.subtitle;
+    fd.description  = incoming.description;
+    fd.releaseNotes = incoming.releaseNotes;
+    delete fd.localizedStoreText[lang];
+
+    fd.primaryLanguage = lang;
   }
   closeAllDropdowns();
   updateObLangListWrap();
@@ -3088,34 +3122,89 @@ function _applyFieldValue(field, value) {
   }
 }
 
+/* ── App Store Product Page Preview — per-language store text ───────────
+   Title/Subtitle/Description/What's New are each associated with a specific
+   language, driven by the preview's own language dropdown (swSelect,
+   render.js) and the Distribution section's Primary Language + selected
+   supported languages (state.formData.primaryLanguage / .localizations).
+   The Primary Language's copy IS the flat state.formData.{title,subtitle,
+   description,releaseNotes} fields — unchanged, still what Game Details and
+   every other platform's own preview (Android/Steam/Web) read and write.
+   Every additional supported language gets its own copy in
+   state.formData.localizedStoreText[langCode], created lazily the first
+   time something is actually typed for it (not eagerly when the language
+   is added in Distribution — an unedited language just reads as empty/
+   placeholder everywhere, which looks identical to an eagerly-created blank
+   entry, so there's nothing to gain from allocating it early, and this way
+   it works no matter how a language got into `localizations` — one at a
+   time via toggleObLang, or in bulk via a Distribution preset). */
+function _iasEffectivePreviewLang() {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const valid = new Set([primary, ...(fd.localizations || [])]);
+  return valid.has(state.iasPreviewLang) ? state.iasPreviewLang : primary;
+}
+
+function _iasBlankLocalizedText() {
+  return { title: '', subtitle: '', description: '', releaseNotes: '' };
+}
+
+function _iasFieldValue(field, lang) {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return fd[field] || '';
+  return (fd.localizedStoreText && fd.localizedStoreText[lang] && fd.localizedStoreText[lang][field]) || '';
+}
+
+function _iasSetFieldValue(field, lang, value) {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    fd[field] = value;
+    return;
+  }
+  if (!fd.localizedStoreText) fd.localizedStoreText = {};
+  if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
+  fd.localizedStoreText[lang][field] = value;
+}
+
 /* ── App Store Product Page Preview — inline click-to-edit ──────────────
    Title/Subtitle/Description/Release Notes can all be edited directly in
    the live preview (buildStorePreviewSection, render.js), not just in
    Game Details elsewhere (Release Notes has no "elsewhere" at all — this
-   is its only editable surface in Shipmate). Clicking any of the four
-   swaps that element for a plain input/textarea in its own place —
-   pre-filled with the REAL underlying state value (state.formData[field]),
-   never whatever placeholder text ("Your Game Title", "Short subtitle",
-   the description fallback sentence, "Add release notes...") happened to
-   be showing, so clicking a still-empty field never accidentally saves
-   the placeholder copy as real data. For Release Notes specifically, that
-   also means the raw newline-separated text with no "- " prefixes — the
-   bullet formatting shown in the preview (notesHtml, render.js) is purely
-   a display transform, not what's stored or re-edited. Reuses the clicked
-   element's own classes on the input/textarea (minus the hover/
-   placeholder-only ones, which don't apply while actively editing) so it
-   inherits that field's exact font size/weight/color from style.css,
-   layering in only the editing-specific look (border, background) via
-   ias-inline-input — see style.css for both. Committing (blur, or Enter
+   is its only editable surface in Shipmate, for the Primary Language;
+   translations have no Game Details equivalent at all, so this preview is
+   their ONLY editable surface, period). Clicking any of the four swaps
+   that element for a plain input/textarea in its own place — pre-filled
+   with the REAL underlying value for whichever language the dropdown above
+   is currently showing (_iasFieldValue), never whatever placeholder text
+   ("Your Game Title", "Short subtitle", the description fallback sentence,
+   "Add release notes...") happened to be showing, so clicking a still-empty
+   field never accidentally saves the placeholder copy as real data. For
+   Release Notes specifically, that also means the raw newline-separated
+   text with no "- " prefixes — the bullet formatting shown in the preview
+   (notesHtml, render.js) is purely a display transform, not what's stored
+   or re-edited. Reuses the clicked element's own classes on the input/
+   textarea (minus the hover/placeholder-only ones, which don't apply while
+   actively editing) so it inherits that field's exact font size/weight/
+   color from style.css, layering in only the editing-specific look (border,
+   background) via ias-inline-input — see style.css for both. The language
+   being edited is captured once, when the field is clicked (not re-read at
+   commit time) — if the preview's language dropdown itself is clicked while
+   mid-edit, the input's blur fires first (normal DOM focus-loss ordering),
+   committing to the language that was open when editing started, before
+   the dropdown's own click handler ever runs. Committing (blur, or Enter
    for the single-line Title/Subtitle — Description and Release Notes are
-   multi-line, so Enter there just adds a line break like any textarea,
-   and only blur commits) writes straight to state.formData and re-renders
-   the whole step modal, which naturally swaps the input back out for the
-   styled preview text. maxLength mirrors the real caps already enforced
-   on these same fields in Game Details: 50 for Title (ob-title's own hard
-   cap — 30 there is only a soft recommended-length counter, not an actual
-   limit), 30 for Subtitle (Apple's real App Store subtitle limit, and the
-   same cap _applyFieldValue above already assumes), and no cap at all for
+   multi-line, so Enter there just adds a line break like any textarea, and
+   only blur commits) writes straight to that language's own storage
+   (_iasSetFieldValue) and re-renders the whole step modal, which naturally
+   swaps the input back out for the styled preview text. maxLength mirrors
+   the real caps already enforced on these same fields in Game Details (for
+   the Primary Language — translations get the same limits for consistency):
+   50 for Title (ob-title's own hard cap — 30 there is only a soft
+   recommended-length counter, not an actual limit), 30 for Subtitle
+   (Apple's real App Store subtitle limit, and the same cap
+   _applyFieldValue above already assumes), and no cap at all for
    Description/Release Notes, matching ob-desc's own textarea (also just a
    soft 4000 counter elsewhere, not a hard limit) — Release Notes has no
    established cap anywhere in this codebase to mirror, so it gets the
@@ -3124,6 +3213,7 @@ function startIasInlineEdit(field, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
+  const lang = _iasEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
@@ -3134,10 +3224,10 @@ function startIasInlineEdit(field, el, ev) {
     input.type = 'text';
     input.maxLength = field === 'subtitle' ? 30 : 50;
   }
-  input.value = state.formData[field] || '';
+  input.value = _iasFieldValue(field, lang);
 
   const commit = () => {
-    state.formData[field] = input.value;
+    _iasSetFieldValue(field, lang, input.value);
     reRenderStepModal();
   };
   input.addEventListener('blur', commit);

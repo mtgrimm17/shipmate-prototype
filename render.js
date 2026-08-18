@@ -3780,16 +3780,6 @@ function buildStorePreviewSection() {
     ? [...selectedUploaded, ...customShots]
     : allUploaded; // fall back to all if none selected yet
 
-  // Title/Subtitle/Description are all clickable-to-edit directly in this
-  // preview (startIasInlineEdit, app.js) — each swaps its own element for a
-  // plain input/textarea in place, pre-filled with the real state value
-  // (never the placeholder text below), and writes straight back to
-  // state.formData on commit. ias-placeholder marks the muted/italic style
-  // used only while showing the fallback copy, so it's visually obvious
-  // which fields are still empty; ias-editable is the shared hover
-  // affordance for all three.
-  const titleRaw  = fd.title || '';
-  const title     = escHtml(titleRaw || 'Your Game Title');
   const category  = escHtml(fd.genre || 'Games');
   const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
   const price     = isFree ? 'GET' : `$${fd.price}`;
@@ -3798,34 +3788,57 @@ function buildStorePreviewSection() {
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
+  const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
 
   // Language dropdown (top-right of the preview) — first option is always
   // the Distribution section's Primary Language (state.formData.primaryLanguage);
   // the rest are the Distribution section's selected supported languages
   // (state.formData.localizations), sorted alphabetically by display name.
   // localizations never contains the primary language itself (selectLocPrimary
-  // removes it on promotion), so there's no dedup to do here.
+  // removes it on promotion), so there's no dedup to do here. previewLang is
+  // shared with app.js's startIasInlineEdit (_iasEffectivePreviewLang) so the
+  // preview's display and its click-to-edit fields never disagree about
+  // which language is currently showing.
   const previewPrimaryLang = fd.primaryLanguage || 'en';
   const previewSupportedLangs = (fd.localizations || [])
     .slice()
     .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
   const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
   const previewLangOptions = previewLangCodes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l }));
-  const previewLang = previewLangCodes.includes(state.iasPreviewLang)
-    ? state.iasPreviewLang
-    : previewPrimaryLang;
-  const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
+  const previewLang = _iasEffectivePreviewLang();
+  const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
 
-  // Subtitle is its own independent field (state.formData.subtitle — the
-  // same field Shipmate's "Fix It" subtitle suggestions already write to via
-  // _applyFieldValue in app.js). It is never derived from Description — the
-  // two are edited and stored completely separately, so typing one never
-  // changes the other. Shows the placeholder text only when genuinely empty.
-  const descRaw   = fd.description || '';
-  const subtitleRaw = fd.subtitle || '';
+  // Title/Subtitle/Description/What's New are all clickable-to-edit directly
+  // in this preview (startIasInlineEdit, app.js) — each swaps its own
+  // element for a plain input/textarea in place, pre-filled with the real
+  // value for whichever language the dropdown above is currently showing
+  // (never the placeholder text below), and writes straight back to that
+  // language's own storage on commit (_iasFieldValue/_iasSetFieldValue,
+  // app.js — the Primary Language's copy is the flat state.formData.
+  // {title,subtitle,description,releaseNotes} fields, unchanged; every other
+  // selected language gets its own copy in
+  // state.formData.localizedStoreText[langCode]). ias-placeholder marks the
+  // muted/italic style used only while showing the fallback copy, so it's
+  // visually obvious which fields are still empty for the language being
+  // previewed; ias-editable is the shared hover affordance for all four.
+  const titleRaw  = _iasFieldValue('title', previewLang);
+  const title     = escHtml(titleRaw || 'Your Game Title');
+
+  // Subtitle is its own independent field — it is never derived from
+  // Description, for any language. The two are edited and stored completely
+  // separately, so typing one never changes the other.
+  const subtitleRaw = _iasFieldValue('subtitle', previewLang);
   const subtitle     = escHtml(subtitleRaw || 'Short subtitle');
 
-  const descFull  = descRaw ? escHtml(descRaw) : 'Your game description will appear here once you fill in the Description field in Game Details.';
+  const descRaw = _iasFieldValue('description', previewLang);
+  // The "fill it in via Game Details" placeholder is only accurate for the
+  // Primary Language — translations have no Game Details equivalent at all,
+  // this preview is their only editable surface, so they get a placeholder
+  // that actually points somewhere real.
+  const descPlaceholder = previewLang === previewPrimaryLang
+    ? 'Your game description will appear here once you fill in the Description field in Game Details.'
+    : `Add a ${previewLangName} description to populate this section.`;
+  const descFull  = descRaw ? escHtml(descRaw) : descPlaceholder;
   const descShort = descRaw.length > 240
     ? escHtml(descRaw.slice(0, 240)) + '…'
     : descFull;
@@ -3947,13 +3960,13 @@ function buildStorePreviewSection() {
   })();
 
   // What's New section — also click-to-edit in place (startIasInlineEdit,
-  // app.js), same mechanism as Title/Subtitle/Description above. Editing
-  // always reopens the RAW state.formData.releaseNotes text (one line per
-  // bullet, no leading "- " required), never this bullet-formatted preview
-  // markup — the "- " prefix and any stray -/–/• the developer already
-  // typed are purely a display transform applied below, not part of the
-  // stored value.
-  const releaseNotes = fd.releaseNotes || '';
+  // app.js), same mechanism as Title/Subtitle/Description above, and same
+  // per-language storage (_iasFieldValue). Editing always reopens the RAW
+  // text for the language being previewed (one line per bullet, no leading
+  // "- " required), never this bullet-formatted preview markup — the "- "
+  // prefix and any stray -/–/• the developer already typed are purely a
+  // display transform applied below, not part of the stored value.
+  const releaseNotes = _iasFieldValue('releaseNotes', previewLang);
   const notesHtml = releaseNotes
     ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
