@@ -1889,6 +1889,10 @@ function selectLocPrimary(lang) {
         subtitle:     fd.subtitle     || '',
         description:  fd.description  || '',
         releaseNotes: fd.releaseNotes || '',
+        // This title is now a real, independent value (it WAS the actual
+        // primary language's title a moment ago) — it must not start
+        // mirroring whatever the newly-promoted primary's title becomes.
+        titleSynced:  false,
       };
     }
     // Promote the incoming primary's own stored translation (if any) into
@@ -3137,7 +3141,20 @@ function _applyFieldValue(field, value) {
    placeholder everywhere, which looks identical to an eagerly-created blank
    entry, so there's nothing to gain from allocating it early, and this way
    it works no matter how a language got into `localizations` — one at a
-   time via toggleObLang, or in bulk via a Distribution preset). */
+   time via toggleObLang, or in bulk via a Distribution preset).
+
+   The game TITLE specifically also has a "synced" relationship with the
+   Primary Language, which Subtitle/Description/What's New do not: a
+   supporting language's title starts out (and stays) mirroring the Primary
+   Language's title live — read at render/edit time, never copied into the
+   entry — until the developer manually types a genuinely different title
+   for that language, at which point titleSynced flips to false and that
+   language's title becomes its own independent value from then on,
+   unaffected by further Primary Language title edits. Committing the exact
+   same text the field was already showing (e.g. opening it and clicking
+   away without changing anything) does NOT count as a manual change and
+   leaves it synced — otherwise merely inspecting an inherited title would
+   silently and permanently break its sync. */
 function _iasEffectivePreviewLang() {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -3146,14 +3163,16 @@ function _iasEffectivePreviewLang() {
 }
 
 function _iasBlankLocalizedText() {
-  return { title: '', subtitle: '', description: '', releaseNotes: '' };
+  return { title: '', subtitle: '', description: '', releaseNotes: '', titleSynced: true };
 }
 
 function _iasFieldValue(field, lang) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
   if (lang === primary) return fd[field] || '';
-  return (fd.localizedStoreText && fd.localizedStoreText[lang] && fd.localizedStoreText[lang][field]) || '';
+  const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
+  if (field === 'title' && (!entry || entry.titleSynced !== false)) return fd.title || '';
+  return (entry && entry[field]) || '';
 }
 
 function _iasSetFieldValue(field, lang, value) {
@@ -3166,6 +3185,7 @@ function _iasSetFieldValue(field, lang, value) {
   if (!fd.localizedStoreText) fd.localizedStoreText = {};
   if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
   fd.localizedStoreText[lang][field] = value;
+  if (field === 'title' && value !== (fd.title || '')) fd.localizedStoreText[lang].titleSynced = false;
 }
 
 /* ── App Store Product Page Preview — inline click-to-edit ──────────────
