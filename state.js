@@ -2215,11 +2215,22 @@ const state = {
     // group, the studio's own general site) — this is the GAME's own
     // official website.
     officialWebsite: '',
-    // Array of { id, name, url } — additional social-media links the
-    // developer can freely add/remove (never auto-populated from IGDB or
-    // Steam — no equivalent field exists on either). id minted via
-    // generateId('link') — see addWebLink/removeWebLink/setWebLinkField in
-    // app.js.
+    // Array of { id, name, url } — social-media links the developer can
+    // freely add/remove by hand (addWebLink/removeWebLink/setWebLinkField,
+    // app.js; id minted via generateId('link')). Auto-populated (when the
+    // picked title links to a Steam page) from the Steam store page's own
+    // "Find Community" section — see _applySteamSocialLinks in app.js and
+    // fetchSteamStorePage/_parseSteamSocialLinks in claude.js. Unlike every
+    // other Steam-sourced field on this object, this ISN'T from Steam's
+    // appdetails JSON API (which has no field for social links at all,
+    // confirmed by inspecting a real response directly) — it's scraped
+    // from the store page's raw HTML instead, since that's the only place
+    // this data exists. More fragile than the rest of this file as a
+    // result: Valve can change that markup without notice, unlike a
+    // documented/stable API — a fetch/parse failure just leaves this list
+    // untouched (never auto-cleared), same guard as
+    // developer/publisher/genres above/below only overwriting when Steam
+    // actually has content.
     links: [],
     // Free text. Auto-populated (when the picked title links to a Steam
     // page) from Steam's appdetails 'publishers' list, joined — see

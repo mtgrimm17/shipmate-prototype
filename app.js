@@ -2418,6 +2418,17 @@ function selectPicklistItem(igdbId) {
     _applySteamHeroBanner(item.steamAppId, item.name);
   }
 
+  // Pre-populate Factsheet > Developer > Links' social-links list from the
+  // Steam store page's own "Find Community" section — see
+  // _applySteamSocialLinks below for why this is a completely separate
+  // fetch from _applySteamAboutData's appdetails call (Steam's JSON API has
+  // no field for these at all). Fire-and-forget, same as
+  // _applySteamHeroBanner above: a failure here never blocks the rest of
+  // picklist selection.
+  if (item.steamAppId) {
+    _applySteamSocialLinks(item.steamAppId, item.name);
+  }
+
   // Populate "IGDB Cover Art" from IGDB's own cover art. Runs independent
   // of item.steamAppId — it only depends on IGDB's own cover field, which
   // every platform's picklist item can have, not just ones with a linked
@@ -2652,6 +2663,49 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
     _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);
   }
+  reRenderStepModal();
+}
+
+/* Runs after selectPicklistItem when the picked title has a linked Steam
+   page (item.steamAppId). Pre-populates Factsheet > Developer > Links'
+   social-links list (state.webSite.links) from the Steam store page's own
+   "Find Community" section — a COMPLETELY SEPARATE fetch from
+   _applySteamAboutData's appdetails JSON call above (fetchSteamStorePage
+   fetches the store page's raw HTML instead; see the long comment on it
+   and on _parseSteamSocialLinks, both in claude.js, for why: appdetails
+   has no field for social links at all, confirmed by inspecting a real
+   response directly, nor does any documented Steamworks Web API interface
+   expose them — this data only exists rendered into the store page's own
+   HTML). Fire-and-forget, same convention as
+   _applySteamHeroBanner/_applySteamCapsuleFromCover: any failure (no store
+   page, section missing, Steam changed their markup — this parse is NOT
+   against a documented/stable API, unlike appdetails) just leaves Links
+   untouched rather than blocking or clearing anything. Same stale-title
+   guard as those two. Only overwrites the existing links list once the
+   fetch+parse actually succeeds AND finds at least one link — matching the
+   "only overwrite a field if Steam actually has content for it" guard
+   _applySteamAboutData uses for Developer/Publisher/Genres above, so a
+   flaky fetch or a page with no social links configured never wipes out
+   links the developer already added by hand. When it does apply, it
+   REPLACES the whole list (not merges/appends) — same "Steam is the
+   source of truth once a title links to a Steam page" convention as
+   Developer/Publisher/Genres. */
+async function _applySteamSocialLinks(appId, expectedTitle) {
+  let links = null;
+  try {
+    const html = await fetchSteamStorePage(appId);
+    links = _parseSteamSocialLinks(html);
+  } catch (e) {
+    console.warn('[Steam Social Links] failed to fetch/parse store page for app', appId, e);
+    return;
+  }
+
+  // Stale guard — bail if the user has since picked a different title.
+  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+  if (!links || !links.length) return;
+
+  if (!state.webSite) state.webSite = {};
+  state.webSite.links = links.map(l => ({ id: generateId('link'), name: l.name, url: l.url }));
   reRenderStepModal();
 }
 

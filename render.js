@@ -2771,10 +2771,14 @@ function buildWebSitePreviewSection() {
   // "Links" sub-section (Factsheet > Developer > Links in the edit form —
   // see _wsFactsheetFieldsHTML below): Official Website, a single URL field
   // auto-populated from Steam's appdetails 'website' field when available
-  // (see _applySteamAboutData in app.js), plus any number of freely
-  // added/removed social-media links (state.webSite.links, each a
-  // { id, name, url } — see addWebLink/removeWebLink/setWebLinkField in
-  // app.js). Both render as button-style links (.pk-link-btn, style.css)
+  // (see _applySteamAboutData in app.js), plus any number of social-media
+  // links (state.webSite.links, each a { id, name, url }) — ALSO
+  // auto-populated when available, but scraped from the Steam store page's
+  // own HTML rather than the appdetails JSON API (see _applySteamSocialLinks
+  // in app.js), since Steam's official API has no field for these at all.
+  // Freely add/removed/edited afterward either way, via
+  // addWebLink/removeWebLink/setWebLinkField in app.js. Both render as
+  // button-style links (.pk-link-btn, style.css)
   // rather than plain inline text, since these read as calls to action
   // rather than incidental info the way the About section's own Website/
   // Contact sub-sections do. Distinct from ws.website (the About group's
@@ -3043,9 +3047,13 @@ function _wsLinkRowHTML(link) {
    Steam's appdetails 'publishers' list / 'website' field respectively — see
    _applySteamAboutData in app.js — same as Developer/Genres above/below
    them, but the developer can still freely edit either afterward like any
-   other text field. The social links list (state.webSite.links) is never
-   auto-populated — purely a manually added/removed list, see
-   addWebLink/removeWebLink in app.js. */
+   other text field. The social links list (state.webSite.links) is ALSO
+   auto-populated when a Steam page is linked, but from a different source
+   entirely — the store page's own HTML, not the appdetails JSON API, which
+   has no field for these at all — see _applySteamSocialLinks in app.js and
+   the state.js comment above webSite.links; the developer can still freely
+   add/remove/edit rows afterward via addWebLink/removeWebLink/
+   setWebLinkField in app.js. */
 function _wsFactsheetFieldsHTML(ws, fd) {
   const platformNames = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid)).map(pid => PK_PLATFORM_LABELS[pid] || pid);
   const platformsText = platformNames.length ? platformNames.join(', ') : 'No platforms selected yet';

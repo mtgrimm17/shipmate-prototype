@@ -590,6 +590,71 @@ async function fetchSteamAppDetails(appId) {
   return entry.data;
 }
 
+/* ── Steam store page HTML — social media links ───────────────────────
+   Steam's appdetails JSON (fetchSteamAppDetails above) has NO field for a
+   game's social media links (Discord/X/YouTube/etc.) — confirmed by fetching
+   a real appdetails response directly and inspecting every field at every
+   nesting level, during this project's own social-links research. Nor does
+   any documented Steamworks Web API interface expose them (checked
+   IStoreService and ISteamApps specifically — neither has a matching
+   method). That data only exists rendered server-side into the store
+   page's own HTML, sourced from the developer's Steamworks "Store Page
+   Admin" settings — so getting it means fetching and parsing that HTML
+   directly, unlike every other Steam-sourced field in this app (all of
+   which come from the stable, JSON-shaped appdetails endpoint). This is
+   inherently more fragile than the rest of this file: Valve can change the
+   store page's markup at any time with no notice and no deprecation
+   window, unlike a documented/stable API. Used by _applySteamSocialLinks
+   (app.js). */
+async function fetchSteamStorePage(appId) {
+  const res = await fetch(`https://corsproxy.io/?https://store.steampowered.com/app/${appId}/`);
+  if (!res.ok) throw new Error('Steam store page fetch failed (' + res.status + ')');
+  return await res.text();
+}
+
+/* Parses the store page's "Find Community"-style social-links row out of
+   its raw HTML (see fetchSteamStorePage above). Confirmed live against Go
+   Ape Ship!'s real store page (appid 4037180, saved and inspected directly
+   during this project's own social-links research): each social link is
+   an <a class="linkbar" href="..." ... data-tooltip-text="...">, containing
+   a <span class="social_account">Name</span> after its icon SVG — e.g.:
+     <a class="linkbar" href="https://steamcommunity.com/linkfilter/?u=https%3A%2F%2Fdiscord.gg%2FkGFbw4MtnG"
+        target="_blank" rel=" noopener" class="ttip" data-tooltip-text="https://discord.gg/kGFbw4MtnG">
+       <svg>...</svg><span class="social_account">Discord</span><img ... alt="External">
+     </a>
+   The data-tooltip-text + social_account combination is what distinguishes
+   a social link from this exact same row's other .linkbar entries ("Visit
+   the website", "View privacy policy", "View update history", "Read
+   related news") — none of those carry either attribute, so they're
+   correctly excluded without needing a separate exclusion list. Most
+   social hrefs are wrapped in Steam's own
+   https://steamcommunity.com/linkfilter/?u=<url-encoded-target> redirect
+   (unwrapped back to the real target URL here) — but not all of them are:
+   on the same real page, Reddit and YouTube came through as plain direct
+   URLs with no linkfilter wrapper at all, so both forms are handled.
+   Returns an array of { name, url } in the same left-to-right order Steam
+   itself lists them, or [] if the row is missing/empty/unparseable (a
+   malformed-HTML guard, not just "no links configured") rather than
+   throwing — again, this markup is NOT a documented API and can change
+   without notice. Deliberately a single regex pass, not a real HTML
+   parser, matching this file's existing "best-effort, developer can always
+   edit the result" philosophy (see _steamHtmlToParagraphLines below). */
+function _parseSteamSocialLinks(html) {
+  const re = /<a class="linkbar" href="([^"]+)"[^>]*data-tooltip-text="[^"]*"[^>]*>[\s\S]*?<span class="social_account">([^<]+)<\/span>/g;
+  const links = [];
+  let m;
+  while ((m = re.exec(html || ''))) {
+    let url = m[1];
+    const wrapped = url.match(/^https:\/\/steamcommunity\.com\/linkfilter\/\?u=(.+)$/);
+    if (wrapped) {
+      try { url = decodeURIComponent(wrapped[1]); } catch (e) { /* malformed encoding — fall back to the wrapped URL as-is */ }
+    }
+    const name = (m[2] || '').trim();
+    if (name && url) links.push({ name, url });
+  }
+  return links;
+}
+
 // Steam's "about_the_game" field is a fragment of raw store-page HTML
 // (<br>/<p> tags, the occasional list, HTML entities) rather than plain
 // text. state.webSite.aboutGame's convention (see state.js) is plain text
