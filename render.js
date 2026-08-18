@@ -3937,7 +3937,13 @@ function buildStorePreviewSection() {
     return cardsHtml || `<div class="ias-privacy-card ias-privacy-pending"><div class="ias-privacy-pending-msg">No data types configured.</div></div>`;
   })();
 
-  // What's New section
+  // What's New section — also click-to-edit in place (startIasInlineEdit,
+  // app.js), same mechanism as Title/Subtitle/Description above. Editing
+  // always reopens the RAW state.formData.releaseNotes text (one line per
+  // bullet, no leading "- " required), never this bullet-formatted preview
+  // markup — the "- " prefix and any stray -/–/• the developer already
+  // typed are purely a display transform applied below, not part of the
+  // stored value.
   const releaseNotes = fd.releaseNotes || '';
   const notesHtml = releaseNotes
     ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
@@ -4148,10 +4154,11 @@ function buildStorePreviewSection() {
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="ias-wn-version">Version ${version}</div>
-          <div class="ias-wn-notes">${notesHtml}</div>
+          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}"
+               onclick="startIasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
           <div class="ias-wn-edit-hint">
             <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
-            Edit in submission details
+            Click to edit
           </div>
         </div>
 

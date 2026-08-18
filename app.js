@@ -3089,35 +3089,42 @@ function _applyFieldValue(field, value) {
 }
 
 /* ── App Store Product Page Preview — inline click-to-edit ──────────────
-   Title/Subtitle/Description can be edited directly in the live preview
-   (buildStorePreviewSection, render.js), not just in Game Details
-   elsewhere. Clicking any of the three swaps that element for a plain
-   input/textarea in its own place — pre-filled with the REAL underlying
-   state value (state.formData[field]), never whatever placeholder text
-   ("Your Game Title", "Short subtitle", the description fallback
-   sentence) happened to be showing, so clicking a still-empty field never
-   accidentally saves the placeholder copy as real data. Reuses the
-   clicked element's own classes on the input/textarea (minus the hover/
+   Title/Subtitle/Description/Release Notes can all be edited directly in
+   the live preview (buildStorePreviewSection, render.js), not just in
+   Game Details elsewhere (Release Notes has no "elsewhere" at all — this
+   is its only editable surface in Shipmate). Clicking any of the four
+   swaps that element for a plain input/textarea in its own place —
+   pre-filled with the REAL underlying state value (state.formData[field]),
+   never whatever placeholder text ("Your Game Title", "Short subtitle",
+   the description fallback sentence, "Add release notes...") happened to
+   be showing, so clicking a still-empty field never accidentally saves
+   the placeholder copy as real data. For Release Notes specifically, that
+   also means the raw newline-separated text with no "- " prefixes — the
+   bullet formatting shown in the preview (notesHtml, render.js) is purely
+   a display transform, not what's stored or re-edited. Reuses the clicked
+   element's own classes on the input/textarea (minus the hover/
    placeholder-only ones, which don't apply while actively editing) so it
    inherits that field's exact font size/weight/color from style.css,
    layering in only the editing-specific look (border, background) via
    ias-inline-input — see style.css for both. Committing (blur, or Enter
-   for the single-line Title/Subtitle — Description is multi-line, so
-   Enter there just adds a line break like any textarea, and only blur
-   commits) writes straight to state.formData and re-renders the whole
-   step modal, which naturally swaps the input back out for the styled
-   preview text. maxLength mirrors the real caps already enforced on
-   these same fields in Game Details: 50 for Title (ob-title's own hard
+   for the single-line Title/Subtitle — Description and Release Notes are
+   multi-line, so Enter there just adds a line break like any textarea,
+   and only blur commits) writes straight to state.formData and re-renders
+   the whole step modal, which naturally swaps the input back out for the
+   styled preview text. maxLength mirrors the real caps already enforced
+   on these same fields in Game Details: 50 for Title (ob-title's own hard
    cap — 30 there is only a soft recommended-length counter, not an actual
    limit), 30 for Subtitle (Apple's real App Store subtitle limit, and the
    same cap _applyFieldValue above already assumes), and no cap at all for
-   Description, matching ob-desc's own textarea (also just a soft 4000
-   counter elsewhere, not a hard limit). */
+   Description/Release Notes, matching ob-desc's own textarea (also just a
+   soft 4000 counter elsewhere, not a hard limit) — Release Notes has no
+   established cap anywhere in this codebase to mirror, so it gets the
+   same uncapped treatment rather than inventing one. */
 function startIasInlineEdit(field, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
-  const isMultiline = field === 'description';
+  const isMultiline = field === 'description' || field === 'releaseNotes';
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
