@@ -1889,10 +1889,6 @@ function selectLocPrimary(lang) {
         subtitle:     fd.subtitle     || '',
         description:  fd.description  || '',
         releaseNotes: fd.releaseNotes || '',
-        // This title is now a real, independent value (it WAS the actual
-        // primary language's title a moment ago) — it must not start
-        // mirroring whatever the newly-promoted primary's title becomes.
-        titleSynced:  false,
       };
     }
     // Promote the incoming primary's own stored translation (if any) into
@@ -1905,10 +1901,12 @@ function selectLocPrimary(lang) {
     delete fd.localizedStoreText[lang];
 
     fd.primaryLanguage = lang;
-    // Any supporting language still synced to the OLD primary's text is now
-    // stale against the newly-promoted primary's text — re-translate so
-    // nothing keeps showing a translation of the wrong source copy.
-    _iasTriggerAutoTranslateAll();
+    // Every supporting language's Title/Subtitle/Description/What's New is
+    // now stale against the newly-promoted primary's text (including the
+    // language just stashed above, which is a regular supported language
+    // again) — refresh everything from the new primary, since nothing
+    // protects any supporting language's copy from this update.
+    _iasPropagateAllFields();
   }
   closeAllDropdowns();
   updateObLangListWrap();
@@ -1923,7 +1921,7 @@ function setObLangPreset(preset) {
   updateObLangListWrap();
   // Bulk selection bypasses toggleObLang entirely, so any newly-added
   // language needs its own initial translation pass triggered here.
-  _iasTriggerAutoTranslateAll();
+  _iasPropagateAllFields();
   // Update pill states
   document.querySelectorAll('.ob-preset-pill').forEach(btn => {
     const presetMap = {
@@ -1941,7 +1939,7 @@ function applyObLangPreset() {
   const preset = state.formData.localizationPreset || 'recommended';
   state.formData.localizations = _computeLangPresetSelections(preset);
   updateObLangListWrap();
-  _iasTriggerAutoTranslateAll();
+  _iasPropagateAllFields();
 }
 
 function toggleObLang(lang) {
@@ -1955,7 +1953,7 @@ function toggleObLang(lang) {
     // Newly-added language — give it an initial translation of the primary
     // language's current Subtitle/Description/What's New right away rather
     // than waiting for those fields to change again.
-    _iasTriggerAutoTranslateAll();
+    _iasPropagateAllFields();
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;
@@ -2382,6 +2380,7 @@ function selectPicklistItem(igdbId) {
     titleEl.value = item.name;
     charCount('ob-title-count', item.name, 30);
   }
+  _iasPropagateTitle(item.name);
 
   // Clear whatever's already in Steam's "Select Key Art" section — Capsule
   // Image, Header Image, IGDB Cover Art, Library Hero — before this new
@@ -3144,6 +3143,7 @@ function _applyFieldValue(field, value) {
     state.formData.title = value;
     const el = document.getElementById('ob-title');
     if (el) { el.value = value; charCount('ob-title-count', value, 30); }
+    _iasPropagateTitle(value);
   }
 }
 
@@ -3164,18 +3164,15 @@ function _applyFieldValue(field, value) {
    it works no matter how a language got into `localizations` — one at a
    time via toggleObLang, or in bulk via a Distribution preset).
 
-   The game TITLE specifically also has a "synced" relationship with the
-   Primary Language, which Subtitle/Description/What's New do not: a
-   supporting language's title starts out (and stays) mirroring the Primary
-   Language's title live — read at render/edit time, never copied into the
-   entry — until the developer manually types a genuinely different title
-   for that language, at which point titleSynced flips to false and that
-   language's title becomes its own independent value from then on,
-   unaffected by further Primary Language title edits. Committing the exact
-   same text the field was already showing (e.g. opening it and clicking
-   away without changing anything) does NOT count as a manual change and
-   leaves it synced — otherwise merely inspecting an inherited title would
-   silently and permanently break its sync. */
+   Every localized field always follows the Primary Language's current
+   text — there is no per-language "override" that sticks around. Editing a
+   supporting language's Title/Subtitle/Description/What's New directly in
+   this preview still writes into its own entry (so it can look different
+   from the primary in the meantime, e.g. while a translation is still
+   loading), but the next time the Primary Language's copy of that field
+   changes, every supporting language's copy is unconditionally refreshed
+   from it — a prior manual edit for that language does not protect it from
+   being overwritten. */
 function _iasEffectivePreviewLang() {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -3184,10 +3181,7 @@ function _iasEffectivePreviewLang() {
 }
 
 function _iasBlankLocalizedText() {
-  return {
-    title: '', subtitle: '', description: '', releaseNotes: '',
-    titleSynced: true, subtitleSynced: true, descriptionSynced: true, releaseNotesSynced: true,
-  };
+  return { title: '', subtitle: '', description: '', releaseNotes: '' };
 }
 
 function _iasFieldValue(field, lang) {
@@ -3195,7 +3189,6 @@ function _iasFieldValue(field, lang) {
   const primary = fd.primaryLanguage || 'en';
   if (lang === primary) return fd[field] || '';
   const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
-  if (field === 'title' && (!entry || entry.titleSynced !== false)) return fd.title || '';
   return (entry && entry[field]) || '';
 }
 
@@ -3204,56 +3197,53 @@ function _iasSetFieldValue(field, lang, value) {
   const primary = fd.primaryLanguage || 'en';
   if (lang === primary) {
     fd[field] = value;
-    if (IAS_TRANSLATABLE_FIELDS.includes(field)) _iasTriggerAutoTranslate(field, value);
+    if (field === 'title') _iasPropagateTitle(value);
+    else if (IAS_TRANSLATABLE_FIELDS.includes(field)) _iasTriggerAutoTranslate(field, value);
     return;
   }
   if (!fd.localizedStoreText) fd.localizedStoreText = {};
   if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
-  const entry = fd.localizedStoreText[lang];
-  const prevValue = entry[field] || '';
-  entry[field] = value;
-  if (field === 'title' && value !== (fd.title || '')) entry.titleSynced = false;
-  // Subtitle/Description/What's New are auto-translated from the primary
-  // language (see _iasTriggerAutoTranslate below) until the developer types
-  // something different directly into this language's own field — same
-  // "committing the same text doesn't count as an override" guard as Title,
-  // compared against what this field was actually already showing here.
-  if (IAS_TRANSLATABLE_FIELDS.includes(field) && value !== prevValue) entry[field + 'Synced'] = false;
+  fd.localizedStoreText[lang][field] = value;
+}
+
+// Copies the Primary Language's Title verbatim into every supporting
+// language. Title is never translated — game titles are typically kept
+// consistent across locales — just mirrored, so (unlike Subtitle/
+// Description/What's New) this is synchronous and needs no API call: a
+// newly-added language's Title is correct immediately, with no loading gap.
+// Always overwrites, including any earlier manual edit for that language —
+// nothing protects a supporting language's Title from the next Primary
+// Language Title change.
+function _iasPropagateTitle(primaryValue) {
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+  if (!fd.localizedStoreText) fd.localizedStoreText = {};
+  supportedLangs.forEach(lang => {
+    if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
+    fd.localizedStoreText[lang].title = primaryValue || '';
+  });
 }
 
 /* ── App Store Product Page Preview — auto-translation ──────────────────
-   Subtitle, Description, and What's New don't have Title's cheap "live
-   passthrough" sync (computed at read time, nothing stored) — translating
-   text requires an actual round trip to Claude, so instead each supporting
-   language's copy is eagerly translated and cached into its
-   localizedStoreText entry as soon as the primary language's text changes,
-   and re-translated whenever it goes stale. A language stays an active
-   translation target for a field as long as two things both hold: (1) the
-   developer hasn't manually typed something different into that language's
-   own copy of the field (tracked the same way as titleSynced — see
-   _iasSetFieldValue), and (2) its cached translation was generated from
-   different primary-language text than what's current right now (tracked
-   via `${field}SourceText`, the exact primary text a stored translation
-   came from — this also naturally covers a newly-added supporting language,
-   which has no entry/source-text yet and is therefore always stale). */
+   Subtitle, Description, and What's New require an actual round trip to
+   Claude to translate, so each supporting language's copy is eagerly
+   translated and cached into its localizedStoreText entry as soon as the
+   primary language's text changes, and re-translated whenever it goes
+   stale — i.e. its cached translation was generated from different
+   primary-language text than what's current right now (tracked via
+   `${field}SourceText`, the exact primary text a stored translation came
+   from). This also naturally covers a newly-added supporting language,
+   which has no entry/source-text yet and is therefore always stale. There
+   is no way for a language to opt out of future re-translation — a manual
+   edit for that language is simply overwritten the next time the primary
+   text changes and this fires again. */
 const IAS_TRANSLATABLE_FIELDS = ['subtitle', 'description', 'releaseNotes'];
 const IAS_FIELD_LABELS = {
   subtitle:     'subtitle',
   description:  'description',
   releaseNotes: "what's new (release notes)",
 };
-
-// Whether `lang`'s copy of `field` is still auto-translated from the
-// primary language (true = no entry yet, or the developer hasn't manually
-// overridden it) — used both by _iasTriggerAutoTranslate to pick targets
-// and by the preview UI to decide whether a "Translating…"/error status
-// line applies to whatever language is currently showing.
-function _iasFieldSynced(field, lang) {
-  const fd = state.formData;
-  const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
-  if (!entry) return true;
-  return entry[field + 'Synced'] !== false;
-}
 
 async function _iasTriggerAutoTranslate(field, primaryValue) {
   if (!IAS_TRANSLATABLE_FIELDS.includes(field)) return;
@@ -3263,18 +3253,16 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
-  const syncedKey = field + 'Synced';
 
   const eligible = supportedLangs.filter(lang => {
-    if (!_iasFieldSynced(field, lang)) return false;
     const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
     const cachedSource = entry ? entry[sourceKey] : undefined;
     return cachedSource !== text;
   });
   if (!eligible.length) return;
 
-  // Nothing to translate — just clear any stale cached translations for
-  // still-synced languages instead of calling out to the API for blanks.
+  // Nothing to translate — just clear any stale cached translations
+  // instead of calling out to the API for blanks.
   if (!text) {
     if (!fd.localizedStoreText) fd.localizedStoreText = {};
     eligible.forEach(lang => {
@@ -3345,9 +3333,6 @@ Rules:
       const translated = results[lang];
       if (typeof translated !== 'string' || !translated.trim()) return;
       if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
-      // Re-check synced at write time — a manual edit could have landed for
-      // this language while the request was in flight.
-      if (fd.localizedStoreText[lang][syncedKey] === false) return;
       fd.localizedStoreText[lang][field]     = translated;
       fd.localizedStoreText[lang][sourceKey] = text;
     });
@@ -3365,14 +3350,16 @@ function _iasRetryTranslate(field) {
   _iasTriggerAutoTranslate(field, state.formData[field] || '');
 }
 
-// Re-triggers translation of all three translatable fields from the current
-// primary-language values — used whenever the set of supporting languages
-// or the primary language itself changes (adding/removing a language one at
-// a time, applying a Distribution preset in bulk, or promoting a different
-// language to primary), since none of those paths edit the fields
-// themselves and so wouldn't otherwise fire _iasTriggerAutoTranslate.
-function _iasTriggerAutoTranslateAll() {
+// Re-propagates Title and re-triggers translation of the other three
+// fields from the current primary-language values — used whenever the set
+// of supporting languages or the primary language itself changes (adding/
+// removing a language one at a time, applying a Distribution preset in
+// bulk, or promoting a different language to primary), since none of those
+// paths edit the fields themselves and so wouldn't otherwise fire
+// _iasPropagateTitle/_iasTriggerAutoTranslate.
+function _iasPropagateAllFields() {
   const fd = state.formData;
+  _iasPropagateTitle(fd.title);
   IAS_TRANSLATABLE_FIELDS.forEach(field => _iasTriggerAutoTranslate(field, fd[field]));
 }
 

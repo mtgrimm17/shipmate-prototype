@@ -206,7 +206,7 @@ function buildAboutTab() {
                      autocomplete="off"
                      oninput="syncField('title', this.value); charCount('ob-title-count', this.value, 30); _onTitleInputScenario(this.value)"
                      onfocus="_onTitleFocus(this.value)"
-                     onblur="_onTitleBlur()">
+                     onblur="_onTitleBlur(); _iasPropagateTitle(this.value)">
               <div class="char-count" id="ob-title-count">0 / 30</div>
             </div>
             <div id="ob-title-picklist" class="title-picklist"></div>
@@ -3847,14 +3847,12 @@ function buildStorePreviewSection() {
   // Subtitle/Description/What's New are auto-translated into every
   // supporting language from the primary language's text
   // (_iasTriggerAutoTranslate, app.js). Only surface the loading/error
-  // status for a field here when the currently-previewed language is
-  // actually one of its translation targets — i.e. it's a supporting
-  // language (not the primary itself) that hasn't been manually overridden
-  // for this field — so the indicator never shows up next to the primary
-  // language's own copy, or a language the developer has taken over.
+  // status for a field here when a non-primary language is being previewed
+  // — every supporting language is always a translation target (there's no
+  // per-language override that excludes it), so the only thing that would
+  // suppress the indicator is previewing the primary language itself.
   const _iasStatusLine = (field, tryAgainLabel) => {
     if (previewLang === previewPrimaryLang) return '';
-    if (!_iasFieldSynced(field, previewLang)) return '';
     const status = state.iasTranslateStatus?.[field];
     if (status === 'loading') {
       return `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating ${tryAgainLabel} to ${previewLangName}…</div>`;
