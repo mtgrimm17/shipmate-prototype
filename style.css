@@ -3322,6 +3322,21 @@ body {
 .ias-inline-input.is-over-limit:has(+ .ias-app-subtitle.is-over-limit) {
   margin-bottom: 14px;
 }
+
+/* Same collapsed-gap problem, one more trigger: Title over its limit (real
+   red border) sitting directly above Subtitle while Subtitle itself is
+   being actively edited. Subtitle is then temporarily an <input> — it's
+   lost its .ias-app-subtitle class entirely, so none of the
+   :has(+ .ias-app-subtitle...) selectors above can see it, regardless of
+   Title's own state. .ias-inline-input always carries a real 1px border
+   (blue while under limit, red once over), so it collides with Title's
+   red border in that same collapsed gap exactly like the both-over-limit
+   case above. This only needs to key off Title's own is-over-limit — the
+   editing Subtitle already always has a visible border of its own, unlike
+   an untouched Subtitle's transparent one. */
+.ias-app-name.is-over-limit:has(+ .ias-inline-input) {
+  margin-bottom: 14px;
+}
 .ias-inline-input {
   display: block; width: 100%; box-sizing: border-box;
   font: inherit; color: var(--text); background: var(--panel-3);
