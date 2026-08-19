@@ -3297,6 +3297,20 @@ body {
 .ias-inline-input:has(+ .ias-app-subtitle.ias-placeholder) {
   margin-bottom: 14px;
 }
+
+/* Same collapsed-gap problem, different trigger: if Title and Subtitle are
+   BOTH over their character limit at once, each now carries a real 1px
+   is-over-limit border (unlike the box-shadow pulse ring above), and those
+   two borders sit right in that same collapsed gap — with no clearance
+   they draw flush against each other, merging into what looks like one
+   continuous red block instead of two separately-outlined fields. Unlike
+   the pulse rule, this only needs to trigger when BOTH fields are over
+   limit — a single over-limit field has nothing to collide with, since an
+   under-limit sibling's border is simply transparent. */
+.ias-app-name.is-over-limit:has(+ .ias-app-subtitle.is-over-limit),
+.ias-inline-input.is-over-limit:has(+ .ias-app-subtitle.is-over-limit) {
+  margin-bottom: 14px;
+}
 .ias-inline-input {
   display: block; width: 100%; box-sizing: border-box;
   font: inherit; color: var(--text); background: var(--panel-3);
