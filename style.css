@@ -3470,12 +3470,29 @@ body {
 .loc-review-cards {
   display: flex; flex-wrap: wrap; gap: 12px;
 }
+/* display:flex + flex-direction:column so the counter row (below) can be
+   pinned to the card's actual bottom edge via margin-top:auto, rather than
+   just trailing whatever height the field's own content happens to be.
+   This matters because .loc-review-cards's flex row uses the default
+   align-items:stretch, which already stretches every card in the same row
+   to match the row's tallest card — without a flex column + auto margin,
+   a card with a short field would leave its counter stranded partway up
+   the stretched box instead of flush with every other card's counter at
+   the bottom. */
 .loc-review-card {
+  display: flex; flex-direction: column;
   flex: 1 1 200px; min-width: 200px; max-width: 280px;
   border: 1px solid var(--border); border-radius: 8px;
   padding: 12px 14px;
   background: var(--panel-2);
 }
+/* Overrides the shared rule's margin-top:4px (below) — auto instead
+   absorbs whatever extra height the card's own stretch introduced, pushing
+   the counter (and the "Must be less than N characters." message it
+   contains) all the way to the card's bottom edge. padding-top guarantees
+   a minimum gap above it even when the card isn't stretched at all (auto
+   margins collapse to 0 with no free space to distribute). */
+.loc-review-card .ias-char-counter-row { margin-top: auto; padding-top: 4px; }
 /* Language name + source badge sit on one row, so the badge reads as
    "top-right corner of the card" without any absolute positioning that
    could overlap or get clipped — it's just the second flex child, pushed
