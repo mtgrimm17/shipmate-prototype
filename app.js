@@ -3685,23 +3685,27 @@ function _iasPropagateAllFields() {
    multi-line, so Enter there just adds a line break like any textarea, and
    only blur commits) writes straight to that language's own storage
    (_iasSetFieldValue) and re-renders the whole step modal, which naturally
-   swaps the input back out for the styled preview text. maxLength mirrors
-   the real caps already enforced on these same fields in Game Details (for
-   the Primary Language — translations get the same limits for consistency):
-   50 for Title (ob-title's own hard cap — 30 there is only a soft
-   recommended-length counter, not an actual limit), 30 for Subtitle
-   (Apple's real App Store subtitle limit, and the same cap
-   _applyFieldValue above already assumes), and no cap at all for
-   Description/Release Notes, matching ob-desc's own textarea (also just a
-   soft 4000 counter elsewhere, not a hard limit) — Release Notes has no
-   established cap anywhere in this codebase to mirror, so it gets the
-   same uncapped treatment rather than inventing one. */
+   swaps the input back out for the styled preview text. Character limits
+   (IAS_FIELD_CHAR_LIMITS below) are Apple's real App Store Connect limits —
+   30 for Title and Subtitle, 4,000 for Description and Release Notes — and
+   are enforced the same way Apple's own submission form enforces them:
+   as a SOFT limit with live visual feedback (a remaining-characters count
+   that goes negative and red, the field itself highlighted red, and a
+   "Must be less than N characters." message once over), never a hard
+   native maxLength that blocks typing outright. This deliberately
+   diverges from ob-title/ob-desc's own separate hard/soft caps in Game
+   Details (unrelated fields, unrelated UI, not touched here) — this
+   preview is its own surface with its own limits and its own always-live
+   (not hover- or hidden-counter) feedback, per Apple's real form. */
+const IAS_FIELD_CHAR_LIMITS = { title: 30, subtitle: 30, description: 4000, releaseNotes: 4000 };
+
 function startIasInlineEdit(field, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const lang = _iasEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
@@ -3709,15 +3713,37 @@ function startIasInlineEdit(field, el, ev) {
     input.rows = 4;
   } else {
     input.type = 'text';
-    input.maxLength = field === 'subtitle' ? 30 : 50;
   }
   input.value = _iasFieldValue(field, lang);
+
+  // Character counter — sits beneath the bottom-right of the field
+  // (ias-char-counter-row, style.css), live-updated on every keystroke.
+  // Typing is never hard-blocked (no native maxLength — see the comment
+  // above): the count is free to go negative, at which point the field
+  // and count turn red and an error line appears to its left.
+  const counterRow = document.createElement('div');
+  counterRow.className = 'ias-char-counter-row';
+  const errorEl = document.createElement('span');
+  errorEl.className = 'ias-char-error';
+  const countEl = document.createElement('span');
+  countEl.className = 'ias-char-count';
+  counterRow.append(errorEl, countEl);
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    countEl.textContent = String(remaining);
+    countEl.classList.toggle('is-over', isOver);
+    errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
 
   const commit = () => {
     _iasSetFieldValue(field, lang, input.value);
     reRenderStepModal();
   };
   input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
   if (!isMultiline) {
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
@@ -3725,6 +3751,8 @@ function startIasInlineEdit(field, el, ev) {
   }
 
   el.replaceWith(input);
+  input.insertAdjacentElement('afterend', counterRow);
+  updateCounter();
   input.focus();
   input.select();
 }

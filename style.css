@@ -3300,6 +3300,19 @@ body {
   border: 1px solid #0a84ff; border-radius: 6px;
   padding: 2px 4px; margin: -2px -4px; outline: none; resize: none;
 }
+.ias-inline-input.is-over-limit { border-color: var(--magenta); background: var(--magenta-soft); }
+
+/* Character-limit counter — sits beneath the bottom-right of an actively-
+   edited App Store Product Page Preview field (startIasInlineEdit, app.js).
+   Error text (left) is empty and takes no visible space while under the
+   limit, so the count alone appears flush right; once over, the row shows
+   both, matching Apple's real App Store Connect form. */
+.ias-char-counter-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 8px; margin-top: 4px; font-size: 11px; color: var(--text-faint);
+}
+.ias-char-error { color: var(--magenta); }
+.ias-char-count.is-over { color: var(--magenta); }
 
 /* Meta strip */
 .ias-meta-strip {
