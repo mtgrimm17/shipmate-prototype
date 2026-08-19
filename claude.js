@@ -738,6 +738,21 @@ function _steamHtmlToParagraphLines(html) {
   }
   while (lines.length && lines[0] === '') lines.shift();
   while (lines.length && lines[lines.length - 1] === '') lines.pop();
+
+  // Consecutive bullet points are a single list, not separate paragraphs —
+  // remove the blank line between two bullet lines so they stay
+  // single-spaced. This matters because Steam's about_the_game HTML often
+  // puts each bullet in its own <p>...</p> (rather than a proper
+  // <ul>/<li> list), and </p> above always inserts a blank-line paragraph
+  // break; without this pass every bullet in a feature list would end up
+  // with a blank line under it, as if each were its own paragraph.
+  const isBullet = s => s.startsWith('• ');
+  for (let i = lines.length - 2; i >= 1; i--) {
+    if (lines[i] === '' && isBullet(lines[i - 1]) && isBullet(lines[i + 1])) {
+      lines.splice(i, 1);
+    }
+  }
+
   return lines.join('\n');
 }
 
