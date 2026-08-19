@@ -4350,9 +4350,9 @@ function buildLocalizationReviewSection() {
   }));
 
   // Shared field+counter markup — identical look/behavior (placeholder,
-  // over-limit styling and message) whether it's the non-flipped card, the
-  // Review side's top half, or its bottom half; only the value shown and
-  // the click-to-edit handler differ.
+  // over-limit styling and message) whether it's the non-flipped card or
+  // the Review side's top half; only the value shown and the click-to-edit
+  // handler differ.
   const fieldBlock = (value, onclickAttr) => {
     const overLimit = value.length > limit;
     const remaining = limit - value.length;
@@ -4364,6 +4364,21 @@ function buildLocalizationReviewSection() {
           <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
           <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
         </div>`;
+  };
+
+  // The Review side's BOTTOM half (the Primary Language back-translation
+  // draft) deliberately has NO character-limit checking at all — no
+  // counter row, so no over-limit styling and no "Must be less than N
+  // characters." message either, ever, regardless of length. It's a
+  // scratch pad used to re-derive the language's real field via
+  // translation (startLocReviewBackTranslationEdit, app.js), not itself
+  // submission data, so App Store Connect's length limit for the real
+  // field doesn't apply to it.
+  const fieldBlockNoLimit = (value, onclickAttr) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>`;
   };
 
   const cards = langCodes.map(lang => {
@@ -4388,7 +4403,7 @@ function buildLocalizationReviewSection() {
           </div>
           <div class="loc-review-half loc-review-half--bottom">
             <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml}</div>
-            ${fieldBlock(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`)}
+            ${fieldBlockNoLimit(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`)}
           </div>
         </div>
       </div>`;

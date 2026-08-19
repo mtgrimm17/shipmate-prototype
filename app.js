@@ -4131,18 +4131,28 @@ async function _locReviewCommitPrimaryEdit(field, lang, value) {
 }
 
 /* Review side's BOTTOM-half click-to-edit — same swap-to-input mechanics as
-   startLocReviewInlineEdit above (reused counter row, soft character
-   limit), but editing the Primary Language back-translation DRAFT
-   (state.locReviewBackTranslation) rather than a language's real field, and
-   committing via _locReviewCommitPrimaryEdit's forward-translate-and-write
-   flow instead of a plain _iasSetFieldValue. Always 4 rows for multiline
-   fields — a bottom half only ever has half a card's vertical room. */
+   startLocReviewInlineEdit above, but editing the Primary Language
+   back-translation DRAFT (state.locReviewBackTranslation) rather than a
+   language's real field, and committing via _locReviewCommitPrimaryEdit's
+   forward-translate-and-write flow instead of a plain _iasSetFieldValue.
+   Always 4 rows for multiline fields — a bottom half only ever has half a
+   card's vertical room.
+
+   Deliberately has NO character-limit enforcement at all — no counter row
+   (buildLocalizationReviewSection, render.js, never renders one for this
+   half in the first place), no is-over-limit styling, no "Must be less
+   than N characters." message. IAS_FIELD_CHAR_LIMITS is the App Store
+   Connect limit for the language's own real field (the TOP half); this
+   draft is just a Primary-Language scratch pad used to re-derive that real
+   field via translation, not itself submitted anywhere, so a length limit
+   on it wouldn't mean anything — the translated text that actually lands
+   in the real field is whatever length the API returns, independent of
+   how long this draft happens to be. */
 function startLocReviewBackTranslationEdit(field, lang, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const isMultiline = field === 'description' || field === 'releaseNotes';
-  const limit = IAS_FIELD_CHAR_LIMITS[field];
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
@@ -4153,26 +4163,10 @@ function startLocReviewBackTranslationEdit(field, lang, el, ev) {
   }
   input.value = _locReviewBackTranslationValue(field, lang).text;
 
-  const counterRow = el.nextElementSibling;
-  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
-  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
-
-  const updateCounter = () => {
-    const remaining = limit - input.value.length;
-    const isOver = remaining < 0;
-    if (countEl) {
-      countEl.textContent = String(remaining);
-      countEl.classList.toggle('is-over', isOver);
-    }
-    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
-    input.classList.toggle('is-over-limit', isOver);
-  };
-
   const commit = () => {
     _locReviewCommitPrimaryEdit(field, lang, input.value);
   };
   input.addEventListener('blur', commit);
-  input.addEventListener('input', updateCounter);
   if (!isMultiline) {
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
@@ -4180,7 +4174,6 @@ function startLocReviewBackTranslationEdit(field, lang, el, ev) {
   }
 
   el.replaceWith(input);
-  updateCounter();
   input.focus();
   input.select();
 }
