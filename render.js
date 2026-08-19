@@ -2639,10 +2639,16 @@ function buildWebSitePreviewSection() {
   const accent = ws.accent || '#0EA5A4';
 
   const title = escHtml(fd.title || 'Your Game');
-  // Description defaults to (and stays synced with) Game Details' Description
-  // field; "Description" in Edit site details overrides it when set.
-  const descRaw = (ws.description && ws.description.trim()) || fd.description || '';
-  const descFull = descRaw ? escHtml(descRaw).replace(/\n/g, '<br>') : 'Your game description will appear here once you fill in the Description field in Game Details.';
+  // "Hook" defaults to (and stays synced with) the linked Steam store
+  // page's own short_description (state.steamLocInfo.shortDescription,
+  // cached by _applySteamAboutData in app.js) — NOT Game Details'
+  // Description field, which is "About This Game"'s job below now; "Hook"
+  // in Edit site details overrides it when set. With no Steam-linked
+  // short_description available (no linked Steam page, or that page has
+  // none), there's no fallback value at all — just the placeholder text.
+  const steamShortDescription = (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
+  const descRaw = (ws.description && ws.description.trim()) || steamShortDescription;
+  const descFull = descRaw ? escHtml(descRaw).replace(/\n/g, '<br>') : 'Your Steam store page\'s short description will appear here once linked to a Steam page that has one — or set your own in the Hook field.';
 
   const shots = ups.screenshots || [];
 
@@ -2865,17 +2871,25 @@ function buildWebSitePreviewSection() {
       ${pkSub('Genres', genresValue)}
     </div>`;
 
-  // "Hook" is the Description field synced from Game Details (with its
-  // placeholder fallback), so it always has content.
+  // "Hook" is Steam's own short_description (with its placeholder
+  // fallback when unavailable), so it always has content.
   const hookValue = `<p class="pk-p">${descFull}</p>`;
 
+  // "About This Game" defaults to (and stays synced with) Game Details'
+  // Description field — the reverse of "Hook" above, which held this exact
+  // "default + override" role before switching to Steam's short_description
+  // (see state.webSite.description's comment in state.js). Unlike Hook,
+  // this has no placeholder fallback — pkSub below renders nothing at all
+  // when both this override and Game Details' Description are empty, same
+  // as every other optional sub-section on this page.
+  const aboutGameRaw = (ws.aboutGame && ws.aboutGame.trim()) || fd.description || '';
   // Blank-line-aware (see _pkParagraphs above), unlike every other
   // multi-line field on this page (Hook is single-line; History still uses
   // the older _pkLines/one-line-per-paragraph treatment) — this is the one
   // field where preserving Steam's own paragraph spacing (and giving manual
   // typing the same two-level spacing) actually matters, per this
   // project's line-spacing discussion.
-  const aboutGameParas = _pkParagraphs(ws.aboutGame);
+  const aboutGameParas = _pkParagraphs(aboutGameRaw);
   const aboutGameValue = aboutGameParas.length
     ? aboutGameParas.map(lines => `<p class="pk-p">${lines.map(escHtml).join('<br>')}</p>`).join('')
     : '';
@@ -3085,8 +3099,8 @@ function _wsFactsheetFieldsHTML(ws) {
    and the same "shown under Description" copy on the preview website). */
 function _wsDescriptionFieldsHTML(ws) {
   return `
-    ${_wsField(ws, 'Hook', 'description', 'Defaults to the Description field in Game Details', { textarea: true, rows: 4 })}
-    ${_wsField(ws, 'About This Game', 'aboutGame', 'Leave a blank line between paragraphs — a longer section shown below Description', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'Hook', 'description', 'Defaults to your Steam store page\'s short description, when linked to one', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'About This Game', 'aboutGame', 'Defaults to the Description field in Game Details — leave a blank line between paragraphs', { textarea: true, rows: 4 })}
     ${_wsField(ws, 'History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}`;
 }
 

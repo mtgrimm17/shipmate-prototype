@@ -2893,12 +2893,17 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   if (data) {
     // "About This Game" (data.about_the_game) is Steam's own full-length
     // store-page copy, flattened from HTML to blank-line-separated
-    // paragraphs by _steamHtmlToParagraphLines (claude.js) — used for BOTH
-    // the About section's Description field below AND the Web platform's
-    // own "About This Game" field further down, so it's computed once here
-    // rather than converted twice. Deliberately NOT data.short_description
-    // (Steam's one-or-two-sentence marketing blurb) — that's far shorter
-    // than what belongs in a store listing's actual Description field.
+    // paragraphs by _steamHtmlToParagraphLines (claude.js) — feeds the About
+    // section's own Description field below. It does NOT also get written
+    // directly into the Web platform's "About This Game" field (state.
+    // webSite.aboutGame) anymore — that field now syncs with (falls back to)
+    // Game Details' Description field at render time instead (see
+    // buildWebSitePreviewSection, render.js), the same "default + override"
+    // treatment "Hook" used to have. Since Game Details' Description is
+    // filled from this exact text two lines below, About This Game still
+    // ends up showing Steam's about_the_game by default for a Steam-linked
+    // title — just through that one indirect path rather than two separate
+    // direct writes that could drift out of sync with each other.
     const aboutGameText = data.about_the_game ? _steamHtmlToParagraphLines(data.about_the_game) : '';
 
     // Guarded like item.summary in the no-Steam-link branch below — only
@@ -2918,7 +2923,6 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // (the studio's own general site, under the About group) — this backs
     // Factsheet > Developer > Links > "Official Website" instead.
     if (data.website) state.webSite.officialWebsite = data.website;
-    if (aboutGameText) state.webSite.aboutGame = aboutGameText;
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips
     // shown on the store page (appdetails has no field for those at all,
@@ -2967,9 +2971,18 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // obviously-unsupported languages without an extra fetch. Reuses this
     // call's own appdetails response rather than issuing a second one —
     // this function already fetches exactly what's needed.
+    //
+    // shortDescription is Steam's own one-or-two-sentence marketing blurb
+    // (data.short_description) — deliberately NOT used for About This Game
+    // or Game Details' Description above (both far longer fields; see
+    // aboutGameText's own comment) but exactly the right length for the Web
+    // platform's "Hook" field, which reads this at render time
+    // (buildWebSitePreviewSection, render.js) the same way it used to read
+    // Game Details' Description before that role moved to About This Game.
     state.steamLocInfo = {
       appId,
       baselineDescription:   aboutGameText,
+      shortDescription:      data.short_description || '',
       supportedLanguagesRaw: data.supported_languages || '',
     };
     // Any supported languages already selected before this game finished

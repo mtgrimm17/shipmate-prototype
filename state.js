@@ -2276,15 +2276,28 @@ const state = {
     // those (see this project's Steam-tags research).
     genres: '',
     // Description
-    description: '',        // "Hook" — overrides the Description field synced from Game Details
-    // "About This Game" — a blank line marks a paragraph break; consecutive
-    // non-blank lines are soft line breaks within the same paragraph
-    // (rendered with <br>, no extra spacing between them) — see
-    // _pkParagraphs/aboutGameValue in render.js. This lets the preview
-    // reproduce Steam's own two-level spacing (tight lines within a
-    // paragraph vs. a real gap between paragraphs) when auto-filled from a
-    // linked Steam page (_steamHtmlToParagraphLines in claude.js), and gives
-    // manual typing here the same two-level spacing, not just a flat list.
+    // "Hook" — overrides the Steam store page's own short_description
+    // (state.steamLocInfo.shortDescription, cached by _applySteamAboutData
+    // in app.js) when set; with no override, the preview falls back to that
+    // short_description at render time (buildWebSitePreviewSection,
+    // render.js) whenever the selected title is Steam-linked and Steam has
+    // one. NOT synced with Game Details' Description field — that's
+    // "About This Game" below now, which used to be this field's role.
+    description: '',
+    // "About This Game" — overrides Game Details' Description field
+    // (formData.description) when set; with no override, the preview falls
+    // back to formData.description at render time (buildWebSitePreviewSection,
+    // render.js) — the same "default + override" role "Hook" above used to
+    // have, before Hook switched to Steam's short_description. A blank line
+    // marks a paragraph break; consecutive non-blank lines are soft line
+    // breaks within the same paragraph (rendered with <br>, no extra spacing
+    // between them) — see _pkParagraphs/aboutGameValue in render.js. This
+    // lets the preview reproduce Steam's own two-level spacing (tight lines
+    // within a paragraph vs. a real gap between paragraphs) when Game
+    // Details' Description was itself auto-filled from a linked Steam page's
+    // about_the_game (_steamHtmlToParagraphLines in claude.js; see
+    // _applySteamAboutData in app.js), and gives manual typing here the same
+    // two-level spacing, not just a flat list.
     aboutGame: '',
     history: '',            // "Studio/Game History" — one paragraph per line
     // About
@@ -2363,21 +2376,25 @@ const state = {
   // lives at the top level rather than inside formData.
   iasTranslateStatus: {},
 
-  // Cached Steam store-page localization info for the currently-selected
-  // Steam-linked game — { appId, baselineDescription, supportedLanguagesRaw }
-  // or null when no Steam-linked game is selected (or its appdetails fetch
-  // failed). baselineDescription is the default-language "About This Game"
-  // field (about_the_game — NOT the much shorter short_description),
-  // flattened from HTML to plain text. Populated by _applySteamAboutData
-  // (app.js) right after it fetches the game's default-language appdetails;
-  // consumed by _checkSteamLocalizedDescription (app.js) whenever a
-  // supported language is added, to fetch that language's appdetails and
-  // compare its (same conversion of) about_the_game against the cached
-  // baseline — Steam silently falls back to the default-language listing
-  // for languages it hasn't actually localized, rather than erroring, so
-  // this comparison is what tells a real localization apart from that
-  // fallback. Session-transient, not submission data, so it lives at the
-  // top level rather than inside formData.
+  // Cached Steam store-page info for the currently-selected Steam-linked
+  // game — { appId, baselineDescription, shortDescription,
+  // supportedLanguagesRaw } or null when no Steam-linked game is selected
+  // (or its appdetails fetch failed). baselineDescription is the default-
+  // language "About This Game" field (about_the_game), flattened from HTML
+  // to plain text. shortDescription is Steam's own one-or-two-sentence
+  // marketing blurb (short_description) — backs the Web platform's "Hook"
+  // field at render time (buildWebSitePreviewSection, render.js; see
+  // state.webSite.description's own comment below). Populated by
+  // _applySteamAboutData (app.js) right after it fetches the game's
+  // default-language appdetails; baselineDescription is also consumed by
+  // _checkSteamLocalizedDescription (app.js) whenever a supported language
+  // is added, to fetch that language's appdetails and compare its (same
+  // conversion of) about_the_game against the cached baseline — Steam
+  // silently falls back to the default-language listing for languages it
+  // hasn't actually localized, rather than erroring, so this comparison is
+  // what tells a real localization apart from that fallback. Session-
+  // transient, not submission data, so it lives at the top level rather
+  // than inside formData.
   steamLocInfo: null,
 
   // Whether the privacy matrix is showing all types (default: fully collapsed)
