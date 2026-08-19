@@ -3603,6 +3603,11 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
       fd.localizedStoreText[lang][field]     = '';
       fd.localizedStoreText[lang][sourceKey] = '';
       if (field === 'description') delete fd.localizedStoreText[lang].descriptionFromSteam;
+      // Top text just changed (cleared) for this language — refresh its
+      // Review-side bottom-half draft to match, same dedup check used
+      // everywhere else so this is a no-op if it's already in sync.
+      const backEntry = _locReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== '') _locReviewRefreshBackTranslation(field, lang, '');
     });
     reRenderStepModal();
     return;
@@ -3695,6 +3700,16 @@ Rules:
       // so the flag no longer applies (if it was even set; harmless no-op
       // otherwise).
       if (field === 'description') delete entry.descriptionFromSteam;
+      // This language's top-half text just changed as a result of the
+      // primary-language edit that kicked off this whole batch — refresh
+      // its Review-side bottom-half draft once this top text has actually
+      // finished updating, same mechanism/dedup used for a direct top-half
+      // edit (startLocReviewInlineEdit's commit hook). Languages skipped by
+      // the Steam-authority guard above never reach here, so their top text
+      // didn't change and their back-translation cache is correctly left
+      // untouched.
+      const backEntry = _locReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== translated) _locReviewRefreshBackTranslation(field, lang, translated);
     });
 
     state.iasTranslateStatus[field] = 'complete';
