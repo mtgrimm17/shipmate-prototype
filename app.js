@@ -3845,18 +3845,27 @@ function startIasInlineEdit(field, el, ev) {
    .loc-review-field alone, is untouched). A review card has no fixed
    height of its own (.loc-review-card just grows to fit its content in the
    flex-wrap row), so a taller editor simply grows that one card — nothing
-   else in it is pushed outside its bounds. */
+   else in it is pushed outside its bounds.
+
+   This same function also handles the TOP half of the flipped Review side
+   (buildLocalizationReviewSection renders it with the identical onclick —
+   the top half IS the language's own real field, exactly like the
+   unflipped side, just laid out above the back-translation half instead of
+   alone in the card) — detected via el.closest('.loc-review-half') so it
+   can size down to 4 rows there, since a half only has half the card's
+   vertical room. */
 function startLocReviewInlineEdit(field, lang, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const isMultiline = field === 'description' || field === 'releaseNotes';
+  const inHalf = !!(el.closest && el.closest('.loc-review-half'));
   const limit = IAS_FIELD_CHAR_LIMITS[field];
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
-    input.rows = 8;
+    input.rows = inHalf ? 4 : 8;
   } else {
     input.type = 'text';
   }
@@ -3893,6 +3902,295 @@ function startLocReviewInlineEdit(field, lang, el, ev) {
   updateCounter();
   input.focus();
   input.select();
+}
+
+/* ── Localization Review — single-string translation helper ─────────────
+   Used by the flipped Review side's back-translation flow below: translate
+   ONE piece of text from `sourceLang` into `targetLang`, in either
+   direction. Unlike _iasTriggerAutoTranslate above (always Primary
+   Language -> every supporting language at once, batched into one prompt),
+   the Review side genuinely translates both ways on a single language
+   pair at a time, so this always makes its own one-off call. Returns the
+   translated string, or null if translation couldn't run at all (no API
+   key) or the call failed — callers treat null as an error state, not as
+   "translated to nothing" (that's what an empty source string returns:
+   '', synchronously, no API call needed). */
+async function _iasTranslateSingle(text, sourceLang, targetLang) {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return '';
+  if (!CLAUDE_API_KEY) return null;
+
+  const sourceName = OB_LANG_NAMES[sourceLang] || sourceLang;
+  const targetName = OB_LANG_NAMES[targetLang] || targetLang;
+
+  const prompt = `Translate the following app store text for a mobile/video game from ${sourceName} into ${targetName}.
+
+Source text:
+"""
+${trimmed}
+"""
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  { "translation": "<translated text>" }
+
+Rules:
+- Preserve the tone, meaning, and any line breaks in the source text.
+- Write a natural, idiomatic translation for a native speaker of ${targetName} — not literal word-for-word.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: 1200,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    return typeof parsed.translation === 'string' ? parsed.translation : null;
+  } catch (e) {
+    console.warn('[Localization Review Translate]', sourceLang, '->', targetLang, e.message);
+    return null;
+  }
+}
+
+/* ── Localization Review's flipped "Review" side — per-card, two-way
+   back-translation (toggleLocReviewMode below flips into it; buildLocalization
+   ReviewSection, render.js renders it). Each SUPPORTING language's card (the
+   Primary Language's own card never flips — nothing to review it against)
+   splits into a top half (the language's own real text, exactly the same
+   data and the same startLocReviewInlineEdit editing as the unflipped side)
+   and a bottom half (a back-translation of that text INTO the Primary
+   Language — a rough round-trip check, not itself real submission data).
+   Editing the bottom half translates FORWARD again into the card's own
+   language and writes the result into the real field via _iasSetFieldValue
+   — the exact same storage the top half itself writes into — so either
+   half can drive the other.
+
+   state.locReviewBackTranslation[field][lang] = { text, syncedTopText, status }
+   - text:          the Primary-Language string currently shown/edited in
+                     the bottom half.
+   - syncedTopText: the top half's real field value (_iasFieldValue) that
+                     `text` is already known to correspond to — set after
+                     EITHER a fresh top -> primary back-translation, or a
+                     bottom edit's forward translation lands back in the
+                     real field. As long as they still match, nothing needs
+                     regenerating; this is what lets toggling the Review
+                     side or switching the field dropdown back and forth
+                     skip redundant API calls for languages already in sync.
+   - status:        null | 'loading' | 'error'. */
+
+// Read-only lookup for render.js — never creates an entry (render functions
+// must not mutate state). A language/field with nothing cached yet reads as
+// a blank, non-loading draft.
+function _locReviewBackTranslationValue(field, lang) {
+  const entry = state.locReviewBackTranslation
+    && state.locReviewBackTranslation[field]
+    && state.locReviewBackTranslation[field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null };
+}
+
+// Mutating accessor for app.js's own bookkeeping below — lazily creates the
+// (field, lang) slot the first time it's touched.
+function _locReviewBackTranslationEntry(field, lang) {
+  if (!state.locReviewBackTranslation) state.locReviewBackTranslation = {};
+  const forField = state.locReviewBackTranslation[field] || (state.locReviewBackTranslation[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null });
+}
+
+// Regenerates the bottom half's back-translation for every supporting
+// language, for whichever field is currently selected — called when the
+// Review side is entered and whenever the field dropdown changes while
+// already showing it. A language whose cached draft is already in sync
+// with its current top text (syncedTopText matches) is left alone, so
+// toggling back and forth doesn't re-fire translations that are still good.
+// Returns a Promise (resolving once every triggered refresh has settled) so
+// callers that care can await it — none of the real UI call sites do
+// (toggleLocReviewMode/setLocReviewField below fire it and move on, same
+// "kick off in the background" pattern as _iasTriggerAutoTranslate
+// elsewhere), but it makes this deterministically testable.
+function _locReviewSyncBackTranslations() {
+  const fd = state.formData;
+  const field = state.locReviewField || 'title';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _iasFieldValue(field, lang);
+    const entry = _locReviewBackTranslationEntry(field, lang);
+    if (entry.syncedTopText === topText) return; // already in sync, including both blank
+    jobs.push(_locReviewRefreshBackTranslation(field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _locReviewRefreshBackTranslation(field, lang, topText) {
+  const entry = _locReviewBackTranslationEntry(field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  // The language's real field may have changed again while this call was
+  // in flight (a direct edit, or a fresh Primary Language auto-translate
+  // landing) — re-check against the CURRENT top text, not the one this
+  // call started with, and restart against it rather than overwrite with a
+  // now-stale result.
+  const currentTop = _iasFieldValue(field, lang);
+  if (currentTop !== topText) { _locReviewRefreshBackTranslation(field, lang, currentTop); return; }
+
+  const freshEntry = _locReviewBackTranslationEntry(field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+// Commits an edit made directly in the Review side's BOTTOM half (the
+// Primary Language draft) — translates it forward into the card's own
+// language and writes the result into the REAL field (_iasSetFieldValue),
+// the same storage the top half's own editing writes into. Like any other
+// manual edit elsewhere in the App Store Product Page Preview, this has no
+// lasting protection: the next time the actual Primary Language field
+// changes, _iasTriggerAutoTranslate overwrites this language's field again
+// like any other.
+async function _locReviewCommitPrimaryEdit(field, lang, value) {
+  const entry = _locReviewBackTranslationEntry(field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined; // not yet known to correspond to any top value
+  entry.status = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _iasSetFieldValue(field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  // If the bottom field was edited again while this call was in flight,
+  // this (now-stale) result must not clobber the newer one.
+  const currentEntry = _locReviewBackTranslationEntry(field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.status = 'error';
+  } else {
+    _iasSetFieldValue(field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+/* Review side's BOTTOM-half click-to-edit — same swap-to-input mechanics as
+   startLocReviewInlineEdit above (reused counter row, soft character
+   limit), but editing the Primary Language back-translation DRAFT
+   (state.locReviewBackTranslation) rather than a language's real field, and
+   committing via _locReviewCommitPrimaryEdit's forward-translate-and-write
+   flow instead of a plain _iasSetFieldValue. Always 4 rows for multiline
+   fields — a bottom half only ever has half a card's vertical room. */
+function startLocReviewBackTranslationEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _locReviewBackTranslationValue(field, lang).text;
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    _locReviewCommitPrimaryEdit(field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+/* Localization Review's "Review" / "All locs" toggle button
+   (buildLocalizationReviewSection, render.js) — flips every SUPPORTING
+   language's card (never the Primary Language's own card, identified by
+   .loc-review-card--primary) to reveal the two-way review layout above,
+   and relabels itself "All locs" so pressing it again flips back. Uses the
+   same rotateY flip-exit/flip-enter timing (style.css) as the rest of the
+   App Store Product Page Preview's own section-level flips
+   (openStorePreviewSection above), just scoped to the individual cards
+   rather than the whole modal — .loc-review-card's own is-flip-exit/
+   is-flip-enter keyframes, not .submit-modal's. */
+async function toggleLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.locReviewMode = state.locReviewMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.locReviewMode === 'review') _locReviewSyncBackTranslations();
+
+  const enteringCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
 }
 
 /* App Store Product Page Preview — Description "more"/"less" toggle.
@@ -3935,6 +4233,10 @@ function setIasPreviewLang(lang) {
 function setLocReviewField(field) {
   state.locReviewField = field;
   reRenderStepModal();
+  // Switching fields while the Review side is showing needs fresh
+  // back-translations for the newly-selected field — each field has its
+  // own independent cache (state.locReviewBackTranslation[field]).
+  if (state.locReviewMode === 'review') _locReviewSyncBackTranslations();
 }
 
 /* Accept the Shipmate-suggested fix for the current item */

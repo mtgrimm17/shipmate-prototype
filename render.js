@@ -4322,11 +4322,24 @@ const LOC_REVIEW_FIELDS = [
    rendered — the whole point of a review screen is seeing every card's
    length at a glance, not just the one you're currently typing into — so
    startLocReviewInlineEdit reuses the counter row already in the DOM
-   instead of creating one. ── */
+   instead of creating one.
+
+   The header's "Review"/"All locs" button (toggleLocReviewMode, app.js)
+   flips every SUPPORTING language's card — never the Primary Language's
+   own, which has nothing to review against — to a second, two-way layout:
+   the language's own text on top (unchanged — same data, same editing, as
+   the non-flipped side), and a back-translation of it into the Primary
+   Language on the bottom (state.locReviewBackTranslation, app.js), which
+   can itself be edited to re-translate forward and overwrite the top half.
+   See _locReviewFieldBlock below for the shared field+counter markup used
+   by all three surfaces (the non-flipped card, and both flipped halves). */
 function buildLocalizationReviewSection() {
   const langCodes = _iasAllPreviewLangCodes();
   const field = state.locReviewField || 'title';
   const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.locReviewMode === 'review';
 
   // warning flags a FIELD that's over limit for at least one language — the
   // transpose of the main preview's per-language warning (_iasLangHasOverLimitField).
@@ -4336,12 +4349,50 @@ function buildLocalizationReviewSection() {
     warning: _iasFieldHasOverLimitLang(f.value, langCodes),
   }));
 
+  // Shared field+counter markup — identical look/behavior (placeholder,
+  // over-limit styling and message) whether it's the non-flipped card, the
+  // Review side's top half, or its bottom half; only the value shown and
+  // the click-to-edit handler differ.
+  const fieldBlock = (value, onclickAttr) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+
   const cards = langCodes.map(lang => {
-    const raw = _iasFieldValue(field, lang);
-    const overLimit = raw.length > limit;
-    const remaining = limit - raw.length;
+    const isPrimary = lang === primary;
     const langName = escHtml(OB_LANG_NAMES[lang] || lang);
-    const display = raw ? escHtml(raw) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    const raw = _iasFieldValue(field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _locReviewBackTranslationValue(field, lang);
+      const statusHtml = back.status === 'loading'
+        ? `<span class="loc-review-status">Translating…</span>`
+        : back.status === 'error'
+          ? `<span class="loc-review-status is-error">Translation failed</span>`
+          : '';
+
+      return `
+      <div class="loc-review-card">
+        <div class="loc-review-side">
+          <div class="loc-review-half loc-review-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div></div>
+            ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`)}
+          </div>
+          <div class="loc-review-half loc-review-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml}</div>
+            ${fieldBlock(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`)}
+          </div>
+        </div>
+      </div>`;
+    }
 
     // Source-of-text badge — see _locReviewSourceBadge (app.js) for exactly
     // when each applies. 'steam' reuses platformIcon's monochrome/white
@@ -4356,24 +4407,22 @@ function buildLocalizationReviewSection() {
         : '';
 
     return `
-      <div class="loc-review-card">
+      <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
         <div class="loc-review-card-head">
           <div class="loc-review-card-lang">${langName}</div>
           ${badgeHtml}
         </div>
-        <div class="loc-review-field ias-editable${raw ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
-             onclick="startLocReviewInlineEdit('${field}','${lang}',this,event)" title="Click to edit">${display}</div>
-        <div class="ias-char-counter-row">
-          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
-          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
-        </div>
+        ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`)}
       </div>`;
   }).join('');
 
   return `
     <div class="loc-review-header">
       <div class="loc-review-title">Localization Review</div>
-      ${swSelect('loc-review-field', field, fieldOptions, 'setLocReviewField', '160px', 'right')}
+      <div class="loc-review-header-controls">
+        <button class="loc-review-toggle-btn" onclick="toggleLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        ${swSelect('loc-review-field', field, fieldOptions, 'setLocReviewField', '160px', 'right')}
+      </div>
     </div>
     <div class="loc-review-cards">${cards}</div>`;
 }

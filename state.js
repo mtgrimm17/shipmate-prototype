@@ -2368,6 +2368,30 @@ const state = {
   // button). null means "show Title" — Localization Review's default view.
   locReviewField: null,
 
+  // 'locs' | 'review' — which side Localization Review's SUPPORTING-language
+  // cards currently show (the Primary Language's own card never flips —
+  // nothing to review it against). 'locs' is the normal side (one field,
+  // directly editable, same as every other Shipmate flip section's default
+  // state). 'review' flips every supporting card to a two-way review layout:
+  // the language's own text on top, a back-translation of it into the
+  // Primary Language on the bottom — editing either half re-translates and
+  // writes the other. Toggled by toggleLocReviewMode (app.js), which also
+  // relabels the header's Review/"All locs" button. See
+  // buildLocalizationReviewSection, render.js.
+  locReviewMode: 'locs',
+
+  // Back-translation drafts for Localization Review's flipped "review" side
+  // — { [field]: { [lang]: { text, syncedTopText, status } } }. text is the
+  // Primary-Language string currently shown in that card's BOTTOM half;
+  // syncedTopText is the language's own real field value (the TOP half)
+  // that `text` is already known to correspond to — as long as they match,
+  // nothing needs re-translating. status is null | 'loading' | 'error'.
+  // This is scratch review-UI state, not real submission data (unlike
+  // formData.localizedStoreText, which the TOP half reads/writes directly
+  // via the same _iasFieldValue/_iasSetFieldValue as the non-flipped side).
+  // See _locReviewSyncBackTranslations / _locReviewCommitPrimaryEdit, app.js.
+  locReviewBackTranslation: {},
+
   // Auto-translation status per field ('subtitle' | 'description' |
   // 'releaseNotes') for the App Store Product Page Preview's Subtitle/
   // Description/What's New auto-translation into supporting languages —

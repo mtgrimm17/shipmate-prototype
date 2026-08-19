@@ -3466,6 +3466,25 @@ body {
   margin-bottom: 12px;
 }
 .loc-review-title { font-size: 13px; font-weight: 700; color: var(--text); }
+/* Groups the "Review"/"All locs" toggle button with the field dropdown, the
+   same way .ias-locs-lang-group groups "All Locs" with the language
+   dropdown on the main preview above this section. */
+.loc-review-header-controls { display: flex; align-items: center; gap: 10px; }
+/* Deliberately the same neutral look as .ias-all-locs-btn — an action, not
+   a selection control, sitting directly beside the field dropdown pill. */
+.loc-review-toggle-btn {
+  display: inline-flex; align-items: center;
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel-3);
+  border: 1.5px solid var(--border-hover);
+  border-radius: 6px;
+  padding: 7px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.loc-review-toggle-btn:hover { background: var(--border-hover); color: var(--text); }
 
 .loc-review-cards {
   display: flex; flex-wrap: wrap; gap: 12px;
@@ -3539,6 +3558,55 @@ textarea.loc-review-field.ias-inline-input {
   min-height: 160px;
 }
 .loc-review-placeholder { color: var(--text-faint); font-style: italic; }
+
+/* toggleLocReviewMode (app.js) applies these to each supporting-language
+   card individually — same rotateY-flip approach as .submit-modal's own
+   is-flip-exit/is-flip-enter (above), just scoped to one card instead of
+   the whole modal, and on its own faster timing since a single small card
+   flipping reads better quicker than the full-device transition does. */
+@keyframes loc-review-card-flip-exit {
+  from { transform: perspective(1000px) rotateY(0deg);   opacity: 1; }
+  to   { transform: perspective(1000px) rotateY(-90deg); opacity: 0; }
+}
+@keyframes loc-review-card-flip-enter {
+  from { transform: perspective(1000px) rotateY(90deg); opacity: 0; }
+  to   { transform: perspective(1000px) rotateY(0deg);  opacity: 1; }
+}
+.loc-review-card.is-flip-exit  { animation: loc-review-card-flip-exit  0.16s ease-in  forwards; }
+.loc-review-card.is-flip-enter { animation: loc-review-card-flip-enter 0.28s ease-out forwards; }
+
+/* The Review side (buildLocalizationReviewSection, render.js) — a
+   SUPPORTING language card flipped via the header's "Review" button splits
+   into two equal halves: top-half.loc-review-card-lang. .loc-review-side
+   fills whatever height .loc-review-card itself has (including any extra
+   height from row-stretch, same as the non-flipped side above), and each
+   half gets an even 1/1 share of it, with a rule between them. min-height:0
+   on both is what lets .loc-review-field's own overflow-y:auto actually
+   engage if a half ends up shorter than its field's content. */
+.loc-review-side { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.loc-review-half { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.loc-review-half--bottom {
+  border-top: 1px solid var(--border);
+  margin-top: 10px; padding-top: 10px;
+}
+/* The card-level "anchor counter to the bottom edge" rule above is about
+   the CARD's own bottom edge specifically — inside a half, the counter
+   should just trail its own field directly (per-half real estate is
+   already tight without also reserving push-to-bottom space), so this
+   more-specific selector resets back to a plain small gap. */
+.loc-review-card .loc-review-half .ias-char-counter-row { margin-top: 4px; }
+/* Halves only have half the card's usual room — a smaller minimum than the
+   non-flipped side's 160px (above), and flex-shrink so the textarea gives
+   way if its half is short, relying on .loc-review-field's own
+   overflow-y:auto for any content past that. */
+.loc-review-half textarea.loc-review-field.ias-inline-input {
+  min-height: 60px;
+  flex-shrink: 1;
+}
+/* Bottom half's translation-in-progress / failure note, shown next to the
+   Primary Language name (same head row as the top half's language name). */
+.loc-review-status { font-size: 10px; color: var(--text-faint); font-style: italic; }
+.loc-review-status.is-error { color: var(--magenta); font-style: normal; }
 
 /* Meta strip */
 .ias-meta-strip {
