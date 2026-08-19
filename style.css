@@ -3626,6 +3626,33 @@ textarea.loc-review-field.ias-inline-input {
 .loc-review-status { font-size: 10px; color: var(--text-faint); font-style: italic; }
 .loc-review-status.is-error { color: var(--magenta); font-style: normal; }
 
+/* buildLocalizationReviewSection (render.js) adds --long-field to
+   .loc-review-cards when the selected field is Description or What's New
+   (up to 4,000 characters each) — the expand-to-fit treatment above is
+   fine for a short Title/Subtitle, but letting a half grow to fit an
+   entire 4,000-character back-translation would make one card dwarf every
+   other card sitting beside it in the row. For these two fields only, the
+   halves fall back to the exact same fixed-height/scroll treatment the
+   non-flipped ("All locs") card's own field already uses (160px cap,
+   internal scrollbar) — restoring min-height:0 here specifically, since a
+   fixed/scrollable field needs its containing flex column able to shrink
+   to that height instead of growing to match the field's full (now
+   scrolled-away) content. The actively-edited textarea is exempted so
+   clicking to edit still expands it, same as everywhere else — only the
+   read-only display view is capped. */
+.loc-review-cards--long-field .loc-review-side,
+.loc-review-cards--long-field .loc-review-half {
+  min-height: 0;
+}
+.loc-review-cards--long-field .loc-review-half .loc-review-field {
+  max-height: 160px;
+  overflow-y: auto;
+}
+.loc-review-cards--long-field .loc-review-half textarea.loc-review-field.ias-inline-input {
+  max-height: none;
+  overflow-y: auto;
+}
+
 /* Meta strip */
 .ias-meta-strip {
   display: flex; align-items: center;

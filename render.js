@@ -4340,6 +4340,13 @@ function buildLocalizationReviewSection() {
   const primary = state.formData.primaryLanguage || 'en';
   const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
   const reviewMode = state.locReviewMode === 'review';
+  // Description/What's New can run to 4,000 characters each — when either
+  // is the selected field, the Review side's halves fall back to the same
+  // fixed-height/scroll treatment as the non-flipped ("All locs") card's
+  // own field, instead of expanding to fit (see the CSS for why: letting a
+  // half grow to fit a full back-translation would dwarf every other card
+  // in the row). Title/Subtitle (30-char limit each) keep expanding to fit.
+  const isLongField = field === 'description' || field === 'releaseNotes';
 
   // warning flags a FIELD that's over limit for at least one language — the
   // transpose of the main preview's per-language warning (_iasLangHasOverLimitField).
@@ -4439,7 +4446,7 @@ function buildLocalizationReviewSection() {
         ${swSelect('loc-review-field', field, fieldOptions, 'setLocReviewField', '160px', 'right')}
       </div>
     </div>
-    <div class="loc-review-cards">${cards}</div>`;
+    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}">${cards}</div>`;
 }
 
 /* ── Submit Modal (non-iOS legacy) ──────────────────── */
