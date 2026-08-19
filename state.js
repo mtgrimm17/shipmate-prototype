@@ -2348,6 +2348,13 @@ const state = {
   // Distribution after being chosen here).
   iasPreviewLang: null,
 
+  // Which field ('title' | 'subtitle' | 'description' | 'releaseNotes') the
+  // Localization Review section's top-right field dropdown is currently
+  // showing across every language's card (buildLocalizationReviewSection,
+  // render.js — opened via the App Store Product Page Preview's "All Locs"
+  // button). null means "show Title" — Localization Review's default view.
+  locReviewField: null,
+
   // Auto-translation status per field ('subtitle' | 'description' |
   // 'releaseNotes') for the App Store Product Page Preview's Subtitle/
   // Description/What's New auto-translation into supporting languages —

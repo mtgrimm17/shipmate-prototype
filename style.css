@@ -3245,6 +3245,25 @@ body {
 }
 .ias-label-note { font-size: 11px; color: var(--text-faint); }
 
+/* "All Locs" — opens the Localization Review flip section (openStorePreviewSection,
+   app.js; buildLocalizationReviewSection, render.js). Sized to sit naturally
+   next to the language dropdown pill it precedes (same height/font/radius),
+   but kept visually neutral (not the dropdown's blue accent) since it's an
+   action, not a selection control. */
+.ias-all-locs-btn {
+  display: inline-flex; align-items: center;
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel-3);
+  border: 1.5px solid var(--border-hover);
+  border-radius: 6px;
+  padding: 7px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.ias-all-locs-btn:hover { background: var(--border-hover); color: var(--text); }
+
 /* Right side of the label row — the "Reflects your submission data" note
    plus the language dropdown (swSelect, populated from the Distribution
    section's Primary Language + selected supported languages) sit together
@@ -3423,6 +3442,46 @@ body {
 .ias-inline-input.is-over-limit + .ias-char-counter-row:has(+ .ias-app-subtitle.is-over-limit) {
   margin-bottom: 14px;
 }
+
+/* ── Localization Review (buildLocalizationReviewSection, render.js) ──
+   Opened via the App Store Product Page Preview's "All Locs" button. Each
+   card's field and counter row deliberately reuse .ias-editable /
+   .ias-inline-input / .is-over-limit / .ias-char-counter-row / .ias-char-error /
+   .ias-char-count as-is (all above) rather than parallel loc-review-specific
+   versions — same look, same over-limit behavior, and any future change to
+   the shared rules (e.g. the width:max-content-style fixes above) applies
+   here too automatically. Only the card chrome itself (border, the language
+   name header, the empty-field placeholder) is new. */
+.loc-review-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.loc-review-title { font-size: 13px; font-weight: 700; color: var(--text); }
+
+.loc-review-cards {
+  display: flex; flex-wrap: wrap; gap: 12px;
+}
+.loc-review-card {
+  flex: 1 1 200px; min-width: 200px; max-width: 280px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+}
+.loc-review-card-lang {
+  font-size: 11px; font-weight: 700; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+/* Description/What's New can run to 4,000 characters — cap the field's own
+   height and let it scroll internally, so one long language's card doesn't
+   dwarf every other card sitting beside it. Title/Subtitle never approach
+   this (30-char limit each), so it's a no-op for them in practice. */
+.loc-review-field {
+  max-height: 160px; overflow-y: auto;
+  font-size: 13px; color: var(--text); line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+.loc-review-placeholder { color: var(--text-faint); font-style: italic; }
 
 /* Meta strip */
 .ias-meta-strip {

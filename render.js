@@ -2283,6 +2283,7 @@ function renderStepModal() {
     webAbout:      'About',
     webKeyArt:     'Key Art',
     keyArt:        'Select Key Art',
+    localization:  'Localization Review',
   };
   const isFlipped = !!flipTarget;
   const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
@@ -2479,6 +2480,10 @@ function buildStorePreviewFlipSection(platformId, target) {
   // buildWebKeyArtEditSection.
   if (target === 'keyArt') {
     return buildSteamKeyArtEditSection();
+  }
+  // iOS-only: the App Store Product Page Preview's "All Locs" button.
+  if (target === 'localization') {
+    return buildLocalizationReviewSection();
   }
   return '';
 }
@@ -3763,6 +3768,24 @@ function buildImproveSubmissionSection(platformId) {
     </div>`;
 }
 
+// Every language the App Store Product Page Preview covers — the
+// Distribution section's Primary Language always first, followed by its
+// selected supported languages (state.formData.localizations) sorted
+// alphabetically by display name. Same derivation buildStorePreviewSection
+// computes inline for its own language dropdown (kept inline there rather
+// than switched over to this helper, to avoid touching that already-covered
+// code path); this is the version buildLocalizationReviewSection's
+// per-language cards use, so the two sections always agree on exactly which
+// languages exist and in what order.
+function _iasAllPreviewLangCodes() {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const supporting = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  return [primary, ...supporting];
+}
+
 function buildStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
@@ -4152,6 +4175,7 @@ function buildStorePreviewSection() {
         </span>
         <div class="ias-label-right">
           <span class="ias-label-note">Reflects your submission data</span>
+          <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">All Locs</button>
           ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
         </div>
       </div>
@@ -4246,6 +4270,81 @@ function buildStorePreviewSection() {
 
     ${navBar}
   `;
+}
+
+/* Localization Review's field dropdown — Title/Subtitle/Description/What's
+   New, in the same vertical order they appear in the App Store Product
+   Page Preview itself, so the dropdown's own order reads the same way the
+   preview above it does. */
+const LOC_REVIEW_FIELDS = [
+  { value: 'title',        label: 'Title' },
+  { value: 'subtitle',     label: 'Subtitle' },
+  { value: 'description',  label: 'Description' },
+  { value: 'releaseNotes', label: "What's New" },
+];
+
+/* ── App Store Product Page Preview flip section: "Localization Review" ──
+   Opened via the preview's "All Locs" button (openStorePreviewSection('ios',
+   'localization')). One card per language the preview covers
+   (_iasAllPreviewLangCodes — Primary Language first, then supported
+   languages alphabetically), shown side by side, all displaying the SAME
+   field at once (Title/Subtitle/Description/What's New, chosen via the
+   top-right field dropdown) — the point being to compare one field across
+   every language at a glance, the opposite cut from the main preview
+   (every field, one language at a time).
+
+   Each card's field and character counter reuse the exact same classes
+   (ias-editable / ias-inline-input / is-over-limit / ias-char-counter-row /
+   ias-char-error / ias-char-count) and the same startIasInlineEdit-style
+   click-to-edit mechanics (startLocReviewInlineEdit, app.js) as the main
+   preview's own Title/Subtitle/Description/What's New fields — both read
+   and write through the same _iasFieldValue/_iasSetFieldValue (app.js), so
+   editing a field here or in the main preview is instantly reflected in
+   the other on next render. The one structural difference: the main
+   preview's counter row only exists while a field is actively being
+   edited (created fresh by startIasInlineEdit), but here it's always
+   rendered — the whole point of a review screen is seeing every card's
+   length at a glance, not just the one you're currently typing into — so
+   startLocReviewInlineEdit reuses the counter row already in the DOM
+   instead of creating one. ── */
+function buildLocalizationReviewSection() {
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.locReviewField || 'title';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+
+  // warning flags a FIELD that's over limit for at least one language — the
+  // transpose of the main preview's per-language warning (_iasLangHasOverLimitField).
+  const fieldOptions = LOC_REVIEW_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _iasFieldHasOverLimitLang(f.value, langCodes),
+  }));
+
+  const cards = langCodes.map(lang => {
+    const raw = _iasFieldValue(field, lang);
+    const overLimit = raw.length > limit;
+    const remaining = limit - raw.length;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const display = raw ? escHtml(raw) : `<span class="loc-review-placeholder">Click to edit</span>`;
+
+    return `
+      <div class="loc-review-card">
+        <div class="loc-review-card-lang">${langName}</div>
+        <div class="loc-review-field ias-editable${raw ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="startLocReviewInlineEdit('${field}','${lang}',this,event)" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="loc-review-header">
+      <div class="loc-review-title">Localization Review</div>
+      ${swSelect('loc-review-field', field, fieldOptions, 'setLocReviewField', '160px', 'right')}
+    </div>
+    <div class="loc-review-cards">${cards}</div>`;
 }
 
 /* ── Submit Modal (non-iOS legacy) ──────────────────── */

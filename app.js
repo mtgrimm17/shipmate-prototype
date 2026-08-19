@@ -3454,6 +3454,18 @@ function _iasLangHasOverLimitField(lang) {
     _iasFieldValue(field, lang).length > IAS_FIELD_CHAR_LIMITS[field]);
 }
 
+// The transpose of _iasLangHasOverLimitField above: whether ANY language
+// (across every language the Localization Review section covers,
+// _iasAllPreviewLangCodes, render.js) has THIS ONE field over its character
+// limit. Drives the warning icon next to a field in Localization Review's
+// top-right field dropdown (buildLocalizationReviewSection, render.js) —
+// e.g. Subtitle gets flagged the moment any single language's Subtitle card
+// is over limit, even while a different field is the one currently shown.
+function _iasFieldHasOverLimitLang(field, langCodes) {
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  return langCodes.some(lang => _iasFieldValue(field, lang).length > limit);
+}
+
 function _iasSetFieldValue(field, lang, value) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -3769,6 +3781,68 @@ function startIasInlineEdit(field, el, ev) {
   input.select();
 }
 
+/* Localization Review's per-card click-to-edit (buildLocalizationReviewSection,
+   render.js) — the same swap-to-input mechanics as startIasInlineEdit above,
+   for the same field types and the same soft IAS_FIELD_CHAR_LIMITS
+   enforcement, but for an explicit `lang` param rather than resolving
+   _iasEffectivePreviewLang(): each card here is a DIFFERENT language shown
+   side by side, not "whichever language the dropdown is currently showing".
+   The one real structural difference: Localization Review's counter row is
+   always visible (buildLocalizationReviewSection renders it directly into
+   every card, editing or not, so the whole point of the review — seeing
+   every language's length at a glance — still works before you've clicked
+   anything) rather than being created fresh on click like
+   startIasInlineEdit's is. So this reuses the counter row already sitting
+   in the DOM as the field's next sibling instead of creating a new one. */
+function startLocReviewInlineEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _iasFieldValue(field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    _iasSetFieldValue(field, lang, input.value);
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
 /* App Store Product Page Preview — Description "more"/"less" toggle.
    The full/short text is read from data-full/data-short attributes on the
    button (set from already-HTML-escaped strings, so the browser decodes
@@ -3797,6 +3871,17 @@ function toggleIasDescMore(btn) {
    only needs to persist which one is currently chosen. */
 function setIasPreviewLang(lang) {
   state.iasPreviewLang = lang;
+  reRenderStepModal();
+}
+
+/* Localization Review's top-right field dropdown (swSelect) — options are
+   the four store-listing fields in the same order they appear in the App
+   Store Product Page Preview (Title, Subtitle, Description, What's New),
+   rebuilt fresh in buildLocalizationReviewSection() every render; this
+   setter only needs to persist which one is currently chosen across every
+   language's card. */
+function setLocReviewField(field) {
+  state.locReviewField = field;
   reRenderStepModal();
 }
 
