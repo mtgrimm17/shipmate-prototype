@@ -3333,9 +3333,30 @@ body {
 .ias-char-counter-row {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 8px; margin-top: 4px; font-size: 11px; color: var(--text-faint);
+  /* ias-inline-input sits width:100% with margin: -2px -4px, which — since
+     its width is an explicit 100% rather than an auto fill — shifts its
+     whole box 4px left of this row's parent (.ias-header-meta), rather than
+     growing it symmetrically. Match that same width/box-sizing/horizontal-
+     margin scheme here so this row's right edge (and the count span pinned
+     to it) lines up exactly with the input's real right border instead of
+     sitting 4px past it. */
+  width: 100%; box-sizing: border-box; margin-left: -4px; margin-right: -4px;
 }
 .ias-char-error { color: var(--magenta); }
 .ias-char-count.is-over { color: var(--magenta); }
+
+/* Same collapsed-gap family as the two rules above, but for a third sibling
+   arrangement: while Title is actively being edited, its ias-char-counter-row
+   (app.js) is inserted as the input's real next sibling, pushing Subtitle
+   back to being the counter row's next sibling instead of the input's. The
+   both-over-limit rule above never sees that case (its :has(+ ...) can't
+   reach past the counter row), so Title's "Must be less than X characters."
+   text was landing flush against an over-limit Subtitle box with no gap.
+   Mirror the same both-over-limit condition, anchored on the counter row
+   instead of the input. */
+.ias-inline-input.is-over-limit + .ias-char-counter-row:has(+ .ias-app-subtitle.is-over-limit) {
+  margin-bottom: 14px;
+}
 
 /* Meta strip */
 .ias-meta-strip {
