@@ -3888,6 +3888,20 @@ function startLocReviewInlineEdit(field, lang, el, ev) {
 
   const commit = () => {
     _iasSetFieldValue(field, lang, input.value);
+    // Editing the TOP half of a flipped Review-side card changes the
+    // language's own real text, which makes the bottom half's cached
+    // back-translation draft stale (it was generated from whatever the top
+    // text used to be) — refresh it here rather than waiting for the next
+    // toggleLocReviewMode/setLocReviewField sync, so the bottom half
+    // immediately reflects the edit instead of showing a now-wrong draft
+    // until something else happens to trigger a resync. Only applies in
+    // the flipped half (inHalf) — the non-flipped card's own edits have no
+    // visible bottom half to keep in sync, and are still picked up lazily
+    // by _locReviewSyncBackTranslations the next time Review mode opens.
+    if (inHalf) {
+      const backEntry = _locReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== input.value) _locReviewRefreshBackTranslation(field, lang, input.value);
+    }
     reRenderStepModal();
   };
   input.addEventListener('blur', commit);
@@ -4014,6 +4028,10 @@ function _locReviewBackTranslationEntry(field, lang) {
 // already showing it. A language whose cached draft is already in sync
 // with its current top text (syncedTopText matches) is left alone, so
 // toggling back and forth doesn't re-fire translations that are still good.
+// (A single language's top half being edited directly, mid-Review, is
+// handled separately — startLocReviewInlineEdit's commit calls
+// _locReviewRefreshBackTranslation for just that one (field, lang) itself,
+// rather than re-running this whole-section sync for one changed card.)
 // Returns a Promise (resolving once every triggered refresh has settled) so
 // callers that care can await it — none of the real UI call sites do
 // (toggleLocReviewMode/setLocReviewField below fire it and move on, same
