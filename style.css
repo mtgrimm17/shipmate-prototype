@@ -3298,6 +3298,17 @@ body {
   margin-bottom: 14px;
 }
 
+/* Same pulse-overlap problem, one more sibling arrangement: while Title is
+   being actively edited AND over its character limit, its
+   .ias-char-counter-row (app.js) is inserted as the input's real next
+   sibling, pushing Subtitle back to being the counter row's sibling instead
+   of the input's — so the rule above's :has(+ .ias-app-subtitle.ias-placeholder)
+   on .ias-inline-input can't reach it. Mirror the same clearance, anchored
+   on the counter row. */
+.ias-char-counter-row:has(+ .ias-app-subtitle.ias-placeholder) {
+  margin-bottom: 14px;
+}
+
 /* Same collapsed-gap problem, different trigger: if Title and Subtitle are
    BOTH over their character limit at once, each now carries a real 1px
    is-over-limit border (unlike the box-shadow pulse ring above), and those
