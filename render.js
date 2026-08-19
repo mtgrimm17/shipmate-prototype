@@ -3805,7 +3805,16 @@ function buildStorePreviewSection() {
     .slice()
     .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
   const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
-  const previewLangOptions = previewLangCodes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l }));
+  // warning flags a language that has at least one field (Title/Subtitle/
+  // Description/What's New) over its character limit (_iasLangHasOverLimitField,
+  // app.js) — swSelect (below) renders a small red warning icon next to that
+  // language's name in the dropdown, so an over-limit field on a language
+  // you aren't currently previewing doesn't go unnoticed.
+  const previewLangOptions = previewLangCodes.map(l => ({
+    value: l,
+    label: OB_LANG_NAMES[l] || l,
+    warning: _iasLangHasOverLimitField(l),
+  }));
   const previewLang = _iasEffectivePreviewLang();
   const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
 
@@ -5373,11 +5382,16 @@ function trailerFileRowHTML(name, mb, prefix = '') {
  * swSelect — reusable styled dropdown (matches Primary Language picker aesthetic).
  * @param {string}   id          Unique DOM id suffix — element gets id="swsel-{id}"
  * @param {string}   currentValue  Currently selected value, or null
- * @param {Array}    options      [{value, label}, ...]
+ * @param {Array}    options      [{value, label, warning}, ...] — warning (optional)
+ *                                shows a small red warning icon next to that
+ *                                option's name (used by the App Store Product
+ *                                Page Preview's language dropdown to flag a
+ *                                language with an over-character-limit field).
  * @param {string}   onChangeFn  Name of a global function called with the chosen value
  */
 function swSelect(id, currentValue, options, onChangeFn, width = '100%') {
   const chevSvg = `<svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+  const warnSvg = `<svg class="loc-dd-warn" width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="var(--magenta)" stroke-width="1.5"/><rect x="7.25" y="4" width="1.5" height="5" rx="0.75" fill="var(--magenta)"/><rect x="7.25" y="10.5" width="1.5" height="1.5" rx="0.75" fill="var(--magenta)"/></svg>`;
   const isNull  = currentValue === null || currentValue === undefined || currentValue === '';
   const currentLabel = isNull ? 'Select…' : (options.find(o => o.value === currentValue)?.label || 'Select…');
 
@@ -5385,6 +5399,7 @@ function swSelect(id, currentValue, options, onChangeFn, width = '100%') {
     <button class="loc-dd-item${o.value === currentValue ? ' is-current' : ''}"
             onclick="swSelectChoose('${id}','${o.value}','${onChangeFn}')">
       <span class="loc-dd-name">${escHtml(o.label)}</span>
+      ${o.warning ? `<span class="tooltip-anchor" data-tip="One or more fields are over the character limit for this language">${warnSvg}</span>` : ''}
     </button>`).join('');
 
   return `

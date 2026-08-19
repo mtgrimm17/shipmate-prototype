@@ -870,6 +870,16 @@ body {
   top: calc(100% + 5px);
   left: 0;
   min-width: 100%;
+  /* Without an explicit width, this absolutely-positioned box's shrink-to-fit
+     sizing only expands past min-width to fit a row's full content while
+     every .loc-dd-item has exactly one child (just .loc-dd-name). The
+     moment any row gains a second flex child — e.g. the warning icon below,
+     conditionally present on some rows but not others — that sizing
+     collapses back down to the min-width floor instead, wrapping the
+     widest label's text onto a second line. width:max-content sizes this
+     box directly off its widest child's actual content instead, regardless
+     of how many children any individual row has. */
+  width: max-content;
   background: #1c1c1c;
   border: 1px solid var(--border-hover);
   border-radius: 8px;
@@ -908,7 +918,19 @@ body {
 .loc-dd-name {
   font-size: 13px;
   font-weight: 500;
+  /* Belt-and-suspenders alongside .loc-dropdown's width:max-content above —
+     guarantees a label never wraps onto a second line even in an edge case
+     where the dropdown's own computed width ends up narrower than a row's
+     full content (e.g. one very long label far outsizing every other row). */
+  white-space: nowrap;
 }
+
+/* Warning icon next to a language whose Title/Subtitle/Description/What's
+   New has an over-character-limit field (_iasLangHasOverLimitField, app.js;
+   swSelect, render.js) — App Store Product Page Preview's language
+   dropdown only, matching the both-over-limit red used on the fields
+   themselves (var(--magenta)). */
+.loc-dd-warn { flex-shrink: 0; }
 
 .loc-dd-region {
   font-size: 11px;

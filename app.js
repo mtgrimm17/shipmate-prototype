@@ -3442,6 +3442,18 @@ function _iasFieldValue(field, lang) {
   return (entry && entry[field]) || '';
 }
 
+// Whether ANY of a language's four store-listing fields (Title, Subtitle,
+// Description, What's New) currently exceeds its character limit
+// (IAS_FIELD_CHAR_LIMITS above) — drives the warning icon shown next to
+// that language in the App Store Product Page Preview's language dropdown
+// (swSelect's ddItems, render.js's buildStorePreviewSection), so an
+// over-limit field on a language you aren't currently previewing doesn't
+// go unnoticed.
+function _iasLangHasOverLimitField(lang) {
+  return Object.keys(IAS_FIELD_CHAR_LIMITS).some(field =>
+    _iasFieldValue(field, lang).length > IAS_FIELD_CHAR_LIMITS[field]);
+}
+
 function _iasSetFieldValue(field, lang, value) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
