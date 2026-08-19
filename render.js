@@ -4395,8 +4395,14 @@ function buildLocalizationReviewSection() {
 
     if (reviewMode && !isPrimary) {
       const back = _locReviewBackTranslationValue(field, lang);
+      // A translation actually in progress is shown as the same small
+      // spinning-rings icon used when the App Store Content Questions
+      // section first opens (.inf-rings-wrap/.inf-ring, above) — scaled
+      // down to fit inline next to the language name (.loc-review-spinner)
+      // — rather than a text message. An actual failure still needs to be
+      // read, so that stays text.
       const statusHtml = back.status === 'loading'
-        ? `<span class="loc-review-status">Translating…</span>`
+        ? `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`
         : back.status === 'error'
           ? `<span class="loc-review-status is-error">Translation failed</span>`
           : '';
