@@ -3662,13 +3662,21 @@ textarea.loc-review-field.ias-inline-input {
    the sudden extra slack, leaving a mostly-empty box above a stranded
    counter. Growing the field itself (flex-grow, not the flex:1 shorthand —
    flex-basis stays auto so it starts from its natural content height rather
-   than 0) lets it actually fill that room instead, still capped by its own
-   max-height:160px/overflow-y:auto (above) for a long Description/What's
-   New value. Scoped to Review mode only — every card is single-field in the
-   normal 'All locs' section, so there's no such disparity to correct for
-   there. */
+   than 0) is necessary but NOT sufficient on its own — the shared
+   .loc-review-field rule's max-height:160px (above) caps the box before
+   flex-grow ever gets a chance to add the extra room, which is exactly what
+   left a large empty gap between the field and the counter in practice.
+   Lifting the cap (and switching to overflow:visible, same treatment as a
+   Review half's own field) lets the field actually grow to match whatever
+   height the row's stretch imposes; a card whose own content is genuinely
+   longer than that simply grows the row further, same as the split halves
+   already do. Scoped to Review mode only — every card is single-field in
+   the normal 'All locs' section, so there's no such disparity to correct
+   for there, and the 160px cap still protects it as before. */
 .loc-review-cards--review-mode .loc-review-card--primary .loc-review-field {
   flex-grow: 1;
+  max-height: none;
+  overflow: visible;
 }
 
 /* Meta strip */
