@@ -3577,14 +3577,24 @@ textarea.loc-review-field.ias-inline-input {
 
 /* The Review side (buildLocalizationReviewSection, render.js) — a
    SUPPORTING language card flipped via the header's "Review" button splits
-   into two equal halves: top-half.loc-review-card-lang. .loc-review-side
-   fills whatever height .loc-review-card itself has (including any extra
-   height from row-stretch, same as the non-flipped side above), and each
-   half gets an even 1/1 share of it, with a rule between them. min-height:0
-   on both is what lets .loc-review-field's own overflow-y:auto actually
-   engage if a half ends up shorter than its field's content. */
-.loc-review-side { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.loc-review-half { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+   into two halves: top-half.loc-review-card-lang. .loc-review-side fills
+   whatever height .loc-review-card itself has (including any extra height
+   from row-stretch, same as the non-flipped side above), and each half
+   gets an even 1/1 share of it when both fit, with a rule between them.
+
+   Deliberately NO min-height:0 on either .loc-review-side or
+   .loc-review-half (unlike most flex-column containers in this file) —
+   min-height:0 is what allows a flex item to shrink below its own
+   content's natural size, and here that let a half get squeezed shorter
+   than the wrapped text inside its .loc-review-field, silently clipping
+   part of the last line with no visible scrollbar to hint more was there.
+   Leaving min-height at its default `auto` means a half (and the card
+   around it) always grows to at least fit its own content — the 50/50
+   split is only exact when both halves' content is short enough to fit
+   the row's stretched height; a half with more text simply claims more of
+   the card instead of clipping. */
+.loc-review-side { display: flex; flex-direction: column; flex: 1; }
+.loc-review-half { display: flex; flex-direction: column; flex: 1; }
 .loc-review-half--bottom {
   border-top: 1px solid var(--border);
   margin-top: 10px; padding-top: 10px;
@@ -3595,13 +3605,21 @@ textarea.loc-review-field.ias-inline-input {
    already tight without also reserving push-to-bottom space), so this
    more-specific selector resets back to a plain small gap. */
 .loc-review-card .loc-review-half .ias-char-counter-row { margin-top: 4px; }
+/* Overrides .loc-review-field's own max-height:160px/overflow-y:auto cap
+   (above) for BOTH halves' display state — the point of the Review side is
+   reading a translation and its back-translation side by side; a scrollbar
+   silently hiding part of one would defeat that, so within a half the
+   field always expands downward to show everything instead. (The
+   non-flipped side's own field keeps the 160px cap/scroll — this override
+   only applies inside .loc-review-half.) */
+.loc-review-half .loc-review-field {
+  max-height: none;
+  overflow: visible;
+}
 /* Halves only have half the card's usual room — a smaller minimum than the
-   non-flipped side's 160px (above), and flex-shrink so the textarea gives
-   way if its half is short, relying on .loc-review-field's own
-   overflow-y:auto for any content past that. */
+   non-flipped side's 160px (above) for the actively-edited textarea. */
 .loc-review-half textarea.loc-review-field.ias-inline-input {
   min-height: 60px;
-  flex-shrink: 1;
 }
 /* Bottom half's translation-in-progress / failure note, shown next to the
    Primary Language name (same head row as the top half's language name). */
