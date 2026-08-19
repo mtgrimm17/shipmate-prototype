@@ -3824,14 +3824,22 @@ function buildStorePreviewSection() {
   // previewed; ias-editable is the shared hover affordance for all four.
   const titleRaw  = _iasFieldValue('title', previewLang);
   const title     = escHtml(titleRaw || 'Your Game Title');
+  // Character-limit highlighting (IAS_FIELD_CHAR_LIMITS, app.js) must
+  // persist on the display element itself, not just the temporary
+  // input/textarea created while actively editing (startIasInlineEdit,
+  // app.js) — a field that's over the limit should stay flagged red even
+  // after you click away, until it's actually edited back under the limit.
+  const titleOverLimit = titleRaw.length > IAS_FIELD_CHAR_LIMITS.title;
 
   // Subtitle is its own independent field — it is never derived from
   // Description, for any language. The two are edited and stored completely
   // separately, so typing one never changes the other.
   const subtitleRaw = _iasFieldValue('subtitle', previewLang);
   const subtitle     = escHtml(subtitleRaw || 'Short subtitle');
+  const subtitleOverLimit = subtitleRaw.length > IAS_FIELD_CHAR_LIMITS.subtitle;
 
   const descRaw = _iasFieldValue('description', previewLang);
+  const descOverLimit = descRaw.length > IAS_FIELD_CHAR_LIMITS.description;
   // The "fill it in via Game Details" placeholder is only accurate for the
   // Primary Language — translations have no Game Details equivalent at all,
   // this preview is their only editable surface, so they get a placeholder
@@ -3990,6 +3998,7 @@ function buildStorePreviewSection() {
   // prefix and any stray -/–/• the developer already typed are purely a
   // display transform applied below, not part of the stored value.
   const releaseNotes = _iasFieldValue('releaseNotes', previewLang);
+  const notesOverLimit = releaseNotes.length > IAS_FIELD_CHAR_LIMITS.releaseNotes;
   const notesHtml = releaseNotes
     ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
@@ -4144,9 +4153,9 @@ function buildStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}"
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
@@ -4178,7 +4187,7 @@ function buildStorePreviewSection() {
 
         <!-- ── Description ── -->
         <div class="ias-section">
-          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}" id="ias-desc-text"
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text"
                onclick="startIasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
@@ -4197,7 +4206,7 @@ function buildStorePreviewSection() {
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="ias-wn-version">Version ${version}</div>
-          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}"
+          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
                onclick="startIasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
           ${notesStatusHtml}
           <div class="ias-wn-edit-hint">

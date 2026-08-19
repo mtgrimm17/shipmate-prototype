@@ -3274,7 +3274,10 @@ body {
    and layers on just enough border/background to read as "actively
    editing", sized to blend into this card rather than look like a normal
    form control. */
-.ias-editable { cursor: pointer; border-radius: 4px; margin: -2px -4px; padding: 2px 4px; }
+.ias-editable {
+  cursor: pointer; border-radius: 4px; margin: -2px -4px; padding: 2px 4px;
+  box-sizing: border-box; border: 1px solid transparent;
+}
 .ias-placeholder { animation: ias-meta-pulse 2s ease-in-out infinite; }
 
 /* Title and Subtitle sit directly adjacent in normal block flow, so their
@@ -3300,6 +3303,12 @@ body {
   border: 1px solid #0a84ff; border-radius: 6px;
   padding: 2px 4px; margin: -2px -4px; outline: none; resize: none;
 }
+/* Over-the-character-limit highlighting must survive after clicking away —
+   .ias-editable (the display element, style-persistent) carries it exactly
+   like .ias-inline-input (the temporary editor) does, sharing the same
+   border-color/background swap, so a field that's over its limit stays
+   flagged red until it's actually edited back under the limit. */
+.ias-editable.is-over-limit,
 .ias-inline-input.is-over-limit { border-color: var(--magenta); background: var(--magenta-soft); }
 
 /* Character-limit counter — sits beneath the bottom-right of an actively-
