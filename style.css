@@ -3654,29 +3654,37 @@ textarea.loc-review-field.ias-inline-input {
 }
 
 /* buildLocalizationReviewSection also adds --review-mode to .loc-review-cards
-   whenever the Review side is showing. The Primary Language's card never
-   splits (nothing to review it against), so in Review mode it sits in the
-   same row as cards stretched tall to fit TWO stacked fields — its own
-   single field would otherwise stay at its own short natural height while
-   .ias-char-counter-row's margin-top:auto (above) silently absorbs all of
-   the sudden extra slack, leaving a mostly-empty box above a stranded
-   counter. Growing the field itself (flex-grow, not the flex:1 shorthand —
-   flex-basis stays auto so it starts from its natural content height rather
-   than 0) is necessary but NOT sufficient on its own — the shared
-   .loc-review-field rule's max-height:160px (above) caps the box before
-   flex-grow ever gets a chance to add the extra room, which is exactly what
-   left a large empty gap between the field and the counter in practice.
-   Lifting the cap (and switching to overflow:visible, same treatment as a
-   Review half's own field) lets the field actually grow to match whatever
-   height the row's stretch imposes; a card whose own content is genuinely
-   longer than that simply grows the row further, same as the split halves
-   already do. Scoped to Review mode only — every card is single-field in
-   the normal 'All locs' section, so there's no such disparity to correct
-   for there, and the 160px cap still protects it as before. */
-.loc-review-cards--review-mode .loc-review-card--primary .loc-review-field {
-  flex-grow: 1;
-  max-height: none;
-  overflow: visible;
+   whenever the Review side is showing. Two earlier attempts at this got it
+   wrong: v3.60 added flex-grow but forgot the shared .loc-review-field
+   rule's max-height:160px still capped the box before flex-grow got a
+   chance to use it (no visible effect at all). v3.61 lifted the cap
+   entirely, which just traded one bug for a worse one — tying the Primary
+   card's height to whatever the row's stretch happens to be means a
+   genuinely long Description (thousands of characters, no cap) can balloon
+   the ENTIRE row to match ITS full natural height, dragging supporting
+   cards' own 160px-capped halves (below) along with it and leaving THEM
+   mostly empty instead — the exact bug this was supposed to fix, just
+   relocated. And for a short Primary value sitting next to a genuinely
+   taller supporting card, flex-grow still stretches the box well past its
+   own content, which is what "fills only half" was actually describing.
+
+   The fix that's actually stable regardless of any card's content length:
+   give the Primary card's field the SAME bounded, deterministic treatment
+   every other long-field surface in this feature already uses — a fixed
+   cap with an internal scrollbar — sized at double a single half's 160px
+   cap (320px), since unlike a supporting card the Primary doesn't have to
+   split that budget between two stacked fields. This is scoped to BOTH
+   Review mode AND the long-field case (Description/What's New) — Title/
+   Subtitle are short enough that the default 160px cap (shared rule above)
+   never comes into play either way, so there's no disparity worth
+   correcting there. A description long enough to need it now visibly fills
+   the box edge-to-edge (scrolling for the rest) instead of leaving a gap
+   above a stranded counter, and short values still just show their natural
+   height as everywhere else, with the counter's own margin-top:auto
+   (above) absorbing any small remaining slack. */
+.loc-review-cards--review-mode.loc-review-cards--long-field .loc-review-card--primary .loc-review-field {
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 /* Meta strip */
