@@ -4152,7 +4152,7 @@ function buildStorePreviewSection() {
         </span>
         <div class="ias-label-right">
           <span class="ias-label-note">Reflects your submission data</span>
-          ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px')}
+          ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
         </div>
       </div>
 
@@ -5387,26 +5387,44 @@ function trailerFileRowHTML(name, mb, prefix = '') {
  *                                option's name (used by the App Store Product
  *                                Page Preview's language dropdown to flag a
  *                                language with an over-character-limit field).
+ *                                The same icon also appears on the closed pill
+ *                                itself when the CURRENTLY SELECTED option is
+ *                                the one flagged, so the warning is visible
+ *                                without opening the dropdown.
  * @param {string}   onChangeFn  Name of a global function called with the chosen value
+ * @param {string}   align       'left' (default) anchors the dropdown's left edge to
+ *                                the pill's left edge, growing rightward — fine for a
+ *                                pill with room to its right. 'right' anchors the
+ *                                dropdown's right edge to the pill's right edge instead,
+ *                                growing leftward — use this for a pill that sits at the
+ *                                right edge of a scrolling container with overflow-x
+ *                                hidden (e.g. the App Store Product Page Preview's
+ *                                language dropdown, right-aligned via .ias-label-right),
+ *                                where a wide dropdown (long label + warning icon) would
+ *                                otherwise grow past that container's right edge and get
+ *                                silently clipped instead of just wrapping to a new line.
  */
-function swSelect(id, currentValue, options, onChangeFn, width = '100%') {
+function swSelect(id, currentValue, options, onChangeFn, width = '100%', align = 'left') {
   const chevSvg = `<svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
   const warnSvg = `<svg class="loc-dd-warn" width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="var(--magenta)" stroke-width="1.5"/><rect x="7.25" y="4" width="1.5" height="5" rx="0.75" fill="var(--magenta)"/><rect x="7.25" y="10.5" width="1.5" height="1.5" rx="0.75" fill="var(--magenta)"/></svg>`;
+  const warnIcon = `<span class="tooltip-anchor" data-tip="One or more fields are over the character limit for this language">${warnSvg}</span>`;
   const isNull  = currentValue === null || currentValue === undefined || currentValue === '';
-  const currentLabel = isNull ? 'Select…' : (options.find(o => o.value === currentValue)?.label || 'Select…');
+  const currentOption = options.find(o => o.value === currentValue);
+  const currentLabel = isNull ? 'Select…' : (currentOption?.label || 'Select…');
 
   const ddItems = options.map(o => `
     <button class="loc-dd-item${o.value === currentValue ? ' is-current' : ''}"
             onclick="swSelectChoose('${id}','${o.value}','${onChangeFn}')">
       <span class="loc-dd-name">${escHtml(o.label)}</span>
-      ${o.warning ? `<span class="tooltip-anchor" data-tip="One or more fields are over the character limit for this language">${warnSvg}</span>` : ''}
+      ${o.warning ? warnIcon : ''}
     </button>`).join('');
 
   return `
-    <div class="loc-primary-wrap sw-select-wrap" id="swsel-${id}" style="min-width:0;max-width:100%;width:${width};">
+    <div class="loc-primary-wrap sw-select-wrap${align === 'right' ? ' align-right' : ''}" id="swsel-${id}" style="min-width:0;max-width:100%;width:${width};">
       <button class="loc-primary-pill" onclick="toggleSwSelect(event,'${id}')">
         <span class="loc-primary-name${isNull ? ' is-placeholder' : ''}">${currentLabel}</span>
         ${chevSvg}
+        ${!isNull && currentOption?.warning ? warnIcon : ''}
       </button>
       <div class="loc-dropdown">${ddItems}</div>
     </div>`;

@@ -893,6 +893,24 @@ body {
   display: block;
 }
 
+/* Opt-in modifier (swSelect's align:'right' param, render.js) for a pill
+   that sits at the right edge of a scrolling container with overflow-x
+   hidden (e.g. #step-modal-body / .submit-modal-scroll, which the App Store
+   Product Page Preview's language dropdown lives inside, right-aligned via
+   .ias-label-right). Left as the default left:0 elsewhere (the Distribution
+   section's own Primary Language picker, the Android account-method
+   picker) since those don't sit flush against a clipping edge and a
+   dropdown wider than its pill growing further right is never a problem
+   for them. Without this, once .loc-dropdown's width:max-content (above)
+   makes the dropdown wider than its pill — which the per-language warning
+   icon here can trigger for a long label like "Chinese (Simplified)" — the
+   extra width grows further past the container's right edge and gets
+   silently clipped there instead of staying visible. */
+.loc-primary-wrap.align-right .loc-dropdown {
+  left: auto;
+  right: 0;
+}
+
 .loc-dd-item {
   display: flex;
   align-items: center;
