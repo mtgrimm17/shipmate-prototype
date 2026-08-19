@@ -4446,7 +4446,7 @@ function buildLocalizationReviewSection() {
         ${swSelect('loc-review-field', field, fieldOptions, 'setLocReviewField', '160px', 'right')}
       </div>
     </div>
-    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}">${cards}</div>`;
+    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
 }
 
 /* ── Submit Modal (non-iOS legacy) ──────────────────── */
