@@ -3265,12 +3265,21 @@ body {
 .ias-all-locs-btn:hover { background: var(--border-hover); color: var(--text); }
 
 /* Right side of the label row — the "Reflects your submission data" note
-   plus the language dropdown (swSelect, populated from the Distribution
-   section's Primary Language + selected supported languages) sit together
+   plus the "All Locs" button/language-dropdown group (below) sit together
    so the row's own space-between still reads as "badge -- everything else",
    and wrap onto their own line together if the modal gets too narrow for
    both. */
 .ias-label-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* "All Locs" and the language dropdown are grouped together with
+   flex-wrap: nowrap so they can only wrap as a single unit (onto their own
+   line under the "Reflects your submission data" note, same as before) —
+   never split apart from each other. Without this, .ias-label-right's own
+   wrapping could land the button and dropdown on two different lines (the
+   button stacked above the dropdown) whenever the row got too narrow for
+   all three children; grouping keeps "All Locs" immediately to the left of
+   the dropdown at every width. */
+.ias-locs-lang-group { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; flex-shrink: 0; }
 
 .ias-page {
   background: var(--panel-2);
@@ -3467,10 +3476,30 @@ body {
   padding: 12px 14px;
   background: var(--panel-2);
 }
+/* Language name + source badge sit on one row, so the badge reads as
+   "top-right corner of the card" without any absolute positioning that
+   could overlap or get clipped — it's just the second flex child, pushed
+   to the far edge by justify-content: space-between. */
+.loc-review-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; margin-bottom: 8px;
+}
 .loc-review-card-lang {
   font-size: 11px; font-weight: 700; color: var(--text-faint);
   text-transform: uppercase; letter-spacing: 0.3px;
-  margin-bottom: 8px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Source-of-text badge — see _locReviewSourceBadge (app.js) for exactly
+   when 'steam' vs 'ai' applies (and when neither renders at all). */
+.loc-review-source-badge { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.loc-review-source-badge--steam { color: var(--text-faint); }
+.loc-review-source-badge--steam svg,
+.loc-review-source-badge--steam .plat-img { display: block; width: 13px; height: 13px; }
+/* Same treatment as .ai-badge (Content Questions' AI-inferred answers) —
+   a plain white ✦ with a shadow for contrast, no background box. */
+.loc-review-source-badge--ai {
+  font-size: 12px; line-height: 1; color: white;
+  text-shadow: 0 0 3px rgba(0,0,0,0.45);
 }
 /* Description/What's New can run to 4,000 characters — cap the field's own
    height and let it scroll internally, so one long language's card doesn't
@@ -3480,6 +3509,17 @@ body {
   max-height: 160px; overflow-y: auto;
   font-size: 13px; color: var(--text); line-height: 1.5;
   white-space: pre-wrap; word-break: break-word;
+}
+/* The actively-edited textarea (startLocReviewInlineEdit, app.js — 8 rows,
+   not the collapsed display state's implicit ~4-line height above) should
+   read as noticeably bigger than the same field's read-only view, not the
+   same cramped 160px viewport with a scrollbar. .loc-review-card has no
+   fixed height of its own (flex: 1 1 200px, auto height) — growing the
+   textarea just grows that one card in the flex-wrap row, so nothing here
+   is pushed outside the card's own boundary. */
+textarea.loc-review-field.ias-inline-input {
+  max-height: none;
+  min-height: 160px;
 }
 .loc-review-placeholder { color: var(--text-faint); font-style: italic; }
 

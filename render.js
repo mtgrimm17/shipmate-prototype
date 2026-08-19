@@ -4189,8 +4189,10 @@ function buildStorePreviewSection() {
         </span>
         <div class="ias-label-right">
           <span class="ias-label-note">Reflects your submission data</span>
-          <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">All Locs</button>
-          ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
+          <div class="ias-locs-lang-group">
+            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">All Locs</button>
+            ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
+          </div>
         </div>
       </div>
 
@@ -4341,9 +4343,24 @@ function buildLocalizationReviewSection() {
     const langName = escHtml(OB_LANG_NAMES[lang] || lang);
     const display = raw ? escHtml(raw) : `<span class="loc-review-placeholder">Click to edit</span>`;
 
+    // Source-of-text badge — see _locReviewSourceBadge (app.js) for exactly
+    // when each applies. 'steam' reuses platformIcon's monochrome/white
+    // variant, the same treatment as the Preview Website Factsheet's
+    // Platforms sub-section (.pk-platform-icon); 'ai' reuses the same ✦
+    // sparkle used for AI-inferred Content Questions answers (.ai-badge).
+    const srcBadge = _locReviewSourceBadge(field, lang);
+    const badgeHtml = srcBadge === 'steam'
+      ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
     return `
       <div class="loc-review-card">
-        <div class="loc-review-card-lang">${langName}</div>
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
         <div class="loc-review-field ias-editable${raw ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
              onclick="startLocReviewInlineEdit('${field}','${lang}',this,event)" title="Click to edit">${display}</div>
         <div class="ias-char-counter-row">

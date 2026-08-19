@@ -3479,6 +3479,37 @@ function _iasFieldHasOverLimitLang(field, langCodes) {
   return langCodes.some(lang => _iasFieldValue(field, lang).length > limit);
 }
 
+// Localization Review — which small "source" badge (if any) a language's
+// card should show for the currently-displayed field (buildLocalizationReviewSection,
+// render.js). Two possible sources, matching the two automatic ways a
+// supporting language's text gets filled in without the developer typing it
+// themselves:
+//   'steam' — a genuine Steam store-page localization is still in effect
+//             for this language's Description (_checkSteamLocalizedDescription
+//             set descriptionFromSteam, and the primary Description hasn't
+//             changed since — see _iasTriggerAutoTranslate's write-time
+//             guard above for how that authority expires).
+//   'ai'    — the field is a live AI translation of the CURRENT primary-
+//             language text: its cached `${field}SourceText` (set by
+//             _iasTriggerAutoTranslate) still matches what's actually in
+//             the primary language's own field right now.
+// Returns null for the Primary Language's own card (nothing to attribute —
+// it's the source, not a copy), for a blank/placeholder field, and for
+// Title (never translated — just mirrored verbatim by _iasPropagateTitle,
+// which is neither a Steam localization nor a translation) and any other
+// text that's stale or was typed directly into that language's card.
+function _locReviewSourceBadge(field, lang) {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_iasFieldValue(field, lang)) return null;
+  const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
+  if (!entry) return null;
+  if (field === 'description' && entry.descriptionFromSteam) return 'steam';
+  if (IAS_TRANSLATABLE_FIELDS.includes(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+  return null;
+}
+
 function _iasSetFieldValue(field, lang, value) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -3806,7 +3837,15 @@ function startIasInlineEdit(field, el, ev) {
    every language's length at a glance — still works before you've clicked
    anything) rather than being created fresh on click like
    startIasInlineEdit's is. So this reuses the counter row already sitting
-   in the DOM as the field's next sibling instead of creating a new one. */
+   in the DOM as the field's next sibling instead of creating a new one.
+
+   Multiline fields get 8 rows here, not the main preview's 4 — matched by
+   the taller max-height override on textarea.loc-review-field.ias-inline-
+   input in style.css (the collapsed DISPLAY state's own 160px cap, on
+   .loc-review-field alone, is untouched). A review card has no fixed
+   height of its own (.loc-review-card just grows to fit its content in the
+   flex-wrap row), so a taller editor simply grows that one card — nothing
+   else in it is pushed outside its bounds. */
 function startLocReviewInlineEdit(field, lang, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
@@ -3817,7 +3856,7 @@ function startLocReviewInlineEdit(field, lang, el, ev) {
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
-    input.rows = 4;
+    input.rows = 8;
   } else {
     input.type = 'text';
   }
