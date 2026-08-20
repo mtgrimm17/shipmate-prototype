@@ -3466,10 +3466,58 @@ body {
   margin-bottom: 12px;
 }
 .loc-review-title { font-size: 13px; font-weight: 700; color: var(--text); }
+/* Groups the "Localization Review" heading with the settings gear icon
+   beside it (the "Automatically translated fields" dropdown trigger). */
+.loc-review-title-group { display: flex; align-items: center; gap: 4px; }
 /* Groups the "Review"/"All locs" toggle button with the field dropdown, the
    same way .ias-locs-lang-group groups "All Locs" with the language
    dropdown on the main preview above this section. */
 .loc-review-header-controls { display: flex; align-items: center; gap: 10px; }
+
+/* "Automatically translated fields" settings — gear icon beside the
+   "Localization Review" heading + its dropdown of checkboxes. Reuses the
+   .sw-select-wrap/.loc-dropdown shell (see swSelect above) for the open/
+   close look and closeAllDropdowns/outside-click wiring, but — unlike every
+   other dropdown built with that shell — this one's open state is also
+   mirrored in state.iasReviewSettingsOpen (see render.js/app.js) so it can
+   survive the reRenderStepModal() its own checkboxes trigger. */
+.loc-review-settings-wrap { position: relative; display: inline-flex; }
+.loc-review-settings-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border: none; border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, transform 0.2s;
+}
+.loc-review-settings-btn:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  transform: rotate(30deg);
+}
+.loc-review-settings-wrap.is-open .loc-review-settings-btn {
+  color: var(--text);
+  background: rgba(255,255,255,0.08);
+}
+.loc-review-settings-wrap .loc-review-settings-dropdown {
+  display: none;
+  left: 0;
+  right: auto;
+  width: max-content;
+  min-width: 220px;
+  padding: 10px 12px;
+}
+.loc-review-settings-wrap.is-open .loc-review-settings-dropdown {
+  display: block;
+}
+.loc-review-settings-heading {
+  font-size: 11px; font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+.loc-review-settings-row { padding: 3px 0; }
 /* Deliberately the same neutral look as .ias-all-locs-btn — an action, not
    a selection control, sitting directly beside the field dropdown pill. */
 .loc-review-toggle-btn {

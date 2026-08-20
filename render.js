@@ -4444,9 +4444,43 @@ function buildLocalizationReviewSection() {
       </div>`;
   }).join('');
 
+  // "Automatically translated fields" settings — gear icon + dropdown of
+  // checkboxes controlling which fields Shipmate auto-translates (or, for
+  // Title, mirrors) from the Primary Language into supporting languages.
+  // See _iasFieldAutoTranslateEnabled/_iasToggleAutoTranslateField (app.js)
+  // for the behavior this configures, and state.iasAutoTranslateFields for
+  // where the selections live. Defaults (Subtitle/Description/What's New on,
+  // Title off) match Shipmate's original hardcoded behavior exactly.
+  const autoCfg = state.iasAutoTranslateFields
+    || { title: false, subtitle: true, description: true, releaseNotes: true };
+  const settingsOpen = !!state.iasReviewSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_iasToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="loc-review-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_iasToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('title', 'Title')}
+          ${settingsRow('subtitle', 'Subtitle')}
+          ${settingsRow('description', 'Description')}
+          ${settingsRow('releaseNotes', "What's New")}
+        </div>
+      </div>`;
+
   return `
     <div class="loc-review-header">
-      <div class="loc-review-title">Localization Review</div>
+      <div class="loc-review-title-group">
+        <div class="loc-review-title">Localization Review</div>
+        ${settingsMenu}
+      </div>
       <div class="loc-review-header-controls">
         <button class="loc-review-toggle-btn" onclick="toggleLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
         ${swSelect('loc-review-field', field, fieldOptions, 'setLocReviewField', '160px', 'right')}

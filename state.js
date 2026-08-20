@@ -2400,6 +2400,30 @@ const state = {
   // lives at the top level rather than inside formData.
   iasTranslateStatus: {},
 
+  // Which localizable fields Shipmate automatically translates (or, for
+  // Title, mirrors) from the Primary Language into every supporting
+  // language — keyed 'title' | 'subtitle' | 'description' | 'releaseNotes',
+  // each true (auto-translate/mirror on) or false (fully manual — no
+  // propagation to supporting languages at all when the primary text is
+  // set or edited). Defaults match Shipmate's original hardcoded behavior
+  // exactly: Title off (it's only ever mirrored, never a real translation,
+  // unless turned on here), Subtitle/Description/What's New on. Set via
+  // the gear icon beside "Localization Review" (_iasToggleAutoTranslateField,
+  // app.js). This only gates the Primary → supporting-languages direction;
+  // the Review section's own top-half/bottom-half back-translation
+  // (locReviewBackTranslation above) is independent and always active.
+  iasAutoTranslateFields: { title: false, subtitle: true, description: true, releaseNotes: true },
+
+  // Whether the "Automatically translated fields" dropdown (opened via the
+  // gear icon beside "Localization Review") is currently open. Tracked in
+  // state, rather than as a transient DOM class like every other dropdown
+  // in the app (see swSelect/toggleSwSelect), because toggling a checkbox
+  // inside it calls reRenderStepModal() to reflect the change immediately —
+  // which fully replaces the modal's markup — so the open/closed state has
+  // to survive that re-render by being read back in at render time instead
+  // of living only in a DOM class that render would otherwise wipe out.
+  iasReviewSettingsOpen: false,
+
   // Cached Steam store-page info for the currently-selected Steam-linked
   // game — { appId, baselineDescription, shortDescription,
   // supportedLanguagesRaw } or null when no Steam-linked game is selected

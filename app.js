@@ -3506,7 +3506,7 @@ function _locReviewSourceBadge(field, lang) {
   const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
   if (!entry) return null;
   if (field === 'description' && entry.descriptionFromSteam) return 'steam';
-  if (IAS_TRANSLATABLE_FIELDS.includes(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+  if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
   return null;
 }
 
@@ -3516,7 +3516,7 @@ function _iasSetFieldValue(field, lang, value) {
   if (lang === primary) {
     fd[field] = value;
     if (field === 'title') _iasPropagateTitle(value);
-    else if (IAS_TRANSLATABLE_FIELDS.includes(field)) _iasTriggerAutoTranslate(field, value);
+    else if (_iasFieldAutoTranslateEnabled(field)) _iasTriggerAutoTranslate(field, value);
     return;
   }
   if (!fd.localizedStoreText) fd.localizedStoreText = {};
@@ -3525,14 +3525,20 @@ function _iasSetFieldValue(field, lang, value) {
 }
 
 // Copies the Primary Language's Title verbatim into every supporting
-// language. Title is never translated — game titles are typically kept
-// consistent across locales — just mirrored, so (unlike Subtitle/
-// Description/What's New) this is synchronous and needs no API call: a
+// language, UNLESS Title has been turned on as an auto-translated field via
+// the "Automatically translated fields" settings (gear icon beside
+// "Localization Review" — see _iasFieldAutoTranslateEnabled/
+// _iasToggleAutoTranslateField below), in which case Title is redirected to
+// the same real AI-translation path as Subtitle/Description/What's New
+// instead. By default Title is NOT one of the auto-translated fields, so
+// this mirror is the normal path: game titles are typically kept consistent
+// across locales, so mirroring is synchronous and needs no API call — a
 // newly-added language's Title is correct immediately, with no loading gap.
 // Always overwrites, including any earlier manual edit for that language —
 // nothing protects a supporting language's Title from the next Primary
 // Language Title change.
 function _iasPropagateTitle(primaryValue) {
+  if (_iasFieldAutoTranslateEnabled('title')) { _iasTriggerAutoTranslate('title', primaryValue); return; }
   const fd = state.formData;
   const supportedLangs = fd.localizations || [];
   if (!supportedLangs.length) return;
@@ -3568,15 +3574,37 @@ function _iasPropagateTitle(primaryValue) {
    else in this function. Steam only gets to supply the *initial* Description
    for a newly-added language or newly-selected Steam-linked game; every
    edit after that is translated and wins normally. */
+// The 3 fields that have never had a verbatim-mirror fallback — Title's
+// fallback (mirroring instead of translating) is handled separately inside
+// _iasPropagateTitle above. This list is intentionally NOT the source of
+// truth for whether a field auto-translates right now — that's
+// state.iasAutoTranslateFields, read via _iasFieldAutoTranslateEnabled below
+// — it's only used by _iasPropagateAllFields to know which fields always go
+// through the translate path (vs. Title, routed through _iasPropagateTitle
+// so it can pick mirror-or-translate based on the current setting).
 const IAS_TRANSLATABLE_FIELDS = ['subtitle', 'description', 'releaseNotes'];
 const IAS_FIELD_LABELS = {
+  title:        'title',
   subtitle:     'subtitle',
   description:  'description',
   releaseNotes: "what's new (release notes)",
 };
 
+// Whether `field` is currently configured to auto-translate (or, for Title,
+// mirror) from the Primary Language into supporting languages — see the
+// "Automatically translated fields" settings, state.iasAutoTranslateFields.
+// Falls back to the original hardcoded IAS_TRANSLATABLE_FIELDS behavior if
+// the setting is ever missing (e.g. a hand-built `state` in older tests),
+// so callers can't crash or silently disable translation just because this
+// field hasn't been initialized.
+function _iasFieldAutoTranslateEnabled(field) {
+  const cfg = state.iasAutoTranslateFields;
+  if (!cfg) return IAS_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
 async function _iasTriggerAutoTranslate(field, primaryValue) {
-  if (!IAS_TRANSLATABLE_FIELDS.includes(field)) return;
+  if (!_iasFieldAutoTranslateEnabled(field)) return;
   const fd = state.formData;
   const supportedLangs = fd.localizations || [];
   if (!supportedLangs.length) return;
@@ -3621,7 +3649,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
-  const perLangBudget  = field === 'subtitle' ? 120 : (field === 'releaseNotes' ? 600 : 1200);
+  const perLangBudget  = (field === 'subtitle' || field === 'title') ? 120 : (field === 'releaseNotes' ? 600 : 1200);
   const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
 
   const prompt = `Translate the following app store ${fieldLabel} text for a mobile/video game into each of the listed languages.
@@ -3736,6 +3764,28 @@ function _iasPropagateAllFields() {
   const fd = state.formData;
   _iasPropagateTitle(fd.title);
   IAS_TRANSLATABLE_FIELDS.forEach(field => _iasTriggerAutoTranslate(field, fd[field]));
+}
+
+// Flips one field's entry in the "Automatically translated fields" setting
+// (gear icon beside "Localization Review") and immediately brings supporting
+// languages up to date if it was just turned ON — mirroring how a newly-
+// added language gets retroactively populated by _iasPropagateAllFields
+// above, rather than waiting for the next primary-language edit. Turning a
+// field OFF does not clear or revert any text already sitting in supporting
+// languages — per the feature's spec, disabling a field only stops FUTURE
+// automatic propagation; existing translations/mirrors are left alone.
+// Never touches the Review section's own back-translation state
+// (locReviewBackTranslation) — that mechanism is completely independent of
+// this setting.
+function _iasToggleAutoTranslateField(field) {
+  state.iasAutoTranslateFields = state.iasAutoTranslateFields || {};
+  state.iasAutoTranslateFields[field] = !state.iasAutoTranslateFields[field];
+  if (state.iasAutoTranslateFields[field]) {
+    const fd = state.formData;
+    if (field === 'title') _iasPropagateTitle(fd.title || '');
+    else _iasTriggerAutoTranslate(field, fd[field] || '');
+  }
+  reRenderStepModal();
 }
 
 /* ── App Store Product Page Preview — inline click-to-edit ──────────────
@@ -4886,6 +4936,14 @@ function closeAllDropdowns() {
   document.getElementById('lang-search-wrap')?.classList.add('hidden');
   // Close language picker
   document.getElementById('langMenu')?.classList.add('hidden');
+  // Close the "Automatically translated fields" settings menu. Unlike the
+  // swSelect dropdowns above (purely transient DOM classes, never read back
+  // by render), this one's open/closed state is also tracked in `state`
+  // (see iasReviewSettingsOpen, state.js) so it can survive a
+  // reRenderStepModal() triggered by its own checkboxes — so closing it here
+  // has to reset that flag too, or the next unrelated re-render would read
+  // stale state and pop it back open.
+  state.iasReviewSettingsOpen = false;
 }
 
 /* ── Language picker ─────────────────────────────────── */
@@ -4916,6 +4974,25 @@ function toggleSwSelect(event, id) {
 function swSelectChoose(id, value, callbackFn) {
   closeAllDropdowns();
   if (typeof window[callbackFn] === 'function') window[callbackFn](value);
+}
+
+/* ── Localization Review — "Automatically translated fields" settings ──
+   Opened via the gear icon beside "Localization Review". Built like a
+   swSelect dropdown (same .sw-select-wrap/.loc-dropdown shell, same
+   closeAllDropdowns/outside-click wiring), but state-driven rather than a
+   pure transient DOM class: its checkboxes call reRenderStepModal() to
+   apply a setting change immediately, which fully rebuilds the modal
+   markup, so open/closed has to be read back from state.iasReviewSettingsOpen
+   at render time (buildLocalizationReviewSection, render.js) or it would
+   snap shut after every single checkbox click. */
+function _iasToggleReviewSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.iasReviewSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.iasReviewSettingsOpen = true;
+    document.getElementById('loc-review-settings-wrap')?.classList.add('is-open');
+  }
 }
 
 /* ── Profile menu ────────────────────────────────────── */
