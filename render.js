@@ -4830,6 +4830,20 @@ function buildLocalizationReviewSection() {
         </span>`;
   };
 
+  // A translation actually in progress (either direction) is shown as the
+  // same small spinning-rings icon used when the App Store Content
+  // Questions section first opens (.inf-rings-wrap/.inf-ring, above) —
+  // scaled down to fit inline next to a language name (.loc-review-
+  // spinner) — rather than a text message. An actual failure still needs
+  // to be read, so that stays text. Shared by all three places a
+  // translate-in-progress indicator can appear: a non-flipped card, a
+  // flipped card's TOP half, and a flipped card's BOTTOM half (see
+  // _iasFieldTranslatePending/_locReviewBackTranslationValue's status/
+  // forwardStatus, app.js, for what drives each one).
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
   // Shared field+counter markup — identical look/behavior (placeholder,
   // over-limit styling and message) whether it's the non-flipped card or
   // the Review side's top half; only the value shown and the click-to-edit
@@ -4875,27 +4889,34 @@ function buildLocalizationReviewSection() {
 
     if (reviewMode && !isPrimary) {
       const back = _locReviewBackTranslationValue(field, lang);
-      // A translation actually in progress is shown as the same small
-      // spinning-rings icon used when the App Store Content Questions
-      // section first opens (.inf-rings-wrap/.inf-ring, above) — scaled
-      // down to fit inline next to the language name (.loc-review-spinner)
-      // — rather than a text message. An actual failure still needs to be
-      // read, so that stays text.
-      const statusHtml = back.status === 'loading'
-        ? `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`
-        : back.status === 'error'
-          ? `<span class="loc-review-status is-error">Translation failed</span>`
-          : '';
+      // TOP half: shows a translate-in-progress indicator for EITHER of
+      // the two things that can currently be writing into this language's
+      // own real field — the Primary Language batch translate
+      // (_iasTriggerAutoTranslate, triggered by a primary-field edit,
+      // covering potentially every supporting language at once) OR this
+      // one card's own bottom-half edit forward-translating back into it
+      // (_locReviewCommitPrimaryEdit's forwardStatus) — whichever is
+      // actually in flight for this (field, lang) right now; the two are
+      // never both active at once for the same language.
+      // BOTTOM half: shows a translate-in-progress indicator for the
+      // top -> Primary Language back-translation refresh (back.status) —
+      // fired either by a direct top-half edit, or by the cascade after
+      // the Primary Language batch translate above lands this language's
+      // new top text.
+      const topStatusHtml = _iasFieldTranslatePending(field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
 
       return `
       <div class="loc-review-card">
         <div class="loc-review-side">
           <div class="loc-review-half loc-review-half--top">
-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div></div>
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
             ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
           </div>
           <div class="loc-review-half loc-review-half--bottom">
-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml}</div>
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
             ${fieldBlockNoLimit(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
           </div>
         </div>
@@ -4907,12 +4928,20 @@ function buildLocalizationReviewSection() {
     // variant, the same treatment as the Preview Website Factsheet's
     // Platforms sub-section (.pk-platform-icon); 'ai' reuses the same ✦
     // sparkle used for AI-inferred Content Questions answers (.ai-badge).
+    // A card currently awaiting a fresh translation from the Primary
+    // Language batch (_iasFieldTranslatePending, app.js — never true for
+    // the Primary Language's own card) shows the loading spinner INSTEAD
+    // of whatever source badge its current (about-to-be-replaced) text
+    // would otherwise carry.
+    const isPending = !isPrimary && _iasFieldTranslatePending(field, lang);
     const srcBadge = _locReviewSourceBadge(field, lang);
-    const badgeHtml = srcBadge === 'steam'
-      ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
-      : srcBadge === 'ai'
-        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
-        : '';
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
 
     return `
       <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">

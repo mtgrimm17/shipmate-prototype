@@ -2429,6 +2429,17 @@ const state = {
   // lives at the top level rather than inside formData.
   iasTranslateStatus: {},
 
+  // Which supporting languages a given field's CURRENT in-flight batch
+  // translate (iasTranslateStatus above) will actually update — the
+  // eligible-language list _iasTriggerAutoTranslate computed when it
+  // started this batch. Read via _iasFieldTranslatePending (app.js) so
+  // Localization Review can show the loading spinner only on the card(s)
+  // really about to change, not indiscriminately on every supporting
+  // language. Cleared back to an empty array once the batch finishes
+  // (success or error) — only meaningful while its field's
+  // iasTranslateStatus entry is 'loading'.
+  iasTranslatePendingLangs: {},
+
   // Which localizable fields Shipmate automatically translates (or, for
   // Title, mirrors) from the Primary Language into every supporting
   // language — keyed 'title' | 'subtitle' | 'description' | 'releaseNotes',

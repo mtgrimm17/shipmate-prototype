@@ -3727,6 +3727,14 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
 
   state.iasTranslateStatus = state.iasTranslateStatus || {};
   state.iasTranslateStatus[field] = 'loading';
+  // Which languages this batch will actually update — read by
+  // _iasFieldTranslatePending (below) so Localization Review can show the
+  // loading spinner only on the card(s) really about to change, not every
+  // supporting language indiscriminately (a language already in sync with
+  // this exact primary text, if any, was already filtered out of
+  // `eligible` above).
+  state.iasTranslatePendingLangs = state.iasTranslatePendingLangs || {};
+  state.iasTranslatePendingLangs[field] = eligible.slice();
   reRenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -3827,8 +3835,28 @@ Rules:
     console.warn('[Store Preview Translate]', field, e.message);
     state.iasTranslateStatus[field] = 'error';
   }
+  // This batch is done (either way) — nothing left pending for it. Any
+  // per-language back-translation refresh the success branch just kicked
+  // off above (_locReviewRefreshBackTranslation) tracks its OWN loading
+  // state separately (locReviewBackTranslation[field][lang].status), so
+  // clearing this doesn't affect that.
+  state.iasTranslatePendingLangs[field] = [];
 
   reRenderStepModal();
+}
+
+// Read-only lookup for render.js (never mutates state) — whether `lang` is
+// currently awaiting a translation from the Primary Language's batch
+// translate above (state.iasTranslatePendingLangs[field]), gated on the
+// batch actually still being in flight (state.iasTranslateStatus[field]
+// === 'loading') so a stale/leftover pending-langs list from a previous
+// batch can never cause a false positive. Drives the loading spinner shown
+// on a non-flipped Localization Review card, or a flipped card's TOP half
+// (buildLocalizationReviewSection, render.js).
+function _iasFieldTranslatePending(field, lang) {
+  if (!state.iasTranslateStatus || state.iasTranslateStatus[field] !== 'loading') return false;
+  const pending = state.iasTranslatePendingLangs && state.iasTranslatePendingLangs[field];
+  return !!(pending && pending.includes(lang));
 }
 
 function _iasRetryTranslate(field) {
@@ -4144,7 +4172,7 @@ Rules:
    — the exact same storage the top half itself writes into — so either
    half can drive the other.
 
-   state.locReviewBackTranslation[field][lang] = { text, syncedTopText, status }
+   state.locReviewBackTranslation[field][lang] = { text, syncedTopText, status, forwardStatus }
    - text:          the Primary-Language string currently shown/edited in
                      the bottom half.
    - syncedTopText: the top half's real field value (_iasFieldValue) that
@@ -4155,7 +4183,21 @@ Rules:
                      regenerating; this is what lets toggling the Review
                      side or switching the field dropdown back and forth
                      skip redundant API calls for languages already in sync.
-   - status:        null | 'loading' | 'error'. */
+   - status:        null | 'loading' | 'error' — the TOP -> Primary
+                     Language direction (_locReviewRefreshBackTranslation
+                     below), shown at the top of the BOTTOM half. Set by a
+                     direct top-half edit, or by the cascade after the
+                     Primary Language's own batch translate
+                     (_iasTriggerAutoTranslate) lands this language's new
+                     top text.
+   - forwardStatus: null | 'loading' | 'error' — the reverse direction, the
+                     Primary Language draft -> this language
+                     (_locReviewCommitPrimaryEdit below, fired by editing
+                     the BOTTOM half), shown at the top of the TOP half.
+                     Deliberately a SEPARATE flag from status — the two
+                     directions can each be independently in flight and
+                     must show their spinner on the correct half, never
+                     the other's. */
 
 // Read-only lookup for render.js — never creates an entry (render functions
 // must not mutate state). A language/field with nothing cached yet reads as
@@ -4164,7 +4206,7 @@ function _locReviewBackTranslationValue(field, lang) {
   const entry = state.locReviewBackTranslation
     && state.locReviewBackTranslation[field]
     && state.locReviewBackTranslation[field][lang];
-  return entry || { text: '', syncedTopText: undefined, status: null };
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
 }
 
 // Mutating accessor for app.js's own bookkeeping below — lazily creates the
@@ -4172,7 +4214,7 @@ function _locReviewBackTranslationValue(field, lang) {
 function _locReviewBackTranslationEntry(field, lang) {
   if (!state.locReviewBackTranslation) state.locReviewBackTranslation = {};
   const forField = state.locReviewBackTranslation[field] || (state.locReviewBackTranslation[field] = {});
-  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null });
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
 }
 
 // Regenerates the bottom half's back-translation for every supporting
@@ -4250,11 +4292,20 @@ async function _locReviewRefreshBackTranslation(field, lang, topText) {
 // lasting protection: the next time the actual Primary Language field
 // changes, _iasTriggerAutoTranslate overwrites this language's field again
 // like any other.
+//
+// Uses forwardStatus, NOT status, for its own loading/error state — status
+// is reserved for the OTHER direction (_locReviewRefreshBackTranslation,
+// top -> Primary Language), shown at the top of the BOTTOM half; this
+// function's own translate call goes the opposite way (Primary Language ->
+// this language) and must show its spinner at the top of the TOP half
+// instead (buildLocalizationReviewSection, render.js) — sharing one flag
+// between both directions would show the spinner on the wrong half
+// whenever this path ran.
 async function _locReviewCommitPrimaryEdit(field, lang, value) {
   const entry = _locReviewBackTranslationEntry(field, lang);
   entry.text = value;
   entry.syncedTopText = undefined; // not yet known to correspond to any top value
-  entry.status = value.trim() ? 'loading' : null;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
   reRenderStepModal();
 
   if (!value.trim()) {
@@ -4274,11 +4325,11 @@ async function _locReviewCommitPrimaryEdit(field, lang, value) {
   if (currentEntry.text !== value) return;
 
   if (translated === null) {
-    currentEntry.status = 'error';
+    currentEntry.forwardStatus = 'error';
   } else {
     _iasSetFieldValue(field, lang, translated);
     currentEntry.syncedTopText = translated;
-    currentEntry.status = null;
+    currentEntry.forwardStatus = null;
   }
   reRenderStepModal();
 }
