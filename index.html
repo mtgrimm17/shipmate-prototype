@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3.64">
-  <link rel="stylesheet" href="splash.css?v=3.64">
+  <link rel="stylesheet" href="style.css?v=3.65">
+  <link rel="stylesheet" href="splash.css?v=3.65">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
   <!-- Plays the Assets tab's auto-filled Steam trailer thumbnail inline
@@ -27,29 +27,9 @@
   <!-- ═══════════════════════════════════════════════════
        ONBOARDING MODAL
   ═══════════════════════════════════════════════════ -->
-  <div id="onboarding-overlay" class="overlay-bg">
-    <div class="ob-modal" id="ob-modal">
-
-      <div class="ob-header">
-        <div class="ob-logo-text">Shipmate</div>
-        <div class="ob-headline">Let's get your game ready</div>
-        <div class="ob-subline">We'll collect the essentials once — then you focus on each platform.</div>
-      </div>
-
-      <div class="ob-tabs" id="ob-tabs">
-        <!-- Rendered by renderOnboardingTabs() -->
-      </div>
-
-      <div class="ob-body" id="ob-body">
-        <!-- Rendered by renderOnboardingBody() -->
-      </div>
-
-      <div class="ob-footer" id="ob-footer">
-        <!-- Rendered by renderOnboardingFooter() -->
-      </div>
-
-    </div>
-  </div>
+  <!-- Onboarding is now inlined into the "Add Game Details" tab (#details).
+       This element is kept (empty, hidden) so legacy references resolve safely. -->
+  <div id="onboarding-overlay" class="overlay-bg hidden"></div>
 
   <!-- ═══════════════════════════════════════════════════
        TASK MODAL
@@ -759,6 +739,30 @@ Confidence</h3>
           </svg>
         </button>
       </div>
+
+      <!-- Top-level tabs: Add Game Details · Submit to Platforms · Spread the Word -->
+      <div class="bar-nav" id="bar-nav" role="tablist" aria-label="Main navigation">
+        <button class="bar-nav-btn" id="nav-details" role="tab" aria-selected="false" style="--accent:#60a5fa" onclick="setView('details')">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          <span>Add Game Details</span>
+        </button>
+        <button class="bar-nav-btn is-active" id="nav-dashboard" role="tab" aria-selected="true" style="--accent:#4ade80" onclick="setView('dashboard')">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
+          </svg>
+          <span>Submit to Platforms</span>
+        </button>
+        <button class="bar-nav-btn" id="nav-broadcast" role="tab" aria-selected="false" style="--accent:#FF3B76" onclick="setView('broadcast')">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/>
+          </svg>
+          <span>Spread the Word</span>
+          <span class="bar-nav-badge">New</span>
+        </button>
+      </div>
+
       <div class="bar-right">
         <div class="version-selector-wrap" id="versionSelectorWrap">
           <button class="version-selector" id="versionSelector" onclick="toggleVersionDropdown(event)">
@@ -789,8 +793,19 @@ Confidence</h3>
     </div>
 
     <main class="main">
+      <div class="details-view hidden" id="details">
+        <div id="details-hero"><!-- tab-hero injected by renderDetails() --></div>
+        <div class="ob-modal ob-inline" id="ob-modal">
+          <div class="ob-tabs" id="ob-tabs"><!-- renderOnboardingTabs() --></div>
+          <div class="ob-body" id="ob-body"><!-- renderOnboardingBody() --></div>
+          <div class="ob-footer" id="ob-footer"><!-- renderOnboardingFooter() --></div>
+        </div>
+      </div>
       <div class="dashboard" id="dashboard">
         <!-- Rendered by renderDashboard() -->
+      </div>
+      <div class="broadcast-view hidden" id="broadcast">
+        <!-- Rendered by renderBroadcast() -->
       </div>
     </main>
 
@@ -807,14 +822,14 @@ Confidence</h3>
       </svg>
       Built by indie devs and game industry veterans to empower the indie game community.
     </span>
-    <span class="app-footer-version" id="app-footer-version">v3.64</span>
+    <span class="app-footer-version" id="app-footer-version">v3.65</span>
   </footer>
 
   <!-- AI disclaimer -->
   <div class="ai-disclaimer">Please review all inferred answers before submitting</div>
 
-  <script src="locale.js?v=3.64"></script>
-  <script src="state.js?v=3.64"></script>
+  <script src="locale.js?v=3.65"></script>
+  <script src="state.js?v=3.65"></script>
   <script>
     const CONFIG = {
       CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
@@ -822,10 +837,10 @@ Confidence</h3>
       IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
     };
   </script>
-  <script src="claude.js?v=3.64"></script>
-  <script src="render.js?v=3.64"></script>
-  <script src="app.js?v=3.64"></script>
-  <script src="splash.js?v=3.64"></script>
+  <script src="claude.js?v=3.65"></script>
+  <script src="render.js?v=3.65"></script>
+  <script src="app.js?v=3.65"></script>
+  <script src="splash.js?v=3.65"></script>
 
 </body>
 </html>

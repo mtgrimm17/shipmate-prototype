@@ -2139,6 +2139,19 @@ const state = {
   // Modal
   activeModal: null,
 
+  // Top-level view within the main app: 'dashboard' | 'broadcast'
+  activeView: 'dashboard',
+
+  // Broadcast (unified announcement) composer — write once, adapt per destination.
+  // Credentials are intentionally deferred; destinations show a "Connect later" state.
+  broadcast: {
+    message: '',              // the single source announcement the dev writes
+    active: [],               // opt-in channel ids turned on (social/community/press/video)
+    storeOff: [],             // auto storefront channels the dev has powered off
+    expandedGroups: {},       // group id -> bool (secondary chips expand/collapse)
+    previewDest: null,        // channel id currently shown in the adapted preview
+  },
+
   // Activated platforms (shown with full task list on dashboard)
   activePlatforms: new Set(),
 

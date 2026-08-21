@@ -46,20 +46,97 @@ function signInFromSplash() {
   }
 }
 
-function showMainApp() {
+function showMainApp(view = 'dashboard') {
   document.getElementById('onboarding-overlay').classList.add('hidden');
   document.getElementById('main-app').classList.remove('hidden');
   document.body.classList.add('signed-in');
   seedOnboardingToIOS();
   seedOnboardingToAndroid();
-  renderDashboard();
+  setView(view);
+}
+
+/* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
+const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast' };
+const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast' };
+function setView(view) {
+  if (!VIEW_IDS[view]) view = 'dashboard';
+  state.activeView = view;
+  for (const [v, id] of Object.entries(VIEW_IDS)) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', v !== view);
+  }
+  for (const [v, id] of Object.entries(VIEW_NAV)) {
+    const btn = document.getElementById(id);
+    if (btn) { const on = v === view; btn.classList.toggle('is-active', on); btn.setAttribute('aria-selected', String(on)); }
+  }
+  if (view === 'details') renderDetails();
+  else if (view === 'broadcast') renderBroadcast();
+  else renderDashboard();
+  window.scrollTo(0, 0);
+}
+
+/* ── Broadcast composer handlers ──────────────────────── */
+// Live-refresh only the adapted-preview pane so the textarea keeps focus.
+function bcRefreshAdapt() {
+  const a = document.querySelector('.bc-adapt');
+  if (a) a.outerHTML = buildBroadcastAdapt();
+}
+function bcSetMessage(v) { state.broadcast.message = v; bcRefreshAdapt(); }
+function bcPreview(id)   { state.broadcast.previewDest = id; bcRefreshAdapt(); }
+// Toggle a channel on/off. Auto storefronts toggle their power (storeOff);
+// opt-in channels toggle membership in the active list.
+function bcToggleChannel(id) {
+  const b = state.broadcast;
+  if (bcAutoStores().includes(id)) {
+    const i = b.storeOff.indexOf(id);
+    if (i >= 0) b.storeOff.splice(i, 1); else b.storeOff.push(id);
+  } else {
+    const i = b.active.indexOf(id);
+    if (i >= 0) b.active.splice(i, 1); else b.active.push(id);
+  }
+  renderBroadcast();
+}
+function bcConnect(id) {
+  const d = bcDest(id);
+  bcToast(`Connect ${d ? d.name : 'this channel'} later — account linking is coming soon.`);
+}
+function bcToggleGroup(gid) {
+  state.broadcast.expandedGroups[gid] = !state.broadcast.expandedGroups[gid];
+  renderBroadcast();
+}
+function bcDraftWithAI() {
+  const title = state.formData.title || 'Our game';
+  state.broadcast.message =
+    `${title} just got a major update! New content, fixes, and quality-of-life improvements are live today. ` +
+    `Thanks to everyone in the community for the feedback that shaped this release — jump back in and let us know what you think.`;
+  renderBroadcast();
+}
+function bcBroadcastNow() {
+  const n = bcActiveChannels().length;
+  if (!n) return;
+  bcToast(`✓ Queued to ${n} channel${n === 1 ? '' : 's'} — connect accounts to post for real.`);
+}
+function bcSchedule() { bcToast('Scheduling comes with connected accounts — coming soon.'); }
+
+// Lightweight self-contained toast (no dependency on other UI).
+function bcToast(msg) {
+  let el = document.getElementById('bc-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'bc-toast';
+    el.className = 'bc-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('is-shown');
+  clearTimeout(bcToast._t);
+  bcToast._t = setTimeout(() => el.classList.remove('is-shown'), 3200);
 }
 
 function showOnboarding() {
-  document.getElementById('onboarding-overlay').classList.remove('hidden');
-  document.getElementById('main-app').classList.add('hidden');
-  renderOnboarding();
-  // Re-apply highlight state after every render (ob-modal is re-used across sessions)
+  // Onboarding is now the "Add Game Details" tab inside the main app (no modal).
+  showMainApp('details');
+  // Re-apply highlight state after every render (ob-modal markup is re-used)
   _setObValidating(false); // triggers the latch logic inside _setObValidating
   updateObSectionStates();
 }
@@ -79,7 +156,7 @@ function closeOnboarding() {
   if (!state.onboardingComplete) return; // can't close if not yet done
   state.assetsFromWebEdit = false;
   state.assetsFromWebEditSource = 'siteInfo';
-  showMainApp();
+  setView('dashboard');
 }
 
 /* Opens the Assets tab from a "Manage" button in the Web platform's
@@ -237,7 +314,7 @@ function completeOnboarding() {
   }
 
   state.onboardingComplete = true;
-  showMainApp();
+  setView('dashboard');   // main app is already visible; just switch to the Submit tab
 }
 
 

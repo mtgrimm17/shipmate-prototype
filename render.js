@@ -183,7 +183,7 @@ function renderOnboardingFooter() {
         ${[0,1,2,3].map(i => `<span class="ob-dot ${i === state.onboardingTab ? 'is-active' : (i < state.onboardingTab ? 'is-done' : '')}"></span>`).join('')}
       </div>
       <button class="btn btn-primary" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : (isLast ? 'completeOnboarding()' : 'nextOnboardingTab()')}">
-        ${fromWebEdit ? 'Save &amp; Return' : (isLast ? t('ob.footer.launch') : t('ob.footer.next'))}
+        ${fromWebEdit ? 'Save &amp; Return' : (isLast ? 'Continue to Submit →' : t('ob.footer.next'))}
       </button>
     </div>`;
 }
@@ -1455,6 +1455,267 @@ const BIN_FINDINGS = {
   ],
 };
 
+/* ── Make Waves: unified launch announcement ─────────────
+   Write once; Shipmate reshapes it per channel. Storefront channels are auto-
+   synced from the game's distribution plan; social/community/press/video are
+   opt-in toggle chips (common ones up front, the rest behind "+ more").
+   Credentials are deferred — each active channel has a cog to connect later. */
+
+// Distribution platform id → its storefront channel id.
+const BC_STORE_FROM_PLATFORM = {
+  ios: 'appstore', android: 'googleplay', steam: 'steam', egs: 'epic',
+  xbox: 'msstore', nintendo: 'nintendo', psn: 'psn',
+};
+
+const BC_GROUPS = [
+  { id: 'storefront', label: 'Storefronts', auto: true,
+    hint: 'Synced from your distribution plan — “What’s New” / patch notes on the stores you ship to', dests: [
+    { id: 'steam',      name: 'Steam',            sub: 'Announcement + patch notes', mono: 'S',  color: '#1b2838', kind: 'patch' },
+    { id: 'appstore',   name: 'App Store',        sub: '“What’s New”',   mono: '',  color: '#0a84ff', kind: 'whatsnew' },
+    { id: 'googleplay', name: 'Google Play',      sub: '“What’s new”',   mono: '▶', color: '#34a853', kind: 'whatsnew' },
+    { id: 'epic',       name: 'Epic Games Store', sub: 'Store news',     mono: 'E', color: '#2a2a2a', kind: 'whatsnew' },
+    { id: 'msstore',    name: 'Microsoft Store',  sub: 'Release notes',  mono: '⊞', color: '#0067b8', kind: 'whatsnew' },
+    { id: 'nintendo',   name: 'Nintendo eShop',   sub: 'Update info',    mono: 'N', color: '#e60012', kind: 'whatsnew' },
+    { id: 'psn',        name: 'PlayStation Store', sub: 'Patch notes',   mono: 'P', color: '#003791', kind: 'patch' },
+  ] },
+  { id: 'social', label: 'Social', hint: 'Where players follow along', dests: [
+    { id: 'x',        name: 'X / Twitter',  sub: 'Post + media',   mono: '𝕏', color: '#000000', kind: 'social', limit: 280, common: true },
+    { id: 'bluesky',  name: 'Bluesky',      sub: 'Post + media',   mono: 'b', color: '#1185fe', kind: 'social', limit: 300, common: true },
+    { id: 'instagram',name: 'Instagram',    sub: 'Image / Reel',   mono: '◎', color: '#e1306c', kind: 'caption', common: true },
+    { id: 'tiktok',   name: 'TikTok',       sub: 'Short video',    mono: '♪', color: '#010101', kind: 'caption', common: true },
+    { id: 'mastodon', name: 'Mastodon',     sub: 'Toot + media',   mono: 'm', color: '#6364ff', kind: 'social', limit: 500 },
+    { id: 'threads',  name: 'Threads',      sub: 'Post + media',   mono: '@', color: '#000000', kind: 'social', limit: 500 },
+    { id: 'ytcomm',   name: 'YouTube',      sub: 'Community post', mono: '▶', color: '#ff0000', kind: 'social' },
+    { id: 'facebook', name: 'Facebook Page', sub: 'Post + media',  mono: 'f', color: '#1877f2', kind: 'social' },
+    { id: 'linkedin', name: 'LinkedIn',     sub: 'Studio update',  mono: 'in',color: '#0a66c2', kind: 'social' },
+  ] },
+  { id: 'community', label: 'Communities & forums', hint: 'Where your most engaged players gather', dests: [
+    { id: 'discord',  name: 'Discord',        sub: 'Announcements channel',     mono: '◈', color: '#5865f2', kind: 'markdown', common: true },
+    { id: 'reddit',   name: 'Reddit',         sub: 'Your subs + r/IndieGaming', mono: 'r', color: '#ff4500', kind: 'title',    common: true },
+    { id: 'steamhub', name: 'Steam Community', sub: 'Hub discussion',           mono: 'S', color: '#1b2838', kind: 'patch' },
+    { id: 'tigsource',name: 'TIGSource',      sub: 'Devlog thread',             mono: 'T', color: '#444444', kind: 'devlog' },
+  ] },
+  { id: 'press', label: 'Discovery & press', hint: 'How new players and journalists find you', dests: [
+    { id: 'email',      name: 'Email newsletter', sub: 'Your list (Mailchimp/Substack)', mono: '✉', color: '#ea580c', kind: 'email', common: true },
+    { id: 'producthunt',name: 'Product Hunt',    sub: 'Launch post', mono: 'P', color: '#da552f', kind: 'title', common: true },
+    { id: 'hackernews', name: 'Hacker News',     sub: 'Show HN',     mono: 'Y', color: '#ff6600', kind: 'title' },
+    { id: 'indiedb',    name: 'IndieDB',         sub: 'News article', mono: 'i',color: '#d35400', kind: 'whatsnew' },
+    { id: 'gamejolt',   name: 'GameJolt',        sub: 'Post',        mono: 'gj',color: '#cf4b4b', kind: 'markdown' },
+    { id: 'presskit',   name: 'Press release',   sub: 'presskit() + media list', mono: '¶', color: '#475569', kind: 'email' },
+  ] },
+  { id: 'video', label: 'Video & streaming', hint: 'Trailers, devlogs, and go-live moments', dests: [
+    { id: 'youtube', name: 'YouTube', sub: 'Trailer / devlog', mono: '▶', color: '#ff0000', kind: 'whatsnew', common: true },
+    { id: 'twitch',  name: 'Twitch',  sub: 'Go-live announce', mono: 't', color: '#9146ff', kind: 'social', common: true },
+  ] },
+];
+
+const BC_KIND_LABEL = { social: 'Social post', whatsnew: 'Store “What’s New”', patch: 'Patch notes',
+  devlog: 'Devlog post', markdown: 'Markdown post', title: 'Title + body', email: 'Email', caption: 'Caption + tags', plain: 'Plain text' };
+const BC_GEAR = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+function bcAllDests() { return BC_GROUPS.flatMap(g => g.dests); }
+function bcDest(id)   { return bcAllDests().find(d => d.id === id); }
+function bcIcon(d)    { return `<span class="bc-ico" style="--c:${d.color}">${d.mono || d.name[0]}</span>`; }
+function bcMessage()  { return state.broadcast.message || ''; }
+
+// Storefront channels auto-derived from the distribution plan (activePlatforms).
+function bcAutoStores() {
+  return [...state.activePlatforms].map(p => BC_STORE_FROM_PLATFORM[p]).filter(Boolean);
+}
+function bcIsActive(id) {
+  if (bcAutoStores().includes(id)) return !state.broadcast.storeOff.includes(id); // auto-on unless powered off
+  return state.broadcast.active.includes(id);
+}
+// Ordered list of currently-active channels (stores first, then opted-in).
+function bcActiveChannels() {
+  const stores = bcAutoStores().filter(id => !state.broadcast.storeOff.includes(id));
+  const optIn  = state.broadcast.active.filter(id => bcDest(id) && !bcAutoStores().includes(id));
+  return [...new Set([...stores, ...optIn])];
+}
+
+function bcAdaptedText(destId) {
+  const msg = bcMessage().trim();
+  const title = (state.formData.title || 'Your Game');
+  const proj = state.projects.find(p => p.id === state.activeProjectId);
+  const ver  = proj?.versions.find(v => v.id === state.activeVersionId)?.versionNumber || '1.0';
+  const kind = (bcDest(destId) || {}).kind || 'plain';
+  const body = msg || `${title} v${ver} is out now! [write your announcement on the left — Shipmate adapts it for each channel]`;
+  const tag  = (title || '').replace(/[^a-z0-9]/gi, '');
+  switch (kind) {
+    case 'patch':    return `[h1]${title} — v${ver}[/h1]\n${body}`;
+    case 'whatsnew': return `What’s new in v${ver}\n${body}`;
+    case 'devlog':   return `# ${title} v${ver}\n${body}`;
+    case 'markdown': return `**${title} v${ver} is live!** 🎉\n${body}`;
+    case 'title':    return `${title} v${ver} is out now\n\n${body}`;
+    case 'email':    return `Subject: ${title} v${ver} is here\n\n${body}`;
+    case 'caption':  return `${body}\n\n#indiegame #gamedev${tag ? ' #' + tag : ''}`;
+    default:         return body;
+  }
+}
+
+function buildBroadcastAdapt() {
+  const channels = bcActiveChannels();
+  if (!channels.length) {
+    return `<div class="bc-adapt bc-adapt--empty">
+      <div class="bc-adapt-head"><span class="bc-adapt-title">✨ Adapted automatically</span>
+        <span class="bc-adapt-sub">Turn on channels below and Shipmate reshapes your message for each one.</span></div>
+    </div>`;
+  }
+  let active = state.broadcast.previewDest;
+  if (!channels.includes(active)) active = channels[0];
+  const tabs = channels.map(id => {
+    const d = bcDest(id); if (!d) return '';
+    return `<button class="bc-adapt-tab${id === active ? ' is-on' : ''}" onclick="bcPreview('${id}')">${bcIcon(d)}<span>${d.name}</span></button>`;
+  }).join('');
+  const d = bcDest(active) || {};
+  const text = bcAdaptedText(active);
+  let meter = '';
+  if (d.limit) {
+    const used = (bcMessage().trim().length || text.length);
+    const over = used > d.limit;
+    meter = `<div class="bc-adapt-meter${over ? ' is-over' : ''}">${used} / ${d.limit}</div>`;
+  }
+  return `
+    <div class="bc-adapt">
+      <div class="bc-adapt-head">
+        <span class="bc-adapt-title">✨ Adapted automatically</span>
+        <span class="bc-adapt-sub">One message, reshaped for each active channel</span>
+      </div>
+      <div class="bc-adapt-tabs">${tabs}</div>
+      <div class="bc-adapt-frame">
+        <div class="bc-adapt-fmt">${d.name || ''} · ${BC_KIND_LABEL[d.kind] || 'Plain text'}${meter}</div>
+        <pre class="bc-adapt-body">${escHtml(text)}</pre>
+      </div>
+    </div>`;
+}
+
+// A channel chip: click toggles active; when active, a cog connects it (later).
+function buildChannelChip(d) {
+  const active = bcIsActive(d.id);
+  return `
+    <div class="bc-chip${active ? ' is-active' : ''}" role="button" tabindex="0"
+         aria-pressed="${active}" title="${d.sub}" onclick="bcToggleChannel('${d.id}')">
+      ${bcIcon(d)}
+      <span class="bc-chip-name">${d.name}</span>
+      ${active
+        ? `<span class="bc-chip-cog" role="button" tabindex="0" title="Connect ${d.name}"
+             onclick="event.stopPropagation();bcConnect('${d.id}')">${BC_GEAR}</span>`
+        : `<span class="bc-chip-add" aria-hidden="true">+</span>`}
+    </div>`;
+}
+
+function buildChannelSection(g) {
+  if (g.auto) {
+    const stores = bcAutoStores();
+    const body = stores.length
+      ? `<div class="bc-chip-row">${stores.map(id => buildChannelChip(bcDest(id))).filter(Boolean).join('')}</div>`
+      : `<div class="bc-empty-note">No stores yet — add distribution platforms on the Dashboard and they’ll sync here automatically.</div>`;
+    return `<section class="bc-section">
+      <div class="bc-section-head"><h3>${g.label} <span class="bc-auto-tag">Auto-synced</span></h3><p>${g.hint}</p></div>
+      ${body}
+    </section>`;
+  }
+  const common = g.dests.filter(d => d.common);
+  const rest   = g.dests.filter(d => !d.common);
+  const expanded = !!state.broadcast.expandedGroups[g.id];
+  const moreHtml = rest.length ? `
+    <div class="bc-chip-row bc-chip-rest${expanded ? ' is-open' : ''}">${rest.map(buildChannelChip).join('')}</div>
+    <button class="bc-more" onclick="bcToggleGroup('${g.id}')">${expanded ? '− Fewer' : `+ ${rest.length} more`}</button>` : '';
+  return `<section class="bc-section">
+    <div class="bc-section-head"><h3>${g.label}</h3><p>${g.hint}</p></div>
+    <div class="bc-chip-row">${common.map(buildChannelChip).join('')}</div>
+    ${moreHtml}
+  </section>`;
+}
+
+/* Shared tab header box — one per top-level tab, tinted to the tab's accent. */
+const TAB_HERO = {
+  details: { accent: '#60a5fa', soft: 'rgba(96,165,250,.16)',
+    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+    title: 'Add your game details once',
+    sub: 'Tell Shipmate about your game and point it in the right direction — these details flow everywhere, from your store listings to your launch announcement.' },
+  dashboard: { accent: '#4ade80', soft: 'rgba(74,222,128,.15)',
+    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`,
+    title: 'Submit to every platform, the right way',
+    sub: 'Shipmate preps your content ratings, data disclosures, and store pages, then walks each store’s submission for you — Apple, Google, Steam, and the consoles.' },
+  broadcast: { accent: '#FF3B76', soft: 'rgba(255,59,118,.16)',
+    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/></svg>`,
+    title: 'Announce your game everywhere at once',
+    sub: 'Write your update once. Shipmate reshapes it for each channel and posts to all of them together, so players find you wherever they look for indie games.' },
+};
+function buildTabHero(view) {
+  const c = TAB_HERO[view];
+  if (!c) return '';
+  return `<div class="tab-hero" style="--accent:${c.accent};--accent-soft:${c.soft}">
+    <div class="tab-hero-icon">${c.icon}</div>
+    <div class="tab-hero-text">
+      <div class="tab-hero-title">${c.title}</div>
+      <div class="tab-hero-sub">${c.sub}</div>
+    </div>
+  </div>`;
+}
+
+/* "Add Game Details" tab — the onboarding flow, inlined (no modal). */
+function renderDetails() {
+  const hero = document.getElementById('details-hero');
+  if (hero) hero.innerHTML = buildTabHero('details');
+  renderProjectBar();
+  renderOnboarding();   // fills #ob-tabs / #ob-body / #ob-footer, now living inside #details
+}
+
+function renderBroadcast() {
+  const el = document.getElementById('broadcast');
+  if (!el) return;
+  renderProjectBar();
+
+  const channels = bcActiveChannels();
+  const n = channels.length;
+  const title = state.formData.title || 'your game';
+
+  el.innerHTML = `
+    ${buildTabHero('broadcast')}
+
+    <div class="bc-main">
+      <section class="bc-compose">
+        <div class="bc-compose-head">
+          <label for="bc-msg">Your announcement</label>
+          <button class="bc-ai-btn" onclick="bcDraftWithAI()">✨ Draft with AI</button>
+        </div>
+        <textarea id="bc-msg" class="bc-textarea" rows="7"
+          placeholder="What's new? Share the headline of your launch or update — Shipmate handles the rest."
+          oninput="bcSetMessage(this.value)">${escHtml(bcMessage())}</textarea>
+        ${buildBroadcastAdapt()}
+      </section>
+
+      <div class="bc-channels">
+        ${BC_GROUPS.map(buildChannelSection).join('')}
+      </div>
+    </div>
+
+    <div class="bc-actionbar">
+      <div class="bc-actionbar-info">${n ? `Posting to <strong>${n}</strong> channel${n === 1 ? '' : 's'}` : 'Turn on channels to post'}</div>
+      <div class="bc-actionbar-btns">
+        <button class="btn btn-ghost" onclick="bcSchedule()">Schedule…</button>
+        <button class="btn btn-primary" ${n ? '' : 'disabled'} onclick="bcBroadcastNow()">Post to all</button>
+      </div>
+    </div>`;
+}
+
+// Capstone that reads as the next beat after the timeline's "Live" marker.
+function buildDashboardAnnounceCta() {
+  const n = bcActiveChannels().length;
+  return `
+    <button class="dash-announce" onclick="setView('broadcast')" aria-label="Open Make Waves">
+      <span class="dash-announce-rail"><span class="dash-announce-node">◈</span></span>
+      <span class="dash-announce-text">
+        <span class="dash-announce-kicker">After you go live</span>
+        <span class="dash-announce-title">Make waves — announce it everywhere</span>
+        <span class="dash-announce-sub">Tell every store, social, community, and press outlet in one shot.</span>
+      </span>
+      <span class="dash-announce-go">${n ? `${n} channel${n === 1 ? '' : 's'} · Open` : 'Open Make Waves'} →</span>
+    </button>`;
+}
+
 function renderDashboard() {
   const el = document.getElementById('dashboard');
   if (!el) return;
@@ -1464,10 +1725,11 @@ function renderDashboard() {
   const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
   const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid));
 
-  let h = '';
+  let h = buildTabHero('dashboard');
 
   if (active.length > 0) {
     h += `<div id="dash-timeline-wrap">${buildDashboardTimeline()}</div>`;
+    h += buildDashboardAnnounceCta();
   }
 
   if (active.length === 0) {
