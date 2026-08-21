@@ -4618,11 +4618,35 @@ function buildLocalizationReviewSection() {
     warning: _iasFieldHasOverLimitLang(f.value, langCodes),
   }));
 
+  // Undo/redo — bottom-left of a card's field, in the same row as its
+  // character counter (locReviewUndo/locReviewRedo/_locReviewUndoState,
+  // app.js). `kind` distinguishes the TWO independent text fields a
+  // flipped Review-side card has: 'real' is a language's own actual field
+  // value (also what the non-flipped card and a flipped card's TOP half
+  // show/edit); 'draft' is a flipped card's BOTTOM half, the Primary-
+  // Language back-translation scratch pad. Each (kind, field, lang) triple
+  // has its own history, so the non-flipped card, a flipped top half, and
+  // a flipped bottom half never share or clobber each other's undo stack.
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _locReviewUndoState(kind, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); locReviewUndo('${kind}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); locReviewRedo('${kind}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
   // Shared field+counter markup — identical look/behavior (placeholder,
   // over-limit styling and message) whether it's the non-flipped card or
   // the Review side's top half; only the value shown and the click-to-edit
   // handler differ.
-  const fieldBlock = (value, onclickAttr) => {
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
     const overLimit = value.length > limit;
     const remaining = limit - value.length;
     const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
@@ -4630,6 +4654,7 @@ function buildLocalizationReviewSection() {
         <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
              onclick="${onclickAttr}" title="Click to edit">${display}</div>
         <div class="ias-char-counter-row">
+          ${undoRedoHtml}
           <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
           <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
         </div>`;
@@ -4642,12 +4667,17 @@ function buildLocalizationReviewSection() {
   // scratch pad used to re-derive the language's real field via
   // translation (startLocReviewBackTranslationEdit, app.js), not itself
   // submission data, so App Store Connect's length limit for the real
-  // field doesn't apply to it.
-  const fieldBlockNoLimit = (value, onclickAttr) => {
+  // field doesn't apply to it. It still gets its own undo/redo pair,
+  // though — a separate footer row carrying just that (no counter/error
+  // spans to sit alongside, since there's no limit to report). */
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
     const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
     return `
         <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
-             onclick="${onclickAttr}" title="Click to edit">${display}</div>`;
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
   };
 
   const cards = langCodes.map(lang => {
@@ -4674,11 +4704,11 @@ function buildLocalizationReviewSection() {
         <div class="loc-review-side">
           <div class="loc-review-half loc-review-half--top">
             <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div></div>
-            ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`)}
+            ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
           </div>
           <div class="loc-review-half loc-review-half--bottom">
             <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml}</div>
-            ${fieldBlockNoLimit(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`)}
+            ${fieldBlockNoLimit(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
           </div>
         </div>
       </div>`;
@@ -4702,7 +4732,7 @@ function buildLocalizationReviewSection() {
           <div class="loc-review-card-lang">${langName}</div>
           ${badgeHtml}
         </div>
-        ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`)}
+        ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
       </div>`;
   }).join('');
 

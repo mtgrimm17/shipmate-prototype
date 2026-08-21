@@ -4029,6 +4029,12 @@ function startLocReviewInlineEdit(field, lang, el, ev) {
   };
 
   const commit = () => {
+    // Record this field's undo/redo history (locReviewUndo/locReviewRedo
+    // below) — capture the value being REPLACED, before writing the new
+    // one, and only when it actually changed (clicking into a field and
+    // blurring without typing anything shouldn't burn an undo step).
+    const previousValue = _iasFieldValue(field, lang);
+    if (input.value !== previousValue) _locReviewPushUndo('real', field, lang, previousValue);
     _iasSetFieldValue(field, lang, input.value);
     // Editing the TOP half of a flipped Review-side card changes the
     // language's own real text, which makes the bottom half's cached
@@ -4306,6 +4312,11 @@ function startLocReviewBackTranslationEdit(field, lang, el, ev) {
   input.value = _locReviewBackTranslationValue(field, lang).text;
 
   const commit = () => {
+    // Same undo/redo bookkeeping as startLocReviewInlineEdit's commit
+    // above, but against the DRAFT's own separate history — this is the
+    // back-translation scratch pad, not the language's real field.
+    const previousValue = _locReviewBackTranslationValue(field, lang).text;
+    if (input.value !== previousValue) _locReviewPushUndo('draft', field, lang, previousValue);
     _locReviewCommitPrimaryEdit(field, lang, input.value);
   };
   input.addEventListener('blur', commit);
@@ -4318,6 +4329,114 @@ function startLocReviewBackTranslationEdit(field, lang, el, ev) {
   el.replaceWith(input);
   input.focus();
   input.select();
+}
+
+/* ── Localization Review — per-field undo/redo ───────────────────────────
+   Two independent "kinds" of text field exist per card:
+     'real'  — a language's own actual field value: state.formData[field]
+               for the Primary Language, state.formData.localizedStoreText
+               [lang][field] for a supporting language. This is what the
+               non-flipped card shows/edits (startLocReviewInlineEdit
+               above), and also what a flipped Review-side card's TOP half
+               shows/edits — same underlying value either way.
+     'draft' — a flipped Review-side card's BOTTOM half: the Primary-
+               Language back-translation scratch pad
+               (state.locReviewBackTranslation[field][lang].text, edited
+               via startLocReviewBackTranslationEdit above) — a
+               completely separate piece of text from 'real'.
+   Each (kind, field, lang) triple gets its own independent stack, keyed
+   under state.locReviewUndoHistory. History is pushed exactly once per
+   completed edit (on blur, by startLocReviewInlineEdit/
+   startLocReviewBackTranslationEdit's own commit closures above) — never
+   by a cascading change from elsewhere (a Primary Language edit auto-
+   translating into a supporting language, for instance) — so one "undo"
+   here always corresponds to one direct edit made to that exact field,
+   the same granularity any ordinary text editor's undo gives a field you
+   just finished typing into and clicked away from. */
+
+// Lazily creates and returns the { past, future } stack for one
+// (kind, field, lang) triple.
+function _locReviewUndoEntry(kind, field, lang) {
+  if (!state.locReviewUndoHistory) state.locReviewUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.locReviewUndoHistory[kind] || (state.locReviewUndoHistory[kind] = {});
+  const forField = forKind[field] || (forKind[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+// Read-only lookup for render.js (never creates an entry, never mutates
+// state) — whether this exact field's undo/redo buttons should render
+// enabled right now.
+function _locReviewUndoState(kind, field, lang) {
+  const entry = state.locReviewUndoHistory
+    && state.locReviewUndoHistory[kind]
+    && state.locReviewUndoHistory[kind][field]
+    && state.locReviewUndoHistory[kind][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+// Caps how many steps back a single field's undo stack keeps, so a very
+// long editing session on one field can't grow this unboundedly.
+const LOC_REVIEW_UNDO_LIMIT = 50;
+
+// Called by startLocReviewInlineEdit/startLocReviewBackTranslationEdit's
+// own commit closures, right before writing a genuinely NEW value —
+// pushes the value being REPLACED onto that field's undo stack, and
+// clears its redo stack: a fresh edit starts a new branch of history,
+// same as any ordinary text editor (undo, then type something new, and
+// the old "redo" branch is gone). Deliberately NOT called from anywhere
+// else — see the comment above this section for why cascading changes
+// from other fields must never push here.
+function _locReviewPushUndo(kind, field, lang, previousValue) {
+  const entry = _locReviewUndoEntry(kind, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > LOC_REVIEW_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+// Writes a restored value back through the exact same commit path its
+// field's normal editor uses — _iasSetFieldValue for 'real' (so Title
+// mirroring/translation, Subtitle/Description/What's New auto-
+// translation, and — when currently in Review mode, editing a supporting
+// language — the back-translation refresh all fire exactly as they would
+// for a matching manual edit) or _locReviewCommitPrimaryEdit for 'draft'.
+// Neither path pushes a NEW undo entry of its own — only
+// startLocReviewInlineEdit/startLocReviewBackTranslationEdit's commit
+// closures do that (above) — so calling this from locReviewUndo/
+// locReviewRedo below never contaminates the very history it's reading.
+function _locReviewRestoreFieldValue(kind, field, lang, value) {
+  if (kind === 'draft') {
+    _locReviewCommitPrimaryEdit(field, lang, value);
+    return;
+  }
+  _iasSetFieldValue(field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.locReviewMode === 'review' && lang !== primary) {
+    const backEntry = _locReviewBackTranslationEntry(field, lang);
+    if (backEntry.syncedTopText !== value) _locReviewRefreshBackTranslation(field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+// The undo button's onclick (buildLocalizationReviewSection, render.js).
+function locReviewUndo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _locReviewUndoEntry(kind, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _locReviewBackTranslationValue(field, lang).text : _iasFieldValue(field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _locReviewRestoreFieldValue(kind, field, lang, previous);
+}
+
+// The redo button's onclick (buildLocalizationReviewSection, render.js).
+function locReviewRedo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _locReviewUndoEntry(kind, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _locReviewBackTranslationValue(field, lang).text : _iasFieldValue(field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _locReviewRestoreFieldValue(kind, field, lang, next);
 }
 
 /* Localization Review's "Review" / "All locs" toggle button

@@ -2405,6 +2405,19 @@ const state = {
   // See _locReviewSyncBackTranslations / _locReviewCommitPrimaryEdit, app.js.
   locReviewBackTranslation: {},
 
+  // Per-field undo/redo history for Localization Review's card fields —
+  // { real: { [field]: { [lang]: { past: [...], future: [...] } } },
+  //   draft: { [field]: { [lang]: { past: [...], future: [...] } } } }.
+  // 'real' tracks a language's own actual field value (the non-flipped
+  // card, or a flipped Review-side card's TOP half); 'draft' tracks a
+  // flipped card's BOTTOM half (the Primary-Language back-translation
+  // scratch pad in locReviewBackTranslation above) — a separate piece of
+  // text with its own separate history. Populated only by a direct edit's
+  // own commit (startLocReviewInlineEdit / startLocReviewBackTranslationEdit,
+  // app.js) — never by a cascading auto-translate/mirror from elsewhere.
+  // See _locReviewPushUndo/locReviewUndo/locReviewRedo, app.js.
+  locReviewUndoHistory: { real: {}, draft: {} },
+
   // Auto-translation status per field ('subtitle' | 'description' |
   // 'releaseNotes') for the App Store Product Page Preview's Subtitle/
   // Description/What's New auto-translation into supporting languages —

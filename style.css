@@ -3560,6 +3560,57 @@ body {
    a minimum gap above it even when the card isn't stretched at all (auto
    margins collapse to 0 with no free space to distribute). */
 .loc-review-card .ias-char-counter-row { margin-top: auto; padding-top: 4px; }
+
+/* Undo/redo — bottom-left of a Localization Review card's field, sharing
+   its row with the character counter (locReviewUndo/locReviewRedo/
+   _locReviewUndoState, app.js; buildLocalizationReviewSection, render.js).
+   margin-right:auto on the group reliably claims all the row's free space
+   right after it, pushing the counter/error spans that follow to the far
+   right as one block — correct regardless of .ias-char-counter-row's own
+   justify-content:space-between above, and correct even when there's only
+   ONE other thing after it (the Review side's bottom-half draft has no
+   character limit at all — see .loc-review-counter-row--no-count below —
+   so there the undo/redo group is the row's only content and simply sits
+   flush left). */
+.loc-review-undo-redo {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: auto;
+}
+.loc-review-undo-btn,
+.loc-review-redo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.loc-review-undo-btn:hover:not(:disabled),
+.loc-review-redo-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255,255,255,0.08);
+}
+.loc-review-undo-btn:disabled,
+.loc-review-redo-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* The Review side's bottom-half draft (fieldBlockNoLimit, render.js) has
+   no character limit/counter at all — its footer row holds only the
+   undo/redo group. Reuses .ias-char-counter-row's own spacing (margin-top,
+   font-size, etc. above) so it lines up with every other field's footer
+   row; this modifier exists only as a documentation hook, no override
+   needed. */
+.loc-review-counter-row--no-count { min-height: 18px; }
+
 /* Language name + source badge sit on one row, so the badge reads as
    "top-right corner of the card" without any absolute positioning that
    could overlap or get clipped — it's just the second flex child, pushed
