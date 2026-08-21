@@ -56,8 +56,8 @@ function showMainApp(view = 'dashboard') {
 }
 
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
-const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast' };
-const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast' };
+const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
+const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
   state.activeView = view;
@@ -71,9 +71,14 @@ function setView(view) {
   }
   if (view === 'details') renderDetails();
   else if (view === 'broadcast') renderBroadcast();
+  else if (view === 'performance') renderPerformance();
   else renderDashboard();
   window.scrollTo(0, 0);
 }
+
+/* ── Performance dashboard handlers ───────────────────── */
+function perfSetPeriod(id) { state.performance.period = id; renderPerformance(); }
+function perfOpen(portal) { bcToast(`${portal} — connect the account to pull live figures. (Mock data shown for now.)`); }
 
 /* ── Broadcast composer handlers ──────────────────────── */
 // Live-refresh only the adapted-preview pane so the textarea keeps focus.

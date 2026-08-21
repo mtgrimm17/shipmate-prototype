@@ -2139,8 +2139,11 @@ const state = {
   // Modal
   activeModal: null,
 
-  // Top-level view within the main app: 'dashboard' | 'broadcast'
+  // Top-level view within the main app: 'details' | 'dashboard' | 'broadcast' | 'performance'
   activeView: 'dashboard',
+
+  // Performance dashboard (live-game analytics) — mock data for now.
+  performance: { period: '30d' },
 
   // Broadcast (unified announcement) composer — write once, adapt per destination.
   // Credentials are intentionally deferred; destinations show a "Connect later" state.

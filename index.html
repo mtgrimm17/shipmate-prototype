@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3.65">
-  <link rel="stylesheet" href="splash.css?v=3.65">
+  <link rel="stylesheet" href="style.css?v=3.66">
+  <link rel="stylesheet" href="splash.css?v=3.66">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
   <!-- Plays the Assets tab's auto-filled Steam trailer thumbnail inline
@@ -761,6 +761,12 @@ Confidence</h3>
           <span>Spread the Word</span>
           <span class="bar-nav-badge">New</span>
         </button>
+        <button class="bar-nav-btn" id="nav-performance" role="tab" aria-selected="false" style="--accent:#fb923c" onclick="setView('performance')">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="7"/><rect x="12" y="7" width="3" height="11"/><rect x="17" y="4" width="3" height="14"/>
+          </svg>
+          <span>Performance</span>
+        </button>
       </div>
 
       <div class="bar-right">
@@ -807,6 +813,9 @@ Confidence</h3>
       <div class="broadcast-view hidden" id="broadcast">
         <!-- Rendered by renderBroadcast() -->
       </div>
+      <div class="performance-view hidden" id="performance">
+        <!-- Rendered by renderPerformance() -->
+      </div>
     </main>
 
   </div>
@@ -822,14 +831,14 @@ Confidence</h3>
       </svg>
       Built by indie devs and game industry veterans to empower the indie game community.
     </span>
-    <span class="app-footer-version" id="app-footer-version">v3.65</span>
+    <span class="app-footer-version" id="app-footer-version">v3.66</span>
   </footer>
 
   <!-- AI disclaimer -->
   <div class="ai-disclaimer">Please review all inferred answers before submitting</div>
 
-  <script src="locale.js?v=3.65"></script>
-  <script src="state.js?v=3.65"></script>
+  <script src="locale.js?v=3.66"></script>
+  <script src="state.js?v=3.66"></script>
   <script>
     const CONFIG = {
       CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
@@ -837,10 +846,10 @@ Confidence</h3>
       IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
     };
   </script>
-  <script src="claude.js?v=3.65"></script>
-  <script src="render.js?v=3.65"></script>
-  <script src="app.js?v=3.65"></script>
-  <script src="splash.js?v=3.65"></script>
+  <script src="claude.js?v=3.66"></script>
+  <script src="render.js?v=3.66"></script>
+  <script src="app.js?v=3.66"></script>
+  <script src="splash.js?v=3.66"></script>
 
 </body>
 </html>

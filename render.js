@@ -1642,6 +1642,10 @@ const TAB_HERO = {
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/></svg>`,
     title: 'Announce your game everywhere at once',
     sub: 'Write your update once. Shipmate reshapes it for each channel and posts to all of them together, so players find you wherever they look for indie games.' },
+  performance: { accent: '#fb923c', soft: 'rgba(251,146,60,.16)',
+    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 4 3 5-7"/></svg>`,
+    title: 'See how your game is performing',
+    sub: 'Wishlists, impressions, reviews, and revenue across every platform in one live view — no logging into each portal. Shipmate flags where numbers are still estimates.' },
 };
 function buildTabHero(view) {
   const c = TAB_HERO[view];
@@ -1698,6 +1702,190 @@ function renderBroadcast() {
         <button class="btn btn-ghost" onclick="bcSchedule()">Schedule…</button>
         <button class="btn btn-primary" ${n ? '' : 'disabled'} onclick="bcBroadcastNow()">Post to all</button>
       </div>
+    </div>`;
+}
+
+/* ── Performance: live-game analytics (mock data) ─────────
+   Concise, scannable KPIs + a cross-platform revenue aggregator that flags
+   platform reporting delays, with "open the portal" links for power users. */
+const PERF_PERIODS = [ { id: '7d', label: '7 days' }, { id: '30d', label: '30 days' }, { id: 'all', label: 'All time' } ];
+const PERF_FACTOR  = { '7d': 0.26, '30d': 1, 'all': 7.4 };   // scales FLOW metrics; rates/stocks stay
+
+const PERF = {
+  revenueNet: 48250, units: 3120, impressions: 512000, wishlistAdds: 2150,
+  delta: { revenue: 18, units: 12, impressions: 9, wishlistAdds: 24, wishlistsTotal: 8, rating: 2, mau: 6, refund: -0.4 },
+  wishlistsTotal: 27400, wishlistConv: 6.8, refundRate: 4.2,
+  rating: 4.6, ratingCount: 1462, steamPositive: 92,
+  mau: 14200, dau: 3400, retD1: 42, retD7: 19, retD30: 8, sessionMin: 27,
+  revByPlatform: {
+    steam:    { name: 'Steam',            portal: 'Steamworks',              gross: 34900, cutPct: 30, units: 1780, status: 'estimated', delay: 'Net finalizes ~30 days after month-end; payout at net-45.' },
+    ios:      { name: 'App Store',        portal: 'App Store Connect',       gross: 12400, cutPct: 15, units: 640,  status: 'estimated', delay: 'Sales finalize ~35 days after the fiscal month closes.' },
+    android:  { name: 'Google Play',      portal: 'Play Console',            gross: 9800,  cutPct: 15, units: 520,  status: 'estimated', delay: 'Daily estimates; figures finalize monthly.' },
+    egs:      { name: 'Epic Games Store', portal: 'Epic Dev Portal',         gross: 6200,  cutPct: 12, units: 210,  status: 'finalized', delay: 'Reported monthly; last month finalized.' },
+    psn:      { name: 'PlayStation',      portal: 'PartnerNet',              gross: 4100,  cutPct: 30, units: 120,  status: 'delayed',   delay: 'Reported monthly, ~30-day lag.' },
+    xbox:     { name: 'Xbox',             portal: 'Partner Center',          gross: 2900,  cutPct: 30, units: 95,   status: 'delayed',   delay: 'Reported monthly.' },
+    nintendo: { name: 'Nintendo eShop',   portal: 'Nintendo Dev Portal',     gross: 3500,  cutPct: 30, units: 140,  status: 'delayed',   delay: 'Reported monthly, ~30-day lag.' },
+  },
+  reviews: [
+    { plat: 'Steam',       score: '92%',  unit: 'positive', count: 812, sub: 'Very Positive' },
+    { plat: 'App Store',   score: '4.6',  unit: '★',        count: 240, sub: 'iPhone + iPad' },
+    { plat: 'Google Play', score: '4.4',  unit: '★',        count: 410, sub: 'All devices' },
+  ],
+  recentReview: { text: 'Exactly the cozy loop I wanted — the 2.0 update fixed the late-game grind.', meta: 'Steam · ★★★★★ · 2 days ago' },
+  regions: [ ['United States', 34], ['Germany', 12], ['United Kingdom', 9], ['China', 8], ['Brazil', 6] ],
+  insights: [
+    { tone: 'up',   text: 'Steam wishlists up 24% since the 2.0 update' },
+    { tone: 'star', text: 'App Store featured in “New Games We Love” (estimated)' },
+    { tone: 'warn', text: 'Refund rate ticked up to 4.2% — worth a look' },
+  ],
+};
+
+const _pNum   = n => Math.round(n).toLocaleString('en-US');
+const _pMoney = n => '$' + Math.round(n).toLocaleString('en-US');
+const _pK     = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(Math.round(n));
+const _pNet   = p => p.gross * (1 - p.cutPct / 100);
+const _pDelta = v => `<span class="perf-delta ${v >= 0 ? 'is-up' : 'is-down'}">${v >= 0 ? '▲' : '▼'} ${Math.abs(v)}%</span>`;
+function _perfPlats() {
+  const live = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid) && PERF.revByPlatform[pid]);
+  return (live.length ? live : Object.keys(PERF.revByPlatform));
+}
+
+function buildPerfKpis(f) {
+  const cards = [
+    { label: 'Net revenue',  val: _pMoney(PERF.revenueNet * f), d: PERF.delta.revenue,      link: 'Revenue detail' },
+    { label: 'Units sold',   val: _pNum(PERF.units * f),        d: PERF.delta.units,         link: 'Sales detail' },
+    { label: 'Wishlists',    val: _pNum(PERF.wishlistsTotal),   d: PERF.delta.wishlistsTotal, sub: `+${_pNum(PERF.wishlistAdds * f)} this period` },
+    { label: 'Store impressions', val: _pK(PERF.impressions * f), d: PERF.delta.impressions, link: 'Traffic detail' },
+    { label: 'Avg rating',   val: `${PERF.rating}★`,            d: PERF.delta.rating,        sub: `${_pNum(PERF.ratingCount)} reviews` },
+    { label: 'Monthly players', val: _pNum(PERF.mau),           d: PERF.delta.mau,           sub: `${_pNum(PERF.dau)} daily` },
+  ];
+  return `<div class="perf-kpis">${cards.map(c => `
+    <div class="perf-kpi">
+      <div class="perf-kpi-label">${c.label}</div>
+      <div class="perf-kpi-val">${c.val}</div>
+      <div class="perf-kpi-foot">${_pDelta(c.d)}${c.sub ? `<span class="perf-kpi-sub">${c.sub}</span>` : ''}</div>
+    </div>`).join('')}</div>`;
+}
+
+function buildPerfRevenue(f) {
+  const plats = _perfPlats();
+  const rows = plats.map(pid => ({ pid, ...PERF.revByPlatform[pid], net: _pNet(PERF.revByPlatform[pid]) * f, grossP: PERF.revByPlatform[pid].gross * f, unitsP: PERF.revByPlatform[pid].units * f }));
+  const totalNet = rows.reduce((s, r) => s + r.net, 0);
+  const maxNet   = Math.max(...rows.map(r => r.net), 1);
+  const anyEst   = rows.some(r => r.status !== 'finalized');
+  const body = rows.sort((a, b) => b.net - a.net).map(r => `
+    <div class="perf-rev-row">
+      <div class="perf-rev-plat">${platformIcon(r.pid, 16, 'white')}<span>${r.name}</span></div>
+      <div class="perf-rev-bar-wrap"><div class="perf-rev-bar" style="width:${(r.net / maxNet * 100).toFixed(1)}%"></div></div>
+      <div class="perf-rev-net">${_pMoney(r.net)}</div>
+      <div class="perf-rev-meta">${_pNum(r.unitsP)} units · ${r.cutPct}% fee</div>
+      <div class="perf-rev-status"><span class="perf-badge perf-badge--${r.status}" title="${r.delay}">${r.status}</span></div>
+      <a class="perf-link" onclick="perfOpen('${r.portal}')">Open ${r.portal} →</a>
+    </div>`).join('');
+  return `
+    <section class="perf-panel perf-panel--wide">
+      <div class="perf-panel-head">
+        <h3>Revenue — all platforms</h3>
+        <div class="perf-total">${_pMoney(totalNet)}<span>net, combined</span></div>
+      </div>
+      <div class="perf-rev-table">${body}</div>
+      ${anyEst ? `<div class="perf-note">⚠ Some figures are <b>estimates</b> — platforms report on different schedules. Hover a badge for each platform's reporting delay. Finalized totals may shift.</div>` : ''}
+    </section>`;
+}
+
+function buildPerfPanel(title, inner, link) {
+  return `<section class="perf-panel">
+    <div class="perf-panel-head"><h3>${title}</h3>${link ? `<a class="perf-link" onclick="perfOpen('${link}')">Details →</a>` : ''}</div>
+    ${inner}
+  </section>`;
+}
+
+function buildPerfWishlists(f) {
+  const regions = PERF.regions.map(([name, pct]) => `
+    <div class="perf-region"><span class="perf-region-name">${name}</span>
+      <span class="perf-region-bar"><span style="width:${pct * 2.5}%"></span></span>
+      <span class="perf-region-pct">${pct}%</span></div>`).join('');
+  const inner = `
+    <div class="perf-stat-row">
+      <div><div class="perf-mini-val">${_pNum(PERF.wishlistsTotal)}</div><div class="perf-mini-lbl">total wishlists</div></div>
+      <div><div class="perf-mini-val">+${_pNum(PERF.wishlistAdds * f)}</div><div class="perf-mini-lbl">net adds</div></div>
+      <div><div class="perf-mini-val">${PERF.wishlistConv}%</div><div class="perf-mini-lbl">wishlist→buy</div></div>
+    </div>
+    <div class="perf-sub-head">Top regions</div>${regions}`;
+  return buildPerfPanel('Wishlists', inner, 'Wishlist detail');
+}
+
+function buildPerfReviews() {
+  const cards = PERF.reviews.map(r => `
+    <div class="perf-review-card">
+      <div class="perf-review-score">${r.score}<span>${r.unit}</span></div>
+      <div class="perf-review-plat">${r.plat}</div>
+      <div class="perf-review-sub">${_pNum(r.count)} · ${r.sub}</div>
+    </div>`).join('');
+  const inner = `<div class="perf-review-cards">${cards}</div>
+    <div class="perf-recent-review">“${PERF.recentReview.text}”<span class="perf-recent-meta">${PERF.recentReview.meta}</span></div>`;
+  return buildPerfPanel('Reviews & rating', inner, 'All reviews');
+}
+
+function buildPerfEngagement() {
+  const inner = `
+    <div class="perf-stat-row">
+      <div><div class="perf-mini-val">${_pNum(PERF.dau)}</div><div class="perf-mini-lbl">daily players</div></div>
+      <div><div class="perf-mini-val">${_pNum(PERF.mau)}</div><div class="perf-mini-lbl">monthly</div></div>
+      <div><div class="perf-mini-val">${PERF.sessionMin}m</div><div class="perf-mini-lbl">avg session</div></div>
+    </div>
+    <div class="perf-sub-head">Retention</div>
+    <div class="perf-ret">
+      ${[['D1', PERF.retD1], ['D7', PERF.retD7], ['D30', PERF.retD30]].map(([k, v]) => `
+        <div class="perf-ret-col"><div class="perf-ret-bar" style="height:${v * 1.6}px"></div><div class="perf-ret-v">${v}%</div><div class="perf-ret-k">${k}</div></div>`).join('')}
+    </div>`;
+  return buildPerfPanel('Player engagement', inner, 'Player analytics');
+}
+
+function buildPerfFreshness() {
+  const rows = _perfPlats().map(pid => {
+    const p = PERF.revByPlatform[pid];
+    return `<div class="perf-fresh-row"><span class="perf-fresh-plat">${p.name}</span>
+      <span class="perf-badge perf-badge--${p.status}">${p.status}</span>
+      <span class="perf-fresh-delay">${p.delay}</span></div>`;
+  }).join('');
+  return buildPerfPanel('Reporting status', `<div class="perf-fresh">${rows}</div>
+    <div class="perf-note">Shipmate reconciles each platform's numbers as they finalize, so combined totals self-correct over time.</div>`);
+}
+
+function buildPerfInsights() {
+  const chips = PERF.insights.map(i => `<div class="perf-insight perf-insight--${i.tone}">${i.text}</div>`).join('');
+  return buildPerfPanel('Insights & alerts', `<div class="perf-insights">${chips}</div>`);
+}
+
+function renderPerformance() {
+  const el = document.getElementById('performance');
+  if (!el) return;
+  renderProjectBar();
+  const period = state.performance.period || '30d';
+  const f = PERF_FACTOR[period] || 1;
+  const chips = PERF_PERIODS.map(p => `<button class="perf-period-chip${p.id === period ? ' is-on' : ''}" onclick="perfSetPeriod('${p.id}')">${p.label}</button>`).join('');
+
+  el.innerHTML = `
+    ${buildTabHero('performance')}
+    <div class="perf-toolbar">
+      <div class="perf-period">${chips}</div>
+      <div class="perf-asof">Updated ~1h ago · some platforms delayed</div>
+    </div>
+    ${buildPerfKpis(f)}
+    ${buildPerfRevenue(f)}
+    <div class="perf-grid-3">
+      ${buildPerfWishlists(f)}
+      ${buildPerfReviews()}
+      ${buildPerfEngagement()}
+    </div>
+    <div class="perf-grid-2">
+      ${buildPerfFreshness()}
+      ${buildPerfInsights()}
+    </div>
+    <div class="perf-soon">
+      <span class="perf-soon-tag">Coming soon</span>
+      Cohort retention, LTV, platform-specific player analysis, and revenue forecasting.
     </div>`;
 }
 
