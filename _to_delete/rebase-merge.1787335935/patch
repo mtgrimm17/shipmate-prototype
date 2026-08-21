@@ -1,0 +1,853 @@
+diff --git a/app.js b/app.js
+index 8e94189..73c5718 100644
+--- a/app.js
++++ b/app.js
+@@ -46,97 +46,20 @@ function signInFromSplash() {
+   }
+ }
+ 
+-function showMainApp(view = 'dashboard') {
++function showMainApp() {
+   document.getElementById('onboarding-overlay').classList.add('hidden');
+   document.getElementById('main-app').classList.remove('hidden');
+   document.body.classList.add('signed-in');
+   seedOnboardingToIOS();
+   seedOnboardingToAndroid();
+-  setView(view);
+-}
+-
+-/* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
+-const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast' };
+-const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast' };
+-function setView(view) {
+-  if (!VIEW_IDS[view]) view = 'dashboard';
+-  state.activeView = view;
+-  for (const [v, id] of Object.entries(VIEW_IDS)) {
+-    const el = document.getElementById(id);
+-    if (el) el.classList.toggle('hidden', v !== view);
+-  }
+-  for (const [v, id] of Object.entries(VIEW_NAV)) {
+-    const btn = document.getElementById(id);
+-    if (btn) { const on = v === view; btn.classList.toggle('is-active', on); btn.setAttribute('aria-selected', String(on)); }
+-  }
+-  if (view === 'details') renderDetails();
+-  else if (view === 'broadcast') renderBroadcast();
+-  else renderDashboard();
+-  window.scrollTo(0, 0);
+-}
+-
+-/* ── Broadcast composer handlers ──────────────────────── */
+-// Live-refresh only the adapted-preview pane so the textarea keeps focus.
+-function bcRefreshAdapt() {
+-  const a = document.querySelector('.bc-adapt');
+-  if (a) a.outerHTML = buildBroadcastAdapt();
+-}
+-function bcSetMessage(v) { state.broadcast.message = v; bcRefreshAdapt(); }
+-function bcPreview(id)   { state.broadcast.previewDest = id; bcRefreshAdapt(); }
+-// Toggle a channel on/off. Auto storefronts toggle their power (storeOff);
+-// opt-in channels toggle membership in the active list.
+-function bcToggleChannel(id) {
+-  const b = state.broadcast;
+-  if (bcAutoStores().includes(id)) {
+-    const i = b.storeOff.indexOf(id);
+-    if (i >= 0) b.storeOff.splice(i, 1); else b.storeOff.push(id);
+-  } else {
+-    const i = b.active.indexOf(id);
+-    if (i >= 0) b.active.splice(i, 1); else b.active.push(id);
+-  }
+-  renderBroadcast();
+-}
+-function bcConnect(id) {
+-  const d = bcDest(id);
+-  bcToast(`Connect ${d ? d.name : 'this channel'} later — account linking is coming soon.`);
+-}
+-function bcToggleGroup(gid) {
+-  state.broadcast.expandedGroups[gid] = !state.broadcast.expandedGroups[gid];
+-  renderBroadcast();
+-}
+-function bcDraftWithAI() {
+-  const title = state.formData.title || 'Our game';
+-  state.broadcast.message =
+-    `${title} just got a major update! New content, fixes, and quality-of-life improvements are live today. ` +
+-    `Thanks to everyone in the community for the feedback that shaped this release — jump back in and let us know what you think.`;
+-  renderBroadcast();
+-}
+-function bcBroadcastNow() {
+-  const n = bcActiveChannels().length;
+-  if (!n) return;
+-  bcToast(`✓ Queued to ${n} channel${n === 1 ? '' : 's'} — connect accounts to post for real.`);
+-}
+-function bcSchedule() { bcToast('Scheduling comes with connected accounts — coming soon.'); }
+-
+-// Lightweight self-contained toast (no dependency on other UI).
+-function bcToast(msg) {
+-  let el = document.getElementById('bc-toast');
+-  if (!el) {
+-    el = document.createElement('div');
+-    el.id = 'bc-toast';
+-    el.className = 'bc-toast';
+-    document.body.appendChild(el);
+-  }
+-  el.textContent = msg;
+-  el.classList.add('is-shown');
+-  clearTimeout(bcToast._t);
+-  bcToast._t = setTimeout(() => el.classList.remove('is-shown'), 3200);
++  renderDashboard();
+ }
+ 
+ function showOnboarding() {
+-  // Onboarding is now the "Add Game Details" tab inside the main app (no modal).
+-  showMainApp('details');
+-  // Re-apply highlight state after every render (ob-modal markup is re-used)
++  document.getElementById('onboarding-overlay').classList.remove('hidden');
++  document.getElementById('main-app').classList.add('hidden');
++  renderOnboarding();
++  // Re-apply highlight state after every render (ob-modal is re-used across sessions)
+   _setObValidating(false); // triggers the latch logic inside _setObValidating
+   updateObSectionStates();
+ }
+@@ -156,7 +79,7 @@ function closeOnboarding() {
+   if (!state.onboardingComplete) return; // can't close if not yet done
+   state.assetsFromWebEdit = false;
+   state.assetsFromWebEditSource = 'siteInfo';
+-  setView('dashboard');
++  showMainApp();
+ }
+ 
+ /* Opens the Assets tab from a "Manage" button in the Web platform's
+@@ -314,7 +237,7 @@ function completeOnboarding() {
+   }
+ 
+   state.onboardingComplete = true;
+-  setView('dashboard');   // main app is already visible; just switch to the Submit tab
++  showMainApp();
+ }
+ 
+ 
+@@ -3722,6 +3645,14 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
+ 
+   state.iasTranslateStatus = state.iasTranslateStatus || {};
+   state.iasTranslateStatus[field] = 'loading';
++  // Which languages this batch will actually update — read by
++  // _iasFieldTranslatePending (below) so Localization Review can show the
++  // loading spinner only on the card(s) really about to change, not every
++  // supporting language indiscriminately (a language already in sync with
++  // this exact primary text, if any, was already filtered out of
++  // `eligible` above).
++  state.iasTranslatePendingLangs = state.iasTranslatePendingLangs || {};
++  state.iasTranslatePendingLangs[field] = eligible.slice();
+   reRenderStepModal();
+ 
+   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+@@ -3822,10 +3753,30 @@ Rules:
+     console.warn('[Store Preview Translate]', field, e.message);
+     state.iasTranslateStatus[field] = 'error';
+   }
++  // This batch is done (either way) — nothing left pending for it. Any
++  // per-language back-translation refresh the success branch just kicked
++  // off above (_locReviewRefreshBackTranslation) tracks its OWN loading
++  // state separately (locReviewBackTranslation[field][lang].status), so
++  // clearing this doesn't affect that.
++  state.iasTranslatePendingLangs[field] = [];
+ 
+   reRenderStepModal();
+ }
+ 
++// Read-only lookup for render.js (never mutates state) — whether `lang` is
++// currently awaiting a translation from the Primary Language's batch
++// translate above (state.iasTranslatePendingLangs[field]), gated on the
++// batch actually still being in flight (state.iasTranslateStatus[field]
++// === 'loading') so a stale/leftover pending-langs list from a previous
++// batch can never cause a false positive. Drives the loading spinner shown
++// on a non-flipped Localization Review card, or a flipped card's TOP half
++// (buildLocalizationReviewSection, render.js).
++function _iasFieldTranslatePending(field, lang) {
++  if (!state.iasTranslateStatus || state.iasTranslateStatus[field] !== 'loading') return false;
++  const pending = state.iasTranslatePendingLangs && state.iasTranslatePendingLangs[field];
++  return !!(pending && pending.includes(lang));
++}
++
+ function _iasRetryTranslate(field) {
+   _iasTriggerAutoTranslate(field, state.formData[field] || '');
+ }
+@@ -4139,7 +4090,7 @@ Rules:
+    — the exact same storage the top half itself writes into — so either
+    half can drive the other.
+ 
+-   state.locReviewBackTranslation[field][lang] = { text, syncedTopText, status }
++   state.locReviewBackTranslation[field][lang] = { text, syncedTopText, status, forwardStatus }
+    - text:          the Primary-Language string currently shown/edited in
+                      the bottom half.
+    - syncedTopText: the top half's real field value (_iasFieldValue) that
+@@ -4150,7 +4101,21 @@ Rules:
+                      regenerating; this is what lets toggling the Review
+                      side or switching the field dropdown back and forth
+                      skip redundant API calls for languages already in sync.
+-   - status:        null | 'loading' | 'error'. */
++   - status:        null | 'loading' | 'error' — the TOP -> Primary
++                     Language direction (_locReviewRefreshBackTranslation
++                     below), shown at the top of the BOTTOM half. Set by a
++                     direct top-half edit, or by the cascade after the
++                     Primary Language's own batch translate
++                     (_iasTriggerAutoTranslate) lands this language's new
++                     top text.
++   - forwardStatus: null | 'loading' | 'error' — the reverse direction, the
++                     Primary Language draft -> this language
++                     (_locReviewCommitPrimaryEdit below, fired by editing
++                     the BOTTOM half), shown at the top of the TOP half.
++                     Deliberately a SEPARATE flag from status — the two
++                     directions can each be independently in flight and
++                     must show their spinner on the correct half, never
++                     the other's. */
+ 
+ // Read-only lookup for render.js — never creates an entry (render functions
+ // must not mutate state). A language/field with nothing cached yet reads as
+@@ -4159,7 +4124,7 @@ function _locReviewBackTranslationValue(field, lang) {
+   const entry = state.locReviewBackTranslation
+     && state.locReviewBackTranslation[field]
+     && state.locReviewBackTranslation[field][lang];
+-  return entry || { text: '', syncedTopText: undefined, status: null };
++  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+ }
+ 
+ // Mutating accessor for app.js's own bookkeeping below — lazily creates the
+@@ -4167,7 +4132,7 @@ function _locReviewBackTranslationValue(field, lang) {
+ function _locReviewBackTranslationEntry(field, lang) {
+   if (!state.locReviewBackTranslation) state.locReviewBackTranslation = {};
+   const forField = state.locReviewBackTranslation[field] || (state.locReviewBackTranslation[field] = {});
+-  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null });
++  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+ }
+ 
+ // Regenerates the bottom half's back-translation for every supporting
+@@ -4245,11 +4210,20 @@ async function _locReviewRefreshBackTranslation(field, lang, topText) {
+ // lasting protection: the next time the actual Primary Language field
+ // changes, _iasTriggerAutoTranslate overwrites this language's field again
+ // like any other.
++//
++// Uses forwardStatus, NOT status, for its own loading/error state — status
++// is reserved for the OTHER direction (_locReviewRefreshBackTranslation,
++// top -> Primary Language), shown at the top of the BOTTOM half; this
++// function's own translate call goes the opposite way (Primary Language ->
++// this language) and must show its spinner at the top of the TOP half
++// instead (buildLocalizationReviewSection, render.js) — sharing one flag
++// between both directions would show the spinner on the wrong half
++// whenever this path ran.
+ async function _locReviewCommitPrimaryEdit(field, lang, value) {
+   const entry = _locReviewBackTranslationEntry(field, lang);
+   entry.text = value;
+   entry.syncedTopText = undefined; // not yet known to correspond to any top value
+-  entry.status = value.trim() ? 'loading' : null;
++  entry.forwardStatus = value.trim() ? 'loading' : null;
+   reRenderStepModal();
+ 
+   if (!value.trim()) {
+@@ -4269,11 +4243,11 @@ async function _locReviewCommitPrimaryEdit(field, lang, value) {
+   if (currentEntry.text !== value) return;
+ 
+   if (translated === null) {
+-    currentEntry.status = 'error';
++    currentEntry.forwardStatus = 'error';
+   } else {
+     _iasSetFieldValue(field, lang, translated);
+     currentEntry.syncedTopText = translated;
+-    currentEntry.status = null;
++    currentEntry.forwardStatus = null;
+   }
+   reRenderStepModal();
+ }
+diff --git a/index.html b/index.html
+index aade70c..ffdc968 100644
+--- a/index.html
++++ b/index.html
+@@ -7,8 +7,8 @@
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+-  <link rel="stylesheet" href="style.css?v=3.65">
+-  <link rel="stylesheet" href="splash.css?v=3.65">
++  <link rel="stylesheet" href="style.css?v=3.66">
++  <link rel="stylesheet" href="splash.css?v=3.66">
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+   <!-- Plays the Assets tab's auto-filled Steam trailer thumbnail inline
+@@ -27,9 +27,29 @@
+   <!-- ═══════════════════════════════════════════════════
+        ONBOARDING MODAL
+   ═══════════════════════════════════════════════════ -->
+-  <!-- Onboarding is now inlined into the "Add Game Details" tab (#details).
+-       This element is kept (empty, hidden) so legacy references resolve safely. -->
+-  <div id="onboarding-overlay" class="overlay-bg hidden"></div>
++  <div id="onboarding-overlay" class="overlay-bg">
++    <div class="ob-modal" id="ob-modal">
++
++      <div class="ob-header">
++        <div class="ob-logo-text">Shipmate</div>
++        <div class="ob-headline">Let's get your game ready</div>
++        <div class="ob-subline">We'll collect the essentials once — then you focus on each platform.</div>
++      </div>
++
++      <div class="ob-tabs" id="ob-tabs">
++        <!-- Rendered by renderOnboardingTabs() -->
++      </div>
++
++      <div class="ob-body" id="ob-body">
++        <!-- Rendered by renderOnboardingBody() -->
++      </div>
++
++      <div class="ob-footer" id="ob-footer">
++        <!-- Rendered by renderOnboardingFooter() -->
++      </div>
++
++    </div>
++  </div>
+ 
+   <!-- ═══════════════════════════════════════════════════
+        TASK MODAL
+@@ -700,7 +720,7 @@ Confidence</h3>
+   <div class="cta-row">
+     <button class="cta" onclick="startFromSplash()">
+       GET STARTED
+-      <svg viewBox="0 0 39 37" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;"><g transform="matrix(1.35728,0,0,1.35728,3.33555,7.91632)"><path d="M17.903,6.787L14.775,3.936L12.638,1.709C12.51,1.631 12.451,1.538 12.412,1.431C12.373,1.323 12.354,1.211 12.354,1.094C12.354,0.853 12.435,0.653 12.638,0.493C12.76,0.334 12.962,0.254 13.203,0.254C13.33,0.254 13.433,0.277 13.54,0.322C13.657,0.368 13.753,0.443 13.857,0.547L20.332,7.002C20.527,7.191 20.625,7.409 20.625,7.656C20.625,7.904 20.527,8.122 20.332,8.311L13.838,14.785C13.659,14.967 13.438,15.059 13.203,15.059C12.962,15.059 12.76,14.979 12.638,14.819C12.435,14.66 12.354,14.46 12.354,14.219C12.354,14.102 12.373,13.989 12.412,13.882C12.451,13.774 12.51,13.682 12.638,13.604L14.775,11.377L17.911,8.525L3.35,8.525C3.096,8.525 2.889,8.444 2.729,8.281C2.63,8.118 2.49,7.91 2.49,7.656C2.49,7.402 2.63,7.194 2.729,7.031C2.889,6.868 3.096,6.787 3.35,6.787L17.903,6.787Z" style="fill:currentColor;"/></g></svg>
++      <svg viewBox="0 0 39 37" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;"><g transform="matrix(1.35728,0,0,1.35728,3.33555,7.91632)"><path d="M17.903,6.787L14.775,3.936L12.638,1.709C12.51,1.631 12.451,1.538 12.412,1.431C12.373,1.323 12.354,1.211 12.354,1.094C12.354,0.853 12.435,0.653 12.638,0.493C12.76,0.334 12.962,0.254 13.203,0.254C13.33,0.254 13.433,0.277 13.54,0.322C13.667,0.368 13.753,0.443 13.857,0.547L20.332,7.002C20.527,7.191 20.625,7.409 20.625,7.656C20.625,7.904 20.527,8.122 20.332,8.311L13.838,14.785C13.669,14.967 13.438,15.059 13.203,15.059C12.962,15.059 12.76,14.979 12.638,14.819C12.435,14.66 12.354,14.46 12.354,14.219C12.354,14.102 12.373,13.989 12.412,13.882C12.451,13.774 12.51,13.682 12.638,13.604L14.775,11.377L17.911,8.525L3.35,8.525C3.096,8.525 2.889,8.444 2.729,8.281C2.63,8.118 2.49,7.91 2.49,7.656C2.49,7.402 2.63,7.194 2.729,7.031C2.889,6.868 3.096,6.787 3.35,6.787L17.903,6.787Z" style="fill:currentColor;"/></g></svg>
+     </button>
+   </div>
+ 
+@@ -739,30 +759,6 @@ Confidence</h3>
+           </svg>
+         </button>
+       </div>
+-
+-      <!-- Top-level tabs: Add Game Details · Submit to Platforms · Spread the Word -->
+-      <div class="bar-nav" id="bar-nav" role="tablist" aria-label="Main navigation">
+-        <button class="bar-nav-btn" id="nav-details" role="tab" aria-selected="false" style="--accent:#60a5fa" onclick="setView('details')">
+-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+-            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+-          </svg>
+-          <span>Add Game Details</span>
+-        </button>
+-        <button class="bar-nav-btn is-active" id="nav-dashboard" role="tab" aria-selected="true" style="--accent:#4ade80" onclick="setView('dashboard')">
+-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+-            <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
+-          </svg>
+-          <span>Submit to Platforms</span>
+-        </button>
+-        <button class="bar-nav-btn" id="nav-broadcast" role="tab" aria-selected="false" style="--accent:#FF3B76" onclick="setView('broadcast')">
+-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+-            <path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/>
+-          </svg>
+-          <span>Spread the Word</span>
+-          <span class="bar-nav-badge">New</span>
+-        </button>
+-      </div>
+-
+       <div class="bar-right">
+         <div class="version-selector-wrap" id="versionSelectorWrap">
+           <button class="version-selector" id="versionSelector" onclick="toggleVersionDropdown(event)">
+@@ -793,20 +789,9 @@ Confidence</h3>
+     </div>
+ 
+     <main class="main">
+-      <div class="details-view hidden" id="details">
+-        <div id="details-hero"><!-- tab-hero injected by renderDetails() --></div>
+-        <div class="ob-modal ob-inline" id="ob-modal">
+-          <div class="ob-tabs" id="ob-tabs"><!-- renderOnboardingTabs() --></div>
+-          <div class="ob-body" id="ob-body"><!-- renderOnboardingBody() --></div>
+-          <div class="ob-footer" id="ob-footer"><!-- renderOnboardingFooter() --></div>
+-        </div>
+-      </div>
+       <div class="dashboard" id="dashboard">
+         <!-- Rendered by renderDashboard() -->
+       </div>
+-      <div class="broadcast-view hidden" id="broadcast">
+-        <!-- Rendered by renderBroadcast() -->
+-      </div>
+     </main>
+ 
+   </div>
+@@ -822,14 +807,14 @@ Confidence</h3>
+       </svg>
+       Built by indie devs and game industry veterans to empower the indie game community.
+     </span>
+-    <span class="app-footer-version" id="app-footer-version">v3.65</span>
++    <span class="app-footer-version" id="app-footer-version">v3.66</span>
+   </footer>
+ 
+   <!-- AI disclaimer -->
+   <div class="ai-disclaimer">Please review all inferred answers before submitting</div>
+ 
+-  <script src="locale.js?v=3.65"></script>
+-  <script src="state.js?v=3.65"></script>
++  <script src="locale.js?v=3.66"></script>
++  <script src="state.js?v=3.66"></script>
+   <script>
+     const CONFIG = {
+       CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
+@@ -837,10 +822,10 @@ Confidence</h3>
+       IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
+     };
+   </script>
+-  <script src="claude.js?v=3.65"></script>
+-  <script src="render.js?v=3.65"></script>
+-  <script src="app.js?v=3.65"></script>
+-  <script src="splash.js?v=3.65"></script>
++  <script src="claude.js?v=3.66"></script>
++  <script src="render.js?v=3.66"></script>
++  <script src="app.js?v=3.66"></script>
++  <script src="splash.js?v=3.66"></script>
+ 
+ </body>
+ </html>
+diff --git a/render.js b/render.js
+index a6dd96c..3a67edf 100644
+--- a/render.js
++++ b/render.js
+@@ -183,7 +183,7 @@ function renderOnboardingFooter() {
+         ${[0,1,2,3].map(i => `<span class="ob-dot ${i === state.onboardingTab ? 'is-active' : (i < state.onboardingTab ? 'is-done' : '')}"></span>`).join('')}
+       </div>
+       <button class="btn btn-primary" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : (isLast ? 'completeOnboarding()' : 'nextOnboardingTab()')}">
+-        ${fromWebEdit ? 'Save &amp; Return' : (isLast ? 'Continue to Submit →' : t('ob.footer.next'))}
++        ${fromWebEdit ? 'Save &amp; Return' : (isLast ? t('ob.footer.launch') : t('ob.footer.next'))}
+       </button>
+     </div>`;
+ }
+@@ -1455,267 +1455,6 @@ const BIN_FINDINGS = {
+   ],
+ };
+ 
+-/* ── Make Waves: unified launch announcement ─────────────
+-   Write once; Shipmate reshapes it per channel. Storefront channels are auto-
+-   synced from the game's distribution plan; social/community/press/video are
+-   opt-in toggle chips (common ones up front, the rest behind "+ more").
+-   Credentials are deferred — each active channel has a cog to connect later. */
+-
+-// Distribution platform id → its storefront channel id.
+-const BC_STORE_FROM_PLATFORM = {
+-  ios: 'appstore', android: 'googleplay', steam: 'steam', egs: 'epic',
+-  xbox: 'msstore', nintendo: 'nintendo', psn: 'psn',
+-};
+-
+-const BC_GROUPS = [
+-  { id: 'storefront', label: 'Storefronts', auto: true,
+-    hint: 'Synced from your distribution plan — “What’s New” / patch notes on the stores you ship to', dests: [
+-    { id: 'steam',      name: 'Steam',            sub: 'Announcement + patch notes', mono: 'S',  color: '#1b2838', kind: 'patch' },
+-    { id: 'appstore',   name: 'App Store',        sub: '“What’s New”',   mono: '',  color: '#0a84ff', kind: 'whatsnew' },
+-    { id: 'googleplay', name: 'Google Play',      sub: '“What’s new”',   mono: '▶', color: '#34a853', kind: 'whatsnew' },
+-    { id: 'epic',       name: 'Epic Games Store', sub: 'Store news',     mono: 'E', color: '#2a2a2a', kind: 'whatsnew' },
+-    { id: 'msstore',    name: 'Microsoft Store',  sub: 'Release notes',  mono: '⊞', color: '#0067b8', kind: 'whatsnew' },
+-    { id: 'nintendo',   name: 'Nintendo eShop',   sub: 'Update info',    mono: 'N', color: '#e60012', kind: 'whatsnew' },
+-    { id: 'psn',        name: 'PlayStation Store', sub: 'Patch notes',   mono: 'P', color: '#003791', kind: 'patch' },
+-  ] },
+-  { id: 'social', label: 'Social', hint: 'Where players follow along', dests: [
+-    { id: 'x',        name: 'X / Twitter',  sub: 'Post + media',   mono: '𝕏', color: '#000000', kind: 'social', limit: 280, common: true },
+-    { id: 'bluesky',  name: 'Bluesky',      sub: 'Post + media',   mono: 'b', color: '#1185fe', kind: 'social', limit: 300, common: true },
+-    { id: 'instagram',name: 'Instagram',    sub: 'Image / Reel',   mono: '◎', color: '#e1306c', kind: 'caption', common: true },
+-    { id: 'tiktok',   name: 'TikTok',       sub: 'Short video',    mono: '♪', color: '#010101', kind: 'caption', common: true },
+-    { id: 'mastodon', name: 'Mastodon',     sub: 'Toot + media',   mono: 'm', color: '#6364ff', kind: 'social', limit: 500 },
+-    { id: 'threads',  name: 'Threads',      sub: 'Post + media',   mono: '@', color: '#000000', kind: 'social', limit: 500 },
+-    { id: 'ytcomm',   name: 'YouTube',      sub: 'Community post', mono: '▶', color: '#ff0000', kind: 'social' },
+-    { id: 'facebook', name: 'Facebook Page', sub: 'Post + media',  mono: 'f', color: '#1877f2', kind: 'social' },
+-    { id: 'linkedin', name: 'LinkedIn',     sub: 'Studio update',  mono: 'in',color: '#0a66c2', kind: 'social' },
+-  ] },
+-  { id: 'community', label: 'Communities & forums', hint: 'Where your most engaged players gather', dests: [
+-    { id: 'discord',  name: 'Discord',        sub: 'Announcements channel',     mono: '◈', color: '#5865f2', kind: 'markdown', common: true },
+-    { id: 'reddit',   name: 'Reddit',         sub: 'Your subs + r/IndieGaming', mono: 'r', color: '#ff4500', kind: 'title',    common: true },
+-    { id: 'steamhub', name: 'Steam Community', sub: 'Hub discussion',           mono: 'S', color: '#1b2838', kind: 'patch' },
+-    { id: 'tigsource',name: 'TIGSource',      sub: 'Devlog thread',             mono: 'T', color: '#444444', kind: 'devlog' },
+-  ] },
+-  { id: 'press', label: 'Discovery & press', hint: 'How new players and journalists find you', dests: [
+-    { id: 'email',      name: 'Email newsletter', sub: 'Your list (Mailchimp/Substack)', mono: '✉', color: '#ea580c', kind: 'email', common: true },
+-    { id: 'producthunt',name: 'Product Hunt',    sub: 'Launch post', mono: 'P', color: '#da552f', kind: 'title', common: true },
+-    { id: 'hackernews', name: 'Hacker News',     sub: 'Show HN',     mono: 'Y', color: '#ff6600', kind: 'title' },
+-    { id: 'indiedb',    name: 'IndieDB',         sub: 'News article', mono: 'i',color: '#d35400', kind: 'whatsnew' },
+-    { id: 'gamejolt',   name: 'GameJolt',        sub: 'Post',        mono: 'gj',color: '#cf4b4b', kind: 'markdown' },
+-    { id: 'presskit',   name: 'Press release',   sub: 'presskit() + media list', mono: '¶', color: '#475569', kind: 'email' },
+-  ] },
+-  { id: 'video', label: 'Video & streaming', hint: 'Trailers, devlogs, and go-live moments', dests: [
+-    { id: 'youtube', name: 'YouTube', sub: 'Trailer / devlog', mono: '▶', color: '#ff0000', kind: 'whatsnew', common: true },
+-    { id: 'twitch',  name: 'Twitch',  sub: 'Go-live announce', mono: 't', color: '#9146ff', kind: 'social', common: true },
+-  ] },
+-];
+-
+-const BC_KIND_LABEL = { social: 'Social post', whatsnew: 'Store “What’s New”', patch: 'Patch notes',
+-  devlog: 'Devlog post', markdown: 'Markdown post', title: 'Title + body', email: 'Email', caption: 'Caption + tags', plain: 'Plain text' };
+-const BC_GEAR = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+-
+-function bcAllDests() { return BC_GROUPS.flatMap(g => g.dests); }
+-function bcDest(id)   { return bcAllDests().find(d => d.id === id); }
+-function bcIcon(d)    { return `<span class="bc-ico" style="--c:${d.color}">${d.mono || d.name[0]}</span>`; }
+-function bcMessage()  { return state.broadcast.message || ''; }
+-
+-// Storefront channels auto-derived from the distribution plan (activePlatforms).
+-function bcAutoStores() {
+-  return [...state.activePlatforms].map(p => BC_STORE_FROM_PLATFORM[p]).filter(Boolean);
+-}
+-function bcIsActive(id) {
+-  if (bcAutoStores().includes(id)) return !state.broadcast.storeOff.includes(id); // auto-on unless powered off
+-  return state.broadcast.active.includes(id);
+-}
+-// Ordered list of currently-active channels (stores first, then opted-in).
+-function bcActiveChannels() {
+-  const stores = bcAutoStores().filter(id => !state.broadcast.storeOff.includes(id));
+-  const optIn  = state.broadcast.active.filter(id => bcDest(id) && !bcAutoStores().includes(id));
+-  return [...new Set([...stores, ...optIn])];
+-}
+-
+-function bcAdaptedText(destId) {
+-  const msg = bcMessage().trim();
+-  const title = (state.formData.title || 'Your Game');
+-  const proj = state.projects.find(p => p.id === state.activeProjectId);
+-  const ver  = proj?.versions.find(v => v.id === state.activeVersionId)?.versionNumber || '1.0';
+-  const kind = (bcDest(destId) || {}).kind || 'plain';
+-  const body = msg || `${title} v${ver} is out now! [write your announcement on the left — Shipmate adapts it for each channel]`;
+-  const tag  = (title || '').replace(/[^a-z0-9]/gi, '');
+-  switch (kind) {
+-    case 'patch':    return `[h1]${title} — v${ver}[/h1]\n${body}`;
+-    case 'whatsnew': return `What’s new in v${ver}\n${body}`;
+-    case 'devlog':   return `# ${title} v${ver}\n${body}`;
+-    case 'markdown': return `**${title} v${ver} is live!** 🎉\n${body}`;
+-    case 'title':    return `${title} v${ver} is out now\n\n${body}`;
+-    case 'email':    return `Subject: ${title} v${ver} is here\n\n${body}`;
+-    case 'caption':  return `${body}\n\n#indiegame #gamedev${tag ? ' #' + tag : ''}`;
+-    default:         return body;
+-  }
+-}
+-
+-function buildBroadcastAdapt() {
+-  const channels = bcActiveChannels();
+-  if (!channels.length) {
+-    return `<div class="bc-adapt bc-adapt--empty">
+-      <div class="bc-adapt-head"><span class="bc-adapt-title">✨ Adapted automatically</span>
+-        <span class="bc-adapt-sub">Turn on channels below and Shipmate reshapes your message for each one.</span></div>
+-    </div>`;
+-  }
+-  let active = state.broadcast.previewDest;
+-  if (!channels.includes(active)) active = channels[0];
+-  const tabs = channels.map(id => {
+-    const d = bcDest(id); if (!d) return '';
+-    return `<button class="bc-adapt-tab${id === active ? ' is-on' : ''}" onclick="bcPreview('${id}')">${bcIcon(d)}<span>${d.name}</span></button>`;
+-  }).join('');
+-  const d = bcDest(active) || {};
+-  const text = bcAdaptedText(active);
+-  let meter = '';
+-  if (d.limit) {
+-    const used = (bcMessage().trim().length || text.length);
+-    const over = used > d.limit;
+-    meter = `<div class="bc-adapt-meter${over ? ' is-over' : ''}">${used} / ${d.limit}</div>`;
+-  }
+-  return `
+-    <div class="bc-adapt">
+-      <div class="bc-adapt-head">
+-        <span class="bc-adapt-title">✨ Adapted automatically</span>
+-        <span class="bc-adapt-sub">One message, reshaped for each active channel</span>
+-      </div>
+-      <div class="bc-adapt-tabs">${tabs}</div>
+-      <div class="bc-adapt-frame">
+-        <div class="bc-adapt-fmt">${d.name || ''} · ${BC_KIND_LABEL[d.kind] || 'Plain text'}${meter}</div>
+-        <pre class="bc-adapt-body">${escHtml(text)}</pre>
+-      </div>
+-    </div>`;
+-}
+-
+-// A channel chip: click toggles active; when active, a cog connects it (later).
+-function buildChannelChip(d) {
+-  const active = bcIsActive(d.id);
+-  return `
+-    <div class="bc-chip${active ? ' is-active' : ''}" role="button" tabindex="0"
+-         aria-pressed="${active}" title="${d.sub}" onclick="bcToggleChannel('${d.id}')">
+-      ${bcIcon(d)}
+-      <span class="bc-chip-name">${d.name}</span>
+-      ${active
+-        ? `<span class="bc-chip-cog" role="button" tabindex="0" title="Connect ${d.name}"
+-             onclick="event.stopPropagation();bcConnect('${d.id}')">${BC_GEAR}</span>`
+-        : `<span class="bc-chip-add" aria-hidden="true">+</span>`}
+-    </div>`;
+-}
+-
+-function buildChannelSection(g) {
+-  if (g.auto) {
+-    const stores = bcAutoStores();
+-    const body = stores.length
+-      ? `<div class="bc-chip-row">${stores.map(id => buildChannelChip(bcDest(id))).filter(Boolean).join('')}</div>`
+-      : `<div class="bc-empty-note">No stores yet — add distribution platforms on the Dashboard and they’ll sync here automatically.</div>`;
+-    return `<section class="bc-section">
+-      <div class="bc-section-head"><h3>${g.label} <span class="bc-auto-tag">Auto-synced</span></h3><p>${g.hint}</p></div>
+-      ${body}
+-    </section>`;
+-  }
+-  const common = g.dests.filter(d => d.common);
+-  const rest   = g.dests.filter(d => !d.common);
+-  const expanded = !!state.broadcast.expandedGroups[g.id];
+-  const moreHtml = rest.length ? `
+-    <div class="bc-chip-row bc-chip-rest${expanded ? ' is-open' : ''}">${rest.map(buildChannelChip).join('')}</div>
+-    <button class="bc-more" onclick="bcToggleGroup('${g.id}')">${expanded ? '− Fewer' : `+ ${rest.length} more`}</button>` : '';
+-  return `<section class="bc-section">
+-    <div class="bc-section-head"><h3>${g.label}</h3><p>${g.hint}</p></div>
+-    <div class="bc-chip-row">${common.map(buildChannelChip).join('')}</div>
+-    ${moreHtml}
+-  </section>`;
+-}
+-
+-/* Shared tab header box — one per top-level tab, tinted to the tab's accent. */
+-const TAB_HERO = {
+-  details: { accent: '#60a5fa', soft: 'rgba(96,165,250,.16)',
+-    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+-    title: 'Add your game details once',
+-    sub: 'Tell Shipmate about your game and point it in the right direction — these details flow everywhere, from your store listings to your launch announcement.' },
+-  dashboard: { accent: '#4ade80', soft: 'rgba(74,222,128,.15)',
+-    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`,
+-    title: 'Submit to every platform, the right way',
+-    sub: 'Shipmate preps your content ratings, data disclosures, and store pages, then walks each store’s submission for you — Apple, Google, Steam, and the consoles.' },
+-  broadcast: { accent: '#FF3B76', soft: 'rgba(255,59,118,.16)',
+-    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/></svg>`,
+-    title: 'Announce your game everywhere at once',
+-    sub: 'Write your update once. Shipmate reshapes it for each channel and posts to all of them together, so players find you wherever they look for indie games.' },
+-};
+-function buildTabHero(view) {
+-  const c = TAB_HERO[view];
+-  if (!c) return '';
+-  return `<div class="tab-hero" style="--accent:${c.accent};--accent-soft:${c.soft}">
+-    <div class="tab-hero-icon">${c.icon}</div>
+-    <div class="tab-hero-text">
+-      <div class="tab-hero-title">${c.title}</div>
+-      <div class="tab-hero-sub">${c.sub}</div>
+-    </div>
+-  </div>`;
+-}
+-
+-/* "Add Game Details" tab — the onboarding flow, inlined (no modal). */
+-function renderDetails() {
+-  const hero = document.getElementById('details-hero');
+-  if (hero) hero.innerHTML = buildTabHero('details');
+-  renderProjectBar();
+-  renderOnboarding();   // fills #ob-tabs / #ob-body / #ob-footer, now living inside #details
+-}
+-
+-function renderBroadcast() {
+-  const el = document.getElementById('broadcast');
+-  if (!el) return;
+-  renderProjectBar();
+-
+-  const channels = bcActiveChannels();
+-  const n = channels.length;
+-  const title = state.formData.title || 'your game';
+-
+-  el.innerHTML = `
+-    ${buildTabHero('broadcast')}
+-
+-    <div class="bc-main">
+-      <section class="bc-compose">
+-        <div class="bc-compose-head">
+-          <label for="bc-msg">Your announcement</label>
+-          <button class="bc-ai-btn" onclick="bcDraftWithAI()">✨ Draft with AI</button>
+-        </div>
+-        <textarea id="bc-msg" class="bc-textarea" rows="7"
+-          placeholder="What's new? Share the headline of your launch or update — Shipmate handles the rest."
+-          oninput="bcSetMessage(this.value)">${escHtml(bcMessage())}</textarea>
+-        ${buildBroadcastAdapt()}
+-      </section>
+-
+-      <div class="bc-channels">
+-        ${BC_GROUPS.map(buildChannelSection).join('')}
+-      </div>
+-    </div>
+-
+-    <div class="bc-actionbar">
+-      <div class="bc-actionbar-info">${n ? `Posting to <strong>${n}</strong> channel${n === 1 ? '' : 's'}` : 'Turn on channels to post'}</div>
+-      <div class="bc-actionbar-btns">
+-        <button class="btn btn-ghost" onclick="bcSchedule()">Schedule…</button>
+-        <button class="btn btn-primary" ${n ? '' : 'disabled'} onclick="bcBroadcastNow()">Post to all</button>
+-      </div>
+-    </div>`;
+-}
+-
+-// Capstone that reads as the next beat after the timeline's "Live" marker.
+-function buildDashboardAnnounceCta() {
+-  const n = bcActiveChannels().length;
+-  return `
+-    <button class="dash-announce" onclick="setView('broadcast')" aria-label="Open Make Waves">
+-      <span class="dash-announce-rail"><span class="dash-announce-node">◈</span></span>
+-      <span class="dash-announce-text">
+-        <span class="dash-announce-kicker">After you go live</span>
+-        <span class="dash-announce-title">Make waves — announce it everywhere</span>
+-        <span class="dash-announce-sub">Tell every store, social, community, and press outlet in one shot.</span>
+-      </span>
+-      <span class="dash-announce-go">${n ? `${n} channel${n === 1 ? '' : 's'} · Open` : 'Open Make Waves'} →</span>
+-    </button>`;
+-}
+-
+ function renderDashboard() {
+   const el = document.getElementById('dashboard');
+   if (!el) return;
+@@ -1725,11 +1464,10 @@ function renderDashboard() {
+   const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
+   const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid));
+ 
+-  let h = buildTabHero('dashboard');
++  let h = '';
+ 
+   if (active.length > 0) {
+     h += `<div id="dash-timeline-wrap">${buildDashboardTimeline()}</div>`;
+-    h += buildDashboardAnnounceCta();
+   }
+ 
+   if (active.length === 0) {
+@@ -4642,6 +4380,20 @@ function buildLocalizationReviewSection() {
+         </span>`;
+   };
+ 
++  // A translation actually in progress (either direction) is shown as the
++  // same small spinning-rings icon used when the App Store Content
++  // Questions section first opens (.inf-rings-wrap/.inf-ring, above) —
++  // scaled down to fit inline next to a language name (.loc-review-
++  // spinner) — rather than a text message. An actual failure still needs
++  // to be read, so that stays text. Shared by all three places a
++  // translate-in-progress indicator can appear: a non-flipped card, a
++  // flipped card's TOP half, and a flipped card's BOTTOM half (see
++  // _iasFieldTranslatePending/_locReviewBackTranslationValue's status/
++  // forwardStatus, app.js, for what drives each one).
++  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
++  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
++  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
++
+   // Shared field+counter markup — identical look/behavior (placeholder,
+   // over-limit styling and message) whether it's the non-flipped card or
+   // the Review side's top half; only the value shown and the click-to-edit
+@@ -4687,27 +4439,34 @@ function buildLocalizationReviewSection() {
+ 
+     if (reviewMode && !isPrimary) {
+       const back = _locReviewBackTranslationValue(field, lang);
+-      // A translation actually in progress is shown as the same small
+-      // spinning-rings icon used when the App Store Content Questions
+-      // section first opens (.inf-rings-wrap/.inf-ring, above) — scaled
+-      // down to fit inline next to the language name (.loc-review-spinner)
+-      // — rather than a text message. An actual failure still needs to be
+-      // read, so that stays text.
+-      const statusHtml = back.status === 'loading'
+-        ? `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`
+-        : back.status === 'error'
+-          ? `<span class="loc-review-status is-error">Translation failed</span>`
+-          : '';
++      // TOP half: shows a translate-in-progress indicator for EITHER of
++      // the two things that can currently be writing into this language's
++      // own real field — the Primary Language batch translate
++      // (_iasTriggerAutoTranslate, triggered by a primary-field edit,
++      // covering potentially every supporting language at once) OR this
++      // one card's own bottom-half edit forward-translating back into it
++      // (_locReviewCommitPrimaryEdit's forwardStatus) — whichever is
++      // actually in flight for this (field, lang) right now; the two are
++      // never both active at once for the same language.
++      // BOTTOM half: shows a translate-in-progress indicator for the
++      // top -> Primary Language back-translation refresh (back.status) —
++      // fired either by a direct top-half edit, or by the cascade after
++      // the Primary Language batch translate above lands this language's
++      // new top text.
++      const topStatusHtml = _iasFieldTranslatePending(field, lang)
++        ? locReviewLoadingSpinnerHtml
++        : locReviewStatusHtml(back.forwardStatus);
++      const bottomStatusHtml = locReviewStatusHtml(back.status);
+ 
+       return `
+       <div class="loc-review-card">
+         <div class="loc-review-side">
+           <div class="loc-review-half loc-review-half--top">
+-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div></div>
++            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+             ${fieldBlock(raw, `startLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+           </div>
+           <div class="loc-review-half loc-review-half--bottom">
+-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml}</div>
++            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+             ${fieldBlockNoLimit(back.text, `startLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+           </div>
+         </div>
+@@ -4719,12 +4478,20 @@ function buildLocalizationReviewSection() {
+     // variant, the same treatment as the Preview Website Factsheet's
+     // Platforms sub-section (.pk-platform-icon); 'ai' reuses the same ✦
+     // sparkle used for AI-inferred Content Questions answers (.ai-badge).
++    // A card currently awaiting a fresh translation from the Primary
++    // Language batch (_iasFieldTranslatePending, app.js — never true for
++    // the Primary Language's own card) shows the loading spinner INSTEAD
++    // of whatever source badge its current (about-to-be-replaced) text
++    // would otherwise carry.
++    const isPending = !isPrimary && _iasFieldTranslatePending(field, lang);
+     const srcBadge = _locReviewSourceBadge(field, lang);
+-    const badgeHtml = srcBadge === 'steam'
+-      ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+-      : srcBadge === 'ai'
+-        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+-        : '';
++    const badgeHtml = isPending
++      ? locReviewLoadingSpinnerHtml
++      : srcBadge === 'steam'
++        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
++        : srcBadge === 'ai'
++          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
++          : '';
+ 
+     return `
+       <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
+diff --git a/splash.html b/splash.html
+index 93246d3..3cc792e 100644
+--- a/splash.html
++++ b/splash.html
+@@ -1017,7 +1017,7 @@ Confidence</h3>
+   <div class="cta-row">
+     <button class="cta" onclick="window.parent.startFromSplash()">
+       GET STARTED
+-      <svg viewBox="0 0 39 37" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;"><g transform="matrix(1.35728,0,0,1.35728,3.33555,7.91632)"><path d="M17.903,6.787L14.775,3.936L12.588,1.709C12.51,1.631 12.451,1.538 12.412,1.431C12.373,1.323 12.354,1.211 12.354,1.094C12.354,0.853 12.435,0.653 12.598,0.493C12.76,0.334 12.962,0.254 13.203,0.254C13.33,0.254 13.433,0.277 13.54,0.322C13.657,0.368 13.753,0.443 13.857,0.547L20.332,7.002C20.527,7.191 20.625,7.409 20.625,7.656C20.625,7.904 20.527,8.122 20.332,8.311L13.838,14.785C13.659,14.967 13.438,15.059 13.203,15.059C12.962,15.059 12.76,14.979 12.598,14.819C12.435,14.66 12.354,14.46 12.354,14.219C12.354,14.102 12.373,13.989 12.412,13.882C12.451,13.774 12.51,13.682 12.588,13.604L14.775,11.377L17.911,8.525L3.35,8.525C3.096,8.525 2.889,8.444 2.729,8.281C2.57,8.118 2.49,7.91 2.49,7.656C2.49,7.402 2.57,7.194 2.729,7.031C2.889,6.868 3.096,6.787 3.35,6.787L17.903,6.787Z" style="fill:currentColor;"/></g></svg>
++      <svg viewBox="0 0 39 37" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;"><g transform="matrix(1.35728,0,0,1.35728,3.33555,7.91632)"><path d="M17.903,6.787L14.775,3.936L12.588,1.709C12.51,1.631 12.451,1.538 12.412,1.431C12.373,1.323 12.354,1.211 12.354,1.094C12.354,0.853 12.435,0.653 12.598,0.493C12.76,0.334 12.962,0.254 13.203,0.254C13.33,0.254 13.433,0.277 13.54,0.322C13.667,0.368 13.753,0.443 13.857,0.547L20.332,7.002C20.527,7.191 20.625,7.409 20.625,7.656C20.625,7.904 20.527,8.122 20.332,8.311L13.838,14.785C13.669,14.967 13.438,15.059 13.203,15.059C12.962,15.059 12.76,14.979 12.598,14.819C12.435,14.66 12.354,14.46 12.354,14.219C12.354,14.102 12.373,13.989 12.412,13.882C12.451,13.774 12.51,13.682 12.588,13.604L14.775,11.377L17.911,8.525L3.35,8.525C3.096,8.525 2.889,8.444 2.729,8.281C2.57,8.118 2.49,7.91 2.49,7.656C2.49,7.402 2.57,7.194 2.729,7.031C2.889,6.868 3.096,6.787 3.35,6.787L17.903,6.787Z" style="fill:currentColor;"/></g></svg>
+     </button>
+   </div>
+ 
+@@ -1363,7 +1363,7 @@ Confidence</h3>
+   color:rgba(255,255,255,0.35);
+   pointer-events:none;z-index:9999;
+   letter-spacing:0.04em;
+-">v3.65</div>
++">v3.66</div>
+ 
+ </body>
+ </html>
+diff --git a/state.js b/state.js
+index 08abcdc..642153b 100644
+--- a/state.js
++++ b/state.js
+@@ -2139,19 +2139,6 @@ const state = {
+   // Modal
+   activeModal: null,
+ 
+-  // Top-level view within the main app: 'dashboard' | 'broadcast'
+-  activeView: 'dashboard',
+-
+-  // Broadcast (unified announcement) composer — write once, adapt per destination.
+-  // Credentials are intentionally deferred; destinations show a "Connect later" state.
+-  broadcast: {
+-    message: '',              // the single source announcement the dev writes
+-    active: [],               // opt-in channel ids turned on (social/community/press/video)
+-    storeOff: [],             // auto storefront channels the dev has powered off
+-    expandedGroups: {},       // group id -> bool (secondary chips expand/collapse)
+-    previewDest: null,        // channel id currently shown in the adapted preview
+-  },
+-
+   // Activated platforms (shown with full task list on dashboard)
+   activePlatforms: new Set(),
+ 
+@@ -2426,6 +2413,17 @@ const state = {
+   // lives at the top level rather than inside formData.
+   iasTranslateStatus: {},
+ 
++  // Which supporting languages a given field's CURRENT in-flight batch
++  // translate (iasTranslateStatus above) will actually update — the
++  // eligible-language list _iasTriggerAutoTranslate computed when it
++  // started this batch. Read via _iasFieldTranslatePending (app.js) so
++  // Localization Review can show the loading spinner only on the card(s)
++  // really about to change, not indiscriminately on every supporting
++  // language. Cleared back to an empty array once the batch finishes
++  // (success or error) — only meaningful while its field's
++  // iasTranslateStatus entry is 'loading'.
++  iasTranslatePendingLangs: {},
++
+   // Which localizable fields Shipmate automatically translates (or, for
+   // Title, mirrors) from the Primary Language into every supporting
+   // language — keyed 'title' | 'subtitle' | 'description' | 'releaseNotes',

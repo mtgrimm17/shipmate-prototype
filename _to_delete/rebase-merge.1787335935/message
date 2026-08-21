@@ -1,0 +1,17 @@
+v3.66 — fix Localization Review translation loading-spinner placement
+
+Loading spinner now appears on exactly the field about to be updated:
+- Primary edit shows spinner on top half of pending supporting cards
+  (only languages actually in the current translate batch, via new
+  iasTranslatePendingLangs tracking)
+- Top-half edit shows spinner on bottom half (back-translation)
+- Bottom-half edit shows spinner on top half (forward re-translation) —
+  previously this incorrectly showed on the bottom half because both
+  translate directions shared one status flag; split into status vs
+  forwardStatus to fix
+
+# Conflicts:
+#	app.js
+#	index.html
+#	render.js
+#	state.js
