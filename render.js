@@ -1794,21 +1794,20 @@ function _perfTotals(f) {
   return { net, units };
 }
 
+// Each top-line metric maps 1:1 to a detail box below (which echoes it top-right).
 function buildPerfKpis(f) {
   const tot = _perfTotals(f);
   const cards = [
-    { label: 'Net revenue',       val: _pMoney(tot.net),           d: PERF.delta.revenue,        jump: 'perf-box-revenue' },
-    { label: 'Units sold',        val: _pNum(tot.units),           d: PERF.delta.units,          jump: 'perf-box-revenue' },
-    { label: 'Wishlists',         val: _pNum(PERF.wishlistsTotal), d: PERF.delta.wishlistsTotal, jump: 'perf-box-wishlists' },
-    { label: 'Store impressions', val: _pK(PERF.impressions * f),  d: PERF.delta.impressions },
-    { label: 'Avg rating',        val: `${PERF.rating}★`,          d: PERF.delta.rating,         sub: `${_pNum(PERF.ratingCount)} reviews`, jump: 'perf-box-reviews' },
-    { label: 'Monthly players',   val: _pNum(PERF.mau),            d: PERF.delta.mau,            sub: `${_pNum(PERF.dau)} daily`, jump: 'perf-box-engagement' },
+    { label: 'Net revenue',     val: _pMoney(tot.net),           d: PERF.delta.revenue,        jump: 'perf-box-revenue' },
+    { label: 'Wishlists',       val: _pNum(PERF.wishlistsTotal), d: PERF.delta.wishlistsTotal, jump: 'perf-box-wishlists' },
+    { label: 'Avg rating',      val: `${PERF.rating}★`,          d: PERF.delta.rating,         jump: 'perf-box-reviews' },
+    { label: 'Monthly players', val: _pNum(PERF.mau),            d: PERF.delta.mau,            jump: 'perf-box-engagement' },
   ];
   return `<div class="perf-kpis">${cards.map(c => `
-    <div class="perf-kpi${c.jump ? ' is-link' : ''}"${c.jump ? ` onclick="perfJump('${c.jump}')"` : ''}>
+    <div class="perf-kpi is-link" onclick="perfJump('${c.jump}')">
       <div class="perf-kpi-label">${c.label}</div>
       <div class="perf-kpi-val">${c.val}</div>
-      <div class="perf-kpi-foot">${_pDelta(c.d)}${c.sub ? `<span class="perf-kpi-sub">${c.sub}</span>` : ''}</div>
+      <div class="perf-kpi-foot">${_pDelta(c.d)}</div>
     </div>`).join('')}</div>`;
 }
 
@@ -1840,9 +1839,9 @@ function buildPerfRevenue(f) {
 }
 
 function buildPerfPanel(title, inner, opts = {}) {
-  const { id = '', mod = '' } = opts;
+  const { id = '', mod = '', metric = '' } = opts;
   return `<section class="perf-panel${mod ? ' ' + mod : ''}"${id ? ` id="${id}"` : ''}>
-    <div class="perf-panel-head"><h3>${title}</h3></div>
+    <div class="perf-panel-head"><h3>${title}</h3>${metric ? `<div class="perf-total">${metric}</div>` : ''}</div>
     ${inner}
   </section>`;
 }
@@ -1854,31 +1853,29 @@ function buildPerfWishlists(f) {
       <span class="perf-region-pct">${pct}%</span></div>`).join('');
   const inner = `
     <div class="perf-stat-row">
-      <div><div class="perf-mini-val">${_pNum(PERF.wishlistsTotal)}</div><div class="perf-mini-lbl">total</div></div>
       <div><div class="perf-mini-val">+${_pNum(PERF.wishlistAdds * f)}</div><div class="perf-mini-lbl">net adds</div></div>
       <div><div class="perf-mini-val">${PERF.wishlistConv}%</div><div class="perf-mini-lbl">conversion</div></div>
     </div>
     <div class="perf-sub-head">Top regions</div>${regions}`;
-  return buildPerfPanel('Wishlists', inner, { id: 'perf-box-wishlists' });
+  return buildPerfPanel('Wishlists', inner, { id: 'perf-box-wishlists', metric: `${_pNum(PERF.wishlistsTotal)}<span>total</span>` });
 }
 
 function buildPerfReviews() {
-  const cards = PERF.reviews.map(r => `
-    <div class="perf-review-card">
-      <div class="perf-review-score">${r.score}<span>${r.unit}</span></div>
-      <div class="perf-review-plat">${r.plat}</div>
-      <div class="perf-review-sub">${_pNum(r.count)} · ${r.sub}</div>
+  const rows = PERF.reviews.map(r => `
+    <div class="perf-rev2-row">
+      <span class="perf-rev2-plat">${r.plat}</span>
+      <span class="perf-rev2-score">${r.score}<small>${r.unit === '★' ? '★' : ' ' + r.unit}</small></span>
+      <span class="perf-rev2-cnt">${_pNum(r.count)}</span>
     </div>`).join('');
-  const inner = `<div class="perf-review-cards">${cards}</div>
+  const inner = `<div class="perf-rev2">${rows}</div>
     <div class="perf-recent-review">“${PERF.recentReview.text}”<span class="perf-recent-meta">${PERF.recentReview.meta}</span></div>`;
-  return buildPerfPanel('Reviews & rating', inner, { id: 'perf-box-reviews' });
+  return buildPerfPanel('Reviews & rating', inner, { id: 'perf-box-reviews', metric: `${PERF.rating}★<span>avg</span>` });
 }
 
 function buildPerfEngagement() {
   const inner = `
     <div class="perf-stat-row">
       <div><div class="perf-mini-val">${_pNum(PERF.dau)}</div><div class="perf-mini-lbl">daily</div></div>
-      <div><div class="perf-mini-val">${_pNum(PERF.mau)}</div><div class="perf-mini-lbl">monthly</div></div>
       <div><div class="perf-mini-val">${PERF.sessionMin}m</div><div class="perf-mini-lbl">avg session</div></div>
     </div>
     <div class="perf-sub-head">Retention</div>
@@ -1886,19 +1883,7 @@ function buildPerfEngagement() {
       ${[['D1', PERF.retD1], ['D7', PERF.retD7], ['D30', PERF.retD30]].map(([k, v]) => `
         <div class="perf-ret-col"><div class="perf-ret-bar" style="height:${v * 1.6}px"></div><div class="perf-ret-v">${v}%</div><div class="perf-ret-k">${k}</div></div>`).join('')}
     </div>`;
-  return buildPerfPanel('Player engagement', inner, { id: 'perf-box-engagement' });
-}
-
-function buildPerfFreshness() {
-  const rows = _perfPlats().map(pid => {
-    const p = PERF.revByPlatform[pid];
-    const delayed = p.status !== 'finalized';
-    return `<div class="perf-fresh-row"><span class="perf-fresh-plat">${p.name}</span>
-      <span class="perf-fresh-tag">${delayed ? '<span class="perf-badge perf-badge--delayed">delayed</span>' : ''}</span>
-      <span class="perf-fresh-delay">${p.delay}</span></div>`;
-  }).join('');
-  return buildPerfPanel('Reporting status', `<div class="perf-fresh">${rows}</div>
-    <div class="perf-note">Shipmate reconciles each platform's numbers as they finalize, so combined totals self-correct over time.</div>`, { id: 'perf-box-reporting' });
+  return buildPerfPanel('Player engagement', inner, { id: 'perf-box-engagement', metric: `${_pNum(PERF.mau)}<span>monthly</span>` });
 }
 
 function buildPerfInsights() {
@@ -1928,7 +1913,6 @@ function renderPerformance() {
       ${buildPerfReviews()}
       ${buildPerfEngagement()}
     </div>
-    ${buildPerfFreshness()}
     <div class="perf-soon">
       <span class="perf-soon-tag">Coming soon</span>
       Cohort retention, LTV, platform-specific player analysis, and revenue forecasting.
