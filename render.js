@@ -1659,12 +1659,47 @@ function buildTabHero(view) {
   </div>`;
 }
 
-/* "Add Game Details" tab — the onboarding flow, inlined (no modal). */
+/* "Add Game Details" tab — onboarding inlined as three always-visible boxes:
+   About (left), Distribution (right), Assets (bottom). No sub-tabs.
+   The #ob-modal wrapper is preserved so validation highlighting (.is-validating)
+   still cascades to every .ob-q inside. */
+function buildGdBox(idx, mod, inner) {
+  const def = OB_TAB_DEFS[idx];
+  const label = (typeof t === 'function' && t(def.labelKey)) || def.labelKey;
+  return `
+    <section class="gd-box gd-box--${mod}">
+      <div class="gd-box-head">${def.icon()}<h3>${label}</h3></div>
+      <div class="gd-box-body">${inner}</div>
+    </section>`;
+}
+
 function renderDetails() {
-  const hero = document.getElementById('details-hero');
-  if (hero) hero.innerHTML = buildTabHero('details');
+  const el = document.getElementById('details');
+  if (!el) return;
   renderProjectBar();
-  renderOnboarding();   // fills #ob-tabs / #ob-body / #ob-footer, now living inside #details
+  const fromWebEdit = state.assetsFromWebEdit;
+  const action = fromWebEdit
+    ? `<button class="btn btn-primary" onclick="backFromAssetsToWebEdit()">Save &amp; Return</button>`
+    : (!state.onboardingComplete
+        ? `<button class="btn btn-primary" onclick="completeOnboarding()">Continue to Submit →</button>`
+        : `<span class="gd-saved-note">Changes save automatically</span>`);
+
+  el.innerHTML = `
+    ${buildTabHero('details')}
+    <div class="gd-grid" id="ob-modal">
+      ${buildGdBox(0, 'about', buildAboutTab())}
+      ${buildGdBox(1, 'dist',  buildDistributionTab())}
+      ${buildGdBox(2, 'assets', buildAssetsTab())}
+    </div>
+    <div class="gd-actions">${action}</div>`;
+
+  // hydrate every section at once (each helper is a no-op if its fields are absent)
+  hydrateGameDetailsTab();
+  hydrateUploadAssetsTab();
+  renderOnboardingScreenshotGrid();
+  requestAnimationFrame(() => initObDistMap());
+  _setObValidating(false);
+  updateObSectionStates();
 }
 
 function renderBroadcast() {
@@ -1745,22 +1780,32 @@ const _pMoney = n => '$' + Math.round(n).toLocaleString('en-US');
 const _pK     = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(Math.round(n));
 const _pNet   = p => p.gross * (1 - p.cutPct / 100);
 const _pDelta = v => `<span class="perf-delta ${v >= 0 ? 'is-up' : 'is-down'}">${v >= 0 ? '▲' : '▼'} ${Math.abs(v)}%</span>`;
+// Live platforms from the distribution plan, else a compact default set
+// (Steam, App Store, Google Play, Epic — the order they'll sort by revenue).
 function _perfPlats() {
   const live = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid) && PERF.revByPlatform[pid]);
-  return (live.length ? live : Object.keys(PERF.revByPlatform));
+  return live.length ? live : ['steam', 'ios', 'android', 'egs'];
+}
+// Combined net + units across shown platforms — keeps the top-line KPI and the
+// revenue box in agreement no matter which platforms are live.
+function _perfTotals(f) {
+  let net = 0, units = 0;
+  for (const pid of _perfPlats()) { const p = PERF.revByPlatform[pid]; net += _pNet(p) * f; units += p.units * f; }
+  return { net, units };
 }
 
 function buildPerfKpis(f) {
+  const tot = _perfTotals(f);
   const cards = [
-    { label: 'Net revenue',  val: _pMoney(PERF.revenueNet * f), d: PERF.delta.revenue,      link: 'Revenue detail' },
-    { label: 'Units sold',   val: _pNum(PERF.units * f),        d: PERF.delta.units,         link: 'Sales detail' },
-    { label: 'Wishlists',    val: _pNum(PERF.wishlistsTotal),   d: PERF.delta.wishlistsTotal, sub: `+${_pNum(PERF.wishlistAdds * f)} this period` },
-    { label: 'Store impressions', val: _pK(PERF.impressions * f), d: PERF.delta.impressions, link: 'Traffic detail' },
-    { label: 'Avg rating',   val: `${PERF.rating}★`,            d: PERF.delta.rating,        sub: `${_pNum(PERF.ratingCount)} reviews` },
-    { label: 'Monthly players', val: _pNum(PERF.mau),           d: PERF.delta.mau,           sub: `${_pNum(PERF.dau)} daily` },
+    { label: 'Net revenue',       val: _pMoney(tot.net),           d: PERF.delta.revenue,        jump: 'perf-box-revenue' },
+    { label: 'Units sold',        val: _pNum(tot.units),           d: PERF.delta.units,          jump: 'perf-box-revenue' },
+    { label: 'Wishlists',         val: _pNum(PERF.wishlistsTotal), d: PERF.delta.wishlistsTotal, jump: 'perf-box-wishlists' },
+    { label: 'Store impressions', val: _pK(PERF.impressions * f),  d: PERF.delta.impressions },
+    { label: 'Avg rating',        val: `${PERF.rating}★`,          d: PERF.delta.rating,         sub: `${_pNum(PERF.ratingCount)} reviews`, jump: 'perf-box-reviews' },
+    { label: 'Monthly players',   val: _pNum(PERF.mau),            d: PERF.delta.mau,            sub: `${_pNum(PERF.dau)} daily`, jump: 'perf-box-engagement' },
   ];
   return `<div class="perf-kpis">${cards.map(c => `
-    <div class="perf-kpi">
+    <div class="perf-kpi${c.jump ? ' is-link' : ''}"${c.jump ? ` onclick="perfJump('${c.jump}')"` : ''}>
       <div class="perf-kpi-label">${c.label}</div>
       <div class="perf-kpi-val">${c.val}</div>
       <div class="perf-kpi-foot">${_pDelta(c.d)}${c.sub ? `<span class="perf-kpi-sub">${c.sub}</span>` : ''}</div>
@@ -1768,34 +1813,36 @@ function buildPerfKpis(f) {
 }
 
 function buildPerfRevenue(f) {
-  const plats = _perfPlats();
-  const rows = plats.map(pid => ({ pid, ...PERF.revByPlatform[pid], net: _pNet(PERF.revByPlatform[pid]) * f, grossP: PERF.revByPlatform[pid].gross * f, unitsP: PERF.revByPlatform[pid].units * f }));
+  const rows = _perfPlats().map(pid => ({ pid, ...PERF.revByPlatform[pid], net: _pNet(PERF.revByPlatform[pid]) * f }))
+    .sort((a, b) => b.net - a.net);
   const totalNet = rows.reduce((s, r) => s + r.net, 0);
   const maxNet   = Math.max(...rows.map(r => r.net), 1);
-  const anyEst   = rows.some(r => r.status !== 'finalized');
-  const body = rows.sort((a, b) => b.net - a.net).map(r => `
+  const anyDelayed = rows.some(r => r.status !== 'finalized');
+  const body = rows.map(r => `
     <div class="perf-rev-row">
-      <div class="perf-rev-plat">${platformIcon(r.pid, 16, 'white')}<span>${r.name}</span></div>
-      <div class="perf-rev-bar-wrap"><div class="perf-rev-bar" style="width:${(r.net / maxNet * 100).toFixed(1)}%"></div></div>
+      <div class="perf-rev-name">
+        <span class="perf-rev-link" onclick="perfOpen('${r.portal}')" title="Open ${r.portal}">${platformIcon(r.pid, 16, 'white')}<span>${r.name}</span><span class="perf-ext" aria-hidden="true">↗</span></span>
+        <span class="perf-fee" title="Platform fee">${r.cutPct}%</span>
+      </div>
       <div class="perf-rev-net">${_pMoney(r.net)}</div>
-      <div class="perf-rev-meta">${_pNum(r.unitsP)} units · ${r.cutPct}% fee</div>
-      <div class="perf-rev-status"><span class="perf-badge perf-badge--${r.status}" title="${r.delay}">${r.status}</span></div>
-      <a class="perf-link" onclick="perfOpen('${r.portal}')">Open ${r.portal} →</a>
+      <div class="perf-rev-bar-wrap"><div class="perf-rev-bar" style="width:${(r.net / maxNet * 100).toFixed(1)}%"></div></div>
+      <div class="perf-rev-flag">${r.status !== 'finalized' ? `<span class="perf-badge perf-badge--delayed" title="${r.delay}">delayed</span>` : ''}</div>
     </div>`).join('');
   return `
-    <section class="perf-panel perf-panel--wide">
+    <section class="perf-panel perf-panel--wide" id="perf-box-revenue">
       <div class="perf-panel-head">
         <h3>Revenue — all platforms</h3>
         <div class="perf-total">${_pMoney(totalNet)}<span>net, combined</span></div>
       </div>
       <div class="perf-rev-table">${body}</div>
-      ${anyEst ? `<div class="perf-note">⚠ Some figures are <b>estimates</b> — platforms report on different schedules. Hover a badge for each platform's reporting delay. Finalized totals may shift.</div>` : ''}
+      ${anyDelayed ? `<div class="perf-note">Platforms tagged <b>delayed</b> are still reporting — those figures firm up as each store finalizes. Hover a tag for the timeline.</div>` : ''}
     </section>`;
 }
 
-function buildPerfPanel(title, inner, link) {
-  return `<section class="perf-panel">
-    <div class="perf-panel-head"><h3>${title}</h3>${link ? `<a class="perf-link" onclick="perfOpen('${link}')">Details →</a>` : ''}</div>
+function buildPerfPanel(title, inner, opts = {}) {
+  const { id = '', mod = '' } = opts;
+  return `<section class="perf-panel${mod ? ' ' + mod : ''}"${id ? ` id="${id}"` : ''}>
+    <div class="perf-panel-head"><h3>${title}</h3></div>
     ${inner}
   </section>`;
 }
@@ -1807,12 +1854,12 @@ function buildPerfWishlists(f) {
       <span class="perf-region-pct">${pct}%</span></div>`).join('');
   const inner = `
     <div class="perf-stat-row">
-      <div><div class="perf-mini-val">${_pNum(PERF.wishlistsTotal)}</div><div class="perf-mini-lbl">total wishlists</div></div>
+      <div><div class="perf-mini-val">${_pNum(PERF.wishlistsTotal)}</div><div class="perf-mini-lbl">total</div></div>
       <div><div class="perf-mini-val">+${_pNum(PERF.wishlistAdds * f)}</div><div class="perf-mini-lbl">net adds</div></div>
-      <div><div class="perf-mini-val">${PERF.wishlistConv}%</div><div class="perf-mini-lbl">wishlist→buy</div></div>
+      <div><div class="perf-mini-val">${PERF.wishlistConv}%</div><div class="perf-mini-lbl">conversion</div></div>
     </div>
     <div class="perf-sub-head">Top regions</div>${regions}`;
-  return buildPerfPanel('Wishlists', inner, 'Wishlist detail');
+  return buildPerfPanel('Wishlists', inner, { id: 'perf-box-wishlists' });
 }
 
 function buildPerfReviews() {
@@ -1824,13 +1871,13 @@ function buildPerfReviews() {
     </div>`).join('');
   const inner = `<div class="perf-review-cards">${cards}</div>
     <div class="perf-recent-review">“${PERF.recentReview.text}”<span class="perf-recent-meta">${PERF.recentReview.meta}</span></div>`;
-  return buildPerfPanel('Reviews & rating', inner, 'All reviews');
+  return buildPerfPanel('Reviews & rating', inner, { id: 'perf-box-reviews' });
 }
 
 function buildPerfEngagement() {
   const inner = `
     <div class="perf-stat-row">
-      <div><div class="perf-mini-val">${_pNum(PERF.dau)}</div><div class="perf-mini-lbl">daily players</div></div>
+      <div><div class="perf-mini-val">${_pNum(PERF.dau)}</div><div class="perf-mini-lbl">daily</div></div>
       <div><div class="perf-mini-val">${_pNum(PERF.mau)}</div><div class="perf-mini-lbl">monthly</div></div>
       <div><div class="perf-mini-val">${PERF.sessionMin}m</div><div class="perf-mini-lbl">avg session</div></div>
     </div>
@@ -1839,23 +1886,24 @@ function buildPerfEngagement() {
       ${[['D1', PERF.retD1], ['D7', PERF.retD7], ['D30', PERF.retD30]].map(([k, v]) => `
         <div class="perf-ret-col"><div class="perf-ret-bar" style="height:${v * 1.6}px"></div><div class="perf-ret-v">${v}%</div><div class="perf-ret-k">${k}</div></div>`).join('')}
     </div>`;
-  return buildPerfPanel('Player engagement', inner, 'Player analytics');
+  return buildPerfPanel('Player engagement', inner, { id: 'perf-box-engagement' });
 }
 
 function buildPerfFreshness() {
   const rows = _perfPlats().map(pid => {
     const p = PERF.revByPlatform[pid];
+    const delayed = p.status !== 'finalized';
     return `<div class="perf-fresh-row"><span class="perf-fresh-plat">${p.name}</span>
-      <span class="perf-badge perf-badge--${p.status}">${p.status}</span>
+      <span class="perf-fresh-tag">${delayed ? '<span class="perf-badge perf-badge--delayed">delayed</span>' : ''}</span>
       <span class="perf-fresh-delay">${p.delay}</span></div>`;
   }).join('');
   return buildPerfPanel('Reporting status', `<div class="perf-fresh">${rows}</div>
-    <div class="perf-note">Shipmate reconciles each platform's numbers as they finalize, so combined totals self-correct over time.</div>`);
+    <div class="perf-note">Shipmate reconciles each platform's numbers as they finalize, so combined totals self-correct over time.</div>`, { id: 'perf-box-reporting' });
 }
 
 function buildPerfInsights() {
   const chips = PERF.insights.map(i => `<div class="perf-insight perf-insight--${i.tone}">${i.text}</div>`).join('');
-  return buildPerfPanel('Insights & alerts', `<div class="perf-insights">${chips}</div>`);
+  return buildPerfPanel('Insights & alerts', `<div class="perf-insights">${chips}</div>`, { id: 'perf-box-insights', mod: 'perf-panel--insights' });
 }
 
 function renderPerformance() {
@@ -1874,15 +1922,13 @@ function renderPerformance() {
     </div>
     ${buildPerfKpis(f)}
     ${buildPerfRevenue(f)}
+    ${buildPerfInsights()}
     <div class="perf-grid-3">
       ${buildPerfWishlists(f)}
       ${buildPerfReviews()}
       ${buildPerfEngagement()}
     </div>
-    <div class="perf-grid-2">
-      ${buildPerfFreshness()}
-      ${buildPerfInsights()}
-    </div>
+    ${buildPerfFreshness()}
     <div class="perf-soon">
       <span class="perf-soon-tag">Coming soon</span>
       Cohort retention, LTV, platform-specific player analysis, and revenue forecasting.

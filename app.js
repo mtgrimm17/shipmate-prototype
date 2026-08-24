@@ -79,6 +79,7 @@ function setView(view) {
 /* ── Performance dashboard handlers ───────────────────── */
 function perfSetPeriod(id) { state.performance.period = id; renderPerformance(); }
 function perfOpen(portal) { bcToast(`${portal} — connect the account to pull live figures. (Mock data shown for now.)`); }
+function perfJump(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
 /* ── Broadcast composer handlers ──────────────────────── */
 // Live-refresh only the adapted-preview pane so the textarea keeps focus.
