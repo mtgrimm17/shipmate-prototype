@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof loadLocale === 'function') {
     await loadLocale();
   }
+  // Shippy's bubbles: a burst of three every few seconds, with jitter so no
+  // two are alike. They only show while the guide is collapsed, since that is
+  // when the lane above the fab exists — the loop no-ops otherwise.
+  if (typeof bubbleLoop === 'function') bubbleLoop();
   // Always start at the splash screen
   showSplash();
 });
@@ -69,11 +73,69 @@ function setView(view) {
     const btn = document.getElementById(id);
     if (btn) { const on = v === view; btn.classList.toggle('is-active', on); btn.setAttribute('aria-selected', String(on)); }
   }
+  // With a tab selected, the other chips' icon squares drop to 5%.
+  document.getElementById('bar-nav')?.classList.add('has-sel');
+  paintBarGlow();
   if (view === 'details') renderDetails();
   else if (view === 'broadcast') renderBroadcast();
   else if (view === 'performance') renderPerformance();
   else renderDashboard();
   window.scrollTo(0, 0);
+}
+
+/* Diffuse light behind the chip that carries news — the prototype's
+   paintGlow(). "Spread the Word" is the only flagged chip, and the glow goes
+   out once you're actually on it, matching the prototype's rule that a news
+   flag only shows while the tab is unvisited. */
+function paintBarGlow() {
+  const bar  = document.getElementById('project-bar');
+  const glow = document.getElementById('bar-glow');
+  const blob = glow?.querySelector('.bar-glow-blob');
+  if (!bar || !glow || !blob) return;
+
+  const target = state.activeView === 'broadcast'
+    ? null
+    : document.getElementById('nav-broadcast');
+  glow.hidden = !target;
+  if (!target) return;
+
+  const br = bar.getBoundingClientRect();
+  const tr = target.getBoundingClientRect();
+  if (!tr.width) { glow.hidden = true; return; }   // pill not laid out yet
+  blob.style.setProperty('--glow-x', (tr.left - br.left + tr.width / 2) + 'px');
+}
+
+// The pill is fluid below 1200px, so the glow has to follow it.
+window.addEventListener('resize', paintBarGlow);
+
+/* Size the nav type so "MY LITTLE GAME" measures exactly 134px, whatever
+   metrics the font that actually loads turns out to have. This is the
+   prototype's calibrate(), ported verbatim.
+
+   It matters more than it looks: the 14.08px in the prototype's :root is a
+   pre-calibration placeholder that this function immediately overwrites, so
+   copying that literal into CSS and stopping there left the nav noticeably
+   smaller than the prototype renders. The measurement has to happen at
+   runtime, after the webfont lands. */
+function calibrateNavFs() {
+  const REF = 'My Little Game', TARGET = 134, PROBE = 100;
+  const s = document.createElement('span');
+  s.style.cssText = `position:absolute;visibility:hidden;white-space:pre;
+    font-family:var(--mono);font-weight:600;text-transform:uppercase;
+    font-size:${PROBE}px`;
+  s.textContent = REF;
+  document.body.appendChild(s);
+  const w = s.getBoundingClientRect().width;
+  s.remove();
+  if (!w) return;   // font not ready; the fonts.ready pass below will retry
+  document.documentElement.style.setProperty('--nav-fs', (TARGET / w * PROBE).toFixed(3) + 'px');
+}
+
+// Calibrate, then again once the webfont has actually loaded — and re-place the
+// glow after, since the chips change width when the type is resized.
+calibrateNavFs();
+if (document.fonts?.ready) {
+  document.fonts.ready.then(() => { calibrateNavFs(); paintBarGlow(); });
 }
 
 /* ── Performance dashboard handlers ───────────────────── */
@@ -202,6 +264,9 @@ function setOnboardingTab(idx) {
   _setObValidating(false);
   state.onboardingTab = idx;
   renderOnboarding();
+  // No paintShippyPanel() needed here: renderOnboarding -> renderOnboardingBody
+  // -> updateObSectionStates() already repaints the guide, with the new tab
+  // index in place.
 }
 
 /* Required fields per tab — maps tab index to OB_Q_ANSWERED keys */
@@ -1449,6 +1514,10 @@ function blinkComingSoon(pid) {
 function activatePlatform(platformId) {
   state.activePlatforms.add(platformId);
   renderDashboard();
+  // Shippy's platform item lives in the Details view, which renderDashboard()
+  // never touches. Without this the checklist stays stale until something
+  // else on the Details tab happens to fire a recalculation.
+  updateObSectionStates();
   // Measure the steps face now so the credentials face can match its height on
   // the very first flip (before any steps face has actually been shown).
   _cacheStepsFaceHeight(platformId);
@@ -1459,6 +1528,7 @@ function deactivatePlatform(platformId) {
   // Reset the transient face (keep platformAuth so sign-in persists).
   if (state.platformFace) delete state.platformFace[platformId];
   renderDashboard();
+  updateObSectionStates();   // same reason as activatePlatform
 }
 
 
@@ -1759,6 +1829,11 @@ function updateObSectionStates() {
   _setInputComplete('ob-title',            !!(state.formData.title?.trim()));
   _setInputComplete('ob-desc',             !!(state.formData.description?.trim()));
   _setInputComplete('ob-prv-nlp-textarea', !!(state.iosSubmitAnswers?.privacyDescription?.trim()));
+  // Shippy's checklist reads the same predicates, so it repaints here. This is
+  // the one hook every field change already funnels through — a dozen call
+  // sites, from keystrokes to platform toggles to screenshot drops — which is
+  // why the panel goes here rather than being wired up at each of them.
+  paintShippyPanel();
 }
 
 function syncField(field, value) {
@@ -1787,7 +1862,8 @@ function charCount(countId, value, max) {
   if (!el) return;
   const len = (value || '').length;
   const note = el.querySelector('.char-note');
-  el.textContent = `${len} / ${max} `;
+  // "12/30", not "12 / 30" — the prototype's spacing.
+  el.textContent = `${len}/${max}`;
   if (note) el.appendChild(note);
   el.className = 'char-count';
   if (len > max * 0.9) el.classList.add('is-warn');
@@ -1857,6 +1933,9 @@ function toggleObCountry(code) {
   document.querySelectorAll('.ob-preset-pill[data-preset]').forEach(btn => {
     btn.classList.toggle('is-active', btn.dataset.preset === state.formData.distributionPreset);
   });
+  // Picking countries can flip the preset, and the preset is what the
+  // checklist reads for Distribution.
+  updateObSectionStates();
 }
 
 function _refreshCountryListInPlace() {
@@ -3173,6 +3252,10 @@ function handleIconFiles(files) {
     if (preview) {
       preview.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" alt="App Icon">`;
     }
+    // Two things read this icon and neither knew it had changed: Shippy's
+    // checklist, and the cover art on the nav pill's project chip.
+    updateObSectionStates();
+    renderProjectBar();
   };
   reader.readAsDataURL(file);
 }
@@ -3186,6 +3269,8 @@ function removeIcon() {
       <div class="asset-dropzone-label">Drop icon here, or click to browse</div>
       <div class="asset-dropzone-hint">PNG · 1024×1024</div>`;
   }
+  updateObSectionStates();
+  renderProjectBar();
 }
 
 function handleScreenshotDrop(e) {

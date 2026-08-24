@@ -39,8 +39,96 @@
   --alert-border:  rgba(255, 59, 118, 0.30);
 
   /* ── Persistent chrome (shared header + footer) ── */
-  --header-h: 65px;
+  /* 66 = 26px top padding + 40px of logo/control height, bottom padding 0.
+     The 34px gap down to the nav pill lives on .project-bar's margin-top,
+     so the topbar/nav rhythm matches the nav prototype exactly (26 / 34)
+     without changing what --header-h means to #main-app or the splash. */
+  --header-h: 66px;
   --footer-h: 46px;
+
+  /* ── Typography ──────────────────────────────────────
+     Single family for the whole app, per the nav prototype. The only
+     exceptions are the storefront mockups, which deliberately keep the
+     real platform faces: .sp-google (Roboto), .ias-page (SF Pro),
+     .pk-page (system sans). Do not fold those into --mono. */
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: var(--mono);
+
+  /* ── Floating nav pill (prototype variant 7) ─────────
+     Every value here is lifted verbatim from shipmate-nav-prototype.html.
+     Do not round or "improve" them. */
+  --nav-w:        1200px;   /* max width; the pill centres and shrinks below it */
+  --chrome-gutter: 32px;    /* breathing room at the edges, shared by header and pill */
+  --nav-h:        60px;
+  --nav-r:        15px;     /* prototype --r */
+  --nav-pad:      7.5px;    /* (60 - 45) / 2 — same air above, below and at the ends */
+  --nav-gap:      8px;
+  /* Starting guess only. calibrateNavFs() in app.js overwrites this on the root
+     element once the webfont has loaded, sizing the type so "MY LITTLE GAME"
+     measures exactly 134px — same as the prototype's calibrate(). The 14.08px
+     literal in the prototype's :root is its pre-calibration placeholder, not
+     the size it actually renders at, so hardcoding it made the nav too small. */
+  --nav-fs:       14.08px;
+  --nav-fill:     #009B80;  /* prototype --v6-fill */
+  --nav-texscale: 105%;     /* prototype --v6-texscale for v7 */
+  --nav-sat:      .55;      /* prototype --v6-sat */
+  --nav-bri:      .82;      /* prototype --v6-bri */
+  --nav-stroke-top: rgba(255, 255, 255, .75);
+  --nav-stroke-bot: rgba(255, 255, 255, .25);
+  --nav-chip:       rgba(255, 255, 255, .13);
+  --nav-chip-hi:    rgba(255, 255, 255, .24);
+  --nav-ease:     var(--ease);
+  --nav-glow:     var(--magenta);  /* the "New" colour, per Jaco */
+
+  /* ── Content grid and the Shippy guide panel ──────────
+     Straight from the prototype's :root. Token names kept identical to that
+     file so the two stay diffable. 1200px in three 378.667px modules with a
+     32px gap; in fixed mode the content takes two of them and the panel is
+     pinned to the right edge of the third. */
+  --ease:      cubic-bezier(.22, 1, .36, 1);
+  --grid-gap:  32px;   /* gutter between content modules */
+  /* The prototype uses 62px here, but its nav is sticky and it has no tab
+     hero under it. With the banner this repo puts there, 62 + the pill's own
+     16px bottom margin read as 78px of dead space. Jaco's call: 10px total,
+     which is this 10 plus a pill margin of 0. */
+  --main-gap:  10px;
+  --sm-w:      338px;  /* width of the Shippy panel */
+  --cta-h:     38px;   /* height reserved for the CTA in the slash row */
+  --slashfs:   20px;   /* size of the slash-nav sub-tabs */
+  --w2of3:     calc((1200px - 2 * var(--grid-gap)) / 3 * 2 + var(--grid-gap));  /* 789.333px */
+  --w-content: calc(1200px - var(--grid-gap) - var(--sm-w));
+  /* The prototype uses 128px = 44 of nav offset + 60 of nav height + air,
+     because there the nav is sticky inside the same scrolling element as the
+     panel, so the panel has to duck under it.
+     Here the scroll container is .main and the nav sits OUTSIDE it, as a
+     sibling — .main's top edge is already below the nav. Carrying 128px over
+     pushed the panel down into the middle of its column and made it lurch
+     whenever the content's height changed. It only needs the content's own
+     top offset, which is --main-gap. */
+  --sticky-top: var(--main-gap);
+
+  /* Shippy's own palette */
+  --sm-fill:   rgba(102, 97, 122, .16);  /* the glass the panel is made of */
+  --sm-accent: #A078FF;                  /* the title */
+  --sm-blob:   #CAA5FF;                  /* the blur that shows through the glass */
+  --octo-body: #a563f3;                  /* the octopus purple, from pulpo-11.json */
+  --mascot-w:  83px;
+  --mascot-x:  26px;
+  --mascot-y:  -73px;   /* negative: only the top of him clears the panel edge */
+  --bub-rise:  64px;    /* height of the bubble lane */
+
+  /* ── Form fields, selection pills and the CTA ─────────
+     The prototype's tokens. Note it declares .selectable and .platform-tile
+     twice: a first pass on rgba(245,245,245,.05) and then an override onto
+     --pill-bg. These are the values that actually win. */
+  --inp-bg:       rgba(102, 97, 122, .16);
+  --inp-bg-hover: rgba(102, 97, 122, .22);
+  --pill-bg:      rgba(102, 97, 122, .16);
+  --pill-bg-hover: rgba(102, 97, 122, .24);
+  --gi-desc-h:    290px;   /* height of the description box */
+  --cta-bg:       #212028;
+  --cta-bg-hover: #453C5A;
+  --cta-blob:     #A078FF;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,12 +136,18 @@
 html, body { height: 100%; overflow: hidden; }
 
 body {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--mono);
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
   line-height: 1.4;
   -webkit-tap-highlight-color: transparent;
+  /* The prototype's body carries this, and the repo's didn't. On macOS the
+     default is subpixel antialiasing, which renders type visibly heavier —
+     that alone made the nav look bolder than the prototype at the same
+     weight. Do not remove without comparing the two side by side. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .hidden { display: none !important; }
@@ -117,7 +211,7 @@ body {
 }
 
 .ob-logo-text {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--mono);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -127,7 +221,7 @@ body {
 }
 
 .ob-headline {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--mono);
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
@@ -214,11 +308,11 @@ body {
 }
 
 /* Footer */
-.ob-footer {
-  border-top: 1px solid var(--border);
-  padding: 14px 24px;
-  flex-shrink: 0;
-}
+/* No footer bar. The prototype has no rule, no progress dots and no Back
+   button here; the only action is Continue, which sits on the slash row.
+   display:contents dissolves this wrapper so #btn-next becomes a direct flex
+   child of .slashrow — that's what lets margin-left:auto pin it to the right. */
+.ob-footer { display: contents; }
 
 .ob-footer-inner {
   display: flex;
@@ -227,22 +321,9 @@ body {
 }
 
 /* Step dots */
-.ob-step-dots { display: flex; gap: 7px; align-items: center; }
 
-.ob-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--panel-3);
-  transition: all 0.2s;
-}
 
-.ob-dot.is-active {
-  background: var(--green);
-  width: 18px;
-  border-radius: 3px;
-}
 
-.ob-dot.is-done { background: rgba(74, 222, 128, 0.4); }
 
 /* Presets row: "Presets:" label + pill strip */
 .ob-presets-row {
@@ -290,12 +371,6 @@ body {
 
 /* Completion-state borders: preset pills in an empty group get amber outline;
    the active pill switches to blue border (matching other selected controls) */
-.is-validating .ob-q[data-answered="0"] .ob-preset-pill:not(.is-active) {
-  border-width: 1px;
-  border-color: rgba(251, 146, 60, 0.4);
-  background: rgba(251, 146, 60, 0.03);
-  transition: border-color 0.25s, background 0.25s;
-}
 
 /* Manual markets row */
 .ob-manual-row {
@@ -1116,11 +1191,6 @@ body {
 
 /* Completion-state borders: platform chips in an empty group get amber outline;
    selected chip switches to white border */
-.is-validating .ob-q[data-answered="0"] .ob-plat-chip:not(.is-on) {
-  border-width: 1px;
-  border-color: rgba(251, 146, 60, 0.4);
-  background: rgba(251, 146, 60, 0.03);
-}
 /* Selected ob-plat-chip uses existing .is-on blue styles — no override needed */
 .ob-plat-tile-icon {
   font-size: 28px;
@@ -1231,29 +1301,7 @@ body {
 .ob-req-group,
 .ob-q .form-group { position: relative; }
 
-.is-validating .ob-q[data-answered="0"] .ob-req-group::before,
-.is-validating .ob-q[data-answered="0"] .form-group::before {
-  content: '';
-  position: absolute;
-  left: -14px; top: 4px; bottom: 4px;
-  width: 2px; border-radius: 1px;
-  background: rgba(251, 146, 60, 0.5);
-  opacity: 1;
-  transition: opacity 0.25s;
-}
-.is-validating .ob-q[data-answered="1"] .ob-req-group::before,
-.is-validating .ob-q[data-answered="1"] .form-group::before {
-  content: '';
-  position: absolute;
-  left: -14px; top: 4px; bottom: 4px;
-  width: 2px; border-radius: 1px;
-  background: rgba(251, 146, 60, 0.5);
-  opacity: 0;
-  transition: opacity 0.25s;
-}
-
-
-/* Section header — uppercase label, tints amber when section is unanswered */
+/* Section header — uppercase label */
 .ob-section-hdr {
   font-size: 10px;
   font-weight: 700;
@@ -1265,9 +1313,6 @@ body {
   align-items: center;
   gap: 8px;
   transition: color 0.2s;
-}
-.is-validating .ob-section.is-unanswered .ob-section-hdr {
-  color: rgba(251, 146, 60, 0.65);
 }
 
 /* Hairline divider between sections */
@@ -1720,10 +1765,10 @@ body {
 
 .topbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 32px;
-  gap: 20px;
+  /* 26px above the logo, nothing below: the 34px down to the nav pill is the
+     pill's own margin-top. Together that reproduces the prototype's
+     .topbar{padding:26px 0 34px} rhythm while the header stays fixed. */
+  padding: 26px 0 0;
   flex-shrink: 0;
   position: fixed;   /* persistent across splash / onboarding / app */
   top: 0;
@@ -1732,7 +1777,26 @@ body {
   height: var(--header-h);
   z-index: 200; /* always above modals (z-index:100) and the splash (z-index:1) */
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  /* No border-bottom: the header and the floating nav share one surface. */
+}
+
+/* The header's contents live on the same measure as the nav pill: 1200px wide,
+   centred, with 32px gutters. The bar stretches to the viewport, the content
+   never does — so widening the window moves nothing but empty space, and the
+   logo stays flush with the left edge of the pill at every width.
+
+   .chrome-measure is the shared rule; anything else that has to line up with
+   the pill should join it rather than restate the numbers. */
+.topbar-inner,
+.chrome-measure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: calc(100% - 2 * var(--chrome-gutter));
+  max-width: var(--nav-w);
+  margin-inline: auto;
+  min-width: 0;
 }
 
 /* Shipmate logo image in topbar */
@@ -1911,27 +1975,111 @@ body {
 .profile-menu-item.danger { color: var(--magenta); }
 .profile-menu-item.danger:hover { background: var(--magenta-soft); }
 
-/* ── Project Bar ─────────────────────────────────────── */
+/* ── Project Bar — the floating nav pill ──────────────────
+   Ported from shipmate-nav-prototype.html, variant 7: the variant 4 layout
+   (project chip on the left, the four category chips on the right) wearing
+   the variant 6 material (teal fill + texture, desaturated and dimmed as one
+   block). Every measurement is the prototype's. Don't round them.
+
+   The one deliberate deviation: the prototype nails the pill to 1200px, this
+   one uses max-width so it shrinks on narrow viewports instead of breaking. */
 
 .project-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 6px 10px;
-  margin: 0 24px 16px;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  gap: var(--nav-gap);
+  /* Same measure as .topbar-inner, so the pill's edges line up with the logo
+     and the account controls at every viewport width. */
+  width: calc(100% - 2 * var(--chrome-gutter));
+  max-width: var(--nav-w);
+  height: var(--nav-h);
+  /* 34px below the header, per the prototype's topbar padding-bottom.
+     Nothing below: the gap down to the content is --main-gap alone. */
+  margin: 34px auto 0;
+  padding: 0 var(--nav-pad);   /* (60 - 45) / 2 — same air at the ends as top and bottom */
+  border-radius: var(--nav-r);
+  background: transparent;     /* the whole material lives in ::after */
   position: relative;
   flex-shrink: 0;
+  backdrop-filter: blur(22px) saturate(130%);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+}
+
+/* Fill and texture in a single layer, so they desaturate and darken as one
+   block. The texture sits at its natural size and the pill clips it — a
+   clipping mask, not a stretch. */
+.project-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    url("Assets/nav-texture.png") center center / var(--nav-texscale) auto no-repeat,
+    var(--nav-fill);
+  filter: saturate(var(--nav-sat)) brightness(var(--nav-bri));
+}
+
+/* 1px inner stroke, white 75% at the top fading to 25% at the bottom. */
+.project-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, var(--nav-stroke-top), var(--nav-stroke-bot));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Diffuse light behind one chip, to flag what's new.
+
+   z-index 1, not the prototype's 0. In the prototype the glow is a child div
+   at z-index 0 while the v7 material lives in .nav::after, also at z-index 0 —
+   and a ::after paints after every child, so in variant 7 the material covers
+   the glow completely and you never see it. It only shows in the variants that
+   paint their fill on the element itself. Raising it to 1 puts it above the
+   material and below the chips (which are also 1, but later in the tree), so
+   the glow actually renders. Order: material → glow → chips. */
+.bar-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+.bar-glow-blob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 210px;
+  height: 150px;
+  transform: translate(calc(var(--glow-x, 0px) - 50%), -50%);
+  background: radial-gradient(closest-side, var(--nav-glow), transparent 72%);
+  filter: blur(26px);
+  opacity: .75;
 }
 
 .bar-left, .bar-right {
   display: flex;
   align-items: center;
   gap: 4px;
+  position: relative;
+  z-index: 1;
 }
+
+/* Pushes the categories to the right edge of the pill. */
+.bar-spacer { flex: 1; min-width: 12px; }
+
+/* Version selector and the ··· menu are parked until we actually use them.
+   The markup stays in index.html so re-enabling is a one-line change. */
+.bar-right { display: none; }
 
 /* ── Icon button (pencil, ···) ───────────────────────── */
 
@@ -1964,42 +2112,12 @@ body {
   flex-shrink: 0;
 }
 
-.project-selector {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  height: 40px;
-  padding: 0 16px;
-  min-width: 200px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  font-family: inherit;
-  color: var(--text);
-  text-align: left;
-}
-
-.project-selector:hover,
-.project-selector-wrap.open .project-selector {
-  border-color: var(--border);
-  background: var(--panel-2);
-}
-
-.project-selector .title {
-  flex: 1;
-  font-weight: 700;
-  font-size: 14px;
-}
-
-.project-selector .chev {
-  color: var(--text-dim);
-  font-size: 14px;
-  transition: transform 0.2s;
-}
-
-.project-selector-wrap.open .project-selector .chev { transform: rotate(180deg); }
+/* The old .project-selector button styles are gone: the project chip is now a
+   .bar-nav-btn like the categories, so it inherits the pill's chip styling.
+   Only the wrap survives, to anchor the dropdown and carry the .open state.
+   Keep the chip lit while its menu is open. */
+.project-selector-wrap.open #projectSelector { background: var(--nav-chip); color: #fff; }
+.project-selector-wrap.open #projectSelector .ic.cover { background: none; }
 
 /* ── Submission selector ─────────────────────────────── */
 
@@ -2052,22 +2170,48 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* The project dropdown is the prototype's .pop / .popitem.
+
+   NOTE ON THE COLOUR: the prototype paints .pop with --violet (#5E1DDC) and
+   never overrides it for variant 7, so a violet menu under a teal pill is
+   literally what the source file does. Kept verbatim rather than guessed at.
+   If that was an oversight, --pop-fill below is the single knob to turn. */
 .project-dropdown,
 .version-dropdown {
+  --pop-fill: #5E1DDC;
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
   min-width: 100%;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--pop-fill);
+  border: 0;
+  border-radius: 12px;
   padding: 6px;
   display: none;
   flex-direction: column;
-  gap: 2px;
   z-index: 50;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  animation: fadeDown 0.15s ease;
+  animation: popIn .18s var(--nav-ease);
+}
+
+/* Same 1px inner stroke as the pill. */
+.project-dropdown::before,
+.version-dropdown::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, var(--nav-stroke-top), var(--nav-stroke-bot));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .version-dropdown { left: auto; right: 0; }
@@ -2076,23 +2220,31 @@ body {
 .version-selector-wrap.open .version-dropdown { display: flex; }
 
 .project-item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 6px;
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  padding: 0 14px 0 10px;
+  border-radius: 9px;
   cursor: pointer;
-  font-size: 13px;
-  transition: background 0.15s, color 0.15s;
-  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+  font-size: var(--nav-fs);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .75);
+  transition: background .14s, color .14s;
 }
 
-.project-item:hover { background: var(--panel-2); }
-.project-item.active { background: var(--panel-2); }
-.project-item.new-project { color: var(--green); }
-.project-item.new-project:hover { background: var(--green-soft); }
-.project-item .plus { font-weight: 600; }
+.project-item:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.project-item.active { background: rgba(255, 255, 255, .16); color: #fff; }
+.project-item.active:hover { background: rgba(255, 255, 255, .28); }
+.project-item.new-project { color: rgba(255, 255, 255, .75); }
+.project-item.new-project:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.project-item .plus { width: 14px; flex: none; font-size: 14px; line-height: 1; text-align: center; }
 
 /* ── Submission ··· menu ─────────────────────────────── */
 
@@ -2144,8 +2296,12 @@ body {
    ============================================================ */
 
 .dashboard {
-  padding: 24px 28px 80px;
-  max-width: 1180px;
+  /* Same 1200px measure as the header and the nav pill, with the shared
+     gutters, so every view lines up with the chrome above it. The 62px of
+     top padding is the prototype's --main-gap. */
+  padding: var(--main-gap) 0 80px;
+  width: calc(100% - 2 * var(--chrome-gutter));
+  max-width: var(--nav-w);
   margin: 0 auto;
 }
 
@@ -2158,7 +2314,7 @@ body {
 .dash-empty-icon { font-size: 36px; margin-bottom: 14px; }
 
 .dash-empty-title {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--mono);
   font-size: 18px;
   font-weight: 600;
   color: var(--text-dim);
@@ -2721,7 +2877,7 @@ body {
   margin-bottom: 6px;
 }
 .iys-bin-fix-code {
-  font-family: 'JetBrains Mono', 'Menlo', 'Monaco', monospace;
+  font-family: var(--mono);
   font-size: 11px;
   line-height: 1.55;
   color: var(--text);
@@ -4625,9 +4781,6 @@ textarea.loc-review-field.ias-inline-input {
 .asset-dropzone-sm { padding: 16px 20px; }
 
 /* Dropzone incomplete state — only in validation mode */
-.is-validating .ob-q[data-answered="0"] .asset-dropzone {
-  border-color: rgba(251, 146, 60, 0.5);
-}
 
 .asset-dropzone-icon {
   font-size: 20px;
@@ -4671,22 +4824,6 @@ textarea.loc-review-field.ias-inline-input {
 /* Mandatory context: amber treatment only when inside an ob-q wrapper.
    Optional fields (YouTube URL, trailer, etc.) are not inside ob-q
    and therefore always get the neutral base style above. */
-.is-validating .ob-q .form-input {
-  border-color: rgba(251, 146, 60, 0.4);
-  background: rgba(251, 146, 60, 0.03);
-}
-.is-validating .ob-q .form-input.is-complete {
-  border-color: var(--border);   /* neutral — answered inputs look unchanged */
-  background: var(--bg);
-}
-.is-validating .ob-q .form-input:focus {
-  border-color: rgba(251, 146, 60, 0.65);
-  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.12);
-}
-.is-validating .ob-q .form-input.is-complete:focus {
-  border-color: var(--text-faint);
-  box-shadow: none;
-}
 textarea.form-input { resize: vertical; line-height: 1.55; }
 select.form-input {
   appearance: none;
@@ -5665,7 +5802,7 @@ select.form-input {
 }
 
 .submit-modal-title {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--mono);
   font-size: 18px; font-weight: 700;
   color: var(--text); letter-spacing: -0.2px;
 }
@@ -6213,7 +6350,7 @@ select.form-input {
 }
 
 .confirm-modal-title {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--mono);
   font-size: 17px;
   font-weight: 700;
   color: var(--text);
@@ -6237,14 +6374,17 @@ select.form-input {
 
 /* ── Project dropdown danger item + divider ──────────── */
 
+/* The prototype's .popsep. */
 .project-dropdown-divider {
   height: 1px;
-  background: var(--border);
-  margin: 4px 2px;
+  background: rgba(255, 255, 255, .14);
+  margin: 5px 6px;
 }
 
-.project-item.danger { color: var(--magenta); }
-.project-item.danger:hover { background: var(--magenta-soft); }
+/* Destructive items stay readable on the violet fill: white text, and the
+   magenta only shows up on hover. --magenta-soft is far too dark here. */
+.project-item.danger { color: rgba(255, 255, 255, .75); }
+.project-item.danger:hover { background: var(--magenta); color: #fff; }
 
 
 /* ============================================================
@@ -7572,7 +7712,7 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mono);
   color: var(--text-dim);
   white-space: pre-wrap;
   word-break: break-word;
@@ -7616,7 +7756,7 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   background: var(--panel-3);
   color: var(--text);
   font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mono);
   outline: none;
   min-width: 0;
 }
@@ -7641,7 +7781,7 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   position: fixed;
   bottom: 10px; right: 12px;
   font-size: 10px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--mono);
   color: var(--text-dim);
   opacity: 0.65;
   pointer-events: none;
@@ -8337,7 +8477,7 @@ body.signed-in       .splash-signin-btn { display: none; }
 
 .splash-signin-btn {
   display: none;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-dim);
@@ -8622,7 +8762,7 @@ body.is-splash .ai-disclaimer { display: none; }
   right: 24px;
   top: 50%;
   transform: translateY(-50%);
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--text-dim);
@@ -9497,20 +9637,127 @@ body.is-splash .ai-disclaimer { display: none; }
    BROADCAST — unified launch announcement
    ============================================================ */
 
-/* Top-bar view switch */
-.bar-nav { display: flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 3px; }
-.bar-nav-btn { display: flex; align-items: center; gap: 7px; padding: 6px 14px; border: none;
-  background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
-  border-radius: 7px; transition: background .15s, color .15s; position: relative; }
-.bar-nav-btn:hover { color: var(--text); }
-.bar-nav-btn.is-active { background: var(--panel-3); color: var(--accent, var(--text)); }
-.bar-nav-btn.is-active svg { color: var(--accent, currentColor); }
-.bar-nav-badge { font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  background: var(--magenta); color: #fff; border-radius: 5px; padding: 1px 5px; margin-left: 2px; }
+/* ── Nav chips inside the pill ─────────────────────────────
+   The prototype's .cats / .cat, measurement for measurement. */
+
+.bar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+  position: relative;
+  z-index: 1;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.bar-nav-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 45px;
+  padding: 0 16px 0 5.5px;   /* the icon square supplies the left air */
+  border: none;
+  border-radius: 13px;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: var(--nav-fs);
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .75);   /* unselected sits at 75% */
+  transition: background .18s var(--nav-ease), color .18s var(--nav-ease);
+}
+
+.bar-nav-btn:hover { background: rgba(255, 255, 255, .09); color: #fff; }
+.bar-nav-btn.is-active { background: var(--nav-chip); color: #fff; }
+.bar-nav-btn.is-active:hover { background: var(--nav-chip-hi); }
+
+/* The selected chip carries its own 1px inner stroke, white 10% at the top
+   fading to 0% at the bottom — the prototype's .cat.on::after. Same masking
+   trick as the pill's outline, just far softer. Without it the selected chip
+   reads as a flat translucent rectangle. */
+.bar-nav-btn.is-active::after,
+.project-item.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, 0));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* The icon square. */
+.bar-nav-btn .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 8.5px;
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: background .18s;
+}
+.bar-nav-btn .ic svg { opacity: .75; transition: opacity .18s;
+  transform: translateZ(0); backface-visibility: hidden; }
+.bar-nav-btn:hover .ic svg,
+.bar-nav-btn.is-active .ic svg { opacity: 1; }
+.bar-nav-btn.is-active .ic { background: rgba(255, 255, 255, .28); }
+.bar-nav-btn.is-active:hover .ic { background: rgba(255, 255, 255, .4); }
+
+/* Once a tab is selected, the other squares drop to 5%. */
+.bar-nav.has-sel .bar-nav-btn:not(.is-active) .ic { background: rgba(255, 255, 255, .05); }
+.bar-nav.has-sel .bar-nav-btn:not(.is-active):hover .ic { background: rgba(255, 255, 255, .18); }
+
+/* ── Project chip ──────────────────────────────────────────
+   Same chip as a category, but it never dims: it's the anchor, not a choice. */
+.project-selector-wrap .bar-nav-btn,
+.project-selector-wrap .bar-nav-btn .ic svg { color: #fff; opacity: 1; }
+
+/* Cover art, masked to the same radius as every other square. */
+.bar-nav-btn .ic.cover { background: none; position: relative; }
+.bar-nav-btn .ic.cover.empty { background: rgba(255, 255, 255, .07); }  /* until the icon lands */
+.bar-nav-btn .ic.cover img {
+  width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit;
+}
+/* Outline behind and in front, so the cover lifts off the fill. */
+.bar-nav-btn .ic.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28), 0 0 0 1px rgba(0, 0, 0, .22);
+}
+
+/* The project name prints exactly as typed — no uppercasing. */
+.bar-nav-btn .pname {
+  font-size: var(--nav-fs);
+  font-weight: 600;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 230px;
+}
 
 /* View container */
-.broadcast-view { max-width: 1180px; margin: 0 auto; padding: 24px 28px 120px; }
+.broadcast-view {
+  /* Same 1200px measure as the header and the nav pill; --main-gap on top. */
+  padding: var(--main-gap) 0 80px;
+  width: calc(100% - 2 * var(--chrome-gutter));
+  max-width: var(--nav-w);
+  margin: 0 auto;
+}
 
 /* Hero */
 .bc-hero { position: relative; overflow: hidden; border: 1px solid var(--border);
@@ -9688,11 +9935,30 @@ body.is-splash .ai-disclaimer { display: none; }
 .tab-hero-sub { font-size: 13px; line-height: 1.5; color: var(--text-dim); margin-top: 3px; max-width: 740px; }
 
 /* ── "Add Game Details" tab — onboarding inlined (no modal) ── */
-.details-view { max-width: 1180px; margin: 0 auto; padding: 24px 28px 80px; }
+.details-view {
+  /* Same 1200px measure as the header and the nav pill; --main-gap on top. */
+  padding: var(--main-gap) 0 80px;
+  width: calc(100% - 2 * var(--chrome-gutter));
+  max-width: var(--nav-w);
+  margin: 0 auto;
+}
+/* height:auto is the fix for the panel that wouldn't resize.
+   .ob-modal carries `height: clamp(560px, 88vh, 800px)` from its days as a
+   real modal. This inline override reset max-height and overflow but never
+   height, so the content column stayed pinned between 560 and 800px no matter
+   what was in it. Inside the panel grid that sets the row height, which is why
+   ticking a checklist item appeared to do nothing to the layout: the form
+   overflowed the fixed box (overflow:visible hid the symptom) while the box —
+   and therefore the row, and therefore the sticky panel — never moved. */
 #details .ob-modal.ob-inline { max-width: none; width: 100%; margin: 0; padding: 0; display: block;
-  background: transparent; border: none; border-radius: 0; box-shadow: none; max-height: none; overflow: visible;
+  background: transparent; border: none; border-radius: 0; box-shadow: none;
+  height: auto; max-height: none; overflow: visible;
   animation: none; }
-#details .ob-body { max-height: none; overflow: visible; }
+/* Inlined into the panel grid, so the body carries no padding of its own:
+   the content column already sets the measure, and 28px of inherited padding
+   would push everything out of line with the slash nav and the nav pill. */
+#details .ob-body { max-height: none; overflow: visible; padding: 0; }
+.slashrow #btn-next { margin-left: auto; }   /* flush with the content's right edge */
 #details .ob-footer { position: static; margin-top: 20px; }
 
 /* Add Game Details — three rounded boxes: About (left) · Distribution (right) · Assets (bottom) */
@@ -9715,7 +9981,14 @@ body.is-splash .ai-disclaimer { display: none; }
 /* ============================================================
    PERFORMANCE — live-game analytics dashboard (amber accent)
    ============================================================ */
-.performance-view { max-width: 1180px; margin: 0 auto; padding: 24px 28px 80px; --pf: #fb923c; }
+.performance-view {
+  /* Same 1200px measure as the header and the nav pill; --main-gap on top. */
+  padding: var(--main-gap) 0 80px;
+  width: calc(100% - 2 * var(--chrome-gutter));
+  max-width: var(--nav-w);
+  margin: 0 auto;
+  --pf: #fb923c;
+}
 
 .perf-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .perf-period { display: inline-flex; gap: 3px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
@@ -9840,3 +10113,438 @@ body.is-splash .ai-disclaimer { display: none; }
   border: 1px dashed var(--border); border-radius: 12px; padding: 13px 16px; }
 .perf-soon-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pf);
   background: var(--orange-soft); border-radius: 5px; padding: 2px 8px; }
+
+
+/* ════════════════════════════════════════════════════════════════════
+   SHIPPY GUIDE PANEL + SLASH NAV
+   Ported from shipmate-nav-prototype.html, values untouched. Tokens live in
+   :root under "Content grid and the Shippy guide panel".
+
+   Two rules from the prototype are deliberately NOT here:
+     · .slashnav .dot / .dot:hover — defined in that file but never rendered,
+       and the progress indicator was dropped on purpose.
+     · .oc-anchor — belonged to the prototype's debug dock, which isn't here.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Slash nav: the sub-tabs, left-aligned with the nav pill ─────────── */
+
+/* The prototype resets every button globally (background:none;border:0;…).
+   This repo has no such reset, and adding one now would restyle hundreds of
+   existing buttons, so the reset is scoped to the components ported here. */
+.slashnav button{
+  background:none;border:0;cursor:pointer;font-family:inherit;font-weight:400;
+}
+
+.slashrow{display:flex;align-items:center;gap:22px;margin:0 0 28px;min-height:var(--cta-h)}
+.slashnav{display:flex;align-items:center;flex-wrap:wrap;gap:0}
+.slashnav button{font-size:var(--slashfs);text-transform:uppercase;
+  color:rgba(255,255,255,.25);transition:.16s;padding:0}
+.slashnav button:hover{color:rgba(255,255,255,.55)}
+.slashnav button.on{color:#fff;display:flex;align-items:center;gap:14px;
+  text-decoration-line:underline;text-underline-offset:6px;text-decoration-thickness:2px}
+.slashnav .sl{color:rgba(255,255,255,.25);padding:0 11px;font-size:var(--slashfs);user-select:none}
+
+/* Completion lives in the DOM as .done but reads identically to not-done:
+   the green was retired on purpose. */
+.slashnav button.done:not(.on){color:rgba(255,255,255,.25)}
+.slashnav button.done.on{color:#fff}
+.slashnav button.done:not(.on):hover{color:rgba(255,255,255,.55)}
+
+/* ── Content grid ────────────────────────────────────────────────────── */
+.grid-2,.grid-3{display:grid;gap:var(--grid-gap);align-items:start;max-width:1200px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-2>*,.grid-3>*{min-width:0}
+.panelgrid{display:grid;grid-template-columns:minmax(0,1fr) var(--sm-w);
+           gap:var(--grid-gap);align-items:start;max-width:1200px}
+.panelgrid>*{min-width:0}
+.pg-main{min-width:0}
+.fullw{max-width:1200px}   /* pasos sin panel: las 3 columnas enteras */
+/* contenido fijo a 2 módulos: el panel se queda pegado a la derecha */
+.panelgrid.fixed{grid-template-columns:var(--w2of3) minmax(0,1fr)}
+.panelgrid.fixed .sm-wrap,.panelgrid.fixed .fabslot{width:var(--sm-w);margin-left:auto}
+.slashrow.w2of3{max-width:var(--w2of3)}
+.slashrow.wcontent{max-width:var(--w-content)}
+.slashrow #btn-next{margin-left:auto}   /* pegado al borde derecho del contenido */
+.span-2{grid-column:span 2}
+.span-3{grid-column:span 3}
+.platform-grid.pg-2{grid-template-columns:repeat(2,1fr)}
+.platform-grid.pg-3{grid-template-columns:repeat(3,1fr)}
+.platform-grid.pg-6{grid-template-columns:repeat(6,1fr)}
+
+
+/* ── The Shippy panel ────────────────────────────────────────────────── */
+.sm-wrap,.fabslot{align-self:start;position:sticky;top:var(--sticky-top)}
+.sm-mascot{
+  position:absolute;right:var(--mascot-x);top:var(--mascot-y);
+  width:var(--mascot-w);z-index:0;pointer-events:none;
+  /* El panel es cristal (fill al 16%), así que estar detrás en z-index no
+     basta: se transparentaba. Recortamos lo que cae dentro del panel, y
+     queda solo el trozo que asoma por el borde anclado.               */
+  clip-path:inset(0 0 max(0px,calc(100% + var(--mascot-y))) 0);
+}
+/* el ancla decide por qué esquina asoma, y por dónde se recorta */
+.sm-wrap[data-anchor="tl"] .sm-mascot{left:var(--mascot-x);right:auto}
+.sm-wrap[data-anchor="bl"] .sm-mascot,
+.sm-wrap[data-anchor="br"] .sm-mascot{
+  top:auto;bottom:var(--mascot-y);
+  clip-path:inset(max(0px,calc(100% + var(--mascot-y))) 0 0 0);
+}
+.sm-wrap[data-anchor="bl"] .sm-mascot{left:var(--mascot-x);right:auto}
+.sm-wrap[data-anchor="tl"] .sm-panel::before,
+.sm-wrap[data-anchor="bl"] .sm-panel::before{left:calc(var(--mascot-x) - 8px);right:auto}
+.sm-wrap[data-anchor="bl"] .sm-panel::before,
+.sm-wrap[data-anchor="br"] .sm-panel::before{top:auto;bottom:-30px}
+
+.sm-mascot svg,.sm-mascot img{width:100%;height:auto;display:block}
+.sm-panel{
+  position:relative;z-index:1;clip-path:inset(0 round 8px);
+  background:var(--sm-fill);border:0;border-radius:8px;
+  padding:0 14px 18px 14px;transition:filter .15s ease;
+}
+/* el blob que delata que el cristal deja pasar a la mascota */
+.sm-panel::before{
+  content:'';position:absolute;z-index:0;pointer-events:none;
+  right:calc(var(--mascot-x) - 8px);top:-30px;
+  width:var(--mascot-w);aspect-ratio:1;border-radius:50%;
+  background:var(--sm-blob);opacity:.30;filter:blur(30px);
+}
+.sm-panel>*{position:relative;z-index:1}
+.sm-titlerow{display:flex;align-items:center;justify-content:space-between;height:34px;margin-bottom:8px}
+.sm-title{
+  font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:11px;
+  text-transform:uppercase;color:var(--sm-accent);
+}
+.sm-toggle{
+  width:22px;height:22px;display:grid;place-items:center;border-radius:6px;
+  color:rgba(255,255,255,.40);cursor:pointer;transition:color .15s ease,background-color .15s ease;
+}
+.sm-toggle:hover{color:rgba(255,255,255,.85);background:rgba(255,255,255,.08)}
+.sm-toggle svg{transition:transform .18s var(--ease)}
+.sm-panel .sm-toggle svg{transform:rotate(180deg)}
+/* entradilla del paso: prosa, no checklist, así que ni caja ni mayúsculas */
+.sm-intro{
+  font-size:12px;line-height:1.5;color:rgba(255,255,255,.55);
+  margin:0 0 18px;text-transform:none;
+}
+.sm-score{font-size:12px;color:rgba(255,255,255,.80);margin:0 0 4px}
+.sm-score b{color:#fff;font-size:15px}
+.sm-sub{
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  font-size:10px;text-transform:uppercase;
+  color:rgba(255,255,255,.42);margin:18px 0 10px;
+  padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.10);
+}
+.sm-panel .sm-sub:first-of-type{margin-top:0}
+/* variante 5: un nivel por paso, para leer la checklist entera de un vistazo */
+.sm-step{
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  font-size:11px;font-weight:500;text-transform:uppercase;
+  color:rgba(255,255,255,.70);margin:22px 0 11px;
+}
+.sm-panel .sm-step:first-of-type{margin-top:0}
+.sm-group{padding-left:13px;border-left:1px solid rgba(255,255,255,.10)}
+.sm-group .sm-sub{margin-top:15px}
+.sm-group .sm-sub:first-of-type{margin-top:0}
+.sm-group .sm-item:last-child{margin-bottom:0}
+.sm-group .sm-score{display:none}   /* el contador ya lo lleva la cabecera del paso */
+.sm-count{font-variant-numeric:tabular-nums;color:rgba(255,255,255,.55);
+          display:inline-flex;align-items:center;gap:7px;white-space:nowrap;flex:none}
+.sm-count.ok{color:#50F88A}
+.sm-count.warn{color:#FFB86B}
+.sm-sub.flag{color:rgba(255,184,107,.75);border-bottom-color:rgba(255,184,107,.25)}
+.sm-sub.foldable{cursor:pointer}
+.sm-sub.foldable:hover{color:rgba(255,255,255,.72)}
+.sm-count svg{opacity:.5;transition:transform .18s var(--ease)}
+.sm-sub.foldable.open svg{transform:rotate(180deg)}   /* abierto: apunta arriba */
+.sm-item{
+  display:flex;align-items:flex-start;gap:0;margin-bottom:13px;
+  font-size:12px;line-height:1.35;text-transform:uppercase;
+}
+.sm-item:last-child{margin-bottom:0}
+.sm-tick{
+  width:0;flex:none;margin-top:2px;overflow:hidden;opacity:0;color:rgba(255,255,255,.30);
+  transition:width .24s var(--ease),margin-right .24s var(--ease),opacity .2s ease .06s;
+}
+.sm-item.done .sm-tick{width:12px;margin-right:9px;opacity:1}
+/* Lista de prioridades: lo pendiente manda, lo hecho se aparta.
+   Lo pendiente lleva además un punto en el hueco que deja el check. */
+.sm-item.done{color:rgba(255,255,255,.22)}
+.sm-item.todo{color:rgba(255,255,255,.88);font-weight:500}
+.sm-item.todo .sm-tick{
+  width:12px;margin-right:9px;opacity:1;color:rgba(255,255,255,.30);
+  display:grid;place-items:center;
+  /* El svg del check va oculto, así que la caja se quedaba con la altura del
+     punto (4px) y el punto subía. Le damos la altura de la línea de texto
+     para que el centrado caiga donde el ojo lo espera. */
+  height:1.35em;margin-top:0;
+}
+.sm-item.todo .sm-tick svg{display:none}
+.sm-item.todo .sm-tick::before{
+  content:'';width:4px;height:4px;border-radius:50%;background:currentColor;
+}
+.sm-item.flag .sm-tick::before{display:none}
+.sm-item i{font-style:normal;color:rgba(255,255,255,.28);margin-left:6px;font-variant-numeric:tabular-nums}
+.sm-item.flag{color:rgba(255,184,107,.85);text-transform:none}
+.sm-item.auto i{color:var(--sm-accent);opacity:.75}
+
+.sm-item.flag .sm-tick{display:none}
+
+/* THIS is why the checklist items jumped 2px when an item got its check.
+
+   The prototype has a global `svg { display: block }`; this repo does not, and
+   I hadn't ported it. Walk the two states of .sm-tick:
+
+     todo  display:grid, height:1.35em -> a 16.2px box (12px font x 1.35)
+     done  height:auto, holding the 13px check mark
+
+   With the svg as a block, the done box is 13px + 2px margin-top = 15px, which
+   is shorter than the 16.2px text line, so the row's height is set by the text
+   and nothing moves. As an inline element the svg instead sits on a line box of
+   1.35 x 12px, making the box 16.2 + 2 = 18.2px — 2px taller than the text. The
+   row grew and everything under it shifted down. Neither height nor margin-top
+   is transitioned, so it snapped.
+
+   Scoped to the panel rather than applied globally: the repo has inline SVG
+   inside buttons, table cells and modals all over, and blockifying every one of
+   them would shift layouts I can't see from here. */
+.sm-panel svg,
+.sm-fab svg { display: block; }
+.sm-txt{min-width:0;overflow-wrap:anywhere}
+
+/* The in-panel links. .sm-go was the real omission: the checklist renders
+   <a class="sm-go"> for every unfinished item and it had no styling at all,
+   so those lines sat as plain body text instead of Shippy's purple underline.
+   .sm-docs comes along for completeness — the store-page notes that use it
+   aren't ported yet, but the rule belongs with the rest of the panel. */
+.sm-go{color:var(--sm-accent);cursor:pointer;text-decoration-line:underline;
+  text-underline-offset:3px;text-decoration-thickness:1px;}
+.sm-go:hover{filter:brightness(1.2)}
+.sm-docs{display:inline-flex;align-items:center;gap:7px;margin-bottom:13px;
+  font-size:12px;line-height:1.35;text-transform:uppercase;
+  color:var(--sm-accent);text-decoration-line:underline;
+  text-underline-offset:3px;text-decoration-thickness:1px;}
+.sm-docs:hover{filter:brightness(1.2)}
+.sm-docs:last-child{margin-bottom:0}
+.sm-docs svg{flex:none;opacity:.7}
+
+.sm-fab{
+  position:relative;width:100%;height:34px;border-radius:8px;border:0;
+  background:var(--sm-fill);display:flex;align-items:center;justify-content:space-between;padding:0 14px;
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  text-transform:uppercase;color:rgba(255,255,255,.55);cursor:pointer;
+  transition:filter .15s ease,color .15s ease;
+  /* This is the 1px the title jumped when expanding and collapsing.
+     The prototype resets every button with `font: inherit`, which hands the
+     button the body's line-height. This repo has no such reset, so .sm-fab
+     fell back to the browser's `line-height: normal` (~1.2) while .sm-title
+     inside the panel inherited body's 1.4. Two different text-box heights,
+     both centred in a 34px row, and the baseline landed a pixel apart. */
+  line-height:inherit;
+}
+.sm-fab:hover{filter:brightness(1.10);color:#fff}
+
+/* Plegado: el pulpo suelta pompitas de vez en cuando. El carril se apoya
+   justo encima del fab y recorta por abajo, así nacen ocultas detrás del
+   borde y aparecen al cruzarlo. Las pompas las crea el JS: es un golpe de
+   tres, no un bucle, que es lo que hace que el movimiento no suene falso. */
+.fabwrap{position:relative}
+.fabwrap .sm-fab{z-index:1}
+.sm-bubbles{
+  position:absolute;left:0;right:0;bottom:100%;height:var(--bub-rise);
+  overflow:hidden;pointer-events:none;z-index:0;
+}
+
+/* Al expandir, Shippy sube desde detrás del panel. No movemos el contenedor
+   (llevaría el recorte con él): movemos el SVG dentro, así el recorte se
+   queda quieto en el borde y el pulpo emerge por debajo de él. */
+.sm-mascot svg{transition:transform .28s cubic-bezier(.16,.9,.3,1),opacity .18s ease}
+.sm-mascot.tuck svg{transform:translateY(calc(-1 * var(--mascot-y)));opacity:0}
+.sm-wrap[data-anchor="bl"] .sm-mascot.tuck svg,
+.sm-wrap[data-anchor="br"] .sm-mascot.tuck svg{transform:translateY(var(--mascot-y))}
+
+
+
+/* ════════════════════════════════════════════════════════════════════
+   ONBOARDING FORM — fields, selection pills, platform tiles, CTA
+
+   The prototype's .gi-* / .typable / .selectable / .platform-tile, value for
+   value. Scoped to .ob-form (and the CTA to its own class) so the repo's
+   .form-input, .form-label and .char-count keep their existing look
+   everywhere else — submit modals, step modals, the compliance questionnaire.
+
+   The amber .is-validating layer that used to dress these fields is gone, per
+   the prototype. It was only ever cosmetic: nextOnboardingTab() advances
+   freely and never gated on it.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Field block ─────────────────────────────────────── */
+.ob-form .ob-q { margin-bottom: 36px; margin-left: 0; padding-left: 0; }
+.ob-form .ob-q:last-child { margin-bottom: 0; }
+.ob-form .form-group { margin-bottom: 0; }
+
+/* Label and character counter share one 18px row, counter pushed right. */
+.ob-form .gi-head { display: flex; align-items: center; height: 18px; margin-bottom: 8px; }
+.ob-form .gi-head .form-label {
+  font-family: var(--mono); font-weight: 400; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; line-height: 18px;
+  color: #E1E4E7; opacity: .72; margin-bottom: 0; display: block;
+}
+.ob-form .gi-head .char-count {
+  display: block; margin-left: auto;
+  font-family: var(--mono); font-weight: 400;
+  font-size: 11px; line-height: 1; color: #5A615D;
+}
+
+/* ── Typable fields ──────────────────────────────────── */
+.ob-form .form-input {
+  width: 100%; border: 1px solid #23272A; border-radius: 8px; background: var(--inp-bg);
+  padding: 0 16px; font-family: var(--mono); font-weight: 400; font-size: 13px;
+  color: #E8EDE9; caret-color: #E1E4E7; outline: none; cursor: text;
+  transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+/* 34 total: with border-box the stroke sits inside */
+.ob-form input.form-input { height: 34px; }
+.ob-form textarea.form-input {
+  padding: 12px 16px; resize: none; min-height: var(--gi-desc-h);
+  line-height: 1.5; display: block;
+}
+.ob-form .form-input::placeholder { color: rgba(255, 255, 255, .25); }
+.ob-form .form-input:hover {
+  border-color: #4A4F4D; background-color: var(--inp-bg-hover);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .02);
+}
+.ob-form .form-input:focus,
+.ob-form .form-input:focus:hover {
+  border-color: rgba(255, 255, 255, .55); background-color: var(--inp-bg); box-shadow: none;
+}
+/* The repo already toggles .is-complete on filled inputs — same role as the
+   prototype's .filled, so it drives the same styling. */
+.ob-form .form-input.is-complete {
+  border-color: rgba(255, 255, 255, .14); box-shadow: none; color: #E1E4E7;
+}
+.ob-form .form-input.is-complete:hover {
+  border-color: rgba(255, 255, 255, .24); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .02);
+}
+
+/* ── Selection pills ─────────────────────────────────── */
+.ob-form .selectable {
+  display: inline-flex; align-items: center;
+  height: 36px; padding: 0 16px; border-radius: 8px;
+  background: var(--pill-bg); border: 1px solid rgba(207, 210, 213, .15);
+  color: #B8BFBA; font-family: var(--mono); font-weight: 400; font-size: 13px;
+  cursor: pointer; transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+.ob-form .selectable:not(.selected):hover {
+  background: var(--pill-bg-hover); border-color: rgba(255, 255, 255, .14);
+  color: #E1E4E7; box-shadow: none;
+}
+.ob-form .selectable.selected {
+  position: relative; background: rgba(0, 154, 255, .35); border: 1px solid transparent;
+  box-shadow: none; color: #52BAFF; font-weight: 500;
+}
+.ob-form .selectable.selected:hover {
+  background: rgba(0, 154, 255, .42); border-color: transparent; box-shadow: none; color: #6FC4FF;
+}
+
+/* ── Platform tiles ──────────────────────────────────── */
+/* .platform-grid.pg-6 sits earlier in this file at the same specificity as
+   ".ob-form .platform-grid", so source order would have let the bare 4-column
+   fallback win and quietly drop the row from six columns to four. The scoped
+   modifiers below settle it. */
+.ob-form .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ob-form .platform-grid.pg-2 { grid-template-columns: repeat(2, 1fr); }
+.ob-form .platform-grid.pg-3 { grid-template-columns: repeat(3, 1fr); }
+.ob-form .platform-grid.pg-6 { grid-template-columns: repeat(6, 1fr); }
+.ob-form .platform-tile {
+  position: relative; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px; padding: 16px 10px 12px; text-align: center; border-radius: 8px;
+  background: var(--pill-bg); border: 1px solid rgba(207, 210, 213, .15);
+  color: #B8BFBA; font-family: var(--mono); font-weight: 400; cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+.ob-form .platform-tile:not(.selected):hover {
+  background: var(--pill-bg-hover); border-color: rgba(255, 255, 255, .14); color: #E1E4E7;
+}
+.ob-form .platform-tile.selected {
+  background: rgba(0, 154, 255, .35); border: 1px solid transparent;
+  color: #52BAFF; font-weight: 500;
+}
+.ob-form .platform-tile.selected:hover { background: rgba(0, 154, 255, .42); color: #6FC4FF; }
+.ob-form .platform-tile-icon {
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  color: currentColor;
+}
+.ob-form .platform-tile-icon svg,
+.ob-form .platform-tile-icon img { width: 100%; height: 100%; display: block; }
+.ob-form .platform-tile-label { font-family: var(--mono); font-size: 12px; line-height: 1.2; }
+
+/* Coming soon: the prototype has no locked state, so this is the repo's,
+   restated on the prototype's tile. Dimmed and inert, lock top-right. */
+.ob-form .platform-tile:disabled { opacity: .4; cursor: default; }
+.ob-form .platform-tile:disabled:hover {
+  background: var(--pill-bg); border-color: rgba(207, 210, 213, .15); color: #B8BFBA;
+}
+.ob-form .platform-tile .ob-plat-lock {
+  position: absolute; top: 6px; right: 6px; width: 10px; height: 11px;
+  color: currentColor; opacity: .7; pointer-events: none;
+}
+
+/* The gradient stroke on a selected pill or tile: blue 75% down to 25%. */
+.ob-form .selectable.selected::after,
+.ob-form .platform-tile.selected::after {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+  background: linear-gradient(180deg, rgba(82, 186, 255, .75) 0%, rgba(82, 186, 255, .25) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+
+/* ── Continue ────────────────────────────────────────── */
+.btn-continue {
+  position: relative; border: 0; border-radius: 999px; overflow: hidden;
+  background: var(--cta-bg); color: #FFFFFF; font-weight: 500;
+  padding: 0 26px; height: var(--cta-h); text-transform: uppercase;
+  font-family: var(--mono); font-size: 12px; cursor: pointer;
+}
+/* the purple of the hover comes from here */
+.btn-continue::before {
+  content: ''; position: absolute; left: 50%; top: 150%;
+  width: 130%; aspect-ratio: 1; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--cta-blob); filter: blur(26px);
+  opacity: 0; transition: opacity .25s ease, top .35s var(--ease); pointer-events: none;
+}
+.btn-continue:hover::before { opacity: .35; top: 85%; }
+.btn-continue::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .10) 0%, rgba(255, 255, 255, 0) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+.btn-continue:hover { color: #FFFFFF; }
+.btn-continue .cta-lbl { position: relative; z-index: 1; }
+
+/* The prototype's green "ready" state, driven by its dev toggle. Kept because
+   the markup can ask for it; nothing switches it on by default. */
+.btn-continue.ready {
+  border-color: transparent; background: rgba(52, 209, 122, .28); color: #4FE39A; box-shadow: none;
+}
+.btn-continue.ready::after {
+  background: linear-gradient(180deg, rgba(111, 233, 166, .75) 0%, rgba(111, 233, 166, .25) 100%);
+}
+.btn-continue.ready:hover {
+  background: rgba(52, 209, 122, .36); border-color: transparent; box-shadow: none;
+}
+
+.btn-ghost-pill {
+  height: var(--cta-h); padding: 0 20px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14); background: transparent;
+  color: rgba(255, 255, 255, .55); font-family: var(--mono);
+  /* no font-size: inherits like .btn-continue, so the pair matches */
+  font-weight: 500; text-transform: uppercase; cursor: pointer; transition: .15s;
+}
+.btn-ghost-pill:hover { color: #fff; border-color: rgba(255, 255, 255, .32); }
+.btn-ghost-pill:disabled { opacity: .35; cursor: default; }
+.btn-ghost-pill:disabled:hover { color: rgba(255, 255, 255, .55); border-color: rgba(255, 255, 255, .14); }

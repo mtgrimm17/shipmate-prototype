@@ -89,6 +89,13 @@ function platformIcon(id, size = 20, variant = 'color') {
 /* ── Onboarding ──────────────────────────────────────── */
 
 /* ── Tab icons: dot-grid SVGs (5×5, cell=3px, gap=1.5px, step=4.5) ── */
+/* The sub-tabs. Order is the repo's, labels are the prototype's.
+
+   renderOnboardingTabs() draws these as a text-only slash nav and never touches
+   `icon`. The closures stay anyway because Mark's buildGdBox() calls def.icon():
+   that function is currently unreachable — v3.70 kept the tabbed layout over the
+   stacked one — but leaving the property off would turn it into a TypeError the
+   moment anyone wires it back up. */
 const OB_TAB_DEFS = [
   { labelKey: 'ob.tab.about',        icon: () => `<img src="Assets/Icon_About.png"        class="ob-tab-img" alt="">` },
   { labelKey: 'ob.tab.distribution', icon: () => `<img src="Assets/Icon_Distribution.png" class="ob-tab-img" alt="">` },
@@ -124,18 +131,19 @@ function renderOnboarding() {
 function renderOnboardingTabs() {
   const tabsEl = document.getElementById('ob-tabs');
   if (!tabsEl) return;
+  /* Slash nav, ported from the prototype: plain uppercase text at 20px, left
+     aligned with the nav pill, separated by "/". No icons and no progress
+     rail — the rails went out with the modal this used to live in. Completion
+     still rides along as .done for whenever we want to show it again;
+     right now it reads identically to not-done, on purpose. */
   tabsEl.innerHTML = OB_TAB_DEFS.map((def, i) => {
     const isActive = i === state.onboardingTab;
-    const progress = getTabProgress(i);
     const label    = (typeof t === 'function') ? t(def.labelKey) : def.labelKey;
-    return `
-      <button class="ob-tab${isActive ? ' is-active' : ''}"
-              style="--tab-progress:${progress.toFixed(3)}"
+    const done     = getTabProgress(i) >= 1;
+    const sep      = i ? '<span class="sl">/</span>' : '';
+    return `${sep}<button class="${isActive ? 'on' : ''}${done ? ' done' : ''}"
               onclick="setOnboardingTab(${i})"
-              aria-selected="${isActive}">
-        <span class="ob-tab-icon">${def.icon()}</span>
-        <span>${label}</span>
-      </button>`;
+              aria-selected="${isActive}">${label}</button>`;
   }).join('');
 }
 
@@ -176,16 +184,15 @@ function renderOnboardingFooter() {
   // backFromAssetsToWebEdit in app.js.
   const fromWebEdit = state.assetsFromWebEdit && state.onboardingTab === 2;
 
+  /* The prototype has no footer bar: no rule, no progress dots, no Back. The
+     only action is Continue, and it lives up on the slash row, pushed to the
+     right edge of the content column by `.slashrow #btn-next{margin-left:auto}`.
+     #ob-footer is display:contents, so the button is a direct flex child of
+     .slashrow and that selector applies verbatim. */
   el.innerHTML = `
-    <div class="ob-footer-inner">
-      <button class="btn btn-ghost" onclick="prevOnboardingTab()" ${(isFirst || fromWebEdit) ? 'style="visibility:hidden"' : ''}>${t('ob.footer.back')}</button>
-      <div class="ob-step-dots">
-        ${[0,1,2,3].map(i => `<span class="ob-dot ${i === state.onboardingTab ? 'is-active' : (i < state.onboardingTab ? 'is-done' : '')}"></span>`).join('')}
-      </div>
-      <button class="btn btn-primary" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : (isLast ? 'completeOnboarding()' : 'nextOnboardingTab()')}">
-        ${fromWebEdit ? 'Save &amp; Return' : (isLast ? 'Continue to Submit →' : t('ob.footer.next'))}
-      </button>
-    </div>`;
+    <button class="btn-continue" id="btn-next" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : (isLast ? 'completeOnboarding()' : 'nextOnboardingTab()')}">
+      <span class="cta-lbl">${fromWebEdit ? 'Save &amp; Return' : (isLast ? 'Continue to Submit' : t('ob.footer.next'))}</span>
+    </button>`;
 }
 
 /* Tab 0: About */
@@ -198,7 +205,10 @@ function buildAboutTab() {
       <div class="ob-section" id="ob-sec-about">
         
         <div class="ob-q" id="ob-q-title" data-answered="${fd.title?.trim() ? '1' : '0'}">
-          <label class="form-label" for="ob-title">${t('ob.field.title.label') || 'Game Title'}</label>
+          <div class="gi-head">
+            <label class="form-label" for="ob-title">${t('ob.field.title.label') || 'Game Title'}</label>
+            <div class="char-count" id="ob-title-count">${(fd.title || '').length}/30</div>
+          </div>
           <div class="title-search-wrap">
             <div class="form-group">
               <input class="form-input" id="ob-title" type="text" maxlength="50" required
@@ -207,7 +217,6 @@ function buildAboutTab() {
                      oninput="syncField('title', this.value); charCount('ob-title-count', this.value, 30); _onTitleInputScenario(this.value)"
                      onfocus="_onTitleFocus(this.value)"
                      onblur="_onTitleBlur(); _iasPropagateTitle(this.value)">
-              <div class="char-count" id="ob-title-count">0 / 30</div>
             </div>
             <div id="ob-title-picklist" class="title-picklist"></div>
           </div>
@@ -218,23 +227,28 @@ function buildAboutTab() {
         </div>
 
         <div class="ob-q" id="ob-q-desc" data-answered="${fd.description?.trim() ? '1' : '0'}">
-          <label class="form-label" for="ob-desc">${t('ob.field.desc.label') || 'Description'}</label>
+          <div class="gi-head">
+            <label class="form-label" for="ob-desc">${t('ob.field.desc.label') || 'Description'}</label>
+            <div class="char-count" id="ob-desc-count">${(fd.description || '').length}/4000</div>
+          </div>
           <div class="form-group">
             <textarea class="form-input" id="ob-desc" rows="5" required
                       placeholder="${t('ob.field.desc.placeholder') || 'Tell players what makes your game worth their time...'}"
                       oninput="syncField('description', this.value); charCount('ob-desc-count', this.value, 4000)"
                       onblur="_iasTriggerAutoTranslate('description', this.value)"></textarea>
-            <div class="char-count" id="ob-desc-count">0 / 4000</div>
           </div>
         </div>
       </div>
 
-      <div class="ob-sec-divider"></div>
-
-      <!-- ── Platforms ── -->
+      <!-- ── Platforms ──
+           No divider: the prototype runs straight from the description into
+           the platform grid. And the label is the same .gi-head/.gi-label as
+           every other field, not a separate section header. -->
       <div class="ob-section" id="ob-sec-platforms">
-        <div class="ob-section-hdr">${t('ob.section.about.platforms') || 'Target Platforms'}</div>
-        <div class="ob-q" id="ob-q-platforms" data-answered="${state.activePlatforms.size > 0 ? '1' : '0'}">
+        <div class="ob-q gi-last" id="ob-q-platforms" data-answered="${state.activePlatforms.size > 0 ? '1' : '0'}">
+          <div class="gi-head">
+            <span class="form-label">${t('ob.section.about.platforms') || 'Select platforms'}</span>
+          </div>
           <div id="ob-plat-grid-wrap" class="ob-req-group ${state.activePlatforms.size === 0 ? 'is-req-empty' : ''}">${buildObPlatTilesHTML()}</div>
         </div>
       </div>
@@ -729,33 +743,77 @@ function buildObCountryChips() {
 function buildObCountryList() { return buildObCountryChips(); }
 
 /* ── Platform chips (text-only multi-select, same style as lang chips) ── */
+/* The icon for a platform tile. The prototype's own mark when it has one,
+   otherwise this repo's, wrapped by hand rather than through platformIcon().
+
+   Why not platformIcon(): for ids that appear in PLATFORM_ASSET — psn among
+   them — it returns an <img>, and a raster image can't inherit currentColor,
+   so the icon would stay grey while its tile turned blue. Wrapping the path
+   data directly keeps every tile on one behaviour.
+
+   Note the viewBoxes differ: the prototype's marks are drawn on 64, this
+   repo's on 24, so the fallbacks read a little heavier. If you have the real
+   Web mark, drop it into platform-icons.js as `web` and this stops firing. */
+function protoTileIcon(iconKey, repoId) {
+  const own = PROTO_PLATFORM_ICONS[iconKey];
+  if (own) return own;
+  const d = (typeof PLATFORM_ICONS !== 'undefined') ? PLATFORM_ICONS[repoId] : '';
+  if (!d) return '';
+  const evenodd = EVENODD_ICONS.has(repoId) ? ' fill-rule="evenodd" clip-rule="evenodd"' : '';
+  return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="currentColor"${evenodd}`
+       + ` aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
 function buildObPlatTilesHTML() {
+  /* The prototype's PLATFORMS list, its order, its labels:
+       [['Steam','steam'],['Web','web'],['App Store','ios'],
+        ['Google Play','android'],['Epic','epic'],['PlayStation','playstation']]
+     Six, not eight. `iconKey` is the prototype's key into PROTO_PLATFORM_ICONS;
+     `id` is this repo's platform id, which drives state.activePlatforms.
+
+     Xbox and Nintendo are not in the prototype's list, so they are not here.
+     Adding them back is a two-line change if you want them, locked.
+
+     The prototype's icon set only has ios, android, steam and epic — there is
+     no web or playstation mark anywhere in that file, so its own Web and
+     PlayStation tiles render an empty box. Those two fall back to this repo's
+     own path data via protoTileIcon() below. */
   const PLATFORMS_OB = [
-    { id:'steam',    label:'Steam',              comingSoon: false },
-    { id:'ios',      label:'App Store',          comingSoon: false },
-    { id:'android',  label:'Google Play',        comingSoon: false },
-    { id:'web',      label:'Web',                comingSoon: false },
-    { id:'egs',      label:'Epic Games Store',   comingSoon: true  },
-    { id:'psn',      label:'PlayStation Store',  comingSoon: true  },
-    { id:'xbox',     label:'Xbox Store',         comingSoon: true  },
-    { id:'nintendo', label:'Nintendo eShop',     comingSoon: true  },
+    { id:'steam',   iconKey:'steam',       label:'Steam',       comingSoon: false },
+    { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
+    { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
+    { id:'android', iconKey:'android',     label:'Google Play', comingSoon: false },
+    { id:'egs',     iconKey:'epic',        label:'Epic',        comingSoon: true  },
+    { id:'psn',     iconKey:'playstation', label:'PlayStation', comingSoon: true  },
   ];
   const lockSVG = `<svg class="ob-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
-  const tiles = PLATFORMS_OB.map(({ id, label, comingSoon }) => {
+  /* The prototype's tile, markup for markup:
+       <button class="platform-tile[ selected]" data-platform="…">
+         <span class="platform-tile-icon">…svg…</span>
+         <span class="platform-tile-label">…</span>
+       </button>
+     The icon comes from PROTO_PLATFORM_ICONS and inherits currentColor, so it turns
+     blue with the tile. platformIcon() is NOT used here — it returns
+     brand-coloured artwork that ignores the tile's state.
+
+     Grid class: the prototype renders `cols===3 ? 'pg-6' : 'pg-3'`, and cols
+     is 3, so what it actually draws is pg-6 — six columns, one row. The bare
+     .platform-grid's repeat(4,1fr) is only the fallback. */
+  const tiles = PLATFORMS_OB.map(({ id, iconKey, label, comingSoon }) => {
+    const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
+      + `<span class="platform-tile-label">${label}</span>`;
     if (comingSoon) {
-      return `<button class="ob-plat-tile ob-plat-tile-cs" disabled title="${label} — coming soon">
-        ${platformIcon(id, 28, 'color')}
-        ${lockSVG}
-      </button>`;
+      // Not in the prototype: its list has no locked state. The repo's lock,
+      // wearing the prototype's tile.
+      return `<button type="button" class="platform-tile" disabled
+                      title="${label} — coming soon">${icon}${lockSVG}</button>`;
     }
     const isOn = state.activePlatforms.has(id);
-    return `<button class="ob-plat-tile${isOn ? ' is-on' : ''}"
+    return `<button type="button" class="platform-tile${isOn ? ' selected' : ''}"
                     onclick="toggleOnboardingPlatform('${id}')"
-                    title="${label}">
-      ${platformIcon(id, 28, 'white')}
-    </button>`;
+                    data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="ob-plat-tile-row">${tiles}</div>`;
+  return `<div class="platform-grid pg-6">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -1136,6 +1194,33 @@ function renderProjectBar() {
   // Update selector button titles
   const selTitle = document.getElementById('projectSelectorTitle');
   if (selTitle) selTitle.textContent = gameTitle;
+
+  // Cover art in the project chip. Same source as the prototype's gameIcon():
+  // the square icon the developer uploaded. Until one lands, the chip shows
+  // the .empty hole rather than a placeholder graphic.
+  const selIcon = document.getElementById('projectSelectorIcon');
+  if (selIcon) {
+    const icon = state.uploads?.appIcon;
+    selIcon.classList.toggle('empty', !icon);
+    selIcon.innerHTML = icon
+      ? `<img src="${icon.dataUrl}" alt="">`
+      : '';
+  }
+
+  // Tab labels come from the locale, not the static markup.
+  const NAV_LABELS = {
+    'nav-details':     'nav.details',
+    'nav-dashboard':   'nav.submit',
+    'nav-broadcast':   'nav.spread',
+    'nav-performance': 'nav.performance',
+  };
+  for (const [id, key] of Object.entries(NAV_LABELS)) {
+    const lbl = document.getElementById(id)?.querySelector('.lbl');
+    if (lbl) lbl.textContent = t(key);
+  }
+  // Labels changed width, so the news glow has to be re-measured.
+  if (typeof paintBarGlow === 'function') paintBarGlow();
+
   const verTitle = document.getElementById('versionSelectorTitle');
   const activeVer = proj?.versions.find(v => v.id === state.activeVersionId);
   if (verTitle) verTitle.textContent = 'v' + (activeVer?.versionNumber || '1.0');
@@ -1177,6 +1262,252 @@ function renderProjectBar() {
   const profName = document.getElementById('profile-name');
   if (profName) profName.textContent = t('bar.developer');
   renderLangMenu();
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   SHIPPY GUIDE PANEL
+
+   The reserved right-hand column. Ported from the prototype's sm-* markup;
+   the checklist predicates are rewritten against this repo's state, since the
+   prototype read its own `form` object.
+
+   Submit (the `dashboard` view) deliberately gets no panel: the platform
+   cards want the full width, same as the prototype's `bare` mode.
+   ════════════════════════════════════════════════════════════════════ */
+
+const SHIPPY_VIEWS = ['details', 'broadcast', 'performance'];
+
+const SM_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+  + ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.5 5.5L20 6"/></svg>';
+
+let shippyGroupState = {};   // groups the user has opened or closed by hand
+let shippyOpen = true;       // false = collapsed to the fab
+
+/* A link only when the target lives somewhere the user can't already see.
+   If it's right in front of them it stays plain text — no useless links. */
+function smGo(label, tabIdx, sel = '') {
+  const here = state.activeView === 'details' && state.onboardingTab === tabIdx;
+  return here ? label
+    : `<a class="sm-go" data-go="${tabIdx}" data-focus="${sel}">${label}</a>`;
+}
+
+const smItem = (done, txt, key, extra) =>
+  `<div class="sm-item ${done ? 'done' : 'todo'}${extra ? ' ' + extra : ''}" data-k="${key}">`
+  + `<span class="sm-tick">${SM_CHECK}</span><span class="sm-txt">${txt}</span></div>`;
+
+/* Group header. Everything folds; `defOpen` is how it arrives from the factory. */
+function smGroup(key, label, ok, total, body, flag, defOpen) {
+  const done = ok === total && total > 0;
+  const open = key in shippyGroupState ? shippyGroupState[key] : !!defOpen;
+  return `<div class="sm-sub${flag ? ' flag' : ''} foldable${open ? ' open' : ''}" data-group="${key}">
+      <span>${label}</span>
+      <span class="sm-count${done ? (flag ? ' warn' : ' ok') : ''}">${ok}/${total}${CHEV}</span>
+    </div>${open ? body : ''}`;
+}
+
+/* ── What Shippy writes in each view ─────────────────── */
+
+function shippyGameInfoNotes() {
+  const A = OB_SECTION_ANSWERED;
+  return `<p class="sm-intro">Tell Shipmate about your game and point it in the right `
+    + `direction — these details flow everywhere, from your store listings to your `
+    + `launch announcement.</p>`
+    + smItem(!!state.formData.title?.trim(),
+        state.formData.title?.trim() ? 'Title' : smGo('Add a title', 0, '#ob-title'), 'title')
+    + smItem(!!state.formData.description?.trim(),
+        state.formData.description?.trim() ? 'Description'
+          : smGo('Write a description', 0, '#ob-desc'), 'desc')
+    + smItem(A.platforms(),
+        A.platforms() ? 'Platforms'
+          : smGo('Select at least one platform', 0, '#ob-q-platforms'), 'plat');
+}
+
+function shippyDistNotes() {
+  const A = OB_SECTION_ANSWERED;
+  return smItem(A.distribution(),
+        A.distribution() ? 'Market' : smGo('Market', 1, '#ob-q-distribution'), 'mk')
+    + smItem(A.localization(),
+        A.localization() ? 'Primary language' : smGo('Primary language', 1, '#ob-lang-list-wrap'), 'pl');
+}
+
+function shippyAssetsNotes() {
+  const shots = state.uploads.screenshots.length;
+  return smItem(shots > 0,
+        shots ? `Screenshots <i>${shots}</i>` : smGo('Add screenshots', 2, '#ob-q-screenshots'), 'shots')
+    + smItem(!!state.uploads.appIcon,
+        state.uploads.appIcon ? 'App icon' : smGo('Upload an app icon', 2, '#ob-q-screenshots'), 'icon');
+}
+
+/* Broadcast and Performance have no checklist logic in this repo yet, so the
+   panel carries the prose intro only. The shell is here so the copy can land
+   without touching the layout again. */
+function shippyNotes(viewId) {
+  if (viewId === 'details') {
+    const byTab = [shippyGameInfoNotes, shippyDistNotes, shippyAssetsNotes];
+    return (byTab[state.onboardingTab] || byTab[0])();
+  }
+  if (viewId === 'broadcast') {
+    return `<p class="sm-intro">Write the announcement once. Shipmate adapts the wording `
+      + `for every channel you switch on, and flags anything a platform will reject.</p>`;
+  }
+  if (viewId === 'performance') {
+    return `<p class="sm-intro">Numbers land here once your stores are connected. `
+      + `Until then everything you see is sample data.</p>`;
+  }
+  return smItem(false, 'Nothing to check here', 'none');
+}
+
+/* ── Mount ───────────────────────────────────────────── */
+
+function shippyPanelHTML(viewId) {
+  return `<aside class="sm-wrap" data-anchor="${mascot.anchor}">
+      <div class="sm-mascot"></div>
+      <div class="sm-panel">${SM_HEAD}${shippyNotes(viewId)}</div>
+    </aside>`;
+}
+
+/* Wraps a view's content into the two-column grid and hangs the panel off the
+   right column. Works on views that rebuild their innerHTML wholesale
+   (broadcast, performance) and on #details, whose structure is static — the
+   .panelgrid guard makes the second case a no-op after the first pass.
+
+   The tab hero and the slash row stay outside the grid, on the full 1200px
+   measure; everything after them drops into the 789.333px content column. */
+/* The panel grid for a view — the scope for every query below.
+   Three views get wrapped, so .sm-panel, .sm-toggle, .sm-fab and .sm-mascot
+   each exist up to three times. Nothing here may use getElementById: it would
+   always return the copy inside whichever view sits first in the DOM, which is
+   how the Performance panel ended up repainting the Details one. */
+function shippyGrid(viewId) {
+  const view = document.getElementById(viewId || state.activeView);
+  return view ? view.querySelector(':scope > .panelgrid') : null;
+}
+
+function mountShippyPanel(viewId) {
+  if (!SHIPPY_VIEWS.includes(viewId)) return;
+  const view = document.getElementById(viewId);
+  if (!view) return;
+  if (view.querySelector(':scope > .panelgrid')) {
+    // Already wrapped. Repaint the body, and re-mount the mascot: OCTO keeps a
+    // single SVG node and mount() moves it, so whichever view mounted last
+    // holds it and this one's mascot box is empty. That was the octopus
+    // vanishing when you came back to a view.
+    paintShippyPanel(viewId);
+    remountMascot(viewId);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'panelgrid fixed';
+  const main = document.createElement('div');
+  main.className = 'pg-main';
+  grid.appendChild(main);
+
+  const stayOut = n => n.nodeType === 1 &&
+    (n.id === 'details-hero' || n.classList.contains('tab-hero') || n.classList.contains('slashrow'));
+
+  let anchor = null;
+  for (const node of [...view.childNodes]) {
+    if (stayOut(node)) { anchor = node; continue; }
+    main.appendChild(node);
+  }
+  if (anchor) anchor.after(grid); else view.appendChild(grid);
+
+  grid.insertAdjacentHTML('beforeend',
+    shippyOpen ? shippyPanelHTML(viewId)
+               : `<div class="fabslot">${shippyFabHTML()}</div>`);
+
+  applyMascot();
+  if (shippyOpen) OCTO.mount(grid.querySelector('.sm-mascot'));
+  wireShippyPanel(viewId);
+}
+
+/* Bring the one octopus node back into this view's mascot box. */
+function remountMascot(viewId) {
+  if (!shippyOpen) return;
+  const host = shippyGrid(viewId)?.querySelector('.sm-mascot');
+  if (host) OCTO.mount(host);
+}
+
+function shippyFabHTML() {
+  return `<div class="fabwrap"><div class="sm-bubbles"></div>`
+    + `<button class="sm-fab" title="Expand the Shippy guide">`
+    + `<span>Shippy guide</span><span class="sm-toggle">${CHEV}</span></button></div>`;
+}
+
+/* When the item list is unchanged, update in place instead of rebuilding: the
+   nodes survive, so .sm-tick can animate its 0.24s width transition from the
+   dot to the checkmark. Blowing away innerHTML would make the tick pop
+   instead. Ported from the prototype's syncPanel(). */
+function syncShippyPanel(el, html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const cur  = [...el.querySelectorAll('.sm-item')];
+  const next = [...tmp.querySelectorAll('.sm-item')];
+  const key  = list => list.map(n => n.dataset.k).join('|');
+  if (!cur.length || key(cur) !== key(next)) { el.innerHTML = html; return; }
+
+  // Items: class and text, onto the node that's already there.
+  cur.forEach((n, i) => {
+    n.className = next[i].className;
+    n.querySelector('.sm-txt').innerHTML = next[i].querySelector('.sm-txt').innerHTML;
+  });
+  // Headers and counters carry the tallies, so they need refreshing too.
+  ['.sm-score', '.sm-step', '.sm-sub'].forEach(sel => {
+    const a = [...el.querySelectorAll(sel)], b = [...tmp.querySelectorAll(sel)];
+    if (a.length !== b.length) return;
+    a.forEach((n, i) => { n.className = b[i].className; n.innerHTML = b[i].innerHTML; });
+  });
+}
+
+/* Repaint the panel body without rebuilding the grid, so the mascot keeps
+   animating and the checkmarks keep their transition. */
+function paintShippyPanel(viewId) {
+  const view = viewId || state.activeView;
+  const el = shippyGrid(view)?.querySelector('.sm-panel');
+  if (!el) return;
+  syncShippyPanel(el, SM_HEAD + shippyNotes(view));
+  wireShippyPanel(view);
+}
+
+function wireShippyPanel(viewId) {
+  const grid = shippyGrid(viewId);
+  if (!grid) return;
+  grid.querySelectorAll('.sm-sub.foldable').forEach(el => el.onclick = e => {
+    e.stopPropagation();
+    shippyGroupState[el.dataset.group] = !el.classList.contains('open');
+    paintShippyPanel(viewId);
+  });
+  grid.querySelectorAll('.sm-go').forEach(el => el.onclick = e => {
+    e.preventDefault(); e.stopPropagation();
+    const tab = +el.dataset.go, sel = el.dataset.focus;
+    if (state.activeView !== 'details') setView('details');
+    setOnboardingTab(tab);
+    requestAnimationFrame(() => {
+      const target = sel && document.querySelector(sel);
+      if (!target) return;
+      target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      if (target.matches('input,textarea,select')) target.focus();
+    });
+  });
+  const collapse = grid.querySelector('.sm-panel .sm-toggle');
+  if (collapse) collapse.onclick = () => { shippyOpen = false; reflowShippyPanel(); };
+  const fab = grid.querySelector('.sm-fab');
+  if (fab) fab.onclick = () => { shippyOpen = true; reflowShippyPanel(); };
+}
+
+/* Swap the panel for the fab, or back, without re-rendering the whole view. */
+function reflowShippyPanel() {
+  const grid = shippyGrid();
+  if (!grid) return;
+  grid.querySelector('.sm-wrap, .fabslot')?.remove();
+  grid.insertAdjacentHTML('beforeend',
+    shippyOpen ? shippyPanelHTML(state.activeView)
+               : `<div class="fabslot">${shippyFabHTML()}</div>`);
+  applyMascot();
+  if (shippyOpen) OCTO.mount(grid.querySelector('.sm-mascot'));
+  wireShippyPanel(state.activeView);
 }
 
 
@@ -1674,32 +2005,14 @@ function buildGdBox(idx, mod, inner) {
 }
 
 function renderDetails() {
-  const el = document.getElementById('details');
-  if (!el) return;
+  const hero = document.getElementById('details-hero');
+  if (hero) hero.innerHTML = buildTabHero('details');
   renderProjectBar();
-  const fromWebEdit = state.assetsFromWebEdit;
-  const action = fromWebEdit
-    ? `<button class="btn btn-primary" onclick="backFromAssetsToWebEdit()">Save &amp; Return</button>`
-    : (!state.onboardingComplete
-        ? `<button class="btn btn-primary" onclick="completeOnboarding()">Continue to Submit →</button>`
-        : `<span class="gd-saved-note">Changes save automatically</span>`);
-
-  el.innerHTML = `
-    ${buildTabHero('details')}
-    <div class="gd-grid" id="ob-modal">
-      ${buildGdBox(0, 'about', buildAboutTab())}
-      ${buildGdBox(1, 'dist',  buildDistributionTab())}
-      ${buildGdBox(2, 'assets', buildAssetsTab())}
-    </div>
-    <div class="gd-actions">${action}</div>`;
-
-  // hydrate every section at once (each helper is a no-op if its fields are absent)
-  hydrateGameDetailsTab();
-  hydrateUploadAssetsTab();
-  renderOnboardingScreenshotGrid();
-  requestAnimationFrame(() => initObDistMap());
-  _setObValidating(false);
-  updateObSectionStates();
+  renderOnboarding();   // fills #ob-tabs / #ob-body / #ob-footer, now living inside #details
+  // Wrap into the panel grid and hang the guide off it. Called here rather
+  // than only from setView(), because these renders rebuild innerHTML and are
+  // also reached directly from handlers that bypass setView().
+  mountShippyPanel('details');
 }
 
 function renderBroadcast() {
@@ -1738,6 +2051,10 @@ function renderBroadcast() {
         <button class="btn btn-primary" ${n ? '' : 'disabled'} onclick="bcBroadcastNow()">Post to all</button>
       </div>
     </div>`;
+  // Wrap into the panel grid and hang the guide off it. Called here rather
+  // than only from setView(), because these renders rebuild innerHTML and are
+  // also reached directly from handlers that bypass setView().
+  mountShippyPanel('broadcast');
 }
 
 /* ── Performance: live-game analytics (mock data) ─────────
@@ -1917,6 +2234,10 @@ function renderPerformance() {
       <span class="perf-soon-tag">Coming soon</span>
       Cohort retention, LTV, platform-specific player analysis, and revenue forecasting.
     </div>`;
+  // Wrap into the panel grid and hang the guide off it. Called here rather
+  // than only from setView(), because these renders rebuild innerHTML and are
+  // also reached directly from handlers that bypass setView().
+  mountShippyPanel('performance');
 }
 
 // Capstone that reads as the next beat after the timeline's "Live" marker.
