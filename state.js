@@ -2145,6 +2145,9 @@ const state = {
   // Performance dashboard (live-game analytics) — mock data for now.
   performance: { period: '30d' },
 
+  // Marketing tab subsections: 'announce' | 'website' | 'presskit' | 'influencers'
+  marketing: { section: 'announce' },
+
   // Broadcast (unified announcement) composer — write once, adapt per destination.
   // Credentials are intentionally deferred; destinations show a "Connect later" state.
   broadcast: {

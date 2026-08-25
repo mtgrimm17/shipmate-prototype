@@ -1210,13 +1210,14 @@ function renderProjectBar() {
   // Tab labels come from the locale, not the static markup.
   const NAV_LABELS = {
     'nav-details':     'nav.details',
+    'nav-assets':      'nav.assets',
     'nav-dashboard':   'nav.submit',
     'nav-broadcast':   'nav.spread',
     'nav-performance': 'nav.performance',
   };
   for (const [id, key] of Object.entries(NAV_LABELS)) {
     const lbl = document.getElementById(id)?.querySelector('.lbl');
-    if (lbl) lbl.textContent = t(key);
+    if (lbl) lbl.innerHTML = t(key).replace(/ /, '<br>');   // two words, stacked
   }
   // Labels changed width, so the news glow has to be re-measured.
   if (typeof paintBarGlow === 'function') paintBarGlow();
@@ -1515,7 +1516,7 @@ function reflowShippyPanel() {
 
 function buildDashboardTimeline() {
   const fd = state.formData;
-  const rt = fd.releaseTiming || 'manual';
+  const rt = 'specific_date';   // timing is now driven by the launch date set in the checklist calendar
 
   // Short display names for the compact timeline label column
   const DASH_TL_LABEL = {
@@ -1645,7 +1646,7 @@ function buildDashboardTimeline() {
       <div class="dash-tl-bar">
         <div class="dash-tl-left">
           <span class="dash-tl-launch-lbl">LAUNCH</span>
-          <div class="dash-tl-chips">${modeChips}${dateInput}</div>
+          <div class="dash-tl-chips"><span class="dash-tl-target">${dateVal ? 'Target launch · ' + fmtDateShort(new Date(dateVal + 'T00:00:00')) : 'Set a target launch date in the checklist calendar →'}</span></div>
         </div>
         ${counterHtml}
         ${rightHtml}
@@ -1976,7 +1977,11 @@ const TAB_HERO = {
   performance: { accent: '#fb923c', soft: 'rgba(251,146,60,.16)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 4 3 5-7"/></svg>`,
     title: 'See how your game is performing',
-    sub: 'Wishlists, impressions, reviews, and revenue across every platform in one live view — no logging into each portal. Shipmate flags where numbers are still estimates.' },
+    sub: 'Wishlists, reviews, units, and revenue across every platform in one live view — no logging into separate portals.' },
+  assets: { accent: '#a78bfa', soft: 'rgba(167,139,250,.16)',
+    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`,
+    title: 'Add your art & media',
+    sub: 'Screenshots, trailers, and key art — upload them once and Shipmate reuses them across every store listing and your press kit.' },
 };
 function buildTabHero(view) {
   const c = TAB_HERO[view];
@@ -2004,29 +2009,82 @@ function buildGdBox(idx, mod, inner) {
     </section>`;
 }
 
+/* Details tab: game info + distribution in one continuous scroll (no sub-tabs,
+   no Continue button). Assets moved to its own tab. */
 function renderDetails() {
-  const hero = document.getElementById('details-hero');
-  if (hero) hero.innerHTML = buildTabHero('details');
-  renderProjectBar();
-  renderOnboarding();   // fills #ob-tabs / #ob-body / #ob-footer, now living inside #details
-  // Wrap into the panel grid and hang the guide off it. Called here rather
-  // than only from setView(), because these renders rebuild innerHTML and are
-  // also reached directly from handlers that bypass setView().
-  mountShippyPanel('details');
-}
-
-function renderBroadcast() {
-  const el = document.getElementById('broadcast');
+  const el = document.getElementById('details');
   if (!el) return;
   renderProjectBar();
-
-  const channels = bcActiveChannels();
-  const n = channels.length;
-  const title = state.formData.title || 'your game';
-
   el.innerHTML = `
-    ${buildTabHero('broadcast')}
+    ${buildTabHero('details')}
+    <div class="ob-modal ob-inline" id="ob-modal">
+      <div class="ob-body">
+        ${buildAboutTab()}
+        ${buildDistributionTab()}
+      </div>
+    </div>`;
+  hydrateGameDetailsTab();
+  if (typeof renderOnboardingFeaturePreview === 'function') renderOnboardingFeaturePreview();
+  requestAnimationFrame(() => initObDistMap());
+  _setObValidating(false);
+  updateObSectionStates();
+}
 
+/* Assets tab: screenshots, trailers, key art. */
+function renderAssets() {
+  const el = document.getElementById('assets');
+  if (!el) return;
+  renderProjectBar();
+  el.innerHTML = `
+    ${buildTabHero('assets')}
+    <div class="ob-modal ob-inline">
+      <div class="ob-body">
+        ${buildAssetsTab()}
+      </div>
+    </div>`;
+  hydrateUploadAssetsTab();
+  renderOnboardingScreenshotGrid();
+  if (typeof renderOnboardingFeaturePreview === 'function') renderOnboardingFeaturePreview();
+}
+
+/* ── Marketing tab: subsections (Announce / Website / Press Kit / Influencers) ── */
+const MKT_TABS = [
+  { id: 'announce',    label: 'Announce' },
+  { id: 'website',     label: 'Website' },
+  { id: 'press',       label: 'Press' },
+  { id: 'influencers', label: 'Influencers' },
+];
+
+// Creator pairing (mock) — ranked on genre fit, platform, audience size,
+// engagement, recent activity, and whether you can actually reach them.
+const MKT_PLATFORMS = ['All', 'YouTube', 'TikTok', 'Twitch', 'Bluesky', 'Press'];
+const MKT_SIZES = ['Any', '10k+', '100k+', '500k+'];
+const MKT_CREATORS = [
+  { name: 'AbyssalPlays',   plat: 'YouTube', color: '#e11d48', tags: ['Metroidvania', 'Atmospheric'], subs: '184K subs', avg: '42K avg views', eng: '7.8% engagement', active: 'active 2 days ago', price: '$1,400', match: 96, status: '', why: 'Covered 3 of your 5 comparables in the last 90 days. Long-form, no-commentary exploration fits your pacing.' },
+  { name: 'pixelbrine',     plat: 'YouTube', color: '#8b5cf6', tags: ['Indie', 'Hand-painted'], subs: '61K subs', avg: '88K avg views', eng: '12.4% engagement', active: 'active today', price: '$420', match: 93, status: 'replied', why: 'Her hand-painted-art series regularly outperforms her baseline by 3x. Your capsule work is exactly that beat.' },
+  { name: 'Mira Vale',      plat: 'Press',   color: '#22c55e', tags: ['Freelance', 'RPS · Polygon'], subs: 'Freelance · 2 outlets', avg: '', eng: '', active: 'active 1 day ago', price: 'Coverage', match: 91, status: 'sent', why: 'Freelances for two outlets on your target list and has written about salvage-and-memory themes twice this year.' },
+  { name: 'TideWatcher_TV', plat: 'Twitch',  color: '#06b6d4', tags: ['Blind runs', 'Cozy horror'], subs: '24K followers', avg: '1.9K avg views', eng: '18.2% engagement', active: 'active today', price: '$260', match: 89, status: '', why: 'Underwater-horror specialist with the highest engagement in this list. Blind first-hour runs convert wishlists hard.' },
+  { name: 'BrineAndBone',   plat: 'YouTube', color: '#f97316', tags: ['Lore', 'Metroidvania'], subs: '297K subs', avg: '61K avg views', eng: '6.3% engagement', active: 'active 1 week ago', price: '$2,100', match: 86, status: '', why: 'Lore-analysis format. Your drowned-city backstory gives him 20 minutes of material without you writing a brief.' },
+  { name: 'clipsofthedeep', plat: 'TikTok',  color: '#22c55e', tags: ['Clips', 'Reaction'], subs: '210K subs', avg: '154K avg views', eng: '14.1% engagement', active: 'active today', price: '$650', match: 84, status: '', why: 'Aggregates underwater-game clips. One post here has historically driven 400+ wishlists for comparable titles.' },
+  { name: 'saltandsonar',   plat: 'Bluesky', color: '#eab308', tags: ['Curator', 'Screenshots'], subs: '38K subs', avg: '12K avg views', eng: '9.6% engagement', active: 'active 3 days ago', price: 'Free', match: 78, status: 'dmonly', why: 'Runs a 38k-follower screenshot curation account. No public email — Shipmate found a DM-only route.' },
+  { name: 'DeepCutGaming',  plat: 'YouTube', color: '#3b82f6', tags: ['Reviews', 'Deep dives'], subs: '1.2M subs', avg: '310K avg views', eng: '4.1% engagement', active: 'active 5 days ago', price: '$8,900', match: 71, status: '', why: 'Largest reach in your genre, but a 4.1% engagement rate and a 6-week backlog. Best used post-launch, not day one.' },
+];
+const MKT_STATUS = { replied: 'REPLIED', sent: 'SENT', dmonly: 'DM ONLY' };
+function _mktRing(v) {
+  const C = 2 * Math.PI * 15;
+  const off = (C * (1 - v / 100)).toFixed(1);
+  const cls = v >= 90 ? 'is-hi' : v >= 80 ? 'is-mid' : 'is-lo';
+  return `<span class="inf-ring ${cls}"><svg viewBox="0 0 36 36"><circle class="inf-ring-bg" cx="18" cy="18" r="15"/><circle class="inf-ring-fg" cx="18" cy="18" r="15" style="stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${off}"/></svg><span class="inf-ring-v">${v}</span></span>`;
+}
+
+function buildMktSubnav(active) {
+  return `<div class="mkt-subnav">${MKT_TABS.map(t =>
+    `<button class="mkt-subtab${t.id === active ? ' is-on' : ''}" onclick="mktSetSection('${t.id}')">${t.label}</button>`).join('')}</div>`;
+}
+
+function buildMktAnnounce() {
+  const n = bcActiveChannels().length;
+  return `
     <div class="bc-main">
       <section class="bc-compose">
         <div class="bc-compose-head">
@@ -2038,12 +2096,10 @@ function renderBroadcast() {
           oninput="bcSetMessage(this.value)">${escHtml(bcMessage())}</textarea>
         ${buildBroadcastAdapt()}
       </section>
-
       <div class="bc-channels">
         ${BC_GROUPS.map(buildChannelSection).join('')}
       </div>
     </div>
-
     <div class="bc-actionbar">
       <div class="bc-actionbar-info">${n ? `Posting to <strong>${n}</strong> channel${n === 1 ? '' : 's'}` : 'Turn on channels to post'}</div>
       <div class="bc-actionbar-btns">
@@ -2051,10 +2107,106 @@ function renderBroadcast() {
         <button class="btn btn-primary" ${n ? '' : 'disabled'} onclick="bcBroadcastNow()">Post to all</button>
       </div>
     </div>`;
-  // Wrap into the panel grid and hang the guide off it. Called here rather
-  // than only from setView(), because these renders rebuild innerHTML and are
-  // also reached directly from handlers that bypass setView().
-  mountShippyPanel('broadcast');
+}
+
+function buildMktWebsite() {
+  const slug = (state.formData.title || 'your-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `
+    <div class="mkt-card-head"><h3>Shipmate Pages</h3><span class="mkt-url">${slug}.shipmate.page</span></div>
+    <p class="mkt-web-note">A ready-made landing page, built from the title, description, capsule art, screenshots, and store links you've already given Shipmate.</p>
+    <div class="mkt-web-embed">${(typeof buildWebSitePreviewSection === 'function') ? buildWebSitePreviewSection() : ''}</div>
+    <div class="mkt-card-actions">
+      <button class="btn btn-ghost" onclick="mktToast('Website editor')">Edit page</button>
+      <button class="btn btn-primary" onclick="mktToast('Publish website')">Publish</button>
+    </div>`;
+}
+
+// Press outlets & journalists matched to the game (mock).
+const MKT_PRESS = [
+  { name: 'Rock Paper Shotgun', plat: 'Outlet · PC', color: '#e11d48', tags: ['Cozy', 'Indie'], subs: 'Editorial', active: 'covers indies weekly', price: 'Pitch', match: 95, status: '', why: 'Their cozy-games column featured 4 of your comparables this year — salvage-and-memory themes are squarely their beat.' },
+  { name: 'Alanah Pearce',      plat: 'Freelance · YT', color: '#8b5cf6', tags: ['Features', 'Interviews'], subs: 'Freelance', active: 'active today', price: 'Coverage', match: 91, status: 'replied', why: 'Regularly spotlights atmospheric indies and does developer interviews — a fit for your studio story.' },
+  { name: 'PC Gamer — Indie',   plat: 'Outlet · PC', color: '#22c55e', tags: ['News', 'Previews'], subs: 'Editorial', active: 'daily', price: 'Pitch', match: 88, status: '', why: 'Runs a weekly indie roundup. Your demo would qualify for their next slot.' },
+  { name: 'Wholesomeverse',     plat: 'Newsletter', color: '#06b6d4', tags: ['Curated', 'Cozy'], subs: '42K subs', active: 'weekly issue', price: 'Free', match: 85, status: '', why: 'Curated cozy-games newsletter with a highly engaged, wishlist-driving audience.' },
+  { name: 'IndieGamesPlus',     plat: 'Outlet', color: '#f97316', tags: ['Reviews', 'Demos'], subs: 'Editorial', active: 'active 2 days ago', price: 'Pitch', match: 80, status: '', why: 'Covers demos and Next Fest entries specifically — good pre-launch timing.' },
+  { name: 'Kotaku (tips)',      plat: 'Outlet', color: '#3b82f6', tags: ['News'], subs: 'Editorial', active: 'daily', price: 'Tip line', match: 71, status: '', why: 'Large reach but a low hit-rate for cold pitches — best once you have a milestone or a hook.' },
+];
+
+// Shared row for both the Influencers and Press pairing lists.
+function _pairRow(c) {
+  const initials = c.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase();
+  const stats = [c.subs, c.avg, c.eng, c.active, c.price].filter(Boolean).join('  ·  ');
+  const status = c.status ? `<span class="inf-status inf-status--${c.status}">${MKT_STATUS[c.status]}</span>` : '';
+  return `
+    <div class="inf-row">
+      <span class="inf-av" style="--c:${c.color}">${initials}</span>
+      <div class="inf-main">
+        <div class="inf-namerow"><span class="inf-name">${c.name}</span>${c.tags.map(t => `<span class="inf-tag">${t}</span>`).join('')}${status}</div>
+        <div class="inf-stats">${stats}</div>
+        <div class="inf-why">✳ ${c.why}</div>
+      </div>
+      <div class="inf-actions">
+        ${_mktRing(c.match)}
+        <button class="inf-star${c.status === 'replied' || c.status === 'sent' ? ' is-on' : ''}" onclick="mktToast('Save')" title="Save">★</button>
+        <button class="inf-email" onclick="mktReachOut('${c.name}')">✉ Email</button>
+      </div>
+    </div>`;
+}
+
+function buildMktPress() {
+  const title = state.formData.title || 'your game';
+  const filters = ['All', 'Outlets', 'Freelance', 'Newsletters', 'Video'];
+  return `
+    <div class="inf-head">
+      <div><h3>Find the press most likely to cover ${escHtml(title)}</h3>
+        <p>Ranked on beat fit, whether they've covered comparable titles recently, and how reachable they are. Shipmate drafts a tailored pitch for each.</p></div>
+      <button class="btn btn-primary inf-batch" onclick="mktToast('Batch pitch')">✈ Batch pitch</button>
+    </div>
+    <div class="inf-search"><input class="inf-search-input" placeholder="e.g. cozy sim, salvage-and-memory, roguelite"><button class="inf-find" onclick="mktToast('Find press')">🔍 Find</button></div>
+    <div class="inf-filters"><span class="inf-flabel">Type</span>${filters.map((f, i) => `<button class="inf-chip${i === 0 ? ' is-on' : ''}" onclick="mktToast('Filter: '+'${f}')">${f}</button>`).join('')}</div>
+    <div class="inf-count"><span>◎ ${MKT_PRESS.length} matches</span><span class="inf-rank">ranked by fit</span></div>
+    <div class="inf-list">${MKT_PRESS.map(_pairRow).join('')}</div>`;
+}
+
+function buildMktInfluencers() {
+  const rows = MKT_CREATORS.map(_pairRow).join('');
+  return `
+    <div class="inf-head">
+      <div><h3>Find the creators who already care about games like yours</h3>
+        <p>Search by comparable title. Shipmate ranks on genre fit, platform, audience size, engagement, recent activity, and whether you can actually reach them.</p></div>
+      <button class="btn btn-primary inf-batch" onclick="mktToast('Batch send')">✈ Batch send</button>
+    </div>
+    <div class="inf-search">
+      <input class="inf-search-input" placeholder="e.g. Sunken Halls, Hollow Knight, Subnautica">
+      <button class="inf-find" onclick="mktToast('Find creators')">🔍 Find</button>
+    </div>
+    <div class="inf-filters">
+      <span class="inf-flabel">Platform</span>
+      ${MKT_PLATFORMS.map((p, i) => `<button class="inf-chip${i === 0 ? ' is-on' : ''}" onclick="mktToast('Filter: '+'${p}')">${p}</button>`).join('')}
+      <span class="inf-flabel inf-flabel--size">Size</span>
+      ${MKT_SIZES.map((s, i) => `<button class="inf-chip${i === 0 ? ' is-on' : ''}" onclick="mktToast('Filter: '+'${s}')">${s}</button>`).join('')}
+    </div>
+    <div class="inf-count"><span>◎ ${MKT_CREATORS.length} matches</span><span class="inf-rank">ranked by fit</span></div>
+    <div class="inf-list">${rows}</div>`;
+}
+
+function buildMktSection(section) {
+  switch (section) {
+    case 'website':     return buildMktWebsite();
+    case 'press':       return buildMktPress();
+    case 'influencers': return buildMktInfluencers();
+    default:            return buildMktAnnounce();
+  }
+}
+
+function renderBroadcast() {
+  const el = document.getElementById('broadcast');
+  if (!el) return;
+  renderProjectBar();
+  const section = (state.marketing && state.marketing.section) || 'announce';
+  el.innerHTML = `
+    ${buildTabHero('broadcast')}
+    ${buildMktSubnav(section)}
+    <div class="mkt-body">${buildMktSection(section)}</div>`;
 }
 
 /* ── Performance: live-game analytics (mock data) ─────────
@@ -2111,14 +2263,16 @@ function _perfTotals(f) {
   return { net, units };
 }
 
-// Each top-line metric maps 1:1 to a detail box below (which echoes it top-right).
+// The five metrics that matter for a live game — each maps 1:1 to a detail box
+// below (which echoes it top-right). Clicking a metric jumps to its box.
 function buildPerfKpis(f) {
   const tot = _perfTotals(f);
   const cards = [
     { label: 'Net revenue',     val: _pMoney(tot.net),           d: PERF.delta.revenue,        jump: 'perf-box-revenue' },
+    { label: 'Units sold',      val: _pNum(tot.units),           d: PERF.delta.units,          jump: 'perf-box-sales' },
     { label: 'Wishlists',       val: _pNum(PERF.wishlistsTotal), d: PERF.delta.wishlistsTotal, jump: 'perf-box-wishlists' },
-    { label: 'Avg rating',      val: `${PERF.rating}★`,          d: PERF.delta.rating,         jump: 'perf-box-reviews' },
     { label: 'Monthly players', val: _pNum(PERF.mau),            d: PERF.delta.mau,            jump: 'perf-box-engagement' },
+    { label: 'Avg rating',      val: `${PERF.rating}★`,          d: PERF.delta.rating,         jump: 'perf-box-reviews' },
   ];
   return `<div class="perf-kpis">${cards.map(c => `
     <div class="perf-kpi is-link" onclick="perfJump('${c.jump}')">
@@ -2203,9 +2357,157 @@ function buildPerfEngagement() {
   return buildPerfPanel('Player engagement', inner, { id: 'perf-box-engagement', metric: `${_pNum(PERF.mau)}<span>monthly</span>` });
 }
 
+function buildPerfSales(f) {
+  const rows = _perfPlats().map(pid => ({ pid, ...PERF.revByPlatform[pid], u: PERF.revByPlatform[pid].units * f }))
+    .sort((a, b) => b.u - a.u);
+  const totalUnits = rows.reduce((s, r) => s + r.u, 0);
+  const totalGross = rows.reduce((s, r) => s + r.gross * f, 0);
+  const asp = totalUnits ? totalGross / totalUnits : 0;
+  const maxU = Math.max(...rows.map(r => r.u), 1);
+  const bars = rows.map(r => `
+    <div class="perf-units-row">
+      <span class="perf-units-plat">${platformIcon(r.pid, 14, 'white')}<span>${r.name}</span></span>
+      <span class="perf-units-bar-wrap"><span style="width:${(r.u / maxU * 100).toFixed(1)}%"></span></span>
+      <span class="perf-units-val">${_pNum(r.u)}</span>
+    </div>`).join('');
+  const inner = `
+    <div class="perf-stat-row">
+      <div><div class="perf-mini-val">$${asp.toFixed(2)}</div><div class="perf-mini-lbl">avg price</div></div>
+      <div><div class="perf-mini-val">${PERF.refundRate}%</div><div class="perf-mini-lbl">refund rate</div></div>
+    </div>
+    <div class="perf-sub-head">Units by platform</div>
+    <div class="perf-units">${bars}</div>`;
+  return buildPerfPanel('Sales', inner, { id: 'perf-box-sales', metric: `${_pNum(totalUnits)}<span>units</span>` });
+}
+
 function buildPerfInsights() {
   const chips = PERF.insights.map(i => `<div class="perf-insight perf-insight--${i.tone}">${i.text}</div>`).join('');
   return buildPerfPanel('Insights & alerts', `<div class="perf-insights">${chips}</div>`, { id: 'perf-box-insights', mod: 'perf-panel--insights' });
+}
+
+/* ── EXPERIMENT: persistent left-pane checklist with a progress ring ──
+   Rough concept test — mixes a few real state signals with placeholders. */
+function _chkGroups() {
+  const fd = state.formData || {};
+  const plats = state.activePlatforms ? state.activePlatforms.size : 0;
+  return [
+    { group: 'Details', view: 'details', items: [
+      { label: 'Add a game title',        anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
+      { label: 'Write a description',      anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
+      { label: 'Choose platforms',        anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
+      { label: 'Select target countries', anchor: 'ob-q-distribution',  done: false },
+      { label: 'List localizations',      anchor: 'ob-lang-list-wrap',  done: false },
+    ] },
+    { group: 'Assets', view: 'assets', items: [
+      { label: 'Upload screenshots', anchor: 'ob-q-screenshots', done: true },
+      { label: 'Add a trailer',      anchor: 'ob-q-screenshots', done: false },
+    ] },
+    { group: 'Platforms', view: 'dashboard', items: [
+      { label: 'Set content ratings',      done: true },
+      { label: 'Data-safety disclosures',  done: true },
+      { label: 'Build store pages',        done: false },
+      { label: 'Submit builds for review', done: false },
+    ] },
+    { group: 'Marketing', view: 'broadcast', items: [
+      { label: 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
+      { label: 'Set up your website',     section: 'website',     done: false },
+      { label: 'Line up press',           section: 'press',       done: false },
+      { label: 'Reach out to creators',   section: 'influencers', done: false },
+    ] },
+    { group: 'Performance', view: 'performance', items: [
+      { label: 'Update Shipmate permissions', done: false },
+    ] },
+  ];
+}
+
+/* Launch schedule for the checklist pane: a countdown + a dated agenda of when
+   to submit to each platform (launch minus a recommended review buffer). */
+function buildChkCalendar() {
+  const fd = state.formData || {};
+  const dateStr = fd.releaseDate || '';
+  const launch = dateStr ? new Date(dateStr + 'T00:00:00') : null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const daysFrom = d => Math.round((d - today) / 86400000);
+
+  let events = [];
+  if (launch) {
+    [...state.activePlatforms].filter(p => OB_PLATFORM_TIMING[p]).forEach(p => {
+      const timing = OB_PLATFORM_TIMING[p];
+      const lead = Math.ceil(timing.days * 2);
+      events.push({ kind: 'submit', color: timing.color, label: `Submit to ${timing.label}`, date: new Date(launch.getTime() - lead * 86400000) });
+    });
+    events.push({ kind: 'launch', color: '#4ade80', label: 'Launch day', date: launch });
+    events.sort((a, b) => a.date - b.date);
+  }
+
+  const rows = events.map(e => {
+    const dd = daysFrom(e.date);
+    const when = dd === 0 ? 'today' : dd < 0 ? `${-dd}d ago` : `in ${dd}d`;
+    return `
+      <div class="cal-ev${e.kind === 'launch' ? ' is-launch' : ''}${dd < 0 ? ' is-past' : ''}">
+        <span class="cal-ev-dot" style="background:${e.color}"></span>
+        <span class="cal-ev-label">${e.kind === 'launch' ? '🚀 ' : ''}${e.label}</span>
+        <span class="cal-ev-date">${fmtDateShort(e.date)}</span>
+        <span class="cal-ev-when">${when}</span>
+      </div>`;
+  }).join('');
+
+  const dtl = launch ? Math.max(0, daysFrom(launch)) : null;
+  return `
+    <div class="chk-cal">
+      <div class="chk-cal-head"><span class="chk-cal-title">Launch schedule</span>
+        <input class="chk-cal-date" type="date" value="${dateStr}" onchange="setLaunchDate(this.value)"></div>
+      ${launch
+        ? `<div class="cal-count"><span class="cal-count-n">${dtl}</span><span class="cal-count-l">days to launch · ${fmtDateShort(launch)}</span></div>
+           <div class="cal-events">${rows}</div>`
+        : `<div class="cal-hint">Set a target launch date to see when to submit to each platform.</div>`}
+    </div>`;
+}
+
+function renderChecklist() {
+  const el = document.getElementById('app-checklist');
+  if (!el) return;
+  const groups = _chkGroups();
+  const all = groups.flatMap(g => g.items);
+  const done = all.filter(i => i.done).length;
+  const pct = all.length ? Math.round(done / all.length * 100) : 0;
+  const C = 2 * Math.PI * 52;
+  const off = (C * (1 - pct / 100)).toFixed(1);
+  el.innerHTML = `
+    <div class="chk-ring-wrap">
+      <svg viewBox="0 0 120 120" class="chk-ring" aria-hidden="true">
+        <circle class="chk-ring-bg" cx="60" cy="60" r="52"/>
+        <circle class="chk-ring-fg" cx="60" cy="60" r="52" style="stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${off}"/>
+      </svg>
+      <div class="chk-ring-label"><span class="chk-ring-pct">${pct}%</span><span class="chk-ring-sub">complete</span></div>
+    </div>
+    <div class="chk-title">Launch checklist</div>
+    <div class="chk-groups">
+      ${groups.map(g => `
+        <div class="chk-group">
+          <button class="chk-group-head${g.view === state.activeView ? ' is-current' : ''}" onclick="setView('${g.view}')">${g.group}</button>
+          ${g.items.map(i => `
+            <button class="chk-item${i.done ? ' is-done' : ''}" onclick="chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')">
+              <span class="chk-box">${i.done ? '✓' : ''}</span>
+              <span class="chk-label">${i.label}</span>
+            </button>`).join('')}
+        </div>`).join('')}
+    </div>
+    ${buildChkCalendar()}`;
+}
+
+/* EXPERIMENT: persistent right guide column — renders the designer's Shippy
+   panel for the active tab (falls back to a minimal placeholder). */
+function renderGuide() {
+  const el = document.getElementById('app-guide');
+  if (!el) return;
+  try {
+    el.innerHTML = (typeof shippyPanelHTML === 'function') ? shippyPanelHTML(state.activeView) : '';
+    const m = el.querySelector('.sm-mascot');
+    if (m && typeof OCTO !== 'undefined' && OCTO.mount) OCTO.mount(m);
+  } catch (e) {
+    el.innerHTML = '<div class="sm-panel"><div class="sm-titlerow"><span class="sm-title">Shippy guide</span></div></div>';
+  }
 }
 
 function renderPerformance() {
@@ -2226,9 +2528,10 @@ function renderPerformance() {
     ${buildPerfRevenue(f)}
     ${buildPerfInsights()}
     <div class="perf-grid-3">
+      ${buildPerfSales(f)}
       ${buildPerfWishlists(f)}
-      ${buildPerfReviews()}
       ${buildPerfEngagement()}
+      ${buildPerfReviews()}
     </div>
     <div class="perf-soon">
       <span class="perf-soon-tag">Coming soon</span>
@@ -2268,7 +2571,6 @@ function renderDashboard() {
 
   if (active.length > 0) {
     h += `<div id="dash-timeline-wrap">${buildDashboardTimeline()}</div>`;
-    h += buildDashboardAnnounceCta();
   }
 
   if (active.length === 0) {

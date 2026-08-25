@@ -56,12 +56,16 @@ function showMainApp(view = 'dashboard') {
   document.body.classList.add('signed-in');
   seedOnboardingToIOS();
   seedOnboardingToAndroid();
+  // No "Continue" button anymore — make sure the first project exists up front.
+  if (!state.onboardingComplete && (!state.projects || state.projects.length === 0)) {
+    try { completeOnboarding(); } catch (e) { /* keep going */ }
+  }
   setView(view);
 }
 
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
-const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
-const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
+const VIEW_IDS = { details: 'details', assets: 'assets', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
+const VIEW_NAV = { details: 'nav-details', assets: 'nav-assets', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
   state.activeView = view;
@@ -77,10 +81,29 @@ function setView(view) {
   document.getElementById('bar-nav')?.classList.add('has-sel');
   paintBarGlow();
   if (view === 'details') renderDetails();
+  else if (view === 'assets') renderAssets();
   else if (view === 'broadcast') renderBroadcast();
   else if (view === 'performance') renderPerformance();
   else renderDashboard();
+  renderChecklist();   // EXPERIMENT: persistent left-pane checklist
+  renderGuide();       // EXPERIMENT: persistent right-pane Shippy guide
+  requestAnimationFrame(alignSidePanes);
   window.scrollTo(0, 0);
+}
+
+// Line the checklist + guide panes up with the top of the tab's real content
+// (below the banner), measured from the active view's tab-hero height.
+function alignSidePanes() {
+  // Measure the ACTIVE view's banner (hidden views have height 0, which is what
+  // was pulling the panes up on every tab except Details).
+  const view = document.getElementById(VIEW_IDS[state.activeView] || 'dashboard');
+  const hero = view ? view.querySelector('.tab-hero') : null;
+  let off = 0;
+  if (hero) { const cs = getComputedStyle(hero); off = hero.offsetHeight + (parseFloat(cs.marginBottom) || 0); }
+  const chk = document.getElementById('app-checklist');
+  const guide = document.getElementById('app-guide');
+  if (chk) chk.style.marginTop = off + 'px';
+  if (guide) guide.style.marginTop = off + 'px';
 }
 
 /* Diffuse light behind the chip that carries news — the prototype's
@@ -142,6 +165,29 @@ if (document.fonts?.ready) {
 function perfSetPeriod(id) { state.performance.period = id; renderPerformance(); }
 function perfOpen(portal) { bcToast(`${portal} — connect the account to pull live figures. (Mock data shown for now.)`); }
 function perfJump(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+/* ── Marketing subsections ────────────────────────────── */
+function mktSetSection(id) { state.marketing.section = id; renderBroadcast(); }
+function mktToast(what) { bcToast(`${what} — coming soon in the Marketing hub.`); }
+function mktReachOut(name) { bcToast(`Drafted a tailored outreach message to ${name} — connect email to send.`); }
+
+/* ── Launch calendar (checklist pane) ─────────────────── */
+function setLaunchDate(v) {
+  state.formData.releaseDate = v;
+  state.formData.releaseTiming = 'specific_date';
+  renderChecklist();
+  if (state.activeView === 'dashboard') renderDashboard();   // refresh the Platforms timeline
+}
+
+// Checklist item → jump to its tab (and Marketing sub-tab), then scroll to the field.
+function chkGo(view, anchor, section) {
+  if (section && view === 'broadcast') state.marketing.section = section;
+  setView(view);
+  if (anchor) requestAnimationFrame(() => {
+    const el = document.getElementById(anchor);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
 
 /* ── Broadcast composer handlers ──────────────────────── */
 // Live-refresh only the adapted-preview pane so the textarea keeps focus.
@@ -243,7 +289,7 @@ function closeOnboarding() {
 function openAssetsFromWebEdit(source) {
   state.assetsFromWebEdit = true;
   state.assetsFromWebEditSource = source || 'siteInfo';
-  openOnboarding(2);
+  setView('assets');   // Assets is now its own top-level tab
 }
 
 /* "Save & Return" button on the Assets tab footer when it was opened via
