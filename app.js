@@ -1000,6 +1000,16 @@ function toggleIOSSection(sectionId) {
 
 // Re-render the step modal body while preserving scroll position
 function reRenderStepModal() {
+  // The Content rating questionnaire also lives inline in the Game Details pane
+  // (not just the legacy step modal). When it's showing there, re-render just
+  // that pane in place so every questionnaire interaction updates.
+  if (state.activeView === 'details' && state.details && state.details.section === 'content') {
+    const pane = document.querySelector('.gd-pane--content');
+    if (pane && typeof buildContentQuestionsPane === 'function') {
+      pane.innerHTML = buildContentQuestionsPane();
+      return;
+    }
+  }
   const bodyEl   = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
   renderStepModal();
@@ -1122,7 +1132,7 @@ function toggleContentRatingExpanded(value) {
   // Re-snapshot on "Unanswered" click so newly-answered questions get hidden
   if (!value) takeFilterSnapshot('ios');
   state.iosContentRatingExpanded = value;
-  reRenderStepModal();
+  reRenderStepModal();   // routes to the inline pane when it's the active surface
 }
 
 function toggleAndroidContentRatingExpanded(value) {
