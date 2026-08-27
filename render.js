@@ -1217,7 +1217,7 @@ function renderProjectBar() {
   };
   for (const [id, key] of Object.entries(NAV_LABELS)) {
     const lbl = document.getElementById(id)?.querySelector('.lbl');
-    if (lbl) lbl.innerHTML = t(key).replace(/ /, '<br>');   // two words, stacked
+    if (lbl) lbl.textContent = t(key);   // single-line tab labels
   }
   // Labels changed width, so the news glow has to be re-measured.
   if (typeof paintBarGlow === 'function') paintBarGlow();
@@ -2011,23 +2011,98 @@ function buildGdBox(idx, mod, inner) {
 
 /* Details tab: game info + distribution in one continuous scroll (no sub-tabs,
    no Continue button). Assets moved to its own tab. */
+/* ── Game Details tab: sub-tabs (Game Details / Distribution / Localization / Assets) ── */
+const GD_SUBS = [
+  { id: 'gamedetails',  label: 'Basic info' },
+  { id: 'distribution', label: 'Distribution' },
+  { id: 'localization', label: 'Localization' },
+  { id: 'content',      label: 'Content rating' },
+  { id: 'assets',       label: 'Assets' },
+];
+
+
+/* Content Questions sub-tab: a platform toggle over the per-store content-rating
+   questionnaires (App Store / Google Play / Steam), each preceded by an inline
+   inference loading screen. Rendered fresh each time the sub-tab is shown. */
+const GD_CONTENT_PLATS = [
+  { id: 'ios',     label: 'App Store' },
+  { id: 'android', label: 'Google Play' },
+  { id: 'steam',   label: 'Steam' },
+];
+
+function buildContentQuestionsPane() {
+  const active = GD_CONTENT_PLATS.filter(p => state.activePlatforms && state.activePlatforms.has(p.id));
+  if (!active.length) {
+    return `<div class="cq-inline-empty">Choose <b>App Store</b>, <b>Google Play</b>, or <b>Steam</b> in the Game Details sub-tab to see its content questionnaire.</div>`;
+  }
+  let pid = state.details.contentPlatform;
+  if (!active.some(p => p.id === pid)) { pid = active[0].id; state.details.contentPlatform = pid; }
+
+  const toggle = `<div class="cq-plat-toggle">${active.map(p =>
+    `<button class="cq-plat-btn${p.id === pid ? ' is-on' : ''}" onclick="gdSetContentPlatform('${p.id}')">
+       ${(typeof platformIcon === 'function') ? platformIcon(p.id, 16, 'white') : ''}<span>${p.label}</span>
+     </button>`).join('')}</div>`;
+
+  const status = (state.contentQ.status && state.contentQ.status[pid]) || 'idle';
+  let body;
+  if (status !== 'ready') {
+    const msgs = (typeof _getInferenceMsgs === 'function')
+      ? _getInferenceMsgs(pid, 'questionnaire')
+      : ['Reading your game details…', 'Matching against store policies…', 'Pre-filling answers…'];
+    body = `
+      <div class="inf-loading-screen cq-inline-loading">
+        <div class="inf-rings-wrap">
+          <div class="inf-ring inf-ring-1"></div>
+          <div class="inf-ring inf-ring-2"></div>
+          <div class="inf-ring inf-ring-3"></div>
+          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
+        </div>
+        <div class="inf-headline">Analyzing your game…</div>
+        <div class="inf-steps">
+          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
+        </div>
+      </div>`;
+  } else {
+    const q = pid === 'ios'   ? buildContentRatingSection()
+            : pid === 'steam' ? buildSteamContentRatingSection()
+            :                   buildAndroidContentRatingSection();
+    body = `<div class="cq-inline-body">${q}</div>`;
+  }
+  return `<div class="cq-inline">${toggle}${body}</div>`;
+}
+
 function renderDetails() {
   const el = document.getElementById('details');
   if (!el) return;
   renderProjectBar();
+  const section = (state.details && state.details.section) || 'gamedetails';
+  // Distribution + Localization share one builder (two id'd sections); CSS shows
+  // the relevant inner section per sub-tab, so ids stay unique (rendered once).
+  // Content Questions pane is dynamic (loading vs questionnaire) — only build its
+  // body while it's the active sub-tab, so its inference loop isn't driven off-screen.
+  const contentBody = section === 'content' ? buildContentQuestionsPane() : '';
   el.innerHTML = `
-    ${buildTabHero('details')}
-    <div class="ob-modal ob-inline" id="ob-modal">
-      <div class="ob-body">
-        ${buildAboutTab()}
-        ${buildDistributionTab()}
+    <div class="sec-solo">
+      <div class="sec-panel">
+        <div class="ob-modal ob-inline" id="ob-modal">
+          <div class="gd-sub" data-gd="${section}">
+            <div class="gd-pane gd-pane--gamedetails ob-body">${buildAboutTab()}</div>
+            <div class="gd-pane gd-pane--distloc ob-body">${buildDistributionTab()}</div>
+            <div class="gd-pane gd-pane--content ob-body">${contentBody}</div>
+            <div class="gd-pane gd-pane--assets ob-body">${buildAssetsTab()}</div>
+          </div>
+        </div>
+        ${buildStepNav('details')}
       </div>
     </div>`;
   hydrateGameDetailsTab();
+  hydrateUploadAssetsTab();
+  renderOnboardingScreenshotGrid();
   if (typeof renderOnboardingFeaturePreview === 'function') renderOnboardingFeaturePreview();
   requestAnimationFrame(() => initObDistMap());
   _setObValidating(false);
   updateObSectionStates();
+  if (section === 'content' && typeof _kickContentQ === 'function') _kickContentQ();
 }
 
 /* Assets tab: screenshots, trailers, key art. */
@@ -2036,7 +2111,6 @@ function renderAssets() {
   if (!el) return;
   renderProjectBar();
   el.innerHTML = `
-    ${buildTabHero('assets')}
     <div class="ob-modal ob-inline">
       <div class="ob-body">
         ${buildAssetsTab()}
@@ -2204,9 +2278,12 @@ function renderBroadcast() {
   renderProjectBar();
   const section = (state.marketing && state.marketing.section) || 'announce';
   el.innerHTML = `
-    ${buildTabHero('broadcast')}
-    ${buildMktSubnav(section)}
-    <div class="mkt-body">${buildMktSection(section)}</div>`;
+    <div class="sec-solo">
+      <div class="sec-panel">
+        <div class="mkt-body">${buildMktSection(section)}</div>
+        ${buildStepNav('broadcast')}
+      </div>
+    </div>`;
 }
 
 /* ── Performance: live-game analytics (mock data) ─────────
@@ -2392,15 +2469,14 @@ function _chkGroups() {
   const plats = state.activePlatforms ? state.activePlatforms.size : 0;
   return [
     { group: 'Details', view: 'details', items: [
-      { label: 'Add a game title',        anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
-      { label: 'Write a description',      anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
-      { label: 'Choose platforms',        anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
-      { label: 'Select target countries', anchor: 'ob-q-distribution',  done: false },
-      { label: 'List localizations',      anchor: 'ob-lang-list-wrap',  done: false },
-    ] },
-    { group: 'Assets', view: 'assets', items: [
-      { label: 'Upload screenshots', anchor: 'ob-q-screenshots', done: true },
-      { label: 'Add a trailer',      anchor: 'ob-q-screenshots', done: false },
+      { label: 'Add a game title',        section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
+      { label: 'Write a description',      section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
+      { label: 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
+      { label: 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
+      { label: 'List localizations',      section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
+      { label: 'Complete content rating', section: 'content',                                    done: false },
+      { label: 'Upload screenshots',      section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
+      { label: 'Add a trailer',           section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
     ] },
     { group: 'Platforms', view: 'dashboard', items: [
       { label: 'Set content ratings',      done: true },
@@ -2498,16 +2574,168 @@ function renderChecklist() {
 
 /* EXPERIMENT: persistent right guide column — renders the designer's Shippy
    panel for the active tab (falls back to a minimal placeholder). */
+// The Shippy guide is now the CURRENT tab's helper: the tab's banner text on
+// top, then that tab's task checklist (each task deep-links into the tab).
 function renderGuide() {
   const el = document.getElementById('app-guide');
   if (!el) return;
-  try {
-    el.innerHTML = (typeof shippyPanelHTML === 'function') ? shippyPanelHTML(state.activeView) : '';
-    const m = el.querySelector('.sm-mascot');
-    if (m && typeof OCTO !== 'undefined' && OCTO.mount) OCTO.mount(m);
-  } catch (e) {
-    el.innerHTML = '<div class="sm-panel"><div class="sm-titlerow"><span class="sm-title">Shippy guide</span></div></div>';
+  const view = state.activeView;
+  const hero = (typeof TAB_HERO !== 'undefined' && TAB_HERO[view]) || {};
+  const group = _chkGroups().find(g => g.view === view);
+  const items = group ? group.items : [];
+  const done = items.filter(i => i.done).length;
+  const collapsed = !!state.guideCollapsed;
+  el.classList.toggle('is-collapsed', collapsed);
+
+  // Collapsed: a one-icon-wide progress rail — a vertical run of status dots.
+  if (collapsed) {
+    const dots = items.map(i =>
+      `<button class="guide-mini-dot${i.done ? ' is-done' : ''}" title="${i.label}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">${i.done ? '✓' : ''}</button>`).join('');
+    el.innerHTML = `
+      <div class="guide-card guide-card--mini">
+        <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Expand guide" title="Expand guide">‹</button>
+        <div class="guide-mini-dots">${dots}</div>
+      </div>`;
+    return;
   }
+
+  // The current task = the first one not yet done (purple ring, per §4).
+  const currentIdx = items.findIndex(i => !i.done);
+  const tasks = items.map((i, idx) => {
+    const cls = i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : '');
+    return `
+    <button class="gd-task${cls}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">
+      <span class="gd-task-box">${i.done ? '✓' : ''}</span>
+      <span class="gd-task-label">${i.label}</span>
+    </button>`;
+  }).join('');
+  const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
+  const tabName = TAB_NAME[view] || '';
+  el.innerHTML = `
+    <div class="guide-card">
+      <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
+      <div class="guide-eyebrow">Shippy Guide</div>
+      <div class="guide-title">${hero.title || ''}</div>
+      <div class="guide-sub">${hero.sub || ''}</div>
+      ${items.length ? `<div class="guide-tasks-head">${tabName} · ${done}/${items.length}</div><div class="guide-tasks">${tasks}</div>` : ''}
+    </div>`;
+}
+
+/* ── EXPERIMENT: Netflix-style top-nav sub-tab drawer ──
+   Each main tab exposes its sub-sections; clicking the active tab expands the
+   nav into a slightly larger box with the sub-tab names below the main row. */
+function _navSubtabs(view) {
+  if (view === 'details')     return { list: GD_SUBS,       fn: 'gdSetSection',       cur: (state.details || {}).section };
+  if (view === 'broadcast')   return { list: MKT_TABS,      fn: 'mktSetSection',      cur: (state.marketing || {}).section };
+  // Submission (dashboard) and Analysis (performance) have no sub-tabs.
+  return null;
+}
+
+function renderSubnav() {
+  const nav = document.getElementById('bar-nav');
+  const sub = document.getElementById('bar-subnav');
+  if (!nav || !sub) return;
+  const forView = state.navOpenView || state.activeView;   // which tab's menu shows (hover-driven)
+  const data = _navSubtabs(forView);
+  const open = !!(state.navExpanded && data && data.list.length);
+  nav.classList.toggle('is-expanded', open);
+  document.body.classList.toggle('nav-open', open);   // dim the page behind
+  // Always render the items (kept in the DOM) so the dropdown can animate closed.
+  sub.innerHTML = (data ? data.list : []).map(s =>
+    `<button class="bar-subtab${s.id === data.cur ? ' is-on' : ''}" onclick="navSubClick('${data.fn}','${s.id}')">${s.label}</button>`).join('');
+  const NAVID = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
+  const btn = document.getElementById(NAVID[forView] || '');
+  // Chevron: up when closed, down on the tab whose menu is open.
+  nav.querySelectorAll('.bar-nav-btn').forEach(b => b.classList.remove('is-menu-open'));
+  if (open && btn) btn.classList.add('is-menu-open');
+  const left = btn ? btn.offsetLeft : 0;
+  sub.style.left = left + 'px';
+  if (open) {
+    // Restart the entrance spring in place so switching tabs re-plays it under
+    // the new tab (no sideways slide).
+    sub.style.animation = 'none';
+    void sub.offsetWidth;
+    sub.style.animation = '';
+  }
+}
+
+/* Splash / home — Shipmate's self-publishing pitch, shown first and whenever the
+   logo is clicked. Lives inside the app so the title bar persists. */
+function renderSplashView() {
+  const el = document.getElementById('splashview');
+  if (!el) return;
+  const pillars = [
+    { tag: 'Submission', title: 'Submit to every store', body: 'One questionnaire, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
+    { tag: 'Marketing',  title: 'Market like a studio',  body: 'Announce everywhere at once, spin up a landing page, and reach press and creators — with an asset library that fits every platform’s specs.' },
+    { tag: 'Analysis',   title: 'Track it all in one place', body: 'Revenue, wishlists, and reviews from every store in one view — no logging into five portals to see how your game is doing.' },
+  ];
+  el.innerHTML = `
+    <div class="splash2">
+      <section class="splash2-hero">
+        <h1 class="splash2-title">Publish your game.<br>Yourself.</h1>
+        <p class="splash2-sub">Everything you need to submit, distribute, and market your game — in one intelligent tool.</p>
+      </section>
+      <section class="splash2-pillars">
+        ${pillars.map(p => `
+          <div class="splash2-card">
+            <div class="splash2-card-tag">${p.tag}</div>
+            <div class="splash2-card-title">${p.title}</div>
+            <p class="splash2-card-body">${p.body}</p>
+          </div>`).join('')}
+      </section>
+      <section class="splash2-foot">
+        <div class="splash2-foot-line">Easy to do yourself, and easy to do right.</div>
+        <button class="splash2-btn splash2-btn-primary" onclick="setView('details')">Get started →</button>
+      </section>
+    </div>`;
+}
+
+/* Prev / Next step buttons at the bottom of a step — sequential navigation
+   without needing the title-bar nav. Sequence isn't enforced. */
+function buildStepNav(view) {
+  const data = _navSubtabs(view);
+  if (!data || data.list.length < 2) return '';
+  const idx = data.list.findIndex(s => s.id === data.cur);
+  if (idx < 0) return '';
+  const prev = idx > 0 ? data.list[idx - 1] : null;
+  const next = idx < data.list.length - 1 ? data.list[idx + 1] : null;
+  if (!prev && !next) return '';
+  const arrowL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>';
+  const arrowR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  const prevBtn = prev
+    ? `<button class="step-nav-btn step-nav-prev" onclick="${data.fn}('${prev.id}')">${arrowL}<span>${prev.label}</span></button>`
+    : '<span></span>';
+  const nextBtn = next
+    ? `<button class="step-nav-btn step-nav-next" onclick="${data.fn}('${next.id}')"><span>${next.label}</span>${arrowR}</button>`
+    : '<span></span>';
+  return `<div class="step-nav-row">${prevBtn}${nextBtn}</div>`;
+}
+
+/* §6 — Analysis folders: the full dashboard, plus a permissions grant screen. */
+const PERF_SECTIONS = [
+  { id: 'dashboard',   label: 'Dashboard' },
+  { id: 'permissions', label: 'Add Permissions' },
+];
+
+/* Permissions folder — grant Shipmate read access to each store's sales data. */
+function buildPerfPermissions() {
+  const list = PLATFORM_ORDER.filter(pid => PLATFORMS[pid]);
+  const rows = list.map(pid => {
+    const connected = !!(state.platformAuth && state.platformAuth[pid] && state.platformAuth[pid].connected);
+    return `
+      <div class="perm-row">
+        <span class="perm-row-name">${(typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : ''}${(PLATFORMS[pid] && PLATFORMS[pid].label) || pid}</span>
+        ${connected
+          ? `<span class="perm-row-ok">✓ Connected</span>`
+          : `<button class="btn btn-ghost btn-sm" onclick="mktToast('Connect ${(PLATFORMS[pid] && PLATFORMS[pid].label) || pid}')">Connect</button>`}
+      </div>`;
+  }).join('');
+  return `
+    <div class="perm-panel">
+      <div class="perm-title">Grant Shipmate access to your sales data</div>
+      <p class="perm-desc">Connect each store so Shipmate can pull live revenue, wishlist, and review numbers into your dashboard. Shipmate only reads reporting data — it can never change your store listings or payouts.</p>
+      <div class="perm-list">${rows}</div>
+    </div>`;
 }
 
 function renderPerformance() {
@@ -2517,9 +2745,7 @@ function renderPerformance() {
   const period = state.performance.period || '30d';
   const f = PERF_FACTOR[period] || 1;
   const chips = PERF_PERIODS.map(p => `<button class="perf-period-chip${p.id === period ? ' is-on' : ''}" onclick="perfSetPeriod('${p.id}')">${p.label}</button>`).join('');
-
-  el.innerHTML = `
-    ${buildTabHero('performance')}
+  const body = `
     <div class="perf-toolbar">
       <div class="perf-period">${chips}</div>
       <div class="perf-asof">Updated ~1h ago · some platforms delayed</div>
@@ -2532,15 +2758,12 @@ function renderPerformance() {
       ${buildPerfWishlists(f)}
       ${buildPerfEngagement()}
       ${buildPerfReviews()}
-    </div>
-    <div class="perf-soon">
-      <span class="perf-soon-tag">Coming soon</span>
-      Cohort retention, LTV, platform-specific player analysis, and revenue forecasting.
     </div>`;
-  // Wrap into the panel grid and hang the guide off it. Called here rather
-  // than only from setView(), because these renders rebuild innerHTML and are
-  // also reached directly from handlers that bypass setView().
-  mountShippyPanel('performance');
+
+  el.innerHTML = `
+    <div class="sec-solo">
+      <div class="sec-panel">${body}</div>
+    </div>`;
 }
 
 // Capstone that reads as the next beat after the timeline's "Live" marker.
@@ -2566,38 +2789,34 @@ function renderDashboard() {
 
   const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
   const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid));
+  const addOpen  = !!(state.submission && state.submission.addOpen);
 
-  let h = buildTabHero('dashboard');
+  // Every activated platform, stacked in a single column.
+  const cards = active.map(pid => buildActiveCard(pid)).join('');
 
-  if (active.length > 0) {
-    h += `<div id="dash-timeline-wrap">${buildDashboardTimeline()}</div>`;
-  }
+  // Always-present "+ Add platform" banner; clicking it reveals the picker.
+  const picker = addOpen ? `
+    <div class="dash-add-picker">
+      ${inactive.length
+        ? `<div class="add-plat-list">${inactive.map(pid => `
+            <button class="add-plat-item" onclick="activatePlatform('${pid}')">
+              ${(typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : ''}
+              <span class="add-plat-name">${(PLATFORMS[pid] && PLATFORMS[pid].label) || pid}</span>
+              <span class="add-plat-cta">+ Add</span>
+            </button>`).join('')}</div>`
+        : `<div class="dash-empty-desc">Every available platform is already activated.</div>`}
+    </div>` : '';
 
-  if (active.length === 0) {
-    h += `
-      <div class="dash-empty">
-        <div class="dash-empty-title">${t('dash.empty.title')}</div>
-        <div class="dash-empty-desc">${t('dash.empty.desc')}</div>
-      </div>`;
-  } else {
-    h += `<div class="active-cards-grid">`;
-    for (const pid of active) {
-      h += buildActiveCard(pid);
-    }
-    h += `</div>`;
-  }
-
-  if (inactive.length > 0) {
-    h += `
-      <div class="inactive-section">
-        <div class="inactive-section-label">${active.length > 0 ? t('dash.more_platforms') : t('dash.available_platforms')}</div>
-        <div class="inactive-cards-grid">
-          ${inactive.map(pid => buildInactiveCard(pid)).join('')}
-        </div>
-      </div>`;
-  }
-
-  el.innerHTML = h;
+  el.innerHTML = `
+    <div class="sec-solo">
+      <div class="dash-column">
+        ${cards}
+        <button class="dash-add-banner${addOpen ? ' is-open' : ''}" onclick="toggleAddPlatform()">
+          <span class="dash-add-banner-plus">+</span><span>Add platform</span>
+        </button>
+        ${picker}
+      </div>
+    </div>`;
 }
 
 // Track selector + drift-visibility status pills for platforms that support
@@ -3360,14 +3579,8 @@ function renderStepModal() {
           <div class="ai-banner-text"><strong>Analysis failed:</strong> ${inferenceError || 'Unknown error'}</div>
           <button class="ai-autofill-btn" onclick="${retryFn}">Retry</button>
         </div>`;
-    } else if (hasRun && stepId === 'questionnaire') {
-      const { answered: infAns, total: infTotal } = _countInferenceAnswers(platformId, stepId);
-      inferenceFooterNote = `
-        <div class="inf-footer-note">
-          <span class="inf-footer-icon">✦</span>
-          <span>Shipmate pre-filled ${infAns} of ${infTotal} questions —<br>Please review ALL answers before submitting</span>
-        </div>`;
     }
+    // (Removed the "Please review ALL answers before submitting" footer note.)
   }
 
   // Store Preview flip — which sub-section is currently showing inside the preview modal

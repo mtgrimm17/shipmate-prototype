@@ -2143,10 +2143,30 @@ const state = {
   activeView: 'dashboard',
 
   // Performance dashboard (live-game analytics) — mock data for now.
-  performance: { period: '30d' },
+  performance: { period: '30d', section: 'dashboard' },
 
-  // Marketing tab subsections: 'announce' | 'website' | 'presskit' | 'influencers'
+  // Submission: single column of platform cards + a toggleable "+ Add platform" picker
+  submission: { addOpen: false },
+
+  // Marketing tab subsections: 'announce' | 'website' | 'press' | 'influencers'
   marketing: { section: 'announce' },
+
+  // Game Details sub-tabs: 'gamedetails' | 'distribution' | 'localization' | 'assets' | 'content'
+  details: { section: 'gamedetails', contentPlatform: null },
+
+  // Content Questions sub-tab: per-platform inline inference status ('idle'|'loading'|'ready')
+  contentQ: { status: {} },
+
+  // Shippy Guide collapse (horizontal): false = full card, true = mini progress rail
+  guideCollapsed: false,
+
+  // Top-nav sub-tab dropdown: opens on hover; navOpenView = which tab's menu shows
+  navExpanded: false,
+  navOpenView: null,
+
+  // Localization has no required input (primary language is preset), so its
+  // checklist item completes once the user has visited the section.
+  localizationSeen: false,
 
   // Broadcast (unified announcement) composer — write once, adapt per destination.
   // Credentials are intentionally deferred; destinations show a "Connect later" state.

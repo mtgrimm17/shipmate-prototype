@@ -10,8 +10,8 @@
        inside .ias-page, the App Store mockup that mimics SF Pro. JetBrains Mono
        is gone: nothing references it since the type unified on Plex. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3.83">
-  <link rel="stylesheet" href="splash.css?v=3.83">
+  <link rel="stylesheet" href="style.css?v=4.14">
+  <link rel="stylesheet" href="splash.css?v=4.14">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
   <!-- Plays the Assets tab's auto-filled Steam trailer thumbnail inline
@@ -101,122 +101,69 @@
          scrolling underneath; the contents are capped at 1200px and centred,
          sharing their left and right edges with the nav pill. -->
     <div class="topbar-inner">
-    <div class="logo">
-      <img src="Assets/Shipmate_Logo.png" class="topbar-logo" alt="Shipmate">
-    </div>
-      <!-- MOVED: project nav pill, tucked into the top bar (experiment) -->
-    <div class="project-bar" id="project-bar">
-      <!-- Diffuse light behind whichever chip carries news. Positioned by
-           paintBarGlow() in app.js. -->
-      <div class="bar-glow" id="bar-glow" hidden><div class="bar-glow-blob"></div></div>
-
-      <div class="bar-left">
-        <div class="project-selector-wrap" id="projectSelectorWrap">
-          <!-- The project chip: cover art plus the name, exactly as typed.
-               The pencil button that used to sit here is gone — it duplicated
-               the Game Details tab. -->
-          <button class="bar-nav-btn" id="projectSelector" onclick="toggleProjectDropdown(event)">
-            <span class="ic cover empty" id="projectSelectorIcon"></span>
-            <span class="pname" id="projectSelectorTitle">My Game</span>
-          </button>
-          <div class="project-dropdown" id="projectDropdown">
-            <!-- Rendered by renderProjectBar() -->
-          </div>
-        </div>
+    <!-- Left region: logo + tabs, spanning the main pane's width. -->
+    <div class="tb-left">
+      <div class="logo" onclick="showSplashView()" title="Home" role="button" tabindex="0">
+        <img src="Assets/Shipmate_Logo_v2.png" class="topbar-logo" alt="Shipmate">
       </div>
-
-      <div class="bar-spacer"></div>
-
-      <!-- Top-level tabs. Labels come from locale.js via renderProjectBar();
-           the text below is the English default. -->
+      <div class="tb-left-spacer"></div>
+      <!-- Top-level tabs. Labels come from locale.js via renderProjectBar(). -->
       <div class="bar-nav" id="bar-nav" role="tablist" aria-label="Main navigation">
         <button class="bar-nav-btn" id="nav-details" role="tab" aria-selected="false"
-                onclick="setView('details')">
-          <span class="ic"><svg width="8" height="16" viewBox="0 0 10 20" fill="none"><g transform="matrix(0.94932,0,0,0.94932,-3.15204,0.642769)"><path d="M3.32,18.424C3.32,18.746 3.424,19.004 3.633,19.199C3.841,19.395 4.119,19.492 4.466,19.492L12.708,19.492C13.056,19.492 13.333,19.395 13.542,19.199C13.75,19.004 13.854,18.746 13.854,18.424C13.854,18.112 13.75,17.858 13.542,17.663C13.333,17.467 13.056,17.37 12.708,17.37L10.091,17.37L10.091,7.435C10.091,7.079 9.987,6.795 9.779,6.582C9.57,6.369 9.297,6.263 8.958,6.263L4.831,6.263C4.492,6.263 4.217,6.359 4.004,6.549C3.791,6.74 3.685,6.992 3.685,7.305C3.685,7.626 3.791,7.886 4.004,8.086C4.217,8.286 4.492,8.385 4.831,8.385L7.682,8.385L7.682,17.37L4.466,17.37C4.119,17.37 3.841,17.467 3.633,17.663C3.424,17.858 3.32,18.112 3.32,18.424ZM6.549,1.211C6.549,1.732 6.732,2.174 7.096,2.539C7.461,2.904 7.904,3.086 8.424,3.086C8.945,3.086 9.386,2.904 9.746,2.539C10.106,2.174 10.286,1.732 10.286,1.211C10.286,0.681 10.106,0.234 9.746,-0.13C9.386,-0.495 8.945,-0.677 8.424,-0.677C7.904,-0.677 7.461,-0.495 7.096,-0.13C6.732,0.234 6.549,0.681 6.549,1.211Z" fill="currentColor" fill-rule="nonzero"/></g></svg></span>
+                onclick="navTabClick('details')">
+          <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
           <span class="lbl">Details</span>
-        </button>
-        <button class="bar-nav-btn" id="nav-assets" role="tab" aria-selected="false"
-                onclick="setView('assets')">
-          <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
-          <span class="lbl">Assets</span>
+          <span class="bar-nav-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>
         <button class="bar-nav-btn" id="nav-dashboard" role="tab" aria-selected="false"
-                onclick="setView('dashboard')">
+                onclick="navTabClick('dashboard')">
           <span class="ic"><svg width="14" height="14" viewBox="0 0 19 19" fill="none"><g transform="matrix(0.678468,0,0,0.678468,-1.35163,1.89936)"><path d="M18.294,24.479C18.763,24.479 19.167,24.293 19.505,23.919C19.844,23.546 20.135,23.047 20.378,22.422L28.906,0.143C29.019,-0.161 29.108,-0.443 29.173,-0.703C29.238,-0.964 29.271,-1.207 29.271,-1.432C29.271,-1.858 29.149,-2.192 28.906,-2.435C28.663,-2.678 28.329,-2.799 27.904,-2.799C27.687,-2.799 27.446,-2.767 27.181,-2.702C26.916,-2.637 26.632,-2.548 26.328,-2.435L3.932,6.146C3.385,6.354 2.925,6.628 2.552,6.966C2.179,7.305 1.992,7.708 1.992,8.177C1.992,8.776 2.196,9.208 2.604,9.473C3.012,9.737 3.529,9.965 4.154,10.156L11.185,12.292C11.602,12.422 11.944,12.472 12.214,12.441C12.483,12.411 12.76,12.266 13.047,12.005L27.331,-1.341C27.409,-1.419 27.493,-1.456 27.585,-1.452C27.676,-1.447 27.756,-1.415 27.826,-1.354C27.895,-1.293 27.93,-1.215 27.93,-1.12C27.93,-1.024 27.891,-0.938 27.813,-0.859L14.518,13.477C14.266,13.746 14.123,14.013 14.089,14.277C14.054,14.542 14.097,14.891 14.219,15.326L16.289,22.201C16.48,22.852 16.71,23.394 16.979,23.828C17.248,24.262 17.687,24.479 18.294,24.479Z" fill="currentColor" fill-rule="nonzero"/></g></svg></span>
           <span class="lbl">Platforms</span>
+          <span class="bar-nav-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>
         <button class="bar-nav-btn" id="nav-broadcast" role="tab" aria-selected="false"
-                onclick="setView('broadcast')">
+                onclick="navTabClick('broadcast')">
           <span class="ic"><svg width="14" height="14" viewBox="0 0 20 20" fill="none"><g transform="matrix(0.689717,0,0,0.689717,-2.29008,2.54154)"><path d="M8.776,15.286L11.576,15.286L11.576,2.839L8.776,2.839C6.997,2.839 5.642,3.29 4.714,4.193C3.785,5.095 3.32,6.402 3.32,8.112L3.32,10.013C3.32,11.723 3.785,13.03 4.714,13.932C5.642,14.835 6.997,15.286 8.776,15.286ZM13.359,15.299C14.583,15.43 15.885,15.638 17.266,15.924C18.646,16.211 20.022,16.573 21.393,17.012C22.765,17.45 24.045,17.96 25.234,18.542L25.234,-0.417C24.028,0.174 22.719,0.69 21.309,1.133C19.898,1.576 18.5,1.94 17.116,2.227C15.731,2.513 14.479,2.717 13.359,2.839L13.359,15.299ZM29.661,21.719C30.191,21.719 30.655,21.608 31.055,21.387C31.454,21.165 31.764,20.855 31.986,20.456C32.207,20.056 32.318,19.596 32.318,19.076L32.318,-1.029C32.318,-1.549 32.207,-2.012 31.986,-2.415C31.764,-2.819 31.454,-3.132 31.055,-3.353C30.655,-3.574 30.191,-3.685 29.661,-3.685C29.141,-3.685 28.681,-3.574 28.281,-3.353C27.882,-3.132 27.572,-2.819 27.35,-2.415C27.129,-2.012 27.018,-1.549 27.018,-1.029L27.018,19.076C27.018,19.596 27.129,20.056 27.35,20.456C27.572,20.855 27.882,21.165 28.281,21.387C28.681,21.608 29.141,21.719 29.661,21.719ZM13.958,24.102C14.497,24.102 14.972,23.98 15.384,23.737C15.796,23.494 16.094,23.138 16.276,22.669C16.458,22.201 16.48,21.632 16.341,20.964L15.612,17.461C15.117,17.374 14.447,17.3 13.6,17.24C12.754,17.179 11.506,17.127 9.857,17.083C9.744,17.083 9.592,17.079 9.401,17.07C9.21,17.062 9.01,17.057 8.802,17.057L10.99,21.836C11.319,22.548 11.708,23.103 12.155,23.503C12.602,23.902 13.203,24.102 13.958,24.102Z" fill="currentColor" fill-rule="nonzero"/></g></svg></span>
           <span class="lbl">Marketing</span>
+          <span class="bar-nav-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>
         <button class="bar-nav-btn" id="nav-performance" role="tab" aria-selected="false"
-                onclick="setView('performance')">
+                onclick="navTabClick('performance')">
           <span class="ic"><svg width="18" height="15" viewBox="0 0 30 25" fill="none"><g transform="matrix(1,0,0,1,-3.32031,1.8099)"><path d="M4.544,16.849C4.544,17.214 4.653,17.498 4.87,17.702C5.087,17.906 5.386,18.008 5.768,18.008L8.776,18.008C9.149,18.008 9.444,17.906 9.661,17.702C9.878,17.498 9.987,17.214 9.987,16.849L9.987,10.534C9.987,10.169 9.878,9.883 9.661,9.674C9.444,9.466 9.149,9.362 8.776,9.362L5.768,9.362C5.386,9.362 5.087,9.466 4.87,9.674C4.653,9.883 4.544,10.169 4.544,10.534L4.544,16.849ZM11.602,16.849C11.602,17.214 11.708,17.498 11.921,17.702C12.133,17.906 12.426,18.008 12.799,18.008L15.82,18.008C16.194,18.008 16.489,17.906 16.706,17.702C16.923,17.498 17.031,17.214 17.031,16.849L17.031,6.797C17.031,6.45 16.923,6.172 16.706,5.964C16.489,5.755 16.194,5.651 15.82,5.651L12.799,5.651C12.426,5.651 12.133,5.755 11.921,5.964C11.708,6.172 11.602,6.45 11.602,6.797L11.602,16.849ZM18.646,16.849C18.646,17.214 18.754,17.498 18.971,17.702C19.188,17.906 19.484,18.008 19.857,18.008L22.865,18.008C23.238,18.008 23.535,17.906 23.757,17.702C23.978,17.498 24.089,17.214 24.089,16.849L24.089,3.073C24.089,2.708 23.978,2.424 23.757,2.22C23.535,2.016 23.238,1.914 22.865,1.914L19.857,1.914C19.484,1.914 19.188,2.016 18.971,2.22C18.754,2.424 18.646,2.708 18.646,3.073L18.646,16.849ZM25.703,16.849C25.703,17.214 25.809,17.498 26.022,17.702C26.235,17.906 26.528,18.008 26.901,18.008L29.909,18.008C30.291,18.008 30.59,17.906 30.807,17.702C31.024,17.498 31.133,17.214 31.133,16.849L31.133,-0.651C31.133,-1.016 31.024,-1.3 30.807,-1.504C30.59,-1.708 30.291,-1.81 29.909,-1.81L26.901,-1.81C26.528,-1.81 26.235,-1.708 26.022,-1.504C25.809,-1.3 25.703,-1.016 25.703,-0.651L25.703,16.849ZM4.362,22.24L31.315,22.24C31.602,22.24 31.849,22.14 32.057,21.94C32.266,21.74 32.37,21.493 32.37,21.198C32.37,20.911 32.266,20.666 32.057,20.462C31.849,20.258 31.602,20.156 31.315,20.156L4.362,20.156C4.084,20.156 3.841,20.258 3.633,20.462C3.424,20.666 3.32,20.911 3.32,21.198C3.32,21.493 3.424,21.74 3.633,21.94C3.841,22.14 4.084,22.24 4.362,22.24Z" fill="currentColor" fill-rule="nonzero"/></g></svg></span>
           <span class="lbl">Performance</span>
+          <span class="bar-nav-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>
+        <div class="bar-subnav" id="bar-subnav"><!-- renderSubnav() --></div>
       </div>
 
-      <!-- Parked: release selector and the ··· menu. Hidden by
-           .bar-right{display:none} until we actually use them. -->
-      <div class="bar-right">
-        <div class="version-selector-wrap" id="versionSelectorWrap">
-          <button class="version-selector" id="versionSelector" onclick="toggleVersionDropdown(event)">
-            <span class="title" id="versionSelectorTitle">v1.0</span>
-            <span class="chev">⌄</span>
-          </button>
-          <div class="version-dropdown" id="versionDropdown">
-            <!-- Rendered by renderProjectBar() -->
-          </div>
-        </div>
-        <div class="version-menu-wrap" id="versionMenuWrap">
-          <button class="icon-btn" onclick="toggleVersionMenu(event)" aria-label="Version options" title="Version options">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-              <circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>
-            </svg>
-          </button>
-          <div class="version-menu" id="versionMenu">
-            <button class="version-menu-item danger" onclick="deleteCurrentVersion()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-              </svg>
-              <span>Delete release</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="topbar-right">
-      <button class="splash-signin-btn" onclick="signInFromSplash()">Sign In</button>
-      <div class="lang-picker-wrap" id="langPickerWrap">
-        <button class="icon-btn lang-picker-btn" onclick="toggleLangMenu(event)" aria-label="Change language" title="Change language">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-               stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="2" y1="12" x2="22" y2="12"/>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
+    </div><!-- /.tb-left -->
+    <!-- Right region: project · language · account, spanning the guide's width. -->
+    <div class="tb-right">
+      <div class="project-selector-wrap" id="projectSelectorWrap">
+        <button class="bar-nav-btn" id="projectSelector" onclick="toggleProjectDropdown(event)">
+          <span class="ic cover empty" id="projectSelectorIcon"></span>
+          <span class="pname" id="projectSelectorTitle">My Game</span>
+          <span class="bar-chev"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>
-        <div class="lang-menu hidden" id="langMenu">
-          <!-- populated by renderLangMenu() -->
-        </div>
+        <div class="project-dropdown" id="projectDropdown"><!-- renderProjectBar() --></div>
       </div>
     <div class="profile-wrap" id="profileWrap">
-      <button class="profile-block" onclick="toggleProfileMenu(event)" aria-label="Profile menu">
-        <div class="profile-avatar"></div>
-        <span class="profile-name" id="profile-name">Developer</span>
+      <button class="profile-block" onclick="toggleProfileMenu(event)" aria-label="Account menu" title="Account">
+        <div class="profile-avatar">D</div>
       </button>
       <div class="profile-menu" id="profileMenu">
         <button class="profile-menu-item" id="profile-menu-signin"
                 onclick="closeAllDropdowns(); if(!state.onboardingComplete) completeOnboarding()">Sign in</button>
         <button class="profile-menu-item" onclick="closeAllDropdowns()">Profile settings</button>
+        <button class="profile-menu-item" onclick="closeAllDropdowns()">Language: English</button>
         <button class="profile-menu-item danger" onclick="closeAllDropdowns()">Sign out</button>
       </div>
     </div><!-- /.profile-wrap -->
-    </div><!-- /.topbar-right -->
+    </div><!-- /.tb-right -->
     </div><!-- /.topbar-inner -->
   </header>
+  <!-- Dims the page while a top-nav sub-tab drawer is open; click to close. -->
+  <div class="nav-dim" id="nav-dim" onclick="closeNav()"></div>
 
   <!-- SPLASH SCREEN — inline section (no iframe; shares the app header/footer) -->
   <div id="splash-section" class="hidden">
@@ -822,8 +769,8 @@ Confidence</h3>
     <main class="main">
       <!-- EXPERIMENT: persistent left checklist pane + tab content, centered on the nav measure -->
       <div class="app-split">
-      <aside class="app-checklist" id="app-checklist"><!-- renderChecklist() --></aside>
       <div class="app-content" id="app-content">
+      <div class="splash-view hidden" id="splashview"><!-- renderSplashView() --></div>
       <div class="details-view hidden" id="details">
         <div id="details-hero"><!-- tab-hero injected by renderDetails() --></div>
         <!-- Slash nav. Outside the panel grid and capped at the content width,
@@ -868,14 +815,11 @@ Confidence</h3>
       </svg>
       Built by indie devs and game industry veterans to empower the indie game community.
     </span>
-    <span class="app-footer-version" id="app-footer-version">v3.83</span>
+    <span class="app-footer-version" id="app-footer-version">v4.14</span>
   </footer>
 
-  <!-- AI disclaimer -->
-  <div class="ai-disclaimer">Please review all inferred answers before submitting</div>
-
-  <script src="locale.js?v=3.83"></script>
-  <script src="state.js?v=3.83"></script>
+  <script src="locale.js?v=4.14"></script>
+  <script src="state.js?v=4.14"></script>
   <script>
     const CONFIG = {
       CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
@@ -883,15 +827,15 @@ Confidence</h3>
       IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
     };
   </script>
-  <script src="claude.js?v=3.83"></script>
+  <script src="claude.js?v=4.14"></script>
   <!-- The prototype's platform icon set, and Shippy's mascot and bubbles.
        Both before render.js, which reads them. -->
-  <script src="platform-icons.js?v=3.83"></script>
+  <script src="platform-icons.js?v=4.14"></script>
   <!-- Shippy's mascot and bubbles. Before render.js, which mounts them. -->
-  <script src="shippy.js?v=3.83"></script>
-  <script src="render.js?v=3.83"></script>
-  <script src="app.js?v=3.83"></script>
-  <script src="splash.js?v=3.83"></script>
+  <script src="shippy.js?v=4.14"></script>
+  <script src="render.js?v=4.14"></script>
+  <script src="app.js?v=4.14"></script>
+  <script src="splash.js?v=4.14"></script>
 
 </body>
 </html>

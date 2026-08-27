@@ -476,8 +476,8 @@
   "ob.dist.show_more": "Show {count} more markets",
   "ob.dist.preset.everywhere_except_cn": "Everywhere except China",
   "nav.details": "Game Details",
-  "nav.assets": "Asset Library",
-  "nav.submit": "Platform Submission",
-  "nav.spread": "Marketing Hub",
-  "nav.performance": "Performance Analysis"
+  "nav.assets": "Assets",
+  "nav.submit": "Submission",
+  "nav.spread": "Marketing",
+  "nav.performance": "Analysis"
 }

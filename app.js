@@ -13,9 +13,56 @@ document.addEventListener('DOMContentLoaded', async () => {
   // two are alike. They only show while the guide is collapsed, since that is
   // when the lane above the fab exists — the loop no-ops otherwise.
   if (typeof bubbleLoop === 'function') bubbleLoop();
-  // Always start at the splash screen
-  showSplash();
+  // Boot straight into the app (title bar persists) with the splash view showing.
+  bootApp();
 });
+
+/* The content scroller (.main) reserves a scrollbar gutter on its right; the
+   fixed top bar doesn't. Measure that width and pad the top bar to match, so the
+   header columns line up exactly with the content columns below. */
+function measureScrollbar() {
+  const m = document.querySelector('.main');
+  const sbw = m ? Math.max(0, m.offsetWidth - m.clientWidth) : 0;
+  document.documentElement.style.setProperty('--sbw', sbw + 'px');
+}
+
+/* Boot into main-app with the persistent title bar and the splash view active. */
+function bootApp() {
+  document.getElementById('splash-section')?.classList.add('hidden');
+  document.getElementById('onboarding-overlay')?.classList.add('hidden');
+  document.getElementById('main-app').classList.remove('hidden');
+  document.body.classList.add('signed-in');
+  document.body.classList.remove('is-splash');
+  if (!state.onboardingComplete && (!state.projects || state.projects.length === 0)) {
+    try { completeOnboarding(); } catch (e) { /* keep going */ }
+  }
+  try { seedOnboardingToIOS(); seedOnboardingToAndroid(); } catch (e) {}
+  if (typeof wireNavHover === 'function') wireNavHover();
+  showSplashView();
+  measureScrollbar();
+  requestAnimationFrame(measureScrollbar);   // again after first layout settles
+}
+window.addEventListener('resize', () => { try { measureScrollbar(); } catch (e) {} });
+
+/* Show the splash as an in-app view (no active tab, guide hidden, full width). */
+function showSplashView() {
+  document.getElementById('main-app').classList.remove('hidden');
+  document.getElementById('splash-section')?.classList.add('hidden');
+  document.body.classList.remove('is-splash');
+  document.body.classList.add('signed-in', 'viewing-splash');
+  state.activeView = 'splash';
+  for (const id of Object.values(VIEW_IDS)) document.getElementById(id)?.classList.add('hidden');
+  for (const id of Object.values(VIEW_NAV)) {
+    const b = document.getElementById(id);
+    if (b) { b.classList.remove('is-active'); b.setAttribute('aria-selected', 'false'); }
+  }
+  state.navExpanded = false;
+  document.getElementById('splashview')?.classList.remove('hidden');
+  renderProjectBar();
+  if (typeof renderSubnav === 'function') renderSubnav();
+  renderSplashView();
+  window.scrollTo(0, 0);
+}
 
 /* ── Splash screen ───────────────────────────────────── */
 
@@ -64,11 +111,13 @@ function showMainApp(view = 'dashboard') {
 }
 
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
-const VIEW_IDS = { details: 'details', assets: 'assets', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
-const VIEW_NAV = { details: 'nav-details', assets: 'nav-assets', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
+const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
+const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
   state.activeView = view;
+  document.getElementById('splashview')?.classList.add('hidden');   // leave the splash
+  document.body.classList.remove('viewing-splash');
   for (const [v, id] of Object.entries(VIEW_IDS)) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('hidden', v !== view);
@@ -81,52 +130,80 @@ function setView(view) {
   document.getElementById('bar-nav')?.classList.add('has-sel');
   paintBarGlow();
   if (view === 'details') renderDetails();
-  else if (view === 'assets') renderAssets();
   else if (view === 'broadcast') renderBroadcast();
   else if (view === 'performance') renderPerformance();
   else renderDashboard();
-  renderChecklist();   // EXPERIMENT: persistent left-pane checklist
-  renderGuide();       // EXPERIMENT: persistent right-pane Shippy guide
-  requestAnimationFrame(alignSidePanes);
+  renderGuide();       // right pane = this tab's banner + task checklist
+  if (typeof renderSubnav === 'function') renderSubnav();   // top-nav sub-tab drawer
   window.scrollTo(0, 0);
 }
 
-// Line the checklist + guide panes up with the top of the tab's real content
-// (below the banner), measured from the active view's tab-hero height.
-function alignSidePanes() {
-  // Measure the ACTIVE view's banner (hidden views have height 0, which is what
-  // was pulling the panes up on every tab except Details).
-  const view = document.getElementById(VIEW_IDS[state.activeView] || 'dashboard');
-  const hero = view ? view.querySelector('.tab-hero') : null;
-  let off = 0;
-  if (hero) { const cs = getComputedStyle(hero); off = hero.offsetHeight + (parseFloat(cs.marginBottom) || 0); }
-  const chk = document.getElementById('app-checklist');
-  const guide = document.getElementById('app-guide');
-  if (chk) chk.style.marginTop = off + 'px';
-  if (guide) guide.style.marginTop = off + 'px';
+/* Netflix-style main-tab click: switch tabs (and open the sub-tab drawer), or
+   toggle the drawer if you click the tab you're already on. */
+function navTabClick(view) {
+  setView(view);   // hover handles the dropdown; a click just navigates
 }
+
+/* Hover opens the sub-menu for that tab (tabs without sub-tabs close it). */
+function navHoverTab(view) {
+  const has = (typeof _navSubtabs === 'function') && !!_navSubtabs(view);
+  if (has) {
+    if (state.navOpenView === view && state.navExpanded) return;   // already open
+    state.navOpenView = view;
+    state.navExpanded = true;
+    renderSubnav();
+  } else if (state.navExpanded) {
+    state.navExpanded = false;
+    renderSubnav();
+  }
+}
+
+/* Leaving the whole nav (incl. the dropdown, which is a child) closes it. */
+function navLeaveNav() {
+  if (!state.navExpanded) return;
+  state.navExpanded = false;
+  renderSubnav();
+}
+
+/* Wire hover once — delegated on the nav so the static buttons don't each need a handler. */
+function wireNavHover() {
+  const bn = document.getElementById('bar-nav');
+  if (!bn || bn._hoverWired) return;
+  bn._hoverWired = true;
+  const ID2VIEW = { 'nav-details': 'details', 'nav-dashboard': 'dashboard', 'nav-broadcast': 'broadcast', 'nav-performance': 'performance' };
+  bn.addEventListener('mouseover', (e) => {
+    const btn = e.target.closest && e.target.closest('.bar-nav-btn');
+    if (btn && ID2VIEW[btn.id]) navHoverTab(ID2VIEW[btn.id]);
+  });
+  bn.addEventListener('mouseleave', navLeaveNav);
+}
+
+/* Close the sub-tab drawer (used by the dim overlay). */
+function closeNav() { state.navExpanded = false; renderSubnav(); }
+
+/* Pick a sub-tab from the dropdown. Since menus open on hover, the open menu may
+   belong to a tab you're NOT on — so switch to that tab first, then open the
+   chosen section, then close the dropdown. */
+function navSubClick(fn, id) {
+  state.navExpanded = false;
+  const view = state.navOpenView;
+  if (view && state.activeView !== view) setView(view);   // jump to that tab first
+  if (typeof window[fn] === 'function') window[fn](id);    // then open the section
+  else renderSubnav();
+}
+
+/* Removed in the v3.92 guide rebuild (handoff §4): the guide is a fixed inset
+   card with margin-top:0 now — no JS banner alignment. No-op for safety. */
+function alignSidePanes() {}
 
 /* Diffuse light behind the chip that carries news — the prototype's
    paintGlow(). "Spread the Word" is the only flagged chip, and the glow goes
    out once you're actually on it, matching the prototype's rule that a news
    flag only shows while the tab is unvisited. */
-function paintBarGlow() {
-  const bar  = document.getElementById('project-bar');
-  const glow = document.getElementById('bar-glow');
-  const blob = glow?.querySelector('.bar-glow-blob');
-  if (!bar || !glow || !blob) return;
-
-  const target = state.activeView === 'broadcast'
-    ? null
-    : document.getElementById('nav-broadcast');
-  glow.hidden = !target;
-  if (!target) return;
-
-  const br = bar.getBoundingClientRect();
-  const tr = target.getBoundingClientRect();
-  if (!tr.width) { glow.hidden = true; return; }   // pill not laid out yet
-  blob.style.setProperty('--glow-x', (tr.left - br.left + tr.width / 2) + 'px');
-}
+/* Removed in the v3.88 top-bar rebuild (handoff §1): the news glow is gone.
+   Kept as a no-op so existing callers stay harmless. If "this tab has news"
+   needs a signal again, use a 6px purple dot on the tab, not a glow. */
+function paintBarGlow() {}
 
 // The pill is fluid below 1200px, so the glow has to follow it.
 window.addEventListener('resize', paintBarGlow);
@@ -140,19 +217,9 @@ window.addEventListener('resize', paintBarGlow);
    copying that literal into CSS and stopping there left the nav noticeably
    smaller than the prototype renders. The measurement has to happen at
    runtime, after the webfont lands. */
-function calibrateNavFs() {
-  const REF = 'My Little Game', TARGET = 134, PROBE = 100;
-  const s = document.createElement('span');
-  s.style.cssText = `position:absolute;visibility:hidden;white-space:pre;
-    font-family:var(--mono);font-weight:600;text-transform:uppercase;
-    font-size:${PROBE}px`;
-  s.textContent = REF;
-  document.body.appendChild(s);
-  const w = s.getBoundingClientRect().width;
-  s.remove();
-  if (!w) return;   // font not ready; the fonts.ready pass below will retry
-  document.documentElement.style.setProperty('--nav-fs', (TARGET / w * PROBE).toFixed(3) + 'px');
-}
+/* Removed in the v3.88 top-bar rebuild (handoff §1): tab type is a fixed 10px
+   literal now, so the webfont-measuring pass is dead. No-op for safety. */
+function calibrateNavFs() {}
 
 // Calibrate, then again once the webfont has actually loaded — and re-place the
 // glow after, since the chips change width when the type is resized.
@@ -163,11 +230,49 @@ if (document.fonts?.ready) {
 
 /* ── Performance dashboard handlers ───────────────────── */
 function perfSetPeriod(id) { state.performance.period = id; renderPerformance(); }
+/* §6 — Analysis section folders + Submission platform folders */
+function perfSetSection(id) { state.performance.section = id; renderPerformance(); renderSubnav(); }
+/* Submission: toggle the "+ Add platform" picker at the bottom of the column. */
+function toggleAddPlatform() { state.submission.addOpen = !state.submission.addOpen; renderDashboard(); }
 function perfOpen(portal) { bcToast(`${portal} — connect the account to pull live figures. (Mock data shown for now.)`); }
 function perfJump(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
 /* ── Marketing subsections ────────────────────────────── */
-function mktSetSection(id) { state.marketing.section = id; renderBroadcast(); }
+function mktSetSection(id) { state.marketing.section = id; renderBroadcast(); renderSubnav(); }
+
+/* ── Game Details sub-tabs (Game Details / Distribution / Localization / Content / Assets) ── */
+function gdSetSection(id) {
+  state.details.section = id;
+  if (id === 'localization') state.localizationSeen = true;   // visiting completes it
+  renderDetails(); renderSubnav();
+  if (typeof renderGuide === 'function') renderGuide();
+}
+
+/* Content Questions: switch the platform whose content-rating questionnaire is shown. */
+function gdSetContentPlatform(pid) { state.details.contentPlatform = pid; renderDetails(); }
+
+/* Shippy Guide horizontal collapse toggle (full card ↔ mini progress rail). */
+function toggleGuide() { state.guideCollapsed = !state.guideCollapsed; renderGuide(); }
+
+/* Drive the inline "analyzing → questionnaire" flow for the selected platform.
+   First view of a platform shows a loading screen; after a short beat we snapshot
+   which answers inference filled (enabling the Unanswered/All filter) and reveal
+   the questionnaire, defaulting to the unanswered questions. */
+function _kickContentQ() {
+  const pid = state.details.contentPlatform;
+  if (!pid) return;
+  if (!state.contentQ.status) state.contentQ.status = {};
+  if ((state.contentQ.status[pid] || 'idle') !== 'idle') return;  // already loading/ready
+  state.contentQ.status[pid] = 'loading';
+  setTimeout(() => {
+    try { takeFilterSnapshot(pid); } catch (e) {}
+    if (pid === 'ios')     state.iosContentRatingExpanded     = false;
+    else if (pid === 'android') state.androidContentRatingExpanded = false;
+    else if (pid === 'steam')   state.steamContentRatingExpanded   = false;
+    state.contentQ.status[pid] = 'ready';
+    if (state.activeView === 'details' && state.details.section === 'content') renderDetails();
+  }, 1700);
+}
 function mktToast(what) { bcToast(`${what} — coming soon in the Marketing hub.`); }
 function mktReachOut(name) { bcToast(`Drafted a tailored outreach message to ${name} — connect email to send.`); }
 
@@ -182,6 +287,7 @@ function setLaunchDate(v) {
 // Checklist item → jump to its tab (and Marketing sub-tab), then scroll to the field.
 function chkGo(view, anchor, section) {
   if (section && view === 'broadcast') state.marketing.section = section;
+  if (section && view === 'details') state.details.section = section;
   setView(view);
   if (anchor) requestAnimationFrame(() => {
     const el = document.getElementById(anchor);
@@ -360,6 +466,7 @@ function toggleOnboardingPlatform(pid) {
   }
   renderOnboardingFooter();
   updateObSectionStates();
+  if (typeof renderGuide === 'function') renderGuide();   // "Choose platforms" reacts live
 }
 
 function prevOnboardingTab() {
@@ -1901,6 +2008,9 @@ function syncField(field, value) {
   if (FIELD_INPUT_MAP[field]) _setInputComplete(FIELD_INPUT_MAP[field], !!(value?.trim()));
   // Update section rails reactively
   updateObSectionStates();
+  // Reactively refresh the Shippy Guide checklist (a field gaining/losing a
+  // value flips its checkbox) — event-driven, not polling.
+  if (typeof renderGuide === 'function') renderGuide();
 }
 
 function charCount(countId, value, max) {
@@ -1951,6 +2061,7 @@ function setObDistPreset(preset) {
     // 'custom' keeps whatever countries are currently selected
   }
   _refreshObDistSection();
+  if (typeof renderGuide === 'function') renderGuide();   // "Select target countries" reacts live
 }
 
 function _selectionMatchesPreset(preset) {
@@ -1982,6 +2093,7 @@ function toggleObCountry(code) {
   // Picking countries can flip the preset, and the preset is what the
   // checklist reads for Distribution.
   updateObSectionStates();
+  if (typeof renderGuide === 'function') renderGuide();
 }
 
 function _refreshCountryListInPlace() {

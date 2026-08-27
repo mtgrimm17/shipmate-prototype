@@ -20,6 +20,8 @@
   --magenta-soft: rgba(255, 59, 118, 0.2);
   --blue:         #60a5fa;
   --blue-soft:    rgba(96, 165, 250, 0.12);
+  --purple:       #9F68F0;   /* "Shipmate did this" — AI inference, tips (brand). NOT selection. */
+  --purple-soft:  rgba(159, 104, 240, 0.15);
 
   /* ── Selection design tokens (blue = selected everywhere) ── */
   --sel-color:     #60a5fa;
@@ -39,11 +41,8 @@
   --alert-border:  rgba(255, 59, 118, 0.30);
 
   /* ── Persistent chrome (shared header + footer) ── */
-  /* 66 = 26px top padding + 40px of logo/control height, bottom padding 0.
-     The 34px gap down to the nav pill lives on .project-bar's margin-top,
-     so the topbar/nav rhythm matches the nav prototype exactly (26 / 34)
-     without changing what --header-h means to #main-app or the splash. */
-  --header-h: 66px;
+  /* Handoff §1: one flat 64px control row. Content offset tracks this. */
+  --header-h: 64px;
   --footer-h: 46px;
 
   /* ── Typography ──────────────────────────────────────
@@ -52,6 +51,7 @@
      real platform faces: .sp-google (Roboto), .ias-page (SF Pro),
      .pk-page (system sans). Do not fold those into --mono. */
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
   --font-mono: var(--mono);
 
   /* ── Floating nav pill (prototype variant 7) ─────────
@@ -1759,6 +1759,9 @@ body {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  scrollbar-gutter: stable;  /* reserve the scrollbar's width always, so the centered
+                                split doesn't shift left when a taller sub-tab (e.g.
+                                Distribution's map) adds a scrollbar */
 }
 
 /* ============================================================
@@ -1771,21 +1774,35 @@ body {
 .app-checklist { flex: 1 1 0; min-width: 0; box-sizing: border-box; position: sticky; top: 16px; z-index: 0;
   border: 1px solid var(--border); border-radius: 14px; background: var(--panel); padding: 18px 16px; }
 .app-content { flex: 2 1 0; min-width: 0; }
-.app-guide { flex: 1 1 0; min-width: 0; box-sizing: border-box; }  /* margin-top set by alignSidePanes() to match the banner height */
+.app-guide { width: 290px; flex: none; align-self: flex-start; min-width: 0; box-sizing: border-box; }  /* §4 — fixed guide column */
 /* keep the header's dropdowns painting above the checklist pane */
 .topbar { position: relative; z-index: 30; }
 
 /* EXPERIMENT item 2: the project nav pill now lives inside the top bar,
    between the logo and the account controls (one bar instead of two). */
-.topbar-inner { display: flex; align-items: center; }
-.topbar-inner .project-bar { width: auto; max-width: none; flex: 1 1 auto; margin: 0 16px; height: auto; }
-body:not(.signed-in) #project-bar { display: none; }
+/* Header mirrors the content columns below it:
+   .tb-left (logo + tabs) spans the main pane; .tb-right (project · lang · account)
+   spans the Shippy Guide (290px). The 16px gap matches .app-split's gap. */
+.topbar-inner { gap: 16px; justify-content: flex-start; height: 100%; }
+.tb-left {
+  flex: 1; min-width: 0; height: 100%;
+  display: flex; align-items: center;
+  padding: 0 22px;   /* inset to line up with the main pane's 22px view padding */
+}
+.tb-left-spacer { flex: 1; min-width: 12px; }
+.tb-right {
+  width: 290px; flex: none; height: 100%;
+  display: flex; align-items: center; gap: 8px;
+}
+.tb-right .project-selector-wrap { flex: 1; min-width: 0; }
+.tb-right #projectSelector { width: 100%; }
+.tb-right .lang-picker-wrap, .tb-right .profile-wrap { flex: none; }
 
 /* fill the content column and give text boxes room from the section edges */
 .app-content .details-view,
 .app-content .dashboard,
 .app-content .broadcast-view,
-.app-content .performance-view { max-width: none; width: auto; margin: 0; padding-left: 22px; padding-right: 22px; }
+.app-content .performance-view { max-width: none; width: auto; margin: 0; padding: 0 22px 40px; }   /* uniform top/bottom across all tabs (§3) */
 
 /* abandon the Shippy guide pane for this experiment — content takes full width */
 .app-content .panelgrid { display: block !important; }
@@ -1813,7 +1830,7 @@ body:not(.signed-in) #project-bar { display: none; }
 .chk-item:hover { background: var(--panel-2); color: var(--text); }
 .chk-box { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border-hover);
   display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #fff; }
-.chk-item.is-done .chk-box { background: var(--magenta); border-color: var(--magenta); }
+.chk-item.is-done .chk-box { background: var(--green); border-color: var(--green); }   /* completion = green, per DS */
 .chk-item.is-done .chk-label { color: var(--text); text-decoration: line-through; text-decoration-color: var(--text-faint); }
 .chk-label { font-size: 13px; }
 
@@ -1840,9 +1857,7 @@ body:not(.signed-in) #project-bar { display: none; }
 .cal-hint { font-size: 11px; color: var(--text-faint); line-height: 1.4; margin-top: 8px; }
 .dash-tl-target { font-size: 12.5px; color: var(--text-dim); }
 
-/* Two-word stacked tab labels */
-.bar-nav-btn { height: 46px; gap: 8px; padding: 0 12px 0 5.5px; }
-.bar-nav-btn .lbl { white-space: normal; line-height: 1.02; text-align: left; font-size: 10.5px; letter-spacing: 0; }
+/* Handoff §1: tab labels are single-line again (stacked override removed). */
 
 /* Launch schedule agenda (checklist pane) */
 .cal-count { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 10px; }
@@ -1858,6 +1873,173 @@ body:not(.signed-in) #project-bar { display: none; }
 .cal-ev.is-launch .cal-ev-label { color: var(--green); font-weight: 700; }
 .cal-ev.is-past { opacity: .5; }
 
+/* ── Game Details sub-tabs: render all panes once, show only the active one ── */
+.gd-pane { display: none; }
+.gd-sub[data-gd="gamedetails"]  .gd-pane--gamedetails,
+.gd-sub[data-gd="distribution"] .gd-pane--distloc,
+.gd-sub[data-gd="localization"] .gd-pane--distloc,
+.gd-sub[data-gd="content"]      .gd-pane--content,
+.gd-sub[data-gd="assets"]       .gd-pane--assets { display: block; }
+
+/* ── Content Questions sub-tab: platform toggle + inline questionnaire ── */
+.cq-inline { display: flex; flex-direction: column; gap: 16px; }
+.cq-plat-toggle { display: flex; gap: 8px; }
+.cq-plat-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 9px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text-dim); font-family: var(--mono); font-size: 13px; font-weight: 600;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.cq-plat-btn:hover { color: var(--text); border-color: var(--border-hover); }
+.cq-plat-btn.is-on { background: var(--panel-3); border-color: var(--accent-details, #60a5fa); color: var(--text); }
+.cq-plat-btn svg, .cq-plat-btn img { width: 16px; height: 16px; display: block; }
+.cq-inline-loading { min-height: 320px; --accent: var(--purple); }
+.cq-inline-empty { padding: 40px 24px; text-align: center; color: var(--text-dim); font-size: 13px; line-height: 1.6; }
+/* Distribution + Localization share one builder — show only the relevant section */
+.gd-sub[data-gd="distribution"] #ob-sec-localization,
+.gd-sub[data-gd="distribution"] .ob-sec-divider,
+.gd-sub[data-gd="localization"] #ob-sec-distribution,
+.gd-sub[data-gd="localization"] .ob-sec-divider { display: none; }
+
+/* Shippy guide = current tab's banner + task checklist */
+/* §4 — the guide reads as an inset card that belongs to the page, not a floating
+   aside. Purple-bordered (Shippy's colour), one step darker than the panel. */
+.guide-card {
+  position: relative;
+  background: var(--panel-2);
+  border: 1px solid rgba(159, 104, 240, 0.35);
+  border-radius: 12px;
+  padding: 22px 18px 18px;   /* top matches the content panel so their contents line up */
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* Horizontal collapse toggle */
+.guide-collapse-btn {
+  position: absolute; top: 14px; right: 14px;
+  width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel-3); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-dim); cursor: pointer; font-size: 15px; line-height: 1;
+  transition: color .12s, border-color .12s;
+}
+.guide-collapse-btn:hover { color: var(--text); border-color: var(--border-hover); }
+
+/* Collapsed: a one-icon-wide progress rail (same card fill + border) */
+.app-guide.is-collapsed { width: 48px; }
+.guide-card--mini { align-items: center; padding: 14px 0; gap: 0; }
+.guide-card--mini .guide-collapse-btn { position: static; margin-bottom: 14px; }
+.guide-mini-dots { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.guide-mini-dot {
+  width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--text-faint);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: #0a0a0a;
+  background: transparent; padding: 0; cursor: pointer; transition: border-color .12s, transform .1s;
+}
+.guide-mini-dot:hover { border-color: var(--purple); transform: scale(1.12); }
+.guide-mini-dot.is-done:hover { border-color: var(--green); }
+.guide-mini-dot.is-done { background: var(--green); border-color: var(--green); }
+.guide-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; color: var(--purple); }
+.guide-title { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.25; }
+.guide-sub { font-size: 12px; line-height: 1.6; color: var(--text-dim); text-wrap: pretty; }
+.guide-tasks-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); margin-top: 2px; }
+.guide-tasks { display: flex; flex-direction: column; gap: 2px; }
+.gd-task { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; padding: 5px 4px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+.gd-task:hover { background: var(--panel-3); }
+/* 16px status circle: open = grey ring, current = purple ring, done = green fill */
+.gd-task-box { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--text-faint); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #0a0a0a; }
+.gd-task.is-current .gd-task-box { border-color: var(--purple); }
+.gd-task.is-done .gd-task-box { background: var(--green); border-color: var(--green); }
+.gd-task-label { font-size: 13px; color: var(--text-dim); }
+.gd-task.is-done .gd-task-label { color: var(--text); }
+
+/* Below ~1100px the guide drops beneath the content column. */
+@media (max-width: 1100px) {
+  .app-split { flex-wrap: wrap; }
+  .app-guide { width: 100%; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Content panel — sub-navigation lives in the expanding title bar now, so the
+   panel spans the full content width (the left folder rail is retired).
+   ══════════════════════════════════════════════════════════════════ */
+.sec-solo { width: 100%; }
+.sec-panel {
+  width: 100%; min-width: 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 22px 24px 26px;
+}
+/* the inline content already sits in the panel now — drop its own frame so we
+   don't get a box-in-a-box */
+.sec-panel .ob-modal.ob-inline { border: 0; background: none; padding: 0; box-shadow: none; }
+.sec-panel .mkt-body { padding: 0; }
+
+/* Prev / Next step buttons at the bottom of a step. Purple palette (a Shipmate
+   action) but softened — a translucent purple fill with light-purple text, not
+   stark white on solid purple. */
+.step-nav-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border); }
+.step-nav-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 10px; cursor: pointer;
+  background: rgba(159, 104, 240, .14); color: #c9b3f2;
+  border: 1px solid rgba(159, 104, 240, .32);
+  font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: .02em;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, transform .1s ease;
+}
+.step-nav-btn:hover { background: rgba(159, 104, 240, .24); color: #e6d9ff; border-color: rgba(159, 104, 240, .5); }
+.step-nav-btn:active { transform: translateY(1px); }
+.step-nav-btn svg { display: block; }
+
+/* Submission "+ Add platform" → a simple list of available platforms. */
+.add-plat-list { display: flex; flex-direction: column; gap: 8px; }
+.add-plat-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px 16px; border-radius: 10px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--mono); font-size: 14px; font-weight: 600;
+  text-align: left; transition: border-color .12s, background .12s;
+}
+.add-plat-item:hover { border-color: var(--purple); background: rgba(159, 104, 240, .06); }
+.add-plat-item svg, .add-plat-item img { width: 18px; height: 18px; flex: none; }
+.add-plat-name { flex: 1; }
+.add-plat-cta { font-size: 12px; font-weight: 700; color: var(--purple); }
+/* Submission: activated platform cards stacked in a single column. */
+.dash-column { display: flex; flex-direction: column; gap: 14px; }
+.dash-column .active-card { width: 100%; }
+.dash-add-head { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin-bottom: 14px; }
+
+/* Always-present "+ Add platform" banner + the picker it toggles open. */
+.dash-add-banner {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; padding: 20px; border-radius: 12px; cursor: pointer;
+  background: transparent; border: 1.5px dashed var(--border-hover);
+  color: var(--text-dim); font-family: var(--mono); font-size: 14px; font-weight: 700;
+  letter-spacing: .02em; transition: border-color .15s, color .15s, background .15s;
+}
+.dash-add-banner:hover,
+.dash-add-banner.is-open {
+  border-color: var(--purple); color: var(--purple);
+  background: rgba(159, 104, 240, .06);
+}
+.dash-add-banner-plus { font-size: 19px; line-height: 1; }
+.dash-add-picker { margin-top: 2px; }
+
+/* Submission and Analysis have no sub-tabs — hide their title-bar chevrons. */
+#nav-dashboard .bar-nav-chev,
+#nav-performance .bar-nav-chev { display: none; }
+
+/* Analysis → Add Permissions folder */
+.perm-panel { max-width: 620px; }
+.perm-title { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.perm-desc { font-size: 13px; line-height: 1.6; color: var(--text-dim); margin-bottom: 18px; }
+.perm-list { display: flex; flex-direction: column; gap: 8px; }
+.perm-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; }
+.perm-row-name { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--text); }
+.perm-row-name svg, .perm-row-name img { width: 18px; height: 18px; }
+.perm-row-ok { font-size: 12px; font-weight: 700; color: var(--green); }
+
+
 @media (max-width: 820px) {
   .app-split { flex-direction: column; }
   .app-checklist { flex-basis: auto; width: 100%; position: static; }
@@ -1867,20 +2049,23 @@ body:not(.signed-in) #project-bar { display: none; }
 
 .topbar {
   display: flex;
-  /* 26px above the logo, nothing below: the 34px down to the nav pill is the
-     pill's own margin-top. Together that reproduces the prototype's
-     .topbar{padding:26px 0 34px} rhythm while the header stays fixed. */
-  padding: 26px 0 0;
+  align-items: center;
+  padding: 0;
   flex-shrink: 0;
   position: fixed;   /* persistent across splash / onboarding / app */
   top: 0;
   left: 0;
   right: 0;
-  height: var(--header-h);
+  height: 64px;      /* handoff §1 — one flat control row */
   z-index: 200; /* always above modals (z-index:100) and the splash (z-index:1) */
-  background: var(--bg);
-  /* No border-bottom: the header and the floating nav share one surface. */
+  background: var(--bg);                    /* #0a0a0a */
+  border-bottom: 1px solid var(--border);   /* #2a2a2a */
+  box-sizing: border-box;
+  padding-right: var(--sbw, 0px);   /* match .main's scrollbar gutter so columns align */
 }
+
+/* Thin rule separating the logo from the controls */
+.topbar-rule { width: 1px; height: 24px; background: var(--panel-3); margin: 0 2px; flex: none; }
 
 /* The header's contents live on the same measure as the nav pill: 1200px wide,
    centred, with 32px gutters. The bar stretches to the viewport, the content
@@ -1901,13 +2086,17 @@ body:not(.signed-in) #project-bar { display: none; }
   min-width: 0;
 }
 
-/* Shipmate logo image in topbar */
+/* Shipmate logo image in topbar (new 2026 octopus lockup, ~2:1) */
 .topbar-logo {
-  height: 40px;
+  height: 46px;
   width: auto;
   display: block;
   object-fit: contain;
 }
+
+/* Dropdown chevron shared by the project chip + account block (SVG for exact centering) */
+.bar-chev { display: flex; align-items: center; justify-content: center; color: var(--text-faint); margin-left: 2px; flex: none; }
+.bar-chev svg { display: block; }
 
 .logo {
   display: flex;
@@ -1924,33 +2113,25 @@ body:not(.signed-in) #project-bar { display: none; }
   flex-shrink: 0;
 }
 
+/* Account is just a round "D" dot now (sign in/out + language live in its menu). */
 .profile-block {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  color: var(--text);
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: inherit;
-  border-radius: 8px;
-  transition: opacity 0.15s;
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex: none;
+  padding: 0; background: transparent; border: none; cursor: pointer;
+  font-family: var(--mono);
 }
-
-.profile-block:hover { opacity: 0.75; }
-
 .profile-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--green);
-  flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 999px;
+  background: var(--purple);
+  display: flex; align-items: center; justify-content: center;
+  color: #0a0a0a; font-family: var(--mono); font-weight: 800; font-size: 15px;
+  transition: filter .15s;
 }
+.profile-block:hover .profile-avatar { filter: brightness(1.12); }
 
 .profile-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--text-dim);
 }
 
@@ -2023,24 +2204,29 @@ body:not(.signed-in) #project-bar { display: none; }
 
 .profile-wrap { position: relative; }
 
+/* Shared spring for every title-bar menu — a subtle overshoot, then settle. */
+@keyframes menuPop {
+  from { opacity: 0; transform: translateY(-12px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
 .profile-menu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 7px);
   right: 0;
-  min-width: 180px;
+  min-width: 210px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 6px;
   display: none;
   flex-direction: column;
   gap: 2px;
   z-index: 60;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: fadeDown 0.15s ease;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .55);
+  transform-origin: top right;
 }
 
-.profile-menu.open { display: flex; }
+.profile-menu.open { display: flex; animation: menuPop .34s cubic-bezier(.34, 1.56, .64, 1); }
 
 .profile-menu-header {
   padding: 8px 14px 6px;
@@ -2060,20 +2246,21 @@ body:not(.signed-in) #project-bar { display: none; }
 .profile-menu-item {
   display: flex;
   align-items: center;
-  padding: 9px 14px;
-  border-radius: 6px;
+  padding: 11px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--mono);
   background: transparent;
   border: none;
   text-align: left;
-  color: var(--text);
-  transition: background 0.12s;
+  color: var(--text-dim);
+  transition: background 0.12s, color 0.12s;
   width: 100%;
 }
 
-.profile-menu-item:hover { background: var(--panel-2); }
+.profile-menu-item:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
 .profile-menu-item.danger { color: var(--magenta); }
 .profile-menu-item.danger:hover { background: var(--magenta-soft); }
 
@@ -2086,86 +2273,20 @@ body:not(.signed-in) #project-bar { display: none; }
    The one deliberate deviation: the prototype nails the pill to 1200px, this
    one uses max-width so it shrinks on narrow viewports instead of breaking. */
 
+/* Handoff §1: the glass pill is gone — .project-bar is now just a transparent
+   flex row holding the project chip, the tab well, and a spacer. No fill, no
+   texture, no inner stroke, no backdrop blur, no news glow. */
 .project-bar {
   display: flex;
   align-items: center;
-  gap: var(--nav-gap);
-  /* Same measure as .topbar-inner, so the pill's edges line up with the logo
-     and the account controls at every viewport width. */
-  width: calc(100% - 2 * var(--chrome-gutter));
-  max-width: var(--nav-w);
-  height: var(--nav-h);
-  /* 34px below the header, per the prototype's topbar padding-bottom.
-     Nothing below: the gap down to the content is --main-gap alone. */
-  margin: 34px auto 0;
-  padding: 0 var(--nav-pad);   /* (60 - 45) / 2 — same air at the ends as top and bottom */
-  border-radius: var(--nav-r);
-  background: transparent;     /* the whole material lives in ::after */
+  gap: 14px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
   position: relative;
   flex-shrink: 0;
-  backdrop-filter: blur(22px) saturate(130%);
-  -webkit-backdrop-filter: blur(22px) saturate(130%);
-}
-
-/* Fill and texture in a single layer, so they desaturate and darken as one
-   block. The texture sits at its natural size and the pill clips it — a
-   clipping mask, not a stretch. */
-.project-bar::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    url("Assets/nav-texture.png") center center / var(--nav-texscale) auto no-repeat,
-    var(--nav-fill);
-  filter: saturate(var(--nav-sat)) brightness(var(--nav-bri));
-}
-
-/* 1px inner stroke, white 75% at the top fading to 25% at the bottom. */
-.project-bar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(180deg, var(--nav-stroke-top), var(--nav-stroke-bot));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* Diffuse light behind one chip, to flag what's new.
-
-   z-index 1, not the prototype's 0. In the prototype the glow is a child div
-   at z-index 0 while the v7 material lives in .nav::after, also at z-index 0 —
-   and a ::after paints after every child, so in variant 7 the material covers
-   the glow completely and you never see it. It only shows in the variants that
-   paint their fill on the element itself. Raising it to 1 puts it above the
-   material and below the chips (which are also 1, but later in the tree), so
-   the glow actually renders. Order: material → glow → chips. */
-.bar-glow {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  overflow: hidden;
-  z-index: 1;
-  pointer-events: none;
-}
-.bar-glow-blob {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 210px;
-  height: 150px;
-  transform: translate(calc(var(--glow-x, 0px) - 50%), -50%);
-  background: radial-gradient(closest-side, var(--nav-glow), transparent 72%);
-  filter: blur(26px);
-  opacity: .75;
+  min-width: 0;
 }
 
 .bar-left, .bar-right {
@@ -2174,9 +2295,10 @@ body:not(.signed-in) #project-bar { display: none; }
   gap: 4px;
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
-/* Pushes the categories to the right edge of the pill. */
+/* Pushes language + account to the right edge of the bar. */
 .bar-spacer { flex: 1; min-width: 12px; }
 
 /* Version selector and the ··· menu are parked until we actually use them.
@@ -2192,18 +2314,17 @@ body:not(.signed-in) #project-bar { display: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid transparent;
-  border-radius: 8px;
+  background: var(--panel);          /* handoff §1 — same chip material */
+  border: 1px solid var(--border);
+  border-radius: 12px;
   cursor: pointer;
   color: var(--text-dim);
-  transition: all 0.15s;
+  transition: border-color 0.15s, color 0.15s;
   padding: 0;
 }
 
 .icon-btn:hover {
-  background: var(--panel-2);
-  border-color: var(--border);
+  border-color: var(--border-hover);
   color: var(--text);
 }
 
@@ -2278,48 +2399,26 @@ body:not(.signed-in) #project-bar { display: none; }
    never overrides it for variant 7, so a violet menu under a teal pill is
    literally what the source file does. Kept verbatim rather than guessed at.
    If that was an oversight, --pop-fill below is the single knob to turn. */
-.project-dropdown,
-.version-dropdown {
-  --pop-fill: #5E1DDC;
+/* Matches the nav sub-menu: dark panel, 12px radius, spring in, #242424 active band. */
+.project-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 7px);
   left: 0;
   min-width: 100%;
-  background: var(--pop-fill);
-  border: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 6px;
   display: none;
   flex-direction: column;
+  gap: 2px;
   z-index: 50;
-  animation: popIn .18s var(--nav-ease);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .55);
+  transform-origin: top left;
 }
+.project-dropdown::before { display: none; }
 
-/* Same 1px inner stroke as the pill. */
-.project-dropdown::before,
-.version-dropdown::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(180deg, var(--nav-stroke-top), var(--nav-stroke-bot));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-}
-
-@keyframes popIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: none; }
-}
-
-.version-dropdown { left: auto; right: 0; }
-
-.project-selector-wrap.open .project-dropdown,
-.version-selector-wrap.open .version-dropdown { display: flex; }
+.project-selector-wrap.open .project-dropdown { display: flex; animation: menuPop .34s cubic-bezier(.34, 1.56, .64, 1); }
 
 .project-item {
   position: relative;
@@ -2328,22 +2427,23 @@ body:not(.signed-in) #project-bar { display: none; }
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  height: 38px;
-  padding: 0 14px 0 10px;
-  border-radius: 9px;
+  padding: 11px 14px;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
-  font-size: var(--nav-fs);
+  font-family: var(--mono);
+  font-size: 14px;
   font-weight: 600;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, .75);
-  transition: background .14s, color .14s;
+  text-transform: none;
+  color: var(--text-dim);
+  transition: background .12s, color .12s;
 }
 
-.project-item:hover { background: rgba(255, 255, 255, .1); color: #fff; }
-.project-item.active { background: rgba(255, 255, 255, .16); color: #fff; }
-.project-item.active:hover { background: rgba(255, 255, 255, .28); }
+.project-item:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
+.project-item.active { background: #242424; color: #fff; }
+.project-item.active:hover { background: #242424; }
+.project-item.active::after { display: none; }
 .project-item.new-project { color: rgba(255, 255, 255, .75); }
 .project-item.new-project:hover { background: rgba(255, 255, 255, .1); color: #fff; }
 .project-item .plus { width: 14px; flex: none; font-size: 14px; line-height: 1; text-align: center; }
@@ -8615,26 +8715,29 @@ body.signed-in       .splash-signin-btn { display: none; }
   width: 80px; height: 80px;
   display: flex; align-items: center; justify-content: center;
 }
-.inf-ring {
+/* Scoped under .inf-rings-wrap so the influencer match ring (a different
+   .inf-ring, defined later in the file) doesn't override position/size. */
+.inf-rings-wrap .inf-ring {
   position: absolute;
   inset: 0;
+  width: auto; height: auto; display: block;
   border-radius: 50%;
   border: 2px solid transparent;
 }
-.inf-ring-1 {
+.inf-rings-wrap .inf-ring-1 {
   border-top-color: var(--accent);
   border-right-color: var(--accent);
   opacity: 0.9;
   animation: infSpin 1.6s linear infinite;
 }
-.inf-ring-2 {
+.inf-rings-wrap .inf-ring-2 {
   inset: 10px;
   border-bottom-color: var(--accent);
   border-left-color: var(--accent);
   opacity: 0.5;
   animation: infSpin 2.2s linear infinite reverse;
 }
-.inf-ring-3 {
+.inf-rings-wrap .inf-ring-3 {
   inset: 20px;
   border-top-color: var(--accent);
   opacity: 0.3;
@@ -9742,40 +9845,177 @@ body.is-splash .ai-disclaimer { display: none; }
 /* ── Nav chips inside the pill ─────────────────────────────
    The prototype's .cats / .cat, measurement for measurement. */
 
+/* Handoff §1: tab group is an inset well holding four pills. */
 .bar-nav {
   display: flex;
   align-items: center;
-  gap: var(--nav-gap);
+  gap: 2px;
+  height: 40px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--panel);          /* #141414 */
+  border: 1px solid var(--border);   /* #2a2a2a */
   position: relative;
   z-index: 1;
-  background: none;
-  border: 0;
-  padding: 0;
 }
 
-.bar-nav-btn {
+/* Tabs (scoped to the well so the project chip keeps its own shape).
+   Equal min-width + centered content → every tab occupies the same span,
+   regardless of label length. */
+.bar-nav .bar-nav-btn {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 45px;
-  padding: 0 16px 0 5.5px;   /* the icon square supplies the left air */
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  min-width: 132px;
+  padding: 0 14px;
   border: none;
-  border-radius: 13px;
+  border-radius: 8px;                /* rows nest inside the 12px group */
   background: transparent;
   font-family: var(--mono);
-  font-size: var(--nav-fs);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  color: rgba(255, 255, 255, .75);   /* unselected sits at 75% */
-  transition: background .18s var(--nav-ease), color .18s var(--nav-ease);
+  color: var(--text-dim);            /* #a0a0a0 */
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.bar-nav .bar-nav-btn:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
+.bar-nav .bar-nav-btn.is-active,
+.bar-nav .bar-nav-btn.is-active:hover {
+  /* Selected main tab: solid brand-purple, dark text. */
+  background: var(--purple);
+  color: #0a0a0a;
+  font-weight: 700;
+}
+.bar-nav .bar-nav-btn.is-active::after { display: none; }   /* kill the leftover ring */
+
+/* ── Squared nav + vertical sub-menu dropdown ──
+   The tab group is squared (8px); rows are 5px. When a tab with sub-sections is
+   selected, a vertical sub-menu springs down (overshoot) anchored under that
+   tab. Sub-tab selection is a flat #242424 band with white text — no accent. */
+.bar-nav {
+  position: relative; overflow: visible; border-radius: 12px;   /* match the main pane */
+  transition: background .2s ease, border-color .2s ease;
+}
+.bar-nav:hover { border-color: var(--border-hover); }
+
+.bar-nav-chev {
+  display: inline-flex; align-items: center; margin-left: 3px; flex: none;
+  opacity: .5; transform: rotate(180deg);   /* default: points up (menu closed) */
+  transition: transform .28s cubic-bezier(.34, 1.56, .64, 1), opacity .15s;
+}
+.bar-nav .bar-nav-btn:hover .bar-nav-chev { opacity: .85; }
+.bar-nav .bar-nav-btn.is-active .bar-nav-chev { opacity: 1; }
+.bar-nav .bar-nav-btn.is-menu-open .bar-nav-chev { transform: rotate(0deg); opacity: 1; }   /* open: points down */
+
+/* Vertical dropdown, anchored under the active tab (left set by renderSubnav).
+   Springs down with an overshoot, retracts the same way. */
+.bar-subnav {
+  position: absolute; top: calc(100% + 7px); left: 0; z-index: 45;
+  min-width: 210px;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .55);
+  opacity: 0; transform-origin: top left; pointer-events: none;
+  transition: opacity .14s ease;   /* close fade; open uses the menuPop spring */
+}
+/* Invisible bridge across the gap so moving from tab → dropdown keeps the nav
+   hovered (the menu is hover-driven and mustn't close in the gap). */
+.bar-subnav::before { content: ''; position: absolute; left: 0; right: 0; top: -9px; height: 9px; }
+.bar-nav.is-expanded .bar-subnav {
+  opacity: 1; pointer-events: auto;
+  animation: menuPop .42s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.bar-subtab {
+  display: flex; align-items: center; width: 100%;
+  padding: 11px 14px; border-radius: 8px; border: none; background: transparent; cursor: pointer;
+  font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text-dim);
+  text-align: left; white-space: nowrap; transition: background .12s, color .12s;
+}
+.bar-subtab:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
+.bar-subtab.is-on { background: #242424; color: #fff; }   /* flat band, no accent */
+
+/* Dim the page behind the nav while a drawer is open (Netflix/Ricola). */
+.nav-dim {
+  position: fixed; inset: 0; z-index: 150;
+  background: rgba(0, 0, 0, .45);
+  opacity: 0; pointer-events: none; transition: opacity .25s ease;
+}
+body.nav-open .nav-dim { opacity: 1; pointer-events: auto; }
+
+/* Logo doubles as a home button (opens the splash). */
+.logo { cursor: pointer; }
+
+/* ══════════════════════════════════════════════════════════════════
+   Splash / home view — persistent title bar above; full-width below.
+   ══════════════════════════════════════════════════════════════════ */
+body.viewing-splash #app-guide { display: none; }
+.splash-view { width: 100%; }
+.splash2 { display: flex; flex-direction: column; gap: 52px; max-width: 1000px; margin: 0 auto; padding: 44px 0 90px; }
+.splash2-hero { text-align: center; padding: 32px 0 4px; }
+.splash2-title { font-family: var(--sans); font-size: 64px; font-weight: 800; line-height: 1.02; letter-spacing: -0.02em; color: var(--text); margin: 0 0 22px; }
+.splash2-sub { font-size: 17px; line-height: 1.65; color: var(--text-dim); max-width: 620px; margin: 0 auto; }
+.splash2-btn { padding: 18px 38px; border-radius: 12px; font-family: var(--mono); font-size: 17px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: filter .15s, background .15s; }
+.splash2-btn-primary { background: var(--purple); color: #0a0a0a; }
+.splash2-btn-primary:hover { filter: brightness(1.1); }
+.splash2-pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.splash2-card { position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px 22px; }
+.splash2-card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--purple); }
+.splash2-card-tag { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--purple); margin-bottom: 10px; }
+.splash2-card-title { font-family: var(--sans); font-size: 19px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.splash2-card-body { font-size: 13.5px; line-height: 1.6; color: var(--text-dim); }
+.splash2-foot { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8px 0; }
+.splash2-foot-line { font-family: var(--sans); font-size: 26px; font-weight: 700; color: var(--text); }
+@media (max-width: 760px) {
+  .splash2-pillars { grid-template-columns: 1fr; }
+  .splash2-title { font-size: 44px; }
 }
 
-.bar-nav-btn:hover { background: rgba(255, 255, 255, .09); color: #fff; }
-.bar-nav-btn.is-active { background: var(--nav-chip); color: #fff; }
-.bar-nav-btn.is-active:hover { background: var(--nav-chip-hi); }
+/* ── One shared chip shape for the project selector, language, account ── */
+.bar-chip {
+  display: flex; align-items: center; gap: 9px;
+  height: 40px; padding: 0 14px;
+  border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  transition: border-color .15s var(--ease);
+}
+.bar-chip:hover { border-color: var(--border-hover); }
+
+/* The project chip reuses #projectSelector; give it the shared chip shape. */
+.project-selector-wrap #projectSelector {
+  display: flex; align-items: center;   /* keep icon + name on one line */
+  height: 40px; padding: 0 12px 0 5px; gap: 9px;
+  border-radius: 12px; white-space: nowrap;
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--text); text-transform: none; font-size: 13px; font-weight: 600;
+}
+.project-selector-wrap #projectSelector:hover { border-color: var(--border-hover); background: var(--panel); }
+
+/* Tab glyphs: drop the 34px squares — bare 14px icons in currentColor. */
+.bar-nav .bar-nav-btn .ic {
+  width: 14px; height: 14px; border-radius: 0;
+  background: transparent !important; color: currentColor;
+  display: grid; place-items: center;
+}
+.bar-nav .bar-nav-btn .ic svg { opacity: 1; }
+.bar-nav .bar-nav-btn.is-active::after { display: none; }   /* kill the white gradient stroke */
+.bar-nav.has-sel .bar-nav-btn:not(.is-active) .ic { background: transparent !important; }
+
+/* Project chip cover art: 22px / radius 6, panel-3 until the icon lands. */
+.project-selector-wrap #projectSelector .ic.cover { width: 22px; height: 22px; border-radius: 6px; }
+.project-selector-wrap #projectSelector .ic.cover.empty { background: var(--panel-3); }
+.project-selector-wrap #projectSelector .pname { font-size: 13px; max-width: 200px; }
+.project-selector-wrap.open #projectSelector { background: var(--panel); border-color: var(--border-hover); color: var(--text); }
+/* Chevron matches the nav tabs: up when closed, down when the menu is open. */
+.project-selector-wrap #projectSelector .bar-chev { margin-left: auto; transform: rotate(180deg); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.project-selector-wrap.open #projectSelector .bar-chev { transform: rotate(0deg); }
 
 /* The selected chip carries its own 1px inner stroke, white 10% at the top
    fading to 0% at the bottom — the prototype's .cat.on::after. Same masking
@@ -9852,6 +10092,75 @@ body.is-splash .ai-disclaimer { display: none; }
   max-width: 230px;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   PHASE 4 — Title bar v2 (Lincoln-style single strip).
+   Scoped under .tb-v2 on <header>, so removing that one class fully
+   reverts to the previous chrome. The four top tabs become a connected
+   segmented control with thin dividers and a per-tab accent underline;
+   the accent is the visual hook the sub-tabs can later expand out of.
+   ══════════════════════════════════════════════════════════════════ */
+.tb-v2 .bar-nav {
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .03);
+}
+
+.tb-v2 .bar-nav-btn {
+  height: 38px;
+  gap: 8px;
+  padding: 0 15px;
+  border-radius: 9px;
+  text-transform: none;          /* terminal, but sentence-case reads cleaner here */
+  letter-spacing: .01em;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, .60);
+}
+
+/* Hairline dividers between segments (skipped next to the active tab) */
+.tb-v2 .bar-nav-btn + .bar-nav-btn::before {
+  content: "";
+  position: absolute;
+  left: -1.5px; top: 9px; bottom: 9px;
+  width: 1px;
+  background: var(--border);
+  opacity: .55;
+  transition: opacity .18s ease;
+}
+.tb-v2 .bar-nav-btn.is-active + .bar-nav-btn::before,
+.tb-v2 .bar-nav-btn.is-active::before,
+.tb-v2 .bar-nav-btn:hover + .bar-nav-btn::before,
+.tb-v2 .bar-nav-btn:hover::before { opacity: 0; }
+
+/* Shrink the big icon squares to inline accent glyphs */
+.tb-v2 .bar-nav .bar-nav-btn .ic {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: transparent !important;
+}
+.tb-v2 .bar-nav .bar-nav-btn .ic svg { opacity: .85; }
+
+/* Per-tab accent — mirrors TAB_HERO accents (details/submission/marketing/analysis) */
+.tb-v2 #nav-details    { --tab-accent: #60a5fa; }
+.tb-v2 #nav-dashboard  { --tab-accent: #4ade80; }
+.tb-v2 #nav-broadcast  { --tab-accent: #FF3B76; }
+.tb-v2 #nav-performance { --tab-accent: #fb923c; }
+
+.tb-v2 .bar-nav-btn:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+
+.tb-v2 .bar-nav-btn.is-active,
+.tb-v2 .bar-nav-btn.is-active:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--tab-accent) 15%, transparent);
+  box-shadow: inset 0 -2px 0 0 var(--tab-accent),
+              0 0 18px -6px var(--tab-accent);
+}
+.tb-v2 .bar-nav-btn.is-active::after { display: none; }   /* replace inner stroke with the underline */
+.tb-v2 .bar-nav .bar-nav-btn.is-active .ic svg { opacity: 1; color: var(--tab-accent); }
+.tb-v2 .bar-nav.has-sel .bar-nav-btn:not(.is-active) .ic { background: transparent !important; }
+.tb-v2 .bar-nav.has-sel .bar-nav-btn:not(.is-active) .ic svg { opacity: .5; }
+
 /* View container */
 .broadcast-view {
   /* Same 1200px measure as the header and the nav pill; --main-gap on top. */
@@ -9908,7 +10217,7 @@ body.is-splash .ai-disclaimer { display: none; }
   border: 1px solid var(--border); background: var(--panel-2); color: var(--text-dim);
   border-radius: 999px; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: all .15s; }
 .bc-adapt-tab:hover { color: var(--text); border-color: var(--border-hover); }
-.bc-adapt-tab.is-on { color: var(--text); border-color: var(--magenta); background: var(--magenta-soft); }
+.bc-adapt-tab.is-on { color: var(--text); border-color: var(--sel-color); background: var(--sel-bg); }   /* selection = blue, per DS */
 .bc-adapt-tab .bc-ico { width: 20px; height: 20px; font-size: 10px; }
 .bc-adapt-frame { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
   overflow: hidden; }
@@ -9932,10 +10241,10 @@ body.is-splash .ai-disclaimer { display: none; }
   cursor: pointer; transition: border-color .15s, background .15s, transform .1s; }
 .bc-dest:hover { border-color: var(--border-hover); transform: translateY(-1px); }
 .bc-dest.is-featured { background: var(--panel-2); }
-.bc-dest.is-selected { border-color: var(--magenta); background: var(--magenta-soft); }
+.bc-dest.is-selected { border-color: var(--sel-color); background: var(--sel-bg); }   /* selection = blue, per DS */
 .bc-dest-check { position: absolute; top: 8px; right: 9px; width: 18px; height: 18px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
-  color: #fff; background: var(--magenta); opacity: 0; transform: scale(.5); transition: all .15s; }
+  color: #0a0a0a; background: var(--sel-color); opacity: 0; transform: scale(.5); transition: all .15s; }
 .bc-dest.is-selected .bc-dest-check { opacity: 1; transform: scale(1); }
 .bc-ico { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center;
   justify-content: center; font-size: 15px; font-weight: 800; color: #fff; background: var(--c, #444);
@@ -10015,7 +10324,7 @@ body.is-splash .ai-disclaimer { display: none; }
   border: 1px solid var(--border); background: var(--panel); border-radius: 999px; cursor: pointer;
   transition: border-color .15s, background .15s, transform .1s; user-select: none; }
 .bc-chip:hover { border-color: var(--border-hover); transform: translateY(-1px); }
-.bc-chip.is-active { border-color: var(--magenta); background: var(--magenta-soft); }
+.bc-chip.is-active { border-color: var(--sel-color); background: var(--sel-bg); }   /* selection = blue, per DS */
 .bc-chip .bc-ico { width: 26px; height: 26px; font-size: 12px; border-radius: 7px; }
 .bc-chip-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .bc-chip:not(.is-active) .bc-chip-name { color: var(--text-dim); }
@@ -10207,7 +10516,7 @@ body.is-splash .ai-disclaimer { display: none; }
   color: var(--text-dim); font-size: 13px; font-weight: 600; padding: 11px 8px; cursor: pointer; text-align: center; }
 .mkt-subtab:first-child { border-left: none; }
 .mkt-subtab:hover { color: var(--text); background: var(--panel-3); }
-.mkt-subtab.is-on { background: var(--panel-3); color: var(--magenta); }
+.mkt-subtab.is-on { background: var(--sel-bg); color: var(--sel-color); }   /* selection = blue, per DS */
 
 /* generic marketing card (website / press kit) */
 .mkt-panelcard { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); padding: 18px 20px; max-width: 640px; }
