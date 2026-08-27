@@ -384,7 +384,10 @@ const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
                             CONFIG.IGDB_CLIENT_SECRET &&
                             CONFIG.IGDB_CLIENT_SECRET !== '__IGDB_CLIENT_SECRET__')
                            ? CONFIG.IGDB_CLIENT_SECRET : '';
-const IGDB_ENDPOINT      = 'https://corsproxy.io/?https://api.igdb.com/v4/games';
+/* corsproxy.io changed its API: the target must now be passed as ?url=<encoded>.
+   The old bare `?<target>` form returns 403. */
+const _cors = (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u);
+const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
 
 // Cached for the page session (token is valid ~60 days)
@@ -594,7 +597,7 @@ function steamLibraryHeroUrl(appId) {
    "silently fell back". */
 async function fetchSteamAppDetails(appId, lang) {
   const langParam = lang ? `&l=${encodeURIComponent(lang)}` : '';
-  const res = await fetch(`https://corsproxy.io/?https://store.steampowered.com/api/appdetails?appids=${appId}${langParam}`);
+  const res = await fetch(_cors(`https://store.steampowered.com/api/appdetails?appids=${appId}${langParam}`));
   if (!res.ok) throw new Error('Steam appdetails fetch failed (' + res.status + ')');
   const json = await res.json();
   const entry = json && json[appId];
@@ -619,7 +622,7 @@ async function fetchSteamAppDetails(appId, lang) {
    window, unlike a documented/stable API. Used by _applySteamSocialLinks
    (app.js). */
 async function fetchSteamStorePage(appId) {
-  const res = await fetch(`https://corsproxy.io/?https://store.steampowered.com/app/${appId}/`);
+  const res = await fetch(_cors(`https://store.steampowered.com/app/${appId}/`));
   if (!res.ok) throw new Error('Steam store page fetch failed (' + res.status + ')');
   return await res.text();
 }
