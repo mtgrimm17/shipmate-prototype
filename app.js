@@ -19,14 +19,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* DEBUG — Ctrl+D swaps the band above the content between the row of sub-tab
-   pills and a single line naming the section you're in. The choice is kept in
-   localStorage so a reload stays on whichever variant you were judging.
+   pills and a single line naming the section you're in.
+
+   Session-only: it always boots OFF (pills visible) and is NOT persisted, so an
+   accidental Ctrl+D can't hide the sub-tabs across reloads — a refresh always
+   restores them. (Previously persisted to localStorage, which stuck the band in
+   title-only mode and hid the Marketing/Details sub-tabs until pressed again.)
 
    Temporary: when the experiment is settled, delete this function, its call
    above, and state.subnavTitleOnly. */
 function initSubnavDebugToggle() {
-  try { state.subnavTitleOnly = localStorage.getItem('sm.subnavTitleOnly') === '1'; }
-  catch (_) {}
+  state.subnavTitleOnly = false;
+  // Clear any value a previous (persisting) build left behind.
+  try { localStorage.removeItem('sm.subnavTitleOnly'); } catch (_) {}
   document.addEventListener('keydown', e => {
     if (!e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.key || '').toLowerCase() !== 'd') return;
@@ -36,8 +41,6 @@ function initSubnavDebugToggle() {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return;
     e.preventDefault();
     state.subnavTitleOnly = !state.subnavTitleOnly;
-    try { localStorage.setItem('sm.subnavTitleOnly', state.subnavTitleOnly ? '1' : '0'); }
-    catch (_) {}
     if (typeof renderAppSubnav === 'function') renderAppSubnav();
   });
 }
