@@ -2016,8 +2016,8 @@ const GD_SUBS = [
   { id: 'gamedetails',  label: 'Basic info' },
   { id: 'distribution', label: 'Distribution' },
   { id: 'localization', label: 'Localization' },
+  { id: 'assets',       label: 'Assets' },       // before Content rating — screenshots feed the AI
   { id: 'content',      label: 'Content rating' },
-  { id: 'assets',       label: 'Assets' },
 ];
 
 
@@ -2474,9 +2474,9 @@ function _chkGroups() {
       { label: 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
       { label: 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
       { label: 'List localizations',      section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
-      { label: 'Complete content rating', section: 'content',                                    done: false },
       { label: 'Upload screenshots',      section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
       { label: 'Add a trailer',           section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
+      { label: 'Complete content rating', section: 'content',                                    done: false },
     ] },
     { group: 'Platforms', view: 'dashboard', items: [
       { label: 'Set content ratings',      done: true },

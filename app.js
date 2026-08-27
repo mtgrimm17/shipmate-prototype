@@ -261,20 +261,26 @@ function toggleGuide() { state.guideCollapsed = !state.guideCollapsed; renderGui
    First view of a platform shows a loading screen; after a short beat we snapshot
    which answers inference filled (enabling the Unanswered/All filter) and reveal
    the questionnaire, defaulting to the unanswered questions. */
-function _kickContentQ() {
+async function _kickContentQ() {
   const pid = state.details.contentPlatform;
   if (!pid) return;
   if (!state.contentQ.status) state.contentQ.status = {};
   if ((state.contentQ.status[pid] || 'idle') !== 'idle') return;  // already loading/ready
   state.contentQ.status[pid] = 'loading';
-  setTimeout(() => {
-    try { takeFilterSnapshot(pid); } catch (e) {}
-    if (pid === 'ios')     state.iosContentRatingExpanded     = false;
-    else if (pid === 'android') state.androidContentRatingExpanded = false;
-    else if (pid === 'steam')   state.steamContentRatingExpanded   = false;
-    state.contentQ.status[pid] = 'ready';
-    if (state.activeView === 'details' && state.details.section === 'content') renderDetails();
-  }, 1700);
+  // Run the REAL AI inference (unified across active platforms). Cached by
+  // 'unified:questionnaire', so switching platforms reuses the same result.
+  try {
+    if (typeof runInference === 'function') await runInference(pid, 'questionnaire');
+  } catch (err) {
+    console.warn('[ContentQ] inference failed:', err && err.message);
+  }
+  // Snapshot which answers inference filled, then default to "Unanswered".
+  try { takeFilterSnapshot(pid); } catch (e) {}
+  if (pid === 'ios')          state.iosContentRatingExpanded     = false;
+  else if (pid === 'android') state.androidContentRatingExpanded = false;
+  else if (pid === 'steam')   state.steamContentRatingExpanded   = false;
+  state.contentQ.status[pid] = 'ready';
+  if (state.activeView === 'details' && state.details.section === 'content') renderDetails();
 }
 function mktToast(what) { bcToast(`${what} — coming soon in the Marketing hub.`); }
 function mktReachOut(name) { bcToast(`Drafted a tailored outreach message to ${name} — connect email to send.`); }
