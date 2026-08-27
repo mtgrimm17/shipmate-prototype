@@ -2201,7 +2201,7 @@ function _computeLangPresetSelections(preset) {
   const langTotals = {};
   IOS_COUNTRIES.forEach(c => {
     if (!countries.includes(c.code) || c.lang === primary) return;
-    langTotals[c.lang] = (langTotals[c.lang] || 0) + (c.iosGamers || 0);
+    langTotals[c.lang] = (langTotals[c.lang] || 0) + (c.gamers || 0);
   });
   const ranked = Object.entries(langTotals).sort(([,a],[,b]) => b - a).map(([l]) => l);
 
@@ -3498,6 +3498,62 @@ function handleScreenshotFiles(files) {
 
 /* ── Improve Your Submission — AI visual analysis ───────────── */
 
+/* Tolerant parse for the analysis JSON. Tries a straight JSON.parse first;
+   if that throws (e.g. the model response was cut off mid-string despite the
+   raised token ceiling), it salvages a partial result: keep the "scores"
+   object if present, and recover every COMPLETE object already closed inside
+   the "items" array, discarding the truncated tail. Better a shorter report
+   than a hard "Analysis failed". */
+function _parseAnalysisJSON(text) {
+  try { return JSON.parse(text); } catch (_) {}
+
+  const out = {};
+  // scores { ... } — grab the first complete brace-balanced object after "scores":
+  const sIdx = text.indexOf('"scores"');
+  if (sIdx !== -1) {
+    const open = text.indexOf('{', sIdx);
+    if (open !== -1) {
+      let depth = 0;
+      for (let i = open; i < text.length; i++) {
+        if (text[i] === '{') depth++;
+        else if (text[i] === '}') { depth--; if (depth === 0) {
+          try { out.scores = JSON.parse(text.slice(open, i + 1)); } catch (_) {}
+          break;
+        } }
+      }
+    }
+  }
+  // items [ ... ] — collect each complete {...} element; stop at the first broken one.
+  out.items = [];
+  const iIdx = text.indexOf('"items"');
+  const arrOpen = iIdx !== -1 ? text.indexOf('[', iIdx) : -1;
+  if (arrOpen !== -1) {
+    let i = arrOpen + 1;
+    while (i < text.length) {
+      const objStart = text.indexOf('{', i);
+      if (objStart === -1) break;
+      let depth = 0, end = -1, inStr = false, esc = false;
+      for (let j = objStart; j < text.length; j++) {
+        const ch = text[j];
+        if (inStr) {
+          if (esc) esc = false;
+          else if (ch === '\\') esc = true;
+          else if (ch === '"') inStr = false;
+        } else if (ch === '"') inStr = true;
+        else if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { end = j; break; } }
+      }
+      if (end === -1) break;                    // truncated element — stop here
+      try { out.items.push(JSON.parse(text.slice(objStart, end + 1))); } catch (_) { break; }
+      i = end + 1;
+    }
+  }
+  if (!out.scores && !out.items.length) {
+    throw new Error('could not parse analysis response');
+  }
+  return out;
+}
+
 async function runImproveSubmissionAnalysis(platformId) {
   if (!CLAUDE_API_KEY) {
     state.improveSubmissionAnalysis = { error: 'No API key configured.' };
@@ -3617,7 +3673,10 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 1600,
+        // Was 1600 — too low for scores + a full items list, so the JSON came
+        // back truncated mid-string ("Unterminated string in JSON"). Give it
+        // real headroom; the tolerant parse below is a second safety net.
+        max_tokens: 4096,
         messages: [{ role: 'user', content }],
       }),
     });
@@ -3625,7 +3684,7 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed  = JSON.parse(cleaned);
+    const parsed  = _parseAnalysisJSON(cleaned);
     // Support both new { scores, items } format and legacy flat array
     if (Array.isArray(parsed)) {
       state.improveSubmissionAnalysis = { scores: null, items: parsed };
@@ -6239,6 +6298,15 @@ function updateAndroidCard() {
 
 /* Re-render Data Safety modal body preserving scroll */
 function reRenderAndroidStepModal() {
+  // Google Play questionnaire also lives inline in the Game Details content pane;
+  // re-render that pane in place when it's the active surface (mirrors reRenderStepModal).
+  if (state.activeView === 'details' && state.details && state.details.section === 'content') {
+    const pane = document.querySelector('.gd-pane--content');
+    if (pane && typeof buildContentQuestionsPane === 'function') {
+      pane.innerHTML = buildContentQuestionsPane();
+      return;
+    }
+  }
   const bodyEl = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
   renderStepModal();
@@ -6418,6 +6486,15 @@ Rules:
    ═══════════════════════════════════════════════════ */
 
 function reRenderSteamStepModal() {
+  // Steam questionnaire also lives inline in the Game Details content pane;
+  // re-render that pane in place when it's the active surface (mirrors reRenderStepModal).
+  if (state.activeView === 'details' && state.details && state.details.section === 'content') {
+    const pane = document.querySelector('.gd-pane--content');
+    if (pane && typeof buildContentQuestionsPane === 'function') {
+      pane.innerHTML = buildContentQuestionsPane();
+      return;
+    }
+  }
   const bodyEl = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
   renderStepModal();

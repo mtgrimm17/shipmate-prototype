@@ -490,7 +490,7 @@ function _obListHeader(leftLabel) {
   return `
     <div class="ob-list-header">
       <span class="ob-list-col-name">${leftLabel}</span>
-      <span class="ob-list-col-count">iOS Gamers</span>
+      <span class="ob-list-col-count">Gamers</span>
     </div>`;
 }
 
@@ -693,12 +693,12 @@ function _legacyScenarioWidget_unused() {
 function buildObCountryChips() {
   const fd         = state.formData;
   const selected   = new Set(fd.selectedCountries || []);
-  const maxGamers  = IOS_COUNTRIES[0]?.iosGamers || 1;
+  const maxGamers  = IOS_COUNTRIES[0]?.gamers || 1;
   const extraCount = Math.max(0, IOS_COUNTRIES.length - 10);
 
   const buildRow = (c, i) => {
     const isOn   = selected.has(c.code);
-    const barPct = Math.round((c.iosGamers / maxGamers) * 100);
+    const barPct = Math.round((c.gamers / maxGamers) * 100);
     const regTipText = regTip(c.code);
     const regTipHtml = regTipText
       ? `<span class="tooltip-anchor" data-tip="${regTipText}" onclick="event.stopPropagation()"><span class="tooltip-icon${isOn ? ' is-warned' : ''}">?</span></span>`
@@ -713,7 +713,7 @@ function buildObCountryChips() {
         <div class="ob-dist-row-bar-wrap">
           <div class="ob-dist-row-bar-fill" style="width:${barPct}%"></div>
         </div>
-        <span class="ob-dist-row-count">${_obFmtGamers(c.iosGamers)}</span>
+        <span class="ob-dist-row-count">${_obFmtGamers(c.gamers)}</span>
       </div>`;
   };
 
@@ -723,7 +723,7 @@ function buildObCountryChips() {
   return `
     <div class="ob-dist-table-header">
       <span class="ob-dist-col-market">Market</span>
-      <span class="ob-dist-col-count">iOS Gamers (approx)</span>
+      <span class="ob-dist-col-count">Gamers (approx)</span>
     </div>
     <div class="ob-dist-country-list" id="ob-dist-country-list">${topRows}</div>
     ${extraCount > 0 ? (() => {
@@ -848,7 +848,7 @@ function _highestImpactUnselectedLang() {
   for (const lang of candidates) {
     const total = IOS_COUNTRIES
       .filter(c => countries.has(c.code) && c.lang === lang)
-      .reduce((sum, c) => sum + (c.iosGamers || 0), 0);
+      .reduce((sum, c) => sum + (c.gamers || 0), 0);
     if (total > bestTotal) { bestTotal = total; best = lang; }
   }
   return { lang: best, total: bestTotal };
@@ -2639,32 +2639,37 @@ function _navSubtabs(view) {
 function renderSubnav() {
   const nav = document.getElementById('bar-nav');
   const sub = document.getElementById('bar-subnav');
-  if (!nav || !sub) return;
-  const forView = state.navOpenView || state.activeView;   // which tab's menu shows (hover-driven)
-  const data = _navSubtabs(forView);
-  const open = !!(state.navExpanded && data && data.list.length);
-  nav.classList.toggle('is-expanded', open);
-  document.body.classList.toggle('nav-open', open);   // dim the page behind
-  // Always render the items (kept in the DOM) so the dropdown can animate closed.
-  sub.innerHTML = (data ? data.list : []).map(s =>
-    `<button class="bar-subtab${s.id === data.cur ? ' is-on' : ''}" onclick="navSubClick('${data.fn}','${s.id}')">${s.label}</button>`).join('');
-  const NAVID = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
-  const btn = document.getElementById(NAVID[forView] || '');
-  // Chevron: up when closed, down on the tab whose menu is open.
-  nav.querySelectorAll('.bar-nav-btn').forEach(b => b.classList.remove('is-menu-open'));
-  if (open && btn) btn.classList.add('is-menu-open');
-  // The dropdown tracks its tab on both axes: same left edge, same width.
-  const left = btn ? btn.offsetLeft : 0;
-  sub.style.left = left + 'px';
-  if (btn) sub.style.width = btn.offsetWidth + 'px';
-  if (open) {
-    // Restart the entrance spring in place so switching tabs re-plays it under
-    // the new tab (no sideways slide).
-    sub.style.animation = 'none';
-    void sub.offsetWidth;
-    sub.style.animation = '';
+  // The hover drawer (#bar-subnav) was removed — sub-tabs now live in the visible
+  // row above the content column (#app-subnav). Only run the drawer logic if that
+  // element still exists; always repaint the visible row regardless, so switching
+  // sub-tabs updates the active pill.
+  if (nav && sub) {
+    const forView = state.navOpenView || state.activeView;   // which tab's menu shows (hover-driven)
+    const data = _navSubtabs(forView);
+    const open = !!(state.navExpanded && data && data.list.length);
+    nav.classList.toggle('is-expanded', open);
+    document.body.classList.toggle('nav-open', open);   // dim the page behind
+    // Always render the items (kept in the DOM) so the dropdown can animate closed.
+    sub.innerHTML = (data ? data.list : []).map(s =>
+      `<button class="bar-subtab${s.id === data.cur ? ' is-on' : ''}" onclick="navSubClick('${data.fn}','${s.id}')">${s.label}</button>`).join('');
+    const NAVID = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
+    const btn = document.getElementById(NAVID[forView] || '');
+    // Chevron: up when closed, down on the tab whose menu is open.
+    nav.querySelectorAll('.bar-nav-btn').forEach(b => b.classList.remove('is-menu-open'));
+    if (open && btn) btn.classList.add('is-menu-open');
+    // The dropdown tracks its tab on both axes: same left edge, same width.
+    const left = btn ? btn.offsetLeft : 0;
+    sub.style.left = left + 'px';
+    if (btn) sub.style.width = btn.offsetWidth + 'px';
+    if (open) {
+      // Restart the entrance spring in place so switching tabs re-plays it under
+      // the new tab (no sideways slide).
+      sub.style.animation = 'none';
+      void sub.offsetWidth;
+      sub.style.animation = '';
+    }
   }
-  renderAppSubnav();
+  renderAppSubnav();   // the visible sub-tab row above the content column
 }
 
 /* The same sub-tabs, a second time: a row sitting above the content column.
@@ -6811,8 +6816,8 @@ function buildDistributionSection() {
   // Build rows; inject the expand button between row VISIBLE-1 and row VISIBLE
   const rows = IOS_COUNTRIES.map((c, i) => {
     const isOn  = a.selectedCountries.includes(c.code);
-    const pct   = Math.round((c.iosGamers / MAX_GAMERS) * 100);
-    const label = fmtGamers(c.iosGamers);
+    const pct   = Math.round((c.gamers / MAX_GAMERS) * 100);
+    const label = fmtGamers(c.gamers);
     const hidden = i >= VISIBLE ? ' dist-row-extra' : '';
 
     // Inject the expand toggle as a pseudo-row right after the 10th entry
@@ -6852,7 +6857,7 @@ function buildDistributionSection() {
     <div class="dist-list-header">
       <span class="dist-list-col-country">Market</span>
       <span class="dist-list-col-bar"></span>
-      <span class="dist-list-col-count">iOS Gamers (Approx)</span>
+      <span class="dist-list-col-count">Gamers (approx)</span>
     </div>
     <div class="dist-country-list" id="dist-country-list">
       ${rows}
