@@ -529,6 +529,20 @@ const _PLAT_ORDER = ['steam', 'ios', 'android', 'psn', 'xbox', 'nintendo'];
 
 function buildTitlePicklist() {
   const items = state.titlePicklist || [];
+  // A failed search (network/proxy/auth error — see titlePicklistError,
+  // state.js) is NOT the same as "no games matched this title": show it
+  // explicitly instead of silently rendering nothing, which looked
+  // identical to a genuine no-results title and made proxy hiccups read as
+  // "the picklist just doesn't work".
+  if (!items.length && state.titlePicklistError) {
+    return `
+      <div class="picklist-row picklist-row--error">
+        <div class="picklist-info">
+          <div class="picklist-name">Search failed — ${escHtml(state.titlePicklistError)}</div>
+          <div class="picklist-desc">Check your connection and try again, or keep typing to retry.</div>
+        </div>
+      </div>`;
+  }
   if (!items.length) return '';
   return items.map(item => {
     const thumb = item.coverUrl

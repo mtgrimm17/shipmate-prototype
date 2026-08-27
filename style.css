@@ -669,6 +669,13 @@ body {
 }
 .picklist-row:last-child { border-bottom: none; }
 .picklist-row:hover { background: var(--panel-3, #2a2a2e); }
+/* Search failed (network/proxy/auth error), not a clickable result — no
+   hover affordance, no thumb/platform grid, just the message. See
+   buildTitlePicklist, render.js. */
+.picklist-row--error { cursor: default; }
+.picklist-row--error:hover { background: transparent; }
+.picklist-row--error .picklist-name { color: var(--magenta, #ff3b78); white-space: normal; }
+.picklist-row--error .picklist-desc { white-space: normal; }
 .picklist-thumb {
   width: 34px;
   height: 46px;

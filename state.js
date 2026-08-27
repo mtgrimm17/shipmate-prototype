@@ -2617,6 +2617,15 @@ const state = {
   // [{ id, name, coverUrl, platforms, summary }]
   titlePicklist: [],
 
+  // Set (to the fetch's error message) when the IGDB picklist search itself
+  // failed — a network/proxy/auth error, NOT "no games matched". Kept
+  // separate from titlePicklist (which is legitimately just [] for both
+  // cases) so buildTitlePicklist (render.js) can show "search failed, try
+  // again" instead of silently rendering nothing indistinguishable from a
+  // genuine no-results title. Cleared the moment a search is retried or
+  // succeeds — see _runTitlePicklist, app.js.
+  titlePicklistError: null,
+
   // AI store page insights: null | { loading: true } | { issues: [...], index } | { error }
   storePageInsights: null,
 

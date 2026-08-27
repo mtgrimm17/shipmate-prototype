@@ -390,13 +390,33 @@ const _cors = (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u);
 const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
 
+// Every IGDB/Steam call in this file (auth, search, appdetails, store-page
+// scrape) goes through a single free third-party CORS proxy (corsproxy.io)
+// with no SLA — it can stall or hang rather than cleanly erroring, and a
+// bare fetch() has no built-in timeout, so a stalled proxy would otherwise
+// leave a picklist search or Steam import spinning forever with nothing to
+// show for it. This wraps fetch with a hard deadline so callers always get
+// a rejection (with a clearly-labeled message) within FETCH_TIMEOUT_MS,
+// whether the proxy is down, rate-limiting, or just slow.
+const FETCH_TIMEOUT_MS = 10000;
+function _fetchWithTimeout(url, opts = {}, ms = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...opts, signal: controller.signal })
+    .catch(err => {
+      if (err.name === 'AbortError') throw new Error('Request timed out after ' + Math.round(ms / 1000) + 's');
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
+}
+
 // Cached for the page session (token is valid ~60 days)
 let _igdbAccessToken = null;
 
 async function _getIgdbToken() {
   if (_igdbAccessToken) return _igdbAccessToken;
   if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) throw new Error('NO_IGDB_KEY');
-  const res = await fetch(
+  const res = await _fetchWithTimeout(
     `${TWITCH_TOKEN_URL}?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_CLIENT_SECRET}&grant_type=client_credentials`,
     { method: 'POST' }
   );
@@ -406,8 +426,22 @@ async function _getIgdbToken() {
   return _igdbAccessToken;
 }
 
-// IGDB website category IDs → our platform IDs
-const IGDB_WEBSITE_TO_PID = { 10: 'ios', 11: 'ios', 12: 'android', 13: 'steam', 16: 'egs' };
+// IGDB website URL patterns → our platform IDs. Matches on the URL itself,
+// NOT the `category` field IGDB's website objects used to carry (category
+// 10/11 = iOS, 12 = Android, 13 = Steam, 16 = Epic). Live testing showed
+// IGDB no longer reliably returns `category` on `websites` entries — every
+// entry now comes back with category: null, even though the query
+// explicitly requests websites.category — so a category-based lookup here
+// silently never matches and this whole detection path goes dead. This
+// mirrors the fix already applied to steamAppId below (which hit the same
+// problem first and switched to matching the URL directly) and generalizes
+// it to every storefront, not just Steam.
+const IGDB_WEBSITE_URL_PATTERNS = [
+  { pid: 'steam',   re: /store\.steampowered\.com\/app\//i },
+  { pid: 'ios',     re: /apps\.apple\.com\//i },
+  { pid: 'android', re: /play\.google\.com\/store\/apps/i },
+  { pid: 'egs',     re: /store\.epicgames\.com\//i },
+];
 
 // IGDB platform IDs → our platform IDs (IDs are stable; slugs can vary)
 // Source: https://api.igdb.com/v4/platforms
@@ -432,10 +466,12 @@ const IGDB_PLATFORM_ID_TO_PID = {
 function _igdbPlatforms(platforms, websites, releaseDates, forDisplay = false) {
   const pids = new Set();
 
-  // Primary: website/storefront links (most reliable — real store listings)
+  // Primary: website/storefront links (most reliable — real store listings).
+  // Matched by URL, not `category` — see IGDB_WEBSITE_URL_PATTERNS above.
   for (const w of (websites || [])) {
-    const pid = IGDB_WEBSITE_TO_PID[w.category];
-    if (pid) pids.add(pid);
+    if (!w || !w.url) continue;
+    const hit = IGDB_WEBSITE_URL_PATTERNS.find(p => p.re.test(w.url));
+    if (hit) pids.add(hit.pid);
   }
 
   // Build confirmed-released set (status 4 = Released, 7 = Early Access)
@@ -493,7 +529,7 @@ async function _igdbSearchRaw(title) {
     `limit 5;`,
   ].join('\n');
 
-  const res = await fetch(IGDB_ENDPOINT, {
+  const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
     method: 'POST',
     headers: {
       'Client-ID':     IGDB_CLIENT_ID,
@@ -543,14 +579,11 @@ async function _igdbSearchRaw(title) {
     // library_hero CDN URL directly (see steamLibraryHeroUrl below).
     //
     // Matches on the URL itself rather than a website "category"/"type"
-    // field — live testing showed IGDB no longer reliably returns a
-    // category on `websites` entries (confirmed via a real console dump:
-    // website objects came back as bare {id, url}, no category key, even
-    // though the query explicitly requests websites.category), so a
-    // category-based check silently never matched. URL matching sidesteps
-    // that entirely.
+    // field — see IGDB_WEBSITE_URL_PATTERNS above for why (the same
+    // pattern table is reused here rather than a separate inline regex).
     steamAppId: (() => {
-      const steamSite = (g.websites || []).find(w => w.url && /store\.steampowered\.com\/app\//i.test(w.url));
+      const steamPattern = IGDB_WEBSITE_URL_PATTERNS.find(p => p.pid === 'steam').re;
+      const steamSite = (g.websites || []).find(w => w.url && steamPattern.test(w.url));
       if (!steamSite) return null;
       const m = steamSite.url.match(/\/app\/(\d+)/);
       return m ? m[1] : null;
@@ -612,7 +645,7 @@ function steamLibraryHeroUrl(appId) {
    "silently fell back". */
 async function fetchSteamAppDetails(appId, lang) {
   const langParam = lang ? `&l=${encodeURIComponent(lang)}` : '';
-  const res = await fetch(_cors(`https://store.steampowered.com/api/appdetails?appids=${appId}${langParam}`));
+  const res = await _fetchWithTimeout(_cors(`https://store.steampowered.com/api/appdetails?appids=${appId}${langParam}`));
   if (!res.ok) throw new Error('Steam appdetails fetch failed (' + res.status + ')');
   const json = await res.json();
   const entry = json && json[appId];
@@ -637,7 +670,7 @@ async function fetchSteamAppDetails(appId, lang) {
    window, unlike a documented/stable API. Used by _applySteamSocialLinks
    (app.js). */
 async function fetchSteamStorePage(appId) {
-  const res = await fetch(_cors(`https://store.steampowered.com/app/${appId}/`));
+  const res = await _fetchWithTimeout(_cors(`https://store.steampowered.com/app/${appId}/`));
   if (!res.ok) throw new Error('Steam store page fetch failed (' + res.status + ')');
   return await res.text();
 }

@@ -2697,6 +2697,7 @@ function _cancelPicklistClose() {
 function _onTitleBlur() {
   _closePicklistTimer = setTimeout(() => {
     state.titlePicklist = [];
+    state.titlePicklistError = null;
     _renderTitlePicklist();
   }, 200);
 }
@@ -2722,6 +2723,7 @@ function _onTitleInputScenario(value) {
   const trimmed = (value || '').trim();
   if (trimmed.length < 3) {
     state.titlePicklist = [];
+    state.titlePicklistError = null;
     _renderTitlePicklist();
     return;
   }
@@ -2735,11 +2737,16 @@ async function _runTitlePicklist(title) {
     // Only apply if the title hasn't changed since the search started
     if ((state.formData.title || '').trim() === title) {
       state.titlePicklist = results;
+      state.titlePicklistError = null;
       _renderTitlePicklist();
     }
   } catch (err) {
     console.warn('[Picklist] IGDB search failed:', err.message);
     state.titlePicklist = [];
+    // Distinct from "no games matched" — buildTitlePicklist (render.js)
+    // shows this so a proxy/network/auth failure doesn't look identical to
+    // a genuine no-results title (see titlePicklistError, state.js).
+    state.titlePicklistError = err.message || 'Search failed';
     _renderTitlePicklist();
   }
 }
@@ -3246,16 +3253,30 @@ function _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, afterLangs) {
 
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
+  let fetchFailed = false;
   try {
     data = await fetchSteamAppDetails(appId);
   } catch (e) {
     console.warn('[Steam About Data] failed to fetch appdetails for app', appId, e);
+    fetchFailed = true;
   }
 
   // Stale guard — bail if the user has since picked a different title.
   // Note: on fallback we still want to fill in IGDB data for the CURRENT
   // title, so this guard applies to both branches below, not just success.
   if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+
+  // The IGDB-fallback branch below still fills in what it can (Description,
+  // screenshots), so this isn't a hard failure from the developer's seat —
+  // but Developer/Publisher/Genres/Release Date/Key Art/Trailer/localization
+  // baseline all come ONLY from Steam and are silently skipped when this
+  // fetch fails (proxy/network/rate-limit — see FETCH_TIMEOUT_MS,
+  // claude.js). A toast beats leaving those fields quietly blank with
+  // nothing to explain why, indistinguishable from "Steam just has nothing
+  // for this game".
+  if (fetchFailed) {
+    bcToast(`Couldn't load Steam store data for "${expectedTitle}" — filled in what IGDB had. Try reselecting the title, or fill in Developer/Publisher/Key Art manually.`);
+  }
 
   if (data) {
     // "About This Game" (data.about_the_game) is Steam's own full-length
@@ -3401,6 +3422,15 @@ async function _applySteamSocialLinks(appId, expectedTitle) {
     links = _parseSteamSocialLinks(html);
   } catch (e) {
     console.warn('[Steam Social Links] failed to fetch/parse store page for app', appId, e);
+    // Still worth a (low-key) heads-up rather than pure silence — this is
+    // fire-and-forget by design (see comment above) since a failure here is
+    // routinely just "no social links on this store page", but a genuine
+    // proxy/network failure looks identical to that from the developer's
+    // seat with nothing shown at all. Only surfaced if the title is still
+    // the one this fetch was for, same guard as the success path below.
+    if ((state.formData.title || '').trim() === (expectedTitle || '').trim()) {
+      bcToast(`Couldn't load Steam's social links for "${expectedTitle}" — add them manually under Factsheet if needed.`);
+    }
     return;
   }
 
