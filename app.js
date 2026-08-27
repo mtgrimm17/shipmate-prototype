@@ -41,6 +41,9 @@ function bootApp() {
   showSplashView();
   measureScrollbar();
   requestAnimationFrame(measureScrollbar);   // again after first layout settles
+  // Warm the IGDB auth token now so the first picklist keystroke doesn't pay
+  // the Twitch OAuth round-trip on top of the search itself.
+  if (typeof _getIgdbToken === 'function') { try { _getIgdbToken().catch(() => {}); } catch (e) {} }
 }
 window.addEventListener('resize', () => { try { measureScrollbar(); } catch (e) {} });
 

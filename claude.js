@@ -464,7 +464,22 @@ function _igdbPlatforms(platforms, websites, releaseDates, forDisplay = false) {
 
 /* ── IGDB picklist search — returns up to 5 results ─────────── */
 
-async function igdbSearch(title) {
+// Cache results per query and de-dupe concurrent identical requests, so repeats
+// and backspacing are instant and never re-hit the (slow) client-side proxy.
+const _igdbCache = new Map();
+const _igdbInflight = new Map();
+function igdbSearch(title) {
+  const key = (title || '').trim().toLowerCase();
+  if (_igdbCache.has(key)) return Promise.resolve(_igdbCache.get(key));
+  if (_igdbInflight.has(key)) return _igdbInflight.get(key);
+  const p = _igdbSearchRaw(title)
+    .then(res => { _igdbCache.set(key, res); _igdbInflight.delete(key); return res; })
+    .catch(err => { _igdbInflight.delete(key); throw err; });
+  _igdbInflight.set(key, p);
+  return p;
+}
+
+async function _igdbSearchRaw(title) {
   const token = await _getIgdbToken();
   const safe  = title.replace(/"/g, '');   // prevent query injection
   // Use case-insensitive substring match (~~ *"..."*) instead of IGDB's
