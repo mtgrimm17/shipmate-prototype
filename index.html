@@ -10,8 +10,8 @@
        inside .ias-page, the App Store mockup that mimics SF Pro. JetBrains Mono
        is gone: nothing references it since the type unified on Plex. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=4.18">
-  <link rel="stylesheet" href="splash.css?v=4.18">
+  <link rel="stylesheet" href="style.css?v=4.19">
+  <link rel="stylesheet" href="splash.css?v=4.19">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
   <!-- Plays the Assets tab's auto-filled Steam trailer thumbnail inline
@@ -111,7 +111,7 @@
       <div class="bar-nav" id="bar-nav" role="tablist" aria-label="Main navigation">
         <button class="bar-nav-btn" id="nav-details" role="tab" aria-selected="false"
                 onclick="navTabClick('details')">
-          <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
+          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="fill-rule:evenodd;clip-rule:evenodd;"><g transform="matrix(1,0,0,1,-2.49023,1.31836)"><path d="M5.557,16.66L17.402,16.66C18.424,16.66 19.191,16.408 19.702,15.903C20.213,15.399 20.469,14.642 20.469,13.633L20.469,1.709C20.469,0.7 20.213,-0.057 19.702,-0.562C19.191,-1.066 18.424,-1.318 17.402,-1.318L5.557,-1.318C4.535,-1.318 3.768,-1.066 3.257,-0.562C2.746,-0.057 2.49,0.7 2.49,1.709L2.49,13.633C2.49,14.642 2.746,15.399 3.257,15.903C3.768,16.408 4.535,16.66 5.557,16.66ZM6.104,10.332C5.928,10.332 5.781,10.273 5.664,10.156C5.547,10.039 5.488,9.896 5.488,9.727C5.488,9.557 5.547,9.416 5.664,9.302C5.781,9.188 5.928,9.131 6.104,9.131L15.918,9.131C16.087,9.131 16.229,9.188 16.343,9.302C16.457,9.416 16.514,9.557 16.514,9.727C16.514,9.896 16.457,10.039 16.343,10.156C16.229,10.273 16.087,10.332 15.918,10.332L6.104,10.332ZM6.104,13.672C5.928,13.672 5.781,13.615 5.664,13.501C5.547,13.387 5.488,13.245 5.488,13.076C5.488,12.907 5.547,12.764 5.664,12.646C5.781,12.529 5.928,12.471 6.104,12.471L13.34,12.471C13.516,12.471 13.66,12.529 13.774,12.646C13.888,12.764 13.945,12.907 13.945,13.076C13.945,13.245 13.888,13.387 13.774,13.501C13.66,13.615 13.516,13.672 13.34,13.672L6.104,13.672ZM5.586,2.334C5.586,2.028 5.675,1.785 5.854,1.606C6.034,1.427 6.279,1.338 6.592,1.338L9.033,1.338C9.346,1.338 9.591,1.427 9.771,1.606C9.95,1.785 10.039,2.028 10.039,2.334L10.039,4.795C10.039,5.101 9.95,5.343 9.771,5.522C9.591,5.701 9.346,5.791 9.033,5.791L6.592,5.791C6.279,5.791 6.034,5.701 5.854,5.522C5.675,5.343 5.586,5.101 5.586,4.795L5.586,2.334Z" fill="currentColor" fill-rule="nonzero"/></g></svg></span>
           <span class="lbl">Details</span>
           <span class="bar-nav-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>
@@ -767,6 +767,9 @@ Confidence</h3>
          "Project Bar — the floating nav pill" and "Nav chips inside the pill".
     ══════════════════════════════════════════════════════ -->
     <main class="main">
+      <!-- The active tab's sub-sections, on the same measure as the split below.
+           renderAppSubnav() — mirrors the nav drawer, which stays as-is. -->
+      <div class="app-subnav" id="app-subnav"><!-- renderAppSubnav() --></div>
       <!-- EXPERIMENT: persistent left checklist pane + tab content, centered on the nav measure -->
       <div class="app-split">
       <div class="app-content" id="app-content">
@@ -815,11 +818,11 @@ Confidence</h3>
       </svg>
       Built by indie devs and game industry veterans to empower the indie game community.
     </span>
-    <span class="app-footer-version" id="app-footer-version">v4.18</span>
+    <span class="app-footer-version" id="app-footer-version">v4.19</span>
   </footer>
 
-  <script src="locale.js?v=4.18"></script>
-  <script src="state.js?v=4.18"></script>
+  <script src="locale.js?v=4.19"></script>
+  <script src="state.js?v=4.19"></script>
   <script>
     const CONFIG = {
       CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
@@ -827,15 +830,15 @@ Confidence</h3>
       IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
     };
   </script>
-  <script src="claude.js?v=4.18"></script>
+  <script src="claude.js?v=4.19"></script>
   <!-- The prototype's platform icon set, and Shippy's mascot and bubbles.
        Both before render.js, which reads them. -->
-  <script src="platform-icons.js?v=4.18"></script>
+  <script src="platform-icons.js?v=4.19"></script>
   <!-- Shippy's mascot and bubbles. Before render.js, which mounts them. -->
-  <script src="shippy.js?v=4.18"></script>
-  <script src="render.js?v=4.18"></script>
-  <script src="app.js?v=4.18"></script>
-  <script src="splash.js?v=4.18"></script>
+  <script src="shippy.js?v=4.19"></script>
+  <script src="render.js?v=4.19"></script>
+  <script src="app.js?v=4.19"></script>
+  <script src="splash.js?v=4.19"></script>
 
 </body>
 </html>

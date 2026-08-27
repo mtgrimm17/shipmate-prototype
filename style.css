@@ -23,6 +23,21 @@
   --purple:       #9F68F0;   /* "Shipmate did this" — AI inference, tips (brand). NOT selection. */
   --purple-soft:  rgba(159, 104, 240, 0.15);
 
+  /* ── Shippy guide card ──
+     Its own ground and stroke: the card is a solid slab now, not a tint of the
+     page, and the stroke is a hairline of white rather than a purple frame. */
+  --guide-bg:       #1B1C2B;
+  --guide-stroke:   rgba(255, 255, 255, 0.05);
+  /* The side inset every tab view carries inside .app-content. The sub-tab row
+     above the split has to repeat it or its pill won't line up with the panel. */
+  --content-inset:  22px;
+  /* Height of the sub-tab band above the split. Shared so the sticky guide can
+     pin exactly where it already sits. */
+  --subnav-h:       66px;
+
+  --guide-mark:     #A078FF;                    /* task complete */
+  --guide-mark-dim: rgba(160, 120, 255, 0.20);  /* task pending */
+
   /* ── Selection design tokens (blue = selected everywhere) ── */
   --sel-color:     #60a5fa;
   --sel-bg:        rgba(96, 165, 250, 0.10);
@@ -1757,11 +1772,14 @@ body {
 
 .main {
   flex: 1;
-  overflow-y: auto;
+  /* `scroll`, not `auto`: the track is then always there, so .main's content box
+     never changes width and the centred split never slides. scrollbar-gutter
+     alone did the same job in Chrome but Safari ignores it, which is exactly
+     where the 2-3px sideways jump on Distribution showed up. Kept alongside it
+     for browsers that would otherwise paint an empty track. */
+  overflow-y: scroll;
   min-height: 0;
-  scrollbar-gutter: stable;  /* reserve the scrollbar's width always, so the centered
-                                split doesn't shift left when a taller sub-tab (e.g.
-                                Distribution's map) adds a scrollbar */
+  scrollbar-gutter: stable;
 }
 
 /* ============================================================
@@ -1770,11 +1788,109 @@ body {
 /* center the split on the same measure as the header/nav pill */
 .app-split { display: flex; align-items: flex-start; gap: 16px; box-sizing: border-box;
   width: calc(100% - 2 * var(--chrome-gutter)); max-width: var(--nav-w); margin: 0 auto; padding-top: var(--main-gap); }
+
+/* ── Sub-tab row, above the split ──
+   Same measure as .app-split so it starts flush with the content panel's left
+   edge. It also doubles as Shippy's headroom: he hangs 73px above the guide
+   card and .main is the scrolling box (overflow-y:auto), so without ~80px of
+   room up here he'd simply be clipped. The row is left-aligned and he sits far
+   right, so they share the band without touching. */
+.app-subnav {
+  /* .app-split's box — same width, max-width and centring. But the panel below
+     is NOT flush with that box: every tab view inside .app-content carries
+     --content-inset of side padding, so the row repeats it. That inset plus a
+     zero margin on the first item is what puts the active pill's border box
+     exactly on the panel's left edge, with its label 18px inside. */
+  box-sizing: border-box;
+  width: calc(100% - 2 * var(--chrome-gutter)); max-width: var(--nav-w);
+  margin: 0 auto; padding: 18px var(--content-inset) 1px;
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  /* Held even on the tabs with no sub-sections (Submission, Analysis): the band
+     is Shippy's room, so letting it collapse would decapitate him there.
+     66px = the 42px item row + the 24px of padding above and below it. */
+  min-height: var(--subnav-h);
+}
+.app-subnav > .app-subtab:first-child { margin-left: 0; }
+body.viewing-splash .app-subnav { display: none; }
+.app-subtab {
+  padding: 10px 18px; border-radius: 10px;
+  border: 1px solid transparent; background: transparent; cursor: pointer;
+  /* Matched to .bar-subtab, the same list inside the header's dropdown. The
+     weight applies to every item, selected or not, so nothing changes width
+     when the selection moves. */
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  /* `none`, not `capitalize`: GD_SUBS already reads "Basic info", "Content
+     rating" — sentence case, one capital. `capitalize` would put one on every
+     word ("Basic Info"). */
+  text-transform: none; letter-spacing: 0;
+  color: var(--text-dim); white-space: nowrap;
+  transition: color .12s, border-color .12s, background .12s;
+}
+/* Hover = the selected pill's fill and nothing else. No stroke: the border is
+   declared transparent on every state and never changes width, so hovering and
+   selecting can't nudge a single pixel of text. */
+.app-subtab:hover { color: var(--text); background: rgba(255, 255, 255, .035); }
+/* Selected: the label takes the brand purple, the box stays the quiet dark pill.
+   Weight is left alone on purpose — a heavier face is a wider face, and the row
+   must not move when you pick a tab. */
+/* Neutral variant: white wash, pure white label. Weight is left to the row —
+   going heavier on selection would widen the pill and shove the rest sideways. */
+.app-subtab.is-on {
+  color: #fff;
+  background: rgba(255, 255, 255, .20);
+  border-color: transparent;
+}
+/* The selected pill answers to hover too — same lift the others get, just from
+   a higher floor. Needs its own rule (rather than riding .app-subtab:hover,
+   which is weaker and would be overridden by .is-on above). */
+.app-subtab.is-on:hover { background: rgba(255, 255, 255, .28); }
+/* The separator's own glyph is the gap between two pills — no margin needed, and
+   it's enough that a selected pill and a hovered neighbour never meet. What made
+   them meet before was dropping the bar from the DOM next to a selection; it is
+   only made invisible now (.is-off), so its box stays and the row never reflows. */
+.app-subtab-sep {
+  color: var(--text-faint); opacity: .5;
+  font-family: var(--mono); font-size: 14px;
+  user-select: none;
+}
+.app-subtab-sep.is-off { visibility: hidden; }
+/* Stand-in for the row on tabs with no sub-sections: just the tab's name. It
+   carries a pill's exact padding and border even though it draws neither, so the
+   word starts on the same line a sub-tab's label would — switching between the
+   two states moves no text. */
+.app-subnav-title {
+  padding: 10px 18px; border: 1px solid transparent;
+  font-family: var(--mono); font-size: 15px; font-weight: 500;
+  letter-spacing: 0; color: var(--text); white-space: nowrap;
+}
+/* Same treatment while hovering: the pill you're pointing at drops the bars on
+   both sides of it. Hover is a CSS state, so this can't come from the renderer —
+   the one after is a sibling combinator, the one before needs :has(). Still
+   `visibility`, so nothing shifts. */
+.app-subtab:hover + .app-subtab-sep,
+.app-subtab-sep:has(+ .app-subtab:hover) { visibility: hidden; }
+
+/* Marketing's own segmented bar, which this row now duplicates. Hidden rather
+   than deleted so it's one line to bring back.
+   Game Details needs no equivalent: its five sections (GD_SUBS) had no in-page
+   nav at all — until now they were reachable only from the nav drawer. The
+   three-item slash nav in #ob-tabs is a different, older tab set
+   (state.onboardingTab, not state.details.section), so it is left alone. */
+.mkt-subnav { display: none; }
 /* three columns: 25% checklist · 50% content · 25% Shippy guide (1:2:1) */
 .app-checklist { flex: 1 1 0; min-width: 0; box-sizing: border-box; position: sticky; top: 16px; z-index: 0;
   border: 1px solid var(--border); border-radius: 14px; background: var(--panel); padding: 18px 16px; }
 .app-content { flex: 2 1 0; min-width: 0; }
-.app-guide { width: 290px; flex: none; align-self: flex-start; min-width: 0; box-sizing: border-box; }  /* §4 — fixed guide column */
+/* §4 — fixed guide column. Sticky rather than relative: the guide follows the
+   scroll instead of being left behind on a long tab like Distribution. It pins
+   at exactly the offset it already occupies (the sub-tab band + the split's top
+   padding), so nothing jumps at the moment it catches — it simply stops leaving.
+   Sticky also keeps it a containing block, which Shippy's absolute placement
+   needs. */
+.app-guide {
+  width: 290px; flex: none; align-self: flex-start; min-width: 0; box-sizing: border-box;
+  position: sticky; top: calc(var(--subnav-h) + var(--main-gap));
+}
 /* keep the header's dropdowns painting above the checklist pane */
 .topbar { position: relative; z-index: 30; }
 
@@ -1792,7 +1908,10 @@ body {
 .tb-left-spacer { flex: 1; min-width: 12px; }
 .tb-right {
   width: 290px; flex: none; height: 100%;
-  display: flex; align-items: center; gap: 8px;
+  /* Chip and avatar are one unit: the chip takes every spare pixel (flex:1
+     below) and the avatar rides right behind it, 12px away, always. Nothing in
+     between can push them apart. */
+  display: flex; align-items: center; gap: 12px;
 }
 .tb-right .project-selector-wrap { flex: 1; min-width: 0; }
 .tb-right #projectSelector { width: 100%; }
@@ -1802,7 +1921,7 @@ body {
 .app-content .details-view,
 .app-content .dashboard,
 .app-content .broadcast-view,
-.app-content .performance-view { max-width: none; width: auto; margin: 0; padding: 0 22px 40px; }   /* uniform top/bottom across all tabs (§3) */
+.app-content .performance-view { max-width: none; width: auto; margin: 0; padding: 0 var(--content-inset) 40px; }   /* uniform top/bottom across all tabs (§3) */
 
 /* abandon the Shippy guide pane for this experiment — content takes full width */
 .app-content .panelgrid { display: block !important; }
@@ -1907,56 +2026,117 @@ body {
    aside. Purple-bordered (Shippy's colour), one step darker than the panel. */
 .guide-card {
   position: relative;
-  background: var(--panel-2);
-  border: 1px solid rgba(159, 104, 240, 0.35);
+  z-index: 1;                /* over .guide-mascot, which peeks out above it */
+  background: var(--guide-bg);
+  border: 1px solid var(--guide-stroke);
   border-radius: 12px;
-  padding: 22px 18px 18px;   /* top matches the content panel so their contents line up */
-  display: flex; flex-direction: column; gap: 12px;
+  /* Measured off the mockup at 290px card width. Every offset below is an
+     explicit margin rather than a flex gap, because the gaps are all different. */
+  padding: 14px 18px 15px;
+  display: flex; flex-direction: column; gap: 0;
 }
+
+/* Shippy hangs off the top-right corner, behind the card. The card is opaque,
+   so everything below its top edge is simply covered — no clipping needed.
+   Sizing and offsets are shippy.js's mascot{} values, kept in sync by eye. */
+.guide-mascot {
+  position: absolute; z-index: 0; pointer-events: none;
+  right: 26px; top: -73px; width: 83px;
+}
+.guide-mascot svg { width: 100%; height: auto; display: block; }
 
 /* Horizontal collapse toggle */
 .guide-collapse-btn {
-  position: absolute; top: 14px; right: 14px;
+  position: absolute; right: 14px;
+  /* Centred on the eyebrow's line rather than on the card's padding: the card's
+     14px top padding, plus half the difference between that 19.2px line box
+     (16px x 1.2) and this 22px button. */
+  top: calc(14px + (19.2px - 22px) / 2);
   width: 22px; height: 22px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--panel-3); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-dim); cursor: pointer; font-size: 15px; line-height: 1;
-  transition: color .12s, border-color .12s;
+  background: var(--purple-soft); border: 1px solid rgba(159, 104, 240, .35);
+  border-radius: 6px;
+  color: var(--purple); cursor: pointer; font-size: 15px; line-height: 1;
+  transition: color .12s, border-color .12s, background .12s;
 }
-.guide-collapse-btn:hover { color: var(--text); border-color: var(--border-hover); }
+.guide-collapse-btn:hover {
+  color: #fff; background: rgba(159, 104, 240, .28); border-color: var(--purple);
+}
 
 /* Collapsed: a one-icon-wide progress rail (same card fill + border) */
-.app-guide.is-collapsed { width: 48px; }
-.guide-card--mini { align-items: center; padding: 14px 0; gap: 0; }
-.guide-card--mini .guide-collapse-btn { position: static; margin-bottom: 14px; }
+/* 52px, not 48: the button is pinned at right:14px and must not move, so the
+   card's width is what sets the gap on its other side. 52 = 1px border + 14 gap
+   + 22 button + 14 gap + 1px border. That also puts the button's centre at 26px,
+   dead centre of the card, so the dots below line up under it on their own. */
+.app-guide.is-collapsed { width: 52px; }
+/* The button is NOT re-flowed when the card collapses: it keeps the expanded
+   card's absolute placement, so it doesn't move a pixel between the two states.
+   That works because the column's right edge stays put — .app-content is the
+   flexible one and simply widens to take up what the guide gives back.
+   48.6px of top padding = where the button ends (12.6 + 22) plus the same 14px
+   gap it has to the sides, so the dots clear it on the same rhythm. */
+.guide-card--mini { align-items: center; padding: 48.6px 0 14px; gap: 0; }
 .guide-mini-dots { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* Same two states as .gd-task-box, so collapsing the guide doesn't recolour it */
 .guide-mini-dot {
-  width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--text-faint);
+  width: 16px; height: 16px; border-radius: 50%; border: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 800; color: #0a0a0a;
-  background: transparent; padding: 0; cursor: pointer; transition: border-color .12s, transform .1s;
+  font-size: 10px; font-weight: 800; color: var(--guide-bg);
+  background: var(--guide-mark-dim); padding: 0; cursor: pointer; transition: background .12s, transform .1s;
 }
-.guide-mini-dot:hover { border-color: var(--purple); transform: scale(1.12); }
-.guide-mini-dot.is-done:hover { border-color: var(--green); }
-.guide-mini-dot.is-done { background: var(--green); border-color: var(--green); }
-.guide-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; color: var(--purple); }
-.guide-title { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.25; }
-.guide-sub { font-size: 12px; line-height: 1.6; color: var(--text-dim); text-wrap: pretty; }
-.guide-tasks-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); margin-top: 2px; }
-.guide-tasks { display: flex; flex-direction: column; gap: 2px; }
-.gd-task { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; padding: 5px 4px; border-radius: 8px; cursor: pointer; transition: background .12s; }
-.gd-task:hover { background: var(--panel-3); }
-/* 16px status circle: open = grey ring, current = purple ring, done = green fill */
-.gd-task-box { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--text-faint); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #0a0a0a; }
-.gd-task.is-current .gd-task-box { border-color: var(--purple); }
-.gd-task.is-done .gd-task-box { background: var(--green); border-color: var(--green); }
-.gd-task-label { font-size: 13px; color: var(--text-dim); }
+.guide-mini-dot:hover { transform: scale(1.12); }
+.guide-mini-dot.is-done { background: var(--guide-mark); }
+/* Eyebrow and title are the same size in the mockup — 16px mono caps. The title
+   is white, the eyebrow purple; that's the whole difference between them. */
+.guide-eyebrow {
+  font-family: var(--mono); font-size: 16px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0; line-height: 1.2;
+  color: var(--purple); margin: 0;
+}
+.guide-title {
+  font-family: var(--mono); font-size: 16px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0; line-height: 1.2;
+  color: var(--text); margin: 24px 0 0;
+}
+.guide-sub {
+  font-size: 13.5px; line-height: 19.6px; letter-spacing: 0;
+  color: var(--text-dim); text-wrap: pretty; margin: 8px 0 0;
+}
+/* Label left, count hard right — two spans, not one string with a separator. */
+.guide-tasks-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0;
+  line-height: 1.2; color: #fff; margin: 33px 0 0;
+}
+/* Centre-to-centre spacing of the discs = the row height, since the discs are
+   vertically centred and there is no gap. The mockup measures 36.5px.
+   Padding is 0: the disc has to start on the card's 18px padding edge. */
+.guide-tasks { display: flex; flex-direction: column; gap: 0; margin: 13px 0 0; }
+/* The hover plate reaches 10px into the card's 18px padding on both sides, so it
+   sits centred in the panel with 8px to each edge — and the disc, still on the
+   card's 18px line, gets the same 10px of air inside the plate that the label
+   has after it. Negative margins rather than a wider box: the row stretches to
+   the column on its own, so `width` must stay auto or it would overflow.
+   font-family is explicit because this is a <button>, and buttons don't inherit
+   the body's face. */
+.gd-task { display: flex; align-items: center; gap: 11px; width: auto; height: 36.5px; flex: none; margin: 0 -10px; padding: 0 10px; text-align: left; background: none; border: none; border-radius: 8px; cursor: pointer; transition: background .12s; font-family: var(--mono); }
+.gd-task:hover { background: rgba(255, 255, 255, .10); }
+/* 16px status disc: pending = accent at 20%, done = solid accent with a white
+   check. No ring on either — the fill carries the state, so the two sit at the
+   same weight and the row never shifts. */
+/* The tick is punched out of the disc rather than drawn on it: it takes the
+   card's own background colour, so it reads as a hole. */
+.gd-task-box { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--guide-mark-dim); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: var(--guide-bg); }
+.gd-task.is-current .gd-task-box { box-shadow: 0 0 0 1.5px var(--guide-mark); }
+.gd-task.is-done .gd-task-box { background: var(--guide-mark); }
+.gd-task-label { font-family: var(--mono); font-size: 13px; letter-spacing: 0; color: var(--text-dim); }
 .gd-task.is-done .gd-task-label { color: var(--text); }
 
 /* Below ~1100px the guide drops beneath the content column. */
 @media (max-width: 1100px) {
   .app-split { flex-wrap: wrap; }
-  .app-guide { width: 100%; }
+  /* Stacked under the content now, so there is nothing to stick alongside. */
+  .app-guide { width: 100%; position: static; }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2003,9 +2183,21 @@ body {
 .add-plat-item svg, .add-plat-item img { width: 18px; height: 18px; flex: none; }
 .add-plat-name { flex: 1; }
 .add-plat-cta { font-size: 12px; font-weight: 700; color: var(--purple); }
-/* Submission: activated platform cards stacked in a single column. */
-.dash-column { display: flex; flex-direction: column; gap: 14px; }
+/* Submission: activated platform cards two to a row. auto-fill with a 360px
+   floor gives 2 across the full content column (~850px) and drops to 1 when the
+   window narrows — no breakpoints to maintain. 360 sits comfortably inside the
+   two-column band: it would take a floor under 275px to fit a third.
+   align-items:start so a tall card doesn't stretch its neighbour. */
+.dash-column {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  align-items: start;
+  gap: 14px;
+}
 .dash-column .active-card { width: 100%; }
+/* The add banner and the picker it opens aren't cards — they span the row. */
+.dash-column > .dash-add-banner,
+.dash-column > .dash-add-picker { grid-column: 1 / -1; }
 .dash-add-head { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin-bottom: 14px; }
 
 /* Always-present "+ Add platform" banner + the picker it toggles open. */
@@ -5076,7 +5268,11 @@ select.form-input {
   background: #0d1117;
   margin-top: 12px;
   margin-bottom: 4px;
-  min-height: 180px;
+  /* _drawMap() draws at H = W * 0.50, but the topology is fetched from a CDN, so
+     the box sat at min-height:180px until it arrived and then doubled — which is
+     what made everything below Distribution jump. Reserving the final ratio up
+     front means the map lands in a hole that already fits it. */
+  aspect-ratio: 2 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9845,16 +10041,22 @@ body.is-splash .ai-disclaimer { display: none; }
 /* ── Nav chips inside the pill ─────────────────────────────
    The prototype's .cats / .cat, measurement for measurement. */
 
-/* Handoff §1: tab group is an inset well holding four pills. */
+/* The four tabs sit straight on the bar — no well around them. The border is
+   still declared at 1px, just transparent, and the height and padding are
+   untouched, so every tab stays exactly where it was.
+   position:relative has to stay: .bar-subnav is absolutely positioned against
+   this element, and z-index:1 keeps the row above the header's texture. */
 .bar-nav {
   display: flex;
   align-items: center;
-  gap: 2px;
-  height: 40px;
+  gap: 5px;
+  /* 50px = the 42px pills + 4px of breathing room top and bottom. Fits the
+     64px topbar with 7px to spare on each side. */
+  height: 50px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--panel);          /* #141414 */
-  border: 1px solid var(--border);   /* #2a2a2a */
+  background: transparent;
+  border: 1px solid transparent;
   position: relative;
   z-index: 1;
 }
@@ -9867,17 +10069,29 @@ body.is-splash .ai-disclaimer { display: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  height: 32px;
+  /* 9px, not 7: the label went from 10px to 15px and the old gap left the icon
+     sitting on top of the word. */
+  gap: 9px;
+  /* At least the sub-tab pill's height. A sub-tab measures 40.2px (13px text on
+     the 1.4 body line-height, +20px padding, +2px border); 42px keeps the header
+     the taller of the two, as the level above should be. */
+  height: 42px;
   min-width: 132px;
-  padding: 0 14px;
+  /* Left inset matches the icon box's own vertical inset: the 26px box in a
+     42px pill leaves (42-26)/2 = 8px above and below, so it gets 8px to its
+     left too and sits in a true corner square. */
+  padding: 0 14px 0 8px;
   border: none;
   border-radius: 8px;                /* rows nest inside the 12px group */
   background: transparent;
   font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
+  /* One step above the sub-tab row (13px): the header is the higher level and
+     has to read that way. The old 10px leaned on tracking to look bigger than
+     it was; at 15px it doesn't need the help. */
+  font-size: 15px;
+  /* Same weight as the sub-tab row — the size carries the hierarchy on its own. */
+  font-weight: 500;
+  letter-spacing: 0;
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
@@ -9887,10 +10101,10 @@ body.is-splash .ai-disclaimer { display: none; }
 .bar-nav .bar-nav-btn:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
 .bar-nav .bar-nav-btn.is-active,
 .bar-nav .bar-nav-btn.is-active:hover {
-  /* Selected main tab: solid brand-purple, dark text. */
+  /* Selected main tab: solid brand-purple, dark text. Weight stays at the row's
+     500 — a heavier face is a wider one, and the tabs must not move on select. */
   background: var(--purple);
   color: #0a0a0a;
-  font-weight: 700;
 }
 .bar-nav .bar-nav-btn.is-active::after { display: none; }   /* kill the leftover ring */
 
@@ -9902,7 +10116,8 @@ body.is-splash .ai-disclaimer { display: none; }
   position: relative; overflow: visible; border-radius: 12px;   /* match the main pane */
   transition: background .2s ease, border-color .2s ease;
 }
-.bar-nav:hover { border-color: var(--border-hover); }
+/* Left over from when .bar-nav was a well: hovering any tab lit the whole
+   group's outline. The border is transparent now and stays that way. */
 
 .bar-nav-chev {
   display: inline-flex; align-items: center; margin-left: 3px; flex: none;
@@ -9917,7 +10132,10 @@ body.is-splash .ai-disclaimer { display: none; }
    Springs down with an overshoot, retracts the same way. */
 .bar-subnav {
   position: absolute; top: calc(100% + 7px); left: 0; z-index: 45;
-  min-width: 210px;
+  /* Width is set from the owning tab in renderSubnav(), so no min-width here —
+     it would win over a narrower tab and break the alignment. border-box keeps
+     the 6px of padding and the 1px border inside that measure. */
+  box-sizing: border-box;
   display: flex; flex-direction: column; gap: 2px; padding: 6px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, .55);
@@ -9965,7 +10183,6 @@ body.viewing-splash #app-guide { display: none; }
 .splash2-btn-primary:hover { filter: brightness(1.1); }
 .splash2-pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .splash2-card { position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px 22px; }
-.splash2-card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--purple); }
 .splash2-card-tag { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--purple); margin-bottom: 10px; }
 .splash2-card-title { font-family: var(--sans); font-size: 19px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
 .splash2-card-body { font-size: 13.5px; line-height: 1.6; color: var(--text-dim); }
@@ -9989,29 +10206,44 @@ body.viewing-splash #app-guide { display: none; }
 .bar-chip:hover { border-color: var(--border-hover); }
 
 /* The project chip reuses #projectSelector; give it the shared chip shape. */
+/* Cover art + a two-line block (title over version). Height and radius match a
+   header tab's selected pill (42px / 8px). The inset is the same on the left,
+   top and bottom, so the 30px cover sits in a square of air: 6 + 30 + 6 = 42.
+   The 30px it leaves is also exactly the two 15px text lines. */
 .project-selector-wrap #projectSelector {
-  display: flex; align-items: center;   /* keep icon + name on one line */
-  height: 40px; padding: 0 12px 0 5px; gap: 9px;
-  border-radius: 12px; white-space: nowrap;
+  display: flex; align-items: center;
+  height: 42px; padding: 6px 12px 6px 6px; gap: 11px;
+  border-radius: 8px; white-space: nowrap;
   background: var(--panel); border: 1px solid var(--border);
-  color: var(--text); text-transform: none; font-size: 13px; font-weight: 600;
+  color: var(--text); text-transform: none;
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
 }
 .project-selector-wrap #projectSelector:hover { border-color: var(--border-hover); background: var(--panel); }
 
-/* Tab glyphs: drop the 34px squares — bare 14px icons in currentColor. */
+/* Tab glyphs sit in an invisible 26x26 box. The four SVGs are different sizes
+   (13, 14, 14 and 18px wide), so hanging the gap off the glyph itself gave each
+   tab a different distance to its label. The box is the constant: same square
+   every time, and the button's gap measures from its edge. */
 .bar-nav .bar-nav-btn .ic {
-  width: 14px; height: 14px; border-radius: 0;
+  width: 26px; height: 26px; border-radius: 0;
   background: transparent !important; color: currentColor;
   display: grid; place-items: center;
 }
-.bar-nav .bar-nav-btn .ic svg { opacity: 1; }
+/* The four glyphs ship at four different sizes (13, 14, 14 and 18px) on four
+   different viewBoxes, so they never matched. One height for all of them, width
+   left to each viewBox's own ratio — the bar chart is genuinely wider than it is
+   tall (30x25) and forcing it square would squash it against the others. */
+.bar-nav .bar-nav-btn .ic svg { opacity: 1; height: 18px; width: auto; }
 .bar-nav .bar-nav-btn.is-active::after { display: none; }   /* kill the white gradient stroke */
 .bar-nav.has-sel .bar-nav-btn:not(.is-active) .ic { background: transparent !important; }
 
 /* Project chip cover art: 22px / radius 6, panel-3 until the icon lands. */
-.project-selector-wrap #projectSelector .ic.cover { width: 22px; height: 22px; border-radius: 6px; }
+.project-selector-wrap #projectSelector .ic.cover { width: 30px; height: 30px; border-radius: 8px; }
 .project-selector-wrap #projectSelector .ic.cover.empty { background: var(--panel-3); }
-.project-selector-wrap #projectSelector .pname { font-size: 13px; max-width: 200px; }
+.project-selector-wrap #projectSelector .pname {
+  font-family: var(--mono); font-size: 13px; font-weight: 500; line-height: 15px;
+  letter-spacing: 0; max-width: 200px; color: var(--text);
+}
 .project-selector-wrap.open #projectSelector { background: var(--panel); border-color: var(--border-hover); color: var(--text); }
 /* Chevron matches the nav tabs: up when closed, down when the menu is open. */
 .project-selector-wrap #projectSelector .bar-chev { margin-left: auto; transform: rotate(180deg); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }

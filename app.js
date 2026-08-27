@@ -13,9 +13,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   // two are alike. They only show while the guide is collapsed, since that is
   // when the lane above the fab exists — the loop no-ops otherwise.
   if (typeof bubbleLoop === 'function') bubbleLoop();
+  initSubnavDebugToggle();
   // Boot straight into the app (title bar persists) with the splash view showing.
   bootApp();
 });
+
+/* DEBUG — Ctrl+D swaps the band above the content between the row of sub-tab
+   pills and a single line naming the section you're in. The choice is kept in
+   localStorage so a reload stays on whichever variant you were judging.
+
+   Temporary: when the experiment is settled, delete this function, its call
+   above, and state.subnavTitleOnly. */
+function initSubnavDebugToggle() {
+  try { state.subnavTitleOnly = localStorage.getItem('sm.subnavTitleOnly') === '1'; }
+  catch (_) {}
+  document.addEventListener('keydown', e => {
+    if (!e.ctrlKey || e.metaKey || e.altKey) return;
+    if ((e.key || '').toLowerCase() !== 'd') return;
+    // Never steal the key from a field the user is typing in.
+    const el = document.activeElement;
+    const tag = el && el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return;
+    e.preventDefault();
+    state.subnavTitleOnly = !state.subnavTitleOnly;
+    try { localStorage.setItem('sm.subnavTitleOnly', state.subnavTitleOnly ? '1' : '0'); }
+    catch (_) {}
+    if (typeof renderAppSubnav === 'function') renderAppSubnav();
+  });
+}
 
 /* The content scroller (.main) reserves a scrollbar gutter on its right; the
    fixed top bar doesn't. Measure that width and pad the top bar to match, so the

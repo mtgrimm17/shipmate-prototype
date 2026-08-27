@@ -2160,6 +2160,11 @@ const state = {
   // Shippy Guide collapse (horizontal): false = full card, true = mini progress rail
   guideCollapsed: false,
 
+  // DEBUG — the sub-tab band above the content. false = the row of pills,
+  // true = just the name of the section you're in. Ctrl+D toggles it; see
+  // the handler in app.js. Remove once the experiment is settled.
+  subnavTitleOnly: false,
+
   // Top-nav sub-tab dropdown: opens on hover; navOpenView = which tab's menu shows
   navExpanded: false,
   navOpenView: null,

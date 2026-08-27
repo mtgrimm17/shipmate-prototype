@@ -2612,13 +2612,18 @@ function renderGuide() {
   const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
   const tabName = TAB_NAME[view] || '';
   el.innerHTML = `
+    <div class="guide-mascot"></div>
     <div class="guide-card">
       <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
       <div class="guide-eyebrow">Shippy Guide</div>
       <div class="guide-title">${hero.title || ''}</div>
       <div class="guide-sub">${hero.sub || ''}</div>
-      ${items.length ? `<div class="guide-tasks-head">${tabName} · ${done}/${items.length}</div><div class="guide-tasks">${tasks}</div>` : ''}
+      ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}
     </div>`;
+  /* OCTO owns a single SVG node and re-parents it, so re-rendering the guide
+     moves the octopus into the fresh host without restarting its animation.
+     Collapsed the card is 48px wide, so the mascot is left out of that branch. */
+  if (typeof OCTO !== 'undefined') OCTO.mount(el.querySelector('.guide-mascot'));
 }
 
 /* ── EXPERIMENT: Netflix-style top-nav sub-tab drawer ──
@@ -2648,8 +2653,10 @@ function renderSubnav() {
   // Chevron: up when closed, down on the tab whose menu is open.
   nav.querySelectorAll('.bar-nav-btn').forEach(b => b.classList.remove('is-menu-open'));
   if (open && btn) btn.classList.add('is-menu-open');
+  // The dropdown tracks its tab on both axes: same left edge, same width.
   const left = btn ? btn.offsetLeft : 0;
   sub.style.left = left + 'px';
+  if (btn) sub.style.width = btn.offsetWidth + 'px';
   if (open) {
     // Restart the entrance spring in place so switching tabs re-plays it under
     // the new tab (no sideways slide).
@@ -2657,6 +2664,50 @@ function renderSubnav() {
     void sub.offsetWidth;
     sub.style.animation = '';
   }
+  renderAppSubnav();
+}
+
+/* The same sub-tabs, a second time: a row sitting above the content column.
+   The nav drawer stays — it's reachable from any tab — but this is the copy you
+   see without going hunting. Both read _navSubtabs(), so they can't drift.
+
+   The drawer's items go through navSubClick() because a hovered menu may belong
+   to a tab you're not on. This row only ever shows the ACTIVE tab's sections, so
+   it calls the section setter directly and skips the view switch.
+
+   Every gap keeps its pipe in the DOM, always. Beside the active pill the pipe
+   is only made invisible (.is-off -> visibility:hidden), because dropping the
+   element would collapse its box and shove the rest of the row sideways every
+   time the selection moved. */
+function renderAppSubnav() {
+  const el = document.getElementById('app-subnav');
+  if (!el) return;
+  const data = _navSubtabs(state.activeView);
+  const list = data ? data.list : [];
+  /* Title mode. Two ways in: Submission and Analysis simply have no sections, so
+     the band carries the tab's own name rather than sitting empty; and the
+     Ctrl+D debug toggle puts every tab in this mode, showing the section you're
+     in instead of the whole row. The tab name is read off the header button, so
+     it always matches whatever the locale rendered there. */
+  if (!list.length || state.subnavTitleOnly) {
+    const NAVID = { details: 'nav-details', dashboard: 'nav-dashboard',
+                    broadcast: 'nav-broadcast', performance: 'nav-performance' };
+    const navId = NAVID[state.activeView];
+    const tabLabel = navId
+      ? (document.querySelector('#' + navId + ' .lbl')?.textContent || '') : '';
+    const text = (list.find(s => s.id === data.cur) || {}).label || tabLabel;
+    el.innerHTML = text ? `<span class="app-subnav-title">${text}</span>` : '';
+    return;
+  }
+  el.innerHTML = list.map((s, i) => {
+    const on     = s.id === data.cur;
+    const nextOn = list[i + 1] && list[i + 1].id === data.cur;
+    const sep = i < list.length - 1
+      ? `<span class="app-subtab-sep${(on || nextOn) ? ' is-off' : ''}">|</span>`
+      : '';
+    return `<button class="app-subtab${on ? ' is-on' : ''}"`
+      + ` onclick="${data.fn}('${s.id}')">${s.label}</button>${sep}`;
+  }).join('');
 }
 
 /* Splash / home — Shipmate's self-publishing pitch, shown first and whenever the
