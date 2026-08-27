@@ -10119,11 +10119,8 @@ body.is-splash .ai-disclaimer { display: none; }
 /* Left over from when .bar-nav was a well: hovering any tab lit the whole
    group's outline. The border is transparent now and stays that way. */
 
-.bar-nav-chev {
-  display: inline-flex; align-items: center; margin-left: 3px; flex: none;
-  opacity: .5; transform: rotate(180deg);   /* default: points up (menu closed) */
-  transition: transform .28s cubic-bezier(.34, 1.56, .64, 1), opacity .15s;
-}
+/* Hover sub-menus removed — the tabs no longer have dropdowns, so no chevron. */
+.bar-nav-chev { display: none; }
 .bar-nav .bar-nav-btn:hover .bar-nav-chev { opacity: .85; }
 .bar-nav .bar-nav-btn.is-active .bar-nav-chev { opacity: 1; }
 .bar-nav .bar-nav-btn.is-menu-open .bar-nav-chev { transform: rotate(0deg); opacity: 1; }   /* open: points down */

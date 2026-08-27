@@ -62,7 +62,7 @@ function bootApp() {
     try { completeOnboarding(); } catch (e) { /* keep going */ }
   }
   try { seedOnboardingToIOS(); seedOnboardingToAndroid(); } catch (e) {}
-  if (typeof wireNavHover === 'function') wireNavHover();
+  // (Top-bar hover sub-menus removed — sub-tabs now live under the title bar.)
   showSplashView();
   measureScrollbar();
   requestAnimationFrame(measureScrollbar);   // again after first layout settles
