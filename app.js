@@ -7519,7 +7519,18 @@ async function openStorePreviewSection(pid, target) {
   state.storePreviewFlipTarget[pid] = target;
 
   const modal = document.getElementById('submit-modal');
-  const needsInference = (target === 'content' || target === 'business')
+  // Business Questions never actually shows AI-inferred answers today (no
+  // ai-badge/ai-confident treatment on any hasIAP/export-compliance field),
+  // so re-running the shared "unified questionnaire" inference and taking
+  // over the whole modal with the "Shipmate is working…" screen every time
+  // someone opens it bought nothing but a multi-second wait — worse, it
+  // also called _postInferenceSetup('questionnaire') on every open, which
+  // resets iosContentRatingExpanded to false (Unanswered) and re-snapshots
+  // hasIAP as "answered" the moment it has a value, permanently hiding the
+  // question AND (before the buildIapSection fix below) the IAP Products
+  // list behind the "All" toggle. Content Questions still needs this (it
+  // has real AI answers to show), so it keeps re-inferring on every open.
+  const needsInference = (target === 'content')
     && CLAUDE_API_KEY
     && !state.platformInferenceCache?.['unified:questionnaire'];
 

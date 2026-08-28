@@ -6926,12 +6926,22 @@ function buildBusinessSection() {
 function buildIapSection() {
   const a = state.iosSubmitAnswers;
 
-  // Unanswered/All filter — hide this question (and its follow-up) once answered
+  // Unanswered/All filter — hides the YES/NO question itself once answered,
+  // same declutter convention as buildBusinessSection's hideTaxCat and
+  // buildExportComplianceSection's own early-return. IMPORTANT: this must
+  // NOT also hide iapFollowUp/buildIapLocalizationsSection below — unlike a
+  // plain answered field, hasIAP gates a persistent, ongoing editing
+  // surface (the saved IAP Products list and its localizations), and once
+  // hasIAP has a value it's marked "answered" (takeFilterSnapshot, app.js)
+  // essentially forever. An earlier version of this function returned ''
+  // for the whole section here, which made a user's own saved IAP products
+  // (and their localizations) disappear entirely the moment hasIAP was
+  // answered and the view was collapsed to "Unanswered" — the exact
+  // opposite of what this filter is for.
   const bsAnswered = state.iosAnsweredAtInference;
   const bsCollapse = bsAnswered !== null;
   const bsShowAll  = state.iosContentRatingExpanded;
-  const hideIAP    = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
-  if (hideIAP) return '';
+  const hideIAPQuestion = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
 
   const iapProducts = a.iapProducts || [];
   const iapProductsHTML = `
@@ -6962,7 +6972,7 @@ function buildIapSection() {
   // saved products and their localizations don't just vanish if hasIAP is
   // later flipped back to "no".
   return `
-    ${iosYNRow('Does your app include in-app purchases?', 'hasIAP',
+    ${hideIAPQuestion ? '' : iosYNRow('Does your app include in-app purchases?', 'hasIAP',
       'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.')}
     ${iapFollowUp}
     ${buildIapLocalizationsSection()}`;
