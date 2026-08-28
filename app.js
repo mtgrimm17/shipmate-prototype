@@ -1399,6 +1399,34 @@ function setIapProductField(id, key, value) {
   const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
   if (p) p[key] = value;
 }
+// Live character-limit feedback for a product's Name/Description field
+// (IAP_PRODUCT_FIELD_LIMITS, render.js) — the same soft-limit pattern as the
+// App Store Product Page Preview's own startIasInlineEdit: a live remaining-
+// count that goes negative and red, the field itself tinted red, and an
+// inline "Must be less than N characters." message once over, but typing is
+// never hard-blocked. Runs on every keystroke without a full
+// reRenderStepModal() (same reason setIapProductField's own text fields
+// skip it — re-rendering mid-word would lose focus/cursor position);
+// instead it reaches directly into the DOM for the input's own counter row
+// (its real next sibling, same technique as startLocReviewInlineEdit) and
+// this card's Save button, disabling Save for as long as ANY field in the
+// card is over its limit (saveIapProduct below also re-checks this itself,
+// so the button staying enabled by some other means can never bypass it).
+function updateIapCharCounter(inputEl, limit) {
+  const remaining = limit - inputEl.value.length;
+  const isOver = remaining < 0;
+  inputEl.classList.toggle('is-over-limit', isOver);
+  const counterRow = inputEl.nextElementSibling;
+  if (counterRow && counterRow.classList.contains('ias-char-counter-row')) {
+    const errorEl = counterRow.querySelector('.ias-char-error');
+    const countEl = counterRow.querySelector('.ias-char-count');
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    if (countEl) { countEl.textContent = String(remaining); countEl.classList.toggle('is-over', isOver); }
+  }
+  const row = inputEl.closest('.iap-product-row');
+  const saveBtn = row?.querySelector('.iap-product-actions .btn-primary');
+  if (saveBtn) saveBtn.disabled = !!row.querySelector('.form-input.is-over-limit');
+}
 function setIapProductType(id, type) {
   const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
   if (!p) return;
@@ -1415,9 +1443,16 @@ function setIapProductTrial(id, trial) {
 }
 // Save collapses the card to just its name; clicking that name (expandIapProduct)
 // reopens the full editable form. Both are structural (re-render) changes.
+// The Save button is already disabled in the DOM whenever Name/Description
+// is over its limit (buildIapProductRow's initial render + updateIapCharCounter's
+// live updates above), but this guard is the actual source of truth — it's
+// what makes going over the limit truly block saving, rather than merely
+// looking disabled.
 function saveIapProduct(id) {
   const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
-  if (p) p.collapsed = true;
+  if (!p) return;
+  if (p.name.length > IAP_PRODUCT_FIELD_LIMITS.name || p.desc.length > IAP_PRODUCT_FIELD_LIMITS.desc) return;
+  p.collapsed = true;
   reRenderStepModal();
 }
 function expandIapProduct(id) {

@@ -7002,6 +7002,15 @@ select.form-input {
 .iap-product-field .form-label { margin-bottom: 4px; }
 .iap-product-field .form-input { margin-bottom: 0; }
 
+/* Name/Description character-limit feedback (IAP_PRODUCT_FIELD_LIMITS,
+   render.js) — reuses the exact same .is-over-limit / .ias-char-counter-row /
+   .ias-char-error / .ias-char-count convention as the App Store Product Page
+   Preview's own fields (Title/Subtitle/Description/What's New) further up
+   this file, just applied to a plain .form-input instead of .ias-editable/
+   .ias-inline-input. Same red tint, same bottom-right count. */
+.form-input.is-over-limit { border-color: var(--magenta); background: var(--magenta-soft); }
+.iap-product-field .ias-char-counter-row { margin-top: 4px; margin-left: 0; margin-right: 0; width: auto; }
+
 .iap-product-trial {
   display: flex;
   align-items: center;
@@ -7019,6 +7028,10 @@ select.form-input {
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
+/* Disabled while Name and/or Description is over its character limit
+   (buildIapProductRow's initial render + updateIapCharCounter, app.js) —
+   saveIapProduct itself is the real gate; this is just the visible cue. */
+.iap-product-actions .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 
 .iap-product-remove {
   position: absolute;

@@ -6782,6 +6782,36 @@ const IOS_IAP_TYPES = [
   { id: 'non-renewing',   label: 'Non-renewing sub',   desc: 'Season pass, time-limited' },
 ];
 
+// Character limits for each IAP product's Name/Description fields — enforced
+// the same soft-limit way as the App Store Product Page Preview's own
+// IAS_FIELD_CHAR_LIMITS (app.js): live remaining-count that goes negative and
+// red, the field itself tinted red, an inline error message once over, but
+// typing itself is never hard-blocked. The one place this genuinely diverges
+// from the Preview's fields is that going over limit here also disables this
+// product's own Save button (updateIapCharCounter/saveIapProduct, app.js) —
+// the Preview's fields have no equivalent "commit" action to gate.
+const IAP_PRODUCT_FIELD_LIMITS = { name: 35, desc: 55 };
+
+// Shared by both of an IAP product's counted fields (Name, Description)
+// below — builds the .form-input plus its .ias-char-counter-row exactly the
+// way startIasInlineEdit's fields do (same classes, same over-limit message),
+// just rendered up front instead of swapped in on click, since these are
+// always-visible fields rather than the Preview's click-to-edit ones.
+function _iapCounterField(id, key, label, value, limit) {
+  const overLimit = value.length > limit;
+  const remaining = limit - value.length;
+  return `
+    <div class="iap-product-field">
+      <label class="form-label">${label}</label>
+      <input class="form-input${overLimit ? ' is-over-limit' : ''}" type="text" value="${escHtml(value)}"
+             oninput="setIapProductField('${id}','${key}',this.value); updateIapCharCounter(this, ${limit})">
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+        <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+      </div>
+    </div>`;
+}
+
 /* One row of the Business section's IAP Products list (state.iosSubmitAnswers
    .iapProducts, each a { id, name, desc, price, type, trial, collapsed } —
    see addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
@@ -6798,7 +6828,10 @@ const IOS_IAP_TYPES = [
 
    A saved product (p.collapsed) renders as a single clickable name row
    instead of the full card — click the name to re-expand (expandIapProduct)
-   and edit it again. */
+   and edit it again. Name/Description are over IAP_PRODUCT_FIELD_LIMITS'
+   character limits, the Save button starts disabled (and updateIapCharCounter,
+   app.js, keeps it in sync live) — a saved product is therefore guaranteed to
+   already be within both limits. */
 function buildIapProductRow(p) {
   if (p.collapsed) {
     // The whole collapsed card expands on click — the remove button stops
@@ -6811,19 +6844,12 @@ function buildIapProductRow(p) {
   }
 
   const isSub = /-renewa|renewing/.test(p.type); // auto-renewable / non-renewing
+  const overAnyLimit = p.name.length > IAP_PRODUCT_FIELD_LIMITS.name || p.desc.length > IAP_PRODUCT_FIELD_LIMITS.desc;
   return `
     <div class="iap-product-row" data-iap-id="${p.id}">
       <button class="iap-product-remove" type="button" onclick="removeIapProduct('${p.id}')" title="Remove IAP" aria-label="Remove IAP">✕</button>
-      <div class="iap-product-field">
-        <label class="form-label">Name</label>
-        <input class="form-input" type="text" value="${escHtml(p.name)}"
-               oninput="setIapProductField('${p.id}','name',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Description</label>
-        <input class="form-input" type="text" value="${escHtml(p.desc)}"
-               oninput="setIapProductField('${p.id}','desc',this.value)">
-      </div>
+      ${_iapCounterField(p.id, 'name', 'Name', p.name, IAP_PRODUCT_FIELD_LIMITS.name)}
+      ${_iapCounterField(p.id, 'desc', 'Description', p.desc, IAP_PRODUCT_FIELD_LIMITS.desc)}
       <div class="iap-product-field">
         <label class="form-label">Price</label>
         <input class="form-input" type="text" value="${escHtml(p.price)}"
@@ -6844,7 +6870,7 @@ function buildIapProductRow(p) {
         </div>
       </div>` : ''}
       <div class="iap-product-actions">
-        <button class="btn btn-primary btn-sm" type="button" onclick="saveIapProduct('${p.id}')">Save</button>
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveIapProduct('${p.id}')" ${overAnyLimit ? 'disabled' : ''}>Save</button>
       </div>
     </div>`;
 }
