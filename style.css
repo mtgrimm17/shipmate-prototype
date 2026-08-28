@@ -3802,7 +3802,7 @@ body.viewing-splash .app-subnav { display: none; }
 }
 .ias-label-note { font-size: 11px; color: var(--text-faint); }
 
-/* "All Locs" — opens the Localization Review flip section (openStorePreviewSection,
+/* "Localizations" — opens the Localization Review flip section (openStorePreviewSection,
    app.js; buildLocalizationReviewSection, render.js). Sized to sit naturally
    next to the language dropdown pill it precedes (same height/font/radius),
    but kept visually neutral (not the dropdown's blue accent) since it's an
@@ -3822,19 +3822,19 @@ body.viewing-splash .app-subnav { display: none; }
 .ias-all-locs-btn:hover { background: var(--border-hover); color: var(--text); }
 
 /* Right side of the label row — the "Reflects your submission data" note
-   plus the "All Locs" button/language-dropdown group (below) sit together
+   plus the "Localizations" button/language-dropdown group (below) sit together
    so the row's own space-between still reads as "badge -- everything else",
    and wrap onto their own line together if the modal gets too narrow for
    both. */
 .ias-label-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 
-/* "All Locs" and the language dropdown are grouped together with
+/* "Localizations" and the language dropdown are grouped together with
    flex-wrap: nowrap so they can only wrap as a single unit (onto their own
    line under the "Reflects your submission data" note, same as before) —
    never split apart from each other. Without this, .ias-label-right's own
    wrapping could land the button and dropdown on two different lines (the
    button stacked above the dropdown) whenever the row got too narrow for
-   all three children; grouping keeps "All Locs" immediately to the left of
+   all three children; grouping keeps "Localizations" immediately to the left of
    the dropdown at every width. */
 .ias-locs-lang-group { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; flex-shrink: 0; }
 
@@ -7060,6 +7060,55 @@ select.form-input {
   font-weight: 600;
   color: var(--text);
 }
+
+/* ── Business — "IAP Localizations" (buildIapLocalizationsSection, render.js) ──
+   Modeled on Localization Review (further above) — reuses every one of its
+   generic building blocks completely unchanged: .loc-review-header/-title/
+   -title-group/-header-controls/-toggle-btn/-card-head/-card-lang/
+   -placeholder/-status/-spinner/-source-badge/-undo-redo/-undo-btn/-redo-btn/
+   -settings-* (own id, not own class — see _iapLocToggleSettingsMenu,
+   app.js), plus .ias-editable/.ias-inline-input/.is-over-limit/
+   .ias-char-counter-row/.ias-char-error/.ias-char-count from the App Store
+   Product Page Preview itself. Only the card/grid/half chrome that's
+   actually scoped to ONE section's own cards gets its own iap-loc- prefixed
+   class here, so the two sections' flip-animation queries
+   (toggleLocReviewMode vs toggleIapLocReviewMode, app.js) can never
+   accidentally target each other's cards. There's no --long-field variant
+   at all (unlike Localization Review's Description/What's New) — Name (35
+   chars) and Description (55 chars) are both short fields, so the plain
+   default sizing below is always enough. */
+.iap-loc-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.iap-loc-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+/* Same flex-column + margin-top:auto counter-pinning trick as
+   .loc-review-card — see its own comment further above for why. */
+.iap-loc-card {
+  display: flex; flex-direction: column;
+  flex: 1 1 200px; min-width: 200px; max-width: 280px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+}
+.iap-loc-card .ias-char-counter-row { margin-top: auto; padding-top: 4px; }
+.iap-loc-field {
+  max-height: 160px; overflow-y: auto;
+  font-size: 13px; color: var(--text); line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+/* toggleIapLocReviewMode (app.js) applies these — reuses Localization
+   Review's own flip keyframes verbatim (loc-review-card-flip-exit/-enter,
+   further above); only the triggering selector is section-specific. */
+.iap-loc-card.is-flip-exit  { animation: loc-review-card-flip-exit  0.16s ease-in  forwards; }
+.iap-loc-card.is-flip-enter { animation: loc-review-card-flip-enter 0.28s ease-out forwards; }
+/* The Review side — mirrors .loc-review-side/.loc-review-half exactly (see
+   their own comments further above for the deliberate lack of min-height:0). */
+.iap-loc-side { display: flex; flex-direction: column; flex: 1; }
+.iap-loc-half { display: flex; flex-direction: column; flex: 1; }
+.iap-loc-half--bottom {
+  border-top: 1px solid var(--border);
+  margin-top: 10px; padding-top: 10px;
+}
+.iap-loc-card .iap-loc-half .ias-char-counter-row { margin-top: 4px; }
+.iap-loc-half .iap-loc-field { max-height: none; overflow: visible; }
 
 /* ── Google Play Content Questions (IARC) ────────────────
    Android's contentRating step. A recursive question tree — each answer

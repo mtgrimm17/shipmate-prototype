@@ -2510,6 +2510,82 @@ const state = {
   // of living only in a DOM class that render would otherwise wipe out.
   iasReviewSettingsOpen: false,
 
+  // ── Business — "IAP Localizations" ──────────────────────────────────
+  // A full parallel of the nine locReview*/iasTranslate*/iasAutoTranslate*
+  // fields directly above, scoped to ONE saved IAP product's Name/
+  // Description at a time instead of the app's own Title/Subtitle/
+  // Description/What's New — see buildIapLocalizationsSection (render.js)
+  // and the _iapLoc*/iapLoc* function set (app.js) this drives. Kept
+  // completely separate from the App-level fields above (its own state
+  // keys, its own function names) rather than generalizing them to take an
+  // optional product id — see the comment above _iapLocSavedProducts,
+  // app.js, for why.
+
+  // Which saved IAP product IAP Localizations' picker dropdown is currently
+  // showing (an IAP product id, e.g. "iap_3"). null means "use the first
+  // saved product" — _iapLocEffectiveIapId (app.js) falls back to it
+  // whenever this is null or no longer a valid choice (e.g. that product
+  // was removed after being chosen here).
+  iapLocIapId: null,
+
+  // Which field ('name' | 'desc') IAP Localizations' top-right field
+  // dropdown is currently showing across every language's card. null means
+  // "show Name" — IAP Localizations' default view, same convention as
+  // locReviewField defaulting to Title above.
+  iapLocField: null,
+
+  // 'locs' | 'review' — mirrors locReviewMode above, independently, for IAP
+  // Localizations' own Review/back-translation flip (toggleIapLocReviewMode,
+  // app.js).
+  iapLocMode: 'locs',
+
+  // Back-translation drafts for IAP Localizations' flipped "review" side —
+  // { [iapId]: { [field]: { [lang]: { text, syncedTopText, status,
+  // forwardStatus } } } }. One level deeper than locReviewBackTranslation
+  // above (keyed by IAP product first) but otherwise identical in shape and
+  // meaning. See _iapLocSyncBackTranslations/_iapLocCommitPrimaryEdit, app.js.
+  iapLocBackTranslation: {},
+
+  // Per-field undo/redo history for IAP Localizations' card fields —
+  // { real: { [iapId]: { [field]: { [lang]: { past: [...], future: [...] } } } },
+  //   draft: { [iapId]: { [field]: { [lang]: { past: [...], future: [...] } } } } }.
+  // One level deeper than locReviewUndoHistory above (keyed by IAP product
+  // first) but otherwise identical. See _iapLocPushUndo/iapLocUndo/
+  // iapLocRedo, app.js.
+  iapLocUndoHistory: { real: {}, draft: {} },
+
+  // Auto-translation status per (IAP product id, field) for IAP
+  // Localizations' own Name/Description auto-translation into supporting
+  // languages — { [iapId]: { [field]: null | 'loading' | 'complete' | 'error' } }.
+  // See _iapLocTriggerAutoTranslate, app.js.
+  iapLocTranslateStatus: {},
+
+  // Which supporting languages a given (IAP product, field)'s CURRENT
+  // in-flight batch translate (iapLocTranslateStatus above) will actually
+  // update — { [iapId]: { [field]: [...langCodes] } }. Mirrors
+  // iasTranslatePendingLangs above; read via _iapLocFieldTranslatePending
+  // (app.js) so IAP Localizations can show the loading spinner only on the
+  // card(s) really about to change.
+  iapLocTranslatePendingLangs: {},
+
+  // Which of an IAP product's two localizable fields Shipmate automatically
+  // translates (or, for Name, mirrors) from the Primary Language into every
+  // supporting language — keyed 'name' | 'desc', each true (auto-translate/
+  // mirror on) or false (fully manual). Defaults match Title/Description's
+  // own defaults exactly: Name off (mirrored only, unless turned on here),
+  // Description on. This setting is GLOBAL — it applies to every saved IAP
+  // product, not just whichever one the picker dropdown currently shows
+  // (see _iapLocToggleAutoTranslateField, app.js). Set via the gear icon
+  // beside "IAP Localizations".
+  iapLocAutoTranslateFields: { name: false, desc: true },
+
+  // Whether IAP Localizations' own "Automatically translated fields"
+  // dropdown is currently open — mirrors iasReviewSettingsOpen above,
+  // independently (its own DOM id, 'iap-loc-settings-wrap', so the two
+  // sections' gear menus can never affect each other — see
+  // closeAllDropdowns/_iapLocToggleSettingsMenu, app.js).
+  iapLocSettingsOpen: false,
+
   // Cached Steam store-page info for the currently-selected Steam-linked
   // game — { appId, baselineDescription, shortDescription,
   // supportedLanguagesRaw } or null when no Steam-linked game is selected

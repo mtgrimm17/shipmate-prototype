@@ -3867,7 +3867,7 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'keyArt') {
     return buildSteamKeyArtEditSection();
   }
-  // iOS-only: the App Store Product Page Preview's "All Locs" button.
+  // iOS-only: the App Store Product Page Preview's "Localizations" button.
   if (target === 'localization') {
     return buildLocalizationReviewSection();
   }
@@ -5599,7 +5599,7 @@ function buildStorePreviewSection() {
         <div class="ias-label-right">
           <span class="ias-label-note">Reflects your submission data</span>
           <div class="ias-locs-lang-group">
-            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">All Locs</button>
+            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">Localizations</button>
             ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
           </div>
         </div>
@@ -5709,7 +5709,7 @@ const LOC_REVIEW_FIELDS = [
 ];
 
 /* ── App Store Product Page Preview flip section: "Localization Review" ──
-   Opened via the preview's "All Locs" button (openStorePreviewSection('ios',
+   Opened via the preview's "Localizations" button (openStorePreviewSection('ios',
    'localization')). One card per language the preview covers
    (_iasAllPreviewLangCodes — Primary Language first, then supported
    languages alphabetically), shown side by side, all displaying the SAME
@@ -6955,10 +6955,225 @@ function buildIapSection() {
       ${iapProductsHTML}
     </div>` : '';
 
+  // IAP Localizations sits outside iapFollowUp (not gated on hasIAP itself)
+  // — same precedent as the Store Preview's own "In-App Purchases" info
+  // block (buildStorePreviewSection's iapInfoBlock), which also keys off
+  // SAVED products existing rather than the hasIAP answer, so previously-
+  // saved products and their localizations don't just vanish if hasIAP is
+  // later flipped back to "no".
   return `
     ${iosYNRow('Does your app include in-app purchases?', 'hasIAP',
       'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.')}
-    ${iapFollowUp}`;
+    ${iapFollowUp}
+    ${buildIapLocalizationsSection()}`;
+}
+
+/* Localization Review's field dropdown analog for IAP Products — only Name
+   and Description (an IAP product has no Subtitle/What's New equivalent),
+   in the same order they appear in each IAP Product's own card
+   (buildIapProductRow above). */
+const IAP_LOC_FIELDS = [
+  { value: 'name', label: 'Name' },
+  { value: 'desc', label: 'Description' },
+];
+
+/* ── Business — "IAP Localizations" ──────────────────────────────────────
+   Modeled directly on buildLocalizationReviewSection above (the App Store
+   Product Page Preview's "Localizations" section), but scoped to ONE saved
+   (collapsed — see saveIapProduct, app.js) IAP product's Name/Description at
+   a time instead of the app's own Title/Subtitle/Description/What's New.
+   Rendered inline at the bottom of the Business Questions step, directly
+   under the IAP Products list (buildIapSection above) rather than behind a
+   flip/button — it's most useful sitting right next to the products it
+   localizes, and there's no equivalent "preview" surface to flip out of in
+   the first place.
+
+   Every language card here reads and writes the SAME underlying value the
+   IAP Products list itself shows for that product's Name/Description — this
+   section's Primary Language card IS state.iosSubmitAnswers.iapProducts'
+   own p.name/p.desc, exactly how Localization Review's own Primary Language
+   card is simultaneously the app's real Title/Subtitle/etc. (see
+   _iapLocFieldValue/_iapLocSetFieldValue, app.js). Only SAVED products are
+   selectable in the IAP picker dropdown below — an in-progress card (not
+   yet within IAP_PRODUCT_FIELD_LIMITS, so not yet save-able at all — see
+   saveIapProduct) has no finished Name worth localizing yet. The whole
+   section is hidden (returns '') until at least one product has been saved.
+
+   Every other mechanic mirrors Localization Review function-for-function,
+   just parameterized by which IAP product the new IAP picker dropdown (sat
+   between the Review button and the field dropdown, per the header layout
+   below) currently has selected: auto-translation into supporting languages
+   (_iapLocTriggerAutoTranslate/_iapLocPropagateName, app.js — Name mirrors
+   verbatim by default same as Title, Description auto-translates by default
+   same as Description), character counters (reusing IAP_PRODUCT_FIELD_LIMITS
+   — the exact same 35/55 limits as the product's own card, render.js above),
+   the Review/back-translation flip, and per-field undo/redo. See app.js for
+   the full parallel function set (all prefixed _iapLoc/iapLoc/toggleIapLoc).
+   Unlike Localization Review, there's no --long-field variant needed at all
+   — Name (35) and Description (55) are both short fields, so the plain
+   default card sizing below is always enough. */
+function buildIapLocalizationsSection() {
+  const savedProducts = (state.iosSubmitAnswers.iapProducts || []).filter(p => p.collapsed);
+  if (!savedProducts.length) return '';
+
+  const iapId = _iapLocEffectiveIapId();
+  const product = savedProducts.find(p => p.id === iapId);
+  if (!product) return ''; // _iapLocEffectiveIapId always picks a saved product when one exists — belt and suspenders
+
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.iapLocField || 'name';
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.iapLocMode === 'review';
+
+  const fieldOptions = IAP_LOC_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _iapLocFieldHasOverLimitLang(iapId, f.value, langCodes),
+  }));
+  const iapOptions = savedProducts.map(p => ({
+    value: p.id,
+    label: escHtml(p.name) || 'Untitled IAP',
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _iapLocUndoState(kind, iapId, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); iapLocUndo('${kind}','${iapId}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); iapLocRedo('${kind}','${iapId}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  // Shared field+counter markup — same look/behavior (placeholder, over-limit
+  // styling and message) as Localization Review's own fieldBlock, just using
+  // .iap-loc-field (style.css) in place of .loc-review-field for the one bit
+  // of chrome that's scoped to this section's own cards rather than shared.
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  // The Review side's bottom half (Primary Language back-translation draft)
+  // — same no-limit-at-all treatment as Localization Review's own
+  // fieldBlockNoLimit, for the same reason (a scratch pad, not real
+  // submission data — see IAP_PRODUCT_FIELD_LIMITS' own comment, render.js).
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _iapLocFieldValue(iapId, field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _iapLocBackTranslationValue(iapId, field, lang);
+      const topStatusHtml = _iapLocFieldTranslatePending(iapId, field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="iap-loc-card">
+        <div class="iap-loc-side">
+          <div class="iap-loc-half iap-loc-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startIapLocInlineEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="iap-loc-half iap-loc-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startIapLocBackTranslationEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _iapLocFieldTranslatePending(iapId, field, lang);
+    const srcBadge = _iapLocSourceBadge(iapId, field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
+    return `
+      <div class="iap-loc-card${isPrimary ? ' iap-loc-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startIapLocInlineEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  // "Automatically translated fields" settings — same gear + dropdown shell
+  // as Localization Review's own (reuses .loc-review-settings-wrap's class
+  // for its styling, just its own id so the two sections' open/close state
+  // — iapLocSettingsOpen vs iasReviewSettingsOpen — can never collide), but
+  // with only Name and Description as options (see
+  // _iapLocFieldAutoTranslateEnabled/_iapLocToggleAutoTranslateField, app.js).
+  const autoCfg = state.iapLocAutoTranslateFields || { name: false, desc: true };
+  const settingsOpen = !!state.iapLocSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_iapLocToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="iap-loc-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_iapLocToggleSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('name', 'Name')}
+          ${settingsRow('desc', 'Description')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">IAP Localizations</div>
+          ${settingsMenu}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="toggleIapLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+          ${swSelect('iap-loc-iap', iapId, iapOptions, 'setIapLocReviewIapId', '160px', 'right')}
+          ${swSelect('iap-loc-field', field, fieldOptions, 'setIapLocField', '150px', 'right')}
+        </div>
+      </div>
+      <div class="iap-loc-cards">${cards}</div>
+    </div>`;
 }
 
 /* ── Distribution ────────────────────────────────────── */

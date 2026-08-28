@@ -1387,7 +1387,14 @@ function setPrivacyMeta(typeId, field, checked) {
    focus mid-word. */
 function addIapProduct() {
   state.iosSubmitAnswers.iapProducts.push({
-    id: generateId('iap'), name: '', desc: '', price: '', type: 'consumable', trial: 'no', collapsed: false,
+    // locs holds this product's Name/Description localizations for every
+    // supporting language — { [lang]: { name, desc, nameSourceText,
+    // descSourceText } }, keyed by language exactly like
+    // state.formData.localizedStoreText is keyed by language for the app's
+    // own fields. Populated by IAP Localizations (buildIapLocalizationsSection,
+    // render.js; _iapLocPropagateName/_iapLocTriggerAutoTranslate below) —
+    // empty until the product is actually saved once (see saveIapProduct).
+    id: generateId('iap'), name: '', desc: '', price: '', type: 'consumable', trial: 'no', collapsed: false, locs: {},
   });
   reRenderStepModal();
 }
@@ -1448,11 +1455,25 @@ function setIapProductTrial(id, trial) {
 // live updates above), but this guard is the actual source of truth — it's
 // what makes going over the limit truly block saving, rather than merely
 // looking disabled.
+//
+// Saving is also this product's "commit point" for IAP Localizations
+// (buildIapLocalizationsSection, render.js) — the same role blur plays for
+// the App Store Product Page Preview's own Title/Description fields
+// (_iasSetFieldValue). Every save (not just the first) re-propagates Name
+// and re-triggers Description's auto-translation into every supporting
+// language, so a product's localizations stay in sync with whatever its
+// Name/Description were most recently saved as — see
+// _iapLocPropagateName/_iapLocTriggerAutoTranslate below. Both are no-ops
+// with no supporting languages configured, and neither blocks the collapse
+// above (fired-and-forgotten, same "kick off in the background" pattern
+// _iasSetFieldValue itself uses).
 function saveIapProduct(id) {
   const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
   if (!p) return;
   if (p.name.length > IAP_PRODUCT_FIELD_LIMITS.name || p.desc.length > IAP_PRODUCT_FIELD_LIMITS.desc) return;
   p.collapsed = true;
+  _iapLocPropagateName(id, p.name);
+  _iapLocTriggerAutoTranslate(id, 'desc', p.desc);
   reRenderStepModal();
 }
 function expandIapProduct(id) {
@@ -5045,6 +5066,602 @@ function setLocReviewField(field) {
   if (state.locReviewMode === 'review') _locReviewSyncBackTranslations();
 }
 
+/* ── Business — "IAP Localizations" ──────────────────────────────────────
+   A full parallel of the App Store Product Page Preview's own Localization
+   Review machinery directly above (_iasFieldValue/_iasSetFieldValue,
+   _iasTriggerAutoTranslate, startLocReviewInlineEdit, the back-translation
+   Review side, per-field undo/redo, toggleLocReviewMode/setLocReviewField),
+   just scoped to ONE saved IAP product's Name/Description at a time instead
+   of the app's own Title/Subtitle/Description/What's New — see
+   buildIapLocalizationsSection, render.js, for the section this drives.
+
+   Kept as its OWN function set (prefixed _iapLoc/iapLoc/toggleIapLoc)
+   rather than generalizing the existing Localization Review functions to
+   take an optional product id — same reasoning as roundIapPrice being its
+   own function instead of parameterizing roundPrice (above): the App-level
+   functions are hardcoded to state.formData/fd.localizedStoreText, and
+   threading an "which scope" parameter through all of them (and every one
+   of their own internal helper calls) would risk a state-selection bug
+   silently mixing an IAP product's localizations into the app's own, or
+   vice versa — a risk worth avoiding on an already-shipped, well-tested
+   feature by keeping the two completely separate instead.
+
+   Data model — mirrors state.formData.localizedStoreText exactly, just one
+   level per product instead of a single global object: each IAP product
+   (state.iosSubmitAnswers.iapProducts entries, see addIapProduct above) has
+   its own p.locs = { [lang]: { name, desc, nameSourceText, descSourceText } }.
+   The Primary Language's own value is never stored in p.locs at all — same
+   as fd.localizedStoreText never storing the Primary Language — it's simply
+   p.name/p.desc themselves (_iapLocFieldValue below). */
+
+// Only SAVED (collapsed) IAP products are eligible for localization — see
+// buildIapLocalizationsSection, render.js, for why (an in-progress card has
+// no finished Name yet worth localizing).
+function _iapLocSavedProducts() {
+  return (state.iosSubmitAnswers.iapProducts || []).filter(p => p.collapsed);
+}
+
+// Which IAP product IAP Localizations' picker dropdown effectively shows —
+// the same "fall back if the current choice is no longer valid" pattern as
+// _iasEffectivePreviewLang above (state.iapLocIapId may point at a product
+// that's since been removed, or simply hasn't been set yet). Returns null
+// only when there are no saved products at all (buildIapLocalizationsSection
+// hides the whole section in that case).
+function _iapLocEffectiveIapId() {
+  const saved = _iapLocSavedProducts();
+  if (!saved.length) return null;
+  if (saved.some(p => p.id === state.iapLocIapId)) return state.iapLocIapId;
+  return saved[0].id;
+}
+
+function _iapLocBlankLocalizedText() {
+  return { name: '', desc: '' };
+}
+
+// Read-only value lookup — mirrors _iasFieldValue exactly, substituting one
+// IAP product's own p/p.locs for state.formData/fd.localizedStoreText.
+function _iapLocFieldValue(iapId, field, lang) {
+  const p = state.iosSubmitAnswers.iapProducts.find(pp => pp.id === iapId);
+  if (!p) return '';
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return p[field] || '';
+  const entry = p.locs && p.locs[lang];
+  return (entry && entry[field]) || '';
+}
+
+// Whether ANY of a product's two localizable fields (Name, Description)
+// currently exceeds its character limit for a given language — the IAP
+// analog of _iasLangHasOverLimitField. Not currently surfaced anywhere in
+// the UI (IAP Localizations has no per-language dropdown to warn on the way
+// the main preview's language dropdown does), kept for parity/future use
+// alongside _iapLocFieldHasOverLimitLang below, which IS used (the field
+// dropdown's own warning icon).
+function _iapLocLangHasOverLimitField(iapId, lang) {
+  return ['name', 'desc'].some(field =>
+    _iapLocFieldValue(iapId, field, lang).length > IAP_PRODUCT_FIELD_LIMITS[field]);
+}
+
+// The transpose of the above: whether ANY language (across every language
+// IAP Localizations covers) has THIS ONE field over its character limit for
+// the given product — mirrors _iasFieldHasOverLimitLang, drives the warning
+// icon next to Name/Description in IAP Localizations' field dropdown.
+function _iapLocFieldHasOverLimitLang(iapId, field, langCodes) {
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  return langCodes.some(lang => _iapLocFieldValue(iapId, field, lang).length > limit);
+}
+
+// Mirrors _locReviewSourceBadge, minus the 'steam' case entirely (an IAP
+// product has no Steam-sourced text — only ever manually typed or
+// AI-translated).
+function _iapLocSourceBadge(iapId, field, lang) {
+  const p = state.iosSubmitAnswers.iapProducts.find(pp => pp.id === iapId);
+  if (!p) return null;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_iapLocFieldValue(iapId, field, lang)) return null;
+  const entry = p.locs && p.locs[lang];
+  if (!entry) return null;
+  if (_iapLocFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (p[field] || '')) return 'ai';
+  return null;
+}
+
+// Mutating setter — mirrors _iasSetFieldValue exactly. Editing the Primary
+// Language's own card writes straight into p.name/p.desc (the SAME value
+// the IAP Products list's own card shows/edits, render.js) and re-propagates
+// to supporting languages; editing a supporting language's card writes only
+// into that language's own p.locs entry.
+function _iapLocSetFieldValue(iapId, field, lang, value) {
+  const p = state.iosSubmitAnswers.iapProducts.find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    p[field] = value;
+    if (field === 'name') _iapLocPropagateName(iapId, value);
+    else if (_iapLocFieldAutoTranslateEnabled(field)) _iapLocTriggerAutoTranslate(iapId, field, value);
+    return;
+  }
+  if (!p.locs) p.locs = {};
+  if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+  p.locs[lang][field] = value;
+}
+
+// Copies a product's Primary Language Name verbatim into every supporting
+// language, UNLESS Name is turned on as an auto-translated field (gear icon
+// beside "IAP Localizations") — mirrors _iasPropagateTitle exactly (Name
+// plays the same role here that Title plays for the app's own fields: a
+// short identifying field that's mirrored by default, translatable if
+// turned on). Always overwrites, including any earlier manual edit for that
+// language — same as Title.
+function _iapLocPropagateName(iapId, primaryValue) {
+  if (_iapLocFieldAutoTranslateEnabled('name')) { _iapLocTriggerAutoTranslate(iapId, 'name', primaryValue); return; }
+  const p = state.iosSubmitAnswers.iapProducts.find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+  if (!p.locs) p.locs = {};
+  supportedLangs.forEach(lang => {
+    if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+    p.locs[lang].name = primaryValue || '';
+  });
+}
+
+// Which of Name/Description currently auto-translates (or, for Name,
+// mirrors) from the Primary Language into supporting languages — mirrors
+// _iasFieldAutoTranslateEnabled. Defaults match Title/Description's own
+// defaults exactly: Name off (mirrored only, unless turned on here),
+// Description on.
+const IAP_LOC_TRANSLATABLE_FIELDS = ['desc'];
+function _iapLocFieldAutoTranslateEnabled(field) {
+  const cfg = state.iapLocAutoTranslateFields;
+  if (!cfg) return IAP_LOC_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
+const IAP_LOC_FIELD_LABELS = { name: 'display name', desc: 'description' };
+
+// Batch auto-translate one product's field from its Primary Language value
+// into every supporting language — mirrors _iasTriggerAutoTranslate exactly,
+// substituting p/p.locs for fd/fd.localizedStoreText and caching each
+// language's source text the same way (`${field}SourceText`).
+async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
+  if (!_iapLocFieldAutoTranslateEnabled(field)) return;
+  const p = state.iosSubmitAnswers.iapProducts.find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  if (!p.locs) p.locs = {};
+  const eligible = supportedLangs.filter(lang => {
+    const entry = p.locs[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  // Nothing to translate — clear any stale cached translations instead of
+  // calling out to the API for blanks, same as _iasTriggerAutoTranslate.
+  if (!text) {
+    eligible.forEach(lang => {
+      if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+      p.locs[lang][field]     = '';
+      p.locs[lang][sourceKey] = '';
+      const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== '') _iapLocRefreshBackTranslation(iapId, field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.iapLocTranslateStatus = state.iapLocTranslateStatus || {};
+  state.iapLocTranslateStatus[iapId] = state.iapLocTranslateStatus[iapId] || {};
+  state.iapLocTranslateStatus[iapId][field] = 'loading';
+  state.iapLocTranslatePendingLangs = state.iapLocTranslatePendingLangs || {};
+  state.iapLocTranslatePendingLangs[iapId] = state.iapLocTranslatePendingLangs[iapId] || {};
+  state.iapLocTranslatePendingLangs[iapId][field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
+  // Name/Description are short fields (35/55-char App Store Connect limits)
+  // — far smaller per-language token budgets than the App-level fields'
+  // (up to 1200 for Description there).
+  const perLangBudget = field === 'name' ? 80 : 200;
+  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following in-app purchase ${fieldLabel} text for a mobile/video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone and meaning of the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+      const entry = p.locs[lang];
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== translated) _iapLocRefreshBackTranslation(iapId, field, lang, translated);
+    });
+
+    state.iapLocTranslateStatus[iapId][field] = 'complete';
+  } catch (e) {
+    console.warn('[IAP Localizations Translate]', iapId, field, e.message);
+    state.iapLocTranslateStatus[iapId][field] = 'error';
+  }
+  state.iapLocTranslatePendingLangs[iapId][field] = [];
+  reRenderStepModal();
+}
+
+// Read-only lookup for render.js — mirrors _iasFieldTranslatePending.
+function _iapLocFieldTranslatePending(iapId, field, lang) {
+  if (!state.iapLocTranslateStatus || !state.iapLocTranslateStatus[iapId] || state.iapLocTranslateStatus[iapId][field] !== 'loading') return false;
+  const pending = state.iapLocTranslatePendingLangs && state.iapLocTranslatePendingLangs[iapId] && state.iapLocTranslatePendingLangs[iapId][field];
+  return !!(pending && pending.includes(lang));
+}
+
+// Flips Name or Description's entry in "Automatically translated fields"
+// (gear icon beside "IAP Localizations") — mirrors _iasToggleAutoTranslateField,
+// but since this setting is global (one gear menu covers every IAP product,
+// not just whichever one the picker dropdown currently shows), turning a
+// field ON retroactively brings EVERY saved product's supporting languages
+// up to date for that field, not just the currently-viewed product.
+function _iapLocToggleAutoTranslateField(field) {
+  state.iapLocAutoTranslateFields = state.iapLocAutoTranslateFields || {};
+  state.iapLocAutoTranslateFields[field] = !state.iapLocAutoTranslateFields[field];
+  if (state.iapLocAutoTranslateFields[field]) {
+    _iapLocSavedProducts().forEach(p => {
+      if (field === 'name') _iapLocPropagateName(p.id, p.name || '');
+      else _iapLocTriggerAutoTranslate(p.id, field, p.desc || '');
+    });
+  }
+  reRenderStepModal();
+}
+
+/* IAP Localizations' per-card click-to-edit — mirrors startLocReviewInlineEdit,
+   minus the multiline branching entirely: Name (35 chars) and Description
+   (55 chars) are both short enough to stay plain <input> fields, exactly
+   like the IAP Products list's own Name/Description fields
+   (_iapCounterField, render.js) — never a <textarea>, unlike the App-level
+   Description/What's New (up to 4,000 characters). */
+function startIapLocInlineEdit(iapId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const inHalf = !!(el.closest && el.closest('.iap-loc-half'));
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _iapLocFieldValue(iapId, field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _iapLocFieldValue(iapId, field, lang);
+    if (input.value !== previousValue) _iapLocPushUndo('real', iapId, field, lang, previousValue);
+    _iapLocSetFieldValue(iapId, field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== input.value) _iapLocRefreshBackTranslation(iapId, field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+/* IAP Localizations' flipped Review side, back-translation bookkeeping —
+   mirrors _locReviewBackTranslationValue/_locReviewBackTranslationEntry/
+   _locReviewSyncBackTranslations/_locReviewRefreshBackTranslation/
+   _locReviewCommitPrimaryEdit exactly, keyed one level deeper by iapId:
+   state.iapLocBackTranslation[iapId][field][lang] = { text, syncedTopText,
+   status, forwardStatus }. Reuses _iasTranslateSingle as-is (already a
+   generic one-string, one-language-pair-at-a-time translator with no
+   App-specific coupling). */
+
+function _iapLocBackTranslationValue(iapId, field, lang) {
+  const entry = state.iapLocBackTranslation
+    && state.iapLocBackTranslation[iapId]
+    && state.iapLocBackTranslation[iapId][field]
+    && state.iapLocBackTranslation[iapId][field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+
+function _iapLocBackTranslationEntry(iapId, field, lang) {
+  if (!state.iapLocBackTranslation) state.iapLocBackTranslation = {};
+  const forIap   = state.iapLocBackTranslation[iapId] || (state.iapLocBackTranslation[iapId] = {});
+  const forField = forIap[field] || (forIap[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+
+function _iapLocSyncBackTranslations(iapId) {
+  if (!iapId) return Promise.resolve();
+  const fd = state.formData;
+  const field = state.iapLocField || 'name';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _iapLocFieldValue(iapId, field, lang);
+    const entry = _iapLocBackTranslationEntry(iapId, field, lang);
+    if (entry.syncedTopText === topText) return;
+    jobs.push(_iapLocRefreshBackTranslation(iapId, field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _iapLocRefreshBackTranslation(iapId, field, lang, topText) {
+  const entry = _iapLocBackTranslationEntry(iapId, field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _iapLocFieldValue(iapId, field, lang);
+  if (currentTop !== topText) { _iapLocRefreshBackTranslation(iapId, field, lang, currentTop); return; }
+
+  const freshEntry = _iapLocBackTranslationEntry(iapId, field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+async function _iapLocCommitPrimaryEdit(iapId, field, lang, value) {
+  const entry = _iapLocBackTranslationEntry(iapId, field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _iapLocSetFieldValue(iapId, field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _iapLocBackTranslationEntry(iapId, field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _iapLocSetFieldValue(iapId, field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+
+/* Review side's BOTTOM-half click-to-edit — mirrors startLocReviewBackTranslationEdit,
+   always a plain <input> (same reasoning as startIapLocInlineEdit above: an
+   IAP product's fields are always short). Deliberately no character-limit
+   enforcement at all, same as the App-level version's own bottom half — a
+   scratch pad, not real submission data. */
+function startIapLocBackTranslationEdit(iapId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _iapLocBackTranslationValue(iapId, field, lang).text;
+
+  const commit = () => {
+    const previousValue = _iapLocBackTranslationValue(iapId, field, lang).text;
+    if (input.value !== previousValue) _iapLocPushUndo('draft', iapId, field, lang, previousValue);
+    _iapLocCommitPrimaryEdit(iapId, field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+/* IAP Localizations — per-field undo/redo. Mirrors _locReviewUndoEntry/
+   _locReviewUndoState/_locReviewPushUndo/_locReviewRestoreFieldValue/
+   locReviewUndo/locReviewRedo exactly, keyed one level deeper by iapId:
+   state.iapLocUndoHistory[kind][iapId][field][lang] = { past, future }. */
+
+function _iapLocUndoEntry(kind, iapId, field, lang) {
+  if (!state.iapLocUndoHistory) state.iapLocUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.iapLocUndoHistory[kind] || (state.iapLocUndoHistory[kind] = {});
+  const forIap   = forKind[iapId] || (forKind[iapId] = {});
+  const forField = forIap[field] || (forIap[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+function _iapLocUndoState(kind, iapId, field, lang) {
+  const entry = state.iapLocUndoHistory
+    && state.iapLocUndoHistory[kind]
+    && state.iapLocUndoHistory[kind][iapId]
+    && state.iapLocUndoHistory[kind][iapId][field]
+    && state.iapLocUndoHistory[kind][iapId][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+const IAP_LOC_UNDO_LIMIT = 50;
+
+function _iapLocPushUndo(kind, iapId, field, lang, previousValue) {
+  const entry = _iapLocUndoEntry(kind, iapId, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > IAP_LOC_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+function _iapLocRestoreFieldValue(kind, iapId, field, lang, value) {
+  if (kind === 'draft') {
+    _iapLocCommitPrimaryEdit(iapId, field, lang, value);
+    return;
+  }
+  _iapLocSetFieldValue(iapId, field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.iapLocMode === 'review' && lang !== primary) {
+    const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
+    if (backEntry.syncedTopText !== value) _iapLocRefreshBackTranslation(iapId, field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+function iapLocUndo(kind, iapId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _iapLocUndoEntry(kind, iapId, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _iapLocBackTranslationValue(iapId, field, lang).text : _iapLocFieldValue(iapId, field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _iapLocRestoreFieldValue(kind, iapId, field, lang, previous);
+}
+
+function iapLocRedo(kind, iapId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _iapLocUndoEntry(kind, iapId, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _iapLocBackTranslationValue(iapId, field, lang).text : _iapLocFieldValue(iapId, field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _iapLocRestoreFieldValue(kind, iapId, field, lang, next);
+}
+
+/* IAP Localizations' "Review" / "All locs" toggle button — mirrors
+   toggleLocReviewMode exactly, scoped to .iap-loc-card (style.css) instead
+   of .loc-review-card so the two sections' flip animations can never
+   accidentally target each other's cards (they can, in principle, both
+   exist in the DOM at once — Business Questions and the Store Preview are
+   different steps of the same submit flow, but nothing prevents a future
+   layout change from showing both at once, so this is real belt-and-
+   suspenders, not just tidiness). */
+async function toggleIapLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.iapLocMode = state.iapLocMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.iapLocMode === 'review') _iapLocSyncBackTranslations(_iapLocEffectiveIapId());
+
+  const enteringCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+
+/* IAP Localizations' IAP picker dropdown (swSelect) — between the Review
+   button and the field dropdown. Options are every currently SAVED IAP
+   product (_iapLocSavedProducts, rebuilt fresh in
+   buildIapLocalizationsSection() every render); this setter only needs to
+   persist which one is currently chosen. */
+function setIapLocReviewIapId(iapId) {
+  state.iapLocIapId = iapId;
+  reRenderStepModal();
+  if (state.iapLocMode === 'review') _iapLocSyncBackTranslations(iapId);
+}
+
+/* IAP Localizations' field dropdown (swSelect) — mirrors setLocReviewField,
+   options are Name/Description (IAP_LOC_FIELDS, render.js). */
+function setIapLocField(field) {
+  state.iapLocField = field;
+  reRenderStepModal();
+  if (state.iapLocMode === 'review') _iapLocSyncBackTranslations(_iapLocEffectiveIapId());
+}
+
 /* Accept the Shipmate-suggested fix for the current item */
 function applyStorePageFix() {
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
@@ -5674,6 +6291,11 @@ function closeAllDropdowns() {
   // has to reset that flag too, or the next unrelated re-render would read
   // stale state and pop it back open.
   state.iasReviewSettingsOpen = false;
+  // Same treatment for IAP Localizations' own independent settings menu
+  // (_iapLocToggleSettingsMenu below) — a completely separate flag/dropdown
+  // from iasReviewSettingsOpen above, so the two sections' gear menus can
+  // never affect each other.
+  state.iapLocSettingsOpen = false;
 }
 
 /* ── Language picker ─────────────────────────────────── */
@@ -5722,6 +6344,21 @@ function _iasToggleReviewSettingsMenu(event) {
   if (!wasOpen) {
     state.iasReviewSettingsOpen = true;
     document.getElementById('loc-review-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* IAP Localizations' own "Automatically translated fields" settings —
+   mirrors _iasToggleReviewSettingsMenu exactly, with its own independent
+   state flag (iapLocSettingsOpen, closeAllDropdowns above) and DOM id
+   ('iap-loc-settings-wrap', buildIapLocalizationsSection, render.js) so the
+   two sections' gear menus never share or clobber each other's open state. */
+function _iapLocToggleSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.iapLocSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.iapLocSettingsOpen = true;
+    document.getElementById('iap-loc-settings-wrap')?.classList.add('is-open');
   }
 }
 
