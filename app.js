@@ -69,9 +69,8 @@ function bootApp() {
   showSplashView();
   measureScrollbar();
   requestAnimationFrame(measureScrollbar);   // again after first layout settles
-  // Warm the IGDB auth token now so the first picklist keystroke doesn't pay
-  // the Twitch OAuth round-trip on top of the search itself.
-  if (typeof _getIgdbToken === 'function') { try { _getIgdbToken().catch(() => {}); } catch (e) {} }
+  // (No token to warm anymore — the picklist search goes through our own
+  // backend now, not direct IGDB/Twitch. See IGDB_SEARCH_ENDPOINT, claude.js.)
 }
 window.addEventListener('resize', () => { try { measureScrollbar(); } catch (e) {} });
 
@@ -2731,7 +2730,8 @@ function _onTitleInputScenario(value) {
 }
 
 async function _runTitlePicklist(title) {
-  if (!IGDB_CLIENT_ID) return;   // no key configured — silent no-op
+  // (No IGDB_CLIENT_ID gate anymore — search goes through our own backend,
+  // IGDB_SEARCH_ENDPOINT in claude.js, which needs no client-side key.)
   try {
     const results = await igdbSearch(title);
     // Only apply if the title hasn't changed since the search started

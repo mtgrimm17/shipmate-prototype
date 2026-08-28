@@ -384,11 +384,38 @@ const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
                             CONFIG.IGDB_CLIENT_SECRET &&
                             CONFIG.IGDB_CLIENT_SECRET !== '__IGDB_CLIENT_SECRET__')
                            ? CONFIG.IGDB_CLIENT_SECRET : '';
-/* corsproxy.io changed its API: the target must now be passed as ?url=<encoded>.
-   The old bare `?<target>` form returns 403. */
+/* corsproxy.io now requires a paid API key for every request (confirmed
+   live: it returns 401 "A valid API key is required" even for a bare,
+   unrelated GET) — the free anonymous tier it ran on is gone. That breaks
+   every call below that still routes through _cors(), not just IGDB's.
+   The IGDB *search* path (below) has been moved off it entirely onto our
+   own backend (IGDB_SEARCH_ENDPOINT). _cors()/IGDB_ENDPOINT and the Twitch
+   token flow are left in place — unused by search now, but still called by
+   the Steam appdetails/store-page fetches further down, and kept as the
+   fallback wiring if IGDB_SEARCH_ENDPOINT ever needs to be pointed back at
+   direct IGDB access. */
 const _cors = (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u);
 const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
+// Our own backend (Sound Games infra) — looks up IGDB on the server side and
+// hands back a small, pre-shaped JSON result, so the browser never needs an
+// IGDB/Twitch key or a third-party CORS proxy for search. Contract (verified
+// live): GET ?query=<text> → { query, results: [{ igdb_id, name, summary,
+// coverUrl, platforms }] }, platforms being website-derived slugs like
+// "steam"/"app-store"/"google-play"/"epic" — see IGDB_SEARCH_PLATFORM_SLUGS.
+// Notably absent vs. the old direct-IGDB response: a Steam app ID and
+// screenshots — see _igdbSearchRaw below for how that's handled.
+const IGDB_SEARCH_ENDPOINT = 'https://app.sbwfr.dev.sound.games/search';
+// This endpoint's platform slugs → our platform IDs. Derived from IGDB
+// website links only (same idea as IGDB_WEBSITE_URL_PATTERNS above), so —
+// like that table — it only ever yields storefront platforms, never
+// consoles (no psn/xbox/nintendo slug has been observed).
+const IGDB_SEARCH_PLATFORM_SLUGS = {
+  'steam':       'steam',
+  'app-store':   'ios',
+  'google-play': 'android',
+  'epic':        'egs',
+};
 
 // Every IGDB/Steam call in this file (auth, search, appdetails, store-page
 // scrape) goes through a single free third-party CORS proxy (corsproxy.io)
@@ -516,90 +543,58 @@ function igdbSearch(title) {
 }
 
 async function _igdbSearchRaw(title) {
-  const token = await _getIgdbToken();
-  const safe  = title.replace(/"/g, '');   // prevent query injection
-  // Use case-insensitive substring match (~~ *"..."*) instead of IGDB's
-  // full-text `search` so partial input like "Monument Val" matches
-  // "Monument Valley". Sort by popularity so the most relevant games
-  // surface first even without relevance ranking.
-  const body  = [
-    `fields name, cover.url, screenshots.url, platforms, release_dates.platform, release_dates.status, summary, websites.url, websites.category;`,
-    `where name ~ *"${safe}"* & version_parent = null;`,
-    `sort aggregated_rating_count desc;`,
-    `limit 5;`,
-  ].join('\n');
+  const res = await _fetchWithTimeout(
+    IGDB_SEARCH_ENDPOINT + '?query=' + encodeURIComponent(title)
+  );
 
-  const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Client-ID':     IGDB_CLIENT_ID,
-      'Authorization': 'Bearer ' + token,
-      'Content-Type':  'text/plain',
-    },
-    body,
-  });
-
-  if (res.status === 401) {
-    _igdbAccessToken = null;               // invalidate and let caller retry
-    throw new Error('IGDB auth expired — please retry');
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.text()).slice(0, 200); } catch (_) {}
+    throw new Error('IGDB search failed (' + res.status + ')' + (detail ? ' — ' + detail : ''));
   }
-  if (!res.ok) throw new Error('IGDB search failed (' + res.status + ')');
 
-  const games = await res.json();
-  console.log('[IGDB raw]', JSON.stringify(games.map(g => ({ id: g.id, name: g.name, platforms: g.platforms, websites: (g.websites||[]).map(w=>w.category), cover: g.cover?.url }))));
-  return games.map(g => ({
-    id:        g.id,
-    name:      g.name || '',
-    // Upgrade thumbnail from t_thumb (32px) to t_cover_small (90×128),
-    // then proxy through wsrv.nl so the image loads cross-origin in the browser.
-    coverUrl: (() => {
-      if (!g.cover?.url) return null;
-      const direct = (g.cover.url.startsWith('//') ? 'https:' : '') + g.cover.url.replace('t_thumb', 't_cover_small');
-      const clean  = direct.replace(/^https?:\/\//, '');
-      return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
-    })(),
-    // Cover art at IGDB's largest dedicated "cover" size (t_cover_big,
-    // 264×374 — portrait). Used by _applySteamCapsuleFromCover (app.js) to
-    // auto-populate the Steam Key Art "IGDB Cover Art" field. Kept as
-    // a raw images.igdb.com URL, not pre-proxied
-    // like coverUrl above — _screenshotSrc (app.js) already proxies any
-    // images.igdb.com URL through wsrv.nl at render time, same as
-    // screenshots elsewhere, so there's no need to double up here.
-    coverBigUrl: (() => {
-      if (!g.cover?.url) return null;
-      return (g.cover.url.startsWith('//') ? 'https:' : '') + g.cover.url.replace('t_thumb', 't_cover_big');
-    })(),
-    // forDisplay=true → consoles shown without requiring confirmed release status
-    platforms:   _igdbPlatforms(g.platforms, g.websites, g.release_dates, true),
-    // Strict activation list stored separately for selectPicklistItem
-    activationPlatforms: _igdbPlatforms(g.platforms, g.websites, g.release_dates, false),
-    // Steam app ID, if IGDB links to a Steam store page — e.g.
-    // "https://store.steampowered.com/app/4037180/Go_Ape_Ship/" → "4037180".
-    // Used by _applySteamHeroBanner (app.js) to build the game's Steam
-    // library_hero CDN URL directly (see steamLibraryHeroUrl below).
-    //
-    // Matches on the URL itself rather than a website "category"/"type"
-    // field — see IGDB_WEBSITE_URL_PATTERNS above for why (the same
-    // pattern table is reused here rather than a separate inline regex).
-    steamAppId: (() => {
-      const steamPattern = IGDB_WEBSITE_URL_PATTERNS.find(p => p.pid === 'steam').re;
-      const steamSite = (g.websites || []).find(w => w.url && steamPattern.test(w.url));
-      if (!steamSite) return null;
-      const m = steamSite.url.match(/\/app\/(\d+)/);
-      return m ? m[1] : null;
-    })(),
-    summary:     g.summary || '',
-    // Up to 6 screenshots upgraded from t_thumb to t_screenshot_big (889×500)
-    // also proxied through wsrv.nl for the same reason.
-    screenshots: (g.screenshots || []).slice(0, 6)
-      .filter(s => s && s.url)
-      .map(s => {
-        const abs   = s.url.startsWith('//') ? 'https:' + s.url : s.url;
-        const sized = abs.replace('/t_thumb/', '/t_screenshot_big/');
-        const clean = sized.replace(/^https?:\/\//, '');
-        return 'https://wsrv.nl/?url=' + encodeURIComponent(clean) + '&output=jpg';
-      }),
-  }));
+  const data  = await res.json();
+  const games = data.results || [];
+  return games.map(g => {
+    // Endpoint hands back IGDB's raw t_thumb (32px) cover URL, protocol-
+    // relative, unproxied — same upgrade-then-proxy treatment the old
+    // direct-IGDB path applied to `cover.url`.
+    const rawCover = g.coverUrl
+      ? (g.coverUrl.startsWith('//') ? 'https:' : '') + g.coverUrl
+      : null;
+    const coverUrl = rawCover
+      ? 'https://wsrv.nl/?url=' + encodeURIComponent(rawCover.replace('t_thumb', 't_cover_small').replace(/^https?:\/\//, '')) + '&output=jpg'
+      : null;
+    // t_cover_big (264×374) for _applySteamCapsuleFromCover (app.js) — same
+    // reasoning as the old coverBigUrl: kept as a raw images.igdb.com URL,
+    // not pre-proxied, since _screenshotSrc proxies it at render time.
+    const coverBigUrl = rawCover ? rawCover.replace('t_thumb', 't_cover_big') : null;
+    // Website-derived storefronts only (steam/ios/android/egs) — this
+    // endpoint doesn't expose IGDB's platform-ID/release-date fields, so
+    // there's no console (psn/xbox/nintendo) detection here. Same list
+    // used for both display and activation since there's no confirmed-
+    // release data to apply the stricter console gate against.
+    const platforms = (g.platforms || [])
+      .map(slug => IGDB_SEARCH_PLATFORM_SLUGS[slug])
+      .filter(pid => pid && !!PLATFORMS[pid]);
+    return {
+      id:        Number(g.igdb_id),
+      name:      g.name || '',
+      coverUrl,
+      coverBigUrl,
+      platforms,
+      activationPlatforms: platforms,
+      // Not returned by this endpoint (no Steam app-page lookup on the
+      // backend yet) — selectPicklistItem (app.js) already guards every
+      // Steam-enrichment call on `item.steamAppId` being truthy, so this
+      // just makes those steps no-op rather than error.
+      steamAppId: null,
+      summary:     g.summary || '',
+      // Not returned by this endpoint — _fillScreenshotGridFromIgdb (app.js)
+      // gets an empty array and simply has nothing to add.
+      screenshots: [],
+    };
+  }).filter(g => g.id && Number.isFinite(g.id));
 }
 
 /* ── Steam library_hero direct CDN URL ────────────────────────────────
