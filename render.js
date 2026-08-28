@@ -3670,6 +3670,7 @@ function renderStepModal() {
     webKeyArt:     'Key Art',
     keyArt:        'Select Key Art',
     localization:  'Localization Review',
+    iapLocalizations: 'IAP Localizations',
   };
   const isFlipped = !!flipTarget;
   const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
@@ -3769,7 +3770,16 @@ function renderStepModal() {
       ${isFlipped
         ? (platformId === 'steam' && flipTarget === 'keyArt' && state.steamKeyArtFromWebEdit)
           ? `<button class="btn btn-primary" onclick="backFromSteamKeyArtToWebEdit()">Save &amp; Return to Web</button>`
-          : `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
+          // IAP Locs is reached FROM Business Questions (the "IAP Locs" button
+          // on the IAP Products row, buildIapSection) rather than from the
+          // un-flipped Store Preview itself, so its own "Save & Return" flips
+          // back to 'business' specifically — closeStorePreviewSection's
+          // default (flip to null) would instead dump the user out to the
+          // Store Preview, skipping right over the Business Questions they
+          // actually came from.
+          : flipTarget === 'iapLocalizations'
+            ? `<button class="btn btn-primary" onclick="openStorePreviewSection('${platformId}','business')">Save &amp; Return</button>`
+            : `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
         : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
@@ -3870,6 +3880,16 @@ function buildStorePreviewFlipSection(platformId, target) {
   // iOS-only: the App Store Product Page Preview's "Localizations" button.
   if (target === 'localization') {
     return buildLocalizationReviewSection();
+  }
+  // iOS-only: Business Questions' "IAP Locs" button (buildIapSection,
+  // further above) — flips the whole modal over from 'business' to this
+  // section rather than rendering it inline under the products list. The
+  // footer's "Save & Return" is special-cased for this one target (further
+  // above) to flip back to 'business' specifically, not the default
+  // un-flipped Store Preview, since that's genuinely where the user came
+  // from and where they'd expect to land back.
+  if (target === 'iapLocalizations') {
+    return buildIapLocalizationsSection();
   }
   return '';
 }
@@ -6944,14 +6964,36 @@ function buildIapSection() {
   const hideIAPQuestion = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
 
   const iapProducts = a.iapProducts || [];
+
+  // "IAP Locs" — sits on the right side of the IAP Products label, opposite
+  // "+ Add IAP" below the list, mirroring the App Store Product Page
+  // Preview's own "Localizations" button (.ias-all-locs-btn, further above)
+  // both in placement-as-an-action and in mechanism: it flips the WHOLE
+  // Business Questions modal over to the IAP Localizations section
+  // (openStorePreviewSection('ios','iapLocalizations') — see
+  // buildStorePreviewFlipSection's 'iapLocalizations' target, and the
+  // footer's special-cased "Save & Return" back to 'business', both
+  // further above) rather than rendering that section inline at the bottom
+  // of this step, which is where it lived before. Only shown once there's
+  // at least one SAVED product to localize — same guard
+  // buildIapLocalizationsSection itself uses, so the button never opens an
+  // empty section.
+  const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
+  const iapLocsBtn = hasSavedIapProducts
+    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('ios','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
+    : '';
+
   const iapProductsHTML = `
     <div class="form-group iap-products-group">
-      <label class="form-label">IAP Products
-        <span class="tooltip-anchor">
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">List each in-app purchase as it should appear on your product page — name, description, price, and type.</span>
-        </span>
-      </label>
+      <div class="iap-products-label-row">
+        <label class="form-label">IAP Products
+          <span class="tooltip-anchor">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-body">List each in-app purchase as it should appear on your product page — name, description, price, and type.</span>
+          </span>
+        </label>
+        ${iapLocsBtn}
+      </div>
       <div class="iap-product-list">
         ${iapProducts.length
           ? iapProducts.map(buildIapProductRow).join('')
@@ -6965,17 +7007,10 @@ function buildIapSection() {
       ${iapProductsHTML}
     </div>` : '';
 
-  // IAP Localizations sits outside iapFollowUp (not gated on hasIAP itself)
-  // — same precedent as the Store Preview's own "In-App Purchases" info
-  // block (buildStorePreviewSection's iapInfoBlock), which also keys off
-  // SAVED products existing rather than the hasIAP answer, so previously-
-  // saved products and their localizations don't just vanish if hasIAP is
-  // later flipped back to "no".
   return `
     ${hideIAPQuestion ? '' : iosYNRow('Does your app include in-app purchases?', 'hasIAP',
       'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.')}
-    ${iapFollowUp}
-    ${buildIapLocalizationsSection()}`;
+    ${iapFollowUp}`;
 }
 
 /* Localization Review's field dropdown analog for IAP Products — only Name
@@ -6992,11 +7027,14 @@ const IAP_LOC_FIELDS = [
    Product Page Preview's "Localizations" section), but scoped to ONE saved
    (collapsed — see saveIapProduct, app.js) IAP product's Name/Description at
    a time instead of the app's own Title/Subtitle/Description/What's New.
-   Rendered inline at the bottom of the Business Questions step, directly
-   under the IAP Products list (buildIapSection above) rather than behind a
-   flip/button — it's most useful sitting right next to the products it
-   localizes, and there's no equivalent "preview" surface to flip out of in
-   the first place.
+   Reached by flipping the whole Business Questions modal via the "IAP
+   Locs" button on the IAP Products row (buildIapSection above,
+   openStorePreviewSection('ios','iapLocalizations')) — see
+   buildStorePreviewFlipSection's 'iapLocalizations' target, further above,
+   for the routing and the footer's special-cased "Save & Return" back to
+   'business'. (An earlier version rendered this inline at the bottom of
+   Business Questions instead; moved behind its own flip so Business
+   Questions itself stays focused on its own questions.)
 
    Every language card here reads and writes the SAME underlying value the
    IAP Products list itself shows for that product's Name/Description — this
@@ -7007,7 +7045,9 @@ const IAP_LOC_FIELDS = [
    selectable in the IAP picker dropdown below — an in-progress card (not
    yet within IAP_PRODUCT_FIELD_LIMITS, so not yet save-able at all — see
    saveIapProduct) has no finished Name worth localizing yet. The whole
-   section is hidden (returns '') until at least one product has been saved.
+   section is hidden (returns '') until at least one product has been
+   saved — the same guard buildIapSection's own "IAP Locs" button uses to
+   decide whether to show itself at all.
 
    Every other mechanic mirrors Localization Review function-for-function,
    just parameterized by which IAP product the new IAP picker dropdown (sat
@@ -7148,7 +7188,7 @@ function buildIapLocalizationsSection() {
   // — iapLocSettingsOpen vs iasReviewSettingsOpen — can never collide), but
   // with only Name and Description as options (see
   // _iapLocFieldAutoTranslateEnabled/_iapLocToggleAutoTranslateField, app.js).
-  const autoCfg = state.iapLocAutoTranslateFields || { name: false, desc: true };
+  const autoCfg = state.iapLocAutoTranslateFields || { name: true, desc: true };
   const settingsOpen = !!state.iapLocSettingsOpen;
   const settingsRow = (key, label) => `
         <label class="cq-check-row loc-review-settings-row">

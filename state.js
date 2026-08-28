@@ -2569,15 +2569,17 @@ const state = {
   iapLocTranslatePendingLangs: {},
 
   // Which of an IAP product's two localizable fields Shipmate automatically
-  // translates (or, for Name, mirrors) from the Primary Language into every
-  // supporting language — keyed 'name' | 'desc', each true (auto-translate/
-  // mirror on) or false (fully manual). Defaults match Title/Description's
-  // own defaults exactly: Name off (mirrored only, unless turned on here),
-  // Description on. This setting is GLOBAL — it applies to every saved IAP
-  // product, not just whichever one the picker dropdown currently shows
-  // (see _iapLocToggleAutoTranslateField, app.js). Set via the gear icon
-  // beside "IAP Localizations".
-  iapLocAutoTranslateFields: { name: false, desc: true },
+  // translates from the Primary Language into every supporting language —
+  // keyed 'name' | 'desc', each true (auto-translate on) or false (mirrored
+  // verbatim for Name, fully manual for Description). Both default on —
+  // unlike Title/Description's own defaults (Title off, mirrored only), an
+  // IAP product's Name is short marketing copy worth actually translating
+  // out of the box, not just carrying over the Primary Language's text.
+  // This setting is GLOBAL — it applies to every saved IAP product, not
+  // just whichever one the picker dropdown currently shows (see
+  // _iapLocToggleAutoTranslateField, app.js). Set via the gear icon beside
+  // "IAP Localizations".
+  iapLocAutoTranslateFields: { name: true, desc: true },
 
   // Whether IAP Localizations' own "Automatically translated fields"
   // dropdown is currently open — mirrors iasReviewSettingsOpen above,

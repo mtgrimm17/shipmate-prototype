@@ -7022,6 +7022,18 @@ select.form-input {
    row (.is-collapsed) instead of the full card. */
 .iap-products-group { margin-top: 14px; }
 
+/* Groups the "IAP Products" label with the "IAP Locs" button (buildIapSection,
+   render.js) on one row — same layout convention as the App Store Product
+   Page Preview's own .ias-label-row (further above), which pairs a label
+   with its own "Localizations" button the same way. .form-label's own
+   margin-bottom is reset to 0 here since this row supplies its own spacing
+   below instead. */
+.iap-products-label-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.iap-products-label-row .form-label { margin-bottom: 0; }
+
 .iap-product-row {
   position: relative;
   padding: 12px 36px 12px 12px;

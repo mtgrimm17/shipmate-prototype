@@ -5209,12 +5209,13 @@ function _iapLocPropagateName(iapId, primaryValue) {
   });
 }
 
-// Which of Name/Description currently auto-translates (or, for Name,
-// mirrors) from the Primary Language into supporting languages — mirrors
-// _iasFieldAutoTranslateEnabled. Defaults match Title/Description's own
-// defaults exactly: Name off (mirrored only, unless turned on here),
-// Description on.
-const IAP_LOC_TRANSLATABLE_FIELDS = ['desc'];
+// Which of Name/Description currently auto-translates from the Primary
+// Language into supporting languages — mirrors _iasFieldAutoTranslateEnabled.
+// Both default on (see state.iapLocAutoTranslateFields, state.js, for why
+// this diverges from Title/Description's own defaults). This fallback only
+// matters for state saved before iapLocAutoTranslateFields existed —
+// otherwise state.js's own default already wins below.
+const IAP_LOC_TRANSLATABLE_FIELDS = ['name', 'desc'];
 function _iapLocFieldAutoTranslateEnabled(field) {
   const cfg = state.iapLocAutoTranslateFields;
   if (!cfg) return IAP_LOC_TRANSLATABLE_FIELDS.includes(field);
