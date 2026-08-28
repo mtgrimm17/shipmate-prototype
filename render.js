@@ -1243,11 +1243,30 @@ function renderProjectBar() {
   // Render project dropdown items
   const projDD = document.getElementById('projectDropdown');
   if (projDD) {
-    projDD.innerHTML = state.projects.map(p => `
-      <div class="project-item ${p.id === state.activeProjectId ? 'active' : ''}"
+    // The active project's row prefers the live state.formData.title over
+    // its saved proj.name (falling back to it, same as the chip's own
+    // gameTitle above, just WITHOUT gameTitle's extra 'My Game' fallback —
+    // that would otherwise always win the `||` below and this row would
+    // never fall through to 'Untitled Game' the way every other row does).
+    // proj.name is only written back by saveCurrentToProject(), at specific
+    // save points (switching project/version, completing onboarding), so a
+    // title just typed or picked from the IGDB search picklist during
+    // onboarding wouldn't show up here yet on a project that hasn't been
+    // saved since. Every OTHER (inactive) project's row still reads its own
+    // saved p.name, since there's no live in-progress state for it to
+    // prefer. See _syncProjectBarTitle (app.js) for the cheap targeted DOM
+    // patch that keeps this row updated between full renderProjectBar()
+    // calls, e.g. on every keystroke while typing.
+    const liveActiveTitle = state.formData.title || proj?.name;
+    projDD.innerHTML = state.projects.map(p => {
+      const isActive = p.id === state.activeProjectId;
+      const label = (isActive ? liveActiveTitle : p.name) || t('bar.untitled_game');
+      return `
+      <div class="project-item ${isActive ? 'active' : ''}"
            onclick="switchProject('${p.id}')">
-        ${p.name || t('bar.untitled_game')}
-      </div>`).join('') + `
+        ${escHtml(label)}
+      </div>`;
+    }).join('') + `
       <div class="project-dropdown-divider"></div>
       <div class="project-item new-project" onclick="createNewProject()">
         <span>${t('bar.new_project')}</span><span class="plus">+</span>

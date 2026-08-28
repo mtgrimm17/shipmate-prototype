@@ -2145,6 +2145,36 @@ function updateObSectionStates() {
   paintShippyPanel();
 }
 
+// Keeps the top-right project bar's game title in sync the moment
+// state.formData.title changes, without waiting for the next full
+// renderProjectBar() (which also rebuilds the nav labels, the release
+// dropdown, and re-measures the nav glow — unnecessary work on every
+// keystroke). Called from syncField('title', ...) (typing the title field)
+// and selectPicklistItem (picking a game from the IGDB search picklist) —
+// the two places the title can change during onboarding.
+//
+// Patches two things: the closed chip (#projectSelectorTitle) and, if the
+// project dropdown is currently open, the active project's own row inside
+// it (.project-item.active, #projectDropdown) — that row previously only
+// ever showed the PROJECT RECORD's saved name (proj.name, written back only
+// by saveCurrentToProject() at save points like switching project/version
+// or completing onboarding), so a title just typed or picked here wouldn't
+// show up in the dropdown until some unrelated action happened to trigger
+// one of those saves — it would keep reading "Untitled Game" even after a
+// game was clearly already selected. An earlier version of this function
+// tried to patch a #projectItemCurrent element that was never actually
+// given that id anywhere in the dropdown's own markup (renderProjectBar,
+// render.js) — a dead, always-null lookup — which is how this went
+// unnoticed. renderProjectBar's own dropdown-row template (render.js) now
+// separately falls back to this same live title for its permanent fix on
+// every full re-render; this function is just the fast path in between.
+function _syncProjectBarTitle(value) {
+  const selEl = document.getElementById('projectSelectorTitle');
+  if (selEl) selEl.textContent = value || 'My Game';
+  const activeDropdownItem = document.querySelector('#projectDropdown .project-item.active');
+  if (activeDropdownItem) activeDropdownItem.textContent = value || t('bar.untitled_game');
+}
+
 function syncField(field, value) {
   state.formData[field] = value;
   // Keep platform privacy URLs in sync when the global field is updated
@@ -2152,13 +2182,7 @@ function syncField(field, value) {
     state.iosSubmitAnswers.privacyPolicyUrl     = value;
     state.androidSubmitAnswers.privacyPolicyUrl = value;
   }
-  if (field === 'title') {
-    // Keep selector title in sync while the user types
-    const selEl = document.getElementById('projectSelectorTitle');
-    if (selEl) selEl.textContent = value || 'My Game';
-    const curEl = document.getElementById('projectItemCurrent');
-    if (curEl) curEl.textContent = value || 'My Game';
-  }
+  if (field === 'title') _syncProjectBarTitle(value);
   // Live is-complete on the typed input — immediate feedback as user types/clears
   const FIELD_INPUT_MAP = { title: 'ob-title', description: 'ob-desc' };
   if (FIELD_INPUT_MAP[field]) _setInputComplete(FIELD_INPUT_MAP[field], !!(value?.trim()));
@@ -2884,6 +2908,14 @@ function selectPicklistItem(igdbId) {
 
   // Set game title
   state.formData.title = item.name;
+  // Picking a game here is exactly the kind of title change syncField's own
+  // oninput handler would normally catch (see _syncProjectBarTitle, further
+  // above) — but this path sets state.formData.title directly rather than
+  // going through syncField, so without this call the top-right project bar
+  // (both the closed chip and, if open, the dropdown's active row) would
+  // keep showing whatever it showed before this pick — "Untitled Game" on a
+  // fresh project — until some unrelated action happened to re-render it.
+  _syncProjectBarTitle(item.name);
   const titleEl = document.getElementById('ob-title');
   if (titleEl) {
     titleEl.value = item.name;
