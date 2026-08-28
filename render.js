@@ -7050,9 +7050,11 @@ const IAP_LOC_FIELDS = [
    decide whether to show itself at all.
 
    Every other mechanic mirrors Localization Review function-for-function,
-   just parameterized by which IAP product the new IAP picker dropdown (sat
-   between the Review button and the field dropdown, per the header layout
-   below) currently has selected: auto-translation into supporting languages
+   just parameterized by which IAP product the new IAP picker dropdown (sits
+   beside the field dropdown on their own row beneath the header — see
+   .iap-loc-selectors-row, style.css — rather than crowding the "IAP
+   Localizations" title's own row the way Localization Review's single field
+   dropdown does) currently has selected: auto-translation into supporting languages
    (_iapLocTriggerAutoTranslate/_iapLocPropagateName, app.js — Name mirrors
    verbatim by default same as Title, Description auto-translates by default
    same as Description), character counters (reusing IAP_PRODUCT_FIELD_LIMITS
@@ -7218,9 +7220,11 @@ function buildIapLocalizationsSection() {
         </div>
         <div class="loc-review-header-controls">
           <button class="loc-review-toggle-btn" onclick="toggleIapLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
-          ${swSelect('iap-loc-iap', iapId, iapOptions, 'setIapLocReviewIapId', '160px', 'right')}
-          ${swSelect('iap-loc-field', field, fieldOptions, 'setIapLocField', '150px', 'right')}
         </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect('iap-loc-iap', iapId, iapOptions, 'setIapLocReviewIapId', '160px', 'right')}
+        ${swSelect('iap-loc-field', field, fieldOptions, 'setIapLocField', '150px', 'right')}
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;

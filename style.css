@@ -7124,6 +7124,18 @@ select.form-input {
    chars) and Description (55 chars) are both short fields, so the plain
    default sizing below is always enough. */
 .iap-loc-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+/* The IAP/field picker dropdowns sit on their own row beneath .loc-review-header
+   instead of crowding it (unlike Localization Review's single field dropdown,
+   which stays in .loc-review-header-controls beside the Review button) — with
+   two selects here instead of one, keeping both on the title's row left the
+   "IAP Localizations" heading squeezed against a picker and pushed the Review
+   button off the row's actual right edge. Right-aligned (justify-content:
+   flex-end) to read as a continuation of the header's own controls, and to
+   land directly above the cards each dropdown filters. */
+.iap-loc-selectors-row {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  margin-bottom: 12px;
+}
 .iap-loc-cards { display: flex; flex-wrap: wrap; gap: 12px; }
 /* Same flex-column + margin-top:auto counter-pinning trick as
    .loc-review-card — see its own comment further above for why. */
