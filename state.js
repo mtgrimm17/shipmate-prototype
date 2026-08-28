@@ -1176,6 +1176,15 @@ function makeBlankIOSAnswers() {
     hasIAP:                 null,
     iapTypes:               [],
     hasFreeTrial:           null,
+    // IAP Products — the individual named SKUs shown in the Business
+    // section's "IAP Products" list (see buildIapProductRow, render.js;
+    // addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
+    // setIapProductTrial, app.js). Each: { id, name, desc, price, type,
+    // trial }. Purely additive detail on top of iapTypes/hasFreeTrial above
+    // — an empty list never blocks Business section completion (see
+    // isIOSSectionComplete below), same as a developer who's declared IAP
+    // types but hasn't named individual products yet.
+    iapProducts:            [],
     taxCategory:            'games',
     // Distribution
     selectedCountries:      [],

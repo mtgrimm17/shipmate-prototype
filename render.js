@@ -6747,6 +6747,61 @@ function buildExportComplianceSection() {
 }
 
 /* ── Business ────────────────────────────────────────── */
+
+// Shared by buildBusinessSection's own "which IAP types does your app
+// include" summary picker AND each individual IAP Products row
+// (buildIapProductRow) below — one definition, so the two pickers can never
+// drift out of sync with each other.
+const IOS_IAP_TYPES = [
+  { id: 'consumable',     label: 'Consumable',         desc: 'Coins, lives, boosts' },
+  { id: 'non-consumable', label: 'Non-consumable',     desc: 'Unlock levels, remove ads' },
+  { id: 'auto-renewable', label: 'Auto-renewable sub', desc: 'Monthly/yearly subscription' },
+  { id: 'non-renewing',   label: 'Non-renewing sub',   desc: 'Season pass, time-limited' },
+];
+
+/* One row of the Business section's IAP Products list (state.iosSubmitAnswers
+   .iapProducts, each a { id, name, desc, price, type, trial } — see
+   addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
+   setIapProductTrial in app.js). Mirrors _wsLinkRowHTML's (Web Factsheet
+   Links) convention: text fields mutate on oninput with no re-render (so
+   typing doesn't lose focus), while structural changes — add/remove, and
+   Type (which can reveal/hide the Free Trial row below it) — go through
+   reRenderStepModal(). Free Trial only applies to the two subscription
+   types (id contains "sub" in IOS_IAP_TYPES' naming, matching how the
+   overall section's existing "Does any subscription include a free trial?"
+   question is scoped) — a Consumable/Non-consumable product hides that row
+   entirely rather than asking a question that can't apply to it. */
+function buildIapProductRow(p) {
+  const isSub = /-renewa|renewing/.test(p.type); // auto-renewable / non-renewing
+  return `
+    <div class="iap-product-row" data-iap-id="${p.id}">
+      <button class="iap-product-remove" type="button" onclick="removeIapProduct('${p.id}')" title="Remove IAP" aria-label="Remove IAP">✕</button>
+      <div class="iap-product-fields">
+        <input class="form-input" type="text" placeholder="Name of the IAP" value="${escHtml(p.name)}"
+               oninput="setIapProductField('${p.id}','name',this.value)">
+        <input class="form-input" type="text" placeholder="Description" value="${escHtml(p.desc)}"
+               oninput="setIapProductField('${p.id}','desc',this.value)">
+      </div>
+      <div class="iap-product-cfg">
+        <input class="form-input iap-product-price" type="text" placeholder="Price (e.g. 4.99)" value="${escHtml(p.price)}"
+               oninput="setIapProductField('${p.id}','price',this.value)" onblur="roundIapPrice('${p.id}',this)">
+        <div class="data-type-chips">
+          ${IOS_IAP_TYPES.map(t => `
+            <button type="button" class="data-type-chip ${p.type === t.id ? 'is-on' : ''}"
+                    onclick="setIapProductType('${p.id}','${t.id}')" title="${t.desc}">${t.label}</button>`).join('')}
+        </div>
+      </div>
+      ${isSub ? `
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Free trial?</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${p.trial === 'yes' ? 'is-selected' : ''}" onclick="setIapProductTrial('${p.id}','yes')">YES</button>
+          <button class="yn-btn yn-no ${p.trial === 'no' ? 'is-selected' : ''}" onclick="setIapProductTrial('${p.id}','no')">NO</button>
+        </div>
+      </div>` : ''}
+    </div>`;
+}
+
 function buildBusinessSection() {
   const a = state.iosSubmitAnswers;
 
@@ -6758,25 +6813,37 @@ function buildBusinessSection() {
   // Tax category defaults to 'games' — always hide in Unanswered view if it has a value
   const hideTaxCat    = bsCollapse && !bsShowAll && !!a.taxCategory;
 
-  const IAP_TYPES = [
-    { id: 'consumable',     label: 'Consumable',         desc: 'Coins, lives, boosts' },
-    { id: 'non-consumable', label: 'Non-consumable',     desc: 'Unlock levels, remove ads' },
-    { id: 'auto-renewable', label: 'Auto-renewable sub', desc: 'Monthly/yearly subscription' },
-    { id: 'non-renewing',   label: 'Non-renewing sub',   desc: 'Season pass, time-limited' },
-  ];
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
+
+  const iapProducts = a.iapProducts || [];
+  const iapProductsHTML = `
+    <div class="form-group iap-products-group">
+      <label class="form-label">IAP Products
+        <span class="tooltip-anchor">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-body">List each in-app purchase as it should appear on your product page — name, description, price, and type.</span>
+        </span>
+      </label>
+      <div class="iap-product-list">
+        ${iapProducts.length
+          ? iapProducts.map(buildIapProductRow).join('')
+          : '<p class="form-hint" style="margin:0 0 10px;">No IAP products added yet.</p>'}
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="addIapProduct()">+ Add IAP</button>
+    </div>`;
 
   const iapFollowUp = a.hasIAP === 'yes' ? `
     <div class="ios-followup">
       <div class="ios-q-label" style="margin-bottom:8px;">Which IAP types does your app include?</div>
       <div class="data-type-chips">
-        ${IAP_TYPES.map(t => `
+        ${IOS_IAP_TYPES.map(t => `
           <button class="data-type-chip ${a.iapTypes.includes(t.id) ? 'is-on' : ''}"
                   onclick="toggleIOSIAPType('${t.id}')" title="${t.desc}">${t.label}</button>`).join('')}
       </div>
       <div style="margin-top:12px;">
         ${iosYNRow('Does any subscription include a free trial?', 'hasFreeTrial', '')}
       </div>
+      ${iapProductsHTML}
     </div>` : '';
 
   const fd = state.formData;

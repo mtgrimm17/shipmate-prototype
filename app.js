@@ -1385,6 +1385,56 @@ function toggleIOSIAPType(typeId) {
   reRenderStepModal();
 }
 
+/* ── Business — IAP Products list ─────────────────────
+   state.iosSubmitAnswers.iapProducts, each a { id, name, desc, price, type,
+   trial } — see buildIapProductRow (render.js) for the row this backs.
+   Same add/remove/field-mutate split as addWebLink/removeWebLink/
+   setWebLinkField (Web Factsheet Links, further down this file): structural
+   changes (add, remove, Type — which can reveal/hide the Free Trial row)
+   go through reRenderStepModal(); plain text fields mutate directly on
+   oninput with no re-render, so typing doesn't lose focus mid-word. */
+function addIapProduct() {
+  state.iosSubmitAnswers.iapProducts.push({
+    id: generateId('iap'), name: '', desc: '', price: '', type: 'consumable', trial: 'no',
+  });
+  reRenderStepModal();
+}
+function removeIapProduct(id) {
+  state.iosSubmitAnswers.iapProducts = state.iosSubmitAnswers.iapProducts.filter(p => p.id !== id);
+  reRenderStepModal();
+}
+function setIapProductField(id, key, value) {
+  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  if (p) p[key] = value;
+}
+function setIapProductType(id, type) {
+  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  if (!p) return;
+  p.type = type;
+  // Type governs whether the Free Trial row even applies (see
+  // buildIapProductRow's isSub check) — re-render so switching to/from a
+  // subscription type shows/hides it immediately.
+  reRenderStepModal();
+}
+function setIapProductTrial(id, trial) {
+  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  if (p) p.trial = trial;
+  reRenderStepModal();
+}
+// Same "round to a .99 price" polish as the base game price (roundPrice
+// above) — kept as its own function rather than reusing roundPrice
+// directly, since that one hardcodes state.formData.price and would
+// overwrite the base game price instead of this product's own.
+function roundIapPrice(id, inputEl) {
+  let val = parseFloat(inputEl.value);
+  if (isNaN(val) || val <= 0) return; // free / blank — leave as-is
+  if (Math.abs(val - Math.floor(val) - 0.99) < 0.001) return;
+  const rounded = Math.round(val);
+  const result = rounded > 0 ? (rounded - 0.01).toFixed(2) : val.toFixed(2);
+  inputEl.value = result;
+  setIapProductField(id, 'price', result);
+}
+
 /* ── Distribution map ────────────────────────────────── */
 
 async function initDistributionMap() {

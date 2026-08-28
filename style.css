@@ -6961,6 +6961,62 @@ select.form-input {
 /* Indented follow-up block */
 .ios-followup { margin-top: 10px; padding-left: 14px; border-left: 2px solid var(--border); }
 
+/* ── Business — IAP Products list ─────────────────────
+   One .iap-product-row per state.iosSubmitAnswers.iapProducts entry (see
+   buildIapProductRow, render.js). Reuses .form-input/.data-type-chip/
+   .yn-btn from elsewhere in this section rather than inventing new field
+   styles — only the row scaffolding itself (card, remove button, the two
+   sub-rows of fields) is new. */
+.iap-products-group { margin-top: 14px; }
+
+.iap-product-row {
+  position: relative;
+  padding: 12px 36px 12px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.iap-product-fields {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.iap-product-fields .form-input { margin-bottom: 0; }
+
+.iap-product-cfg {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.iap-product-price { max-width: 140px; flex: none; }
+
+.iap-product-trial {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.iap-product-trial-label { font-size: 12px; color: var(--text-dim); }
+
+.iap-product-remove {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 22px; height: 22px;
+  border: none; border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.iap-product-remove:hover { background: var(--panel-3); color: var(--text); }
+
 /* ── Google Play Content Questions (IARC) ────────────────
    Android's contentRating step. A recursive question tree — each answer
    can reveal follow-up questions nested below it; a question and all of
