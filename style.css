@@ -7136,6 +7136,24 @@ select.form-input {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   margin-bottom: 12px;
 }
+/* Both selects in this row are called with swSelect(..., 'auto', ...) (see
+   swSelect's own @param width doc, render.js) so their closed pill shrink-wraps
+   to whatever label is actually showing instead of a fixed px guess — the IAP
+   picker in particular shows a user-authored product Name up to
+   IAP_PRODUCT_FIELD_LIMITS.name (35) characters, far too variable for any one
+   fixed width to fit without either wrapping to a second line (too narrow for
+   a long name) or leaving obvious dead space (too wide for a short one).
+   flex-shrink:0 stops this row's own flexbox from undoing that by squeezing
+   the pill back down when both dropdowns together don't fit the row's width —
+   scoped to this row (not a blanket .loc-primary-wrap rule) so every OTHER
+   swSelect pill elsewhere in the app, all of which already pick a fixed width
+   that fits their own small known label set, keeps behaving exactly as before.
+   white-space:nowrap on the label itself is the actual single-line guarantee:
+   shrink-wrapping only decides the box's width from the label's natural
+   (already unwrapped) size — without nowrap the browser would still be free
+   to wrap the label text and shrink-wrap to a narrower, taller result instead. */
+.iap-loc-selectors-row .loc-primary-wrap { flex-shrink: 0; }
+.iap-loc-selectors-row .loc-primary-name { white-space: nowrap; }
 .iap-loc-cards { display: flex; flex-wrap: wrap; gap: 12px; }
 /* Same flex-column + margin-top:auto counter-pinning trick as
    .loc-review-card — see its own comment further above for why. */

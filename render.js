@@ -7223,8 +7223,8 @@ function buildIapLocalizationsSection() {
         </div>
       </div>
       <div class="iap-loc-selectors-row">
-        ${swSelect('iap-loc-iap', iapId, iapOptions, 'setIapLocReviewIapId', '160px', 'right')}
-        ${swSelect('iap-loc-field', field, fieldOptions, 'setIapLocField', '150px', 'right')}
+        ${swSelect('iap-loc-iap', iapId, iapOptions, 'setIapLocReviewIapId', 'auto', 'right')}
+        ${swSelect('iap-loc-field', field, fieldOptions, 'setIapLocField', 'auto', 'right')}
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;
@@ -7495,6 +7495,24 @@ function trailerFileRowHTML(name, mb, prefix = '') {
  *                                the one flagged, so the warning is visible
  *                                without opening the dropdown.
  * @param {string}   onChangeFn  Name of a global function called with the chosen value
+ * @param {string}   width       CSS width for the closed pill — either a fixed length
+ *                                (e.g. '160px', the default '100%') for a caller with a
+ *                                small, known set of option labels that all comfortably
+ *                                fit one width, or 'auto' when the shown label's length
+ *                                varies too much for any single fixed width to fit without
+ *                                either wrapping to a second line (too narrow) or leaving
+ *                                excess empty space (too wide) — e.g. IAP Localizations'
+ *                                own IAP picker (buildIapLocalizationsSection, further
+ *                                below), whose label is a user-authored product Name up to
+ *                                IAP_PRODUCT_FIELD_LIMITS.name characters long. 'auto' relies
+ *                                on .loc-primary-wrap's plain display:inline-block (the
+ *                                width:auto set inline below overrides its own min/max-width)
+ *                                to shrink-wrap to the label's actual rendered width, paired
+ *                                with .loc-primary-name's white-space:nowrap (style.css) so
+ *                                the label itself is never what decides to wrap — see
+ *                                .iap-loc-selectors-row's own comment, style.css, for why
+ *                                that nowrap is scoped to this section rather than applied
+ *                                to every swSelect pill.
  * @param {string}   align       'left' (default) anchors the dropdown's left edge to
  *                                the pill's left edge, growing rightward — fine for a
  *                                pill with room to its right. 'right' anchors the
