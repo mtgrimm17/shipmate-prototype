@@ -2822,15 +2822,40 @@ function selectPicklistItem(igdbId) {
   // from IGDB's own summary/screenshots (via the same helpers used in the
   // no-Steam-link branch below) rather than leaving the About section and
   // screenshot grid empty.
-  if (item.steamAppId) {
-    _applySteamAboutData(item.steamAppId, item.name, item);
-  } else {
-    if (item.summary) _fillDescriptionField(item.summary);
-    _fillScreenshotGridFromIgdb(item.screenshots || []);
-    // Not a Steam-linked title — clear any Steam localization cache left
-    // over from a previously-selected game so a later language-add on THIS
-    // title can't be checked against the wrong game's Steam data.
-    state.steamLocInfo = null;
+  // IGDB_SEARCH_ENDPOINT's results never carry a Steam app ID (see
+  // claude.js) — fill the baseline from IGDB immediately so the fields
+  // aren't left blank, then resolve the real Steam link asynchronously
+  // below and let it upgrade these once it resolves.
+  if (item.summary) _fillDescriptionField(item.summary);
+  _fillScreenshotGridFromIgdb(item.screenshots || []);
+  // Clear any Steam localization cache left over from a previously-selected
+  // game so a later language-add on THIS title can't be checked against the
+  // wrong game's Steam data before (or if) a real Steam link resolves below.
+  state.steamLocInfo = null;
+
+  // Resolve this title's Steam app ID with a small, targeted follow-up
+  // query (_igdbFetchSteamAppId, claude.js) — only attempted when IGDB
+  // itself already told us (via platforms, from the search results) that
+  // this title has a Steam listing, so titles with none skip the extra
+  // request entirely. Fire-and-forget: the synchronous IGDB-sourced fill
+  // above already leaves the app fully usable while this resolves.
+  if ((item.platforms || []).includes('steam') && typeof _igdbFetchSteamAppId === 'function') {
+    _igdbFetchSteamAppId(item.id).then(steamAppId => {
+      if (!steamAppId) return;
+      // Stale-title guard — the user may have picked a different title
+      // (or edited it away) before this resolves.
+      if ((state.formData.title || '').trim() !== (item.name || '').trim()) return;
+      // Steam is now treated as the source of truth for Description / Web
+      // Factsheet Developer / Publisher / Links "Official Website" / Web
+      // "About This Game" / screenshots / Capsule Image / Header Image /
+      // Library Hero / social links — each of these calls only overwrites
+      // a field once it actually has Steam content for it (see
+      // _applySteamAboutData), so this safely upgrades the IGDB-sourced
+      // baseline filled in above rather than fighting with it.
+      _applySteamAboutData(steamAppId, item.name, item);
+      _applySteamHeroBanner(steamAppId, item.name);
+      _applySteamSocialLinks(steamAppId, item.name);
+    }).catch(err => console.warn('[Picklist] Steam app ID lookup failed:', err.message));
   }
 
   // Auto-activate platforms — use strict activationPlatforms (no unconfirmed console ports)
@@ -2867,25 +2892,9 @@ function selectPicklistItem(igdbId) {
   const qTitle = document.getElementById('ob-q-title');
   if (qTitle) qTitle.dataset.answered = '1';
 
-  // If this title links to a Steam store page, try the Library Hero
-  // asset's direct CDN URL (steamLibraryHeroUrl in claude.js) — no proxy,
-  // no steamdb.info lookup needed. Fire-and-forget: the picklist selection
-  // above already leaves the app fully usable, this only fills in the
-  // Steam Key Art field if it resolves.
-  if (item.steamAppId) {
-    _applySteamHeroBanner(item.steamAppId, item.name);
-  }
-
-  // Pre-populate Factsheet > Developer > Links' social-links list from the
-  // Steam store page's own "Find Community" section — see
-  // _applySteamSocialLinks below for why this is a completely separate
-  // fetch from _applySteamAboutData's appdetails call (Steam's JSON API has
-  // no field for these at all). Fire-and-forget, same as
-  // _applySteamHeroBanner above: a failure here never blocks the rest of
-  // picklist selection.
-  if (item.steamAppId) {
-    _applySteamSocialLinks(item.steamAppId, item.name);
-  }
+  // (Library Hero and social links are fired together with the About Data
+  // call above, once the async Steam app ID lookup resolves — see the
+  // _igdbFetchSteamAppId block earlier in this function.)
 
   // Populate "IGDB Cover Art" from IGDB's own cover art. Runs independent
   // of item.steamAppId — it only depends on IGDB's own cover field, which

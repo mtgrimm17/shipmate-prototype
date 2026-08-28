@@ -403,11 +403,13 @@ const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
    The IGDB *search* path has been moved off _cors() entirely onto our own
    backend (IGDB_SEARCH_ENDPOINT) — a real fix rather than a proxy swap,
    since that path also needed an IGDB/Twitch key the browser shouldn't
-   hold. _cors()/IGDB_ENDPOINT and the Twitch token flow are left in place
-   — unused by search now, but still used by the Steam appdetails/store-
-   page fetches further down, and kept as the fallback wiring if
-   IGDB_SEARCH_ENDPOINT ever needs to be pointed back at direct IGDB
-   access (now viable again since _cors() itself works). */
+   hold. _cors()/IGDB_ENDPOINT and the Twitch token flow are still used —
+   by the Steam appdetails/store-page fetches further down, by
+   _igdbFetchSteamAppId's single-item follow-up lookup (also below — the
+   results _igdbSearchRaw hands back don't carry a Steam app ID, so
+   selectPicklistItem, app.js, resolves it this way once a title is
+   picked), and as the fallback wiring if IGDB_SEARCH_ENDPOINT itself ever
+   needs to be pointed back at a full direct-IGDB search. */
 const _cors = (u) => 'https://proxy.cors.sh/' + u;
 const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
@@ -611,6 +613,47 @@ async function _igdbSearchRaw(title) {
       screenshots: [],
     };
   }).filter(g => g.id && Number.isFinite(g.id));
+}
+
+/* Resolves a single title's Steam app ID by IGDB id — a small, targeted
+   follow-up query used once a title is picked (selectPicklistItem, app.js),
+   since IGDB_SEARCH_ENDPOINT's results don't include one (see above). Goes
+   straight to IGDB itself via IGDB_ENDPOINT/_cors() — viable again now that
+   _cors() points at proxy.cors.sh instead of the dead corsproxy.io — rather
+   than the search backend, and only ever asks for one game's websites, so
+   it's much lighter than the old full-text search this replaced. Reuses
+   IGDB_WEBSITE_URL_PATTERNS, the same URL-matching table _igdbSearchRaw's
+   predecessor used, to pull the appid out of the website URL itself (IGDB's
+   website `category` field has been unreliable — see that table's comment).
+   Returns null for "no linked Steam page" (not an error); only throws for a
+   real fetch/auth failure, which the caller already treats as non-fatal. */
+async function _igdbFetchSteamAppId(igdbId) {
+  const token = await _getIgdbToken();
+  const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Client-ID':     IGDB_CLIENT_ID,
+      'Authorization': 'Bearer ' + token,
+      'Content-Type':  'text/plain',
+    },
+    body: `fields websites.url; where id = ${Number(igdbId)};`,
+  });
+
+  if (res.status === 401) {
+    _igdbAccessToken = null;               // invalidate and let caller retry
+    throw new Error('IGDB auth expired — please retry');
+  }
+  if (!res.ok) throw new Error('IGDB website lookup failed (' + res.status + ')');
+
+  const games = await res.json();
+  const game  = games[0];
+  if (!game) return null;
+
+  const steamPattern = IGDB_WEBSITE_URL_PATTERNS.find(p => p.pid === 'steam').re;
+  const steamSite = (game.websites || []).find(w => w.url && steamPattern.test(w.url));
+  if (!steamSite) return null;
+  const m = steamSite.url.match(/\/app\/(\d+)/);
+  return m ? m[1] : null;
 }
 
 /* ── Steam library_hero direct CDN URL ────────────────────────────────
