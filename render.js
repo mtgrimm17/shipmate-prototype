@@ -3739,7 +3739,7 @@ function renderStepModal() {
   else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
   else if (stepId === 'contentRating')        body = buildContentRatingSection();
   else if (stepId === 'privacy')              body = buildPrivacySection();
-  else if (stepId === 'business')             body = buildBusinessSection() + buildExportComplianceSection();
+  else if (stepId === 'business')             body = buildBusinessSection() + buildExportComplianceSection() + buildIapSection();
 
   const complete = platformId === 'android' ? isAndroidSectionComplete(stepId)
                : platformId === 'steam'   ? isSteamSectionComplete(stepId)
@@ -3841,7 +3841,7 @@ function buildStorePreviewFlipSection(platformId, target) {
       return `<div class="qs-section"><div class="qs-section-header">Store Tags</div>${buildSteamStoreTagsSection()}</div>
               <div class="qs-section qs-section-divided"><div class="qs-section-header">Technical</div>${buildSteamTechnicalSection()}</div>`;
     }
-    return buildBusinessSection() + buildExportComplianceSection();
+    return buildBusinessSection() + buildExportComplianceSection() + buildIapSection();
   }
   if (target === 'data') {
     if (platformId === 'android') return buildAndroidDataSafetySection();
@@ -6269,7 +6269,7 @@ function buildQuestionnaireSection(platformId) {
   if (platformId === 'ios') {
     sections.push({ label: 'Content Rating',  body: buildContentRatingSection() });
     sections.push({ label: 'Data Privacy',    body: buildPrivacySection() });
-    sections.push({ label: 'Business',        body: buildBusinessSection() + buildExportComplianceSection() });
+    sections.push({ label: 'Business',        body: buildBusinessSection() + buildExportComplianceSection() + buildIapSection() });
   } else if (platformId === 'android') {
     sections.push({ label: 'Content Rating',  body: buildAndroidContentRatingSection() });
     sections.push({ label: 'Data Safety',     body: buildAndroidDataSafetySection() });
@@ -6760,36 +6760,55 @@ const IOS_IAP_TYPES = [
 ];
 
 /* One row of the Business section's IAP Products list (state.iosSubmitAnswers
-   .iapProducts, each a { id, name, desc, price, type, trial } — see
-   addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
-   setIapProductTrial in app.js). Mirrors _wsLinkRowHTML's (Web Factsheet
-   Links) convention: text fields mutate on oninput with no re-render (so
-   typing doesn't lose focus), while structural changes — add/remove, and
-   Type (which can reveal/hide the Free Trial row below it) — go through
-   reRenderStepModal(). Free Trial only applies to the two subscription
-   types (id contains "sub" in IOS_IAP_TYPES' naming, matching how the
-   overall section's existing "Does any subscription include a free trial?"
-   question is scoped) — a Consumable/Non-consumable product hides that row
-   entirely rather than asking a question that can't apply to it. */
+   .iapProducts, each a { id, name, desc, price, type, trial, collapsed } —
+   see addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
+   setIapProductTrial/saveIapProduct/expandIapProduct in app.js). Mirrors
+   _wsLinkRowHTML's (Web Factsheet Links) convention: text fields mutate on
+   oninput with no re-render (so typing doesn't lose focus), while structural
+   changes — add/remove, Type (which can reveal/hide the Free Trial row
+   below it), Save, and expand — go through reRenderStepModal(). Free Trial
+   only applies to the two subscription types (id contains "sub" in
+   IOS_IAP_TYPES' naming, matching how the overall section's existing "Does
+   any subscription include a free trial?" question is scoped) — a
+   Consumable/Non-consumable product hides that row entirely rather than
+   asking a question that can't apply to it.
+
+   A saved product (p.collapsed) renders as a single clickable name row
+   instead of the full card — click the name to re-expand (expandIapProduct)
+   and edit it again. */
 function buildIapProductRow(p) {
+  if (p.collapsed) {
+    return `
+      <div class="iap-product-row is-collapsed" data-iap-id="${p.id}">
+        <button class="iap-product-remove" type="button" onclick="removeIapProduct('${p.id}')" title="Remove IAP" aria-label="Remove IAP">✕</button>
+        <span class="iap-product-name-collapsed" onclick="expandIapProduct('${p.id}')">${escHtml(p.name) || 'Untitled IAP'}</span>
+      </div>`;
+  }
+
   const isSub = /-renewa|renewing/.test(p.type); // auto-renewable / non-renewing
   return `
     <div class="iap-product-row" data-iap-id="${p.id}">
       <button class="iap-product-remove" type="button" onclick="removeIapProduct('${p.id}')" title="Remove IAP" aria-label="Remove IAP">✕</button>
-      <div class="iap-product-fields">
-        <input class="form-input" type="text" placeholder="Name of the IAP" value="${escHtml(p.name)}"
+      <div class="iap-product-field">
+        <label class="form-label">Name</label>
+        <input class="form-input" type="text" value="${escHtml(p.name)}"
                oninput="setIapProductField('${p.id}','name',this.value)">
-        <input class="form-input" type="text" placeholder="Description" value="${escHtml(p.desc)}"
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Description</label>
+        <input class="form-input" type="text" value="${escHtml(p.desc)}"
                oninput="setIapProductField('${p.id}','desc',this.value)">
       </div>
-      <div class="iap-product-cfg">
-        <input class="form-input iap-product-price" type="text" placeholder="Price (e.g. 4.99)" value="${escHtml(p.price)}"
+      <div class="iap-product-field">
+        <label class="form-label">Price</label>
+        <input class="form-input" type="text" placeholder="Price" value="${escHtml(p.price)}"
                oninput="setIapProductField('${p.id}','price',this.value)" onblur="roundIapPrice('${p.id}',this)">
-        <div class="data-type-chips">
-          ${IOS_IAP_TYPES.map(t => `
-            <button type="button" class="data-type-chip ${p.type === t.id ? 'is-on' : ''}"
-                    onclick="setIapProductType('${p.id}','${t.id}')" title="${t.desc}">${t.label}</button>`).join('')}
-        </div>
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Type</label>
+        <select class="form-input" onchange="setIapProductType('${p.id}', this.value)">
+          ${IOS_IAP_TYPES.map(t => `<option value="${t.id}" ${p.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
+        </select>
       </div>
       ${isSub ? `
       <div class="iap-product-trial">
@@ -6799,6 +6818,9 @@ function buildIapProductRow(p) {
           <button class="yn-btn yn-no ${p.trial === 'no' ? 'is-selected' : ''}" onclick="setIapProductTrial('${p.id}','no')">NO</button>
         </div>
       </div>` : ''}
+      <div class="iap-product-actions">
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveIapProduct('${p.id}')">Save</button>
+      </div>
     </div>`;
 }
 
@@ -6806,14 +6828,59 @@ function buildBusinessSection() {
   const a = state.iosSubmitAnswers;
 
   // Unanswered/All filter — hide answered rows in Unanswered view
+  // Tax category defaults to 'games' — always hide in Unanswered view if it has a value
   const bsAnswered    = state.iosAnsweredAtInference;
   const bsCollapse    = bsAnswered !== null;
   const bsShowAll     = state.iosContentRatingExpanded;
-  const hideIAP       = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
-  // Tax category defaults to 'games' — always hide in Unanswered view if it has a value
   const hideTaxCat    = bsCollapse && !bsShowAll && !!a.taxCategory;
 
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
+
+  const fd = state.formData;
+  const priceVal = fd.price || '';
+
+  return `
+    <div class="form-group">
+      <label class="form-label">Price (USD)
+        <span class="tooltip-anchor">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-body">Your base price for iOS. Leave blank or enter 0 for free. Shipmate will convert to local currencies across all regions.</span>
+        </span>
+      </label>
+      <input class="form-input" id="ios-price" type="text" placeholder="4.99 (or 0 for free)"
+             value="${priceVal}"
+             oninput="syncField('price', this.value)"
+             onblur="roundPrice(this)">
+    </div>
+    ${hideTaxCat ? '' : `
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Tax Category
+        <span class="tooltip-anchor">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-body">Determines how Apple handles VAT and GST in each country. Choose the category that best describes your app.</span>
+        </span>
+      </label>
+      <select class="form-input" onchange="answerIOSField('taxCategory', this.value)">
+        <option value="">Select a category</option>
+        ${TAX_CATS.map(c => `<option value="${c.toLowerCase()}" ${a.taxCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>`}`;
+}
+
+/* ── Business — In-App Purchases ────────────────────────
+   Split out from buildBusinessSection so the composed Business step (see
+   the three "buildBusinessSection() + buildExportComplianceSection() +
+   buildIapSection()" call sites) renders IAP questions AFTER the Export
+   Compliance section's cryptography question, rather than before it. */
+function buildIapSection() {
+  const a = state.iosSubmitAnswers;
+
+  // Unanswered/All filter — hide this question (and its follow-up) once answered
+  const bsAnswered = state.iosAnsweredAtInference;
+  const bsCollapse = bsAnswered !== null;
+  const bsShowAll  = state.iosContentRatingExpanded;
+  const hideIAP    = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
+  if (hideIAP) return '';
 
   const iapProducts = a.iapProducts || [];
   const iapProductsHTML = `
@@ -6834,50 +6901,14 @@ function buildBusinessSection() {
 
   const iapFollowUp = a.hasIAP === 'yes' ? `
     <div class="ios-followup">
-      <div class="ios-q-label" style="margin-bottom:8px;">Which IAP types does your app include?</div>
-      <div class="data-type-chips">
-        ${IOS_IAP_TYPES.map(t => `
-          <button class="data-type-chip ${a.iapTypes.includes(t.id) ? 'is-on' : ''}"
-                  onclick="toggleIOSIAPType('${t.id}')" title="${t.desc}">${t.label}</button>`).join('')}
-      </div>
-      <div style="margin-top:12px;">
-        ${iosYNRow('Does any subscription include a free trial?', 'hasFreeTrial', '')}
-      </div>
+      ${iosYNRow('Does any subscription include a free trial?', 'hasFreeTrial', '')}
       ${iapProductsHTML}
     </div>` : '';
 
-  const fd = state.formData;
-  const priceVal = fd.price || '';
-
   return `
-    <div class="form-group">
-      <label class="form-label">Price (USD)
-        <span class="tooltip-anchor">
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">Your base price for iOS. Leave blank or enter 0 for free. Shipmate will convert to local currencies across all regions.</span>
-        </span>
-      </label>
-      <input class="form-input" id="ios-price" type="text" placeholder="4.99 (or 0 for free)"
-             value="${priceVal}"
-             oninput="syncField('price', this.value)"
-             onblur="roundPrice(this)">
-    </div>
-    ${hideIAP ? '' : iosYNRow('Does your app include in-app purchases?', 'hasIAP',
+    ${iosYNRow('Does your app include in-app purchases?', 'hasIAP',
       'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.')}
-    ${hideIAP ? '' : iapFollowUp}
-    ${hideTaxCat ? '' : `
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Tax Category
-        <span class="tooltip-anchor">
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">Determines how Apple handles VAT and GST in each country. Choose the category that best describes your app.</span>
-        </span>
-      </label>
-      <select class="form-input" onchange="answerIOSField('taxCategory', this.value)">
-        <option value="">Select a category</option>
-        ${TAX_CATS.map(c => `<option value="${c.toLowerCase()}" ${a.taxCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
-      </select>
-    </div>`}`;
+    ${iapFollowUp}`;
 }
 
 /* ── Distribution ────────────────────────────────────── */

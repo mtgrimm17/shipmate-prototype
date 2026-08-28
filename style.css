@@ -6963,10 +6963,14 @@ select.form-input {
 
 /* ── Business — IAP Products list ─────────────────────
    One .iap-product-row per state.iosSubmitAnswers.iapProducts entry (see
-   buildIapProductRow, render.js). Reuses .form-input/.data-type-chip/
+   buildIapProductRow, render.js). Reuses .form-group/.form-label/.form-input/
    .yn-btn from elsewhere in this section rather than inventing new field
-   styles — only the row scaffolding itself (card, remove button, the two
-   sub-rows of fields) is new. */
+   styles — only the row scaffolding itself (card, remove button, per-field
+   stacking, the Save action bar, and the collapsed state) is new. Each
+   field (Name/Description/Price/Type) gets its own .iap-product-field line
+   with a .form-label title above it. Saving a product (see saveIapProduct,
+   app.js) sets p.collapsed and re-renders it as a single clickable name
+   row (.is-collapsed) instead of the full card. */
 .iap-products-group { margin-top: 14px; }
 
 .iap-product-row {
@@ -6978,21 +6982,10 @@ select.form-input {
   background: var(--panel-2);
 }
 
-.iap-product-fields {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.iap-product-fields .form-input { margin-bottom: 0; }
-
-.iap-product-cfg {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.iap-product-price { max-width: 140px; flex: none; }
+.iap-product-field { margin-bottom: 10px; }
+.iap-product-field:last-of-type { margin-bottom: 0; }
+.iap-product-field .form-label { margin-bottom: 4px; }
+.iap-product-field .form-input { margin-bottom: 0; }
 
 .iap-product-trial {
   display: flex;
@@ -7003,6 +6996,14 @@ select.form-input {
   border-top: 1px solid var(--border);
 }
 .iap-product-trial-label { font-size: 12px; color: var(--text-dim); }
+
+.iap-product-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
 
 .iap-product-remove {
   position: absolute;
@@ -7016,6 +7017,16 @@ select.form-input {
   transition: background 0.15s, color 0.15s;
 }
 .iap-product-remove:hover { background: var(--panel-3); color: var(--text); }
+
+/* Collapsed (saved) state — only the product's name shows, click to re-expand */
+.iap-product-row.is-collapsed { padding: 10px 36px 10px 12px; }
+.iap-product-name-collapsed {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.iap-product-name-collapsed:hover { color: #fff; text-decoration: underline; }
 
 /* ── Google Play Content Questions (IARC) ────────────────
    Android's contentRating step. A recursive question tree — each answer

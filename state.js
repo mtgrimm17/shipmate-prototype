@@ -1174,16 +1174,21 @@ function makeBlankIOSAnswers() {
     ernNumber:              '',
     // Business
     hasIAP:                 null,
+    // iapTypes is no longer settable via the UI (the "Which IAP types does
+    // your app include?" question was removed — see buildIapSection,
+    // render.js) but is left in place since claude.js's inference pipeline
+    // can still populate it as background/legacy metadata.
     iapTypes:               [],
     hasFreeTrial:           null,
     // IAP Products — the individual named SKUs shown in the Business
     // section's "IAP Products" list (see buildIapProductRow, render.js;
     // addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
-    // setIapProductTrial, app.js). Each: { id, name, desc, price, type,
-    // trial }. Purely additive detail on top of iapTypes/hasFreeTrial above
-    // — an empty list never blocks Business section completion (see
-    // isIOSSectionComplete below), same as a developer who's declared IAP
-    // types but hasn't named individual products yet.
+    // setIapProductTrial/saveIapProduct/expandIapProduct, app.js). Each:
+    // { id, name, desc, price, type, trial, collapsed }. Purely additive
+    // detail on top of hasFreeTrial above — an empty list never blocks
+    // Business section completion (see isIOSSectionComplete below), same as
+    // a developer who's declared they have IAP but hasn't named individual
+    // products yet.
     iapProducts:            [],
     taxCategory:            'games',
     // Distribution
@@ -1308,7 +1313,6 @@ function isIOSSectionComplete(sectionId) {
   if (sectionId === 'business') {
     // IAP
     if (a.hasIAP === null) return false;
-    if (a.hasIAP === 'yes' && a.iapTypes.length === 0) return false;
     // Export compliance (merged into business step)
     if (a.usesEncryption === null) return false;
     if (a.usesEncryption === 'yes') {

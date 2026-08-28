@@ -1376,26 +1376,18 @@ function setPrivacyMeta(typeId, field, checked) {
   // Tracking warning updates lazily on next section re-open
 }
 
-/* ── Legacy stub (IAP type toggle) ───────────────────── */
-
-function toggleIOSIAPType(typeId) {
-  const types = state.iosSubmitAnswers.iapTypes;
-  const idx = types.indexOf(typeId);
-  if (idx === -1) types.push(typeId); else types.splice(idx, 1);
-  reRenderStepModal();
-}
-
 /* ── Business — IAP Products list ─────────────────────
    state.iosSubmitAnswers.iapProducts, each a { id, name, desc, price, type,
-   trial } — see buildIapProductRow (render.js) for the row this backs.
-   Same add/remove/field-mutate split as addWebLink/removeWebLink/
+   trial, collapsed } — see buildIapProductRow (render.js) for the row this
+   backs. Same add/remove/field-mutate split as addWebLink/removeWebLink/
    setWebLinkField (Web Factsheet Links, further down this file): structural
-   changes (add, remove, Type — which can reveal/hide the Free Trial row)
-   go through reRenderStepModal(); plain text fields mutate directly on
-   oninput with no re-render, so typing doesn't lose focus mid-word. */
+   changes (add, remove, Type — which can reveal/hide the Free Trial row —
+   Save, and expand) go through reRenderStepModal(); plain text fields
+   mutate directly on oninput with no re-render, so typing doesn't lose
+   focus mid-word. */
 function addIapProduct() {
   state.iosSubmitAnswers.iapProducts.push({
-    id: generateId('iap'), name: '', desc: '', price: '', type: 'consumable', trial: 'no',
+    id: generateId('iap'), name: '', desc: '', price: '', type: 'consumable', trial: 'no', collapsed: false,
   });
   reRenderStepModal();
 }
@@ -1419,6 +1411,18 @@ function setIapProductType(id, type) {
 function setIapProductTrial(id, trial) {
   const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
   if (p) p.trial = trial;
+  reRenderStepModal();
+}
+// Save collapses the card to just its name; clicking that name (expandIapProduct)
+// reopens the full editable form. Both are structural (re-render) changes.
+function saveIapProduct(id) {
+  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  if (p) p.collapsed = true;
+  reRenderStepModal();
+}
+function expandIapProduct(id) {
+  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  if (p) p.collapsed = false;
   reRenderStepModal();
 }
 // Same "round to a .99 price" polish as the base game price (roundPrice
