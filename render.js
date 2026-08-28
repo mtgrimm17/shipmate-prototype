@@ -5453,19 +5453,42 @@ function buildStorePreviewSection() {
         `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
       ).join('');
 
-  const infoRows = [
+  const _infoRowHtml = r => `
+    <div class="ias-info-row">
+      <span class="ias-info-label">${r.label}</span>
+      <span class="ias-info-value">${r.value}</span>
+    </div>`;
+
+  const infoRowsTop = [
     { label: 'Seller',        value: 'Your Company'      },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'iPhone, iPad'      },
     { label: 'Languages',     value: langCode            },
     { label: 'Age Rating',    value: ageRating           },
-    { label: 'Copyright',     value: `© ${new Date().getFullYear()}` },
-  ].map(r => `
-    <div class="ias-info-row">
-      <span class="ias-info-label">${r.label}</span>
-      <span class="ias-info-value">${r.value}</span>
-    </div>`).join('');
+  ].map(_infoRowHtml).join('');
+  const copyrightRowHtml = _infoRowHtml({ label: 'Copyright', value: `© ${new Date().getFullYear()}` });
+
+  // In-App Purchases — mirrors the real App Store product page, which lists
+  // each purchasable item's name and price right inside the Information
+  // card. Placed between Age Rating and Copyright per that same layout.
+  // Only products the developer has actually saved (see saveIapProduct,
+  // app.js) show up here — an in-progress, unsaved draft card shouldn't
+  // appear on the live-looking preview.
+  const savedIapProducts = (a.iapProducts || []).filter(p => p.collapsed);
+  const iapPriceLabel = price => {
+    const val = parseFloat(price);
+    return (!price || isNaN(val) || val <= 0) ? 'Free' : `$${price}`;
+  };
+  const iapInfoBlock = savedIapProducts.length ? `
+    <div class="ias-info-subhead">In-App Purchases</div>
+    ${savedIapProducts.map(p => `
+      <div class="ias-info-row">
+        <span class="ias-iap-name">${escHtml(p.name) || 'Untitled IAP'}</span>
+        <span class="ias-iap-price">${iapPriceLabel(p.price)}</span>
+      </div>`).join('')}` : '';
+
+  const infoRows = `${infoRowsTop}${iapInfoBlock}${copyrightRowHtml}`;
 
   // Section completion status for DocuSign navigation
   // content/business require the user to have actually visited the sub-section
@@ -6778,10 +6801,12 @@ const IOS_IAP_TYPES = [
    and edit it again. */
 function buildIapProductRow(p) {
   if (p.collapsed) {
+    // The whole collapsed card expands on click — the remove button stops
+    // propagation so removing a card doesn't also try to expand it first.
     return `
-      <div class="iap-product-row is-collapsed" data-iap-id="${p.id}">
-        <button class="iap-product-remove" type="button" onclick="removeIapProduct('${p.id}')" title="Remove IAP" aria-label="Remove IAP">✕</button>
-        <span class="iap-product-name-collapsed" onclick="expandIapProduct('${p.id}')">${escHtml(p.name) || 'Untitled IAP'}</span>
+      <div class="iap-product-row is-collapsed" data-iap-id="${p.id}" onclick="expandIapProduct('${p.id}')">
+        <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeIapProduct('${p.id}')" title="Remove IAP" aria-label="Remove IAP">✕</button>
+        <span class="iap-product-name-collapsed">${escHtml(p.name) || 'Untitled IAP'}</span>
       </div>`;
   }
 
@@ -6801,7 +6826,7 @@ function buildIapProductRow(p) {
       </div>
       <div class="iap-product-field">
         <label class="form-label">Price</label>
-        <input class="form-input" type="text" placeholder="Price" value="${escHtml(p.price)}"
+        <input class="form-input" type="text" value="${escHtml(p.price)}"
                oninput="setIapProductField('${p.id}','price',this.value)" onblur="roundIapPrice('${p.id}',this)">
       </div>
       <div class="iap-product-field">
@@ -6901,7 +6926,6 @@ function buildIapSection() {
 
   const iapFollowUp = a.hasIAP === 'yes' ? `
     <div class="ios-followup">
-      ${iosYNRow('Does any subscription include a free trial?', 'hasFreeTrial', '')}
       ${iapProductsHTML}
     </div>` : '';
 

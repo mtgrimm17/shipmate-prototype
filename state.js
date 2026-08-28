@@ -1179,16 +1179,20 @@ function makeBlankIOSAnswers() {
     // render.js) but is left in place since claude.js's inference pipeline
     // can still populate it as background/legacy metadata.
     iapTypes:               [],
+    // hasFreeTrial is likewise no longer settable via the UI (the
+    // section-level "Does any subscription include a free trial?" question
+    // was removed — each product's own "Free trial?" row in
+    // buildIapProductRow, render.js, covers this per-product instead) but
+    // is left in place for the same reason as iapTypes above.
     hasFreeTrial:           null,
     // IAP Products — the individual named SKUs shown in the Business
     // section's "IAP Products" list (see buildIapProductRow, render.js;
     // addIapProduct/removeIapProduct/setIapProductField/setIapProductType/
     // setIapProductTrial/saveIapProduct/expandIapProduct, app.js). Each:
     // { id, name, desc, price, type, trial, collapsed }. Purely additive
-    // detail on top of hasFreeTrial above — an empty list never blocks
-    // Business section completion (see isIOSSectionComplete below), same as
-    // a developer who's declared they have IAP but hasn't named individual
-    // products yet.
+    // — an empty list never blocks Business section completion (see
+    // isIOSSectionComplete below), same as a developer who's declared they
+    // have IAP but hasn't named individual products yet.
     iapProducts:            [],
     taxCategory:            'games',
     // Distribution

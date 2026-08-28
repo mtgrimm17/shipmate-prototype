@@ -4564,6 +4564,21 @@ textarea.loc-review-field.ias-inline-input {
   font-size: 13px; color: #0a84ff;
 }
 
+/* In-App Purchases — a mini list inserted into the Information card
+   (between Age Rating and Copyright, see buildStorePreviewSection,
+   render.js). Reuses .ias-info-row's own layout/divider rhythm; unlike an
+   info row's faint label/dim value pairing, here the item name is the
+   primary content (full-text color) and the price is the de-emphasized
+   side, matching the real App Store's own In-App Purchases list. */
+.ias-info-subhead {
+  padding: 9px 0 2px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.ias-iap-name { color: var(--text); }
+.ias-iap-price { color: var(--text-faint); text-align: right; }
+
 /* ── Store Preview action cells in meta strip ── */
 @keyframes ias-meta-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.35); }
@@ -7018,15 +7033,20 @@ select.form-input {
 }
 .iap-product-remove:hover { background: var(--panel-3); color: var(--text); }
 
-/* Collapsed (saved) state — only the product's name shows, click to re-expand */
-.iap-product-row.is-collapsed { padding: 10px 36px 10px 12px; }
+/* Collapsed (saved) state — only the product's name shows; the whole card
+   (not just the name) is clickable to re-expand, same convention as
+   .giarc-card.is-collapsed below. */
+.iap-product-row.is-collapsed {
+  padding: 10px 36px 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+.iap-product-row.is-collapsed:hover { border-color: var(--border-hover); }
 .iap-product-name-collapsed {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  cursor: pointer;
 }
-.iap-product-name-collapsed:hover { color: #fff; text-decoration: underline; }
 
 /* ── Google Play Content Questions (IARC) ────────────────
    Android's contentRating step. A recursive question tree — each answer
