@@ -386,15 +386,29 @@ const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
                            ? CONFIG.IGDB_CLIENT_SECRET : '';
 /* corsproxy.io now requires a paid API key for every request (confirmed
    live: it returns 401 "A valid API key is required" even for a bare,
-   unrelated GET) — the free anonymous tier it ran on is gone. That breaks
-   every call below that still routes through _cors(), not just IGDB's.
-   The IGDB *search* path (below) has been moved off it entirely onto our
-   own backend (IGDB_SEARCH_ENDPOINT). _cors()/IGDB_ENDPOINT and the Twitch
-   token flow are left in place — unused by search now, but still called by
-   the Steam appdetails/store-page fetches further down, and kept as the
-   fallback wiring if IGDB_SEARCH_ENDPOINT ever needs to be pointed back at
-   direct IGDB access. */
-const _cors = (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u);
+   unrelated GET) — the free anonymous tier it ran on is gone. That broke
+   every call in this file that routed through _cors(), not just IGDB's.
+
+   _cors() now points at proxy.cors.sh instead (a Cloudflare Worker-based
+   free CORS proxy — no key needed in testing). Verified live against real
+   Steam traffic: 6/6 requests succeeded across both appdetails (JSON) and
+   store-page (HTML) fetches, ~0.5–0.8s each — and separately confirmed it
+   forwards POST + custom headers intact (relevant to IGDB_ENDPOINT below,
+   which needs both). allorigins.win/raw was also tested as a candidate and
+   does work, but only succeeded on roughly half of repeated live Steam
+   requests (random timeouts/408s) — not solid enough to rely on alone, so
+   it isn't used, though it — or another provider — would be a reasonable
+   second leg if proxy.cors.sh ever needs a fallback.
+
+   The IGDB *search* path has been moved off _cors() entirely onto our own
+   backend (IGDB_SEARCH_ENDPOINT) — a real fix rather than a proxy swap,
+   since that path also needed an IGDB/Twitch key the browser shouldn't
+   hold. _cors()/IGDB_ENDPOINT and the Twitch token flow are left in place
+   — unused by search now, but still used by the Steam appdetails/store-
+   page fetches further down, and kept as the fallback wiring if
+   IGDB_SEARCH_ENDPOINT ever needs to be pointed back at direct IGDB
+   access (now viable again since _cors() itself works). */
+const _cors = (u) => 'https://proxy.cors.sh/' + u;
 const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
 // Our own backend (Sound Games infra) — looks up IGDB on the server side and
@@ -417,14 +431,16 @@ const IGDB_SEARCH_PLATFORM_SLUGS = {
   'epic':        'egs',
 };
 
-// Every IGDB/Steam call in this file (auth, search, appdetails, store-page
-// scrape) goes through a single free third-party CORS proxy (corsproxy.io)
-// with no SLA — it can stall or hang rather than cleanly erroring, and a
-// bare fetch() has no built-in timeout, so a stalled proxy would otherwise
-// leave a picklist search or Steam import spinning forever with nothing to
-// show for it. This wraps fetch with a hard deadline so callers always get
-// a rejection (with a clearly-labeled message) within FETCH_TIMEOUT_MS,
-// whether the proxy is down, rate-limiting, or just slow.
+// The Steam appdetails/store-page fetches below go through a free
+// third-party CORS proxy (_cors(), currently proxy.cors.sh) with no SLA —
+// it can stall or hang rather than cleanly erroring, and a bare fetch() has
+// no built-in timeout, so a stalled proxy would otherwise leave a Steam
+// import spinning forever with nothing to show for it. This wraps fetch
+// with a hard deadline so callers always get a rejection (with a
+// clearly-labeled message) within FETCH_TIMEOUT_MS, whether the proxy is
+// down, rate-limiting, or just slow. (The IGDB picklist search no longer
+// uses this at all — see IGDB_SEARCH_ENDPOINT above — but still benefits
+// from the same timeout wrapper against our own backend.)
 const FETCH_TIMEOUT_MS = 10000;
 function _fetchWithTimeout(url, opts = {}, ms = FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -621,12 +637,8 @@ function steamLibraryHeroUrl(appId) {
    the same data backing the store page itself, and is what most
    third-party Steam-library tools rely on. Requires a CORS proxy from the
    browser since store.steampowered.com doesn't send permissive CORS
-   headers; corsproxy.io is reused here since it's already verified live
-   and working for IGDB itself in this exact app (see this project's
-   appdetails reliability testing — a live-browser fetch() from a real
-   Shipmate page got a clean 200 on the identical corsproxy.io host for
-   the IGDB endpoint, so there's no reason to expect it to behave
-   differently for this target). Used by _applySteamAboutData (app.js).
+   headers — see _cors() above for which proxy and why. Used by
+   _applySteamAboutData (app.js).
 
    Optional `lang` (a Steam API language code, e.g. 'french', 'schinese' —
    see STEAM_LOCALIZATION_LANG_MAP, app.js) requests appdetails localized
