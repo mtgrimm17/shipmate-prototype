@@ -2127,24 +2127,6 @@ const state = {
   onboardingTab: 0,          // 0 = About, 1 = Distribution, 2 = Assets, 3 = Compliance (unreachable via Next — dead tab)
   _newProjectMode: false,    // true when onboarding is creating a 2nd+ project
 
-  // True while the Assets tab (tab 2) was opened via a "Manage" button in
-  // the Web platform's Trailers/Screenshots sub-sections (shown in both the
-  // combined "Site Details" edit panel and the standalone "Media" flip
-  // modal) rather than through the normal onboarding flow — while true and
-  // on tab 2, the footer hides the normal Back/Next pair and shows a single
-  // "Save & Return" button instead. See openAssetsFromWebEdit/
-  // backFromAssetsToWebEdit in app.js and renderOnboardingFooter in
-  // render.js.
-  assetsFromWebEdit: false,
-
-  // Which Web flip section to return to when the Assets tab's "Save &
-  // Return" button (above) is clicked — 'siteInfo' (Site Details) or
-  // 'webMedia' (the standalone Media modal), whichever the user clicked
-  // "Manage" from (set by openAssetsFromWebEdit's `source` argument).
-  // Falls back to 'siteInfo' if somehow unset. See _wsMediaFieldsHTML in
-  // render.js for where the two "Manage" buttons pass their own source.
-  assetsFromWebEditSource: 'siteInfo',
-
   // True while Steam's "Select Key Art" flip section (Store Page Preview
   // step) was opened via the "Manage" button in the Web platform's "Key Art"
   // flip modal, rather than through Steam's own normal navigation — while
@@ -2374,6 +2356,33 @@ const state = {
     // wasn't part of that move and reads as redundant with officialWebsite
     // above (the GAME's own site).
     aboutDev: '', email: '',
+    // Media — the Web platform's OWN independent copies of Game Details'
+    // Assets step (state.uploads.screenshots / state.uploads.trailer /
+    // formData.trailerUrl), NOT references to those same objects. Every
+    // add/remove/replace made to Game Details' own screenshots/trailer is
+    // mirrored here too — see the calls into _wsSyncAutoScreenshots and the
+    // mirroring added directly into handleScreenshotFiles/removeScreenshot/
+    // handleTrailerFiles/removeTrailer/syncField, all in app.js — so this
+    // starts pre-populated from whatever Game Details already has and stays
+    // in sync with it going forward, one-way only: editing these fields
+    // directly in the Web platform's own Media section (its own dropzones,
+    // see _wsMediaFieldsHTML/buildWebMediaEditSection in render.js) only
+    // ever writes here, never back to Game Details.
+    //
+    // screenshots: same shape as state.uploads.screenshots ({ id, name,
+    // dataUrl } for a manual upload, or { id, name, url } for an
+    // IGDB/Steam auto-import) — kept in sync by matching id, so an entry
+    // added independently here (a different id) survives a Game Details
+    // change instead of being wiped by it.
+    screenshots: [],
+    // trailerFile: same shape as state.uploads.trailer ({ name, size }).
+    // trailerUrl: same as formData.trailerUrl. Unlike screenshots, these
+    // are forced to match Game Details' current value on every change
+    // there (whole-value overwrite, not merged) — a single trailer slot has
+    // no "coexistence" story the way a list of screenshots does, so this
+    // uses the same "default + force-overwrite-on-source-change" treatment
+    // as About This Game has with Game Details' Description above.
+    trailerFile: null, trailerUrl: '',
   },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)

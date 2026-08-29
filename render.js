@@ -169,29 +169,14 @@ function renderOnboardingFooter() {
   const isFirst = state.onboardingTab === 0;
   const hasPlat = state.activePlatforms.size > 0;
 
-  // Assets opened via a "Manage" button in the Web platform's Trailers/
-  // Screenshots sub-sections (shown in both "Site Details" and the
-  // standalone "Media" modal — see _wsMediaFieldsHTML) is a standalone
-  // detour, not a step in the linear onboarding flow: no "Launch Dashboard"
-  // action here, no ordinary Back either (there's nowhere in the linear
-  // flow to go back TO — this wasn't reached by stepping forward through
-  // it). Instead the footer's usual Back/Next pair is replaced by a single
-  // "Save & Return" button (bottom-right, same presentation as the
-  // analogous cross-platform detour's own "Save & Return"/"Save & Return to
-  // Web" buttons in the step-modal footer — see renderStepModal) that sends
-  // the user back to whichever of Site Details/Media they clicked "Manage"
-  // from (state.assetsFromWebEditSource). See openAssetsFromWebEdit /
-  // backFromAssetsToWebEdit in app.js.
-  const fromWebEdit = state.assetsFromWebEdit && state.onboardingTab === 2;
-
   /* The prototype has no footer bar: no rule, no progress dots, no Back. The
      only action is Continue, and it lives up on the slash row, pushed to the
      right edge of the content column by `.slashrow #btn-next{margin-left:auto}`.
      #ob-footer is display:contents, so the button is a direct flex child of
      .slashrow and that selector applies verbatim. */
   el.innerHTML = `
-    <button class="btn-continue" id="btn-next" onclick="${fromWebEdit ? 'backFromAssetsToWebEdit()' : (isLast ? 'completeOnboarding()' : 'nextOnboardingTab()')}">
-      <span class="cta-lbl">${fromWebEdit ? 'Save &amp; Return' : (isLast ? 'Continue to Submit' : t('ob.footer.next'))}</span>
+    <button class="btn-continue" id="btn-next" onclick="${isLast ? 'completeOnboarding()' : 'nextOnboardingTab()'}">
+      <span class="cta-lbl">${isLast ? 'Continue to Submit' : t('ob.footer.next')}</span>
     </button>`;
 }
 
@@ -2136,36 +2121,6 @@ function renderDetails() {
   _setObValidating(false);
   updateObSectionStates();
   if (section === 'content' && typeof _kickContentQ === 'function') _kickContentQ();
-}
-
-/* Assets tab: screenshots, trailers, key art.
-
-   Reached only as a standalone detour via a "Manage" button in the Web
-   platform's Trailers/Screenshots sub-sections (openAssetsFromWebEdit,
-   app.js) — there's no ordinary nav tab for it (see VIEW_IDS/VIEW_NAV,
-   app.js). renderOnboardingFooter's own "Save & Return" treatment for this
-   same detour (its fromWebEdit branch) only ever renders into the
-   onboarding MODAL's own #ob-footer, which this standalone view's markup
-   doesn't include — so this view needs its own return button, gated the
-   same way, or "Manage" would strand the user here with no way back. */
-function renderAssets() {
-  const el = document.getElementById('assets');
-  if (!el) return;
-  renderProjectBar();
-  const fromWebEdit = !!state.assetsFromWebEdit;
-  el.innerHTML = `
-    <div class="ob-modal ob-inline">
-      <div class="ob-body">
-        ${buildAssetsTab()}
-      </div>
-      ${fromWebEdit ? `
-      <div style="display:flex;justify-content:flex-end;padding:16px 4px 4px;">
-        <button class="btn btn-primary" onclick="backFromAssetsToWebEdit()">Save &amp; Return</button>
-      </div>` : ''}
-    </div>`;
-  hydrateUploadAssetsTab();
-  renderOnboardingScreenshotGrid();
-  if (typeof renderOnboardingFeaturePreview === 'function') renderOnboardingFeaturePreview();
 }
 
 /* ── Marketing tab: subsections (Announce / Website / Press Kit / Influencers) ── */
@@ -4571,46 +4526,97 @@ function _wsDescriptionFieldsHTML(ws) {
     ${_wsField(ws, 'About the Developer', 'aboutDev', 'One paragraph per line — a short bio about your studio', { textarea: true, rows: 4 })}`;
 }
 
-/* Media fields: Trailers, Screenshots. Both are read-only summaries of the
-   same "Trailer"/"Screenshots" assets managed in Shipmate's Assets step
-   (Onboarding tab 2) — "Manage" jumps there via openAssetsFromWebEdit.
-   `source` is passed straight through to openAssetsFromWebEdit so its
-   "Save & Return" button (Assets tab footer) knows which of the two
-   places this got called from — this function is shared by both
-   buildWebSiteEditSection ('siteInfo', the combined Site Details panel)
-   and buildWebMediaEditSection ('webMedia', the standalone Media flip
-   modal), so it can't hardcode a single return target itself.
-   The Trailers summary reflects every applicable source, not just one —
-   fd.trailerUrl/state.uploads.trailer (Shipmate's own manual entry) and
-   state.uploads.steamTrailer (auto-filled from the linked Steam page's own
-   trailer, see _steamTrailerFromMovies in app.js) are independent and can
-   coexist, same as they do in the Assets tab itself, so this joins
-   whichever apply rather than treating them as mutually exclusive. */
-function _wsMediaFieldsHTML(fd, source) {
-  const shotsCount = (state.uploads?.screenshots || []).length;
-  const uploadedTrailer = state.uploads?.trailer || null;
-  const steamTrailer = state.uploads?.steamTrailer || null;
-  const trailerParts = [];
-  if (fd.trailerUrl) trailerParts.push('Trailer URL set');
-  if (uploadedTrailer) trailerParts.push(`Trailer uploaded: ${uploadedTrailer.name}`);
-  if (steamTrailer) trailerParts.push('Steam trailer added');
-  const trailerSummary = trailerParts.length ? trailerParts.join(' · ') : 'No trailer added yet';
-  return `
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailers</label>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
-      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(trailerSummary)}</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit('${source}');">Manage ›</button>
+/* One screenshot thumbnail cell for the Web platform's OWN screenshot grid
+   (state.webSite.screenshots) — same markup/classes as Game Details' own
+   grid (renderScreenshotGridInto, app.js) so the two look identical, but
+   wired to removeWebScreenshot (app.js) instead of removeScreenshot, since
+   this grid's data lives in a completely separate array. Returned as a
+   plain string (not written into the DOM) since it's used both for this
+   section's initial build below and for app.js's renderWebScreenshotGridInto,
+   which just re-sets a grid element's innerHTML to this after an add/remove
+   — mirroring renderScreenshotGridInto's own "patch just the grid" approach
+   so typing elsewhere on this panel never loses focus. */
+function _wsScreenshotGridHTML(shots) {
+  if (!shots || !shots.length) return '';
+  return shots.map(s => `
+    <div class="asset-thumb" onclick="openScreenshotLightbox(this)">
+      <img src="${_screenshotSrc(s)}" alt="${escHtml(s.name)}">
+      <button class="asset-remove" onclick="event.stopPropagation(); removeWebScreenshot('${s.id}')" title="Remove">×</button>
+      <div class="asset-name">${escHtml(s.name)}</div>
     </div>
+  `).join('');
+}
 
+/* Media fields: Screenshots, Trailer — the Web platform's OWN independent
+   copies (state.webSite.screenshots/trailerFile/trailerUrl), not the
+   shared state.uploads.screenshots/state.uploads.trailer/
+   formData.trailerUrl that Game Details' own Assets step (buildAssetsTab,
+   Onboarding tab 2) edits. Every add/remove/replace made there is mirrored
+   here automatically (see _wsSyncAutoScreenshots and the mirroring calls
+   added directly into handleScreenshotFiles/removeScreenshot/
+   handleTrailerFiles/removeTrailer/syncField in app.js), so this section
+   starts pre-populated from whatever Game Details already has and stays in
+   sync with it going forward — but edits made directly in THIS section (via
+   its own dropzones/URL field below) only ever touch state.webSite, never
+   state.uploads/formData, so they never flow back to Game Details.
+   Screenshots use coexisting, per-item id-matched sync (mirrors exactly the
+   spec's own "if a screenshot is added or removed" example): an item
+   independently added here survives a Game Details change, since Game
+   Details' mirroring only ever adds/removes entries by the SAME id it
+   created. The single Trailer slot instead uses forced whole-value sync
+   (same "default + force-overwrite-on-source-change" treatment About This
+   Game has with Game Details' Description) — there's no equivalent
+   "coexistence" concept for a single file/URL slot.
+   The dropzone/grid markup mirrors buildAssetsTab's own (same CSS classes,
+   same lightbox/HLS-player handlers) but with its own ids (ws- prefix) and
+   its own handler functions (handleWebScreenshotFiles/removeWebScreenshot/
+   handleWebTrailerFiles in app.js) so the two dropzones act on entirely
+   separate state. The auto-filled Steam trailer preview
+   (state.uploads.steamTrailer) is the one exception shown as-is, shared
+   with Game Details — it's a read-only reference to what's already live on
+   the linked Steam page, never edited by either side, so there's nothing to
+   keep in sync. */
+function _wsMediaFieldsHTML(ws) {
+  const shots = ws.screenshots || [];
+  const trailerFile = ws.trailerFile || null;
+  const steamTrailerHTML = _steamTrailerPreviewHTML(state.uploads?.steamTrailer);
+  return `
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
-      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${shotsCount} screenshot${shotsCount === 1 ? '' : 's'} from your uploads shown on the preview.</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openAssetsFromWebEdit('${source}');">Manage ›</button>
+    <div class="asset-dropzone" id="ws-screenshot-dropzone"
+         onclick="document.getElementById('ws-screenshot-input').click()"
+         ondragover="event.preventDefault(); this.classList.add('is-over')"
+         ondragleave="this.classList.remove('is-over')"
+         ondrop="handleWebScreenshotDrop(event); this.classList.remove('is-over')">
+      <div class="asset-dropzone-icon">↑</div>
+      <div class="asset-dropzone-label">Drop screenshots here, or click to browse</div>
+      <div class="asset-dropzone-hint">PNG or JPG, any size</div>
+      <input type="file" id="ws-screenshot-input" multiple accept="image/*" style="display:none"
+             onchange="handleWebScreenshotFiles(this.files); this.value=''">
+    </div>
+    <div class="asset-grid" id="ws-screenshot-grid" style="margin-bottom:16px;">${_wsScreenshotGridHTML(shots)}</div>
+
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailer</label>
+    <div class="asset-dropzone asset-dropzone-sm" id="ws-trailer-dropzone"
+         onclick="document.getElementById('ws-trailer-input').click()"
+         ondragover="event.preventDefault(); this.classList.add('is-over')"
+         ondragleave="this.classList.remove('is-over')"
+         ondrop="handleWebTrailerDrop(event); this.classList.remove('is-over')">
+      <div class="asset-dropzone-icon">↑</div>
+      <div class="asset-dropzone-label">Drop a trailer file here, or click to browse</div>
+      <div class="asset-dropzone-hint">MP4 or MOV, any size</div>
+      <input type="file" id="ws-trailer-input" accept="video/*" style="display:none"
+             onchange="handleWebTrailerFiles(this.files); this.value=''">
+    </div>
+    ${steamTrailerHTML}
+    <div id="ws-trailer-file-info" style="margin-bottom:8px;${trailerFile ? '' : 'display:none;'}">${trailerFile ? trailerFileRowHTML(trailerFile.name, (trailerFile.size / 1024 / 1024).toFixed(1), 'ws-') : ''}</div>
+    <div class="asset-url-row" style="margin-bottom:16px;">
+      <label class="form-label" style="display:block;margin-bottom:6px;">Or paste a YouTube URL</label>
+      <input class="qs-input" style="width:100%;" id="ws-trailer-url" type="url" value="${escHtml(ws.trailerUrl || '')}"
+             placeholder="https://youtube.com/watch?v=…" oninput="setWebSiteField('trailerUrl', this.value)">
     </div>`;
 }
 
 function buildWebSiteEditSection() {
-  const fd = state.formData || {};
   const ws = state.webSite || {};
   const accent = ws.accent || '#0EA5A4';
   const swatches = ['#0EA5A4', '#4B7BEC', '#8B5CF6', '#EC4899', '#F59E0B', '#22C55E'];
@@ -4639,7 +4645,7 @@ function buildWebSiteEditSection() {
       ${_wsDescriptionFieldsHTML(ws)}
 
       <div class="pk-edit-group-label">Media</div>
-      ${_wsMediaFieldsHTML(fd, 'siteInfo')}
+      ${_wsMediaFieldsHTML(ws)}
     </div>`;
 }
 
@@ -4671,23 +4677,24 @@ function buildWebDescriptionEditSection() {
 }
 
 function buildWebMediaEditSection() {
-  const fd = state.formData || {};
+  const ws = state.webSite || {};
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
         Edit the Media fields shown on your preview website.
       </p>
-      ${_wsMediaFieldsHTML(fd, 'webMedia')}
+      ${_wsMediaFieldsHTML(ws)}
     </div>`;
 }
 
 /* Key Art fields: Capsule Image, Header Image, IGDB Cover Art, Library
    Hero (alphabetical, matching buildSteamKeyArtEditSection's own order) —
    read-only summaries of the same assets managed in Steam's "Select Key
-   Art" section (Store Page Preview step, see buildSteamKeyArtEditSection),
-   same relationship as _wsMediaFieldsHTML's Trailers/Screenshots rows have
-   with Shipmate's Assets step. "Manage" jumps to Steam via
-   openSteamKeyArtFromWebEdit. */
+   Art" section (Store Page Preview step, see buildSteamKeyArtEditSection).
+   "Manage" jumps to Steam via openSteamKeyArtFromWebEdit — unlike the
+   Media section's own Screenshots/Trailer above, these aren't mirrored
+   into an independent Web-owned copy, so a "Manage" jump-away (rather than
+   inline dropzones) is still the right treatment here. */
 function _wsKeyArtFieldsHTML() {
   const ups = state.uploads || {};
   const capsuleImageSummary = ups.steamCapsuleImage ? `Uploaded: ${ups.steamCapsuleImage.name}` : 'No capsule image added yet';

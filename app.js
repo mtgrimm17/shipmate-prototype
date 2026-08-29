@@ -141,11 +141,7 @@ function showMainApp(view = 'dashboard') {
 }
 
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
-// 'assets' has no nav button of its own (VIEW_NAV) — it's a standalone
-// detour reached only via a "Manage" button in the Web platform's Trailers/
-// Screenshots sub-sections (openAssetsFromWebEdit below), never from the
-// main tab bar.
-const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance', assets: 'assets' };
+const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
 const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
@@ -166,7 +162,6 @@ function setView(view) {
   if (view === 'details') renderDetails();
   else if (view === 'broadcast') renderBroadcast();
   else if (view === 'performance') renderPerformance();
-  else if (view === 'assets') renderAssets();
   else renderDashboard();
   renderGuide();       // right pane = this tab's banner + task checklist
   if (typeof renderSubnav === 'function') renderSubnav();   // top-nav sub-tab drawer
@@ -415,42 +410,7 @@ function openOnboarding(tab = 0) {
 
 function closeOnboarding() {
   if (!state.onboardingComplete) return; // can't close if not yet done
-  state.assetsFromWebEdit = false;
-  state.assetsFromWebEditSource = 'siteInfo';
   setView('dashboard');
-}
-
-/* Opens the Assets tab from a "Manage" button in the Web platform's
-   Trailers/Screenshots sub-sections — shown in both the combined "Site
-   Details" edit panel (buildWebSiteEditSection) and the standalone "Media"
-   flip modal (buildWebMediaEditSection), both via the shared
-   _wsMediaFieldsHTML in render.js. A standalone asset-management detour
-   rather than a step in the normal onboarding flow.
-   `source` is which of those two the user clicked "Manage" from —
-   'siteInfo' or 'webMedia' (the same target strings openStorePreviewSection
-   already uses for them) — remembered so the Assets tab's "Save & Return"
-   button (backFromAssetsToWebEdit below) can send the user back to the
-   right one instead of always landing on Site Details regardless of where
-   they came from. Falls back to 'siteInfo' if called without one. See the
-   matching footer treatment in renderOnboardingFooter (render.js). */
-function openAssetsFromWebEdit(source) {
-  state.assetsFromWebEdit = true;
-  state.assetsFromWebEditSource = source || 'siteInfo';
-  setView('assets');   // Assets is now its own top-level tab
-}
-
-/* "Save & Return" button on the Assets tab footer when it was opened via
-   openAssetsFromWebEdit — returns to whichever of Site Details/Media the
-   user came from (state.assetsFromWebEditSource) instead of always
-   Distribution (the normal Back target) or always Site Details (this
-   function's own previous, source-blind behavior). */
-async function backFromAssetsToWebEdit() {
-  const returnTarget = state.assetsFromWebEditSource || 'siteInfo';
-  state.assetsFromWebEdit = false;
-  state.assetsFromWebEditSource = 'siteInfo';
-  closeOnboarding();
-  await openStepModal('web', 'storePreview');
-  await openStorePreviewSection('web', returnTarget);
 }
 
 function setOnboardingTab(idx) {
@@ -2189,6 +2149,11 @@ function syncField(field, value) {
   }
   if (field === 'title') _syncProjectBarTitle(value);
   if (field === 'description') _wsPropagateAboutGame(value);
+  // Force-sync into the Web platform's own independent trailer slot — same
+  // whole-value overwrite treatment as the trailer FILE gets in
+  // handleTrailerFiles/removeTrailer (see the state.js comment above
+  // webSite.trailerFile).
+  if (field === 'trailerUrl') { if (!state.webSite) state.webSite = {}; state.webSite.trailerUrl = value; }
   // Live is-complete on the typed input — immediate feedback as user types/clears
   const FIELD_INPUT_MAP = { title: 'ob-title', description: 'ob-desc' };
   if (FIELD_INPUT_MAP[field]) _setInputComplete(FIELD_INPUT_MAP[field], !!(value?.trim()));
@@ -3129,20 +3094,38 @@ function _refreshScreenshotGrid() {
   updateObSectionStates();
 }
 
+// Mirrors an auto-import batch (IGDB or Steam — see
+// _fillScreenshotGridFromIgdb/_fillScreenshotGridFromSteam below) into the
+// Web platform's own independent screenshots copy: same "drop the
+// previous auto-populated batch, keep anything with a dataUrl" rule as
+// Game Details' own array uses, applied to state.webSite.screenshots
+// instead. `entries` is the SAME array (same ids) just pushed onto
+// state.uploads.screenshots, so a later per-id removal (removeScreenshot)
+// still matches correctly on both sides. See the state.js comment above
+// webSite.screenshots.
+function _wsSyncAutoScreenshots(entries) {
+  if (!state.webSite) state.webSite = {};
+  if (!state.webSite.screenshots) state.webSite.screenshots = [];
+  state.webSite.screenshots = state.webSite.screenshots.filter(s => s.dataUrl);
+  state.webSite.screenshots.push(...entries);
+  const wsGrid = document.getElementById('ws-screenshot-grid');
+  if (wsGrid) renderWebScreenshotGridInto(wsGrid);
+}
+
 // Always clears previously auto-populated screenshots (id starts with
 // 'igdb-' or 'steam-') when a new game is selected, then loads the new
 // game's screenshots. User-uploaded screenshots (those with a dataUrl) are
 // left untouched. IGDB CDN images route through wsrv.nl (via _screenshotSrc
 // at render time) to avoid 403s from direct hotlinking.
 function _fillScreenshotGridFromIgdb(urls) {
+  const entries = (urls || []).map((url, i) => ({
+    id:   'igdb-' + i + '-' + Date.now(),
+    name: `screenshot-${i + 1}.jpg`,
+    url,  // stored as URL; rendering proxies through wsrv.nl
+  }));
   state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
-  (urls || []).forEach((url, i) => {
-    state.uploads.screenshots.push({
-      id:   'igdb-' + i + '-' + Date.now(),
-      name: `screenshot-${i + 1}.jpg`,
-      url,  // stored as URL; rendering proxies through wsrv.nl
-    });
-  });
+  state.uploads.screenshots.push(...entries);
+  _wsSyncAutoScreenshots(entries);
   _refreshScreenshotGrid();
 }
 
@@ -3152,15 +3135,15 @@ function _fillScreenshotGridFromIgdb(urls) {
 // directly with no proxy needed (same reasoning as steamLibraryHeroUrl
 // above: plain <img> loading doesn't require CORS headers).
 function _fillScreenshotGridFromSteam(steamScreenshots) {
-  state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
   const ts = Date.now();
-  (steamScreenshots || []).slice(0, 10).filter(s => s && s.path_full).forEach((s, i) => {
-    state.uploads.screenshots.push({
-      id:   'steam-' + i + '-' + ts,
-      name: `screenshot-${i + 1}.jpg`,
-      url:  s.path_full,
-    });
-  });
+  const entries = (steamScreenshots || []).slice(0, 10).filter(s => s && s.path_full).map((s, i) => ({
+    id:   'steam-' + i + '-' + ts,
+    name: `screenshot-${i + 1}.jpg`,
+    url:  s.path_full,
+  }));
+  state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
+  state.uploads.screenshots.push(...entries);
+  _wsSyncAutoScreenshots(entries);
   _refreshScreenshotGrid();
 }
 
@@ -3678,10 +3661,19 @@ function handleScreenshotFiles(files) {
     const id = 'ss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
     const reader = new FileReader();
     reader.onload = ev => {
-      state.uploads.screenshots.push({ id, name: file.name, dataUrl: ev.target.result });
+      const entry = { id, name: file.name, dataUrl: ev.target.result };
+      state.uploads.screenshots.push(entry);
       const grid = document.getElementById('ob-screenshot-grid');
       if (grid) renderScreenshotGridInto(grid);
       updateObSectionStates();   // clear amber as soon as first screenshot lands
+      // Mirror into the Web platform's own independent copy (same id, so a
+      // later removal here — by id — finds and removes it there too). See
+      // the state.js comment above webSite.screenshots.
+      if (!state.webSite) state.webSite = {};
+      if (!state.webSite.screenshots) state.webSite.screenshots = [];
+      state.webSite.screenshots.push({ ...entry });
+      const wsGrid = document.getElementById('ws-screenshot-grid');
+      if (wsGrid) renderWebScreenshotGridInto(wsGrid);
     };
     reader.readAsDataURL(file);
   });
@@ -5977,6 +5969,73 @@ function removeScreenshot(id) {
   state.uploads.screenshots = state.uploads.screenshots.filter(s => s.id !== id);
   const grid = document.getElementById('ob-screenshot-grid');
   if (grid) renderScreenshotGridInto(grid);
+  // Mirror the removal into the Web platform's own independent copy, by
+  // the same id — a screenshot added independently there (a different id)
+  // is untouched. See the state.js comment above webSite.screenshots.
+  if (state.webSite && state.webSite.screenshots) {
+    state.webSite.screenshots = state.webSite.screenshots.filter(s => s.id !== id);
+    const wsGrid = document.getElementById('ws-screenshot-grid');
+    if (wsGrid) renderWebScreenshotGridInto(wsGrid);
+  }
+}
+
+/* ── Web platform's own Media section — screenshots/trailer dropzones ────
+   Mirror of handleScreenshotDrop/handleScreenshotFiles/removeScreenshot
+   above, but reading/writing state.webSite.screenshots instead of
+   state.uploads.screenshots — this is the Web platform's OWN independent
+   copy (see the state.js comment above webSite.screenshots), so these
+   never touch Game Details' own Assets step. Game Details' own add/remove
+   functions above mirror INTO this array; these never mirror back out. */
+function renderWebScreenshotGridInto(grid) {
+  grid.innerHTML = _wsScreenshotGridHTML(state.webSite?.screenshots);
+}
+
+function handleWebScreenshotDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleWebScreenshotFiles(e.dataTransfer.files);
+}
+
+function handleWebScreenshotFiles(files) {
+  if (!state.webSite) state.webSite = {};
+  if (!state.webSite.screenshots) state.webSite.screenshots = [];
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const id = 'wsss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      state.webSite.screenshots.push({ id, name: file.name, dataUrl: ev.target.result });
+      const grid = document.getElementById('ws-screenshot-grid');
+      if (grid) renderWebScreenshotGridInto(grid);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeWebScreenshot(id) {
+  if (!state.webSite || !state.webSite.screenshots) return;
+  state.webSite.screenshots = state.webSite.screenshots.filter(s => s.id !== id);
+  const grid = document.getElementById('ws-screenshot-grid');
+  if (grid) renderWebScreenshotGridInto(grid);
+}
+
+function handleWebTrailerDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleWebTrailerFiles(e.dataTransfer.files);
+}
+
+function handleWebTrailerFiles(files) {
+  const file = files[0];
+  if (!file) return;
+  if (!state.webSite) state.webSite = {};
+  state.webSite.trailerFile = { name: file.name, size: file.size };
+  const info = document.getElementById('ws-trailer-file-info');
+  if (info) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    info.style.display = 'block';
+    info.innerHTML = trailerFileRowHTML(file.name, mb, 'ws-');
+  }
 }
 
 function handleFeatureDrop(e) {
@@ -6029,14 +6088,38 @@ function handleTrailerFiles(files) {
       <div class="trailer-file-row">
         <span class="trailer-file-name">🎬 ${file.name}</span>
         <span class="trailer-file-size">${mb} MB</span>
-        <button class="btn btn-ghost btn-sm" onclick="removeTrailer()">Remove</button>
+        <button class="btn btn-ghost btn-sm" onclick="removeTrailer('ob-')">Remove</button>
       </div>`;
+  }
+  // Force-sync into the Web platform's own independent trailer slot — see
+  // the state.js comment above webSite.trailerFile for why this is a whole-
+  // value overwrite rather than the coexisting per-id merge screenshots use.
+  if (!state.webSite) state.webSite = {};
+  state.webSite.trailerFile = { name: file.name, size: file.size };
+  const wsInfo = document.getElementById('ws-trailer-file-info');
+  if (wsInfo) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    wsInfo.style.display = 'block';
+    wsInfo.innerHTML = trailerFileRowHTML(file.name, mb, 'ws-');
   }
 }
 
-function removeTrailer() {
-  state.uploads.trailer = null;
-  const info = document.getElementById('ob-trailer-file-info');
+/* `prefix` distinguishes which trailer-file slot to clear: 'ob-' (or
+   omitted, the default) for Game Details' own state.uploads.trailer, 'ws-'
+   for the Web platform's independent state.webSite.trailerFile (see
+   _wsMediaFieldsHTML, render.js). Clearing Game Details' own trailer file
+   also force-clears the Web platform's copy to match (same one-way sync as
+   handleTrailerFiles above) — clearing the Web platform's own copy only
+   ever touches state.webSite, never state.uploads. */
+function removeTrailer(prefix) {
+  prefix = prefix || 'ob-';
+  if (prefix === 'ws-') {
+    if (state.webSite) state.webSite.trailerFile = null;
+  } else {
+    state.uploads.trailer = null;
+    if (state.webSite) state.webSite.trailerFile = null;
+  }
+  const info = document.getElementById(`${prefix}trailer-file-info`);
   if (info) { info.style.display = 'none'; info.innerHTML = ''; }
 }
 
@@ -7798,9 +7881,8 @@ function removeSteamKeyArtHeaderImage() {
 
 /* Jumps from the Web platform's read-only "Key Art" flip modal to Steam's
    "Select Key Art" section (Store Page Preview step) — a cross-platform
-   detour, same relationship openAssetsFromWebEdit has with the Assets tab.
-   Caller closes Web's step modal first (see _wsKeyArtFieldsHTML's onclick),
-   matching openAssetsFromWebEdit's own calling convention. */
+   detour. Caller closes Web's step modal first (see _wsKeyArtFieldsHTML's
+   onclick). */
 async function openSteamKeyArtFromWebEdit() {
   state.steamKeyArtFromWebEdit = true;
   await openStepModal('steam', 'storePreview');
