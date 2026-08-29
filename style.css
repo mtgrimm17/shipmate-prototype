@@ -11181,6 +11181,7 @@ body.viewing-splash #app-guide { display: none; }
 .platform-grid.pg-2{grid-template-columns:repeat(2,1fr)}
 .platform-grid.pg-3{grid-template-columns:repeat(3,1fr)}
 .platform-grid.pg-6{grid-template-columns:repeat(6,1fr)}
+.platform-grid.pg-7{grid-template-columns:repeat(7,1fr)}
 
 
 /* ── The Shippy panel ────────────────────────────────────────────────── */
@@ -11458,14 +11459,15 @@ body.viewing-splash #app-guide { display: none; }
 }
 
 /* ── Platform tiles ──────────────────────────────────── */
-/* .platform-grid.pg-6 sits earlier in this file at the same specificity as
-   ".ob-form .platform-grid", so source order would have let the bare 4-column
-   fallback win and quietly drop the row from six columns to four. The scoped
-   modifiers below settle it. */
+/* .platform-grid.pg-6/.pg-7 sit earlier in this file at the same specificity
+   as ".ob-form .platform-grid", so source order would have let the bare
+   4-column fallback win and quietly drop the row from six/seven columns to
+   four. The scoped modifiers below settle it. */
 .ob-form .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .ob-form .platform-grid.pg-2 { grid-template-columns: repeat(2, 1fr); }
 .ob-form .platform-grid.pg-3 { grid-template-columns: repeat(3, 1fr); }
 .ob-form .platform-grid.pg-6 { grid-template-columns: repeat(6, 1fr); }
+.ob-form .platform-grid.pg-7 { grid-template-columns: repeat(7, 1fr); }
 .ob-form .platform-tile {
   position: relative; display: flex; flex-direction: column;
   align-items: center; justify-content: center;

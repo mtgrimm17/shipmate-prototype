@@ -64,7 +64,7 @@ function bootApp() {
   if (!state.onboardingComplete && (!state.projects || state.projects.length === 0)) {
     try { completeOnboarding(); } catch (e) { /* keep going */ }
   }
-  try { seedOnboardingToIOS(); seedOnboardingToAndroid(); } catch (e) {}
+  try { seedOnboardingToIOS(); seedOnboardingToIOS('macos'); seedOnboardingToAndroid(); } catch (e) {}
   // (Top-bar hover sub-menus removed — sub-tabs now live under the title bar.)
   showSplashView();
   measureScrollbar();
@@ -132,6 +132,7 @@ function showMainApp(view = 'dashboard') {
   document.getElementById('main-app').classList.remove('hidden');
   document.body.classList.add('signed-in');
   seedOnboardingToIOS();
+  seedOnboardingToIOS('macos');
   seedOnboardingToAndroid();
   // No "Continue" button anymore — make sure the first project exists up front.
   if (!state.onboardingComplete && (!state.projects || state.projects.length === 0)) {
@@ -458,6 +459,10 @@ function toggleOnboardingPlatform(pid) {
     if (!state.platformStepStatus[pid]) {
       state.platformStepStatus[pid] = makeEmptyPlatformSteps()[pid] || {};
     }
+    // First time Mac App Store is turned on, snapshot Game Details' current
+    // listing text into its own independent copy (seedMacAppStoreListing is
+    // a no-op on every activation after the first).
+    if (pid === 'macos') seedMacAppStoreListing();
   }
   // Re-render just the platform tiles section in-place (platform is now in Game Details tab)
   const gridWrap = document.getElementById('ob-plat-grid-wrap');
@@ -640,26 +645,75 @@ function markTaskUndone(platformId, stepId) {
 
 /* ── iOS Step Modal ───────────────────────────────────── */
 
-// Seed onboarding answers into iOS submission state (idempotent — only fills nulls)
-function seedOnboardingToIOS() {
-  if (!state.iosSubmitAnswers.privacyPolicyUrl && state.formData.privacyUrl) {
-    state.iosSubmitAnswers.privacyPolicyUrl = state.formData.privacyUrl;
+// Resolve which platform's App-Store-shaped answers/meta object to read or
+// write — 'macos' gets its own independent state.macSubmitAnswers/
+// state.macAnswerMeta, everything else (in practice only 'ios') keeps using
+// state.iosSubmitAnswers/state.iosAnswerMeta exactly as before. Shared by
+// seedOnboardingToIOS and every Content Rating/Privacy/Business/IAP answer
+// handler below so Mac App Store's responses never read or write iOS's.
+function _appStoreAnswers(pid) {
+  return pid === 'macos' ? state.macSubmitAnswers : state.iosSubmitAnswers;
+}
+function _appStoreAnswerMeta(pid) {
+  return pid === 'macos' ? state.macAnswerMeta : state.iosAnswerMeta;
+}
+
+// Seed onboarding answers into iOS (or, for pid='macos', Mac App Store)
+// submission state (idempotent — only fills nulls). Called once per
+// platform at app load / onboarding-complete, and again defensively every
+// time that platform's step modal opens (see openStepModal's default
+// branch below) — matching how it always worked for iOS.
+function seedOnboardingToIOS(pid) {
+  pid = pid || 'ios';
+  const ans  = _appStoreAnswers(pid);
+  const meta = _appStoreAnswerMeta(pid);
+  if (!ans.privacyPolicyUrl && state.formData.privacyUrl) {
+    ans.privacyPolicyUrl = state.formData.privacyUrl;
   }
-  if (state.iosSubmitAnswers.hasIAP === null && state.questionAnswers.inAppPurchases !== null) {
-    state.iosSubmitAnswers.hasIAP = state.questionAnswers.inAppPurchases;
-    state.iosAnswerMeta.hasIAP = { humanConfirmed: true };
+  if (ans.hasIAP === null && state.questionAnswers.inAppPurchases !== null) {
+    ans.hasIAP = state.questionAnswers.inAppPurchases;
+    meta.hasIAP = { humanConfirmed: true };
   }
-  if (state.iosSubmitAnswers.collectsData === null && state.questionAnswers.dataCollection !== null) {
-    state.iosSubmitAnswers.collectsData = state.questionAnswers.dataCollection;
-    state.iosAnswerMeta.collectsData = { humanConfirmed: true };
+  if (ans.collectsData === null && state.questionAnswers.dataCollection !== null) {
+    ans.collectsData = state.questionAnswers.dataCollection;
+    meta.collectsData = { humanConfirmed: true };
   }
-  if (state.iosSubmitAnswers.selectedCountries.length === 0) {
+  if (ans.selectedCountries.length === 0) {
     const langs = new Set([state.formData.primaryLanguage, ...state.formData.localizations]);
-    state.iosSubmitAnswers.selectedCountries = IOS_COUNTRIES
+    ans.selectedCountries = IOS_COUNTRIES
       .filter(c => langs.has(c.lang))
       .map(c => c.code);
-    state.iosSubmitAnswers.distPreset = 'custom';
+    ans.distPreset = 'custom';
   }
+}
+
+// Pre-fills Mac App Store's own independent Product Page Preview listing
+// (state.macAppStoreListing) from Game Details' current values THE FIRST
+// TIME the Mac App Store platform is activated (toggleOnboardingPlatform /
+// activatePlatform above, and defensively again from openStepModal below in
+// case 'macos' was ever added to state.activePlatforms some other way) —
+// the same "seed once, then fully independent" treatment seedOnboardingToIOS
+// above gives the compliance-answers layer, and the Web platform's own
+// Developer/Publisher fields. A no-op on every call after the first
+// (state.macAppStoreListing already exists), so re-toggling Mac App Store
+// off and back on — or simply opening its modal again — never overwrites
+// edits already made to its own listing. primaryLanguage/localizations are
+// deliberately NOT copied in here — see state.macAppStoreListing's own
+// comment in state.js — they stay shared via state.formData for every
+// platform, Mac App Store included.
+function seedMacAppStoreListing() {
+  if (state.macAppStoreListing) return;
+  const fd = state.formData;
+  state.macAppStoreListing = {
+    title:        fd.title        || '',
+    subtitle:     fd.subtitle     || '',
+    description:  fd.description  || '',
+    releaseNotes: fd.releaseNotes || '',
+    // Deep-copied so editing a supporting language's Mac App Store text can
+    // never mutate the App Store's own localizedStoreText entry (or vice
+    // versa) — they only share a starting point, never live storage.
+    localizedStoreText: JSON.parse(JSON.stringify(fd.localizedStoreText || {})),
+  };
 }
 
 async function openStepModal(pid, stepId) {
@@ -737,14 +791,18 @@ async function openStepModal(pid, stepId) {
     return;
   }
 
-  seedOnboardingToIOS();
+  seedOnboardingToIOS(pid);
+  if (pid === 'macos') seedMacAppStoreListing();
 
   state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
 
   // Open overlay immediately so user sees something
   renderStepModal();
   // Mark Store Page Preview as visited before rendering
-  if (stepId === 'storePreview') state.iosStorePreviewSeen = true;
+  if (stepId === 'storePreview') {
+    if (pid === 'macos') state.macStorePreviewSeen = true;
+    else                 state.iosStorePreviewSeen = true;
+  }
 
   document.getElementById('submit-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -765,7 +823,7 @@ async function openStepModal(pid, stepId) {
       state.stepModal.inferenceError  = err.message === 'NO_KEY' ? 'No API key set.' : err.message;
     }
     reRenderStepModal();
-    updateIOSCard();
+    updateIOSCard(pid);
   } else if (stepId === 'improveSubmission') {
     _autoRunImproveSubmission(pid);
   }
@@ -796,6 +854,7 @@ function closeStepModal() {
   overlay.classList.add('hidden');
   document.body.style.overflow = '';
   updateIOSCard();
+  updateIOSCard('macos');
   updateAndroidCard();
   updateSteamCard();
   if (sm?.platformId === 'web') renderDashboard();
@@ -926,15 +985,21 @@ function submitOverlayClick(e) {
   if (e.target === document.getElementById('submit-overlay')) closeStepModal();
 }
 
-// Update the iOS active card step completion states without full re-render
-function updateIOSCard() {
-  if (!state.activePlatforms.has('ios')) return;
+// Update the iOS (or, via the optional pid param, Mac App Store) active
+// card step completion states without full re-render. pid defaults to
+// 'ios' for backward compatibility with existing no-arg call sites;
+// updateIOSCard('macos') updates Mac App Store's card using its own
+// independent completion data (isMacSectionComplete/macSubmitAnswers)
+// instead of iOS's.
+function updateIOSCard(pid) {
+  pid = pid || 'ios';
+  if (!state.activePlatforms.has(pid)) return;
   const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-  PLATFORMS.ios.steps.forEach((step, i) => {
-    const card = document.getElementById(`ios-step-card-${step.id}`);
+  PLATFORMS[pid].steps.forEach((step, i) => {
+    const card = document.getElementById(`${pid}-step-card-${step.id}`);
     if (!card) return;
-    const done = isIOSSectionComplete(step.id);
+    const done = _appStoreSectionComplete(pid, step.id);
     card.classList.toggle('is-complete', done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
@@ -945,8 +1010,8 @@ function updateIOSCard() {
   });
 
   // Update submit step card lock state
-  const counts = platformStepCount('ios');
-  const submitCard = document.getElementById('ios-step-card-submit');
+  const counts = platformStepCount(pid);
+  const submitCard = document.getElementById(`${pid}-step-card-submit`);
   if (submitCard) submitCard.classList.toggle('submit-step-locked', !counts.allRequired);
 }
 
@@ -1064,29 +1129,39 @@ function reRenderStepModal() {
 
 // Called by YES/NO and intensity/chip clicks — re-renders immediately
 // Clicking the already-selected value toggles it back to null (deselect)
+// pid resolves from the currently-open step modal (state.stepModal.platformId)
+// — this and every other Content Rating/Privacy/Business/IAP handler below
+// are only ever invoked via onclick/oninput from inside that modal, for
+// whichever App-Store-shaped platform (ios or macos) is currently open —
+// so this is always the right platform without needing an explicit
+// parameter threaded through every onclick="...()" call site.
 function answerIOSField(field, value) {
-  const current      = state.iosSubmitAnswers[field];
-  const meta         = state.iosAnswerMeta[field];
-  const humanAlready = meta?.humanConfirmed === true;
+  const pid  = state.stepModal?.platformId || 'ios';
+  const ans  = _appStoreAnswers(pid);
+  const meta = _appStoreAnswerMeta(pid);
+  const current      = ans[field];
+  const fmeta        = meta[field];
+  const humanAlready = fmeta?.humanConfirmed === true;
 
   if (current === value && humanAlready) {
     // Human-confirmed answer clicked again → unselect
-    state.iosSubmitAnswers[field] = null;
-    delete state.iosAnswerMeta[field];
+    ans[field] = null;
+    delete meta[field];
   } else if (current === value && !humanAlready) {
     // AI-inferred answer clicked → promote to human-confirmed, keep value
-    state.iosAnswerMeta[field] = { ...(meta || {}), humanConfirmed: true };
+    meta[field] = { ...(fmeta || {}), humanConfirmed: true };
   } else {
     // Different value selected → set and mark human
-    state.iosSubmitAnswers[field] = value;
-    state.iosAnswerMeta[field] = { ...(meta || {}), humanConfirmed: true };
+    ans[field] = value;
+    meta[field] = { ...(fmeta || {}), humanConfirmed: true };
   }
   reRenderStepModal();
 }
 
 // Called by text oninput — updates state only, no re-render (prevents cursor jumping)
 function updateIOSTextField(field, value) {
-  state.iosSubmitAnswers[field] = value;
+  const pid = state.stepModal?.platformId || 'ios';
+  _appStoreAnswers(pid)[field] = value;
 }
 
 /**
@@ -1096,12 +1171,13 @@ function updateIOSTextField(field, value) {
 function setPrivacyUrl(url) {
   state.formData.privacyUrl                    = url;
   state.iosSubmitAnswers.privacyPolicyUrl      = url;
+  state.macSubmitAnswers.privacyPolicyUrl      = url;
   state.androidSubmitAnswers.privacyPolicyUrl  = url;
   state.steamSubmitAnswers.privacyPolicyUrl    = url;
   // Sync sibling platform inputs that are currently in the DOM
   // (but don't change the one that's actively focused — it's the source)
   const active = document.activeElement;
-  ['ios-privacy-url', 'android-privacy-url', 'steam-privacy-url'].forEach(id => {
+  ['ios-privacy-url', 'macos-privacy-url', 'android-privacy-url', 'steam-privacy-url'].forEach(id => {
     const el = document.getElementById(id);
     if (el && el !== active && el.value !== url) el.value = url;
   });
@@ -1110,6 +1186,7 @@ function setPrivacyUrl(url) {
   updateObSectionStates();
   updateAndroidCard();
   updateIOSCard();
+  updateIOSCard('macos');
   updateSteamCard?.();
 }
 
@@ -1121,9 +1198,11 @@ function togglePrivacyMatrix() {
 }
 
 function toggleContentRatingExpanded(value) {
+  const pid = state.stepModal?.platformId || 'ios';
   // Re-snapshot on "Unanswered" click so newly-answered questions get hidden
-  if (!value) takeFilterSnapshot('ios');
-  state.iosContentRatingExpanded = value;
+  if (!value) takeFilterSnapshot(pid);
+  if (pid === 'macos') state.macContentRatingExpanded = value;
+  else                 state.iosContentRatingExpanded = value;
   reRenderStepModal();   // routes to the inline pane when it's the active surface
 }
 
@@ -1168,6 +1247,11 @@ function togglePrivacyPreset(id) {
       state.iosSubmitAnswers.dataPerType        = {};
       state.iosSubmitAnswers.collectsData       = null;
     }
+    if (state.macSubmitAnswers) {
+      state.macSubmitAnswers.privacyDescription = '';
+      state.macSubmitAnswers.dataPerType        = {};
+      state.macSubmitAnswers.collectsData       = null;
+    }
     if (state.androidSubmitAnswers) {
       state.androidSubmitAnswers.androidDataDescription = '';
     }
@@ -1178,8 +1262,10 @@ function togglePrivacyPreset(id) {
 
   if (hasGuest) {
     state.iosSubmitAnswers.collectsData            = 'no';
+    state.macSubmitAnswers.collectsData            = 'no';
     state.androidSubmitAnswers.collectsOrSharesData = 'no';
     state.iosSubmitAnswers.privacyDescription       = '';
+    state.macSubmitAnswers.privacyDescription       = '';
     state.androidSubmitAnswers.androidDataDescription = '';
     reRenderStepModal();
     return;
@@ -1187,18 +1273,20 @@ function togglePrivacyPreset(id) {
 
   // Non-guest presets selected
   state.iosSubmitAnswers.collectsData            = 'yes';
+  state.macSubmitAnswers.collectsData            = 'yes';
   state.androidSubmitAnswers.collectsOrSharesData = 'yes';
   const combined = selected
     .map(pid2 => PRIVACY_PRESETS.find(p => p.id === pid2)?.description || '')
     .filter(Boolean)
     .join(' ');
   state.iosSubmitAnswers.privacyDescription       = combined;
+  state.macSubmitAnswers.privacyDescription       = combined;
   state.androidSubmitAnswers.androidDataDescription = combined;
 
   // Trigger AI translation for the active platform only
   if (combined.length >= 20) {
-    if (pid === 'ios')     _triggerPrivacyAI();
-    if (pid === 'android') _triggerAndroidDataAI();
+    if (pid === 'ios' || pid === 'macos') _triggerPrivacyAI(pid);
+    if (pid === 'android')                _triggerAndroidDataAI();
   }
   reRenderStepModal();
 }
@@ -1207,20 +1295,26 @@ function togglePrivacyPreset(id) {
 
 // Fires on blur (focus-out) — not on every keystroke
 function updatePrivacyDescription(val) {
-  state.iosSubmitAnswers.privacyDescription = val;
+  const pid = state.stepModal?.platformId || 'ios';
+  _appStoreAnswers(pid).privacyDescription = val;
   _setInputComplete('ob-prv-nlp-textarea', !!(val?.trim()));
   if (!val || val.trim().length < 20) return;
-  _triggerPrivacyAI();
+  _triggerPrivacyAI(pid);
 }
 
-async function _triggerPrivacyAI() {
+async function _triggerPrivacyAI(pid) {
+  pid = pid || state.stepModal?.platformId || 'ios';
+  const ans = _appStoreAnswers(pid);
   if (!CLAUDE_API_KEY) return;
-  const desc = (state.iosSubmitAnswers.privacyDescription || '').trim();
+  const desc = (ans.privacyDescription || '').trim();
   if (desc.length < 20) return;
 
   // If this exact description succeeded before, restore cached result instantly
+  // (the success cache is shared across platforms — it's keyed by the exact
+  // description text, not by pid, so identical Privacy descriptions on ios
+  // and macos both benefit from one cached AI call).
   if (desc === state.privacyLastSuccessDesc && state.privacyLastSuccessResult) {
-    state.iosSubmitAnswers.dataPerType = state.privacyLastSuccessResult;
+    ans.dataPerType = state.privacyLastSuccessResult;
     state.privacyAIStatus = 'complete';
     reRenderStepModal();
     return;
@@ -1294,7 +1388,7 @@ Rules:
       };
     }
 
-    state.iosSubmitAnswers.dataPerType = newPerType;
+    ans.dataPerType = newPerType;
     state.privacyAIStatus = 'complete';
     state.privacyLastSuccessDesc   = desc;
     state.privacyLastSuccessResult = newPerType;
@@ -1307,8 +1401,9 @@ Rules:
 }
 
 function togglePrivacyDataType(typeId) {
+  const pid = state.stepModal?.platformId || 'ios';
   // Clicking a row (but not a checkbox inside it) toggles selection
-  const perType = state.iosSubmitAnswers.dataPerType;
+  const perType = _appStoreAnswers(pid).dataPerType;
   if (perType[typeId]) {
     delete perType[typeId];
   } else {
@@ -1319,14 +1414,16 @@ function togglePrivacyDataType(typeId) {
 }
 
 function setPrivacyMeta(typeId, field, checked) {
-  const perType = state.iosSubmitAnswers.dataPerType;
+  const pid = state.stepModal?.platformId || 'ios';
+  const perType = _appStoreAnswers(pid).dataPerType;
   if (!perType[typeId]) return;
   perType[typeId][field] = checked ? 'yes' : 'no';
   reRenderStepModal();
 }
 
 function togglePrivacyPurpose(typeId, purposeId, checked) {
-  const perType = state.iosSubmitAnswers.dataPerType;
+  const pid = state.stepModal?.platformId || 'ios';
+  const perType = _appStoreAnswers(pid).dataPerType;
   if (!perType[typeId]) return;
   const arr = perType[typeId].purposes;
   if (checked && !arr.includes(purposeId)) arr.push(purposeId);
@@ -1335,7 +1432,8 @@ function togglePrivacyPurpose(typeId, purposeId, checked) {
 }
 
 function setPrivacyMeta(typeId, field, checked) {
-  const perType = state.iosSubmitAnswers.dataPerType;
+  const pid = state.stepModal?.platformId || 'ios';
+  const perType = _appStoreAnswers(pid).dataPerType;
   if (!perType[typeId]) return;
   perType[typeId][field] = checked ? 'yes' : 'no';
   // Tracking warning updates lazily on next section re-open
@@ -1351,7 +1449,8 @@ function setPrivacyMeta(typeId, field, checked) {
    mutate directly on oninput with no re-render, so typing doesn't lose
    focus mid-word. */
 function addIapProduct() {
-  state.iosSubmitAnswers.iapProducts.push({
+  const pid = state.stepModal?.platformId || 'ios';
+  _appStoreAnswers(pid).iapProducts.push({
     // locs holds this product's Name/Description localizations for every
     // supporting language — { [lang]: { name, desc, nameSourceText,
     // descSourceText } }, keyed by language exactly like
@@ -1364,11 +1463,14 @@ function addIapProduct() {
   reRenderStepModal();
 }
 function removeIapProduct(id) {
-  state.iosSubmitAnswers.iapProducts = state.iosSubmitAnswers.iapProducts.filter(p => p.id !== id);
+  const pid = state.stepModal?.platformId || 'ios';
+  const ans = _appStoreAnswers(pid);
+  ans.iapProducts = ans.iapProducts.filter(p => p.id !== id);
   reRenderStepModal();
 }
 function setIapProductField(id, key, value) {
-  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  const pid = state.stepModal?.platformId || 'ios';
+  const p = _appStoreAnswers(pid).iapProducts.find(p => p.id === id);
   if (p) p[key] = value;
 }
 // Live character-limit feedback for a product's Name/Description field
@@ -1400,7 +1502,8 @@ function updateIapCharCounter(inputEl, limit) {
   if (saveBtn) saveBtn.disabled = !!row.querySelector('.form-input.is-over-limit');
 }
 function setIapProductType(id, type) {
-  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  const pid = state.stepModal?.platformId || 'ios';
+  const p = _appStoreAnswers(pid).iapProducts.find(p => p.id === id);
   if (!p) return;
   p.type = type;
   // Type governs whether the Free Trial row even applies (see
@@ -1409,7 +1512,8 @@ function setIapProductType(id, type) {
   reRenderStepModal();
 }
 function setIapProductTrial(id, trial) {
-  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  const pid = state.stepModal?.platformId || 'ios';
+  const p = _appStoreAnswers(pid).iapProducts.find(p => p.id === id);
   if (p) p.trial = trial;
   reRenderStepModal();
 }
@@ -1433,16 +1537,22 @@ function setIapProductTrial(id, trial) {
 // above (fired-and-forgotten, same "kick off in the background" pattern
 // _iasSetFieldValue itself uses).
 function saveIapProduct(id) {
-  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  const pid = state.stepModal?.platformId || 'ios';
+  const p = _appStoreAnswers(pid).iapProducts.find(p => p.id === id);
   if (!p) return;
   if (p.name.length > IAP_PRODUCT_FIELD_LIMITS.name || p.desc.length > IAP_PRODUCT_FIELD_LIMITS.desc) return;
   p.collapsed = true;
+  // IAP Localizations (_iapLocPropagateName/_iapLocTriggerAutoTranslate) is
+  // currently only wired to iOS's own iapProducts array — for a Mac App
+  // Store product these look up `id` there, find nothing, and no-op
+  // harmlessly rather than cross-contaminating iOS's data.
   _iapLocPropagateName(id, p.name);
   _iapLocTriggerAutoTranslate(id, 'desc', p.desc);
   reRenderStepModal();
 }
 function expandIapProduct(id) {
-  const p = state.iosSubmitAnswers.iapProducts.find(p => p.id === id);
+  const pid = state.stepModal?.platformId || 'ios';
+  const p = _appStoreAnswers(pid).iapProducts.find(p => p.id === id);
   if (p) p.collapsed = false;
   reRenderStepModal();
 }
@@ -1787,6 +1897,9 @@ function blinkComingSoon(pid) {
 
 function activatePlatform(platformId) {
   state.activePlatforms.add(platformId);
+  // See toggleOnboardingPlatform's identical call — Submission's own
+  // "add a platform" entry point needs the same one-time seed.
+  if (platformId === 'macos') seedMacAppStoreListing();
   renderDashboard();
   // Shippy's platform item lives in the Details view, which renderDashboard()
   // never touches. Without this the checklist stays stale until something
@@ -2145,6 +2258,7 @@ function syncField(field, value) {
   // Keep platform privacy URLs in sync when the global field is updated
   if (field === 'privacyUrl') {
     state.iosSubmitAnswers.privacyPolicyUrl     = value;
+    state.macSubmitAnswers.privacyPolicyUrl     = value;
     state.androidSubmitAnswers.privacyPolicyUrl = value;
   }
   if (field === 'title') _syncProjectBarTitle(value);
@@ -2329,6 +2443,34 @@ function toggleLocPrimaryDropdown(event) {
   if (!isOpen) wrap.classList.add('is-open');
 }
 
+// Shared by selectLocPrimary below for both the App Store's own flat listing
+// (state.formData) and Mac App Store's independent one (state.macAppStoreListing,
+// when it exists) — promotes `lang`'s stored translation into whichever
+// listing's own flat title/subtitle/description/releaseNotes fields, stashing
+// the outgoing primary's copy under its own language code first (only if
+// it's staying around as a supported language — see selectLocPrimary's own
+// comment). `blank` is that listing's own blank-entry shape helper
+// (_iasBlankLocalizedText / _masBlankLocalizedText) — the two listings are
+// identically shaped, so this works for either without caring which one it
+// is, and never touches the other.
+function _promoteLangPrimary(listing, oldPrimary, lang, oldPrimaryKept, blank) {
+  if (!listing.localizedStoreText) listing.localizedStoreText = {};
+  if (oldPrimaryKept) {
+    listing.localizedStoreText[oldPrimary] = {
+      title:        listing.title        || '',
+      subtitle:     listing.subtitle     || '',
+      description:  listing.description  || '',
+      releaseNotes: listing.releaseNotes || '',
+    };
+  }
+  const incoming = listing.localizedStoreText[lang] || blank();
+  listing.title        = incoming.title;
+  listing.subtitle     = incoming.subtitle;
+  listing.description  = incoming.description;
+  listing.releaseNotes = incoming.releaseNotes;
+  delete listing.localizedStoreText[lang];
+}
+
 function selectLocPrimary(lang) {
   const fd = state.formData;
   const oldPrimary = fd.primaryLanguage || 'en';
@@ -2347,29 +2489,7 @@ function selectLocPrimary(lang) {
     // suddenly show the OLD primary's text (since the preview always reads
     // the flat fields for whichever language is primary), silently hiding
     // any translation already written for the incoming primary language.
-    if (!fd.localizedStoreText) fd.localizedStoreText = {};
-    if (oldPrimaryKept) {
-      // Stash the outgoing primary's copy under its own language code —
-      // only if it's staying around as a supported language; if not (a
-      // non-featured language demoted from primary isn't kept as a
-      // supported language at all, per the logic above), its text has
-      // nowhere left to live in this preview and is dropped, matching the
-      // existing loss of that language's *selection* in the same case.
-      fd.localizedStoreText[oldPrimary] = {
-        title:        fd.title        || '',
-        subtitle:     fd.subtitle     || '',
-        description:  fd.description  || '',
-        releaseNotes: fd.releaseNotes || '',
-      };
-    }
-    // Promote the incoming primary's own stored translation (if any) into
-    // the flat fields Game Details and every other platform's preview read.
-    const incoming = fd.localizedStoreText[lang] || _iasBlankLocalizedText();
-    fd.title        = incoming.title;
-    fd.subtitle     = incoming.subtitle;
-    fd.description  = incoming.description;
-    fd.releaseNotes = incoming.releaseNotes;
-    delete fd.localizedStoreText[lang];
+    _promoteLangPrimary(fd, oldPrimary, lang, oldPrimaryKept, _iasBlankLocalizedText);
 
     fd.primaryLanguage = lang;
     // Every supporting language's Title/Subtitle/Description/What's New is
@@ -2378,6 +2498,16 @@ function selectLocPrimary(lang) {
     // again) — refresh everything from the new primary, since nothing
     // protects any supporting language's copy from this update.
     _iasPropagateAllFields();
+
+    // Mac App Store shares this same primary-language promotion — its own
+    // independent listing (when it exists) goes through the identical
+    // stash/promote/re-propagate dance, on its own storage, so switching
+    // Primary Language never lets Mac App Store's preview show the App
+    // Store's text (or vice versa).
+    if (state.macAppStoreListing) {
+      _promoteLangPrimary(state.macAppStoreListing, oldPrimary, lang, oldPrimaryKept, _masBlankLocalizedText);
+      _masPropagateAllFields();
+    }
   }
   closeAllDropdowns();
   updateObLangListWrap();
@@ -2394,6 +2524,7 @@ function setObLangPreset(preset) {
   // Bulk selection bypasses toggleObLang entirely, so any newly-added
   // language needs its own initial translation pass triggered here.
   _iasPropagateAllFields();
+  _masPropagateAllFields(); // no-op until Mac App Store is activated
   // Same reasoning as toggleObLang — bulk selection also bypasses the
   // per-language Steam localization check, so run it for every language
   // this preset newly added.
@@ -2417,6 +2548,7 @@ function applyObLangPreset() {
   state.formData.localizations = _computeLangPresetSelections(preset);
   updateObLangListWrap();
   _iasPropagateAllFields();
+  _masPropagateAllFields(); // no-op until Mac App Store is activated
   _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, state.formData.localizations);
 }
 
@@ -2432,6 +2564,7 @@ function toggleObLang(lang) {
     // language's current Subtitle/Description/What's New right away rather
     // than waiting for those fields to change again.
     _iasPropagateAllFields();
+    _masPropagateAllFields(); // no-op until Mac App Store is activated
     // If this game is Steam-linked and its store page has been localized
     // into this language, prefer Steam's own "About This Game" copy for the
     // Description field over the Claude translation just triggered above
@@ -4443,6 +4576,225 @@ function _iasToggleAutoTranslateField(field) {
   reRenderStepModal();
 }
 
+/* ── Mac App Store Product Page Preview — own independent listing text ──
+   Full twins of the _ias* helpers directly above, reading/writing
+   state.macAppStoreListing (via _masFieldValue/_masSetFieldValue) instead
+   of state.formData, so editing Mac App Store's own Title/Subtitle/
+   Description/What's New — in buildMacStorePreviewSection, render.js —
+   never touches the App Store's copy or vice versa (see
+   state.macAppStoreListing's own comment in state.js, and
+   seedMacAppStoreListing above, which is what actually creates it).
+   primaryLanguage/localizations are NOT duplicated — every _mas* helper
+   below still reads those off state.formData, exactly like its _ias*
+   counterpart, since which languages exist at all is a studio-wide
+   Distribution setting shared by every platform, not per-listing copy.
+
+   Deliberately NOT cloned here: Localization Review (buildLocalizationReviewSection)
+   and its whole back-translation/undo-redo machinery, and the "Automatically
+   translated fields" settings menu (_iasToggleReviewSettingsMenu) that only
+   that section renders. Mac App Store's own Preview still fully supports
+   per-language inline editing and auto-translation (state.masAutoTranslateFields
+   ships with the same defaults as state.iasAutoTranslateFields — see state.js
+   — there just isn't a settings UI to change them for Mac App Store yet, nor
+   a side-by-side multi-language review grid). See buildStorePreviewFlipSection's
+   'localization' target comment (render.js) for the same limitation stated
+   from the render side. */
+function _masEffectivePreviewLang() {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const valid = new Set([primary, ...(fd.localizations || [])]);
+  return valid.has(state.masPreviewLang) ? state.masPreviewLang : primary;
+}
+
+function _masBlankLocalizedText() {
+  return { title: '', subtitle: '', description: '', releaseNotes: '' };
+}
+
+function _masFieldValue(field, lang) {
+  const fd = state.formData;
+  const ml = state.macAppStoreListing;
+  if (!ml) return ''; // not yet seeded (Mac App Store not activated) — nothing to show
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return ml[field] || '';
+  const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
+  return (entry && entry[field]) || '';
+}
+
+function _masLangHasOverLimitField(lang) {
+  return Object.keys(IAS_FIELD_CHAR_LIMITS).some(field =>
+    _masFieldValue(field, lang).length > IAS_FIELD_CHAR_LIMITS[field]);
+}
+
+function _masSetFieldValue(field, lang, value) {
+  const ml = state.macAppStoreListing;
+  if (!ml) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    ml[field] = value;
+    if (field === 'title') _masPropagateTitle(value);
+    else if (_masFieldAutoTranslateEnabled(field)) _masTriggerAutoTranslate(field, value);
+    return;
+  }
+  if (!ml.localizedStoreText) ml.localizedStoreText = {};
+  if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
+  ml.localizedStoreText[lang][field] = value;
+}
+
+// Mirrors _iasPropagateTitle — copies the Primary Language's Title verbatim
+// into every supporting language's Mac App Store listing, unless Title is
+// one of Mac App Store's own auto-translated fields (masAutoTranslateFields).
+function _masPropagateTitle(primaryValue) {
+  if (_masFieldAutoTranslateEnabled('title')) { _masTriggerAutoTranslate('title', primaryValue); return; }
+  const ml = state.macAppStoreListing;
+  if (!ml) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+  if (!ml.localizedStoreText) ml.localizedStoreText = {};
+  supportedLangs.forEach(lang => {
+    if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
+    ml.localizedStoreText[lang].title = primaryValue || '';
+  });
+}
+
+function _masFieldAutoTranslateEnabled(field) {
+  const cfg = state.masAutoTranslateFields;
+  if (!cfg) return IAS_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
+// Mirrors _iasTriggerAutoTranslate, minus the Localization Review back-
+// translation refresh calls (_locReviewBackTranslationEntry/
+// _locReviewRefreshBackTranslation) and the Steam-authoritative-description
+// guard — neither applies here: Mac App Store's listing has no Localization
+// Review surface to keep in sync, and no Steam-sourced initial Description
+// of its own (that's an App-Store-only wrinkle seeded from
+// _checkSteamLocalizedDescription into state.formData directly).
+async function _masTriggerAutoTranslate(field, primaryValue) {
+  if (!_masFieldAutoTranslateEnabled(field)) return;
+  const ml = state.macAppStoreListing;
+  if (!ml) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  const eligible = supportedLangs.filter(lang => {
+    const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    if (!ml.localizedStoreText) ml.localizedStoreText = {};
+    eligible.forEach(lang => {
+      if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
+      ml.localizedStoreText[lang][field]     = '';
+      ml.localizedStoreText[lang][sourceKey] = '';
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.masTranslateStatus = state.masTranslateStatus || {};
+  state.masTranslateStatus[field] = 'loading';
+  state.masTranslatePendingLangs = state.masTranslatePendingLangs || {};
+  state.masTranslatePendingLangs[field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel     = IAS_FIELD_LABELS[field] || field;
+  const perLangBudget  = (field === 'subtitle' || field === 'title') ? 120 : (field === 'releaseNotes' ? 600 : 1200);
+  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following Mac app store ${fieldLabel} text for a video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone, meaning, and any line breaks in the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    if (!ml.localizedStoreText) ml.localizedStoreText = {};
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
+      const entry = ml.localizedStoreText[lang];
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+    });
+
+    state.masTranslateStatus[field] = 'complete';
+  } catch (e) {
+    console.warn('[Mac App Store Preview Translate]', field, e.message);
+    state.masTranslateStatus[field] = 'error';
+  }
+  state.masTranslatePendingLangs[field] = [];
+
+  reRenderStepModal();
+}
+
+function _masRetryTranslate(field) {
+  const ml = state.macAppStoreListing;
+  _masTriggerAutoTranslate(field, (ml && ml[field]) || '');
+}
+
+// Mirrors _iasPropagateAllFields — re-propagates Title and re-triggers
+// translation of the other three fields from Mac App Store's own current
+// primary-language values. Called alongside _iasPropagateAllFields
+// (never instead of it) wherever the SHARED language list changes —
+// selectLocPrimary/setObLangPreset/applyObLangPreset/toggleObLang — and
+// only when Mac App Store has actually been activated (state.macAppStoreListing
+// truthy); before that there's nothing yet to propagate into.
+function _masPropagateAllFields() {
+  const ml = state.macAppStoreListing;
+  if (!ml) return;
+  _masPropagateTitle(ml.title);
+  IAS_TRANSLATABLE_FIELDS.forEach(field => _masTriggerAutoTranslate(field, ml[field]));
+}
+
 /* ── App Store Product Page Preview — inline click-to-edit ──────────────
    Title/Subtitle/Description/Release Notes can all be edited directly in
    the live preview (buildStorePreviewSection, render.js), not just in
@@ -4528,6 +4880,65 @@ function startIasInlineEdit(field, el, ev) {
 
   const commit = () => {
     _iasSetFieldValue(field, lang, input.value);
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.insertAdjacentElement('afterend', counterRow);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+// Mac App Store twin of startIasInlineEdit above — identical mechanics,
+// reading/writing state.macAppStoreListing (via _masEffectivePreviewLang/
+// _masFieldValue/_masSetFieldValue) instead of state.formData, so editing
+// Mac App Store's own Title/Subtitle/Description/What's New in its Product
+// Page Preview (buildMacStorePreviewSection, render.js) never touches the
+// App Store's own copy.
+function startMasInlineEdit(field, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const lang = _masEffectivePreviewLang();
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _masFieldValue(field, lang);
+
+  const counterRow = document.createElement('div');
+  counterRow.className = 'ias-char-counter-row';
+  const errorEl = document.createElement('span');
+  errorEl.className = 'ias-char-error';
+  const countEl = document.createElement('span');
+  countEl.className = 'ias-char-count';
+  counterRow.append(errorEl, countEl);
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    countEl.textContent = String(remaining);
+    countEl.classList.toggle('is-over', isOver);
+    errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    _masSetFieldValue(field, lang, input.value);
     reRenderStepModal();
   };
   input.addEventListener('blur', commit);
@@ -5094,6 +5505,15 @@ function toggleIasDescMore(btn) {
    only needs to persist which one is currently chosen. */
 function setIasPreviewLang(lang) {
   state.iasPreviewLang = lang;
+  reRenderStepModal();
+}
+
+// Mac App Store twin of setIasPreviewLang above — its own Product Page
+// Preview's language dropdown (buildMacStorePreviewSection, render.js)
+// persists into state.masPreviewLang instead, so switching languages while
+// previewing one platform never affects the other's dropdown.
+function setMasPreviewLang(lang) {
+  state.masPreviewLang = lang;
   reRenderStepModal();
 }
 
@@ -7623,6 +8043,7 @@ function _refreshBuildUI(pid) {
   const card = document.getElementById('active-card-' + pid);
   if (card) {
     if (pid === 'ios')          card.outerHTML = buildIOSActiveCard(pid);
+    else if (pid === 'macos')   card.outerHTML = buildIOSActiveCard(pid);
     else if (pid === 'android') card.outerHTML = buildAndroidActiveCard(pid);
     else if (pid === 'steam')   card.outerHTML = buildSteamActiveCard(pid);
   } else {

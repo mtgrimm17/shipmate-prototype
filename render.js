@@ -767,8 +767,10 @@ function buildObPlatTilesHTML() {
   /* The prototype's PLATFORMS list, its order, its labels:
        [['Steam','steam'],['Web','web'],['App Store','ios'],
         ['Google Play','android'],['Epic','epic'],['PlayStation','playstation']]
-     Six, not eight. `iconKey` is the prototype's key into PROTO_PLATFORM_ICONS;
-     `id` is this repo's platform id, which drives state.activePlatforms.
+     Six, not eight — plus this repo's own added Mac App Store tile (below),
+     which the prototype never had at all. `iconKey` is the prototype's key
+     into PROTO_PLATFORM_ICONS; `id` is this repo's platform id, which drives
+     state.activePlatforms.
 
      Xbox and Nintendo are not in the prototype's list, so they are not here.
      Adding them back is a two-line change if you want them, locked.
@@ -781,6 +783,12 @@ function buildObPlatTilesHTML() {
     { id:'steam',   iconKey:'steam',       label:'Steam',       comingSoon: false },
     { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
     { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
+    // Mac App Store reuses the App Store's own icon mark verbatim (iconKey:
+    // 'ios' — see protoTileIcon above) per the feature spec: same icon,
+    // different label. Its own dedicated tile/id ('macos') is what actually
+    // drives independence — toggling it only ever touches state.activePlatforms's
+    // 'macos' entry, never 'ios'.
+    { id:'macos',   iconKey:'ios',         label:'Mac App Store', comingSoon: false },
     { id:'android', iconKey:'android',     label:'Google Play', comingSoon: false },
     { id:'egs',     iconKey:'epic',        label:'Epic',        comingSoon: true  },
     { id:'psn',     iconKey:'playstation', label:'PlayStation', comingSoon: true  },
@@ -796,8 +804,11 @@ function buildObPlatTilesHTML() {
      brand-coloured artwork that ignores the tile's state.
 
      Grid class: the prototype renders `cols===3 ? 'pg-6' : 'pg-3'`, and cols
-     is 3, so what it actually draws is pg-6 — six columns, one row. The bare
-     .platform-grid's repeat(4,1fr) is only the fallback. */
+     is 3, so what it actually draws is (this repo's own) pg-7 now that Mac
+     App Store's tile makes it seven, not six — one row, one column wider
+     than the prototype's own layout ever needed (see style.css's .pg-7,
+     added alongside .pg-6/.pg-3/.pg-2). The bare .platform-grid's
+     repeat(4,1fr) is only the fallback. */
   const tiles = PLATFORMS_OB.map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -812,7 +823,7 @@ function buildObPlatTilesHTML() {
                     onclick="toggleOnboardingPlatform('${id}')"
                     data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="platform-grid pg-6">${tiles}</div>`;
+  return `<div class="platform-grid pg-7">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -1730,7 +1741,7 @@ function buildConsolidatedBanner() {
 }
 
 // Canonical display order for platform cards (active and inactive sections)
-const PLATFORM_ORDER = ['steam', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
+const PLATFORM_ORDER = ['steam', 'ios', 'macos', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -3234,6 +3245,7 @@ function buildAccountCard(pid) {
 function buildActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (pid === 'ios')     return buildIOSActiveCard(pid, force);
+  if (pid === 'macos')   return buildIOSActiveCard(pid, force);
   if (pid === 'android') return buildAndroidActiveCard(pid, force);
   if (pid === 'steam')   return buildSteamActiveCard(pid, force);
 
@@ -3343,6 +3355,18 @@ function _openTrackMenu(pid) {
   try { sel.size = 1; sel.click(); } catch(e) {}
 }
 
+// Shared by both App Store-shaped platforms (ios, macos) — dispatches to
+// each platform's own dedicated isXxxSectionComplete/computeXxxSectionRisk
+// (state.js) so buildIOSActiveCard/updateIOSCard below can stay a single
+// shared implementation instead of a second literal copy, while each
+// platform's actual completion/risk data stays fully separate.
+function _appStoreSectionComplete(pid, sectionId) {
+  return pid === 'macos' ? isMacSectionComplete(sectionId) : isIOSSectionComplete(sectionId);
+}
+function _appStoreSectionRisk(pid, sectionId) {
+  return pid === 'macos' ? computeMacSectionRisk(sectionId) : computeIOSSectionRisk(sectionId);
+}
+
 function buildIOSActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
@@ -3355,13 +3379,13 @@ function buildIOSActiveCard(pid, force) {
 
   const binProc = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
-    const done      = isIOSSectionComplete(step.id);
+    const done      = _appStoreSectionComplete(pid, step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
 
     // Upload Build step — inline, no modal
     if (step.id === 'uploadBuild') {
       return `
-        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="ios-step-card-${step.id}">
+        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="${pid}-step-card-${step.id}">
           <div class="${numClass}">${done ? checkSVG : i + 1}</div>
           <div class="ios-step-info">
             <div class="ios-step-name">${stepLabel(pid, step)}</div>
@@ -3370,7 +3394,7 @@ function buildIOSActiveCard(pid, force) {
         </div>`;
     }
 
-    const risk      = computeIOSSectionRisk(step.id);
+    const risk      = _appStoreSectionRisk(pid, step.id);
     const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
     // Only show risk dot after the user has attempted to save/close this step at least once
     const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
@@ -3380,7 +3404,7 @@ function buildIOSActiveCard(pid, force) {
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
       : `<span class="ios-step-arrow">›</span>`;
     return `
-      <div class="ios-step-card ${done ? 'is-complete' : ''}" id="ios-step-card-${step.id}"
+      <div class="ios-step-card ${done ? 'is-complete' : ''}" id="${pid}-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
         <div class="${numClass}">${done ? checkSVG : i + 1}</div>
         <div class="ios-step-info">
@@ -3719,19 +3743,20 @@ function renderStepModal() {
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
   } else if (platformId === 'web') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
-  } else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildStorePreviewSection();
+  } else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
   // iOS legacy / questionnaire kept for backward-compat
   else if (stepId === 'questionnaire')        body = buildQuestionnaireSection(platformId);
   else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
-  else if (stepId === 'contentRating')        body = buildContentRatingSection();
-  else if (stepId === 'privacy')              body = buildPrivacySection();
-  else if (stepId === 'business')             body = buildBusinessSection() + buildExportComplianceSection() + buildIapSection();
+  else if (stepId === 'contentRating')        body = buildContentRatingSection(platformId);
+  else if (stepId === 'privacy')              body = buildPrivacySection(platformId);
+  else if (stepId === 'business')             body = buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
 
   const complete = platformId === 'android' ? isAndroidSectionComplete(stepId)
                : platformId === 'steam'   ? isSteamSectionComplete(stepId)
                : platformId === 'web'     ? (state.platformStepStatus?.web?.[stepId] === 'complete')
+               : platformId === 'macos'   ? isMacSectionComplete(stepId)
                : isIOSSectionComplete(stepId);
 
   modal.innerHTML = `
@@ -3829,7 +3854,7 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'content') {
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
-    return buildContentRatingSection();
+    return buildContentRatingSection(platformId);
   }
   if (target === 'business') {
     if (platformId === 'android') return buildAndroidBusinessSection();
@@ -3837,7 +3862,7 @@ function buildStorePreviewFlipSection(platformId, target) {
       return `<div class="qs-section"><div class="qs-section-header">Store Tags</div>${buildSteamStoreTagsSection()}</div>
               <div class="qs-section qs-section-divided"><div class="qs-section-header">Technical</div>${buildSteamTechnicalSection()}</div>`;
     }
-    return buildBusinessSection() + buildExportComplianceSection() + buildIapSection();
+    return buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
   }
   if (target === 'data') {
     if (platformId === 'android') return buildAndroidDataSafetySection();
@@ -3850,7 +3875,7 @@ function buildStorePreviewFlipSection(platformId, target) {
         </p>
         ${buildSteamStorePreviewSection()}
       </div>`;
-    return buildPrivacySection();
+    return buildPrivacySection(platformId);
   }
   if (target === 'screenshots') {
     return buildScreenshotsSection(platformId);
@@ -3910,7 +3935,7 @@ function buildStorePreviewFlipSection(platformId, target) {
 /* Display labels for the Factsheet's "Platforms" sub-section — synced
    read-only from state.activePlatforms, keyed the same as PLATFORM_ORDER. */
 const PK_PLATFORM_LABELS = {
-  steam: 'PC (Steam)', ios: 'iOS', android: 'Android', web: 'Web',
+  steam: 'PC (Steam)', ios: 'iOS', macos: 'macOS', android: 'Android', web: 'Web',
   egs: 'PC (Epic Games Store)', psn: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo Switch',
 };
 
@@ -4937,10 +4962,17 @@ function buildStoreInsightsPanel() {
 function buildImproveSubmissionSection(platformId) {
   const isIos     = platformId === 'ios';
   const isAndroid = platformId === 'android';
+  const isMac     = platformId === 'macos';
 
-  // Mark as seen on first render — triggers step completion in dashboard
+  // Mark as seen on first render — triggers step completion in dashboard.
+  // Mac App Store tracks its own independent completion (state.macSubmitAnswers)
+  // even though it shares the SAME AI analysis content as iOS below
+  // (state.storePageInsights/state.improveSubmissionAnalysis aren't pid-keyed —
+  // this section's suggestions are game-wide, not App-Store-vs-Mac-App-Store
+  // specific), so "seen" is the only thing that's actually independent here.
   if (isIos)          state.iosSubmitAnswers.improveSubmissionSeen     = true;
   else if (isAndroid) state.androidSubmitAnswers.improveSubmissionSeen = true;
+  else if (isMac)     state.macSubmitAnswers.improveSubmissionSeen     = true;
   else                state.steamSubmitAnswers.improveSubmissionSeen   = true;
 
   const spi = state.storePageInsights;
@@ -5834,6 +5866,484 @@ const LOC_REVIEW_FIELDS = [
    can itself be edited to re-translate forward and overwrite the top half.
    See _locReviewFieldBlock below for the shared field+counter markup used
    by all three surfaces (the non-flipped card, and both flipped halves). */
+/* ── Mac App Store Product Page Preview ──────────────────────────────────
+   Full twin of buildStorePreviewSection above — same markup, same ias-*
+   classes (reusing the App Store's own preview chrome verbatim, per the
+   feature spec: Mac App Store's sections are "copies of the App Store
+   platform's"), same Content/Business/Data flip-section wiring via the
+   shared buildContentRatingSection/buildBusinessSection/buildExportComplianceSection/
+   buildIapSection/buildPrivacySection (all pid-parameterized, pid='macos'
+   here) and isMacSectionComplete — but reading Mac App Store's OWN
+   independent state throughout:
+     • state.macSubmitAnswers          instead of state.iosSubmitAnswers
+     • state.macAppStoreListing        instead of state.formData's flat
+       title/subtitle/description/releaseNotes/localizedStoreText (via
+       _masFieldValue/_masEffectivePreviewLang/_masLangHasOverLimitField,
+       app.js — see state.macAppStoreListing's own comment in state.js)
+     • state.masTranslateStatus/masPreviewLang instead of their ias- twins
+     • state.storePreviewSectionSeen.macos / isMacSectionComplete instead
+       of their iOS equivalents
+   primaryLanguage/localizations/screenshots/app icon are all still shared
+   (state.formData/state.uploads/state.platformScreenshots) — see each
+   comment above for why. Compatibility reads "Mac", not "iPhone, iPad".
+
+   Deliberately NOT reproduced here: the "Localizations" button (Localization
+   Review is iOS-only for now — see buildStorePreviewFlipSection's
+   'localization' target). Everything else — inline click-to-edit,
+   auto-translation, character limits, IAP display, App Privacy nutrition
+   labels, the DocuSign-style next-required nav bar — works exactly like the
+   App Store's own preview, just against Mac App Store's own answers. */
+function buildMacStorePreviewSection() {
+  const fd    = state.formData;
+  const ups   = state.uploads;
+  const a     = state.macSubmitAnswers;
+  const icon  = ups.appIcon;
+  const pid   = 'macos';
+
+  // Use the screenshots selected in the Select Screenshots step,
+  // falling back to all uploaded screenshots if none selected yet.
+  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
+  const allUploaded = ups.screenshots || [];
+  const selectedIds = new Set(ps.selected);
+  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
+  const customShots = ps.custom || [];
+  const shots = selectedUploaded.length > 0 || customShots.length > 0
+    ? [...selectedUploaded, ...customShots]
+    : allUploaded; // fall back to all if none selected yet
+
+  const category  = escHtml(fd.genre || 'Games');
+  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
+  const price     = isFree ? 'GET' : `$${fd.price}`;
+  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
+  const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
+  const activeProj = state.projects.find(p => p.id === state.activeProjectId);
+  const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
+  const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
+
+  // Language dropdown — same shared primary/supported language list as the
+  // App Store's own preview (see buildStorePreviewSection's own comment);
+  // only the currently-PREVIEWED language (masPreviewLang) and the TEXT
+  // shown for it (state.macAppStoreListing) are independent.
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
+  const previewLangOptions = previewLangCodes.map(l => ({
+    value: l,
+    label: OB_LANG_NAMES[l] || l,
+    warning: _masLangHasOverLimitField(l),
+  }));
+  const previewLang = _masEffectivePreviewLang();
+  const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
+
+  // Title/Subtitle/Description/What's New — click-to-edit via startMasInlineEdit
+  // (app.js), reading/writing state.macAppStoreListing through _masFieldValue/
+  // _masSetFieldValue instead of the App Store's state.formData fields.
+  const titleRaw  = _masFieldValue('title', previewLang);
+  const title     = escHtml(titleRaw || 'Your Game Title');
+  const titleOverLimit = titleRaw.length > IAS_FIELD_CHAR_LIMITS.title;
+
+  const subtitleRaw = _masFieldValue('subtitle', previewLang);
+  const subtitle     = escHtml(subtitleRaw || 'Short subtitle');
+  const subtitleOverLimit = subtitleRaw.length > IAS_FIELD_CHAR_LIMITS.subtitle;
+
+  const descRaw = _masFieldValue('description', previewLang);
+  const descOverLimit = descRaw.length > IAS_FIELD_CHAR_LIMITS.description;
+  const descPlaceholder = previewLang === previewPrimaryLang
+    ? 'Your game description will appear here once you fill in the Description field in Game Details.'
+    : `Add a ${previewLangName} description to populate this section.`;
+  const descFull  = descRaw ? escHtml(descRaw) : descPlaceholder;
+  const descShort = descRaw.length > 240
+    ? escHtml(descRaw.slice(0, 240)) + '…'
+    : descFull;
+
+  // Subtitle/Description/What's New auto-translate via _masTriggerAutoTranslate
+  // (app.js) — same loading/error indicator treatment as the App Store's own
+  // preview, reading state.masTranslateStatus instead of state.iasTranslateStatus.
+  const _masStatusLine = (field, tryAgainLabel) => {
+    if (previewLang === previewPrimaryLang) return '';
+    const status = state.masTranslateStatus?.[field];
+    if (status === 'loading') {
+      return `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating ${tryAgainLabel} to ${previewLangName}…</div>`;
+    }
+    if (status === 'error') {
+      return `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_masRetryTranslate('${field}')">Try again</button></div>`;
+    }
+    return '';
+  };
+  const subtitleStatusHtml = _masStatusLine('subtitle', 'subtitle');
+  const descStatusHtml     = _masStatusLine('description', 'description');
+  const notesStatusHtml    = _masStatusLine('releaseNotes', "what's new");
+
+  // Age rating from Mac App Store's own Content Rating answers
+  const ageRating = (function() {
+    if (a.ageCategory === 'made_for_kids') return '4+';
+    const hasAdult = a.graphicSexual === 'frequent' || a.extendedViolence === 'frequent';
+    const hasTeen  = a.realisticViolence && a.realisticViolence !== 'none';
+    return hasAdult ? '17+' : hasTeen ? '12+' : '4+';
+  })();
+
+  // Privacy section content — identical Nutrition Label format, Mac App
+  // Store's own data-collection answers (a === state.macSubmitAnswers).
+  const privacyHtml = (function() {
+    if (a.collectsData === 'no') {
+      return `
+        <div class="ias-privacy-card ias-privacy-clean">
+          <svg viewBox="0 0 28 28" fill="none" width="32" height="32">
+            <circle cx="14" cy="14" r="13" stroke="#0a84ff" stroke-width="1.5"/>
+            <path d="M9 14l3.5 3.5L19 10" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="ias-privacy-clean-title">Data Not Collected</div>
+          <div class="ias-privacy-clean-sub">The developer does not collect any data from this app.</div>
+        </div>`;
+    }
+
+    const dataPerType = a.dataPerType || {};
+    const typeEntries = Object.entries(dataPerType);
+
+    if (a.collectsData !== 'yes' || typeEntries.length === 0) {
+      return `
+        <div class="ias-privacy-card ias-privacy-pending">
+          <div class="ias-privacy-pending-msg">Complete the Data Privacy step to populate this section.</div>
+        </div>`;
+    }
+
+    const tracking  = [];
+    const linked    = [];
+    const notLinked = [];
+
+    typeEntries.forEach(([id, td]) => {
+      if (td.tracking === 'yes')       tracking.push(id);
+      else if (td.identity === 'yes')  linked.push(id);
+      else                             notLinked.push(id);
+    });
+
+    function _groups(ids) {
+      const seen = new Set();
+      return ids.map(id => IOS_DATA_TYPE_LOOKUP[id]?.group || id.replace(/_/g,' ')).filter(g => {
+        if (seen.has(g)) return false; seen.add(g); return true;
+      });
+    }
+
+    function _groupIcon(groupName) {
+      const icons = {
+        'Purchases':        `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="4" y="7" width="12" height="10" rx="2" stroke="white" stroke-width="1.4"/><path d="M7 7V5.5a3 3 0 0 1 6 0V7" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+        'Contact Info':     `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="8.25" stroke="white" stroke-width="1.4"/><path d="M10 9v5" stroke="white" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="6.5" r="0.9" fill="white"/></svg>`,
+        'Identifiers':      `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="2.5" y="5.5" width="15" height="9" rx="2" stroke="white" stroke-width="1.4"/><path d="M6 9h2M6 11.5h5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="14" cy="10.25" r="1.75" stroke="white" stroke-width="1.2"/></svg>`,
+        'Usage Data':       `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M4 14V10M8 14V7M12 14V9M16 14V5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Diagnostics':      `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a8 8 0 1 1 0 16A8 8 0 0 1 10 2z" stroke="white" stroke-width="1.4"/><path d="M10 6v4l2.5 2.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        'Location':         `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a5.5 5.5 0 0 1 5.5 5.5c0 4-5.5 10.5-5.5 10.5S4.5 11.5 4.5 7.5A5.5 5.5 0 0 1 10 2z" stroke="white" stroke-width="1.4"/><circle cx="10" cy="7.5" r="1.8" stroke="white" stroke-width="1.3"/></svg>`,
+        'Financial Info':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="7.5" stroke="white" stroke-width="1.4"/><path d="M10 6v8M8 7.5h3a1.5 1.5 0 0 1 0 3H9a1.5 1.5 0 0 0 0 3h3" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        'Health & Fitness': `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 16s-7-4.5-7-8.5a4 4 0 0 1 7-2.65A4 4 0 0 1 17 7.5C17 11.5 10 16 10 16z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+        'User Content':     `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M5 3h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="white" stroke-width="1.4"/><path d="M7 8h6M7 11h4" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        'Browsing History': `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="7.5" stroke="white" stroke-width="1.4"/><path d="M2.5 10h15M10 2.5a12 12 0 0 1 0 15M10 2.5a12 12 0 0 0 0 15" stroke="white" stroke-width="1.3"/></svg>`,
+        'Search History':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="9" cy="9" r="5.5" stroke="white" stroke-width="1.4"/><path d="M13 13l3.5 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Sensitive Info':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2l7 3.5V10c0 4-3.5 7-7 8-3.5-1-7-4-7-8V5.5L10 2z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+        'Contacts':         `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="8" cy="7.5" r="3" stroke="white" stroke-width="1.4"/><path d="M2 17c0-3.3 2.7-5 6-5" stroke="white" stroke-width="1.4" stroke-linecap="round"/><path d="M14 11v6M11 14h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Other Data':       `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="5" cy="10" r="1.5" fill="white"/><circle cx="10" cy="10" r="1.5" fill="white"/><circle cx="15" cy="10" r="1.5" fill="white"/></svg>`,
+      };
+      return icons[groupName] || icons['Other Data'];
+    }
+
+    const personIcon = `
+      <div class="ias-pp-person-icon">
+        <svg viewBox="0 0 44 44" fill="none" width="44" height="44">
+          <circle cx="22" cy="22" r="22" fill="#0a84ff"/>
+          <circle cx="22" cy="17" r="6" fill="white"/>
+          <path d="M8 38c0-7.7 6.3-13 14-13s14 5.3 14 13" fill="white"/>
+        </svg>
+      </div>`;
+
+    function _ppCard(bucketTitle, bucketSubtitle, ids) {
+      if (!ids.length) return '';
+      const groups = _groups(ids);
+      return `
+        <div class="ias-pp-card">
+          ${personIcon}
+          <div class="ias-pp-card-title">${bucketTitle}</div>
+          <div class="ias-pp-card-subtitle">${bucketSubtitle}</div>
+          <div class="ias-pp-grid">
+            ${groups.map(g => `
+              <div class="ias-pp-grid-item">
+                ${_groupIcon(g)}
+                <span>${escHtml(g)}</span>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    const cardsHtml = _ppCard('Data Used to Track You',
+        'The following data may be used to track you across apps and websites owned by other companies:',
+        tracking)
+      + _ppCard('Data Linked to You',
+        'The following data may be collected and linked to your identity:',
+        linked)
+      + _ppCard('Data Not Linked to You',
+        'The following data may be collected but it is not linked to your identity:',
+        notLinked);
+
+    return cardsHtml || `<div class="ias-privacy-card ias-privacy-pending"><div class="ias-privacy-pending-msg">No data types configured.</div></div>`;
+  })();
+
+  // What's New section — click-to-edit via startMasInlineEdit, same
+  // per-language storage (_masFieldValue) as Title/Subtitle/Description above.
+  const releaseNotes = _masFieldValue('releaseNotes', previewLang);
+  const notesOverLimit = releaseNotes.length > IAS_FIELD_CHAR_LIMITS.releaseNotes;
+  const notesHtml = releaseNotes
+    ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
+    : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
+
+  const iconHtml = icon
+    ? `<img src="${icon.dataUrl}" class="ias-icon" alt="App icon">`
+    : `<div class="ias-icon ias-icon-empty">
+        <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
+          <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
+          <polygon points="20,3 32,14 8,14" fill="#666"/>
+        </svg>
+      </div>`;
+
+  // Show all selected shots (no cap) — scroll container handles overflow
+  const shotHtml = shots.length > 0
+    ? shots.map(s =>
+        `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
+      ).join('')
+    : ['Gameplay','Gameplay','Menu'].map(lbl =>
+        `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
+      ).join('');
+
+  const _infoRowHtml = r => `
+    <div class="ias-info-row">
+      <span class="ias-info-label">${r.label}</span>
+      <span class="ias-info-value">${r.value}</span>
+    </div>`;
+
+  // Compatibility reads "Mac" — this is the Mac App Store, not iPhone/iPad.
+  const infoRowsTop = [
+    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Size',          value: '—'                 },
+    { label: 'Category',      value: category            },
+    { label: 'Compatibility', value: 'Mac'                },
+    { label: 'Languages',     value: langCode            },
+    { label: 'Age Rating',    value: ageRating           },
+  ].map(_infoRowHtml).join('');
+  const copyrightRowHtml = _infoRowHtml({ label: 'Copyright', value: `© ${new Date().getFullYear()}` });
+
+  const savedIapProducts = (a.iapProducts || []).filter(p => p.collapsed);
+  const iapPriceLabel = price => {
+    const val = parseFloat(price);
+    return (!price || isNaN(val) || val <= 0) ? 'Free' : `$${price}`;
+  };
+  const iapInfoBlock = savedIapProducts.length ? `
+    <div class="ias-info-subhead">In-App Purchases</div>
+    ${savedIapProducts.map(p => `
+      <div class="ias-info-row">
+        <span class="ias-iap-name">${escHtml(p.name) || 'Untitled IAP'}</span>
+        <span class="ias-iap-price">${iapPriceLabel(p.price)}</span>
+      </div>`).join('')}` : '';
+
+  const infoRows = `${infoRowsTop}${iapInfoBlock}${copyrightRowHtml}`;
+
+  // Section completion status for DocuSign navigation — Mac App Store's own
+  // storePreviewSectionSeen/isMacSectionComplete, independent of iOS's.
+  const seenSections    = state.storePreviewSectionSeen?.macos || {};
+  const contentDone     = !!(seenSections.content  && isMacSectionComplete('contentRating'));
+  const businessDone    = !!(seenSections.business && isMacSectionComplete('business'));
+  const dataDone        = isMacSectionComplete('privacy');
+  const screenshotsDone = isMacSectionComplete('screenshots');
+
+  function _sppBtn(target, label, sub, isDone) {
+    if (isDone) {
+      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="spp-section-btn-title">${label}</div>
+          <div class="spp-section-btn-sub">Tap to edit</div>
+        </div>
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>`;
+    }
+    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
+      <div>
+        <div class="spp-section-btn-title">${label}</div>
+        <div class="spp-section-btn-sub">${sub}</div>
+      </div>
+      <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto"><path d="M1 1l6 5-6 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>`;
+  }
+
+  const SPP_SECTIONS = [
+    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
+    { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'             },
+    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
+    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  ];
+  const nextSection = SPP_SECTIONS.find(s => !s.done);
+  const navBar = nextSection ? `
+    <div class="spp-nav-bar">
+      <span class="spp-nav-label">Next required</span>
+      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
+        ${nextSection.label} →
+      </button>
+    </div>` : `
+    <div class="spp-nav-bar spp-nav-bar--done">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      All sections complete — ready to save
+    </div>`;
+
+  const ageCell = contentDone
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+         <div class="ias-meta-top ias-meta-age">${ageRating}</div>
+         <div class="ias-meta-bot">Age</div>
+       </div>`
+    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+         <div class="ias-meta-top ias-meta-action-icon">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
+         </div>
+         <div class="ias-meta-bot ias-meta-bot--action">Content</div>
+       </div>`;
+
+  const priceCell = businessDone
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
+         <div class="ias-meta-top">${priceText}</div>
+         <div class="ias-meta-bot">Price</div>
+       </div>`
+    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+         <div class="ias-meta-top ias-meta-action-icon">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
+         </div>
+         <div class="ias-meta-bot ias-meta-bot--action">Business</div>
+       </div>`;
+
+  const screenshotsArea = `
+    <div class="ias-shots-scroll">${shotHtml}</div>
+    <div class="ias-device-compat">
+      <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span>Mac</span>
+    </div>
+    <div style="padding:0 16px 10px;">
+      ${_sppBtn('screenshots', 'Select Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
+    </div>`;
+
+  const privacySection = dataDone
+    ? `<div class="ias-section-head-row">
+         <span class="ias-section-head">App Privacy</span>
+         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+       </div>
+       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+       ${privacyHtml}
+       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
+
+  return `
+    <div class="ias-device-wrap">
+      <div class="ias-label-row">
+        <span class="ias-label-badge">
+          <svg viewBox="0 0 16 16" fill="none" width="11" height="11" style="margin-right:4px;vertical-align:-1px;"><path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm.75 10.25h-1.5v-5h1.5v5zm0-6.5h-1.5v-1.5h1.5v1.5z" fill="currentColor"/></svg>
+          Mac App Store Preview
+        </span>
+        <div class="ias-label-right">
+          <span class="ias-label-note">Reflects your submission data</span>
+          <div class="ias-locs-lang-group">
+            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
+          </div>
+        </div>
+      </div>
+
+      <div class="ias-page">
+
+        <!-- ── Header ── -->
+        <div class="ias-header">
+          ${iconHtml}
+          <div class="ias-header-meta">
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}"
+                 onclick="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}"
+                 onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
+            ${subtitleStatusHtml}
+            ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
+          </div>
+          <div class="ias-header-cta">
+            <button class="ias-get-btn">${price}</button>
+          </div>
+        </div>
+
+        <!-- ── Meta strip (Age → Content Qs, Price → Business Qs) ── -->
+        <div class="ias-meta-strip">
+          <div class="ias-meta-cell">
+            <div class="ias-meta-top">—</div>
+            <div class="ias-meta-bot">Ratings</div>
+          </div>
+          <div class="ias-meta-divider"></div>
+          ${ageCell}
+          <div class="ias-meta-divider"></div>
+          ${priceCell}
+          <div class="ias-meta-divider"></div>
+          <div class="ias-meta-cell ias-meta-cell-wide">
+            <div class="ias-meta-top">${category}</div>
+            <div class="ias-meta-bot">Category</div>
+          </div>
+        </div>
+
+        <!-- ── Screenshots (or Select Screenshots button) ── -->
+        ${screenshotsArea}
+
+        <!-- ── Description ── -->
+        <div class="ias-section">
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
+               onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
+            ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
+          ${descStatusHtml}
+          <div class="ias-dev-row">
+            <span class="ias-dev-name">Developer</span>
+            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>
+
+        <!-- ── What's New ── -->
+        <div class="ias-section">
+          <div class="ias-section-head-row">
+            <span class="ias-section-head">What's New</span>
+            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="ias-wn-version">Version ${version}</div>
+          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
+               onclick="startMasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
+          ${notesStatusHtml}
+          <div class="ias-wn-edit-hint">
+            <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
+            Click to edit
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>
+
+        <!-- ── App Privacy (or Data Collection button) ── -->
+        <div class="ias-section">
+          ${privacySection}
+        </div>
+
+        <div class="ias-section-divider"></div>
+
+        <!-- ── Information ── -->
+        <div class="ias-section">
+          <div class="ias-section-head">Information</div>
+          <div class="ias-info-grid">${infoRows}</div>
+          <div class="ias-info-link">Developer Website <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="ias-info-link">Privacy Policy <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+
+      </div><!-- /ias-page -->
+    </div><!-- /ias-device-wrap -->
+
+    ${navBar}
+  `;
+}
+
 function buildLocalizationReviewSection() {
   const langCodes = _iasAllPreviewLangCodes();
   const field = state.locReviewField || 'title';
@@ -6164,6 +6674,7 @@ function renderTrackSubmitModal(pid) {
 // Get answer metadata for any platform.
 function _getAnswerMeta(platformId, qid) {
   if (platformId === 'ios')     return state.iosAnswerMeta[qid];
+  if (platformId === 'macos')   return state.macAnswerMeta[qid];
   if (platformId === 'android') return state.cqAnswerMeta[qid];
   if (platformId === 'steam')   return state.steamAnswerMeta[qid];
   return null;
@@ -6172,6 +6683,7 @@ function _getAnswerMeta(platformId, qid) {
 // Get the live (current) answer value for any platform.
 function _getLiveAnswer(platformId, qid) {
   if (platformId === 'ios')     return state.iosSubmitAnswers[qid];
+  if (platformId === 'macos')   return state.macSubmitAnswers[qid];
   if (platformId === 'android') return state.cqAnswers[qid];
   if (platformId === 'steam')   return (state.steamSubmitAnswers.steamContentAnswers || {})[qid];
   return null;
@@ -6227,6 +6739,16 @@ function takeFilterSnapshot(platformId) {
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
     state.iosAnsweredAtInference = s;
+  } else if (platformId === 'macos') {
+    const a = state.macSubmitAnswers;
+    const s = new Set();
+    IOS_INTENSITY_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
+    IOS_CONTENT_YN_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
+    if (a.hasIAP        !== null && a.hasIAP        !== undefined) s.add('hasIAP');
+    if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
+    if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
+    if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    state.macAnsweredAtInference = s;
   } else if (platformId === 'android') {
     const androidQs = CQ_QUESTIONS.filter(q => q.platforms.includes('android'));
     state.androidAnswerSnapshot = new Set(
@@ -6340,37 +6862,39 @@ function _isCurrentlyAnswered(platformId, qid) {
 
 /* ── iOS wrappers — add AI inference decoration on top of shared primitives ── */
 
-// iOS YES/NO row: injects AI confidence classes and badge content
-function iosYNRow(label, fieldId, desc, tooltip, inverted = false) {
-  const val    = state.iosSubmitAnswers[fieldId];
+// App Store YES/NO row: injects AI confidence classes and badge content.
+// pid defaults to 'ios'; pass 'macos' to read/decorate against Mac App
+// Store's own independent answers instead (see buildContentRatingSection).
+function iosYNRow(label, fieldId, desc, tooltip, inverted = false, pid = 'ios') {
+  const val    = _appStoreAnswers(pid)[fieldId];
   const ttText = tooltip || desc || '';
   return ynRow(
     label, val,
     `answerIOSField('${fieldId}','yes')`,
     `answerIOSField('${fieldId}','no')`,
     ttText, inverted,
-    _platformAIClass('ios', fieldId, 'yes').trim(),
-    _platformAIClass('ios', fieldId, 'no').trim(),
-    'YES' + _platformAIBadge('ios', fieldId, 'yes'),
-    'NO'  + _platformAIBadge('ios', fieldId, 'no')
+    _platformAIClass(pid, fieldId, 'yes').trim(),
+    _platformAIClass(pid, fieldId, 'no').trim(),
+    'YES' + _platformAIBadge(pid, fieldId, 'yes'),
+    'NO'  + _platformAIBadge(pid, fieldId, 'no')
   );
 }
 
-// iOS intensity row (None / Infrequent / Frequent): injects AI decoration
-function iosIntensityRow(label, fieldId, tooltip) {
-  const val  = state.iosSubmitAnswers[fieldId];
+// App Store intensity row (None / Infrequent / Frequent): injects AI decoration
+function iosIntensityRow(label, fieldId, tooltip, pid = 'ios') {
+  const val  = _appStoreAnswers(pid)[fieldId];
   const opts = [
     { value: 'frequent',   label: 'Frequent',   selectedClass: 'is-sel-frequent',
-      extraClass: _platformAIClass('ios', fieldId, 'frequent').trim(),
-      content: 'Frequent'   + _platformAIBadge('ios', fieldId, 'frequent'),
+      extraClass: _platformAIClass(pid, fieldId, 'frequent').trim(),
+      content: 'Frequent'   + _platformAIBadge(pid, fieldId, 'frequent'),
       onSelect: `answerIOSField('${fieldId}','frequent')` },
     { value: 'infrequent', label: 'Infrequent', selectedClass: 'is-sel-infrequent',
-      extraClass: _platformAIClass('ios', fieldId, 'infrequent').trim(),
-      content: 'Infrequent' + _platformAIBadge('ios', fieldId, 'infrequent'),
+      extraClass: _platformAIClass(pid, fieldId, 'infrequent').trim(),
+      content: 'Infrequent' + _platformAIBadge(pid, fieldId, 'infrequent'),
       onSelect: `answerIOSField('${fieldId}','infrequent')` },
     { value: 'none',       label: 'None',       selectedClass: 'is-sel-none',
-      extraClass: _platformAIClass('ios', fieldId, 'none').trim(),
-      content: 'None'       + _platformAIBadge('ios', fieldId, 'none'),
+      extraClass: _platformAIClass(pid, fieldId, 'none').trim(),
+      content: 'None'       + _platformAIBadge(pid, fieldId, 'none'),
       onSelect: `answerIOSField('${fieldId}','none')` },
   ];
   return singleSelectRow(label, val, opts, tooltip);
@@ -6428,8 +6952,13 @@ function _stepAttempted(stepId) {
   return !!(pid && state.stepSaveAttempted?.has(`${pid}-${stepId}`));
 }
 
-function buildPrivacySection() {
-  const a = state.iosSubmitAnswers;
+// pid defaults to 'ios'; buildStorePreviewFlipSection passes 'macos' through
+// for Mac App Store's own independent Data Collection Questions, reading
+// state.macSubmitAnswers instead of state.iosSubmitAnswers via
+// _appStoreAnswers(pid) — everything else (labels, markup, AI translation
+// flow) is identical.
+function buildPrivacySection(pid = 'ios') {
+  const a = _appStoreAnswers(pid);
   const noUrl = !a.privacyPolicyUrl.trim();
 
   let collectBlock = '';
@@ -6440,7 +6969,7 @@ function buildPrivacySection() {
       : state.privacyAIStatus === 'complete'
       ? `<div class="prv-nlp-status done">✓ Privacy labels updated — expand below to review or adjust</div>`
       : state.privacyAIStatus === 'error'
-      ? `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_triggerPrivacyAI()">Try again</button></div>`
+      ? `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_triggerPrivacyAI('${pid}')">Try again</button></div>`
       : '';
     collectBlock = `
       <div class="prv-nlp-wrap">
@@ -6463,7 +6992,7 @@ function buildPrivacySection() {
           <span class="tooltip-body">${t('ios.privacy.url.tooltip') || 'Apple requires a live, reachable URL. A missing or broken link is an automatic rejection reason.'}</span>
         </span>
       </label>
-      <input class="form-input" type="url" id="ios-privacy-url" value="${a.privacyPolicyUrl}"
+      <input class="form-input" type="url" id="${pid}-privacy-url" value="${a.privacyPolicyUrl}"
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
@@ -6471,7 +7000,7 @@ function buildPrivacySection() {
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsData === null ? iosYNRow(t('ios.privacy.collects.label') || 'Does your app collect any data from users?', 'collectsData',
-      t('ios.privacy.collects.tooltip') || 'Includes analytics SDKs, crash reporters, accounts, device IDs, or any third-party SDK that collects data.') : ''}
+      t('ios.privacy.collects.tooltip') || 'Includes analytics SDKs, crash reporters, accounts, device IDs, or any third-party SDK that collects data.', null, false, pid) : ''}
     ${collectBlock}`;
 }
 
@@ -6600,28 +7129,30 @@ const QUESTIONNAIRE_DOC_SECTIONS = {
 };
 
 // Y/N row with click-to-open-pane tooltip and data-doc-section for row-hover highlighting.
-function iosYNRowDocPane(label, fieldId, tooltip, docSection) {
-  const val    = state.iosSubmitAnswers[fieldId];
+// pid defaults to 'ios'; buildContentRatingSection passes 'macos' through
+// for Mac App Store's own independent answers.
+function iosYNRowDocPane(label, fieldId, tooltip, docSection, pid = 'ios') {
+  const val    = _appStoreAnswers(pid)[fieldId];
   const ttHTML = tooltip
     ? `<span class="tooltip-anchor tooltip-click" data-tip="${tooltip}" onclick="openDocPaneSection('${docSection}',event)"><span class="tooltip-icon">?</span><span class="tooltip-body">${tooltip}</span></span>`
     : '';
-  const yesClass = `yn-btn yn-yes${val === 'yes' ? ' is-selected' : ''}${_platformAIClass('ios', fieldId, 'yes').trim() ? ' ' + _platformAIClass('ios', fieldId, 'yes').trim() : ''}`;
-  const noClass  = `yn-btn yn-no${val === 'no'   ? ' is-selected' : ''}${_platformAIClass('ios', fieldId, 'no').trim()  ? ' ' + _platformAIClass('ios', fieldId, 'no').trim()  : ''}`;
+  const yesClass = `yn-btn yn-yes${val === 'yes' ? ' is-selected' : ''}${_platformAIClass(pid, fieldId, 'yes').trim() ? ' ' + _platformAIClass(pid, fieldId, 'yes').trim() : ''}`;
+  const noClass  = `yn-btn yn-no${val === 'no'   ? ' is-selected' : ''}${_platformAIClass(pid, fieldId, 'no').trim()  ? ' ' + _platformAIClass(pid, fieldId, 'no').trim()  : ''}`;
   return `
     <div class="ios-q-row" data-answered="${val !== null && val !== undefined ? '1' : '0'}" data-doc-section="${docSection}">
       <div class="ios-q-left">
         <div class="ios-q-label">${label}${ttHTML}</div>
       </div>
       <div class="question-yn">
-        <button class="${yesClass}" onclick="answerIOSField('${fieldId}','yes')">YES${_platformAIBadge('ios', fieldId, 'yes')}</button>
-        <button class="${noClass}"  onclick="answerIOSField('${fieldId}','no')">NO${_platformAIBadge('ios', fieldId, 'no')}</button>
+        <button class="${yesClass}" onclick="answerIOSField('${fieldId}','yes')">YES${_platformAIBadge(pid, fieldId, 'yes')}</button>
+        <button class="${noClass}"  onclick="answerIOSField('${fieldId}','no')">NO${_platformAIBadge(pid, fieldId, 'no')}</button>
       </div>
     </div>`;
 }
 
 // Intensity row (Frequent/Infrequent/None) with same click-to-open-pane tooltip.
-function iosIntensityRowDocPane(label, fieldId, tooltip, docSection) {
-  const val     = state.iosSubmitAnswers[fieldId];
+function iosIntensityRowDocPane(label, fieldId, tooltip, docSection, pid = 'ios') {
+  const val     = _appStoreAnswers(pid)[fieldId];
   const ttHTML  = tooltip
     ? `<span class="tooltip-anchor tooltip-click" data-tip="${tooltip}" onclick="openDocPaneSection('${docSection}',event)"><span class="tooltip-icon">?</span><span class="tooltip-body">${tooltip}</span></span>`
     : '';
@@ -6633,9 +7164,9 @@ function iosIntensityRowDocPane(label, fieldId, tooltip, docSection) {
   ];
   const btns = opts.map(o => {
     const sel      = val === o.value;
-    const aiClass  = _platformAIClass('ios', fieldId, o.value).trim();
+    const aiClass  = _platformAIClass(pid, fieldId, o.value).trim();
     const cls      = `intensity-btn${sel && o.cls ? ' ' + o.cls : ''}${sel && aiClass ? ' ' + aiClass : ''}`;
-    return `<button class="${cls}" onclick="answerIOSField('${fieldId}','${o.value}')">${o.label}${_platformAIBadge('ios', fieldId, o.value)}</button>`;
+    return `<button class="${cls}" onclick="answerIOSField('${fieldId}','${o.value}')">${o.label}${_platformAIBadge(pid, fieldId, o.value)}</button>`;
   }).join('');
   return `
     <div class="ios-q-row ios-q-row-intensity" data-answered="${answered ? '1' : '0'}" data-doc-section="${docSection}">
@@ -6694,8 +7225,12 @@ const IOS_CR_RISK_NOTES = {
     : '',
 };
 
-function buildContentRatingSection() {
-  const a = state.iosSubmitAnswers;
+// pid defaults to 'ios'; pass 'macos' to render Mac App Store's own
+// independent Content Rating answers (state.macSubmitAnswers via
+// _appStoreAnswers) instead of iOS's — everything else (categories,
+// markup, risk notes) is identical.
+function buildContentRatingSection(pid = 'ios') {
+  const a = _appStoreAnswers(pid);
 
   // Quick lookups
   const iq = id => { const q = IOS_INTENSITY_QUESTIONS.find(q => q.id === id); return { ...q, label: t(`iosint.${q.id}.label`) || q.label, tooltip: t(`iosint.${q.id}.tooltip`) || q.tooltip }; };
@@ -6708,20 +7243,20 @@ function buildContentRatingSection() {
     if (q.type === 'intensity') {
       const d = iq(q.id);
       html = docSection
-        ? iosIntensityRowDocPane(d.label, q.id, d.tooltip, docSection)
-        : iosIntensityRow(d.label, d.id, d.tooltip);
+        ? iosIntensityRowDocPane(d.label, q.id, d.tooltip, docSection, pid)
+        : iosIntensityRow(d.label, d.id, d.tooltip, pid);
     } else {
       const d = yq(q.id);
       html = docSection
-        ? iosYNRowDocPane(d.label, q.id, d.tooltip, docSection)
-        : iosYNRow(d.label, q.id, '', d.tooltip);
+        ? iosYNRowDocPane(d.label, q.id, d.tooltip, docSection, pid)
+        : iosYNRow(d.label, q.id, '', d.tooltip, false, pid);
     }
     return html + (IOS_CR_RISK_NOTES[q.id] ? IOS_CR_RISK_NOTES[q.id](a) : '');
   };
 
   // Whether a question was answered at inference time (determines collapse eligibility)
-  const answered     = state.iosAnsweredAtInference; // null = pre-inference, Set = post-inference
-  const showAll      = state.iosContentRatingExpanded; // false = "Unanswered", true = "All"
+  const answered     = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference; // null = pre-inference, Set = post-inference
+  const showAll      = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded; // false = "Unanswered", true = "All"
   const collapseMode = answered !== null;
 
   // "Unanswered / All" toggle pill — shown only after AI inference has run
@@ -6825,23 +7360,25 @@ function computeIOSAgeRating() {
 }
 
 /* ── Export Compliance ───────────────────────────────── */
-function buildExportComplianceSection() {
-  const a = state.iosSubmitAnswers;
+// pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
+// Export Compliance answers (see buildContentRatingSection above).
+function buildExportComplianceSection(pid = 'ios') {
+  const a = _appStoreAnswers(pid);
 
   // Respect the Unanswered/All filter — hide this section when usesEncryption is answered
-  const answered     = state.iosAnsweredAtInference;
+  const answered     = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const collapseMode = answered !== null;
-  const showAll      = state.iosContentRatingExpanded;
+  const showAll      = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
   if (collapseMode && !showAll && answered.has('usesEncryption')) return '';
 
   let followUp = '';
   if (a.usesEncryption === 'yes') {
     followUp = `<div class="ios-followup">
       ${iosYNRow('Is the encryption exempt from US export regulations?', 'encryptionExempt',
-        'Exempt: standard HTTPS/TLS for data in transit, standard auth only, no custom algorithms.')}
+        'Exempt: standard HTTPS/TLS for data in transit, standard auth only, no custom algorithms.', undefined, false, pid)}
       ${a.encryptionExempt === 'no' ? `
         <div class="ios-followup">
-          ${iosYNRow('Do you have an Encryption Registration Number (ERN) from the US Bureau of Industry and Security?', 'hasERN', '')}
+          ${iosYNRow('Do you have an Encryption Registration Number (ERN) from the US Bureau of Industry and Security?', 'hasERN', '', undefined, false, pid)}
           ${a.hasERN === 'yes' ? `
             <div class="form-group" style="margin-top:8px;">
               <label class="form-label">${t('ios.export.ern.label') || 'ERN Number'}</label>
@@ -6856,7 +7393,7 @@ function buildExportComplianceSection() {
 
   return `
     ${iosYNRow('Does your app use, contain, or incorporate cryptography or encryption?', 'usesEncryption',
-      'Includes HTTPS, SSL/TLS, data-at-rest encryption, and any third-party SDK that uses encryption (AWS, Firebase, etc.).')}
+      'Includes HTTPS, SSL/TLS, data-at-rest encryption, and any third-party SDK that uses encryption (AWS, Firebase, etc.).', undefined, false, pid)}
     ${followUp}
     ${a.usesEncryption === 'no' ? '<div class="ios-note">No encryption — your app qualifies as exempt. No ERN required.</div>' : ''}`;
 }
@@ -6967,14 +7504,20 @@ function buildIapProductRow(p) {
     </div>`;
 }
 
-function buildBusinessSection() {
-  const a = state.iosSubmitAnswers;
+// pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
+// Business answers (tax category — see buildContentRatingSection above).
+// Price (USD) is deliberately NOT independent: it's the one game-wide price
+// (state.formData.price) shared by every store that bills in a single base
+// price, same as the App Store Product Page Preview itself reads — Mac App
+// Store and App Store share Apple's one price, they don't get their own.
+function buildBusinessSection(pid = 'ios') {
+  const a = _appStoreAnswers(pid);
 
   // Unanswered/All filter — hide answered rows in Unanswered view
   // Tax category defaults to 'games' — always hide in Unanswered view if it has a value
-  const bsAnswered    = state.iosAnsweredAtInference;
+  const bsAnswered    = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const bsCollapse    = bsAnswered !== null;
-  const bsShowAll     = state.iosContentRatingExpanded;
+  const bsShowAll     = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
   const hideTaxCat    = bsCollapse && !bsShowAll && !!a.taxCategory;
 
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
@@ -6990,7 +7533,7 @@ function buildBusinessSection() {
           <span class="tooltip-body">Your base price for iOS. Leave blank or enter 0 for free. Shipmate will convert to local currencies across all regions.</span>
         </span>
       </label>
-      <input class="form-input" id="ios-price" type="text" placeholder="4.99 (or 0 for free)"
+      <input class="form-input" id="${pid}-price" type="text" placeholder="4.99 (or 0 for free)"
              value="${priceVal}"
              oninput="syncField('price', this.value)"
              onblur="roundPrice(this)">
@@ -7015,8 +7558,13 @@ function buildBusinessSection() {
    the three "buildBusinessSection() + buildExportComplianceSection() +
    buildIapSection()" call sites) renders IAP questions AFTER the Export
    Compliance section's cryptography question, rather than before it. */
-function buildIapSection() {
-  const a = state.iosSubmitAnswers;
+// pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
+// IAP Products list (see buildContentRatingSection above). The "IAP Locs"
+// button and buildIapLocalizationsSection remain iOS-only for now (see the
+// comment on buildStorePreviewFlipSection's 'iapLocalizations' target) —
+// Mac's own saved products simply won't have a working localization flip.
+function buildIapSection(pid = 'ios') {
+  const a = _appStoreAnswers(pid);
 
   // Unanswered/All filter — hides the YES/NO question itself once answered,
   // same declutter convention as buildBusinessSection's hideTaxCat and
@@ -7030,9 +7578,9 @@ function buildIapSection() {
   // (and their localizations) disappear entirely the moment hasIAP was
   // answered and the view was collapsed to "Unanswered" — the exact
   // opposite of what this filter is for.
-  const bsAnswered = state.iosAnsweredAtInference;
+  const bsAnswered = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const bsCollapse = bsAnswered !== null;
-  const bsShowAll  = state.iosContentRatingExpanded;
+  const bsShowAll  = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
   const hideIAPQuestion = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
 
   const iapProducts = a.iapProducts || [];
@@ -7049,9 +7597,13 @@ function buildIapSection() {
   // of this step, which is where it lived before. Only shown once there's
   // at least one SAVED product to localize — same guard
   // buildIapLocalizationsSection itself uses, so the button never opens an
-  // empty section.
+  // empty section. IAP Localizations is iOS-only for now (buildIapLocalizationsSection
+  // reads state.iosSubmitAnswers.iapProducts directly) — the button is
+  // hidden entirely for Mac App Store rather than shown as a dead click,
+  // since it would either no-op (mismatched flip-target pid) or, worse,
+  // silently show iOS's own products under a Mac App Store modal.
   const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
-  const iapLocsBtn = hasSavedIapProducts
+  const iapLocsBtn = (pid === 'ios' && hasSavedIapProducts)
     ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('ios','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
     : '';
 
@@ -7081,7 +7633,7 @@ function buildIapSection() {
 
   return `
     ${hideIAPQuestion ? '' : iosYNRow('Does your app include in-app purchases?', 'hasIAP',
-      'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.')}
+      'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.', undefined, false, pid)}
     ${iapFollowUp}`;
 }
 
@@ -8661,6 +9213,7 @@ function buildBuildDropdown(pid, inModal) {
   const build      = state.platformBuilds?.[pid] || null;
   const processing = !!(state.platformBuildProcessing?.[pid]);
   const accept     = pid === 'ios'     ? '.ipa'
+                   : pid === 'macos'   ? '.pkg,.zip'
                    : pid === 'android' ? '.apk,.aab'
                    :                     '.exe,.zip';
   // Unique file input id — avoid clash between card header and modal instances
