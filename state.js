@@ -2289,10 +2289,7 @@ const state = {
     // URL, auto-populated (when the picked title links to a Steam page)
     // from Steam's appdetails 'website' field — see _applySteamAboutData in
     // app.js — same treatment as developer/publisher above, but still
-    // freely editable afterward. Distinct from the 'website' field further
-    // below (which backs the unrelated "Website" field under the About
-    // group, the studio's own general site) — this is the GAME's own
-    // official website.
+    // freely editable afterward.
     officialWebsite: '',
     // Array of { id, name, url } — social-media links the developer can
     // freely add/remove by hand (addWebLink/removeWebLink/setWebLinkField,
@@ -2346,25 +2343,37 @@ const state = {
     // one. NOT synced with Game Details' Description field — that's
     // "About This Game" below now, which used to be this field's role.
     description: '',
-    // "About This Game" — overrides Game Details' Description field
-    // (formData.description) when set; with no override, the preview falls
-    // back to formData.description at render time (buildWebSitePreviewSection,
-    // render.js) — the same "default + override" role "Hook" above used to
-    // have, before Hook switched to Steam's short_description. A blank line
-    // marks a paragraph break; consecutive non-blank lines are soft line
-    // breaks within the same paragraph (rendered with <br>, no extra spacing
-    // between them) — see _pkParagraphs/aboutGameValue in render.js. This
-    // lets the preview reproduce Steam's own two-level spacing (tight lines
-    // within a paragraph vs. a real gap between paragraphs) when Game
-    // Details' Description was itself auto-filled from a linked Steam page's
-    // about_the_game (_steamHtmlToParagraphLines in claude.js; see
-    // _applySteamAboutData in app.js), and gives manual typing here the same
-    // two-level spacing, not just a flat list.
+    // "About This Game" — defaults to, and then stays FORCED in sync with,
+    // Game Details' Description field (formData.description): every edit to
+    // Description overwrites this field to match (_wsPropagateAboutGame,
+    // app.js, wired into every place Description itself gets written), so
+    // it always mirrors Description going forward, not just on first
+    // pre-population. The developer can still freely edit this field
+    // directly between those Description edits — same as any other plain
+    // field, via setWebSiteField — but that edit never writes back to
+    // Description, only the next Description edit overwrites it again. A
+    // blank line marks a paragraph break; consecutive non-blank lines are
+    // soft line breaks within the same paragraph (rendered with <br>, no
+    // extra spacing between them) — see _pkParagraphs/aboutGameValue in
+    // render.js. This lets the preview reproduce Steam's own two-level
+    // spacing (tight lines within a paragraph vs. a real gap between
+    // paragraphs) when Game Details' Description was itself auto-filled
+    // from a linked Steam page's about_the_game
+    // (_steamHtmlToParagraphLines in claude.js; see _applySteamAboutData in
+    // app.js), and gives manual typing here the same two-level spacing, not
+    // just a flat list.
     aboutGame: '',
     history: '',            // "Studio/Game History" — one paragraph per line
-    // About
-    aboutDev: '',           // "About the Developer" bio — one paragraph per line
-    website: '', email: '',
+    // Former "About" group, folded into Factsheet (now labeled "About" on
+    // the preview website — see factsheetHTML's comment in render.js) and
+    // Description when that section was removed: aboutDev ("About the
+    // Developer" bio, one paragraph per line) now shows under Description
+    // (after History), email now shows under Factsheet (after Location,
+    // before Links). The old group's standalone "Website" field (the
+    // studio's own general site) was dropped rather than migrated — it
+    // wasn't part of that move and reads as redundant with officialWebsite
+    // above (the GAME's own site).
+    aboutDev: '', email: '',
   },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)

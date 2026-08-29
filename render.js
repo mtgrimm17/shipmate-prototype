@@ -2138,16 +2138,30 @@ function renderDetails() {
   if (section === 'content' && typeof _kickContentQ === 'function') _kickContentQ();
 }
 
-/* Assets tab: screenshots, trailers, key art. */
+/* Assets tab: screenshots, trailers, key art.
+
+   Reached only as a standalone detour via a "Manage" button in the Web
+   platform's Trailers/Screenshots sub-sections (openAssetsFromWebEdit,
+   app.js) — there's no ordinary nav tab for it (see VIEW_IDS/VIEW_NAV,
+   app.js). renderOnboardingFooter's own "Save & Return" treatment for this
+   same detour (its fromWebEdit branch) only ever renders into the
+   onboarding MODAL's own #ob-footer, which this standalone view's markup
+   doesn't include — so this view needs its own return button, gated the
+   same way, or "Manage" would strand the user here with no way back. */
 function renderAssets() {
   const el = document.getElementById('assets');
   if (!el) return;
   renderProjectBar();
+  const fromWebEdit = !!state.assetsFromWebEdit;
   el.innerHTML = `
     <div class="ob-modal ob-inline">
       <div class="ob-body">
         ${buildAssetsTab()}
       </div>
+      ${fromWebEdit ? `
+      <div style="display:flex;justify-content:flex-end;padding:16px 4px 4px;">
+        <button class="btn btn-primary" onclick="backFromAssetsToWebEdit()">Save &amp; Return</button>
+      </div>` : ''}
     </div>`;
   hydrateUploadAssetsTab();
   renderOnboardingScreenshotGrid();
@@ -3682,10 +3696,9 @@ function renderStepModal() {
     data:          'Data Collection Questions',
     screenshots:   'Screenshots',
     siteInfo:      'Site Details',
-    webFactsheet:  'Factsheet',
+    webFactsheet:  'About',
     webDescription:'Description',
     webMedia:      'Media',
-    webAbout:      'About',
     webKeyArt:     'Key Art',
     keyArt:        'Select Key Art',
     localization:  'Localization Review',
@@ -3851,13 +3864,12 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'siteInfo') {
     return buildWebSiteEditSection();
   }
-  // Clicking a glow box around one of the preview website's four main
+  // Clicking a glow box around one of the preview website's three main
   // sections flips to a focused modal with just that section's fields,
   // rather than the full "Edit site details" panel.
   if (target === 'webFactsheet')   return buildWebFactsheetEditSection();
   if (target === 'webDescription') return buildWebDescriptionEditSection();
   if (target === 'webMedia')       return buildWebMediaEditSection();
-  if (target === 'webAbout')       return buildWebAboutEditSection();
   if (target === 'webKeyArt')      return buildWebKeyArtEditSection();
   if (target === 'content') {
     if (platformId === 'android') return buildAndroidContentRatingSection();
@@ -4182,18 +4194,15 @@ function buildWebSitePreviewSection() {
     ? `<h3 class="pk-h3">${escHtml(label)}</h3>${innerHtml}`
     : '';
 
-  // Developer (+ Location, folded in as a line under the developer name
-  // rather than its own sub-section — see devNameValue below), Website and
-  // Email (from the "Factsheet" and "About" groups in Edit site details,
-  // respectively) — each of these is its own sub-section, independently
-  // optional. Developer always shows (with a muted dash placeholder when
-  // empty), unlike the other optional sub-sections.
+  // Developer (+ Location and Email, both folded in as lines under the
+  // developer name rather than their own sub-sections — see devNameValue/
+  // emailLine below) — its own sub-section, always shows (with a muted dash
+  // placeholder when empty), unlike every other optional sub-section here.
   const devLocationLine = ws.basedIn ? `<p class="pk-p">Based in ${escHtml(ws.basedIn)}</p>` : '';
 
   // Turns a raw URL-ish string (with or without a scheme) into a safe
-  // absolute href, same convention as the existing About "Website" field
-  // below (websiteHref) — prepend https:// when the developer typed a bare
-  // domain rather than a full URL.
+  // absolute href — prepend https:// when the developer typed a bare domain
+  // rather than a full URL.
   const _pkLinkHref = raw => /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 
   // "Links" sub-section (Factsheet > Developer > Links in the edit form —
@@ -4208,10 +4217,8 @@ function buildWebSitePreviewSection() {
   // addWebLink/removeWebLink/setWebLinkField in app.js. Both render as
   // button-style links (.pk-link-btn, style.css)
   // rather than plain inline text, since these read as calls to action
-  // rather than incidental info the way the About section's own Website/
-  // Contact sub-sections do. Distinct from ws.website (the About group's
-  // "Website" field, the studio's own general site) — this is the GAME's
-  // own official website. Each is its own <span class="pk-dev-links"> row
+  // rather than incidental info the way Location/Email above do. Each is
+  // its own <span class="pk-dev-links"> row
   // (display:flex via the CSS class, same convention platformsValue below
   // uses for its own icon wrapper) so Official Website and the social links
   // wrap independently rather than interleaving into one run if both are
@@ -4228,18 +4235,20 @@ function buildWebSitePreviewSection() {
   const socialLinksBlock = socialLinks.length ? `
     <span class="pk-dev-links">${socialLinks.map(l => `<a href="${escHtml(_pkLinkHref(l.url.trim()))}" target="_blank" rel="noopener" class="pk-link-btn pk-link-btn--social" onclick="event.stopPropagation()">${escHtml(l.name.trim())}</a>`).join('')}</span>` : '';
 
-  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}${officialWebsiteBlock}${socialLinksBlock}`;
+  // Email (from the Factsheet group's own Email field in Edit site details —
+  // formerly the About group's "Contact" field before the About section was
+  // folded into Factsheet) — folded into the same combined Developer
+  // sub-section as Location just above, positioned between Location and the
+  // Links block, since Location itself has no separate pkSub row of its own
+  // to insert after. No dedicated "Website" sub-section here anymore — the
+  // former About group's standalone Website field (studio's own general
+  // site, distinct from Links > Official Website above, the GAME's own
+  // site) was dropped along with the rest of the About section rather than
+  // migrated, since it wasn't one of the two fields this section's move
+  // covered and reads as redundant with Official Website.
+  const emailLine = ws.email ? `<p class="pk-p">${escHtml(ws.email.trim())}</p>` : '';
 
-  const websiteRaw = ws.website ? ws.website.trim() : '';
-  const websiteDomain = websiteRaw
-    ? escHtml(websiteRaw.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, ''))
-    : '';
-  const websiteHref = websiteRaw ? (/^https?:\/\//i.test(websiteRaw) ? websiteRaw : `https://${websiteRaw}`) : '';
-  const websiteValue = websiteDomain
-    ? `<p class="pk-p"><a href="${escHtml(websiteHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${websiteDomain}</a></p>`
-    : '';
-
-  const emailValue = ws.email ? `<p class="pk-p">${escHtml(ws.email.trim())}</p>` : '';
+  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}${emailLine}${officialWebsiteBlock}${socialLinksBlock}`;
 
   // Platforms — synced read-only from the platforms selected elsewhere in
   // Shipmate (state.activePlatforms), not a separate field on state.webSite.
@@ -4255,7 +4264,7 @@ function buildWebSitePreviewSection() {
   // wrappers, and this codebase's own render tests locate a main section
   // by matching to its FIRST same-tag closing tag; a nested <div> here
   // would close that match early and hide everything after it (Genres).
-  // <section>-wrapped main sections (Media/About) don't have this hazard.
+  // The <section>-wrapped Media main section doesn't have this hazard.
   const activePids = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
   const platformsValue = activePids.length ? `
     <span class="pk-platform-icons" style="display:flex;flex-wrap:wrap;gap:8px;">
@@ -4286,9 +4295,17 @@ function buildWebSitePreviewSection() {
   // capsule (Capsule Image/Header Image) no longer leaves the same big
   // gap the tall IGDB Cover Art box needed.
   const factsheetMarginTop = _webCapsuleFactsheetMarginTop(ws.capsuleSource);
+  // Visibly labeled "About" (heading, flip-modal title, edit-group label) —
+  // this section absorbed the old About section's fields (Email above,
+  // moved from About > Contact) after that section was removed. Internal
+  // identifiers (pk-factsheet id, webFactsheet flip target, this function's
+  // own name and _wsFactsheetFieldsHTML/buildWebFactsheetEditSection) stay
+  // as-is deliberately — app.js has a live DOM lookup on #pk-factsheet
+  // (capsule-height margin recompute, _pkSyncCapsuleAspect) that would need
+  // a coordinated rename otherwise, for a change that's purely cosmetic.
   const factsheetHTML = `
     <div class="pk-factsheet pk-mainsection" id="pk-factsheet" style="margin-top:${factsheetMarginTop}px;" onclick="openStorePreviewSection('web','webFactsheet')">
-      <h2 class="pk-h2">Factsheet</h2>
+      <h2 class="pk-h2">About</h2>
       ${pkSub('Developer', devNameValue)}
       ${pkSub('Publisher', publisherValue)}
       ${pkSub('Release Date', releaseDateValue)}
@@ -4300,13 +4317,14 @@ function buildWebSitePreviewSection() {
   // fallback when unavailable), so it always has content.
   const hookValue = `<p class="pk-p">${descFull}</p>`;
 
-  // "About This Game" defaults to (and stays synced with) Game Details'
-  // Description field — the reverse of "Hook" above, which held this exact
-  // "default + override" role before switching to Steam's short_description
-  // (see state.webSite.description's comment in state.js). Unlike Hook,
+  // "About This Game" is kept forced in sync with Game Details' Description
+  // field on every edit to Description (_wsPropagateAboutGame, app.js), so
+  // in practice ws.aboutGame IS the current value — the `|| fd.description`
+  // fallback here only matters for a project saved before that propagation
+  // existed, where ws.aboutGame could still be stale/blank. Unlike Hook,
   // this has no placeholder fallback — pkSub below renders nothing at all
-  // when both this override and Game Details' Description are empty, same
-  // as every other optional sub-section on this page.
+  // when both are empty, same as every other optional sub-section on this
+  // page.
   const aboutGameRaw = (ws.aboutGame && ws.aboutGame.trim()) || fd.description || '';
   // Blank-line-aware (see _pkParagraphs above), unlike every other
   // multi-line field on this page (Hook is single-line; History still uses
@@ -4324,12 +4342,20 @@ function buildWebSitePreviewSection() {
     ? `<p class="pk-p">${historyLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
     : '';
 
+  // "About the Developer" — moved here from the former About section
+  // (removed), positioned after History per that section move.
+  const aboutDevLines = _pkLines(ws.aboutDev);
+  const aboutDevValue = aboutDevLines.length
+    ? `<p class="pk-p">${aboutDevLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
+    : '';
+
   const descriptionHTML = `
     <div class="pk-description pk-mainsection" id="pk-description" onclick="openStorePreviewSection('web','webDescription')">
       <h2 class="pk-h2">Description</h2>
       ${pkSub('Hook', hookValue)}
       ${pkSub('About This Game', aboutGameValue)}
       ${pkSub('History', historyValue)}
+      ${pkSub('About the Developer', aboutDevValue)}
     </div>`;
 
   // Trailers — sourced from the same "Trailer" asset set in Shipmate's
@@ -4384,23 +4410,11 @@ function buildWebSitePreviewSection() {
       ${pkSub('Trailers', trailersValue)}
     </section>`;
 
-  const aboutDevLines = _pkLines(ws.aboutDev);
-  const aboutDevValue = aboutDevLines.length
-    ? `<p class="pk-p">${aboutDevLines.map(escHtml).join('</p><p class="pk-p">')}</p>`
-    : '';
-
-  const aboutHTML = `
-    <section class="pk-section pk-mainsection" id="pk-about" onclick="openStorePreviewSection('web','webAbout')">
-      <h2 class="pk-h2">About</h2>
-      ${pkSub('About the Developer', aboutDevValue)}
-      ${pkSub('Website', websiteValue)}
-      ${pkSub('Contact', emailValue)}
-    </section>`;
 
   return `
     <div class="web-preview-wrap" style="padding:4px 2px 8px;">
       <p style="margin:0 0 12px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        A press-kit style page for your game, built from your game details and the fields below. Factsheet, Description, Media, and About always show — fill in more of the optional fields in <strong>Edit site details</strong> to fill out their sub-sections.
+        A press-kit style page for your game, built from your game details and the fields below. About, Description, and Media always show — fill in more of the optional fields in <strong>Edit site details</strong> to fill out their sub-sections.
       </p>
 
       <div class="pk-browser-frame">
@@ -4423,7 +4437,6 @@ function buildWebSitePreviewSection() {
               ${descriptionHTML}
             </section>
             ${mediaHTML}
-            ${aboutHTML}
           </div>
         </div>
       </div>
@@ -4434,14 +4447,25 @@ function buildWebSitePreviewSection() {
     </div>`;
 }
 
-/* Shared field renderer for the "Edit site details" panel and the four
+/* Shared field renderer for the "Edit site details" panel and the three
    focused per-section modals opened by clicking a glow box on the preview
-   website (buildWeb{Factsheet,Description,Media,About}EditSection below) —
-   both presentations use this exact markup, so a field looks identical
-   wherever it's edited. */
+   website (buildWeb{Factsheet,Description,Media}EditSection below) — both
+   presentations use this exact markup, so a field looks identical wherever
+   it's edited.
+
+   `opts.fallback`, when given, is a live default value already in effect
+   for this field on the actual preview website (e.g. Hook's Steam
+   short_description, About This Game's Game Details Description — see the
+   matching descRaw/aboutGameRaw fallbacks computed in
+   buildWebSitePreviewSection) even though nothing has been typed into
+   ws[key] itself yet. Shown here purely for display, so the field doesn't
+   read as blank when the preview clearly isn't — never written to state,
+   per this file's "render.js never mutates state" rule. Typing still calls
+   setWebSiteField the same as any other field, which naturally overrides
+   the shown fallback text from then on. */
 function _wsField(ws, labelText, key, placeholder, opts) {
   opts = opts || {};
-  const val = escHtml(ws[key] || '');
+  const val = escHtml(ws[key] || opts.fallback || '');
   if (opts.textarea) {
     return `
       <label class="task-content-label" style="display:block;margin-bottom:6px;">${labelText}</label>
@@ -4476,21 +4500,25 @@ function _wsLinkRowHTML(link) {
     </div>`;
 }
 
-/* Factsheet fields: Developer, Location, Links (Official Website + any
-   number of added social links), Publisher, Release Date, Platforms,
-   Genres. Platforms is synced read-only from elsewhere in Shipmate, not
-   stored on state.webSite. Publisher/Official Website/Release Date are
-   auto-populated (when the picked title links to a Steam page) from
-   Steam's appdetails 'publishers' list / 'website' / 'release_date' fields
-   respectively — see _applySteamAboutData in app.js — same as
-   Developer/Genres above/below them, but the developer can still freely
-   edit any of them afterward like any other plain text field (Release Date
-   used to be a native date-picker input synced from the shared
-   formData.releaseDate field elsewhere in Shipmate — changed to a plain
-   text field by request, since a store listing's release date is often
-   free text like "Coming Soon" or "Q1 2027", not always an exact date).
-   The social links list (state.webSite.links) is ALSO auto-populated when
-   a Steam page is linked, but from a different source entirely — the
+/* Factsheet fields (shown under the preview website's "About" heading —
+   see buildWebSitePreviewSection's factsheetHTML comment for why the
+   internal name stays "Factsheet"): Developer, Location, Email (moved here
+   from the former About section, which has been removed — positioned
+   after Location, before Links, per that section move), Links (Official
+   Website + any number of added social links), Publisher, Release Date,
+   Platforms, Genres. Platforms is synced read-only from elsewhere in
+   Shipmate, not stored on state.webSite. Publisher/Official Website/
+   Release Date are auto-populated (when the picked title links to a Steam
+   page) from Steam's appdetails 'publishers' list / 'website' /
+   'release_date' fields respectively — see _applySteamAboutData in app.js —
+   same as Developer/Genres above/below them, but the developer can still
+   freely edit any of them afterward like any other plain text field
+   (Release Date used to be a native date-picker input synced from the
+   shared formData.releaseDate field elsewhere in Shipmate — changed to a
+   plain text field by request, since a store listing's release date is
+   often free text like "Coming Soon" or "Q1 2027", not always an exact
+   date). The social links list (state.webSite.links) is ALSO auto-populated
+   when a Steam page is linked, but from a different source entirely — the
    store page's own HTML, not the appdetails JSON API, which has no field
    for these at all — see _applySteamSocialLinks in app.js and the state.js
    comment above webSite.links; the developer can still freely
@@ -4502,6 +4530,7 @@ function _wsFactsheetFieldsHTML(ws) {
   return `
     ${_wsField(ws, 'Developer', 'developer', 'Your studio name')}
     ${_wsField(ws, 'Location', 'basedIn', 'Your general location')}
+    ${_wsField(ws, 'Email', 'email', 'hello@yourstudio.com')}
 
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Links</label>
     ${_wsField(ws, 'Official Website', 'officialWebsite', 'Auto-filled from Steam when available')}
@@ -4521,12 +4550,25 @@ function _wsFactsheetFieldsHTML(ws) {
 
 /* Description fields: Hook, About This Game, History (labeled "Studio/Game
    History" until renamed by request — still backs the same 'history' field
-   and the same "shown under Description" copy on the preview website). */
+   and the same "shown under Description" copy on the preview website), and
+   About the Developer (moved here, after History, from the former About
+   section, which has been removed).
+
+   Hook and About This Game each pass `fallback` so the field shows the
+   live default already in effect on the preview (Steam's short_description
+   for Hook, Game Details' Description for About This Game) instead of
+   reading blank before anything's been typed — see _wsField's own comment.
+   About This Game's fallback also covers legacy projects saved before
+   _wsPropagateAboutGame (app.js) started keeping state.webSite.aboutGame
+   forced in sync with Game Details' Description on every edit to it. */
 function _wsDescriptionFieldsHTML(ws) {
+  const steamShortDescription = (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
+  const gameDetailsDescription = (state.formData && state.formData.description) || '';
   return `
-    ${_wsField(ws, 'Hook', 'description', 'Defaults to your Steam store page\'s short description, when linked to one', { textarea: true, rows: 4 })}
-    ${_wsField(ws, 'About This Game', 'aboutGame', 'Defaults to the Description field in Game Details — leave a blank line between paragraphs', { textarea: true, rows: 4 })}
-    ${_wsField(ws, 'History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}`;
+    ${_wsField(ws, 'Hook', 'description', 'Defaults to your Steam store page\'s short description, when linked to one', { textarea: true, rows: 4, fallback: steamShortDescription })}
+    ${_wsField(ws, 'About This Game', 'aboutGame', 'Defaults to the Description field in Game Details — leave a blank line between paragraphs', { textarea: true, rows: 4, fallback: gameDetailsDescription })}
+    ${_wsField(ws, 'History', 'history', 'One paragraph per line — shown under Description', { textarea: true, rows: 4 })}
+    ${_wsField(ws, 'About the Developer', 'aboutDev', 'One paragraph per line — a short bio about your studio', { textarea: true, rows: 4 })}`;
 }
 
 /* Media fields: Trailers, Screenshots. Both are read-only summaries of the
@@ -4567,14 +4609,6 @@ function _wsMediaFieldsHTML(fd, source) {
     </div>`;
 }
 
-/* About fields: About the Developer, Website, Email. */
-function _wsAboutFieldsHTML(ws) {
-  return `
-    ${_wsField(ws, 'About the Developer', 'aboutDev', 'One paragraph per line — a short bio about your studio', { textarea: true, rows: 4 })}
-    ${_wsField(ws, 'Website', 'website', 'yourstudio.com')}
-    ${_wsField(ws, 'Email', 'email', 'hello@yourstudio.com')}`;
-}
-
 function buildWebSiteEditSection() {
   const fd = state.formData || {};
   const ws = state.webSite || {};
@@ -4598,7 +4632,7 @@ function buildWebSiteEditSection() {
         `).join('')}
       </div>
 
-      <div class="pk-edit-group-label">Factsheet</div>
+      <div class="pk-edit-group-label">About</div>
       ${_wsFactsheetFieldsHTML(ws)}
 
       <div class="pk-edit-group-label">Description</div>
@@ -4606,14 +4640,11 @@ function buildWebSiteEditSection() {
 
       <div class="pk-edit-group-label">Media</div>
       ${_wsMediaFieldsHTML(fd, 'siteInfo')}
-
-      <div class="pk-edit-group-label">About</div>
-      ${_wsAboutFieldsHTML(ws)}
     </div>`;
 }
 
 /* Focused edit modals opened by clicking a glow box around one of the
-   preview website's four main sections — same field markup as the matching
+   preview website's three main sections — same field markup as the matching
    group in buildWebSiteEditSection (via the shared _ws*FieldsHTML helpers
    above), just without the other groups. The flip modal's own header shows
    the section name (see FLIP_LABELS), so these don't repeat a group label. */
@@ -4622,7 +4653,7 @@ function buildWebFactsheetEditSection() {
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Edit the Factsheet fields shown on your preview website.
+        Edit the About fields shown on your preview website.
       </p>
       ${_wsFactsheetFieldsHTML(ws)}
     </div>`;
@@ -4647,17 +4678,6 @@ function buildWebMediaEditSection() {
         Edit the Media fields shown on your preview website.
       </p>
       ${_wsMediaFieldsHTML(fd, 'webMedia')}
-    </div>`;
-}
-
-function buildWebAboutEditSection() {
-  const ws = state.webSite || {};
-  return `
-    <div class="qs-section" style="padding:4px 2px;">
-      <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Edit the About fields shown on your preview website.
-      </p>
-      ${_wsAboutFieldsHTML(ws)}
     </div>`;
 }
 

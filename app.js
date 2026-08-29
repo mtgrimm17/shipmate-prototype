@@ -141,7 +141,11 @@ function showMainApp(view = 'dashboard') {
 }
 
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
-const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
+// 'assets' has no nav button of its own (VIEW_NAV) — it's a standalone
+// detour reached only via a "Manage" button in the Web platform's Trailers/
+// Screenshots sub-sections (openAssetsFromWebEdit below), never from the
+// main tab bar.
+const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance', assets: 'assets' };
 const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
@@ -162,6 +166,7 @@ function setView(view) {
   if (view === 'details') renderDetails();
   else if (view === 'broadcast') renderBroadcast();
   else if (view === 'performance') renderPerformance();
+  else if (view === 'assets') renderAssets();
   else renderDashboard();
   renderGuide();       // right pane = this tab's banner + task checklist
   if (typeof renderSubnav === 'function') renderSubnav();   // top-nav sub-tab drawer
@@ -2183,6 +2188,7 @@ function syncField(field, value) {
     state.androidSubmitAnswers.privacyPolicyUrl = value;
   }
   if (field === 'title') _syncProjectBarTitle(value);
+  if (field === 'description') _wsPropagateAboutGame(value);
   // Live is-complete on the typed input — immediate feedback as user types/clears
   const FIELD_INPUT_MAP = { title: 'ob-title', description: 'ob-desc' };
   if (FIELD_INPUT_MAP[field]) _setInputComplete(FIELD_INPUT_MAP[field], !!(value?.trim()));
@@ -2745,6 +2751,7 @@ function confirmGameImport() {
 
   // Pre-populate the description field
   state.formData.description = ls.description;
+  _wsPropagateAboutGame(ls.description);
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = ls.description;
@@ -3107,6 +3114,7 @@ function _applySteamCapsuleFromCover(url, expectedTitle) {
 
 function _fillDescriptionField(text) {
   state.formData.description = text || '';
+  _wsPropagateAboutGame(text || '');
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = text || '';
@@ -3458,9 +3466,8 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // Official Website — Steam's appdetails 'website' field (the game's own
     // landing page, when the developer has set one on the store page —
     // Steam leaves this blank more often than not, so this often stays
-    // whatever the developer already typed). Distinct from webSite.website
-    // (the studio's own general site, under the About group) — this backs
-    // Factsheet > Developer > Links > "Official Website" instead.
+    // whatever the developer already typed). Backs Factsheet > Developer >
+    // Links > "Official Website".
     if (data.website) state.webSite.officialWebsite = data.website;
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips
@@ -4007,6 +4014,7 @@ function _applyFieldValue(field, value) {
 
   if (field === 'description') {
     state.formData.description = value;
+    _wsPropagateAboutGame(value);
     const el = document.getElementById('ob-desc');
     if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
     _iasTriggerAutoTranslate('description', value);
@@ -7632,6 +7640,21 @@ function closeStorePreviewSection(pid) {
 function setWebSiteField(key, value) {
   if (!state.webSite) state.webSite = {};
   state.webSite[key] = value;
+}
+/* The Web platform's "About This Game" field (state.webSite.aboutGame)
+   defaults to Game Details' Description field (formData.description) and
+   stays editable afterward like any other field — but unlike Hook (which
+   only ever falls back to Steam's short_description when left blank),
+   About This Game must keep tracking Description going forward: editing
+   About This Game itself must never write back to Description, but any
+   edit to Description — including after About This Game has already been
+   customized — overwrites About This Game to match. Called from every
+   place Description itself gets written (syncField, confirmGameImport,
+   _fillDescriptionField, _applyFieldValue), not from render.js, per this
+   codebase's "render.js never mutates state" rule. */
+function _wsPropagateAboutGame(value) {
+  if (!state.webSite) state.webSite = {};
+  state.webSite.aboutGame = value || '';
 }
 function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};
