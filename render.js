@@ -4203,7 +4203,13 @@ function buildWebSitePreviewSection() {
   // covered and reads as redundant with Official Website.
   const emailLine = ws.email ? `<p class="pk-p">${escHtml(ws.email.trim())}</p>` : '';
 
-  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}${emailLine}${officialWebsiteBlock}${socialLinksBlock}`;
+  const devNameValue = `<p class="pk-p">${ws.developer ? escHtml(ws.developer) : '<span class="pk-muted">—</span>'}</p>${devLocationLine}${emailLine}`;
+
+  // "Links" sub-section — its own pkSub row (Official Website + any social
+  // links), given a proper "Links" header matching Developer/Publisher/
+  // Release Date's own treatment, rather than being folded silently into
+  // Developer's block above with no label of its own.
+  const linksValue = `${officialWebsiteBlock}${socialLinksBlock}`;
 
   // Platforms — synced read-only from the platforms selected elsewhere in
   // Shipmate (state.activePlatforms), not a separate field on state.webSite.
@@ -4228,6 +4234,21 @@ function buildWebSitePreviewSection() {
     </span>` : '';
 
   const genresValue = (ws.genres && ws.genres.trim()) ? `<p class="pk-p">${escHtml(ws.genres.trim())}</p>` : '';
+
+  // Purchase — a rectangular red "Buy Now" button (always shown, even with
+  // no price set yet — there's no real checkout behind it in this
+  // prototype, so it's non-functional decoration rather than a real link)
+  // plus, to its right, the game's price (state.webSite.price) once one has
+  // been set — auto-filled once from the linked Steam page's own listed
+  // price when available (see _applySteamAboutData, app.js), freely
+  // editable afterward from the "Edit the About fields" panel
+  // (_wsFactsheetFieldsHTML below), same "auto-fill once, then editable"
+  // treatment as Developer/Publisher/Genres above.
+  const purchasePriceValue = (ws.price && ws.price.trim()) ? `<span class="pk-buy-now-price">${escHtml(ws.price.trim())}</span>` : '';
+  const purchaseValue = `
+    <div class="pk-buy-now-row">
+      <a href="#" class="pk-buy-now-btn" onclick="event.stopPropagation()">Buy Now</a>${purchasePriceValue}
+    </div>`;
 
   // Publisher — a plain optional text field (own sub-section, unlike
   // Location which is folded into Developer above). Auto-populated, when the
@@ -4262,10 +4283,12 @@ function buildWebSitePreviewSection() {
     <div class="pk-factsheet pk-mainsection" id="pk-factsheet" style="margin-top:${factsheetMarginTop}px;" onclick="openStorePreviewSection('web','webFactsheet')">
       <h2 class="pk-h2">About</h2>
       ${pkSub('Developer', devNameValue)}
+      ${pkSub('Links', linksValue)}
       ${pkSub('Publisher', publisherValue)}
       ${pkSub('Release Date', releaseDateValue)}
-      ${pkSub('Platforms', platformsValue)}
       ${pkSub('Genres', genresValue)}
+      ${pkSub('Platforms', platformsValue)}
+      ${pkSub('Purchase', purchaseValue)}
     </div>`;
 
   // "Hook" is Steam's own short_description (with its placeholder
@@ -4496,11 +4519,14 @@ function _wsFactsheetFieldsHTML(ws) {
 
     ${_wsField(ws, 'Release Date', 'releaseDate', 'Auto-filled from Steam when available, e.g. "Feb 18, 2026" or "Coming Soon"')}
 
+    ${_wsField(ws, 'Genres', 'genres', 'e.g. Roguelike, Deckbuilder')}
+
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Platforms</label>
     <div class="qs-input" style="width:100%;margin-bottom:2px;background:var(--bg-subtle,#f4f4f5);color:var(--text-muted,#6b7280);cursor:default;">${escHtml(platformsText)}</div>
     <p class="pk-muted" style="margin:4px 0 16px;font-size:12px;">Set via your platform selection elsewhere in Shipmate.</p>
 
-    ${_wsField(ws, 'Genres', 'genres', 'e.g. Roguelike, Deckbuilder')}`;
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Purchase</label>
+    ${_wsField(ws, 'Price', 'price', 'Auto-filled from your Steam store page\'s price when available')}`;
 }
 
 /* Description fields: Hook, About This Game, History (labeled "Studio/Game

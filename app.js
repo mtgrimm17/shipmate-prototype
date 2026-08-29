@@ -3460,6 +3460,20 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // state.js), so this joins the descriptions the same way developers
     // above joins Steam's developers list.
     if (data.genres && data.genres.length) state.webSite.genres = data.genres.map(g => g.description).filter(Boolean).join(', ');
+    // Purchase price — Steam's appdetails 'price_overview' (shaped like
+    // { currency, initial, final, discount_percent, initial_formatted,
+    // final_formatted }, e.g. final_formatted: "$19.99"), already
+    // currency-formatted so it's used as-is; 'is_free' is a separate top-
+    // level boolean Steam sets instead of price_overview for free-to-play
+    // titles. Same "auto-fill once, then freely editable" treatment as
+    // developer/publisher/genres above — only sets it here, at Steam-link
+    // time, never re-synced afterward, so the developer's own later edit
+    // (or a game that later goes on sale) is never silently overwritten.
+    if (data.price_overview && data.price_overview.final_formatted) {
+      state.webSite.price = data.price_overview.final_formatted;
+    } else if (data.is_free) {
+      state.webSite.price = 'Free';
+    }
     // Release Date — Steam's own appdetails 'release_date' field, shaped
     // { coming_soon: bool, date: string } (e.g. { coming_soon: false, date:
     // "Feb 18, 2026" }, confirmed live against this project's own captured

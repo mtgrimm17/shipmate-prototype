@@ -2316,6 +2316,19 @@ const state = {
     // "tags" chips shown on the store page — appdetails has no field for
     // those (see this project's Steam-tags research).
     genres: '',
+    // Purchase — free text, e.g. "$19.99". Auto-populated once (when the
+    // picked title links to a Steam page) from Steam's appdetails
+    // 'price_overview' field (its final_formatted string, already
+    // currency-formatted) — or the literal text "Free" when Steam's
+    // 'is_free' flag is set instead — see _applySteamAboutData in app.js.
+    // Same "auto-fill once, then freely editable" treatment as developer/
+    // publisher/genres above: this is a plain text field the developer can
+    // still change afterward, not kept in forced sync with Steam going
+    // forward. Shown on the preview website next to the "Buy Now" button
+    // in the About section's Purchase sub-section (purchaseValue,
+    // buildWebSitePreviewSection, render.js) — that button itself is
+    // decorative in this prototype (no real checkout behind it).
+    price: '',
     // Description
     // "Hook" — overrides the Steam store page's own short_description
     // (state.steamLocInfo.shortDescription, cached by _applySteamAboutData

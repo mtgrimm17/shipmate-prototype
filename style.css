@@ -7581,6 +7581,21 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 .pk-link-btn:hover { filter: brightness(0.92); }
 
+/* Factsheet Purchase sub-section: a rectangular (not pill-shaped, unlike
+   .pk-link-btn above) red "Buy Now" button with white text, plus the
+   game's price shown to its right when state.webSite.price is set (see
+   purchaseValue, buildWebSitePreviewSection). Decorative in this
+   prototype — no real checkout behind it. */
+.pk-buy-now-row { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 4px; }
+.pk-buy-now-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 22px; border-radius: 4px;
+  background: #E0242B; color: #fff;
+  font-size: 13px; font-weight: 700; line-height: 1.2; text-decoration: none;
+}
+.pk-buy-now-btn:hover { filter: brightness(0.92); }
+.pk-buy-now-price { font-size: 14px; font-weight: 600; color: var(--text); }
+
 /* Factsheet Platforms sub-section: small neutral icon badges, matching the
    Dashboard's .active-card-icon / .inactive-card-icon recipe (same
    background, sizing ratio, and whitening filter for the raster platform
