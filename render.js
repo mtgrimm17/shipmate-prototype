@@ -3201,7 +3201,7 @@ function renderSplashView() {
   const pillars = [
     { tag: 'Submission', title: 'Submit to every platform', body: 'One streamlined flow, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
     { tag: 'Marketing',  title: 'Market like a studio',  body: 'All the marketing tools you need in one place. Push posts and media specced for every channel, connect with press and content creators, and build a press kit in seconds.' },
-    { tag: 'Analysis',   title: 'Analyze performance', body: 'Track your game\'s performance with a unified dashboard. Monitor revenue, wishlists, and engagement across every platform, all in one place.' },
+    { tag: 'Analysis',   title: 'Analyze performance', body: 'Track your game\'s performance with a unified dashboard. Monitor revenue, wishlists, reviews, and engagement across every platform, all in one place.' },
   ];
   el.innerHTML = `
     <div class="splash2">
