@@ -3199,14 +3199,14 @@ function renderSplashView() {
   const el = document.getElementById('splashview');
   if (!el) return;
   const pillars = [
-    { tag: 'Submission', title: 'Submit to every store', body: 'One questionnaire, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
-    { tag: 'Marketing',  title: 'Market like a studio',  body: 'Announce everywhere at once, spin up a landing page, and reach press and creators — with an asset library that fits every platform’s specs.' },
-    { tag: 'Analysis',   title: 'Track it all in one place', body: 'Revenue, wishlists, and reviews from every store in one view — no logging into five portals to see how your game is doing.' },
+    { tag: 'Submission', title: 'Submit to every platform', body: 'One streamlined flow, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
+    { tag: 'Marketing',  title: 'Market like a studio',  body: 'All the marketing tools you need in one place. Push posts and media specced for every channel, connect with press and content creators, and build a press kit in seconds.' },
+    { tag: 'Analysis',   title: 'Analyze performance', body: 'Track your game\'s performance with a unified dashboard. Monitor revenue, wishlists, and engagement across every platform, all in one place.' },
   ];
   el.innerHTML = `
     <div class="splash2">
       <section class="splash2-hero">
-        <h1 class="splash2-title">Publish your game.<br>Yourself.</h1>
+        <h1 class="splash2-title">Publish your game yourself.</h1>
         <p class="splash2-sub">Everything you need to submit, distribute, and market your game — in one intelligent tool.</p>
       </section>
       <section class="splash2-pillars">
@@ -3218,7 +3218,7 @@ function renderSplashView() {
           </div>`).join('')}
       </section>
       <section class="splash2-foot">
-        <div class="splash2-foot-line">Easy to do yourself, and easy to do right.</div>
+        <div class="splash2-foot-line">Easy to do yourself. Easy to get right.</div>
         <button class="splash2-btn splash2-btn-primary" onclick="setView('details')">Get started →</button>
       </section>
     </div>`;
