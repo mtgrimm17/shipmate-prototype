@@ -7594,7 +7594,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   font-size: 13px; font-weight: 700; line-height: 1.2; text-decoration: none;
 }
 .pk-buy-now-btn:hover { filter: brightness(0.92); }
-.pk-buy-now-price { font-size: 14px; font-weight: 600; color: var(--text); }
+.pk-buy-now-price { font-size: 14px; font-weight: 600; color: #000; }
 
 /* Factsheet Platforms sub-section: small neutral icon badges, matching the
    Dashboard's .active-card-icon / .inactive-card-icon recipe (same
