@@ -3799,6 +3799,14 @@ body.viewing-splash .app-subnav { display: none; }
   background: color-mix(in srgb, var(--blue) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
   border-radius: 20px; padding: 3px 9px;
+  /* Sits in a flex row (.ias-label-row) alongside the note + Localizations/
+     language-dropdown group, which itself wraps onto its own line when the
+     modal gets too narrow for everything (see .ias-label-right below).
+     Without these, this badge could shrink below its own text's width
+     first and wrap "App Store Preview" onto two lines instead — flex-
+     shrink:0 keeps it at its natural size, and white-space:nowrap is a
+     second guard against the text itself ever wrapping. */
+  flex-shrink: 0; white-space: nowrap;
 }
 .ias-label-note { font-size: 11px; color: var(--text-faint); }
 
