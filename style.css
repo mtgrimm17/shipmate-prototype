@@ -31,6 +31,11 @@
   /* The side inset every tab view carries inside .app-content. The sub-tab row
      above the split has to repeat it or its pill won't line up with the panel. */
   --content-inset:  22px;
+  /* Gap between the content column and the guide column. The header splits on
+     the same measure, so its columns and the content's have to share this — a
+     different value there and the nav group's right edge stops lining up with
+     the panel below it. */
+  --split-gap:      16px;
   /* Height of the sub-tab band above the split. Shared so the sticky guide can
      pin exactly where it already sits. */
   --subnav-h:       66px;
@@ -1787,13 +1792,29 @@ body {
   overflow-y: scroll;
   min-height: 0;
   scrollbar-gutter: stable;
+  scrollbar-color: rgba(255, 255, 255, .13) transparent;   /* Firefox */
 }
+/* Forcing the track on means macOS stops using its overlay scrollbar and paints
+   the system one — a wide grey slab down the edge of the page. Since the width
+   has to stay reserved (that's what stops the sideways jump), the bar is styled
+   down instead: no track at all, and a thin translucent thumb inset from the
+   edge by a transparent border. */
+.main::-webkit-scrollbar { width: 11px; }
+.main::-webkit-scrollbar-track { background: transparent; }
+.main::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .13);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+.main::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .26); background-clip: content-box; }
+.main::-webkit-scrollbar-corner { background: transparent; }
 
 /* ============================================================
    EXPERIMENT — persistent left checklist pane (1/3) + content (2/3)
    ============================================================ */
 /* center the split on the same measure as the header/nav pill */
-.app-split { display: flex; align-items: flex-start; gap: 16px; box-sizing: border-box;
+.app-split { display: flex; align-items: flex-start; gap: var(--split-gap); box-sizing: border-box;
   width: calc(100% - 2 * var(--chrome-gutter)); max-width: var(--nav-w); margin: 0 auto; padding-top: var(--main-gap); }
 
 /* ── Sub-tab row, above the split ──
@@ -1910,7 +1931,7 @@ body.viewing-splash .app-subnav { display: none; }
 .tb-left {
   flex: 1; min-width: 0; height: 100%;
   display: flex; align-items: center;
-  padding: 0 22px;   /* inset to line up with the main pane's 22px view padding */
+  padding: 0 var(--content-inset);   /* the same inset the tab views carry */
 }
 .tb-left-spacer { flex: 1; min-width: 12px; }
 .tb-right {
@@ -1928,7 +1949,8 @@ body.viewing-splash .app-subnav { display: none; }
 .app-content .details-view,
 .app-content .dashboard,
 .app-content .broadcast-view,
-.app-content .performance-view { max-width: none; width: auto; margin: 0; padding: 0 var(--content-inset) 40px; }   /* uniform top/bottom across all tabs (§3) */
+.app-content .performance-view,
+.app-content .calendar-view { max-width: none; width: auto; margin: 0; padding: 0 var(--content-inset) 40px; }   /* uniform top/bottom across all tabs (§3) */
 
 /* abandon the Shippy guide pane for this experiment — content takes full width */
 .app-content .panelgrid { display: block !important; }
@@ -1959,6 +1981,431 @@ body.viewing-splash .app-subnav { display: none; }
 .chk-item.is-done .chk-box { background: var(--green); border-color: var(--green); }   /* completion = green, per DS */
 .chk-item.is-done .chk-label { color: var(--text); text-decoration: line-through; text-decoration-color: var(--text-faint); }
 .chk-label { font-size: 13px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   CALENDAR / CHECKLIST — Marketing → Calendar.
+   Borrows the app's existing furniture rather than inventing any: the panel,
+   border and radius of a content card, the sub-tab row's pill for the view
+   switcher, and the guide card's task rows for the checklist. Each item's
+   colour arrives as --k from the renderer (the Submission / Marketing tab
+   accents), so nothing here hard-codes which is which.
+   ══════════════════════════════════════════════════════════════════ */
+.mcal-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.mcal-nav { display: flex; align-items: center; gap: 8px; }
+.mcal-month {
+  font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: 0;
+  color: var(--text); margin: 0 0 0 6px;
+}
+.mcal-arrow, .mcal-today {
+  height: 30px; padding: 0 10px; min-width: 30px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-dim); cursor: pointer;
+  font-family: var(--mono); font-size: 13px; line-height: 1;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.mcal-arrow:hover, .mcal-today:hover { color: var(--text); border-color: var(--border-hover); }
+
+/* Same pill as a sub-tab, one size down */
+.mcal-views { display: flex; align-items: center; gap: 2px; }
+.mcal-view {
+  padding: 7px 13px; border-radius: 8px; border: 1px solid transparent;
+  background: transparent; cursor: pointer;
+  font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0;
+  color: var(--text-dim); transition: color .12s, background .12s;
+}
+.mcal-view:hover { color: var(--text); background: rgba(255, 255, 255, .035); }
+.mcal-view.is-on { color: #fff; background: rgba(255, 255, 255, .20); }
+/* Week and Day aren't built yet. Visibly present, visibly not ready. */
+.mcal-view.is-soon { color: var(--text-faint); cursor: not-allowed; }
+.mcal-view.is-soon:hover { background: transparent; color: var(--text-faint); }
+
+.mcal-legend { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+.mcal-key {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+}
+.mcal-key-dot { width: 8px; height: 8px; border-radius: 50%; }
+.mcal-clearwk {
+  margin-left: auto; background: none; border: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--purple);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+
+/* Seven equal columns, six fixed rows: every day is the same width, and the
+   grid never changes height from month to month. minmax(0,1fr) rather than a
+   bare 1fr so a long chip can't push its column wider than its neighbours. */
+.mcal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.mcal-dow {
+  background: var(--panel-2); padding: 9px 8px;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0; color: var(--text-faint);
+  text-align: center;
+}
+.mcal-day {
+  background: var(--panel); min-height: 96px; padding: 6px 6px 8px;
+  display: flex; flex-direction: column; gap: 5px; cursor: pointer;
+}
+.mcal-day.is-out { background: #101010; }          /* neighbouring months, pushed back */
+.mcal-day.is-out .mcal-daynum { color: var(--text-faint); }
+/* A selected week is outlined, not filled: seven tinted cells shouted, and the
+   tint fought with the launch day and the today marker. Each cell draws the top
+   and bottom of the stroke, the two end cells close the sides — the grid's 1px
+   gaps break it very slightly at each column, which is the price of a stroke
+   around cells that aren't one element. */
+.mcal-day.is-inweek {
+  box-shadow: inset 0 1px 0 var(--purple), inset 0 -1px 0 var(--purple);
+}
+.mcal-day.is-inweek.is-wkfirst {
+  box-shadow: inset 0 1px 0 var(--purple), inset 0 -1px 0 var(--purple), inset 1px 0 0 var(--purple);
+}
+.mcal-day.is-inweek.is-wklast {
+  box-shadow: inset 0 1px 0 var(--purple), inset 0 -1px 0 var(--purple), inset -1px 0 0 var(--purple);
+}
+/* Hover lifts the cell and reveals a "+": a double-click is invisible as an
+   affordance, so the day has to say out loud that something can be added to it.
+   Each state that paints its own background restates its hover, rather than one
+   blanket rule wiping the launch day's green. */
+.mcal-day:hover { background: var(--panel-2); }
+.mcal-day.is-out:hover { background: #161616; }
+/* Drag target while an undated item is in the air. */
+.mcal-day.is-drop {
+  background: rgba(159, 104, 240, .18);
+  box-shadow: inset 0 0 0 2px var(--purple);
+}
+/* Lit from the checklist: hovering a row over there points at its day here. */
+.mcal-day.is-hilite {
+  background: rgba(159, 104, 240, .14);
+  box-shadow: inset 0 0 0 1px var(--purple);
+}
+
+.mcal-dayhead { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.mcal-daynum {
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim); line-height: 1;
+}
+.mcal-add {
+  flex: none; width: 18px; height: 18px; margin: -2px -2px -2px 0; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 5px; border: 1px solid var(--border-hover);
+  background: var(--panel-3); color: var(--text-dim);
+  font-family: var(--mono); font-size: 13px; line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity .12s, color .12s, background .12s;
+}
+.mcal-day:hover .mcal-add { opacity: 1; }
+.mcal-add:hover { background: var(--purple); border-color: var(--purple); color: #0a0a0a; }
+/* Keyboard users get it without a pointer ever being involved. */
+.mcal-add:focus-visible { opacity: 1; }
+.mcal-day.is-today .mcal-daynum {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin: -3px 0 -1px -3px;
+  border-radius: 50%; background: var(--purple); color: #0a0a0a; font-weight: 700;
+}
+.mcal-chips { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mcal-chip {
+  display: flex; align-items: flex-start; width: 100%;
+  padding: 3px 6px; border: 0; border-radius: 5px; cursor: pointer;
+  /* The label takes the item's own colour on a wash of the same — the kind is
+     legible from the text itself, not only from the dot. */
+  background: color-mix(in srgb, var(--k) 13%, transparent);
+  font-family: var(--mono); font-size: 11px; line-height: 1.3; letter-spacing: 0;
+  color: var(--k); text-align: left;
+  transition: background .12s, opacity .12s;
+}
+.mcal-chip:hover { background: color-mix(in srgb, var(--k) 24%, transparent); }
+/* Two lines before it gives up, so "Connect with five content creators" reads
+   in full instead of dying at an ellipsis. The clamp still catches anything
+   longer, and the cell grows to fit rather than clipping. */
+.mcal-chip-lbl {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+/* Struck with text-decoration, which follows the text onto a second line — a
+   drawn ::after could only ever be one bar, and on a two-line label it landed
+   in the gap between them, crossing out nothing.
+   It's declared on every chip and merely kept transparent, so the colour is
+   what changes; that's an animatable property, which is what lets .is-just-done
+   fade the line in when the item is ticked (see calDraftDone). */
+.mcal-chip.is-done { opacity: .5; }
+.mcal-chip-lbl {
+  text-decoration: line-through;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1.5px;
+}
+.mcal-chip.is-done .mcal-chip-lbl { text-decoration-color: currentColor; }
+.mcal-chip.is-just-done .mcal-chip-lbl { animation: mcalStrike .28s ease forwards; }
+@keyframes mcalStrike {
+  from { text-decoration-color: transparent; }
+  to   { text-decoration-color: currentColor; }
+}
+/* Launch day is the one date the whole plan points at, so it takes the cell
+   instead of queueing up as another chip: a solid block filling whatever the
+   day number leaves. No tint on the cell and no ring — the block is the
+   statement, and layering more around it only muddied it. */
+.mcal-launch {
+  flex: 1; width: 100%; min-height: 34px; margin-top: 2px; padding: 6px;
+  display: grid; place-items: center; text-align: center;
+  border: 0; border-radius: 6px; cursor: pointer;
+  /* Same language as the chips — the kind's colour on a wash of itself — but
+     filling the cell, which is what makes it the loudest thing on the month. */
+  background: color-mix(in srgb, var(--green) 15%, transparent);
+  color: var(--green);
+  font-family: var(--mono); font-size: 12px; font-weight: 700; line-height: 1.25;
+  text-transform: uppercase; letter-spacing: 0;
+  transition: background .12s;
+}
+.mcal-launch:hover { background: color-mix(in srgb, var(--green) 26%, transparent); }
+.mcal-launch.is-done { opacity: .5; text-decoration: line-through; }
+.mcal-day.is-launchday .mcal-daynum { color: var(--green); font-weight: 700; }
+.mcal-more { font-family: var(--mono); font-size: 10px; color: var(--text-faint); padding-left: 6px; }
+
+/* Composer popover. Floats over the grid, anchored to the day that opened it —
+   .mcal-wrap is its positioning context, since .mcal-grid clips its overflow and
+   would slice the popover at the cell edges.
+   The 268px width is mirrored by POP_W in app.js, which needs it to keep the
+   popover inside the grid's right edge. */
+.mcal-wrap { position: relative; }
+/* Dims the page while the composer is open, the way the nav drawer does. Sits
+   below the header (z-index 200), which stays lit — same as .nav-dim. */
+.mcal-dim {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, .45);
+}
+/* The day being composed for is lifted over the dim rather than buried by it:
+   the whole point of opening beside the cell is that you can still read which
+   date you're adding to. Neither .mcal-grid nor .mcal-wrap sets a z-index, so
+   this competes at the root and clears the overlay. */
+.mcal-day.is-composing {
+  position: relative; z-index: 61;
+  box-shadow: inset 0 0 0 1px var(--purple);
+}
+.mcal-day.is-composing .mcal-add { opacity: 1; }
+/* Fixed, not absolute: it's opened from the calendar and from the checklist,
+   which sit in different columns, so it's positioned against the viewport
+   (see _calPopPos in app.js) rather than against the grid. */
+.mcal-pop {
+  position: fixed; z-index: 62; width: 268px;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border-radius: 12px;
+  background: var(--panel-2); border: 1px solid var(--border-hover);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .6);
+  /* Last resort, for a note long enough that no amount of nudging fits it on
+     screen. Silent scrollbar, like the guide card's. */
+  max-height: calc(100vh - 88px); overflow-y: auto;
+  scrollbar-width: none;
+}
+.mcal-pop::-webkit-scrollbar { width: 0; }
+/* Segmented, the way Apple's Event / Reminder pair reads — but here the choice
+   is what kind of work it is, which is also what colours it everywhere else. */
+.mcal-pop-kinds { display: flex; gap: 4px; }
+.mcal-pop-kind {
+  flex: 1; padding: 7px 0; border-radius: 8px; cursor: pointer;
+  background: var(--panel-3); border: 1px solid transparent; color: var(--text-dim);
+  font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.mcal-pop-kind:hover { color: var(--text); }
+/* The label takes the kind's own colour, matching how the chips read on the
+   grid — white text made the two look interchangeable. */
+.mcal-pop-kind.is-on {
+  background: color-mix(in srgb, var(--k) 18%, transparent);
+  border-color: color-mix(in srgb, var(--k) 50%, transparent);
+  color: var(--k);
+}
+.mcal-pop-title, .mcal-pop-note {
+  width: 100%; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; outline: none;
+  padding: 9px 10px; font-family: var(--mono); font-size: 13px; letter-spacing: 0;
+}
+.mcal-pop-note {
+  font-size: 12px; color: var(--text-dim);
+  resize: none; overflow-y: auto; min-height: 46px; max-height: 132px;
+  line-height: 1.45;
+}
+.mcal-pop-title:focus, .mcal-pop-note:focus, .mcal-pop-date:focus { border-color: var(--purple); }
+.mcal-pop-title::placeholder, .mcal-pop-note::placeholder { color: var(--text-faint); }
+.mcal-pop-row { display: flex; align-items: center; gap: 10px; }
+.mcal-pop-lbl {
+  flex: none; width: 48px;
+  font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0; color: var(--text-faint);
+}
+.mcal-pop-date {
+  flex: 1; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; outline: none;
+  padding: 7px 9px; font-family: var(--mono); font-size: 12px; color-scheme: dark;
+}
+.mcal-pop-reps { display: flex; gap: 4px; flex: 1; }
+.mcal-pop-rep {
+  flex: 1; padding: 6px 0; border-radius: 7px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.mcal-pop-rep:hover { color: var(--text); }
+.mcal-pop-rep.is-on { background: rgba(255, 255, 255, .10); color: #fff; border-color: var(--border-hover); }
+/* align-items:center matters here: the bin is a 26px icon next to two ~35px
+   buttons, and the row's default stretch left it pinned to the top. */
+.mcal-pop-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.mcal-pop-cancel, .mcal-pop-add {
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0;
+  transition: filter .12s, background .12s, color .12s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mcal-chip.is-just-done .mcal-chip-lbl::after { animation-duration: .01s; }
+}
+
+/* Read view — a summary, not a form. Roomier line spacing than the editor,
+   since nothing here is a control except the two at the bottom. */
+/* Tighter than the editor: these are lines of text, not stacked controls. The
+   two that are controls (Open… and Mark as done) get their own air below. */
+.mcal-pop--read { gap: 6px; }
+/* A long note in a 268px column becomes a tall ribbon. Widening it is what
+   actually helps: fewer lines, and it stops needing to scroll. _calFitPop
+   measures the real box afterwards, so the extra width can't push it off the
+   right edge. */
+.mcal-pop--read.is-roomy { width: 380px; }
+.mcal-pop--read .mcal-pop-go { margin-top: 6px; }
+.mcal-pop-tag {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  padding: 3px 9px 3px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--k) 16%, transparent);
+  color: var(--k);
+  font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0;
+}
+.mcal-pop-tagdot { width: 6px; height: 6px; border-radius: 50%; background: var(--k); }
+.mcal-pop-h {
+  margin: 2px 0 0; font-family: var(--mono); font-size: 15px; font-weight: 600;
+  line-height: 1.35; letter-spacing: 0; color: var(--text);
+}
+.mcal-pop-when {
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim); letter-spacing: 0;
+}
+.mcal-pop-rep-note { font-size: 11px; color: var(--text-faint); }
+/* Plain text, on the same terms as the date line above it. The box made the
+   note look like a field waiting to be filled in — but nothing here is a
+   control, it's just another thing the item knows about itself. */
+.mcal-pop-notetext {
+  margin: 0; font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  letter-spacing: 0; color: var(--text-dim);
+}
+/* Edit and close live in the corner as icons. Both are secondary to the one
+   thing this view is usually opened to do, which now owns the full-width button
+   at the bottom on its own. */
+/* Bare glyphs until you reach for them, then the square appears behind — the
+   same treatment as the power and cog icons on a Submission platform card
+   (.active-card-power / .active-card-settings). */
+.mcal-pop-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; }
+.mcal-pop-icon {
+  width: 26px; height: 26px; padding: 0; display: grid; place-items: center;
+  border: none; border-radius: 8px; background: transparent;
+  color: var(--text-muted, #8f98a0); cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.mcal-pop-icon:hover { color: var(--text); background: var(--surface-hover, rgba(255, 255, 255, .06)); }
+.mcal-pop-icon svg { display: block; }
+/* Room for them, so a long tag never slides underneath. */
+.mcal-pop--read .mcal-pop-tag { margin-right: 56px; }
+/* Where this item gets dealt with. Secondary to ticking it off, but named in
+   full — "Open Marketing · Press" says more than a bare arrow. */
+.mcal-pop-go {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  padding: 9px 12px; border-radius: 8px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
+  font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.mcal-pop-go:hover { color: var(--text); border-color: var(--purple); background: var(--purple-soft); }
+.mcal-pop-go svg { display: block; }
+.mcal-pop-wide { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2px; }
+.mcal-pop-add.is-done { background: var(--panel-3); border-color: var(--border); color: var(--text-dim); }
+.mcal-pop-add.is-done:hover { filter: none; color: var(--text); }
+/* Delete is the bin in the footer's left corner, on the same terms as the two
+   icons in the top corner: bare glyph, square only on hover. It just tips
+   magenta instead of white, being the destructive one. */
+.mcal-pop-del { margin-right: auto; color: var(--text-muted, #8f98a0); }
+.mcal-pop-del:hover { color: var(--magenta); background: var(--magenta-soft); }
+.mcal-pop-cancel { background: none; border: 1px solid var(--border); color: var(--text-dim); }
+.mcal-pop-cancel:hover { color: var(--text); border-color: var(--border-hover); }
+.mcal-pop-add { background: var(--purple); border: 1px solid var(--purple); color: #0a0a0a; }
+.mcal-pop-add:hover { filter: brightness(1.1); }
+
+/* Checklist side — the guide card's own rows, plus a colour key per item. */
+.mcal-tasks { display: flex; flex-direction: column; gap: 0; margin: 10px 0 0; }
+/* .gd-task's layout, with min-height where it has a fixed height — these rows
+   carry a note on a second line. Same gap, same negative margins, same radius. */
+.mcal-task {
+  display: flex; align-items: center; gap: 11px; width: auto;
+  min-height: 36.5px; margin: 0 -10px; padding: 6px 10px; border: 0; border-radius: 8px;
+  background: none; cursor: pointer; text-align: left;
+  font-family: var(--mono); transition: background .12s;
+}
+.mcal-task:hover { background: rgba(255, 255, 255, .10); }
+/* Only the undated rows can be dragged onto the calendar, so only they say so. */
+.mcal-task.is-loose { cursor: grab; }
+.mcal-task.is-loose:active { cursor: grabbing; }
+.mcal-task.is-dragging { opacity: .4; }
+/* Events move between days by dragging too. Grab only while the pointer is
+   down, so the chip still reads as clickable at rest. */
+.mcal-chip:active, .mcal-launch:active { cursor: grabbing; }
+.mcal-chip.is-dragging, .mcal-launch.is-dragging { opacity: .4; }
+/* The same disc as .gd-task-box in the Shippy guide, value for value: 20px,
+   12px glyph at weight 800, no ring, and the tick punched out in the card's own
+   background colour. The only difference is the source of the colour — here it
+   is the item's kind (--k) rather than the guide's single accent, which is what
+   carries submission-versus-marketing across both halves of this view. */
+.mcal-task-box {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 0;
+  background: color-mix(in srgb, var(--k) 30%, transparent);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  font-size: 12px; font-weight: 800; line-height: 1; color: transparent;
+  transition: background .12s, color .12s;
+}
+.mcal-task-box:hover { background: color-mix(in srgb, var(--k) 55%, transparent); }
+.mcal-task.is-done .mcal-task-box { background: var(--k); color: var(--guide-bg); }
+/* One line per item. The note lives in the detail popover instead: in the list
+   it was either restating the title ("By end of Friday" on a Friday) or listing
+   execution detail nobody needs while scanning the week. */
+.mcal-task-label { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--text); letter-spacing: 0; }
+.mcal-task.is-done .mcal-task-label { color: var(--text-faint); text-decoration: line-through; }
+/* Right-aligned in a fixed column so the dates stack into a readable edge
+   instead of drifting with the length of each label. Tabular figures keep the
+   digits on the same rhythm. */
+.mcal-task-date {
+  flex: none; min-width: 48px; text-align: right;
+  font-size: 11px; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* The jump lives on the row itself too, so you don't have to open an item to
+   find out it has somewhere to go. Faint until the row is hovered. */
+.mcal-task-go {
+  flex: none; display: grid; place-items: center;
+  width: 20px; height: 20px; margin: 0 -4px 0 2px; border-radius: 6px;
+  color: var(--text-faint); opacity: 0;
+  transition: opacity .12s, color .12s, background .12s;
+}
+.mcal-task:hover .mcal-task-go { opacity: 1; }
+/* Rows with nowhere to go keep the slot anyway, so every date lands on the
+   same right edge. */
+.mcal-task-go.is-empty { pointer-events: none; }
+.mcal-task-go:hover { color: var(--text); background: rgba(255, 255, 255, .10); }
+.mcal-empty { font-family: var(--mono); font-size: 12px; color: var(--text-faint); padding: 6px 0; }
+
+/* Below the guide's breakpoint the month grid stops being readable at 7
+   columns of chips — let the day cells shrink and drop the notes. */
+@media (max-width: 1100px) {
+  .mcal-day { min-height: 78px; }
+  .mcal-chip-lbl { font-size: 10px; }
+}
 
 /* Launch calendar in the checklist pane */
 .chk-cal { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); padding: 12px; }
@@ -2041,7 +2488,21 @@ body.viewing-splash .app-subnav { display: none; }
      explicit margin rather than a flex gap, because the gaps are all different. */
   padding: 14px 18px 15px;
   display: flex; flex-direction: column; gap: 0;
+  /* The card scrolls its own content rather than dragging the page with it.
+     The scroll lives here and not on .app-guide because Shippy hangs 73px above
+     that column — an overflow on the column would decapitate him.
+     64px is the fixed header; the sticky offset below it is the same
+     subnav + gap the column uses, and 16px leaves air at the bottom.
+     overscroll-behavior stops the wheel handing off to .main at either end. */
+  max-height: calc(100vh - 64px - var(--subnav-h) - var(--main-gap) - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Scrolls, but silently: no track, no thumb, and no gutter eating into the
+     card's 18px padding. */
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* legacy Edge */
 }
+.guide-card::-webkit-scrollbar { width: 0; height: 0; }   /* Chrome, Safari */
 
 /* Shippy hangs off the top-right corner, behind the card. The card is opaque,
    so everything below its top edge is simply covered — no clipping needed.
@@ -2051,6 +2512,21 @@ body.viewing-splash .app-subnav { display: none; }
   right: 26px; top: -73px; width: 83px;
 }
 .guide-mascot svg { width: 100%; height: auto; display: block; }
+
+/* The tell that the card is glass and Shippy is behind it: a soft purple bloom
+   where his body meets the top edge. Painted OVER the card (z-index 2, above
+   the card's 1 and the mascot's 0) rather than inside it — the card is opaque,
+   so a glow underneath would simply never be seen, and one inside it would
+   scroll away with the content and be clipped by the card's overflow.
+   Anchored to .app-guide, which is the sticky positioning context, roughly
+   under the mascot's own centre (right: 26px + half of its 83px width). */
+.app-guide::after {
+  content: ''; position: absolute; z-index: 2; pointer-events: none;
+  right: 18px; top: -20px; width: 96px; aspect-ratio: 1;
+  border-radius: 50%; background: var(--sm-blob); opacity: .18; filter: blur(28px);
+}
+/* Collapsed the card is 52px wide — a bloom that size would swamp it. */
+.app-guide.is-collapsed::after { display: none; }
 
 /* Horizontal collapse toggle */
 .guide-collapse-btn {
@@ -2286,6 +2762,12 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 /* Shipmate logo image in topbar (new 2026 octopus lockup, ~2:1) */
+/* The header measures like .app-split or its columns drift from the content's.
+   .chrome-measure sets gap:20px above and, being the later rule, was winning
+   over .topbar-inner's own — which is what pushed the nav group 4px left of the
+   panel underneath it. */
+.topbar-inner { gap: var(--split-gap); }
+
 .topbar-logo {
   height: 46px;
   width: auto;
@@ -10376,6 +10858,11 @@ body.is-splash .ai-disclaimer { display: none; }
   color: var(--text-dim);            /* #a0a0a0 */
   transition: background .15s var(--ease), color .15s var(--ease);
 }
+/* Icon-only tab (Calendar). The 132px min-width exists so the labelled tabs all
+   occupy the same span; a tab with no label must opt out of it or it sits there
+   as a wide empty box. 8px each side of the 26px icon box makes it 42px — the
+   same as the row's height, so it reads as a square. */
+.bar-nav .bar-nav-btn--icon { min-width: 0; padding: 0 8px; gap: 0; }
 .bar-nav .bar-nav-btn:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
 .bar-nav .bar-nav-btn.is-active,
 .bar-nav .bar-nav-btn.is-active:hover {

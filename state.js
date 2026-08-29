@@ -2074,8 +2074,16 @@ function makeBlankFormData() {
     selectedCountries:    [],            // initialized from preset on first use
     manualMarkets:        false,         // true when user is manually toggling countries
     localizationPreset:   'recommended', // recommended|primary_only|all_regions
-    releaseTiming:        'manual',
-    releaseDate:          '',
+    releaseTiming:        'specific_date',
+    /* Prototype: pre-filled so the calendar, the launch countdown and the
+       Platforms timeline all have something to show on a cold open. The 29th of
+       next month — evergreen, rather than a hard-coded date that goes stale —
+       which leaves every submission deadline counting back inside that month.
+       The developer overwrites it the moment they set a real one. */
+    releaseDate:          (() => {
+      const t = new Date(), d = new Date(t.getFullYear(), t.getMonth() + 1, 29);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-29`;
+    })(),
     trailerUrl:           '',
     appVersion:           '1.0',
     releaseNotes:         '',
@@ -2324,6 +2332,28 @@ const state = {
 
   // Marketing tab subsections: 'announce' | 'website' | 'press' | 'influencers'
   marketing: { section: 'announce' },
+
+  /* Calendar / Checklist (Marketing → Calendar). One model feeds both halves:
+     the month grid in the content column and the checklist in the guide column.
+       monthOffset  months away from the current one; 0 = today's month. Starts
+                    at 1 so the calendar opens on the launch month, where the
+                    launch and all three submission deadlines live.
+       view         'month' | 'week' | 'day' — only month is built so far
+       selectedWeek ISO date of a week's Sunday, or null for the whole month.
+                    Set by clicking the week number; narrows the checklist.
+       done         { [itemKey]: true } — itemKey is the item id plus its date,
+                    so each occurrence of a recurring item ticks separately.
+       custom       items the developer added by double-clicking a day:
+                    { id, kind, label, dateISO }
+       overrides    { [itemKey]: {label, note, kind, dateISO} } — edits made to a
+                    GENERATED item (a recurring beat, a submission deadline).
+                    Those aren't stored records, so an edit can't change them at
+                    source; it's kept here and applied on top when they're built.
+                    Keyed on the item's natural key, so moving its date doesn't
+                    lose the edit.
+       hidden       { [itemKey]: true } — generated items removed from view
+       draft        the open composer, or null */
+  calendar: { monthOffset: 1, view: 'month', selectedWeek: null, done: {}, custom: [], overrides: {}, hidden: {}, draft: null },
 
   // Game Details sub-tabs: 'gamedetails' | 'distribution' | 'localization' | 'assets' | 'content'
   details: { section: 'gamedetails', contentPlatform: null },

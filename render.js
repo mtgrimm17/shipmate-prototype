@@ -2276,6 +2276,457 @@ function buildMktInfluencers() {
     <div class="inf-list">${rows}</div>`;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   CALENDAR / CHECKLIST  (Marketing → Calendar)
+
+   One model, two views. Everything comes out of _calItems(); the month grid
+   draws whatever has a date, the checklist in the guide column draws all of it
+   and parks the undated items at the bottom — the point of those being to show
+   that an item doesn't have to be scheduled to exist.
+
+   Colour is the item's origin, not its status: Submission items take the
+   Submission tab's accent and Marketing items take Marketing's, so the coding
+   is the one already used by the top-level navigation rather than a new one.
+   ══════════════════════════════════════════════════════════════════ */
+const CAL_KIND = {
+  /* Green is also what the launch-day block uses, so the legend stays true for
+     every submission item including that one. */
+  submission: { label: 'Submission', color: '#4ADE80' },   // --green
+  marketing:  { label: 'Marketing',  color: '#FACC15' },   // yellow, no token yet
+};
+
+/* Recurring. weekday is 0=Sun … 6=Sat, matching Date.getDay(). */
+const CAL_RECURRING = [
+  { id: 'weekly-update', kind: 'marketing', weekday: 1,
+    label: 'Post weekly update', note: 'Steam · Discord · Bluesky · X · Reddit',
+    go: { view: 'broadcast', section: 'announce' } },
+  { id: 'five-creators', kind: 'marketing', weekday: 5,
+    label: 'Connect with five content creators', note: 'By end of Friday',
+    go: { view: 'broadcast', section: 'influencers' } },
+];
+
+/* One-off marketing beats. Prototype data: offsets in days from today, so the
+   month always has something in it whenever this is opened. */
+const CAL_ONEOFF = [
+  { id: 'appstore-nom',   kind: 'marketing', offset:  3, label: 'Submit App Store featuring nomination' },
+  { id: 'ign-trailer',    kind: 'marketing', offset:  8, label: 'Submit trailer to IGN', go: { view: 'broadcast', section: 'press' } },
+  { id: 'creator-follow', kind: 'marketing', offset: 11, label: 'Follow up with Alanah Pearce', go: { view: 'broadcast', section: 'influencers' } },
+  { id: 'shipmate-page',  kind: 'marketing', offset: 16, label: 'Update your Shipmate Page', go: { view: 'broadcast', section: 'website' } },
+  { id: 'engagement',     kind: 'marketing', offset: 22, label: 'Check engagement metrics', go: { view: 'performance' } },
+];
+
+/* Never dated. These exist to make the point that an item can sit on the
+   checklist without being on the calendar at all. */
+const CAL_UNDATED = [
+  { id: 'keyart-featuring', kind: 'marketing',  label: 'Submit key art for App Store featuring request', go: { view: 'details', section: 'assets' } },
+  { id: 'press-kit',        kind: 'marketing',  label: 'Finish your press kit', go: { view: 'broadcast', section: 'press' } },
+  { id: 'launch-stream',    kind: 'marketing',  label: 'Line up a launch-day stream', go: { view: 'broadcast', section: 'influencers' } },
+  { id: 'ratings-left',     kind: 'submission', label: 'Answer remaining content-rating questions', go: { view: 'details', section: 'content' } },
+];
+
+const _calISO  = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const _calDay  = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const _calToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
+/* An occurrence's key: the same recurring item on two Mondays ticks separately.
+   Computed from the item's NATURAL date, before any override is applied, so an
+   edit that moves the date doesn't orphan its own override. Everything
+   downstream reads it.key rather than recomputing. */
+const _calKey = it => it.date ? `${it.id}@${_calISO(it.date)}` : it.id;
+
+/* Stamps the key on each item, lays any override on top, and drops the ones
+   that have been removed. Generated items have no record to edit at source, so
+   this is where an edit to one actually lands. */
+function _calDecorate(list) {
+  const ov  = state.calendar.overrides || {};
+  const hid = state.calendar.hidden    || {};
+  return list.reduce((out, it) => {
+    const key = _calKey(it);   // natural key, before any override moves the date
+    if (hid[key]) return out;
+    const o = ov[key];
+    const item = { ...it, key };
+    if (o) {
+      if (o.label != null) item.label = o.label;
+      if (o.note  != null) item.note  = o.note;
+      if (o.kind  != null) item.kind  = o.kind;
+      if (o.dateISO)       item.date  = new Date(o.dateISO + 'T00:00:00');
+    }
+    out.push(item);
+    return out;
+  }, []);
+}
+
+/* The month being shown, and the 6-week grid that contains it. Weeks start on
+   Sunday, matching the en-US formatting used everywhere else in the app. */
+function _calMonth() {
+  const t = _calToday();
+  return new Date(t.getFullYear(), t.getMonth() + (state.calendar.monthOffset || 0), 1);
+}
+function _calGridStart(first) { return _calDay(first, -first.getDay()); }
+
+/* Every dated item that falls inside [from, to], plus the undated ones when
+   asked for them. Sorted by date so both views read the same way. */
+function _calItems(from, to, opts = {}) {
+  const items = [];
+  const push = it => { if (!it.date || (it.date >= from && it.date <= to)) items.push(it); };
+
+  // Recurring — walk the range once and emit on matching weekdays.
+  for (let d = new Date(from); d <= to; d = _calDay(d, 1)) {
+    CAL_RECURRING.filter(r => r.weekday === d.getDay())
+      .forEach(r => push({ ...r, date: new Date(d) }));
+  }
+
+  const today = _calToday();
+  CAL_ONEOFF.forEach(o => push({ ...o, date: _calDay(today, o.offset) }));
+
+  /* Anything the developer added by double-clicking a day. A weekly one behaves
+     like the built-in recurring items: it repeats on its own weekday from its
+     start date onward, so it keeps appearing in months navigated to later. */
+  (state.calendar.custom || []).forEach(c => {
+    const from0 = new Date(c.dateISO + 'T00:00:00');
+    if (c.repeat !== 'weekly') { push({ ...c, date: from0 }); return; }
+    for (let d = new Date(from); d <= to; d = _calDay(d, 1)) {
+      if (d.getDay() === from0.getDay() && d >= from0) push({ ...c, date: new Date(d) });
+    }
+  });
+
+  /* Submission workback off the target launch date — the same lead time
+     buildChkCalendar() uses, so the two never disagree.
+     Platforms come from what the developer actually activated; with none
+     activated yet there'd be nothing to show at all, so it falls back to the
+     three stores that are actually submittable today. */
+  const timed = [...(state.activePlatforms || [])].filter(p => OB_PLATFORM_TIMING[p]);
+  const plats = timed.length ? timed : ['ios', 'android', 'steam'];
+  /* formData.releaseDate ships pre-filled (see its comment in state.js), so this
+     view is never empty on a cold open. The fallback only matters if someone
+     clears the field. */
+  const dateStr = (state.formData || {}).releaseDate || '';
+  const launch  = dateStr ? new Date(dateStr + 'T00:00:00') : _calDay(_calToday(), 45);
+  const submissions = plats.map(p => {
+    const timing = OB_PLATFORM_TIMING[p];
+    const lead = Math.ceil(timing.days * 2);
+    return { id: 'submit-' + p, kind: 'submission', label: `Submit to ${timing.label}`,
+             lead, note: `${lead} days before launch · ~${timing.days}d review` };
+  });
+
+  submissions.forEach(s => push({ ...s, date: _calDay(launch, -s.lead) }));
+  push({ id: 'launch-day', kind: 'submission', label: 'Launch day', isLaunch: true,
+         go: { view: 'dashboard' }, date: launch });
+
+  /* The undated ones are decorated too, because an override can have given one
+     a date — dragging it onto a day does exactly that. Once it has one it stops
+     being "no date yet" and joins the dated stream, so it has to be considered
+     here rather than only in the checklist's own branch. */
+  const loose     = _calDecorate(CAL_UNDATED.map(u => ({ ...u, date: null })));
+  const scheduled = loose.filter(u => u.date);
+  const stillLoose = loose.filter(u => !u.date);
+
+  const out = _calDecorate(items);
+  scheduled.forEach(u => { if (u.date >= from && u.date <= to) out.push(u); });
+  out.sort((a, b) => a.date - b.date);
+  if (opts.withUndated) out.push(...stillLoose);
+  return out;
+}
+
+/* Top-level Calendar view. The month grid fills the content column; the
+   checklist takes the guide column (see renderGuide). */
+function renderCalendar() {
+  const el = document.getElementById('calendarview');
+  if (!el) return;
+  renderProjectBar();
+  el.innerHTML = `
+    <div class="sec-solo">
+      <div class="sec-panel">${buildCalendarMonth()}</div>
+    </div>`;
+}
+
+function buildCalendarMonth() {
+  const cal   = state.calendar;
+  const first = _calMonth();
+  const start = _calGridStart(first);
+  const end   = _calDay(start, 41);              // 6 weeks, so the grid never reflows
+  const today = _calToday();
+  const items = _calItems(start, end);
+
+  const byDay = {};
+  items.forEach(it => { (byDay[_calISO(it.date)] ||= []).push(it); });
+
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let cells = DOW.map(d => `<div class="mcal-dow">${d}</div>`).join('');
+
+  for (let w = 0; w < 6; w++) {
+    const weekStart = _calDay(start, w * 7);
+    const weekISO   = _calISO(weekStart);
+    const on        = cal.selectedWeek === weekISO;
+    for (let i = 0; i < 7; i++) {
+      const d    = _calDay(weekStart, i);
+      const iso  = _calISO(d);
+      const out  = d.getMonth() !== first.getMonth();
+      const list = byDay[iso] || [];
+      /* Launch day isn't a chip in a list — it takes the cell. Anything else
+         that lands on the same date still lists above it. */
+      const launchIt = list.find(it => it.isLaunch);
+      const rest  = list.filter(it => !it.isLaunch);
+      const shown = rest.slice(0, 2);
+      const more  = rest.length - shown.length;
+      const isLaunchDay = !!launchIt;
+      const composing   = !!(cal.draft && cal.draft.date === iso);
+      cells += `
+        <div class="mcal-day${out ? ' is-out' : ''}${iso === _calISO(today) ? ' is-today' : ''}${on ? ` is-inweek${i === 0 ? ' is-wkfirst' : ''}${i === 6 ? ' is-wklast' : ''}` : ''}${isLaunchDay ? ' is-launchday' : ''}${composing ? ' is-composing' : ''}"
+             onclick="calSelectWeek('${weekISO}')" ondblclick="calNewItem('${iso}', event)" data-iso="${iso}"
+             ondragover="calDragOver(event)" ondragleave="calDragLeave(event)" ondrop="calDrop(event, '${iso}')"
+             title="${on ? 'Click to show the whole month again' : 'Click to narrow the checklist to this week'} · double-click to add">
+          <div class="mcal-dayhead">
+            <span class="mcal-daynum">${d.getDate()}</span>
+            <button class="mcal-add" title="Add an item on this day"
+                    onclick="event.stopPropagation(); calNewItem('${iso}', event)">+</button>
+          </div>
+          <div class="mcal-chips">
+            ${shown.map(it => `
+              <button class="mcal-chip${_calDone(it) ? ' is-done' : ''}${it.isLaunch ? ' is-launch' : ''}"
+                      style="--k:${CAL_KIND[it.kind].color}"
+                      data-key="${it.key}" draggable="true"
+                      ondragstart="event.stopPropagation(); calDragStart(event, '${it.key}')"
+                      ondragend="calDragEnd()"
+                      onclick="event.stopPropagation(); calOpenItem('${it.key}', event)"
+                      title="${escHtml(it.label)}${it.note ? ' — ' + escHtml(it.note) : ''}">
+                <span class="mcal-chip-lbl">${escHtml(it.label)}</span>
+              </button>`).join('')}
+            ${more > 0 ? `<span class="mcal-more">+${more} more</span>` : ''}
+          </div>
+          ${launchIt ? `<button class="mcal-launch${_calDone(launchIt) ? ' is-done' : ''}" data-key="${launchIt.key}" draggable="true"
+                       ondragstart="event.stopPropagation(); calDragStart(event, '${launchIt.key}')"
+                       ondragend="calDragEnd()"
+                       onclick="event.stopPropagation(); calOpenItem('${launchIt.key}', event)"
+                       title="Drag to move the launch date">${escHtml(launchIt.label)}</button>` : ''}
+        </div>`;
+    }
+  }
+
+  const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  /* Week and Day exist as destinations but aren't built — shown disabled rather
+     than hidden, so the month view reads as one of three, the way a calendar app
+     behaves. */
+  const views = [
+    { id: 'month', label: 'Month', on: true },
+    { id: 'week',  label: 'Week' },
+    { id: 'day',   label: 'Day' },
+  ].map(v => `<button class="mcal-view${cal.view === v.id ? ' is-on' : ''}${v.on ? '' : ' is-soon'}"
+       ${v.on ? `onclick="calSetView('${v.id}')"` : 'disabled title="Coming soon"'}>${v.label}</button>`).join('');
+
+  return `
+    <div class="mcal-wrap">
+      <div class="mcal-toolbar">
+        <div class="mcal-nav">
+          <button class="mcal-arrow" onclick="calShiftMonth(-1)" aria-label="Previous month">‹</button>
+          <button class="mcal-arrow" onclick="calShiftMonth(1)" aria-label="Next month">›</button>
+          <button class="mcal-today" onclick="calToday()">Today</button>
+          <h3 class="mcal-month">${monthName}</h3>
+        </div>
+        <div class="mcal-views">${views}</div>
+      </div>
+      <div class="mcal-legend">
+        ${Object.entries(CAL_KIND).map(([k, v]) =>
+          `<span class="mcal-key"><span class="mcal-key-dot" style="background:${v.color}"></span>${v.label}</span>`).join('')}
+        ${cal.selectedWeek ? `<button class="mcal-clearwk" onclick="calSelectWeek('${cal.selectedWeek}')">Showing one week · clear</button>` : ''}
+      </div>
+      <div class="mcal-grid">${cells}</div>
+      ${_calDraftHTML()}
+    </div>`;
+}
+
+const _calDone = it => !!(state.calendar.done || {})[it.key];
+
+/* Where an item is actually resolved, spelled out for a button label:
+   "Marketing · Press", "Game Details · Content rating", "Submission".
+   Section names are read from the same lists the sub-tabs are built from, so a
+   renamed section renames here too. */
+const CAL_VIEW_NAME = { details: 'Game Details', dashboard: 'Submission',
+                        broadcast: 'Marketing', performance: 'Analysis',
+                        calendar: 'Calendar' };
+function _calGoLabel(go) {
+  if (!go) return '';
+  const list = go.view === 'broadcast' ? MKT_TABS : go.view === 'details' ? GD_SUBS : null;
+  const sec  = list && go.section ? (list.find(s => s.id === go.section) || {}).label : '';
+  return CAL_VIEW_NAME[go.view] + (sec ? ` · ${sec}` : '');
+}
+
+/* The composer, Apple-Calendar style: double-clicking a day opens a small
+   popover anchored to that cell rather than a full dialog. Only one is ever
+   open, so it lives on state as a single `draft` and is rendered once, as a
+   sibling of the grid — the grid clips its overflow, so a popover drawn inside
+   a cell would be cut off at the edges.
+   Its coordinates are computed when it opens and kept on the draft, so a
+   re-render doesn't move it. Clicks are stopped from bubbling: the cell
+   underneath toggles the week selection. */
+function _calDraftHTML() {
+  const d = state.calendar.draft;
+  if (!d) return '';
+  /* Clicking an item opens it to be READ, not to be edited: a summary of only
+     what that item actually has — its own kind, not both; its repeat rule only
+     if it repeats; its note only if there is one. Editing is a deliberate step
+     behind a quiet button, so the common case (glance at it, tick it, close)
+     isn't buried under a form. */
+  if (d.mode === 'detail') return _calDetailHTML(d);
+
+  /* new  — double-click or the "+" on a day
+     edit — reached from the detail view. A generated item has no stored record
+            to change, so its edit is kept as an override keyed on the
+            occurrence (state.calendar.overrides) and laid on top on rebuild. */
+  const editing = d.mode === 'edit';
+  const kinds = Object.entries(CAL_KIND).map(([k, v]) =>
+    `<button class="mcal-pop-kind${d.kind === k ? ' is-on' : ''}" style="--k:${v.color}"
+             onclick="calDraftKind('${k}')">${v.label}</button>`).join('');
+  const repeats = [
+    { id: 'none',   label: 'One-off' },
+    { id: 'weekly', label: 'Every week' },
+  ].map(r => `<button class="mcal-pop-rep${(d.repeat || 'none') === r.id ? ' is-on' : ''}"
+             onclick="calDraftRepeat('${r.id}')">${r.label}</button>`).join('');
+
+  return `
+    <div class="mcal-dim" onclick="calDraftCancel()"></div>
+    <div class="mcal-pop" style="left:${d.x}px; top:${d.y}px"
+         onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
+      <div class="mcal-pop-kinds">${kinds}</div>
+      <input class="mcal-pop-title" id="mcal-pop-title" value="${escHtml(d.text || '')}"
+             placeholder="New item" onkeydown="calDraftKey(event)">
+      <label class="mcal-pop-row">
+        <span class="mcal-pop-lbl">Date</span>
+        <input class="mcal-pop-date" id="mcal-pop-date" type="date" value="${d.date}">
+      </label>
+      <div class="mcal-pop-row">
+        <span class="mcal-pop-lbl">Repeat</span>
+        <div class="mcal-pop-reps">${repeats}</div>
+      </div>
+      <textarea class="mcal-pop-note" id="mcal-pop-note" rows="2" placeholder="Add a note"
+                oninput="calAutoGrow(this)" onkeydown="calNoteKey(event)">${escHtml(d.note || '')}</textarea>
+      <div class="mcal-pop-foot">
+        ${editing ? `<button class="mcal-pop-icon mcal-pop-del" onclick="calDraftDelete()"
+                             aria-label="Delete" title="Delete">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>
+          </svg>
+        </button>` : ''}
+        <button class="mcal-pop-cancel" onclick="calDraftCancel()">Cancel</button>
+        <button class="mcal-pop-add" onclick="calDraftSave()">${editing ? 'Save' : 'Add'}</button>
+      </div>
+    </div>`;
+}
+
+/* The read view. Only the rows this item actually has: one kind pill rather
+   than the pair, the repeat line only when it repeats, the note only when there
+   is one. The title carries the strike-through, so ticking from here reads as
+   the item being crossed off. */
+function _calDetailHTML(d) {
+  const kind = CAL_KIND[d.kind];
+  const date = d.date ? new Date(d.date + 'T00:00:00') : null;
+  const when = date
+    ? date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : 'No date yet';
+  const repeats = d.repeat === 'weekly' && date
+    ? `Repeats every ${date.toLocaleDateString('en-US', { weekday: 'long' })}` : '';
+  const isDone = !!state.calendar.done[d.key];
+
+  return `
+    <div class="mcal-dim" onclick="calDraftCancel()"></div>
+    <div class="mcal-pop mcal-pop--read${(d.note || '').length > 120 ? ' is-roomy' : ''}"
+         style="left:${d.x}px; top:${d.y}px"
+         onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
+      <div class="mcal-pop-tools">
+        <button class="mcal-pop-icon" onclick="calDraftEdit()" aria-label="Edit" title="Edit">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+        </button>
+        <button class="mcal-pop-icon" onclick="calDraftCancel()" aria-label="Close" title="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <span class="mcal-pop-tag" style="--k:${kind.color}">
+        <span class="mcal-pop-tagdot"></span>${kind.label}
+      </span>
+      <h4 class="mcal-pop-h">${escHtml(d.text || '')}</h4>
+      <div class="mcal-pop-when">${when}${repeats ? `<span class="mcal-pop-rep-note">${repeats}</span>` : ''}</div>
+      ${d.note ? `<p class="mcal-pop-notetext">${escHtml(d.note).replace(/\n/g, '<br>')}</p>` : ''}
+      ${d.go ? `<button class="mcal-pop-go" onclick="calGoItem('${d.key}')">
+        Open ${escHtml(_calGoLabel(d.go))}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>` : ''}
+      <button class="mcal-pop-add mcal-pop-wide${isDone ? ' is-done' : ''}" onclick="calDraftDone('${d.key}')">
+        ${isDone ? 'Done' : 'Mark as done'}
+      </button>
+    </div>`;
+}
+
+/* Rebuilds the range currently on screen and picks one item out of it. The
+   items are derived, not stored, so there's no collection to look them up in —
+   the key is the only stable handle. */
+function _calFindByKey(key) {
+  const first = _calMonth(), start = _calGridStart(first);
+  return _calItems(start, _calDay(start, 41), { withUndated: true })
+    .find(it => it.key === key) || null;
+}
+
+/* The guide column while Marketing → Calendar is open: the same items as the
+   grid, as a list, with the undated ones last. */
+function buildCalChecklist() {
+  const cal = state.calendar;
+  /* A week, not the whole month. The month grid is already the wide view; this
+     column's job is what's next — and keeping it to seven days is what leaves
+     room for the undated block underneath. Clicking a week in the grid scopes
+     to that week; otherwise it's the seven days from today, whatever month the
+     grid happens to be showing. */
+  let from, to, scope;
+  if (cal.selectedWeek) {
+    from  = new Date(cal.selectedWeek + 'T00:00:00');
+    to    = _calDay(from, 6);
+    scope = `Week of ${fmtDateShort(from)}`;
+  } else {
+    from  = _calToday();
+    to    = _calDay(from, 6);
+    scope = 'Next 7 days';
+  }
+
+  const items   = _calItems(from, to, { withUndated: true });
+  const dated   = items.filter(i => i.date);
+  const undated = items.filter(i => !i.date);
+  /* Counted per section. A single total over both read as wrong, because the
+     number under "Upcoming" was tallying the undated rows it wasn't showing. */
+  const doneDated   = dated.filter(_calDone).length;
+  const doneUndated = undated.filter(_calDone).length;
+
+  const row = it => `
+    <button class="mcal-task${_calDone(it) ? ' is-done' : ''}${it.date ? '' : ' is-loose'}" style="--k:${CAL_KIND[it.kind].color}"
+            ${it.date ? '' : `draggable="true" ondragstart="calDragStart(event, '${it.key}')" ondragend="calDragEnd()"`}
+            onclick="calOpenItem('${it.key}', event)"
+            ${it.date ? `onmouseenter="calHiliteDay('${_calISO(it.date)}')" onmouseleave="calHiliteDay(null)"` : ''}>
+      <span class="mcal-task-box" title="${_calDone(it) ? 'Mark as not done' : 'Mark as done'}"
+            onclick="event.stopPropagation(); calToggleDone('${it.key}')">&#10003;</span>
+      <span class="mcal-task-label">${escHtml(it.label)}</span>
+      <span class="mcal-task-date">${it.date ? fmtDateShort(it.date) : '—'}</span>
+      ${it.go ? `<span class="mcal-task-go" title="Open ${escHtml(_calGoLabel(it.go))}"
+                 onclick="event.stopPropagation(); calGoItem('${it.key}')">
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+           </span>`
+              : `<span class="mcal-task-go is-empty"></span>`}
+    </button>`;
+
+  return `
+    <div class="guide-card">
+      <div class="guide-eyebrow">Checklist</div>
+      <div class="guide-title">${escHtml(scope)}</div>
+      <div class="guide-sub">What's coming up, plus the items that don't have a date yet.</div>
+      <div class="guide-tasks-head"><span>Upcoming</span><span>${doneDated}/${dated.length}</span></div>
+      <div class="mcal-tasks">${dated.map(row).join('') || '<div class="mcal-empty">Nothing scheduled this week.</div>'}</div>
+      <div class="guide-tasks-head"><span>No date yet</span><span>${doneUndated}/${undated.length}</span></div>
+      <div class="mcal-tasks">${undated.map(row).join('')}</div>
+    </div>`;
+}
+
 function buildMktSection(section) {
   switch (section) {
     case 'website':     return buildMktWebsite();
@@ -2593,6 +3044,17 @@ function renderGuide() {
   const el = document.getElementById('app-guide');
   if (!el) return;
   const view = state.activeView;
+
+  /* The Calendar tab hands this column to its own checklist: the guide's job
+     there is the calendar's items, not a tab's setup tasks. Shippy still hangs
+     off the top so the column doesn't change character. */
+  if (view === 'calendar' && !state.guideCollapsed) {
+    el.classList.remove('is-collapsed');
+    el.innerHTML = `<div class="guide-mascot"></div>${buildCalChecklist()}`;
+    if (typeof OCTO !== 'undefined') OCTO.mount(el.querySelector('.guide-mascot'));
+    return;
+  }
+
   const hero = (typeof TAB_HERO !== 'undefined' && TAB_HERO[view]) || {};
   const group = _chkGroups().find(g => g.view === view);
   const items = group ? group.items : [];
@@ -2709,10 +3171,13 @@ function renderAppSubnav() {
      it always matches whatever the locale rendered there. */
   if (!list.length || state.subnavTitleOnly) {
     const NAVID = { details: 'nav-details', dashboard: 'nav-dashboard',
-                    broadcast: 'nav-broadcast', performance: 'nav-performance' };
+                    broadcast: 'nav-broadcast', performance: 'nav-performance',
+                    calendar: 'nav-calendar' };
     const navId = NAVID[state.activeView];
-    const tabLabel = navId
-      ? (document.querySelector('#' + navId + ' .lbl')?.textContent || '') : '';
+    /* Calendar's header button is an icon with no label, so there's nothing to
+       read off it — CAL_VIEW_NAME is the fallback for any tab in that case. */
+    const tabLabel = (navId ? (document.querySelector('#' + navId + ' .lbl')?.textContent || '') : '')
+      || CAL_VIEW_NAME[state.activeView] || '';
     const text = (list.find(s => s.id === data.cur) || {}).label || tabLabel;
     el.innerHTML = text ? `<span class="app-subnav-title">${text}</span>` : '';
     return;

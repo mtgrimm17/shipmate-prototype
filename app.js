@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // when the lane above the fab exists — the loop no-ops otherwise.
   if (typeof bubbleLoop === 'function') bubbleLoop();
   initSubnavDebugToggle();
+  initCalendarKeys();
   // Boot straight into the app (title bar persists) with the splash view showing.
   bootApp();
 });
@@ -142,8 +143,8 @@ function showMainApp(view = 'dashboard') {
 }
 
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
-const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance' };
-const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance' };
+const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance', calendar: 'calendarview' };
+const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance', calendar: 'nav-calendar' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
   state.activeView = view;
@@ -163,6 +164,7 @@ function setView(view) {
   if (view === 'details') renderDetails();
   else if (view === 'broadcast') renderBroadcast();
   else if (view === 'performance') renderPerformance();
+  else if (view === 'calendar') renderCalendar();
   else renderDashboard();
   renderGuide();       // right pane = this tab's banner + task checklist
   if (typeof renderSubnav === 'function') renderSubnav();   // top-nav sub-tab drawer
@@ -269,7 +271,12 @@ function perfOpen(portal) { bcToast(`${portal} — connect the account to pull l
 function perfJump(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
 /* ── Marketing subsections ────────────────────────────── */
-function mktSetSection(id) { state.marketing.section = id; renderBroadcast(); renderSubnav(); }
+function mktSetSection(id) {
+  state.marketing.section = id;
+  renderBroadcast();
+  renderSubnav();
+  if (typeof renderGuide === 'function') renderGuide();
+}
 
 /* ── Game Details sub-tabs (Game Details / Distribution / Localization / Content / Assets) ── */
 function gdSetSection(id) {
@@ -312,6 +319,340 @@ async function _kickContentQ() {
 }
 function mktToast(what) { bcToast(`${what} — coming soon in the Marketing hub.`); }
 function mktReachOut(name) { bcToast(`Drafted a tailored outreach message to ${name} — connect email to send.`); }
+
+/* ── Calendar / Checklist (Marketing → Calendar) ───────
+   Every handler ends the same way: repaint the grid and the guide column, since
+   the two are the same model seen twice and must never disagree. */
+function _calRerender() {
+  renderCalendar();
+  if (typeof renderGuide === 'function') renderGuide();
+  _calFitPop();
+}
+
+/* _calPopPos places the popover from an estimate of its height (POP_H), because
+   it doesn't exist yet at that point. Once it's painted, measure the real thing
+   and nudge it back inside the viewport if it overhangs — a read view with a
+   long title and a note is a good deal taller than the editor.
+   The correction is written straight to the node's style as well as to the
+   draft: re-rendering here would take focus out of whatever field you're in. */
+function _calFitPop() {
+  requestAnimationFrame(() => {
+    const pop = document.querySelector('.mcal-pop');
+    const d = state.calendar.draft;
+    if (!pop || !d) return;
+    const r = pop.getBoundingClientRect();
+    let dx = 0, dy = 0;
+    if (r.bottom > window.innerHeight - 8) dy = window.innerHeight - 8 - r.bottom;
+    if (r.top + dy < TOP_SAFE)             dy = TOP_SAFE - r.top;
+    if (r.right > window.innerWidth - 8)   dx = window.innerWidth - 8 - r.right;
+    if (r.left + dx < 8)                   dx = 8 - r.left;
+    if (!dx && !dy) return;
+    d.x += dx; d.y += dy;
+    pop.style.left = d.x + 'px';
+    pop.style.top  = d.y + 'px';
+  });
+}
+function calShiftMonth(n) {
+  state.calendar.monthOffset += n;
+  state.calendar.selectedWeek = null;   // a week of the old month means nothing here
+  _calRerender();
+}
+function calToday() {
+  state.calendar.monthOffset = 0;
+  state.calendar.selectedWeek = null;
+  _calRerender();
+}
+function calSetView(v) { state.calendar.view = v; _calRerender(); }
+/* Clicking the selected week again clears it — the gutter is a toggle, so there
+   is always a way back to the whole month without hunting for a control. */
+function calSelectWeek(iso) {
+  state.calendar.selectedWeek = state.calendar.selectedWeek === iso ? null : iso;
+  _calRerender();
+}
+/* Double-clicking a day opens the composer popover anchored to that cell. The
+   position is worked out once, here, and kept on the draft — recomputing it on
+   every re-render would make the popover jump while you type in it.
+   POP_W has to match .mcal-pop's width in the stylesheet; it's needed in JS to
+   keep the popover from hanging off the right edge of the grid. */
+const POP_W = 268;
+const POP_H = 296;   // approximate; only used to keep the popover inside the grid
+
+/* Where the popover goes, given whatever was clicked inside a day cell. Beside
+   the day, never on top of it — the date it belongs to has to stay readable.
+   Right by default; if that would run off the grid it flips to the left of the
+   cell rather than being squashed against the edge. Vertically it's kept inside
+   the grid so the last rows don't open off-screen.
+   Worked out once, when the popover opens, and kept on the draft: recomputing
+   it on every re-render would make it jump around while you type. */
+const TOP_SAFE = 72;   // clears the fixed header
+function _calPopPos(ev, iso) {
+  /* Viewport coordinates, because the popover is position:fixed. It has to be:
+     it opens from the grid AND from the checklist, and those live in different
+     columns — anchoring inside the calendar's own box left an undated item,
+     which has no cell, stranded in the corner.
+
+     The day is found in the live DOM by its date rather than taken from the
+     event. A double-click fires two single clicks first, each of which
+     re-renders the grid (they toggle the week selection), so by the time
+     ondblclick runs its node is detached — and a detached node measures as all
+     zeros. The event is the fallback, and covers the checklist rows. */
+  let anchor = iso ? document.querySelector(`.mcal-day[data-iso="${iso}"]`) : null;
+  if (!anchor && ev && ev.currentTarget) {
+    anchor = ev.currentTarget.closest('.mcal-day, .mcal-task') || ev.currentTarget;
+  }
+  if (!anchor || !anchor.getBoundingClientRect) return { x: 24, y: TOP_SAFE };
+  const r = anchor.getBoundingClientRect();
+  // Beside it, flipping to the other side rather than hanging off the screen.
+  let x = r.right + 10;
+  if (x + POP_W > window.innerWidth - 8) x = r.left - POP_W - 10;
+  return {
+    x: Math.max(8, Math.min(x, window.innerWidth - POP_W - 8)),
+    y: Math.max(TOP_SAFE, Math.min(r.top, window.innerHeight - POP_H - 8)),
+  };
+}
+function calNewItem(iso, ev) {
+  /* Called from two places — a double-click on the cell and the hover "+"
+     inside it — so resolve up to the cell either way; the popover anchors to
+     the day, not to whatever was clicked. */
+  state.calendar.draft = { mode: 'new', date: iso, kind: 'marketing', text: '', note: '', repeat: 'none', ..._calPopPos(ev, iso) };
+  _calRerender();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('mcal-pop-title');
+    if (el) { el.focus(); el.select(); }
+    const note = document.getElementById('mcal-pop-note');
+    if (note) calAutoGrow(note);
+  });
+}
+
+/* Clicking an item on the grid opens the same popover on it. Ticking moved to
+   the checklist and to this popover's own button — a chip that both opened
+   details and toggled done on the same click couldn't do either predictably. */
+function calOpenItem(key, ev) {
+  const it = _calFindByKey(key);
+  if (!it) return;
+  const iso = it.date ? _calISO(it.date) : '';
+  /* Opening an item takes the checklist to its week, so the panel on the right
+     is showing the days the thing you just clicked lives among — rather than
+     whichever week you happened to have selected before. Undated items leave
+     the selection alone: they belong to no week. */
+  if (it.date) state.calendar.selectedWeek = _calISO(_calDay(it.date, -it.date.getDay()));
+  state.calendar.draft = {
+    mode: 'detail',
+    key, itemId: it.id,
+    custom: String(it.id).startsWith('custom-'),
+    date: iso,
+    kind: it.kind, text: it.label, note: it.note || '', repeat: it.repeat || 'none',
+    go: it.go || null,
+    ..._calPopPos(ev, iso),
+  };
+  _calRerender();
+  requestAnimationFrame(() => {
+    const note = document.getElementById('mcal-pop-note');
+    if (note) calAutoGrow(note);
+  });
+}
+
+/* Every field is read back into state before any re-render, so switching the
+   colour or the repeat doesn't wipe what's already been typed. */
+function _calReadDraft() {
+  const d = state.calendar.draft;
+  if (!d) return null;
+  const val = id => (document.getElementById(id) || {}).value;
+  d.text = val('mcal-pop-title') ?? d.text;
+  d.note = val('mcal-pop-note')  ?? d.note;
+  d.date = val('mcal-pop-date')  || d.date;
+  return d;
+}
+function _calRefocus() {
+  requestAnimationFrame(() => {
+    document.getElementById('mcal-pop-title')?.focus();
+    const note = document.getElementById('mcal-pop-note');
+    if (note) calAutoGrow(note);
+  });
+}
+/* The note grows with what's written in it, up to a ceiling — past that it
+   scrolls, so the popover can't grow taller than the grid it sits in. */
+function calAutoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 132) + 'px';
+}
+/* Enter belongs to the note itself; ⌘/Ctrl+Enter is how you save from inside it. */
+function calNoteKey(e) {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); calDraftSave(); }
+}
+
+/* Escape closes the popover whatever is open and wherever the focus is —
+   reading an item, editing one, or typing in the note. One document-level
+   listener rather than one per field, because the read view has no fields. */
+function initCalendarKeys() {
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!state.calendar || !state.calendar.draft) return;
+    e.preventDefault();
+    e.stopPropagation();
+    calDraftCancel();
+  }, true);   // capture: get it before any field's own Escape handling
+}
+function calDraftKind(kind)     { const d = _calReadDraft(); if (!d) return; d.kind = kind;     _calRerender(); _calRefocus(); }
+function calDraftRepeat(repeat) { const d = _calReadDraft(); if (!d) return; d.repeat = repeat; _calRerender(); _calRefocus(); }
+
+/* Escape is handled once, globally, by initCalendarKeys — the read view has no
+   field to hang a key handler on, so it can't live on the inputs. */
+function calDraftKey(e) {
+  if (e.key === 'Enter') calDraftSave();
+}
+/* Saving takes one of three routes, depending on what's being edited:
+     a new item          → appended to state.calendar.custom
+     one you created     → that record is updated in place
+     a generated one     → an override under its key, since the item itself is
+                           rebuilt from a rule or from the launch date and has
+                           nothing to write back to. */
+function calDraftSave() {
+  const d = _calReadDraft();
+  if (!d) return;
+  const label = (d.text || '').trim();
+  if (!label) { document.getElementById('mcal-pop-title')?.focus(); return; }
+  const fields = {
+    kind: d.kind, label,
+    note: (d.note || '').trim() || (d.repeat === 'weekly' ? 'Repeats weekly' : ''),
+    dateISO: d.date, repeat: d.repeat,
+  };
+  const list = state.calendar.custom || (state.calendar.custom = []);
+  if (d.mode !== 'edit') {
+    list.push({ id: 'custom-' + Date.now(), ...fields });
+  } else if (d.custom) {
+    const rec = list.find(c => c.id === d.itemId);
+    if (rec) Object.assign(rec, fields);
+  } else {
+    (state.calendar.overrides || (state.calendar.overrides = {}))[d.key] = fields;
+  }
+  state.calendar.draft = null;
+  _calRerender();
+}
+/* Deleting a generated item can't remove it at source either — it's hidden by
+   key instead, and the rule that made it carries on producing the others. */
+function calDraftDelete() {
+  const d = state.calendar.draft;
+  if (!d || d.mode !== 'edit') return;
+  if (d.custom) {
+    state.calendar.custom = (state.calendar.custom || []).filter(c => c.id !== d.itemId);
+  } else {
+    (state.calendar.hidden || (state.calendar.hidden = {}))[d.key] = true;
+  }
+  state.calendar.draft = null;
+  _calRerender();
+}
+
+/* ── Dragging an undated item onto a day ───────────────
+   Scheduling something is the one gesture the two halves share, so it's a drag
+   from the checklist to the grid rather than a form. Only the "no date yet"
+   rows are draggable; the dated ones already have their place.
+   The dragged key is kept in state as well as on the dataTransfer — Safari
+   won't let you read dataTransfer during dragover, and the drop target needs to
+   know whether it should light up. */
+let _calDragKey = null;
+function calDragStart(ev, key) {
+  _calDragKey = key;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', key);
+  ev.currentTarget.classList.add('is-dragging');
+}
+function calDragEnd() {
+  _calDragKey = null;
+  document.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+  document.querySelectorAll('.mcal-day.is-drop').forEach(el => el.classList.remove('is-drop'));
+}
+function calDragOver(ev) {
+  if (!_calDragKey) return;
+  ev.preventDefault();                       // without this the drop never fires
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('is-drop');
+}
+function calDragLeave(ev) { ev.currentTarget.classList.remove('is-drop'); }
+
+/* Landing it: a custom item gets its own record updated, a generated one gets
+   an override — the same split as saving from the popover. */
+function calDrop(ev, iso) {
+  ev.preventDefault();
+  const key = _calDragKey || ev.dataTransfer.getData('text/plain');
+  calDragEnd();
+  if (!key) return;
+  const it = _calFindByKey(key);
+  if (!it) return;
+  /* Launch day isn't an event that happens to sit on a date — it IS the date.
+     Dragging it moves the release date itself, and every submission deadline
+     recalculates off the new one. setLaunchDate keeps the checklist pane's
+     countdown and the Platforms timeline in step. */
+  if (it.id === 'launch-day') { setLaunchDate(iso); _calRerender(); return; }
+  if (String(it.id).startsWith('custom-')) {
+    const rec = (state.calendar.custom || []).find(c => c.id === it.id);
+    if (rec) rec.dateISO = iso;
+  } else {
+    const ov = state.calendar.overrides || (state.calendar.overrides = {});
+    ov[key] = { ...(ov[key] || {}), dateISO: iso };
+  }
+  _calRerender();
+}
+
+/* An item names where it gets resolved; this walks you there. chkGo() is the
+   jump the Shippy checklist already uses — same switch of tab, same sub-tab,
+   same scroll to the field — so the two lists behave identically.
+   The popover is closed first: you're leaving this screen. */
+function calGoItem(key) {
+  const it = _calFindByKey(key);
+  if (!it || !it.go) return;
+  state.calendar.draft = null;
+  chkGo(it.go.view, it.go.anchor || '', it.go.section || '');
+}
+
+/* Hovering a checklist row lights up the day it lives on. Straight DOM, no
+   re-render: this fires on every pointer move across the list, and rebuilding
+   the grid each time would be both slow and visibly janky. */
+function calHiliteDay(iso) {
+  document.querySelectorAll('.mcal-day.is-hilite').forEach(el => el.classList.remove('is-hilite'));
+  if (iso) document.querySelector(`.mcal-day[data-iso="${iso}"]`)?.classList.add('is-hilite');
+}
+function calDraftCancel() { state.calendar.draft = null; _calRerender(); }
+/* Detail -> edit. The read view holds no inputs, so there is nothing to read
+   back first; the draft already carries every field. */
+function calDraftEdit() {
+  if (!state.calendar.draft) return;
+  state.calendar.draft.mode = 'edit';
+  _calRerender();
+  _calRefocus();
+}
+
+/* Ticking from the popover: strike the title through, then let the popover go.
+   Deliberately not re-rendering until the end — a repaint mid-animation would
+   rebuild the node and kill it. The timeout matches the CSS in .mcal-pop.is-striking
+   (280ms of strike, then a 140ms fade). Un-ticking skips the ceremony: there's
+   nothing to celebrate about undoing something. */
+const CAL_STRIKE_MS = 420;
+/* Ticking runs as a small sequence rather than all at once: the popover closes,
+   the item is struck through on its own day in the grid, and only when that has
+   played does the checklist on the right show its check. Striking inside the
+   popover was the wrong place for it — the thing being crossed off is on the
+   calendar, not in the dialog that happened to be covering it. */
+function calDraftDone(key) {
+  const done = state.calendar.done;
+  state.calendar.draft = null;
+  if (done[key]) { delete done[key]; _calRerender(); return; }
+
+  done[key] = true;
+  renderCalendar();                        // popover gone, chip already struck
+  requestAnimationFrame(() => {
+    // Draws the line rather than having it appear; the class dies with the
+    // next re-render, so there's nothing to clean up.
+    document.querySelector(`.mcal-chip[data-key="${key}"]`)?.classList.add('is-just-done');
+  });
+  setTimeout(() => { if (typeof renderGuide === 'function') renderGuide(); }, CAL_STRIKE_MS);
+}
+
+function calToggleDone(key) {
+  const done = state.calendar.done || (state.calendar.done = {});
+  if (done[key]) delete done[key]; else done[key] = true;
+  _calRerender();
+}
 
 /* ── Launch calendar (checklist pane) ─────────────────── */
 function setLaunchDate(v) {
