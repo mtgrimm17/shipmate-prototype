@@ -3888,19 +3888,25 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'keyArt') {
     return buildSteamKeyArtEditSection();
   }
-  // iOS-only: the App Store Product Page Preview's "Localizations" button.
+  // The App Store / Mac App Store Product Page Preview's "Localizations"
+  // button. Mac App Store gets its own builder (own review-UI scratch state —
+  // back-translation cache, undo history — even though Title/Subtitle's
+  // underlying data is shared with the App Store; see buildMacLocalizationReviewSection's
+  // own header comment for why).
   if (target === 'localization') {
-    return buildLocalizationReviewSection();
+    return platformId === 'macos' ? buildMacLocalizationReviewSection() : buildLocalizationReviewSection();
   }
-  // iOS-only: Business Questions' "IAP Locs" button (buildIapSection,
-  // further above) — flips the whole modal over from 'business' to this
-  // section rather than rendering it inline under the products list. The
+  // Business Questions' "IAP Locs" button (buildIapSection, further above) —
+  // flips the whole modal over from 'business' to this section rather than
+  // rendering it inline under the products list. Mac App Store gets its own
+  // builder, reading its own independent IAP products (state.macSubmitAnswers.iapProducts)
+  // — IAP Products themselves are never shared between platforms. The
   // footer's "Save & Return" is special-cased for this one target (further
   // above) to flip back to 'business' specifically, not the default
   // un-flipped Store Preview, since that's genuinely where the user came
   // from and where they'd expect to land back.
   if (target === 'iapLocalizations') {
-    return buildIapLocalizationsSection();
+    return platformId === 'macos' ? buildMacIapLocalizationsSection() : buildIapLocalizationsSection();
   }
   return '';
 }
@@ -5873,30 +5879,41 @@ const LOC_REVIEW_FIELDS = [
    platform's"), same Content/Business/Data flip-section wiring via the
    shared buildContentRatingSection/buildBusinessSection/buildExportComplianceSection/
    buildIapSection/buildPrivacySection (all pid-parameterized, pid='macos'
-   here) and isMacSectionComplete — but reading Mac App Store's OWN
-   independent state throughout:
-     • state.macSubmitAnswers          instead of state.iosSubmitAnswers
+   here) and isMacSectionComplete. Content Rating and Data Privacy are
+   SHARED with the App Store (IOS_MAC_SHARED_ANSWER_FIELDS, state.js) — read
+   here via `sh` (= _appStoreAnswers('macos', ...) = state.iosSubmitAnswers)
+   — while Business (`a` = state.macSubmitAnswers) and the listing text
+   remain Mac App Store's own independent state:
+     • state.macSubmitAnswers          — Business fields only (hasIAP, iapProducts, tax)
      • state.macAppStoreListing        instead of state.formData's flat
-       title/subtitle/description/releaseNotes/localizedStoreText (via
-       _masFieldValue/_masEffectivePreviewLang/_masLangHasOverLimitField,
-       app.js — see state.macAppStoreListing's own comment in state.js)
+       title/subtitle/description/releaseNotes/localizedStoreText for
+       Description/What's New (via _masFieldValue/_masEffectivePreviewLang/
+       _masLangHasOverLimitField, app.js) — Title/Subtitle are ALSO shared
+       (see MAS_SHARED_LISTING_FIELDS, app.js): _masFieldValue delegates
+       those two straight to state.formData, so they're the literal same
+       text as the App Store's own.
      • state.masTranslateStatus/masPreviewLang instead of their ias- twins
+       (still used for Description/What's New's own independent translation)
      • state.storePreviewSectionSeen.macos / isMacSectionComplete instead
        of their iOS equivalents
    primaryLanguage/localizations/screenshots/app icon are all still shared
    (state.formData/state.uploads/state.platformScreenshots) — see each
    comment above for why. Compatibility reads "Mac", not "iPhone, iPad".
 
-   Deliberately NOT reproduced here: the "Localizations" button (Localization
-   Review is iOS-only for now — see buildStorePreviewFlipSection's
-   'localization' target). Everything else — inline click-to-edit,
-   auto-translation, character limits, IAP display, App Privacy nutrition
-   labels, the DocuSign-style next-required nav bar — works exactly like the
-   App Store's own preview, just against Mac App Store's own answers. */
+   The "Localizations" button opens Mac App Store's OWN Localization Review
+   (buildMacLocalizationReviewSection, further below) — its Title/Subtitle
+   cards edit the same shared storage this preview's own Title/Subtitle
+   fields do, so an edit in either surface (or the App Store's own preview/
+   Localization Review) is instantly reflected everywhere else. Everything
+   else — inline click-to-edit, auto-translation, character limits, IAP
+   display, App Privacy nutrition labels, the DocuSign-style next-required
+   nav bar — works exactly like the App Store's own preview, just against
+   Mac App Store's own (or shared, where noted) answers. */
 function buildMacStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
-  const a     = state.macSubmitAnswers;
+  const a     = state.macSubmitAnswers;                        // Business (hasIAP, iapProducts) — Mac App Store's own
+  const sh    = _appStoreAnswers('macos', 'collectsData');      // Content Rating + Privacy — shared with the App Store (state.iosSubmitAnswers)
   const icon  = ups.appIcon;
   const pid   = 'macos';
 
@@ -5977,18 +5994,18 @@ function buildMacStorePreviewSection() {
   const descStatusHtml     = _masStatusLine('description', 'description');
   const notesStatusHtml    = _masStatusLine('releaseNotes', "what's new");
 
-  // Age rating from Mac App Store's own Content Rating answers
+  // Age rating from Content Rating's shared answers (sh === state.iosSubmitAnswers)
   const ageRating = (function() {
-    if (a.ageCategory === 'made_for_kids') return '4+';
-    const hasAdult = a.graphicSexual === 'frequent' || a.extendedViolence === 'frequent';
-    const hasTeen  = a.realisticViolence && a.realisticViolence !== 'none';
+    if (sh.ageCategory === 'made_for_kids') return '4+';
+    const hasAdult = sh.graphicSexual === 'frequent' || sh.extendedViolence === 'frequent';
+    const hasTeen  = sh.realisticViolence && sh.realisticViolence !== 'none';
     return hasAdult ? '17+' : hasTeen ? '12+' : '4+';
   })();
 
-  // Privacy section content — identical Nutrition Label format, Mac App
-  // Store's own data-collection answers (a === state.macSubmitAnswers).
+  // Privacy section content — identical Nutrition Label format, reading the
+  // shared Data Privacy answers (sh === state.iosSubmitAnswers).
   const privacyHtml = (function() {
-    if (a.collectsData === 'no') {
+    if (sh.collectsData === 'no') {
       return `
         <div class="ias-privacy-card ias-privacy-clean">
           <svg viewBox="0 0 28 28" fill="none" width="32" height="32">
@@ -6000,10 +6017,10 @@ function buildMacStorePreviewSection() {
         </div>`;
     }
 
-    const dataPerType = a.dataPerType || {};
+    const dataPerType = sh.dataPerType || {};
     const typeEntries = Object.entries(dataPerType);
 
-    if (a.collectsData !== 'yes' || typeEntries.length === 0) {
+    if (sh.collectsData !== 'yes' || typeEntries.length === 0) {
       return `
         <div class="ias-privacy-card ias-privacy-pending">
           <div class="ias-privacy-pending-msg">Complete the Data Privacy step to populate this section.</div>
@@ -6247,6 +6264,7 @@ function buildMacStorePreviewSection() {
         <div class="ias-label-right">
           <span class="ias-label-note">Reflects your submission data</span>
           <div class="ias-locs-lang-group">
+            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">Localizations</button>
             ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
           </div>
         </div>
@@ -6559,6 +6577,171 @@ function buildLocalizationReviewSection() {
     <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
 }
 
+/* ── Mac App Store Product Page Preview flip section: "Localization Review" ──
+   Full twin of buildLocalizationReviewSection above — same markup/classes,
+   same 4-field dropdown (Title/Subtitle/Description/What's New), same
+   Review/back-translation flip and per-field undo/redo — reading/writing
+   through _masFieldValue/_masSetFieldValue and Mac App Store's own review-UI
+   state (masLocReviewField/masLocReviewMode/masLocReviewBackTranslation/
+   masLocReviewUndoHistory, state.js) via the "_masLoc"/"masLoc" prefixed
+   handler cluster (app.js) instead of Localization Review's own.
+
+   Title/Subtitle cards here read/write the exact SAME underlying value as
+   the App Store's own Localization Review (_masFieldValue/_masSetFieldValue
+   delegate those two fields straight to state.formData — see
+   MAS_SHARED_LISTING_FIELDS, app.js) — editing either one here is instantly
+   reflected in the App Store's own Localization Review, Preview, or Mac App
+   Store's own Preview on next render. Description/What's New remain fully
+   independent (state.macAppStoreListing).
+
+   One deliberate difference from the App Store's own settings menu: the
+   "Automatically translated fields" gear here offers ONLY Description and
+   What's New — Title/Subtitle have no independent auto-translate setting of
+   their own any more (they're governed by the single shared
+   iasAutoTranslateFields setting, i.e. the App Store's own gear), so a
+   Title/Subtitle row here would be a dead control that looks like it does
+   something but never actually fires (_masToggleAutoTranslateField, app.js,
+   is only ever invoked for the other two fields). */
+function buildMacLocalizationReviewSection() {
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.masLocReviewField || 'title';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.masLocReviewMode === 'review';
+  const isLongField = field === 'description' || field === 'releaseNotes';
+
+  const fieldOptions = LOC_REVIEW_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _masFieldHasOverLimitLang(f.value, langCodes),
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _masLocReviewUndoState(kind, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); masLocReviewUndo('${kind}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); masLocReviewRedo('${kind}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _masFieldValue(field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _masLocReviewBackTranslationValue(field, lang);
+      const topStatusHtml = _masFieldTranslatePending(field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="loc-review-card">
+        <div class="loc-review-side">
+          <div class="loc-review-half loc-review-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startMasLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="loc-review-half loc-review-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startMasLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _masFieldTranslatePending(field, lang);
+    const srcBadge = _masLocReviewSourceBadge(field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
+    return `
+      <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startMasLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  // Only Description/What's New have their own independently-toggleable
+  // auto-translate setting — see this function's own top comment.
+  const autoCfg = state.masAutoTranslateFields
+    || { title: false, subtitle: true, description: true, releaseNotes: true };
+  const settingsOpen = !!state.masReviewSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_masToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="mas-loc-review-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_masToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('description', 'Description')}
+          ${settingsRow('releaseNotes', "What's New")}
+        </div>
+      </div>`;
+
+  return `
+    <div class="loc-review-header">
+      <div class="loc-review-title-group">
+        <div class="loc-review-title">Localization Review</div>
+        ${settingsMenu}
+      </div>
+      <div class="loc-review-header-controls">
+        <button class="loc-review-toggle-btn" onclick="toggleMasLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        ${swSelect('mas-loc-review-field', field, fieldOptions, 'setMasLocReviewField', '160px', 'right')}
+      </div>
+    </div>
+    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
+}
+
 /* ── Submit Modal (non-iOS legacy) ──────────────────── */
 
 function renderSubmitModal() {
@@ -6671,19 +6854,24 @@ function renderTrackSubmitModal(pid) {
    SHARED AI BADGE HELPERS — used by all platforms
    ══════════════════════════════════════════════════════════════ */
 
-// Get answer metadata for any platform.
+// Get answer metadata for any platform. For 'macos', a Content Rating/
+// Privacy field (IOS_MAC_SHARED_ANSWER_FIELDS, state.js) is shared with the
+// App Store — _appStoreAnswerMeta (app.js) routes those straight to
+// state.iosAnswerMeta so a shared field's AI-confidence badge always agrees
+// between platforms; anything else still resolves state.macAnswerMeta.
 function _getAnswerMeta(platformId, qid) {
   if (platformId === 'ios')     return state.iosAnswerMeta[qid];
-  if (platformId === 'macos')   return state.macAnswerMeta[qid];
+  if (platformId === 'macos')   return _appStoreAnswerMeta('macos', qid)[qid];
   if (platformId === 'android') return state.cqAnswerMeta[qid];
   if (platformId === 'steam')   return state.steamAnswerMeta[qid];
   return null;
 }
 
-// Get the live (current) answer value for any platform.
+// Get the live (current) answer value for any platform. Same shared-field
+// routing as _getAnswerMeta above, via _appStoreAnswers (app.js).
 function _getLiveAnswer(platformId, qid) {
   if (platformId === 'ios')     return state.iosSubmitAnswers[qid];
-  if (platformId === 'macos')   return state.macSubmitAnswers[qid];
+  if (platformId === 'macos')   return _appStoreAnswers('macos', qid)[qid];
   if (platformId === 'android') return state.cqAnswers[qid];
   if (platformId === 'steam')   return (state.steamSubmitAnswers.steamContentAnswers || {})[qid];
   return null;
@@ -6740,10 +6928,16 @@ function takeFilterSnapshot(platformId) {
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
     state.iosAnsweredAtInference = s;
   } else if (platformId === 'macos') {
+    // Content Rating fields are shared with the App Store (state.iosSubmitAnswers
+    // — see IOS_MAC_SHARED_ANSWER_FIELDS, state.js) so they must be snapshotted
+    // from there, not from state.macSubmitAnswers (which no longer receives
+    // writes for them at all); Business/export-compliance fields remain Mac
+    // App Store's own.
+    const shared = state.iosSubmitAnswers;
     const a = state.macSubmitAnswers;
     const s = new Set();
-    IOS_INTENSITY_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
-    IOS_CONTENT_YN_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
+    IOS_INTENSITY_QUESTIONS.forEach(q => { if (shared[q.id] !== null && shared[q.id] !== undefined) s.add(q.id); });
+    IOS_CONTENT_YN_QUESTIONS.forEach(q => { if (shared[q.id] !== null && shared[q.id] !== undefined) s.add(q.id); });
     if (a.hasIAP        !== null && a.hasIAP        !== undefined) s.add('hasIAP');
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
@@ -6866,7 +7060,7 @@ function _isCurrentlyAnswered(platformId, qid) {
 // pid defaults to 'ios'; pass 'macos' to read/decorate against Mac App
 // Store's own independent answers instead (see buildContentRatingSection).
 function iosYNRow(label, fieldId, desc, tooltip, inverted = false, pid = 'ios') {
-  const val    = _appStoreAnswers(pid)[fieldId];
+  const val    = _appStoreAnswers(pid, fieldId)[fieldId];
   const ttText = tooltip || desc || '';
   return ynRow(
     label, val,
@@ -6882,7 +7076,7 @@ function iosYNRow(label, fieldId, desc, tooltip, inverted = false, pid = 'ios') 
 
 // App Store intensity row (None / Infrequent / Frequent): injects AI decoration
 function iosIntensityRow(label, fieldId, tooltip, pid = 'ios') {
-  const val  = _appStoreAnswers(pid)[fieldId];
+  const val  = _appStoreAnswers(pid, fieldId)[fieldId];
   const opts = [
     { value: 'frequent',   label: 'Frequent',   selectedClass: 'is-sel-frequent',
       extraClass: _platformAIClass(pid, fieldId, 'frequent').trim(),
@@ -6953,12 +7147,16 @@ function _stepAttempted(stepId) {
 }
 
 // pid defaults to 'ios'; buildStorePreviewFlipSection passes 'macos' through
-// for Mac App Store's own independent Data Collection Questions, reading
-// state.macSubmitAnswers instead of state.iosSubmitAnswers via
-// _appStoreAnswers(pid) — everything else (labels, markup, AI translation
-// flow) is identical.
+// for Mac App Store's own Data Collection Questions modal — but every field
+// this section touches (privacyPolicyUrl/collectsData/privacyDescription/
+// dataPerType) is SHARED with the App Store (IOS_MAC_SHARED_ANSWER_FIELDS,
+// state.js), so _appStoreAnswers(pid, 'privacyPolicyUrl') below resolves the
+// same state.iosSubmitAnswers object for either pid — everything else
+// (labels, markup, AI translation flow) is identical, and answering this
+// section from Mac App Store's modal is really just answering the App
+// Store's own Data Privacy questions from a different door.
 function buildPrivacySection(pid = 'ios') {
-  const a = _appStoreAnswers(pid);
+  const a = _appStoreAnswers(pid, 'privacyPolicyUrl');
   const noUrl = !a.privacyPolicyUrl.trim();
 
   let collectBlock = '';
@@ -7132,7 +7330,7 @@ const QUESTIONNAIRE_DOC_SECTIONS = {
 // pid defaults to 'ios'; buildContentRatingSection passes 'macos' through
 // for Mac App Store's own independent answers.
 function iosYNRowDocPane(label, fieldId, tooltip, docSection, pid = 'ios') {
-  const val    = _appStoreAnswers(pid)[fieldId];
+  const val    = _appStoreAnswers(pid, fieldId)[fieldId];
   const ttHTML = tooltip
     ? `<span class="tooltip-anchor tooltip-click" data-tip="${tooltip}" onclick="openDocPaneSection('${docSection}',event)"><span class="tooltip-icon">?</span><span class="tooltip-body">${tooltip}</span></span>`
     : '';
@@ -7152,7 +7350,7 @@ function iosYNRowDocPane(label, fieldId, tooltip, docSection, pid = 'ios') {
 
 // Intensity row (Frequent/Infrequent/None) with same click-to-open-pane tooltip.
 function iosIntensityRowDocPane(label, fieldId, tooltip, docSection, pid = 'ios') {
-  const val     = _appStoreAnswers(pid)[fieldId];
+  const val     = _appStoreAnswers(pid, fieldId)[fieldId];
   const ttHTML  = tooltip
     ? `<span class="tooltip-anchor tooltip-click" data-tip="${tooltip}" onclick="openDocPaneSection('${docSection}',event)"><span class="tooltip-icon">?</span><span class="tooltip-body">${tooltip}</span></span>`
     : '';
@@ -7225,12 +7423,17 @@ const IOS_CR_RISK_NOTES = {
     : '',
 };
 
-// pid defaults to 'ios'; pass 'macos' to render Mac App Store's own
-// independent Content Rating answers (state.macSubmitAnswers via
-// _appStoreAnswers) instead of iOS's — everything else (categories,
-// markup, risk notes) is identical.
+// pid defaults to 'ios'; pass 'macos' to render Mac App Store's own Content
+// Rating modal — every field here (IOS_INTENSITY_QUESTIONS/
+// IOS_CONTENT_YN_QUESTIONS/ageCategory/etc.) is SHARED with the App Store
+// (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), so _appStoreAnswers(pid,
+// 'ageCategory') below resolves the same state.iosSubmitAnswers object for
+// either pid — everything else (categories, markup, risk notes) is
+// identical, and answering Content Rating from Mac App Store's modal is
+// really just answering the App Store's own Content Rating from a
+// different door.
 function buildContentRatingSection(pid = 'ios') {
-  const a = _appStoreAnswers(pid);
+  const a = _appStoreAnswers(pid, 'ageCategory');
 
   // Quick lookups
   const iq = id => { const q = IOS_INTENSITY_QUESTIONS.find(q => q.id === id); return { ...q, label: t(`iosint.${q.id}.label`) || q.label, tooltip: t(`iosint.${q.id}.tooltip`) || q.tooltip }; };
@@ -7560,9 +7763,9 @@ function buildBusinessSection(pid = 'ios') {
    Compliance section's cryptography question, rather than before it. */
 // pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
 // IAP Products list (see buildContentRatingSection above). The "IAP Locs"
-// button and buildIapLocalizationsSection remain iOS-only for now (see the
-// comment on buildStorePreviewFlipSection's 'iapLocalizations' target) —
-// Mac's own saved products simply won't have a working localization flip.
+// button now works for both platforms — see buildStorePreviewFlipSection's
+// 'iapLocalizations' target, which dispatches to buildMacIapLocalizationsSection()
+// for Mac App Store's own saved products.
 function buildIapSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
@@ -7590,21 +7793,21 @@ function buildIapSection(pid = 'ios') {
   // Preview's own "Localizations" button (.ias-all-locs-btn, further above)
   // both in placement-as-an-action and in mechanism: it flips the WHOLE
   // Business Questions modal over to the IAP Localizations section
-  // (openStorePreviewSection('ios','iapLocalizations') — see
+  // (openStorePreviewSection(pid,'iapLocalizations') — see
   // buildStorePreviewFlipSection's 'iapLocalizations' target, and the
   // footer's special-cased "Save & Return" back to 'business', both
   // further above) rather than rendering that section inline at the bottom
   // of this step, which is where it lived before. Only shown once there's
   // at least one SAVED product to localize — same guard
-  // buildIapLocalizationsSection itself uses, so the button never opens an
-  // empty section. IAP Localizations is iOS-only for now (buildIapLocalizationsSection
-  // reads state.iosSubmitAnswers.iapProducts directly) — the button is
-  // hidden entirely for Mac App Store rather than shown as a dead click,
-  // since it would either no-op (mismatched flip-target pid) or, worse,
-  // silently show iOS's own products under a Mac App Store modal.
+  // buildIapLocalizationsSection/buildMacIapLocalizationsSection each use
+  // themselves, so the button never opens an empty section. Works for both
+  // platforms now — the onclick uses the real pid, and
+  // buildStorePreviewFlipSection routes 'macos' to buildMacIapLocalizationsSection(),
+  // which reads Mac App Store's own saved products
+  // (state.macSubmitAnswers.iapProducts) rather than iOS's.
   const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
-  const iapLocsBtn = (pid === 'ios' && hasSavedIapProducts)
-    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('ios','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
+  const iapLocsBtn = hasSavedIapProducts
+    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('${pid}','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
     : '';
 
   const iapProductsHTML = `
@@ -7653,7 +7856,7 @@ const IAP_LOC_FIELDS = [
    a time instead of the app's own Title/Subtitle/Description/What's New.
    Reached by flipping the whole Business Questions modal via the "IAP
    Locs" button on the IAP Products row (buildIapSection above,
-   openStorePreviewSection('ios','iapLocalizations')) — see
+   openStorePreviewSection(pid,'iapLocalizations')) — see
    buildStorePreviewFlipSection's 'iapLocalizations' target, further above,
    for the routing and the footer's special-cased "Save & Return" back to
    'business'. (An earlier version rendered this inline at the bottom of
@@ -7849,6 +8052,166 @@ function buildIapLocalizationsSection() {
       <div class="iap-loc-selectors-row">
         ${swSelect('iap-loc-iap', iapId, iapOptions, 'setIapLocReviewIapId', 'auto', 'right')}
         ${swSelect('iap-loc-field', field, fieldOptions, 'setIapLocField', 'auto', 'right')}
+      </div>
+      <div class="iap-loc-cards">${cards}</div>
+    </div>`;
+}
+
+/* ── Mac App Store — "IAP Localizations" ─────────────────────────────────
+   Full twin of buildIapLocalizationsSection above, scoped to Mac App
+   Store's own saved IAP products (state.macSubmitAnswers.iapProducts —
+   already fully independent of iOS's own; not part of Task B's Content
+   Rating/Privacy sharing at all) via the "_masIapLoc"/"masIapLoc" prefixed
+   handler cluster (app.js). Reached by flipping the whole Business Questions
+   modal via Mac App Store's own "IAP Locs" button (buildIapSection above,
+   openStorePreviewSection('macos','iapLocalizations')). */
+function buildMacIapLocalizationsSection() {
+  const savedProducts = (state.macSubmitAnswers.iapProducts || []).filter(p => p.collapsed);
+  if (!savedProducts.length) return '';
+
+  const iapId = _masIapLocEffectiveIapId();
+  const product = savedProducts.find(p => p.id === iapId);
+  if (!product) return '';
+
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.masIapLocField || 'name';
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.masIapLocMode === 'review';
+
+  const fieldOptions = IAP_LOC_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _masIapLocFieldHasOverLimitLang(iapId, f.value, langCodes),
+  }));
+  const iapOptions = savedProducts.map(p => ({
+    value: p.id,
+    label: escHtml(p.name) || 'Untitled IAP',
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _masIapLocUndoState(kind, iapId, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); masIapLocUndo('${kind}','${iapId}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); masIapLocRedo('${kind}','${iapId}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _masIapLocFieldValue(iapId, field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _masIapLocBackTranslationValue(iapId, field, lang);
+      const topStatusHtml = _masIapLocFieldTranslatePending(iapId, field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="iap-loc-card">
+        <div class="iap-loc-side">
+          <div class="iap-loc-half iap-loc-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startMasIapLocInlineEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="iap-loc-half iap-loc-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startMasIapLocBackTranslationEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _masIapLocFieldTranslatePending(iapId, field, lang);
+    const srcBadge = _masIapLocSourceBadge(iapId, field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
+    return `
+      <div class="iap-loc-card${isPrimary ? ' iap-loc-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startMasIapLocInlineEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  const autoCfg = state.masIapLocAutoTranslateFields || { name: true, desc: true };
+  const settingsOpen = !!state.masIapLocSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_masIapLocToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="mas-iap-loc-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_masIapLocToggleSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('name', 'Name')}
+          ${settingsRow('desc', 'Description')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">IAP Localizations</div>
+          ${settingsMenu}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="toggleMasIapLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect('mas-iap-loc-iap', iapId, iapOptions, 'setMasIapLocReviewIapId', 'auto', 'right')}
+        ${swSelect('mas-iap-loc-field', field, fieldOptions, 'setMasIapLocField', 'auto', 'right')}
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;

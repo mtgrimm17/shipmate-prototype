@@ -1096,6 +1096,24 @@ const IOS_CONTENT_YN_QUESTIONS = [
     tooltip: 'Randomized virtual item containers available for purchase. Includes randomized functional cards or cosmetic items.' },
 ];
 
+// Content Rating + Data Privacy fields that Mac App Store SHARES with the
+// App Store — literally the same answer, stored once in state.iosSubmitAnswers/
+// iosAnswerMeta regardless of which platform's UI you answered it from. See
+// _appStoreAnswers/_appStoreAnswerMeta (app.js), the single choke point that
+// routes a (pid, fieldId) pair to the correct backing object. Business
+// Questions fields (hasIAP, usesEncryption, taxCategory, iapProducts, etc.)
+// are deliberately NOT in this set — those stay fully independent per
+// platform (state.macSubmitAnswers), unchanged from the original Mac App
+// Store feature. Title/Subtitle are a separate, listing-text-specific
+// sharing concern (see MAS_SHARED_LISTING_FIELDS, app.js) — they don't live
+// in *SubmitAnswers at all, so they're not part of this set either.
+const IOS_MAC_SHARED_ANSWER_FIELDS = new Set([
+  ...IOS_INTENSITY_QUESTIONS.map(q => q.id),
+  ...IOS_CONTENT_YN_QUESTIONS.map(q => q.id),
+  'ageCategory', 'kidsAgeRange', 'overrideRating', 'ageSuitabilityUrl',
+  'privacyPolicyUrl', 'collectsData', 'privacyDescription', 'dataPerType',
+]);
+
 // Apple-distributable countries, sorted by approximate iOS user count (millions)
 // gamers = estimated total gamers (all platforms: mobile, PC, console) in
 // millions (2024, approx). Sorted descending so the first entry is the max.
@@ -1388,6 +1406,14 @@ function isIOSSectionComplete(sectionId) {
    Android/Steam already have their own isXxxSectionComplete/
    computeXxxSectionRisk rather than a single generic parameterized one. */
 function computeMacSectionRisk(sectionId) {
+  // Content Rating and Data Privacy answers are shared with the App Store
+  // (state.iosSubmitAnswers/iosAnswerMeta — see IOS_MAC_SHARED_ANSWER_FIELDS
+  // and _appStoreAnswers/_appStoreAnswerMeta, app.js) — delegate straight to
+  // the iOS computation so the two platforms can never disagree about the
+  // very same answers.
+  if (sectionId === 'privacy' || sectionId === 'contentRating') {
+    return computeIOSSectionRisk(sectionId);
+  }
   if (sectionId === 'questionnaire') {
     const risks = ['privacy','contentRating','business'].map(computeMacSectionRisk);
     if (risks.includes('HIGH'))   return 'HIGH';
@@ -1411,19 +1437,6 @@ function computeMacSectionRisk(sectionId) {
     if (statuses.includes('missing'))   return 'HIGH';
     if (statuses.includes('confident')) return 'MEDIUM';
     return 'LOW';
-  }
-
-  if (sectionId === 'privacy') {
-    return evalFields(['collectsData']);
-  }
-
-  if (sectionId === 'contentRating') {
-    const fields = [
-      ...IOS_INTENSITY_QUESTIONS.map(q => q.id),
-      ...IOS_CONTENT_YN_QUESTIONS.map(q => q.id),
-      'ageCategory',
-    ];
-    return evalFields(fields);
   }
 
   if (sectionId === 'business') {
@@ -1453,6 +1466,16 @@ function isMacSectionComplete(sectionId) {
   }
   if (sectionId === 'improveSubmission') return !!state.macSubmitAnswers.improveSubmissionSeen;
 
+  // Content Rating and Data Privacy are answered ONCE, shared with the App
+  // Store (state.iosSubmitAnswers — see IOS_MAC_SHARED_ANSWER_FIELDS and
+  // _appStoreAnswers, app.js), so Mac App Store's own completion for these
+  // two sections is always identical to the App Store's — delegate rather
+  // than re-derive from state.macSubmitAnswers, which no longer receives
+  // writes for these fields at all.
+  if (sectionId === 'privacy' || sectionId === 'contentRating') {
+    return isIOSSectionComplete(sectionId);
+  }
+
   if (sectionId === 'storePreview') {
     return isMacSectionComplete('contentRating') &&
            isMacSectionComplete('privacy') &&
@@ -1467,29 +1490,6 @@ function isMacSectionComplete(sectionId) {
   }
 
   const a = state.macSubmitAnswers;
-
-  if (sectionId === 'privacy') {
-    const url = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
-    if (!url) return false;
-    if (a.collectsData === null) return false;
-    if (a.collectsData === 'yes') {
-      const types = Object.entries(a.dataPerType);
-      if (types.length === 0) return false;
-      for (const [, t] of types) {
-        if (t.purposes.length === 0) return false;
-      }
-    }
-    return true;
-  }
-
-  if (sectionId === 'contentRating') {
-    if (!IOS_INTENSITY_QUESTIONS.every(q => a[q.id] !== null)) return false;
-    if (!IOS_CONTENT_YN_QUESTIONS.every(q => a[q.id] !== null)) return false;
-    if (a.ageCategory === null) return false;
-    if (a.ageCategory === 'made_for_kids'   && a.kidsAgeRange  === null) return false;
-    if (a.ageCategory === 'override_higher' && a.overrideRating === null) return false;
-    return true;
-  }
 
   if (sectionId === 'business') {
     if (a.hasIAP === null) return false;
@@ -2669,6 +2669,23 @@ const state = {
   masAutoTranslateFields: { title: false, subtitle: true, description: true, releaseNotes: true },
   masReviewSettingsOpen: false,
 
+  // Mac App Store's OWN Localization Review — full twins of
+  // locReviewField/locReviewMode/locReviewBackTranslation/locReviewUndoHistory
+  // below, kept as entirely separate state (own cache, own undo history)
+  // rather than reusing iOS's directly, even for the two fields (Title/
+  // Subtitle) whose REAL data is shared — see MAS_SHARED_LISTING_FIELDS'
+  // comment (app.js) for why: the real value is shared through
+  // _masFieldValue/_masSetFieldValue regardless, so an edit made from
+  // either platform's Localization Review always lands in the same place;
+  // only this ephemeral review-UI scratch state (back-translation drafts,
+  // undo stacks, which field/mode is showing) stays platform-local, the
+  // same "duplicate the stateful UI, not the data" tradeoff already made
+  // for IAP Localizations (see iapLocField's own comment further below).
+  masLocReviewField: null,
+  masLocReviewMode: 'locs',
+  masLocReviewBackTranslation: {},
+  masLocReviewUndoHistory: { real: {}, draft: {} },
+
   // Which language the App Store Product Page Preview's top-right language
   // dropdown is currently showing (a language code, e.g. 'en'). null means
   // "use the Distribution section's primary language" — buildStorePreviewSection
@@ -2841,6 +2858,26 @@ const state = {
   // sections' gear menus can never affect each other — see
   // closeAllDropdowns/_iapLocToggleSettingsMenu, app.js).
   iapLocSettingsOpen: false,
+
+  // Mac App Store's OWN IAP Localizations — full twins of the nine
+  // iapLoc*/iapLocIapId fields directly above, scoped to Mac App Store's own
+  // saved IAP products (state.macSubmitAnswers.iapProducts — already fully
+  // independent of iOS's own, unaffected by the Content Rating/Privacy
+  // sharing added elsewhere) instead of iOS's. Kept completely separate for
+  // the same reason iapLoc* itself is kept separate from locReview* (see
+  // iapLocIapId's own comment above) — IAP Products themselves are not
+  // shared at all, so there's no sharing concern here, just the ordinary
+  // "own copy of the same stateful UI" pattern used throughout Mac App
+  // Store's build.
+  masIapLocIapId: null,
+  masIapLocField: null,
+  masIapLocMode: 'locs',
+  masIapLocBackTranslation: {},
+  masIapLocUndoHistory: { real: {}, draft: {} },
+  masIapLocTranslateStatus: {},
+  masIapLocTranslatePendingLangs: {},
+  masIapLocAutoTranslateFields: { name: true, desc: true },
+  masIapLocSettingsOpen: false,
 
   // Cached Steam store-page info for the currently-selected Steam-linked
   // game — { appId, baselineDescription, shortDescription,

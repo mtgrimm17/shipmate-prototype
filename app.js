@@ -646,15 +646,24 @@ function markTaskUndone(platformId, stepId) {
 /* ── iOS Step Modal ───────────────────────────────────── */
 
 // Resolve which platform's App-Store-shaped answers/meta object to read or
-// write — 'macos' gets its own independent state.macSubmitAnswers/
-// state.macAnswerMeta, everything else (in practice only 'ios') keeps using
-// state.iosSubmitAnswers/state.iosAnswerMeta exactly as before. Shared by
+// write. Most fields are still per-platform — 'macos' gets its own
+// independent state.macSubmitAnswers/state.macAnswerMeta, everything else
+// (in practice only 'ios') keeps using state.iosSubmitAnswers/iosAnswerMeta
+// exactly as before. But Content Rating and Data Privacy fields
+// (IOS_MAC_SHARED_ANSWER_FIELDS, state.js) are answered ONCE and shared with
+// the App Store — pass the fieldId being touched as the second argument and,
+// for pid==='macos', a shared field routes straight to state.iosSubmitAnswers/
+// iosAnswerMeta instead of Mac App Store's own. Omitting fieldId (or passing
+// one that isn't shared) preserves the original pid-only behavior, so every
+// existing Business-Questions call site needs no change at all. Shared by
 // seedOnboardingToIOS and every Content Rating/Privacy/Business/IAP answer
-// handler below so Mac App Store's responses never read or write iOS's.
-function _appStoreAnswers(pid) {
+// handler below.
+function _appStoreAnswers(pid, fieldId) {
+  if (pid === 'macos' && fieldId && IOS_MAC_SHARED_ANSWER_FIELDS.has(fieldId)) return state.iosSubmitAnswers;
   return pid === 'macos' ? state.macSubmitAnswers : state.iosSubmitAnswers;
 }
-function _appStoreAnswerMeta(pid) {
+function _appStoreAnswerMeta(pid, fieldId) {
+  if (pid === 'macos' && fieldId && IOS_MAC_SHARED_ANSWER_FIELDS.has(fieldId)) return state.iosAnswerMeta;
   return pid === 'macos' ? state.macAnswerMeta : state.iosAnswerMeta;
 }
 
@@ -662,28 +671,38 @@ function _appStoreAnswerMeta(pid) {
 // submission state (idempotent — only fills nulls). Called once per
 // platform at app load / onboarding-complete, and again defensively every
 // time that platform's step modal opens (see openStepModal's default
-// branch below) — matching how it always worked for iOS.
+// branch below) — matching how it always worked for iOS. Touches a MIX of
+// shared (privacyPolicyUrl, collectsData) and independent (hasIAP,
+// selectedCountries, distPreset) fields, so each resolves its own answers
+// object by its own fieldId rather than sharing one `ans`/`meta` pair —
+// for pid='macos' the shared ones resolve to state.iosSubmitAnswers (same
+// object seedOnboardingToIOS('ios') itself would have already filled, so
+// there's normally nothing left for the 'macos' call to do there) while the
+// independent ones resolve to state.macSubmitAnswers, exactly as before.
 function seedOnboardingToIOS(pid) {
   pid = pid || 'ios';
-  const ans  = _appStoreAnswers(pid);
-  const meta = _appStoreAnswerMeta(pid);
-  if (!ans.privacyPolicyUrl && state.formData.privacyUrl) {
-    ans.privacyPolicyUrl = state.formData.privacyUrl;
+  const privacyAns  = _appStoreAnswers(pid, 'privacyPolicyUrl');
+  const collectsAns  = _appStoreAnswers(pid, 'collectsData');
+  const collectsMeta = _appStoreAnswerMeta(pid, 'collectsData');
+  const bizAns  = _appStoreAnswers(pid);
+  const bizMeta = _appStoreAnswerMeta(pid);
+  if (!privacyAns.privacyPolicyUrl && state.formData.privacyUrl) {
+    privacyAns.privacyPolicyUrl = state.formData.privacyUrl;
   }
-  if (ans.hasIAP === null && state.questionAnswers.inAppPurchases !== null) {
-    ans.hasIAP = state.questionAnswers.inAppPurchases;
-    meta.hasIAP = { humanConfirmed: true };
+  if (bizAns.hasIAP === null && state.questionAnswers.inAppPurchases !== null) {
+    bizAns.hasIAP = state.questionAnswers.inAppPurchases;
+    bizMeta.hasIAP = { humanConfirmed: true };
   }
-  if (ans.collectsData === null && state.questionAnswers.dataCollection !== null) {
-    ans.collectsData = state.questionAnswers.dataCollection;
-    meta.collectsData = { humanConfirmed: true };
+  if (collectsAns.collectsData === null && state.questionAnswers.dataCollection !== null) {
+    collectsAns.collectsData = state.questionAnswers.dataCollection;
+    collectsMeta.collectsData = { humanConfirmed: true };
   }
-  if (ans.selectedCountries.length === 0) {
+  if (bizAns.selectedCountries.length === 0) {
     const langs = new Set([state.formData.primaryLanguage, ...state.formData.localizations]);
-    ans.selectedCountries = IOS_COUNTRIES
+    bizAns.selectedCountries = IOS_COUNTRIES
       .filter(c => langs.has(c.lang))
       .map(c => c.code);
-    ans.distPreset = 'custom';
+    bizAns.distPreset = 'custom';
   }
 }
 
@@ -1137,8 +1156,8 @@ function reRenderStepModal() {
 // parameter threaded through every onclick="...()" call site.
 function answerIOSField(field, value) {
   const pid  = state.stepModal?.platformId || 'ios';
-  const ans  = _appStoreAnswers(pid);
-  const meta = _appStoreAnswerMeta(pid);
+  const ans  = _appStoreAnswers(pid, field);
+  const meta = _appStoreAnswerMeta(pid, field);
   const current      = ans[field];
   const fmeta        = meta[field];
   const humanAlready = fmeta?.humanConfirmed === true;
@@ -1161,12 +1180,18 @@ function answerIOSField(field, value) {
 // Called by text oninput — updates state only, no re-render (prevents cursor jumping)
 function updateIOSTextField(field, value) {
   const pid = state.stepModal?.platformId || 'ios';
-  _appStoreAnswers(pid)[field] = value;
+  _appStoreAnswers(pid, field)[field] = value;
 }
 
 /**
  * Set privacy policy URL across ALL platforms and the global formData at once.
  * Called from any platform's privacy URL input so they stay in sync.
+ * privacyPolicyUrl is one of Mac App Store's fields SHARED with the App
+ * Store (IOS_MAC_SHARED_ANSWER_FIELDS, state.js) — state.iosSubmitAnswers is
+ * the one object _appStoreAnswers(pid, 'privacyPolicyUrl') actually resolves
+ * to for either platform now, so the state.macSubmitAnswers.privacyPolicyUrl
+ * write below is inert (nothing reads it any more) but is left in place as
+ * harmless, self-documenting redundancy rather than removed.
  */
 function setPrivacyUrl(url) {
   state.formData.privacyUrl                    = url;
@@ -1218,7 +1243,14 @@ function toggleSteamContentRatingExpanded(value) {
   reRenderStepModal();
 }
 
-/* ── Privacy preset chips ────────────────────────────── */
+/* ── Privacy preset chips ─────────────────────────────
+   collectsData/privacyDescription/dataPerType are Mac App Store fields
+   SHARED with the App Store (IOS_MAC_SHARED_ANSWER_FIELDS, state.js) — a
+   single write to state.iosSubmitAnswers below is all either platform ever
+   reads for these, so there is no separate state.macSubmitAnswers.* write
+   here at all (unlike setPrivacyUrl, which keeps its now-inert
+   macSubmitAnswers write as harmless redundancy — this function never had
+   one worth preserving, since it's being written fresh either way). */
 function togglePrivacyPreset(id) {
   const preset = PRIVACY_PRESETS.find(p => p.id === id);
   if (!preset) return;
@@ -1247,11 +1279,6 @@ function togglePrivacyPreset(id) {
       state.iosSubmitAnswers.dataPerType        = {};
       state.iosSubmitAnswers.collectsData       = null;
     }
-    if (state.macSubmitAnswers) {
-      state.macSubmitAnswers.privacyDescription = '';
-      state.macSubmitAnswers.dataPerType        = {};
-      state.macSubmitAnswers.collectsData       = null;
-    }
     if (state.androidSubmitAnswers) {
       state.androidSubmitAnswers.androidDataDescription = '';
     }
@@ -1262,10 +1289,8 @@ function togglePrivacyPreset(id) {
 
   if (hasGuest) {
     state.iosSubmitAnswers.collectsData            = 'no';
-    state.macSubmitAnswers.collectsData            = 'no';
     state.androidSubmitAnswers.collectsOrSharesData = 'no';
     state.iosSubmitAnswers.privacyDescription       = '';
-    state.macSubmitAnswers.privacyDescription       = '';
     state.androidSubmitAnswers.androidDataDescription = '';
     reRenderStepModal();
     return;
@@ -1273,14 +1298,12 @@ function togglePrivacyPreset(id) {
 
   // Non-guest presets selected
   state.iosSubmitAnswers.collectsData            = 'yes';
-  state.macSubmitAnswers.collectsData            = 'yes';
   state.androidSubmitAnswers.collectsOrSharesData = 'yes';
   const combined = selected
     .map(pid2 => PRIVACY_PRESETS.find(p => p.id === pid2)?.description || '')
     .filter(Boolean)
     .join(' ');
   state.iosSubmitAnswers.privacyDescription       = combined;
-  state.macSubmitAnswers.privacyDescription       = combined;
   state.androidSubmitAnswers.androidDataDescription = combined;
 
   // Trigger AI translation for the active platform only
@@ -1296,7 +1319,7 @@ function togglePrivacyPreset(id) {
 // Fires on blur (focus-out) — not on every keystroke
 function updatePrivacyDescription(val) {
   const pid = state.stepModal?.platformId || 'ios';
-  _appStoreAnswers(pid).privacyDescription = val;
+  _appStoreAnswers(pid, 'privacyDescription').privacyDescription = val;
   _setInputComplete('ob-prv-nlp-textarea', !!(val?.trim()));
   if (!val || val.trim().length < 20) return;
   _triggerPrivacyAI(pid);
@@ -1304,15 +1327,18 @@ function updatePrivacyDescription(val) {
 
 async function _triggerPrivacyAI(pid) {
   pid = pid || state.stepModal?.platformId || 'ios';
-  const ans = _appStoreAnswers(pid);
+  const ans = _appStoreAnswers(pid, 'privacyDescription');
   if (!CLAUDE_API_KEY) return;
   const desc = (ans.privacyDescription || '').trim();
   if (desc.length < 20) return;
 
-  // If this exact description succeeded before, restore cached result instantly
-  // (the success cache is shared across platforms — it's keyed by the exact
-  // description text, not by pid, so identical Privacy descriptions on ios
-  // and macos both benefit from one cached AI call).
+  // If this exact description succeeded before, restore cached result instantly.
+  // privacyDescription/dataPerType are now genuinely the SAME shared answer
+  // for ios and macos (IOS_MAC_SHARED_ANSWER_FIELDS, state.js) — `ans` above
+  // already resolves to the one shared state.iosSubmitAnswers object for
+  // either pid, so this cache is almost never consulted for a cross-platform
+  // hit any more (there's only ever one live description to match against);
+  // it still helps if the description is edited and then edited BACK.
   if (desc === state.privacyLastSuccessDesc && state.privacyLastSuccessResult) {
     ans.dataPerType = state.privacyLastSuccessResult;
     state.privacyAIStatus = 'complete';
@@ -1403,7 +1429,7 @@ Rules:
 function togglePrivacyDataType(typeId) {
   const pid = state.stepModal?.platformId || 'ios';
   // Clicking a row (but not a checkbox inside it) toggles selection
-  const perType = _appStoreAnswers(pid).dataPerType;
+  const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
   if (perType[typeId]) {
     delete perType[typeId];
   } else {
@@ -1415,7 +1441,7 @@ function togglePrivacyDataType(typeId) {
 
 function setPrivacyMeta(typeId, field, checked) {
   const pid = state.stepModal?.platformId || 'ios';
-  const perType = _appStoreAnswers(pid).dataPerType;
+  const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
   if (!perType[typeId]) return;
   perType[typeId][field] = checked ? 'yes' : 'no';
   reRenderStepModal();
@@ -1423,7 +1449,7 @@ function setPrivacyMeta(typeId, field, checked) {
 
 function togglePrivacyPurpose(typeId, purposeId, checked) {
   const pid = state.stepModal?.platformId || 'ios';
-  const perType = _appStoreAnswers(pid).dataPerType;
+  const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
   if (!perType[typeId]) return;
   const arr = perType[typeId].purposes;
   if (checked && !arr.includes(purposeId)) arr.push(purposeId);
@@ -1433,7 +1459,7 @@ function togglePrivacyPurpose(typeId, purposeId, checked) {
 
 function setPrivacyMeta(typeId, field, checked) {
   const pid = state.stepModal?.platformId || 'ios';
-  const perType = _appStoreAnswers(pid).dataPerType;
+  const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
   if (!perType[typeId]) return;
   perType[typeId][field] = checked ? 'yes' : 'no';
   // Tracking warning updates lazily on next section re-open
@@ -2446,28 +2472,29 @@ function toggleLocPrimaryDropdown(event) {
 // Shared by selectLocPrimary below for both the App Store's own flat listing
 // (state.formData) and Mac App Store's independent one (state.macAppStoreListing,
 // when it exists) — promotes `lang`'s stored translation into whichever
-// listing's own flat title/subtitle/description/releaseNotes fields, stashing
-// the outgoing primary's copy under its own language code first (only if
-// it's staying around as a supported language — see selectLocPrimary's own
-// comment). `blank` is that listing's own blank-entry shape helper
-// (_iasBlankLocalizedText / _masBlankLocalizedText) — the two listings are
-// identically shaped, so this works for either without caring which one it
-// is, and never touches the other.
-function _promoteLangPrimary(listing, oldPrimary, lang, oldPrimaryKept, blank) {
+// listing's own flat fields, stashing the outgoing primary's copy under its
+// own language code first (only if it's staying around as a supported
+// language — see selectLocPrimary's own comment). `blank` is that listing's
+// own blank-entry shape helper (_iasBlankLocalizedText / _masBlankLocalizedText)
+// — the two listings are identically shaped, so this works for either
+// without caring which one it is, and never touches the other. `fields`
+// restricts which of the four listing fields this call actually promotes —
+// defaults to all four (the App Store's own call, and any other full
+// listing); selectLocPrimary passes just ['description','releaseNotes'] for
+// Mac App Store's call, since Title/Subtitle are shared with the App Store
+// (MAS_SHARED_LISTING_FIELDS) and are already promoted once by the App
+// Store's own call into the single shared storage — promoting them again
+// here, into state.macAppStoreListing, would just write into fields nothing
+// reads any more.
+function _promoteLangPrimary(listing, oldPrimary, lang, oldPrimaryKept, blank, fields = ['title', 'subtitle', 'description', 'releaseNotes']) {
   if (!listing.localizedStoreText) listing.localizedStoreText = {};
   if (oldPrimaryKept) {
-    listing.localizedStoreText[oldPrimary] = {
-      title:        listing.title        || '',
-      subtitle:     listing.subtitle     || '',
-      description:  listing.description  || '',
-      releaseNotes: listing.releaseNotes || '',
-    };
+    const stash = listing.localizedStoreText[oldPrimary] || blank();
+    fields.forEach(f => { stash[f] = listing[f] || ''; });
+    listing.localizedStoreText[oldPrimary] = stash;
   }
   const incoming = listing.localizedStoreText[lang] || blank();
-  listing.title        = incoming.title;
-  listing.subtitle     = incoming.subtitle;
-  listing.description  = incoming.description;
-  listing.releaseNotes = incoming.releaseNotes;
+  fields.forEach(f => { listing[f] = incoming[f]; });
   delete listing.localizedStoreText[lang];
 }
 
@@ -2505,7 +2532,7 @@ function selectLocPrimary(lang) {
     // Primary Language never lets Mac App Store's preview show the App
     // Store's text (or vice versa).
     if (state.macAppStoreListing) {
-      _promoteLangPrimary(state.macAppStoreListing, oldPrimary, lang, oldPrimaryKept, _masBlankLocalizedText);
+      _promoteLangPrimary(state.macAppStoreListing, oldPrimary, lang, oldPrimaryKept, _masBlankLocalizedText, ['description', 'releaseNotes']);
       _masPropagateAllFields();
     }
   }
@@ -4589,16 +4616,13 @@ function _iasToggleAutoTranslateField(field) {
    counterpart, since which languages exist at all is a studio-wide
    Distribution setting shared by every platform, not per-listing copy.
 
-   Deliberately NOT cloned here: Localization Review (buildLocalizationReviewSection)
-   and its whole back-translation/undo-redo machinery, and the "Automatically
-   translated fields" settings menu (_iasToggleReviewSettingsMenu) that only
-   that section renders. Mac App Store's own Preview still fully supports
-   per-language inline editing and auto-translation (state.masAutoTranslateFields
-   ships with the same defaults as state.iasAutoTranslateFields — see state.js
-   — there just isn't a settings UI to change them for Mac App Store yet, nor
-   a side-by-side multi-language review grid). See buildStorePreviewFlipSection's
-   'localization' target comment (render.js) for the same limitation stated
-   from the render side. */
+   Mac App Store also gets its own Localization Review and IAP Localizations
+   (the "_masLoc" / "masLoc" / "_masIapLoc" / "masIapLoc" prefixed clusters
+   further below) — full twins of Localization Review/IAP Localizations' own
+   back-translation/undo-redo machinery and settings menus, each with its OWN
+   independent review-UI scratch state (never shared with iOS's, even for
+   Title/Subtitle — see MAS_SHARED_LISTING_FIELDS' own comment below for why
+   that split is fine). */
 function _masEffectivePreviewLang() {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -4610,7 +4634,18 @@ function _masBlankLocalizedText() {
   return { title: '', subtitle: '', description: '', releaseNotes: '' };
 }
 
+// Title and Subtitle are SHARED with the App Store — literally the same
+// listing text, stored once in state.formData/formData.localizedStoreText,
+// even when read/written from Mac App Store's own Preview or Localization
+// Review. This is a separate sharing concern from IOS_MAC_SHARED_ANSWER_FIELDS
+// (state.js, which governs Content Rating/Privacy *answers*): here it's
+// which of the four Product Page Preview LISTING fields Mac App Store keeps
+// its own independent copy of. Description/What's New remain fully
+// independent in state.macAppStoreListing.
+const MAS_SHARED_LISTING_FIELDS = new Set(['title', 'subtitle']);
+
 function _masFieldValue(field, lang) {
+  if (MAS_SHARED_LISTING_FIELDS.has(field)) return _iasFieldValue(field, lang);
   const fd = state.formData;
   const ml = state.macAppStoreListing;
   if (!ml) return ''; // not yet seeded (Mac App Store not activated) — nothing to show
@@ -4626,36 +4661,24 @@ function _masLangHasOverLimitField(lang) {
 }
 
 function _masSetFieldValue(field, lang, value) {
+  // Title/Subtitle write straight through to the App Store's own storage
+  // (_iasSetFieldValue — which itself handles mirroring/auto-translation via
+  // the single iasAutoTranslateFields setting) rather than to
+  // state.macAppStoreListing — there is no independent Mac App Store copy of
+  // these two fields to write into any more.
+  if (MAS_SHARED_LISTING_FIELDS.has(field)) { _iasSetFieldValue(field, lang, value); return; }
   const ml = state.macAppStoreListing;
   if (!ml) return;
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
   if (lang === primary) {
     ml[field] = value;
-    if (field === 'title') _masPropagateTitle(value);
-    else if (_masFieldAutoTranslateEnabled(field)) _masTriggerAutoTranslate(field, value);
+    if (_masFieldAutoTranslateEnabled(field)) _masTriggerAutoTranslate(field, value);
     return;
   }
   if (!ml.localizedStoreText) ml.localizedStoreText = {};
   if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
   ml.localizedStoreText[lang][field] = value;
-}
-
-// Mirrors _iasPropagateTitle — copies the Primary Language's Title verbatim
-// into every supporting language's Mac App Store listing, unless Title is
-// one of Mac App Store's own auto-translated fields (masAutoTranslateFields).
-function _masPropagateTitle(primaryValue) {
-  if (_masFieldAutoTranslateEnabled('title')) { _masTriggerAutoTranslate('title', primaryValue); return; }
-  const ml = state.macAppStoreListing;
-  if (!ml) return;
-  const fd = state.formData;
-  const supportedLangs = fd.localizations || [];
-  if (!supportedLangs.length) return;
-  if (!ml.localizedStoreText) ml.localizedStoreText = {};
-  supportedLangs.forEach(lang => {
-    if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
-    ml.localizedStoreText[lang].title = primaryValue || '';
-  });
 }
 
 function _masFieldAutoTranslateEnabled(field) {
@@ -4664,13 +4687,16 @@ function _masFieldAutoTranslateEnabled(field) {
   return !!cfg[field];
 }
 
-// Mirrors _iasTriggerAutoTranslate, minus the Localization Review back-
-// translation refresh calls (_locReviewBackTranslationEntry/
-// _locReviewRefreshBackTranslation) and the Steam-authoritative-description
-// guard — neither applies here: Mac App Store's listing has no Localization
-// Review surface to keep in sync, and no Steam-sourced initial Description
-// of its own (that's an App-Store-only wrinkle seeded from
-// _checkSteamLocalizedDescription into state.formData directly).
+// Mirrors _iasTriggerAutoTranslate, minus the Steam-authoritative-description
+// guard — that doesn't apply here: Mac App Store has no Steam-sourced initial
+// Description of its own (that's an App-Store-only wrinkle seeded from
+// _checkSteamLocalizedDescription into state.formData directly). DOES include
+// the Localization Review back-translation refresh calls
+// (_masLocReviewBackTranslationEntry/_masLocReviewRefreshBackTranslation,
+// above) now that Mac App Store has its own Localization Review to keep in
+// sync — only ever called with field='description'|'releaseNotes' (Title/
+// Subtitle bypass to _iasSetFieldValue before reaching here), so no
+// shared/independent branching is needed inside this function itself.
 async function _masTriggerAutoTranslate(field, primaryValue) {
   if (!_masFieldAutoTranslateEnabled(field)) return;
   const ml = state.macAppStoreListing;
@@ -4695,6 +4721,8 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
       if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
       ml.localizedStoreText[lang][field]     = '';
       ml.localizedStoreText[lang][sourceKey] = '';
+      const backEntry = _masLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== '') _masLocReviewRefreshBackTranslation(field, lang, '');
     });
     reRenderStepModal();
     return;
@@ -4764,6 +4792,8 @@ Rules:
       const entry = ml.localizedStoreText[lang];
       entry[field]     = translated;
       entry[sourceKey] = text;
+      const backEntry = _masLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== translated) _masLocReviewRefreshBackTranslation(field, lang, translated);
     });
 
     state.masTranslateStatus[field] = 'complete';
@@ -4778,21 +4808,25 @@ Rules:
 
 function _masRetryTranslate(field) {
   const ml = state.macAppStoreListing;
-  _masTriggerAutoTranslate(field, (ml && ml[field]) || '');
+  _masTriggerAutoTranslate(field, _masFieldValue(field, state.formData.primaryLanguage || 'en'));
 }
 
-// Mirrors _iasPropagateAllFields — re-propagates Title and re-triggers
-// translation of the other three fields from Mac App Store's own current
-// primary-language values. Called alongside _iasPropagateAllFields
-// (never instead of it) wherever the SHARED language list changes —
-// selectLocPrimary/setObLangPreset/applyObLangPreset/toggleObLang — and
-// only when Mac App Store has actually been activated (state.macAppStoreListing
-// truthy); before that there's nothing yet to propagate into.
+// Re-triggers translation of Mac App Store's own independent fields
+// (Description/What's New) from their current primary-language values.
+// Called alongside _iasPropagateAllFields (never instead of it) wherever the
+// SHARED language list changes — selectLocPrimary/setObLangPreset/
+// applyObLangPreset/toggleObLang — and only when Mac App Store has actually
+// been activated (state.macAppStoreListing truthy); before that there's
+// nothing yet to propagate into. Title/Subtitle are NOT re-propagated here —
+// they're shared with the App Store (MAS_SHARED_LISTING_FIELDS above), so
+// the _iasPropagateAllFields() call every one of these same call sites
+// already makes re-propagates them once, into the one shared storage both
+// platforms read; doing it again here would just repeat the same writes.
 function _masPropagateAllFields() {
   const ml = state.macAppStoreListing;
   if (!ml) return;
-  _masPropagateTitle(ml.title);
-  IAS_TRANSLATABLE_FIELDS.forEach(field => _masTriggerAutoTranslate(field, ml[field]));
+  _masTriggerAutoTranslate('description', ml.description);
+  _masTriggerAutoTranslate('releaseNotes', ml.releaseNotes);
 }
 
 /* ── App Store Product Page Preview — inline click-to-edit ──────────────
@@ -4954,6 +4988,387 @@ function startMasInlineEdit(field, el, ev) {
   updateCounter();
   input.focus();
   input.select();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MAC APP STORE — Localization Review
+   ══════════════════════════════════════════════════════════════════════
+   Mac App Store's own version of Localization Review (buildMacLocalizationReviewSection,
+   render.js — reached via buildMacStorePreviewSection's own "Localizations"
+   button). A full twin of Localization Review's own back-translation/
+   undo-redo machinery directly above/below (startLocReviewInlineEdit through
+   setLocReviewField) — same mechanics, own independent review-UI scratch
+   state (state.masLocReviewField/masLocReviewMode/masLocReviewBackTranslation/
+   masLocReviewUndoHistory, state.js) — kept completely separate rather than
+   generalizing the iOS functions to take a pid, for the same reason IAP
+   Localizations is kept separate from Localization Review itself (see
+   _iapLocSavedProducts' own comment further below): threading a "which
+   platform" parameter through this much already-shipped, stateful machinery
+   would risk a state-selection bug silently mixing one platform's review
+   session into the other's.
+
+   The one place real DATA is genuinely shared rather than duplicated is the
+   read/write layer itself: every function here reads/writes through
+   _masFieldValue/_masSetFieldValue (the same accessors buildMacStorePreviewSection's
+   own Preview uses), which already delegate Title/Subtitle straight to the
+   App Store's own state.formData (MAS_SHARED_LISTING_FIELDS, above) — so an
+   edit made here to Title or Subtitle lands in the exact same place an edit
+   from the App Store's own Localization Review or either platform's Preview
+   would, and every one of those surfaces reflects it on next render. Only
+   the EPHEMERAL scratch state — back-translation drafts, undo stacks, which
+   field/mode is currently showing — stays platform-local: reviewing Title's
+   back-translation from Mac App Store's own Localization Review uses its
+   own draft cache, separate from the App Store's, even though the real
+   Title text underneath is the one shared value. In the worst case that
+   just means the first time either platform's Review side is opened for a
+   field the other already reviewed, its back-translation draft is
+   regenerated once rather than reused — never wrong data, just a
+   once-per-session redundant translation call. */
+
+// Read-only lookup for render.js — never creates an entry (render functions
+// must not mutate state). Mirrors _locReviewBackTranslationValue exactly,
+// against state.masLocReviewBackTranslation instead.
+function _masLocReviewBackTranslationValue(field, lang) {
+  const entry = state.masLocReviewBackTranslation
+    && state.masLocReviewBackTranslation[field]
+    && state.masLocReviewBackTranslation[field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+
+// Mutating accessor for this cluster's own bookkeeping below — lazily
+// creates the (field, lang) slot the first time it's touched.
+function _masLocReviewBackTranslationEntry(field, lang) {
+  if (!state.masLocReviewBackTranslation) state.masLocReviewBackTranslation = {};
+  const forField = state.masLocReviewBackTranslation[field] || (state.masLocReviewBackTranslation[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+
+// Mirrors _locReviewSyncBackTranslations — regenerates the bottom half's
+// back-translation for every supporting language, for whichever field is
+// currently selected in Mac App Store's own Localization Review.
+function _masLocReviewSyncBackTranslations() {
+  const fd = state.formData;
+  const field = state.masLocReviewField || 'title';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _masFieldValue(field, lang);
+    const entry = _masLocReviewBackTranslationEntry(field, lang);
+    if (entry.syncedTopText === topText) return; // already in sync, including both blank
+    jobs.push(_masLocReviewRefreshBackTranslation(field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _masLocReviewRefreshBackTranslation(field, lang, topText) {
+  const entry = _masLocReviewBackTranslationEntry(field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _masFieldValue(field, lang);
+  if (currentTop !== topText) { _masLocReviewRefreshBackTranslation(field, lang, currentTop); return; }
+
+  const freshEntry = _masLocReviewBackTranslationEntry(field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+// Mirrors _locReviewCommitPrimaryEdit — commits an edit made directly in the
+// Review side's BOTTOM half, translating it forward into the card's own
+// language and writing the result via _masSetFieldValue (which itself routes
+// Title/Subtitle to the shared App Store storage, same as every other write
+// path here).
+async function _masLocReviewCommitPrimaryEdit(field, lang, value) {
+  const entry = _masLocReviewBackTranslationEntry(field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _masSetFieldValue(field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _masLocReviewBackTranslationEntry(field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _masSetFieldValue(field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+
+// Mirrors startLocReviewInlineEdit — Mac App Store's own Localization Review
+// per-card click-to-edit, reading/writing through _masFieldValue/
+// _masSetFieldValue and its own undo history (masLocReviewUndoHistory)
+// instead of the App Store's.
+function startMasLocReviewInlineEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const inHalf = !!(el.closest && el.closest('.loc-review-half'));
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = inHalf ? 4 : 8;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _masFieldValue(field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _masFieldValue(field, lang);
+    if (input.value !== previousValue) _masLocReviewPushUndo('real', field, lang, previousValue);
+    _masSetFieldValue(field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _masLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== input.value) _masLocReviewRefreshBackTranslation(field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+// Mirrors startLocReviewBackTranslationEdit — Review side's BOTTOM-half
+// click-to-edit for Mac App Store's own Localization Review.
+function startMasLocReviewBackTranslationEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _masLocReviewBackTranslationValue(field, lang).text;
+
+  const commit = () => {
+    const previousValue = _masLocReviewBackTranslationValue(field, lang).text;
+    if (input.value !== previousValue) _masLocReviewPushUndo('draft', field, lang, previousValue);
+    _masLocReviewCommitPrimaryEdit(field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+// Mirrors _locReviewUndoEntry/_locReviewUndoState/_locReviewPushUndo/
+// _locReviewRestoreFieldValue/locReviewUndo/locReviewRedo — Mac App Store's
+// own per-field undo/redo, against state.masLocReviewUndoHistory.
+function _masLocReviewUndoEntry(kind, field, lang) {
+  if (!state.masLocReviewUndoHistory) state.masLocReviewUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.masLocReviewUndoHistory[kind] || (state.masLocReviewUndoHistory[kind] = {});
+  const forField = forKind[field] || (forKind[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+function _masLocReviewUndoState(kind, field, lang) {
+  const entry = state.masLocReviewUndoHistory
+    && state.masLocReviewUndoHistory[kind]
+    && state.masLocReviewUndoHistory[kind][field]
+    && state.masLocReviewUndoHistory[kind][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+function _masLocReviewPushUndo(kind, field, lang, previousValue) {
+  const entry = _masLocReviewUndoEntry(kind, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > LOC_REVIEW_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+function _masLocReviewRestoreFieldValue(kind, field, lang, value) {
+  if (kind === 'draft') {
+    _masLocReviewCommitPrimaryEdit(field, lang, value);
+    return;
+  }
+  _masSetFieldValue(field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.masLocReviewMode === 'review' && lang !== primary) {
+    const backEntry = _masLocReviewBackTranslationEntry(field, lang);
+    if (backEntry.syncedTopText !== value) _masLocReviewRefreshBackTranslation(field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+// The undo button's onclick (buildMacLocalizationReviewSection, render.js).
+function masLocReviewUndo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _masLocReviewUndoEntry(kind, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _masLocReviewBackTranslationValue(field, lang).text : _masFieldValue(field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _masLocReviewRestoreFieldValue(kind, field, lang, previous);
+}
+
+// The redo button's onclick (buildMacLocalizationReviewSection, render.js).
+function masLocReviewRedo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _masLocReviewUndoEntry(kind, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _masLocReviewBackTranslationValue(field, lang).text : _masFieldValue(field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _masLocReviewRestoreFieldValue(kind, field, lang, next);
+}
+
+// Mirrors toggleLocReviewMode — Mac App Store's own "Review"/"All locs"
+// toggle button.
+async function toggleMasLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.masLocReviewMode = state.masLocReviewMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.masLocReviewMode === 'review') _masLocReviewSyncBackTranslations();
+
+  const enteringCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+
+// Mirrors setLocReviewField — Mac App Store's own Localization Review
+// top-right field dropdown setter.
+function setMasLocReviewField(field) {
+  state.masLocReviewField = field;
+  reRenderStepModal();
+  if (state.masLocReviewMode === 'review') _masLocReviewSyncBackTranslations();
+}
+
+// Mirrors _iasFieldHasOverLimitLang — whether ANY language has THIS field
+// over its character limit, for Mac App Store's own listing.
+function _masFieldHasOverLimitLang(field, langCodes) {
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  return langCodes.some(lang => _masFieldValue(field, lang).length > limit);
+}
+
+// Mirrors _iasFieldTranslatePending. Title/Subtitle are shared with the App
+// Store (MAS_SHARED_LISTING_FIELDS) — their translate-in-progress status
+// lives in state.iasTranslateStatus/iasTranslatePendingLangs (the same
+// single operation the App Store's own Preview/Localization Review would
+// show), not in Mac App Store's own masTranslateStatus, so this defers to
+// _iasFieldTranslatePending for those two fields.
+function _masFieldTranslatePending(field, lang) {
+  if (MAS_SHARED_LISTING_FIELDS.has(field)) return _iasFieldTranslatePending(field, lang);
+  if (!state.masTranslateStatus || state.masTranslateStatus[field] !== 'loading') return false;
+  const pending = state.masTranslatePendingLangs && state.masTranslatePendingLangs[field];
+  return !!(pending && pending.includes(lang));
+}
+
+// Mirrors _locReviewSourceBadge. No Steam-sourced-description concept
+// applies to Mac App Store (see _masTriggerAutoTranslate's own comment
+// above), so this only ever returns 'ai' or null. For a shared field
+// (Title/Subtitle) the authority check is against the App Store's own
+// state.formData entry/sourceText and its iasAutoTranslateFields setting —
+// the same single source of truth the App Store's own Localization Review
+// card would show for that language.
+function _masLocReviewSourceBadge(field, lang) {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_masFieldValue(field, lang)) return null;
+  if (MAS_SHARED_LISTING_FIELDS.has(field)) {
+    const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
+    if (!entry) return null;
+    if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+    return null;
+  }
+  const ml = state.macAppStoreListing;
+  const entry = ml && ml.localizedStoreText && ml.localizedStoreText[lang];
+  if (!entry) return null;
+  if (_masFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ml[field] || '')) return 'ai';
+  return null;
+}
+
+// Mirrors _iasToggleAutoTranslateField — Mac App Store's own "Automatically
+// translated fields" settings gear. Only ever invoked for Description/
+// What's New — buildMacLocalizationReviewSection's own settings menu omits
+// Title/Subtitle rows entirely, since those are governed by the single
+// shared iasAutoTranslateFields setting (the App Store's own gear), not a
+// per-platform one — see that render function's own comment for why.
+function _masToggleAutoTranslateField(field) {
+  state.masAutoTranslateFields = state.masAutoTranslateFields || {};
+  state.masAutoTranslateFields[field] = !state.masAutoTranslateFields[field];
+  if (state.masAutoTranslateFields[field]) {
+    const ml = state.macAppStoreListing;
+    if (ml) _masTriggerAutoTranslate(field, ml[field] || '');
+  }
+  reRenderStepModal();
 }
 
 /* Localization Review's per-card click-to-edit (buildLocalizationReviewSection,
@@ -6129,6 +6544,477 @@ function setIapLocField(field) {
   if (state.iapLocMode === 'review') _iapLocSyncBackTranslations(_iapLocEffectiveIapId());
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   MAC APP STORE — IAP Localizations
+   ══════════════════════════════════════════════════════════════════════
+   Mac App Store's own version of IAP Localizations (buildMacIapLocalizationsSection,
+   render.js — reached via buildIapSection's own "IAP Locs" button, pid='macos').
+   A full twin of the "_iapLoc"/"iapLoc" prefixed cluster directly above, substituting
+   state.macSubmitAnswers.iapProducts for state.iosSubmitAnswers.iapProducts
+   and its own masIapLoc* state (state.js) throughout. Unlike Localization
+   Review, there is no sharing wrinkle here at all — IAP Products themselves
+   are, and always have been, fully independent per platform (Business
+   Questions fields were never part of Task B's sync scope) — so this is a
+   plain duplicate-the-stateful-UI clone, same reasoning as _iapLocSavedProducts'
+   own comment above for why IAP Localizations itself is kept separate from
+   Localization Review. */
+
+function _masIapLocSavedProducts() {
+  return (state.macSubmitAnswers.iapProducts || []).filter(p => p.collapsed);
+}
+
+function _masIapLocEffectiveIapId() {
+  const saved = _masIapLocSavedProducts();
+  if (!saved.length) return null;
+  if (saved.some(p => p.id === state.masIapLocIapId)) return state.masIapLocIapId;
+  return saved[0].id;
+}
+
+function _masIapLocFieldValue(iapId, field, lang) {
+  const p = (state.macSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return '';
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return p[field] || '';
+  const entry = p.locs && p.locs[lang];
+  return (entry && entry[field]) || '';
+}
+
+function _masIapLocFieldHasOverLimitLang(iapId, field, langCodes) {
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  return langCodes.some(lang => _masIapLocFieldValue(iapId, field, lang).length > limit);
+}
+
+function _masIapLocSourceBadge(iapId, field, lang) {
+  const p = (state.macSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return null;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_masIapLocFieldValue(iapId, field, lang)) return null;
+  const entry = p.locs && p.locs[lang];
+  if (!entry) return null;
+  if (_masIapLocFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (p[field] || '')) return 'ai';
+  return null;
+}
+
+function _masIapLocSetFieldValue(iapId, field, lang, value) {
+  const p = (state.macSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    p[field] = value;
+    if (field === 'name') _masIapLocPropagateName(iapId, value);
+    else if (_masIapLocFieldAutoTranslateEnabled(field)) _masIapLocTriggerAutoTranslate(iapId, field, value);
+    return;
+  }
+  if (!p.locs) p.locs = {};
+  if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+  p.locs[lang][field] = value;
+}
+
+function _masIapLocPropagateName(iapId, primaryValue) {
+  if (_masIapLocFieldAutoTranslateEnabled('name')) { _masIapLocTriggerAutoTranslate(iapId, 'name', primaryValue); return; }
+  const p = (state.macSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+  if (!p.locs) p.locs = {};
+  supportedLangs.forEach(lang => {
+    if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+    p.locs[lang].name = primaryValue || '';
+  });
+}
+
+function _masIapLocFieldAutoTranslateEnabled(field) {
+  const cfg = state.masIapLocAutoTranslateFields;
+  if (!cfg) return IAP_LOC_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
+async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
+  if (!_masIapLocFieldAutoTranslateEnabled(field)) return;
+  const p = (state.macSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  if (!p.locs) p.locs = {};
+  const eligible = supportedLangs.filter(lang => {
+    const entry = p.locs[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    eligible.forEach(lang => {
+      if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+      p.locs[lang][field]     = '';
+      p.locs[lang][sourceKey] = '';
+      const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== '') _masIapLocRefreshBackTranslation(iapId, field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.masIapLocTranslateStatus = state.masIapLocTranslateStatus || {};
+  state.masIapLocTranslateStatus[iapId] = state.masIapLocTranslateStatus[iapId] || {};
+  state.masIapLocTranslateStatus[iapId][field] = 'loading';
+  state.masIapLocTranslatePendingLangs = state.masIapLocTranslatePendingLangs || {};
+  state.masIapLocTranslatePendingLangs[iapId] = state.masIapLocTranslatePendingLangs[iapId] || {};
+  state.masIapLocTranslatePendingLangs[iapId][field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
+  const perLangBudget = field === 'name' ? 80 : 200;
+  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following in-app purchase ${fieldLabel} text for a mobile/video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone and meaning of the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+      const entry = p.locs[lang];
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== translated) _masIapLocRefreshBackTranslation(iapId, field, lang, translated);
+    });
+
+    state.masIapLocTranslateStatus[iapId][field] = 'complete';
+  } catch (e) {
+    console.warn('[Mac App Store IAP Localizations Translate]', iapId, field, e.message);
+    state.masIapLocTranslateStatus[iapId][field] = 'error';
+  }
+  state.masIapLocTranslatePendingLangs[iapId][field] = [];
+  reRenderStepModal();
+}
+
+function _masIapLocFieldTranslatePending(iapId, field, lang) {
+  if (!state.masIapLocTranslateStatus || !state.masIapLocTranslateStatus[iapId] || state.masIapLocTranslateStatus[iapId][field] !== 'loading') return false;
+  const pending = state.masIapLocTranslatePendingLangs && state.masIapLocTranslatePendingLangs[iapId] && state.masIapLocTranslatePendingLangs[iapId][field];
+  return !!(pending && pending.includes(lang));
+}
+
+function _masIapLocToggleAutoTranslateField(field) {
+  state.masIapLocAutoTranslateFields = state.masIapLocAutoTranslateFields || {};
+  state.masIapLocAutoTranslateFields[field] = !state.masIapLocAutoTranslateFields[field];
+  if (state.masIapLocAutoTranslateFields[field]) {
+    _masIapLocSavedProducts().forEach(p => {
+      if (field === 'name') _masIapLocPropagateName(p.id, p.name || '');
+      else _masIapLocTriggerAutoTranslate(p.id, field, p.desc || '');
+    });
+  }
+  reRenderStepModal();
+}
+
+function startMasIapLocInlineEdit(iapId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const inHalf = !!(el.closest && el.closest('.iap-loc-half'));
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _masIapLocFieldValue(iapId, field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _masIapLocFieldValue(iapId, field, lang);
+    if (input.value !== previousValue) _masIapLocPushUndo('real', iapId, field, lang, previousValue);
+    _masIapLocSetFieldValue(iapId, field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== input.value) _masIapLocRefreshBackTranslation(iapId, field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+function _masIapLocBackTranslationValue(iapId, field, lang) {
+  const entry = state.masIapLocBackTranslation
+    && state.masIapLocBackTranslation[iapId]
+    && state.masIapLocBackTranslation[iapId][field]
+    && state.masIapLocBackTranslation[iapId][field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+
+function _masIapLocBackTranslationEntry(iapId, field, lang) {
+  if (!state.masIapLocBackTranslation) state.masIapLocBackTranslation = {};
+  const forIap   = state.masIapLocBackTranslation[iapId] || (state.masIapLocBackTranslation[iapId] = {});
+  const forField = forIap[field] || (forIap[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+
+function _masIapLocSyncBackTranslations(iapId) {
+  if (!iapId) return Promise.resolve();
+  const fd = state.formData;
+  const field = state.masIapLocField || 'name';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _masIapLocFieldValue(iapId, field, lang);
+    const entry = _masIapLocBackTranslationEntry(iapId, field, lang);
+    if (entry.syncedTopText === topText) return;
+    jobs.push(_masIapLocRefreshBackTranslation(iapId, field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _masIapLocRefreshBackTranslation(iapId, field, lang, topText) {
+  const entry = _masIapLocBackTranslationEntry(iapId, field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _masIapLocFieldValue(iapId, field, lang);
+  if (currentTop !== topText) { _masIapLocRefreshBackTranslation(iapId, field, lang, currentTop); return; }
+
+  const freshEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+async function _masIapLocCommitPrimaryEdit(iapId, field, lang, value) {
+  const entry = _masIapLocBackTranslationEntry(iapId, field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _masIapLocSetFieldValue(iapId, field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _masIapLocSetFieldValue(iapId, field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+
+function startMasIapLocBackTranslationEdit(iapId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _masIapLocBackTranslationValue(iapId, field, lang).text;
+
+  const commit = () => {
+    const previousValue = _masIapLocBackTranslationValue(iapId, field, lang).text;
+    if (input.value !== previousValue) _masIapLocPushUndo('draft', iapId, field, lang, previousValue);
+    _masIapLocCommitPrimaryEdit(iapId, field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function _masIapLocUndoEntry(kind, iapId, field, lang) {
+  if (!state.masIapLocUndoHistory) state.masIapLocUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.masIapLocUndoHistory[kind] || (state.masIapLocUndoHistory[kind] = {});
+  const forIap   = forKind[iapId] || (forKind[iapId] = {});
+  const forField = forIap[field] || (forIap[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+function _masIapLocUndoState(kind, iapId, field, lang) {
+  const entry = state.masIapLocUndoHistory
+    && state.masIapLocUndoHistory[kind]
+    && state.masIapLocUndoHistory[kind][iapId]
+    && state.masIapLocUndoHistory[kind][iapId][field]
+    && state.masIapLocUndoHistory[kind][iapId][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+function _masIapLocPushUndo(kind, iapId, field, lang, previousValue) {
+  const entry = _masIapLocUndoEntry(kind, iapId, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > IAP_LOC_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+function _masIapLocRestoreFieldValue(kind, iapId, field, lang, value) {
+  if (kind === 'draft') {
+    _masIapLocCommitPrimaryEdit(iapId, field, lang, value);
+    return;
+  }
+  _masIapLocSetFieldValue(iapId, field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.masIapLocMode === 'review' && lang !== primary) {
+    const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
+    if (backEntry.syncedTopText !== value) _masIapLocRefreshBackTranslation(iapId, field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+function masIapLocUndo(kind, iapId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _masIapLocUndoEntry(kind, iapId, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _masIapLocBackTranslationValue(iapId, field, lang).text : _masIapLocFieldValue(iapId, field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _masIapLocRestoreFieldValue(kind, iapId, field, lang, previous);
+}
+
+function masIapLocRedo(kind, iapId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _masIapLocUndoEntry(kind, iapId, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _masIapLocBackTranslationValue(iapId, field, lang).text : _masIapLocFieldValue(iapId, field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _masIapLocRestoreFieldValue(kind, iapId, field, lang, next);
+}
+
+async function toggleMasIapLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.masIapLocMode = state.masIapLocMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.masIapLocMode === 'review') _masIapLocSyncBackTranslations(_masIapLocEffectiveIapId());
+
+  const enteringCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+
+function setMasIapLocReviewIapId(iapId) {
+  state.masIapLocIapId = iapId;
+  reRenderStepModal();
+  if (state.masIapLocMode === 'review') _masIapLocSyncBackTranslations(iapId);
+}
+
+function setMasIapLocField(field) {
+  state.masIapLocField = field;
+  reRenderStepModal();
+  if (state.masIapLocMode === 'review') _masIapLocSyncBackTranslations(_masIapLocEffectiveIapId());
+}
+
 /* Accept the Shipmate-suggested fix for the current item */
 function applyStorePageFix() {
   if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
@@ -6854,6 +7740,13 @@ function closeAllDropdowns() {
   // from iasReviewSettingsOpen above, so the two sections' gear menus can
   // never affect each other.
   state.iapLocSettingsOpen = false;
+  // Same treatment for Mac App Store's own Localization Review / IAP
+  // Localizations settings menus (_masToggleReviewSettingsMenu/
+  // _masIapLocToggleSettingsMenu below) — reuses masReviewSettingsOpen
+  // (already declared in state.js for this exact purpose) plus a new
+  // masIapLocSettingsOpen, each independent of every other platform's.
+  state.masReviewSettingsOpen = false;
+  state.masIapLocSettingsOpen = false;
 }
 
 /* ── Language picker ─────────────────────────────────── */
@@ -6917,6 +7810,33 @@ function _iapLocToggleSettingsMenu(event) {
   if (!wasOpen) {
     state.iapLocSettingsOpen = true;
     document.getElementById('iap-loc-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* Mac App Store's own Localization Review "Automatically translated fields"
+   settings — mirrors _iasToggleReviewSettingsMenu, against masReviewSettingsOpen
+   and its own DOM id so it never shares open state with the App Store's own
+   gear menu. */
+function _masToggleReviewSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.masReviewSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.masReviewSettingsOpen = true;
+    document.getElementById('mas-loc-review-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* Mac App Store's own IAP Localizations "Automatically translated fields"
+   settings — mirrors _iapLocToggleSettingsMenu, against masIapLocSettingsOpen
+   and its own DOM id. */
+function _masIapLocToggleSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.masIapLocSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.masIapLocSettingsOpen = true;
+    document.getElementById('mas-iap-loc-settings-wrap')?.classList.add('is-open');
   }
 }
 
