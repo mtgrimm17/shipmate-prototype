@@ -12208,7 +12208,26 @@ body.viewing-splash #app-guide { display: none; }
    overflow-x:auto do its job. min-width:0 opts both columns out of that
    automatic floor, so the 1.6fr/1fr proportion holds no matter how much
    media gets added. */
-.steam-spp-media-left { min-width: 0; }
+/* flex column + the thumbs-wrap's own margin-top:auto (below) mirrors
+   .steam-spp-glance's own margin-top:auto trick on .steam-spp-tags — see
+   that rule's comment for the full mechanism. Both sides need the same
+   trick, not just one: CSS Grid's default align-items:stretch makes
+   whichever of .steam-spp-media-left/.steam-spp-glance has the taller
+   NATURAL content set the row height for both, and the SHORTER one then
+   needs to actively push its own last visual chunk down to that height's
+   bottom edge to visually reach it — otherwise it just sits at the top of
+   its own stretched (but invisible) box, leaving a real gap below it. v4.55
+   only gave .steam-spp-glance this treatment on the assumption
+   .steam-spp-media-left (hero + thumbs) would always be the taller side —
+   true for the empty/placeholder content those tests used, but false for
+   real game data (a wrapping short description, longer dev/publisher
+   names, several tags) tall enough to make .steam-spp-glance the taller
+   side instead, which left .steam-spp-media-left's own visible content
+   (thumbs + scrollbar) stranded well above the glance column's real
+   bottom. Symmetric now: whichever side is shorter pushes its trailing
+   group to match. */
+.steam-spp-media-left { min-width: 0; display: flex; flex-direction: column; }
+.steam-spp-media-thumbs-wrap { margin-top: auto; }
 .steam-spp-media-hero {
   width: 100%; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden;
   background: #000;
@@ -12276,9 +12295,10 @@ body.viewing-splash #app-guide { display: none; }
 }
 .steam-spp-scrollbar-thumb {
   position: absolute; top: 0; left: 0; height: 100%; min-width: 24px;
-  background: #3a5a75; border-radius: 4px;
+  background: #3a5a75; border-radius: 4px; cursor: grab;
 }
 .steam-spp-scrollbar-thumb:hover { background: #4c6f8c; }
+.steam-spp-scrollbar-thumb:active { cursor: grabbing; }
 
 /* Same automatic-minimum-width guard as .steam-spp-media-left (see its
    comment above), on the other side of the same grid row — a long enough
@@ -12367,8 +12387,20 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-langwarn strong { color: #f0a848; display: block; margin-bottom: 4px; }
 .steam-spp-langwarn p { margin: 4px 0 0; }
 
+/* Lighter gradient panel (sampled from a real Steam purchase box: roughly
+   #30404d on the left brightening to #56647a on the right) holding just the
+   title/icons row — position:relative so .steam-spp-purchase-bottom (the
+   price/Add to Cart bar) can be pinned to its bottom-right corner and
+   deliberately overlap past it, matching how a real Steam page's price/
+   button visibly hangs half outside its own box rather than being fully
+   contained by it. Extra padding-bottom reserves room for the portion of
+   the bar that sits INSIDE the box above its bottom edge; margin-bottom
+   clears room below for the portion that hangs OUTSIDE it, so the next
+   section (About This Game) doesn't sit underneath the overlap. */
 .steam-spp-purchase {
-  background: #131924; border-radius: 4px; padding: 14px 16px 12px; margin-bottom: 16px;
+  position: relative;
+  background: linear-gradient(90deg, #30404d, #56647a);
+  border-radius: 4px; padding: 12px 16px 26px; margin-bottom: 30px;
 }
 .steam-spp-purchase-top {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -12382,8 +12414,12 @@ body.viewing-splash #app-guide { display: none; }
    supporting chrome. */
 .steam-spp-purchase-title { font-size: 20px; font-weight: 600; color: #fff; }
 .steam-spp-purchase-icons { display: flex; align-items: center; gap: 6px; color: #c6d4df; flex-shrink: 0; }
-.steam-spp-purchase-bottom { display: flex; justify-content: flex-end; margin-top: 12px; }
-.steam-spp-purchase-bar { display: flex; border-radius: 3px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+/* Absolutely positioned so the bar can hang partway below the panel's own
+   bottom edge (bottom:-16px — the bar is 36px tall, so ~20px sits inside
+   the panel's padding-bottom and ~16px hangs below it onto the surrounding
+   dark background) rather than sitting fully inside it in normal flow. */
+.steam-spp-purchase-bottom { position: absolute; right: 16px; bottom: -16px; }
+.steam-spp-purchase-bar { display: flex; border-radius: 3px; overflow: hidden; box-shadow: 0 3px 6px rgba(0,0,0,0.4); }
 .steam-spp-purchase-price {
   background: #000; color: #c6d4df; font-size: 13px; font-weight: 600;
   display: flex; align-items: center; padding: 0 14px;

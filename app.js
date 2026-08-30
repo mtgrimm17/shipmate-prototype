@@ -8078,43 +8078,152 @@ function _steamSppCarouselSelect(el) {
    buildSteamStorePreviewPrototypeSection, render.js) — mirrors real Steam's
    own left-arrow/thumb/track/right-arrow control for scrolling the
    screenshot/trailer thumbnail strip (#steam-spp-media-thumbs) when it
-   overflows. The strip and scrollbar are always rendered (even with 0-1
-   items, where there's nothing to actually scroll) so the reserved height
-   stays constant — see mediaLeftHtml's own comment, render.js — so these
-   functions all no-op gracefully when the strip doesn't overflow.
+   overflows, PLUS the same mouse-wheel and drag-the-thumb affordances a
+   real Steam page's own carousel supports, rather than only the two arrow
+   buttons — native `scrollBy({behavior:'smooth'})` (the previous approach)
+   reads as a single blunt jump per click and offers no way to scroll
+   continuously, which is what read as "not smooth" against the reference.
+   The strip and scrollbar are always rendered (even with 0-1 items, where
+   there's nothing to actually scroll) so the reserved height stays constant
+   — see mediaLeftHtml's own comment, render.js — so every function below
+   no-ops gracefully when the strip doesn't overflow. */
 
-   _steamSppScrollThumbs(dir): click handler for the ‹/› arrow buttons.
-   Scrolls by roughly one thumbnail-and-a-half so a click always reveals a
-   fresh item rather than nudging by a sliver. _steamSppUpdateScrollbar
-   picks up the resulting scroll position via the strip's own onscroll
-   handler (see mediaLeftHtml, render.js) plus the requestAnimationFrame
-   hydration call right after render (renderStepModal, render.js) — no
-   separate resize listener, matching this prototype's existing
-   render-then-hydrate pattern (e.g. .steam-spp-autogrow) rather than adding
-   an observer for a fixed-layout modal that doesn't otherwise resize. */
+/* Eases the strip's scrollLeft to `targetLeft` over `duration`ms via its own
+   requestAnimationFrame loop (ease-out cubic) instead of the browser's
+   built-in smooth-scroll, so it can be driven consistently from multiple
+   call sites (arrow tap, held arrow's repeat ticks, track click) without
+   each restarting a new native smooth-scroll on top of one still in
+   flight — restarting a rAF loop here just retargets it cleanly. */
+function _steamSppAnimateScrollTo(strip, targetLeft, duration = 220) {
+  const startLeft = strip.scrollLeft;
+  const delta = targetLeft - startLeft;
+  if (Math.abs(delta) < 1) return;
+  const startTime = performance.now();
+  const animId = (strip._steamSppScrollAnimId = (strip._steamSppScrollAnimId || 0) + 1);
+  function step(now) {
+    if (strip._steamSppScrollAnimId !== animId) return; // superseded by a newer scroll request
+    const t = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    strip.scrollLeft = startLeft + delta * eased;
+    _steamSppUpdateScrollbar();
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* Single nudge — used by a plain click/keyboard-Enter on an arrow, by each
+   repeat tick while an arrow is held (see _steamSppScrollThumbsPressStart
+   below), and internally by the track-click handler's own step fallback.
+   Scrolls by roughly one thumbnail-and-a-half so a single nudge always
+   reveals a fresh item rather than sliding by a sliver. */
 function _steamSppScrollThumbs(dir) {
   const strip = document.getElementById('steam-spp-media-thumbs');
   if (!strip) return;
   const step = 92 + 4; // .steam-spp-carousel-thumb width + its flex gap
-  strip.scrollBy({ left: dir * step * 1.5, behavior: 'smooth' });
-  // scroll settles asynchronously; the strip's own onscroll handler keeps
-  // the thumb in sync as it animates, this just catches the resting frame.
-  requestAnimationFrame(() => requestAnimationFrame(_steamSppUpdateScrollbar));
+  const maxScroll = strip.scrollWidth - strip.clientWidth;
+  const target = Math.max(0, Math.min(maxScroll, strip.scrollLeft + dir * step * 1.5));
+  _steamSppAnimateScrollTo(strip, target);
 }
 
-/* Click handler for the scrollbar track itself (not the thumb) — jumps the
-   strip so the clicked point along the track becomes the new scroll
-   fraction, same "click track to jump" affordance a native scrollbar gives. */
+// Tracks a held arrow button's repeat timer/interval and whether the
+// press-and-hold path already handled the interaction, so the browser's
+// own synthetic 'click' firing right after mouseup doesn't double-nudge.
+let _steamSppScrollHoldTimer = null;
+let _steamSppScrollHoldInterval = null;
+let _steamSppSuppressNextArrowClick = false;
+
+/* mousedown handler for the ‹/› arrows — nudges immediately, then after a
+   short delay (matching a native scrollbar's own initial-delay-then-repeat
+   arrow behavior) keeps nudging on an interval for as long as the button
+   stays pressed, giving continuous scrolling rather than one jump per
+   click. */
+function _steamSppScrollThumbsPressStart(dir) {
+  _steamSppSuppressNextArrowClick = true;
+  _steamSppScrollThumbs(dir);
+  clearTimeout(_steamSppScrollHoldTimer);
+  clearInterval(_steamSppScrollHoldInterval);
+  _steamSppScrollHoldTimer = setTimeout(() => {
+    _steamSppScrollHoldInterval = setInterval(() => _steamSppScrollThumbs(dir), 160);
+  }, 350);
+}
+function _steamSppScrollThumbsPressEnd() {
+  clearTimeout(_steamSppScrollHoldTimer);
+  clearInterval(_steamSppScrollHoldInterval);
+  _steamSppScrollHoldTimer = null;
+  _steamSppScrollHoldInterval = null;
+}
+/* onclick handler for the arrows — the browser fires 'click' after every
+   mouseup (and synthesizes one for a keyboard Enter/Space activation with
+   no mousedown at all). Skips the nudge when mousedown already handled it
+   above; runs it when there was no preceding mousedown, i.e. keyboard use. */
+function _steamSppScrollThumbsClick(dir) {
+  if (_steamSppSuppressNextArrowClick) { _steamSppSuppressNextArrowClick = false; return; }
+  _steamSppScrollThumbs(dir);
+}
+
+/* Mouse-wheel support on the thumb strip itself — a real Steam carousel
+   scrolls its screenshot strip on a plain (vertical) wheel/trackpad
+   gesture same as this does, redirecting the vertical delta to horizontal
+   scroll. Left as native (un-eased) scrolling, since the wheel/trackpad
+   itself already delivers the fine-grained, momentum-carrying deltas that
+   make this feel smooth — animating on top would fight the browser's own
+   momentum physics rather than add anything. Only preventDefault (blocking
+   the page's own vertical scroll) when the strip actually has somewhere to
+   go, so an already-fully-visible strip doesn't trap an otherwise-normal
+   page scroll. */
+function _steamSppThumbsWheel(evt) {
+  const strip = document.getElementById('steam-spp-media-thumbs');
+  if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+  evt.preventDefault();
+  strip.scrollLeft += (evt.deltaY !== 0 ? evt.deltaY : evt.deltaX);
+  _steamSppUpdateScrollbar();
+}
+
+// Tracks whether the scrollbar thumb is currently being dragged, so the
+// document-level mousemove/mouseup listeners below know whether to act —
+// registered/torn down per-drag rather than left permanently attached.
+let _steamSppThumbDragging = false;
+function _steamSppThumbDragStart(evt) {
+  evt.preventDefault(); // avoid selecting page text while dragging
+  _steamSppThumbDragging = true;
+  document.addEventListener('mousemove', _steamSppThumbDragMove);
+  document.addEventListener('mouseup', _steamSppThumbDragEnd);
+}
+function _steamSppThumbDragMove(evt) {
+  if (!_steamSppThumbDragging) return;
+  const strip = document.getElementById('steam-spp-media-thumbs');
+  const track = document.getElementById('steam-spp-scrollbar-track');
+  const thumb = document.getElementById('steam-spp-scrollbar-thumb');
+  if (!strip || !track || !thumb) return;
+  const trackRect = track.getBoundingClientRect();
+  const thumbWidth = thumb.getBoundingClientRect().width;
+  const maxThumbLeft = trackRect.width - thumbWidth;
+  const rawThumbLeft = evt.clientX - trackRect.left - thumbWidth / 2;
+  const thumbLeft = Math.max(0, Math.min(maxThumbLeft, rawThumbLeft));
+  const fraction = maxThumbLeft > 0 ? thumbLeft / maxThumbLeft : 0;
+  const maxScroll = strip.scrollWidth - strip.clientWidth;
+  strip.scrollLeft = fraction * maxScroll; // direct 1:1 tracking, no easing — a drag should feel exactly as fast as the mouse moves
+  _steamSppUpdateScrollbar();
+}
+function _steamSppThumbDragEnd() {
+  _steamSppThumbDragging = false;
+  document.removeEventListener('mousemove', _steamSppThumbDragMove);
+  document.removeEventListener('mouseup', _steamSppThumbDragEnd);
+}
+
+/* Click handler for the scrollbar track itself (not the thumb, and not
+   while a drag is in progress) — eases the strip so the clicked point
+   along the track becomes the new scroll fraction, same "click track to
+   jump" affordance a native scrollbar gives. */
 function _steamSppScrollbarTrackClick(evt) {
-  if (evt.target.id === 'steam-spp-scrollbar-thumb') return; // dragging isn't implemented; let a thumb click no-op rather than jump under itself
+  if (evt.target.id === 'steam-spp-scrollbar-thumb') return; // the thumb's own mousedown handles drags; don't also jump under it
   const strip = document.getElementById('steam-spp-media-thumbs');
   const track = document.getElementById('steam-spp-scrollbar-track');
   if (!strip || !track) return;
   const rect = track.getBoundingClientRect();
   const fraction = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0;
   const maxScroll = strip.scrollWidth - strip.clientWidth;
-  strip.scrollTo({ left: fraction * maxScroll, behavior: 'smooth' });
-  requestAnimationFrame(() => requestAnimationFrame(_steamSppUpdateScrollbar));
+  _steamSppAnimateScrollTo(strip, fraction * maxScroll);
 }
 
 /* Syncs the scrollbar thumb's width/position and the arrow buttons'

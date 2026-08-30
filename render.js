@@ -10197,27 +10197,48 @@ function buildSteamStorePreviewPrototypeSection() {
     : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
-  // rather than gated behind carouselItems.length, so .steam-spp-media-left's
-  // natural height stays constant whether or not media has been added yet —
-  // needed for .steam-spp-tags's margin-top:auto bottom-alignment trick
-  // (below) to hold "both before and after media is added" per the request,
-  // since that trick only produces a real visible-content match when
-  // .steam-spp-media-left is reliably the taller/equal grid column. Gated
-  // visibility previously left a real gap in the sparse-content case (see
-  // this section's git history) because CSS Grid's default
-  // align-items:stretch made the two columns' WRAPPER boxes always measure
-  // equal even when their visible content didn't line up.
+  // rather than gated behind carouselItems.length, so there's always a
+  // trailing group inside .steam-spp-media-left for
+  // .steam-spp-media-thumbs-wrap's margin-top:auto to push to the bottom
+  // (style.css, .steam-spp-media-left's own comment) — the same mechanism
+  // .steam-spp-glance's margin-top:auto gives .steam-spp-tags, kept
+  // symmetric on both sides since either column can end up the shorter one
+  // depending on real content (screenshot count on this side; short
+  // description/dev/publisher/tag text length on that one).
+  // Arrow buttons wire up BOTH mousedown/mouseup/mouseleave (press-and-hold,
+  // continuous scroll) and onclick (single nudge — the path a keyboard
+  // Enter/Space activation actually takes, since there's no mousedown for
+  // that) — see _steamSppScrollThumbsPressStart/_steamSppScrollThumbsClick's
+  // own comments, app.js, for how the two paths avoid double-nudging a
+  // plain mouse click. The thumb's own mousedown starts a drag
+  // (_steamSppThumbDragStart) rather than falling through to the track's
+  // click-to-jump handler.
   const scrollbarHtml = `
     <div class="steam-spp-media-scrollbar" id="steam-spp-media-scrollbar">
-      <button class="steam-spp-scrollbar-arrow" type="button" onclick="_steamSppScrollThumbs(-1)" aria-label="Scroll media left">‹</button>
+      <button class="steam-spp-scrollbar-arrow" type="button"
+              onmousedown="_steamSppScrollThumbsPressStart(-1)" onmouseup="_steamSppScrollThumbsPressEnd()" onmouseleave="_steamSppScrollThumbsPressEnd()"
+              onclick="_steamSppScrollThumbsClick(-1)" aria-label="Scroll media left">‹</button>
       <div class="steam-spp-scrollbar-track" id="steam-spp-scrollbar-track" onclick="_steamSppScrollbarTrackClick(event)">
-        <div class="steam-spp-scrollbar-thumb" id="steam-spp-scrollbar-thumb"></div>
+        <div class="steam-spp-scrollbar-thumb" id="steam-spp-scrollbar-thumb" onmousedown="_steamSppThumbDragStart(event)"></div>
       </div>
-      <button class="steam-spp-scrollbar-arrow" type="button" onclick="_steamSppScrollThumbs(1)" aria-label="Scroll media right">›</button>
+      <button class="steam-spp-scrollbar-arrow" type="button"
+              onmousedown="_steamSppScrollThumbsPressStart(1)" onmouseup="_steamSppScrollThumbsPressEnd()" onmouseleave="_steamSppScrollThumbsPressEnd()"
+              onclick="_steamSppScrollThumbsClick(1)" aria-label="Scroll media right">›</button>
     </div>`;
-  const mediaLeftHtml = `${heroHtml}
-       <div class="steam-spp-media-thumbs" id="steam-spp-media-thumbs" onscroll="_steamSppUpdateScrollbar()">${carouselThumbsHtml}</div>
-       ${scrollbarHtml}`;
+  // thumbsWrapHtml groups the thumb strip + scrollbar into one block so
+  // .steam-spp-media-thumbs-wrap's own margin-top:auto (style.css) moves them
+  // as a single unit when .steam-spp-media-left needs to stretch to match a
+  // taller .steam-spp-glance — keeping the strip and its scrollbar always
+  // flush against each other rather than letting the auto margin land
+  // between them. onwheel lets a plain mouse-wheel/trackpad gesture over
+  // the strip scroll it horizontally, matching a real Steam carousel
+  // (_steamSppThumbsWheel, app.js).
+  const thumbsWrapHtml = `
+    <div class="steam-spp-media-thumbs-wrap">
+      <div class="steam-spp-media-thumbs" id="steam-spp-media-thumbs" onscroll="_steamSppUpdateScrollbar()" onwheel="_steamSppThumbsWheel(event)">${carouselThumbsHtml}</div>
+      ${scrollbarHtml}
+    </div>`;
+  const mediaLeftHtml = `${heroHtml}${thumbsWrapHtml}`;
 
   const capsuleHtml = headerImgSrc
     ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
