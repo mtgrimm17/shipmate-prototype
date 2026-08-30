@@ -726,7 +726,7 @@ const PLATFORM_ICONS = {
 
 const PLATFORMS = {
   steam: {
-    id: 'steam', label: 'Steam Store', color: '#4c6b8a',
+    id: 'steam', label: 'Steam', color: '#4c6b8a',
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'storePreview',      label: 'Store Page Preview'                           },
@@ -765,6 +765,14 @@ const PLATFORMS = {
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
+  // egs/psn/xbox/nintendo below are also in COMING_SOON_PLATFORMS (render.js,
+  // near buildInactiveCard) — the Submission dashboard's "+ Add platform"
+  // picker (renderDashboard, render.js) greys these four out and shows a
+  // lock instead of "+ Add", mirroring the Basic Info platform grid's own
+  // locked-tile treatment (PLATFORMS_OB, buildObPlatTilesHTML). Reusing that
+  // existing Set rather than adding a parallel comingSoon field here, since
+  // it's already the single source of truth two other call sites (auto-
+  // activation from a title-search picklist match) filter against.
   egs: {
     id: 'egs', label: 'Epic Games Store', color: '#313131',
     steps: [
@@ -790,7 +798,7 @@ const PLATFORMS = {
     ],
   },
   xbox: {
-    id: 'xbox', label: 'Xbox Store', color: '#107C10',
+    id: 'xbox', label: 'Microsoft Store | XBOX', color: '#107C10',
     steps: [
       { id: 'reviewStoreListing', label: 'Review Store Listing' },
       { id: 'confirmMedia',       label: 'Confirm Media' },
@@ -2107,7 +2115,7 @@ function makeBlankUploads() {
     screenshots:    [],
     featureGraphic: null,
     trailer:        null,
-    // Key Art (Steam Store platform's "Select Key Art" section — see
+    // Key Art (Steam platform's "Select Key Art" section — see
     // buildSteamKeyArtEditSection in render.js) — four image slots, shown
     // in alphabetical order: Capsule Image, Header Image, IGDB Cover Art,
     // Library Hero. Every field can be either { name, dataUrl } for a

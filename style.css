@@ -2737,6 +2737,13 @@ body.viewing-splash .app-subnav { display: none; }
 .add-plat-item svg, .add-plat-item img { width: 18px; height: 18px; flex: none; }
 .add-plat-name { flex: 1; }
 .add-plat-cta { font-size: 12px; font-weight: 700; color: var(--purple); }
+/* Coming soon (egs/psn/xbox/nintendo — see PLATFORMS.comingSoon, state.js):
+   same dimmed/inert/locked treatment as Basic Info's Select Platforms grid
+   (.ob-form .platform-tile:disabled + .ob-plat-lock, further below) restated
+   on this row-shaped button instead of a square tile. */
+.add-plat-item.is-coming-soon { opacity: .4; cursor: default; }
+.add-plat-item.is-coming-soon:hover { border-color: var(--border); background: var(--panel-2); }
+.add-plat-lock { width: 12px; height: 14px; flex: none; color: currentColor; opacity: .7; }
 /* Submission: activated platform cards two to a row. auto-fill with a 360px
    floor gives 2 across the full content column (~850px) and drops to 1 when the
    window narrows — no breakpoints to maintain. 360 sits comfortably inside the
@@ -12048,7 +12055,15 @@ body.viewing-splash #app-guide { display: none; }
 }
 .ob-form .platform-tile-icon svg,
 .ob-form .platform-tile-icon img { width: 100%; height: 100%; display: block; }
-.ob-form .platform-tile-label { font-family: var(--mono); font-size: 12px; line-height: 1.2; }
+/* 10px, not the prototype's 12px — "Mac App Store" (the longest label, seven
+   platforms wide now — see PLATFORMS_OB above) is the constraint: at the
+   typical full-page-browser tile width (~104px, the pg-7 grid's own
+   plateaued width from ~1280px viewport up — the container hits its own
+   max-width there, so wider monitors don't add room) "Mac App Store" still
+   wraps to two lines at 12px and even at 10.5px; 10px is the first size
+   where it renders on one row. Measured against the actual rendered grid at
+   a range of realistic desktop widths, not eyeballed. */
+.ob-form .platform-tile-label { font-family: var(--mono); font-size: 10px; line-height: 1.2; }
 
 /* Coming soon: the prototype has no locked state, so this is the repo's,
    restated on the prototype's tile. Dimmed and inert, lock top-right. */

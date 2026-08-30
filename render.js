@@ -781,15 +781,15 @@ function buildObPlatTilesHTML() {
      own path data via protoTileIcon() below. */
   const PLATFORMS_OB = [
     { id:'steam',   iconKey:'steam',       label:'Steam',       comingSoon: false },
-    { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
-    { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
     // Mac App Store reuses the App Store's own icon mark verbatim (iconKey:
     // 'ios' — see protoTileIcon above) per the feature spec: same icon,
     // different label. Its own dedicated tile/id ('macos') is what actually
     // drives independence — toggling it only ever touches state.activePlatforms's
     // 'macos' entry, never 'ios'.
     { id:'macos',   iconKey:'ios',         label:'Mac App Store', comingSoon: false },
+    { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
     { id:'android', iconKey:'android',     label:'Google Play', comingSoon: false },
+    { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
     { id:'egs',     iconKey:'epic',        label:'Epic',        comingSoon: true  },
     { id:'psn',     iconKey:'playstation', label:'PlayStation', comingSoon: true  },
   ];
@@ -1741,7 +1741,7 @@ function buildConsolidatedBanner() {
 }
 
 // Canonical display order for platform cards (active and inactive sections)
-const PLATFORM_ORDER = ['steam', 'ios', 'macos', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
+const PLATFORM_ORDER = ['steam', 'macos', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -3359,15 +3359,31 @@ function renderDashboard() {
   const cards = active.map(pid => buildActiveCard(pid)).join('');
 
   // Always-present "+ Add platform" banner; clicking it reveals the picker.
+  // COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo — declared further below,
+  // already the source of truth two other call sites filter against) get the
+  // same treatment as Epic/PlayStation's locked tiles in Basic Info's Select
+  // Platforms grid (buildObPlatTilesHTML): greyed out, "+ Add" swapped for a
+  // lock icon, disabled (no onclick), "Coming soon" on hover via title.
+  const addPlatLockSVG = `<svg class="add-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
   const picker = addOpen ? `
     <div class="dash-add-picker">
       ${inactive.length
-        ? `<div class="add-plat-list">${inactive.map(pid => `
-            <button class="add-plat-item" onclick="activatePlatform('${pid}')">
-              ${(typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : ''}
-              <span class="add-plat-name">${(PLATFORMS[pid] && PLATFORMS[pid].label) || pid}</span>
+        ? `<div class="add-plat-list">${inactive.map(pid => {
+            const label = (PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
+            const icon  = (typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '';
+            if (COMING_SOON_PLATFORMS.has(pid)) {
+              return `<button type="button" class="add-plat-item is-coming-soon" disabled title="Coming soon">
+                ${icon}
+                <span class="add-plat-name">${label}</span>
+                ${addPlatLockSVG}
+              </button>`;
+            }
+            return `<button class="add-plat-item" onclick="activatePlatform('${pid}')">
+              ${icon}
+              <span class="add-plat-name">${label}</span>
               <span class="add-plat-cta">+ Add</span>
-            </button>`).join('')}</div>`
+            </button>`;
+          }).join('')}</div>`
         : `<div class="dash-empty-desc">Every available platform is already activated.</div>`}
     </div>` : '';
 
@@ -5302,7 +5318,7 @@ function buildWebKeyArtEditSection() {
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Key art is managed from the Steam Store platform's Store Page Preview — uploading it there also updates this preview website.
+        Key art is managed from the Steam platform's Store Page Preview — uploading it there also updates this preview website.
       </p>
 
       <div class="form-group" style="margin-bottom:20px;">

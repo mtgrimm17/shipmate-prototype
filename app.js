@@ -2310,6 +2310,11 @@ function blinkComingSoon(pid) {
 }
 
 function activatePlatform(platformId) {
+  // Defensive: the "+ Add platform" picker (renderDashboard, render.js)
+  // already disables the button for COMING_SOON_PLATFORMS (render.js —
+  // egs/psn/xbox/nintendo), so this only matters if something ever calls
+  // activatePlatform directly instead of going through it.
+  if (COMING_SOON_PLATFORMS.has(platformId)) return;
   state.activePlatforms.add(platformId);
   // See toggleOnboardingPlatform's identical call — Submission's own
   // "add a platform" entry point needs the same one-time seed.
