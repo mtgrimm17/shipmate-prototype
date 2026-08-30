@@ -12231,7 +12231,12 @@ body.viewing-splash #app-guide { display: none; }
   width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; border: none;
 }
 .steam-spp-media-hero .steam-trailer-video { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
-.steam-spp-media-thumbs { display: flex; gap: 4px; margin-top: 6px; overflow-x: auto; }
+/* min-height reserves the strip's height even at 0-1 items (thumbs row is
+   now always rendered — see mediaLeftHtml, buildSteamStorePreviewPrototypeSection,
+   render.js) so .steam-spp-media-left's total height stays constant whether
+   or not screenshots have been added, which the bottom-alignment fix on
+   .steam-spp-tags (below) depends on. */
+.steam-spp-media-thumbs { display: flex; gap: 4px; margin-top: 6px; overflow-x: auto; min-height: 52px; }
 .steam-spp-carousel-thumb {
   position: relative; width: 92px; height: 52px; border-radius: 3px; overflow: hidden;
   flex-shrink: 0; cursor: pointer; background: #16202d; border: 2px solid transparent;
@@ -12246,6 +12251,34 @@ body.viewing-splash #app-guide { display: none; }
   color: #fff; display: flex; align-items: center; justify-content: center;
   font-size: 9px; padding-left: 1px;
 }
+
+/* Horizontal scrollbar beneath the media carousel (scrollbarHtml,
+   buildSteamStorePreviewPrototypeSection, render.js) — mirrors real Steam's
+   own left-arrow/thumb-on-track/right-arrow control under the screenshot
+   strip: a chunky rounded-rect arrow button flush against a similarly
+   chunky, lighter rounded-rect "thumb" segment, on a thin dark track.
+   Always rendered (even with 0-1 items) so it also contributes to
+   .steam-spp-media-left's constant reserved height. Thumb width/position are
+   computed from #steam-spp-media-thumbs's scroll metrics by
+   _steamSppUpdateScrollbar (app.js). */
+.steam-spp-media-scrollbar { display: flex; align-items: center; gap: 3px; margin-top: 6px; height: 22px; }
+.steam-spp-scrollbar-arrow {
+  flex: 0 0 auto; width: 26px; height: 22px; border: none; border-radius: 4px;
+  background: #2a475e; color: #c6d4df; font-size: 12px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.steam-spp-scrollbar-arrow:hover { background: #356485; }
+.steam-spp-scrollbar-arrow:disabled { background: #1c2b38; color: #4c6b8a; cursor: default; }
+.steam-spp-scrollbar-track {
+  position: relative; flex: 1 1 auto; height: 22px; background: #0e1a24;
+  border-radius: 4px; cursor: pointer; overflow: hidden;
+}
+.steam-spp-scrollbar-thumb {
+  position: absolute; top: 0; left: 0; height: 100%; min-width: 24px;
+  background: #3a5a75; border-radius: 4px;
+}
+.steam-spp-scrollbar-thumb:hover { background: #4c6f8c; }
 
 /* Same automatic-minimum-width guard as .steam-spp-media-left (see its
    comment above), on the other side of the same grid row — a long enough
@@ -12340,25 +12373,24 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-purchase-top {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
-.steam-spp-purchase-title { font-size: 15px; color: #fff; }
-.steam-spp-purchase-icons { display: flex; align-items: center; gap: 8px; color: #c6d4df; flex-shrink: 0; }
+/* Reversed from an earlier pass that grew the price/button row to match the
+   title's old 15px — direct feedback against a real Steam page (e.g.
+   store.steampowered.com's own purchase bar) showed the opposite hierarchy:
+   the "Buy [Game]" title is the dominant element, while the OS icons, price,
+   and Add to Cart button are compact, secondary controls beneath it. Title
+   grown to read as dominant; icons/price/button shrunk back down to read as
+   supporting chrome. */
+.steam-spp-purchase-title { font-size: 20px; font-weight: 600; color: #fff; }
+.steam-spp-purchase-icons { display: flex; align-items: center; gap: 6px; color: #c6d4df; flex-shrink: 0; }
 .steam-spp-purchase-bottom { display: flex; justify-content: flex-end; margin-top: 12px; }
-/* Sized and weighted to read as the prominent, slightly "raised" call to
-   action a real Steam purchase bar has (a subtle drop shadow standing in
-   for the real page's floating/overlapping button treatment, without the
-   absolute-positioning overhaul that exact layout would need) — the price
-   box and buttons were previously undersized/flatter than their real-Steam
-   counterpart. Height bumped from 42px and font-size from 14px to line up
-   with .steam-spp-purchase-title's own 15px, so the price/button row reads
-   at the same visual weight as the title above it, matching the reference. */
-.steam-spp-purchase-bar { display: flex; border-radius: 3px; overflow: hidden; box-shadow: 0 3px 6px rgba(0,0,0,0.35); }
+.steam-spp-purchase-bar { display: flex; border-radius: 3px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .steam-spp-purchase-price {
-  background: #000; color: #c6d4df; font-size: 15px; font-weight: 600;
-  display: flex; align-items: center; padding: 0 18px;
+  background: #000; color: #c6d4df; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; padding: 0 14px;
 }
 .steam-spp-btn {
-  border: none; padding: 0 22px; height: 46px; display: flex; align-items: center;
-  font-size: 15px; font-weight: 600; cursor: pointer; color: #fff;
+  border: none; padding: 0 16px; height: 36px; display: flex; align-items: center;
+  font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
 }
 .steam-spp-btn-green { background: #5c7e10; }
 .steam-spp-btn-blue  { background: #2a6fd6; }

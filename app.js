@@ -8074,6 +8074,88 @@ function _steamSppCarouselSelect(el) {
   hero.innerHTML = _steamSppHeroMarkup(kind, name, src, thumb, hls);
 }
 
+/* Horizontal scrollbar under the media carousel (scrollbarHtml,
+   buildSteamStorePreviewPrototypeSection, render.js) — mirrors real Steam's
+   own left-arrow/thumb/track/right-arrow control for scrolling the
+   screenshot/trailer thumbnail strip (#steam-spp-media-thumbs) when it
+   overflows. The strip and scrollbar are always rendered (even with 0-1
+   items, where there's nothing to actually scroll) so the reserved height
+   stays constant — see mediaLeftHtml's own comment, render.js — so these
+   functions all no-op gracefully when the strip doesn't overflow.
+
+   _steamSppScrollThumbs(dir): click handler for the ‹/› arrow buttons.
+   Scrolls by roughly one thumbnail-and-a-half so a click always reveals a
+   fresh item rather than nudging by a sliver. _steamSppUpdateScrollbar
+   picks up the resulting scroll position via the strip's own onscroll
+   handler (see mediaLeftHtml, render.js) plus the requestAnimationFrame
+   hydration call right after render (renderStepModal, render.js) — no
+   separate resize listener, matching this prototype's existing
+   render-then-hydrate pattern (e.g. .steam-spp-autogrow) rather than adding
+   an observer for a fixed-layout modal that doesn't otherwise resize. */
+function _steamSppScrollThumbs(dir) {
+  const strip = document.getElementById('steam-spp-media-thumbs');
+  if (!strip) return;
+  const step = 92 + 4; // .steam-spp-carousel-thumb width + its flex gap
+  strip.scrollBy({ left: dir * step * 1.5, behavior: 'smooth' });
+  // scroll settles asynchronously; the strip's own onscroll handler keeps
+  // the thumb in sync as it animates, this just catches the resting frame.
+  requestAnimationFrame(() => requestAnimationFrame(_steamSppUpdateScrollbar));
+}
+
+/* Click handler for the scrollbar track itself (not the thumb) — jumps the
+   strip so the clicked point along the track becomes the new scroll
+   fraction, same "click track to jump" affordance a native scrollbar gives. */
+function _steamSppScrollbarTrackClick(evt) {
+  if (evt.target.id === 'steam-spp-scrollbar-thumb') return; // dragging isn't implemented; let a thumb click no-op rather than jump under itself
+  const strip = document.getElementById('steam-spp-media-thumbs');
+  const track = document.getElementById('steam-spp-scrollbar-track');
+  if (!strip || !track) return;
+  const rect = track.getBoundingClientRect();
+  const fraction = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0;
+  const maxScroll = strip.scrollWidth - strip.clientWidth;
+  strip.scrollTo({ left: fraction * maxScroll, behavior: 'smooth' });
+  requestAnimationFrame(() => requestAnimationFrame(_steamSppUpdateScrollbar));
+}
+
+/* Syncs the scrollbar thumb's width/position and the arrow buttons'
+   disabled state to #steam-spp-media-thumbs's actual scroll metrics. Called
+   on the strip's own onscroll (mediaLeftHtml, render.js) and once after
+   every render (renderStepModal's requestAnimationFrame hydration block,
+   render.js) so the scrollbar always reflects reality, including right
+   after screenshots are added/removed/reordered via Select Steam Assets. */
+function _steamSppUpdateScrollbar() {
+  const strip = document.getElementById('steam-spp-media-thumbs');
+  const track = document.getElementById('steam-spp-scrollbar-track');
+  const thumb = document.getElementById('steam-spp-scrollbar-thumb');
+  const bar   = document.getElementById('steam-spp-media-scrollbar');
+  if (!strip || !track || !thumb || !bar) return;
+
+  const { scrollWidth, clientWidth, scrollLeft } = strip;
+  const canScroll = scrollWidth > clientWidth + 1;
+  const arrows = bar.querySelectorAll('.steam-spp-scrollbar-arrow');
+
+  if (!canScroll) {
+    // Nothing to scroll (0, 1, or few enough thumbs to fit) — thumb fills
+    // the whole track and both arrows go inert, matching how a native
+    // scrollbar looks when its content doesn't overflow.
+    thumb.style.width = '100%';
+    thumb.style.left = '0';
+    arrows.forEach(a => a.disabled = true);
+    return;
+  }
+
+  const trackWidth = track.clientWidth;
+  const thumbWidthPx = Math.max(16, trackWidth * (clientWidth / scrollWidth));
+  const maxThumbLeft = trackWidth - thumbWidthPx;
+  const maxScroll = scrollWidth - clientWidth;
+  const thumbLeft = maxScroll > 0 ? (scrollLeft / maxScroll) * maxThumbLeft : 0;
+
+  thumb.style.width = thumbWidthPx + 'px';
+  thumb.style.left = thumbLeft + 'px';
+  arrows[0].disabled = scrollLeft <= 0;
+  arrows[1].disabled = scrollLeft >= maxScroll - 1;
+}
+
 /* onload handler for the preview website's capsule image (.pk-capsule-img,
    see capsuleHTML in buildWebSitePreviewSection, render.js) — corrects the
    box's aspect-ratio to the REAL loaded image's own naturalWidth/

@@ -4337,6 +4337,7 @@ function renderStepModal() {
   if (stepId === 'storePreviewPrototype') {
     requestAnimationFrame(() => {
       document.querySelectorAll('.steam-spp-autogrow').forEach(_steamSppAutoGrow);
+      _steamSppUpdateScrollbar();
     });
   }
 
@@ -10191,10 +10192,32 @@ function buildSteamStorePreviewPrototypeSection() {
     return `<div class="steam-spp-carousel-thumb${i === 0 ? ' is-active' : ''}" ${attrs.join(' ')} onclick="_steamSppCarouselSelect(this)">${thumbImg}${playBadge}</div>`;
   }).join('');
 
-  const mediaLeftHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero">${heroInnerHtml}</div>
-       ${carouselItems.length > 1 ? `<div class="steam-spp-media-thumbs">${carouselThumbsHtml}</div>` : ''}`
+  const heroHtml = firstCarouselItem
+    ? `<div class="steam-spp-media-hero">${heroInnerHtml}</div>`
     : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
+
+  // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
+  // rather than gated behind carouselItems.length, so .steam-spp-media-left's
+  // natural height stays constant whether or not media has been added yet —
+  // needed for .steam-spp-tags's margin-top:auto bottom-alignment trick
+  // (below) to hold "both before and after media is added" per the request,
+  // since that trick only produces a real visible-content match when
+  // .steam-spp-media-left is reliably the taller/equal grid column. Gated
+  // visibility previously left a real gap in the sparse-content case (see
+  // this section's git history) because CSS Grid's default
+  // align-items:stretch made the two columns' WRAPPER boxes always measure
+  // equal even when their visible content didn't line up.
+  const scrollbarHtml = `
+    <div class="steam-spp-media-scrollbar" id="steam-spp-media-scrollbar">
+      <button class="steam-spp-scrollbar-arrow" type="button" onclick="_steamSppScrollThumbs(-1)" aria-label="Scroll media left">‹</button>
+      <div class="steam-spp-scrollbar-track" id="steam-spp-scrollbar-track" onclick="_steamSppScrollbarTrackClick(event)">
+        <div class="steam-spp-scrollbar-thumb" id="steam-spp-scrollbar-thumb"></div>
+      </div>
+      <button class="steam-spp-scrollbar-arrow" type="button" onclick="_steamSppScrollThumbs(1)" aria-label="Scroll media right">›</button>
+    </div>`;
+  const mediaLeftHtml = `${heroHtml}
+       <div class="steam-spp-media-thumbs" id="steam-spp-media-thumbs" onscroll="_steamSppUpdateScrollbar()">${carouselThumbsHtml}</div>
+       ${scrollbarHtml}`;
 
   const capsuleHtml = headerImgSrc
     ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
@@ -10266,9 +10289,12 @@ function buildSteamStorePreviewPrototypeSection() {
   // Windows-compatible); Apple's glyph joins it only when Mac App Store is
   // also an active submission platform (hasMacSupport above). Both share the
   // one PURCHASE_ICON_SIZE literal (see _winIcon's own comment) so they
-  // always render as a matched pair, sized to read as prominently as they do
-  // on a real Steam page rather than as small meta-strip glyphs.
-  const PURCHASE_ICON_SIZE = 20;
+  // always render as a matched pair. Sized as a compact, secondary control
+  // next to the (now-dominant) "Buy [Game]" title — a real Steam page's
+  // purchase row reads title-first with the OS icons/price/button as small
+  // supporting chrome, the opposite hierarchy of this prototype's previous
+  // 20px icons sized to match a 15px title.
+  const PURCHASE_ICON_SIZE = 16;
   const purchaseIconsHtml = `${_winIcon(PURCHASE_ICON_SIZE)}${hasMacSupport ? platformIcon('macos', PURCHASE_ICON_SIZE) : ''}`;
 
   const purchaseAreaHtml = isFreeGame
