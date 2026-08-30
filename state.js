@@ -728,9 +728,10 @@ const PLATFORMS = {
   steam: {
     id: 'steam', label: 'Steam', color: '#4c6b8a',
     steps: [
-      { id: 'uploadBuild',       label: 'Upload Build'                                 },
-      { id: 'storePreview',      label: 'Store Page Preview'                           },
-      { id: 'improveSubmission', label: 'Improve Your Submission'                      },
+      { id: 'uploadBuild',            label: 'Upload Build'                            },
+      { id: 'storePreview',           label: 'Store Page Preview'                      },
+      { id: 'storePreviewPrototype',  label: 'Store Page Preview - Prototype'          },
+      { id: 'improveSubmission',      label: 'Improve Your Submission'                 },
     ],
   },
   ios: {
@@ -3250,6 +3251,8 @@ function makeBlankSteamAnswers() {
     // Store Preview
     storePreviewSeen:   false,
     privacyPolicyUrl:   '',
+    // Store Page Preview - Prototype — full-page mockup, marks complete on first view
+    storePreviewPrototypeSeen: false,
     // Improve Your Submission — marks complete on first view
     improveSubmissionSeen: false,
   };
@@ -3265,6 +3268,7 @@ function isSteamSectionComplete(sectionId) {
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
+  if (sectionId === 'storePreviewPrototype') return !!state.steamSubmitAnswers.storePreviewPrototypeSeen;
 
   if (sectionId === 'storePreview') {
     return isSteamSectionComplete('contentRating') &&

@@ -4148,7 +4148,8 @@ function renderStepModal() {
   // Questionnaire contains privacy matrix — needs extra width for iOS and Android.
   // Preview Website needs extra width for the two-column presskit layout.
   const isWide = (stepId === 'questionnaire' && (platformId === 'ios' || platformId === 'android'))
-              || (stepId === 'storePreview' && platformId === 'web');
+              || (stepId === 'storePreview' && platformId === 'web')
+              || (stepId === 'storePreviewPrototype' && platformId === 'steam');
   modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
@@ -4245,6 +4246,7 @@ function renderStepModal() {
     else if (stepId === 'business')           body = buildAndroidBusinessSection();
   } else if (platformId === 'steam') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewSection();
+    else if (stepId === 'storePreviewPrototype') body = buildSteamStorePreviewPrototypeSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
     // Legacy / questionnaire kept for backward-compat
     else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
@@ -9987,6 +9989,260 @@ function buildSteamStorePreviewSection() {
 
     ${navBar}
   `;
+}
+
+/* ── Steam: Store Page Preview - Prototype ────────────
+   Full-page mockup of the game's public Steam store page, modeled on a real
+   scraped store page's structure (this project's own reference export) and
+   its screenshot (used to decide which sections are in scope). Deliberately
+   excludes Steam's own site header/nav and footer — those live outside this
+   page's content entirely, per the brief this section was built from.
+   Pulls from state wherever a real field already exists (formData/webSite/
+   uploads/steamSubmitAnswers — the same Steam-sourced fields the Web
+   platform's own preview website reads); falls back to neutral placeholder
+   copy everywhere else, same "seed once, then no source" story every other
+   optional field on this page follows. Marks storePreviewPrototypeSeen on
+   first render, same "visiting counts as done" treatment improveSubmission
+   and the existing Store Page Preview step both already use. */
+function buildSteamStorePreviewPrototypeSection() {
+  const fd  = state.formData;
+  const ws  = state.webSite;
+  const ups = state.uploads;
+  const ssa = state.steamSubmitAnswers;
+
+  ssa.storePreviewPrototypeSeen = true;
+
+  const gameTitle = fd.title || 'Your Game Title';
+  const genreList   = (ssa.topGenres || []);
+  const genreText   = genreList.length ? genreList.join(', ') : 'Indie';
+  const primaryGenre = genreList[0] || 'Games';
+
+  const devName = escHtml(ws.developer || 'Developer Name');
+  const pubName = escHtml(ws.publisher || 'Publisher Name');
+
+  // Short description ("Hook") — same fallback chain as the preview website
+  // (ws.description → Steam's own cached short_description → Description).
+  const shortDescRaw = (ws.description && ws.description.trim())
+    || (state.steamLocInfo && state.steamLocInfo.shortDescription)
+    || fd.description || '';
+  const shortDescTrimmed = shortDescRaw.slice(0, 300) + (shortDescRaw.length > 300 ? '…' : '');
+  const shortDesc = shortDescRaw
+    ? escHtml(shortDescTrimmed)
+    : '<span class="steam-spp-placeholder">No short description yet.</span>';
+
+  // Screenshots — reuse the same manual/auto-import shape + resolver as
+  // every other screenshot surface in the app (_screenshotSrc, app.js).
+  const shots     = (ups.screenshots || []).slice(0, 5);
+  const heroShot  = shots[0] ? _screenshotSrc(shots[0]) : '';
+
+  // Header Image key art (460×215) — the asset Steam itself uses at the top
+  // of a real store page's media block.
+  const headerImgObj = ups.steamHeaderImage;
+  const headerImgSrc = headerImgObj ? (headerImgObj.dataUrl || headerImgObj.url || '') : '';
+
+  // Purchase area — Free vs. paid, same "Free"/formatted-price text
+  // state.webSite.price already stores (see its comment in state.js).
+  const rawPrice   = (ws.price || '').trim();
+  const isFreeGame = !rawPrice || /^free$/i.test(rawPrice) || rawPrice === '0' || rawPrice === '0.00';
+
+  // Supported languages — primary + any localizations picked in Game
+  // Details (state.formData), same source Distribution/Localization
+  // Review read elsewhere. Gates the "language not supported" warning and
+  // the sidebar's "Is this game relevant to you?" card, same as a real
+  // Steam page gates them on the visitor's own language preference.
+  const langCodes = Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
+  const supportsEnglish = langCodes.includes('en');
+
+  // About This Game — kept in sync with Description, same fallback/paragraph
+  // handling as the preview website's own About This Game (_pkParagraphs).
+  const aboutGameRaw   = (ws.aboutGame && ws.aboutGame.trim()) || fd.description || '';
+  const aboutGameParas = _pkParagraphs(aboutGameRaw);
+  const aboutGameHtml  = aboutGameParas.length
+    ? aboutGameParas.map(lines => `<p class="steam-spp-p">${lines.map(escHtml).join('<br>')}</p>`).join('')
+    : '<p class="steam-spp-p steam-spp-placeholder">No description yet — fill in Game Details’ Description field.</p>';
+
+  // AI Generated Content Disclosure + the "Profile Features Limited" /
+  // 3rd-party-service DRM notice it triggers — all driven by the real
+  // Content Questions answers (steamSubmitAnswers), same gating Steam
+  // itself applies to AI-content titles.
+  const usesAI       = ssa.usesAI === 'yes';
+  const aiDescRaw    = (ssa.aiDescription || '').trim();
+  const aiThirdParty = usesAI && ssa.aiThirdParty === 'yes';
+  const aiServiceName = escHtml(ssa.aiThirdPartyName || 'a third-party service');
+
+  const breadcrumbHtml = `
+    <div class="steam-spp-breadcrumb">
+      <span>All Games</span><span class="steam-spp-crumb-sep">›</span>
+      <span>${escHtml(primaryGenre)}</span><span class="steam-spp-crumb-sep">›</span>
+      <span class="steam-spp-crumb-current">${escHtml(gameTitle)}</span>
+    </div>`;
+
+  const headerHtml = `
+    <div class="steam-spp-apphub">
+      <button class="steam-spp-hub-btn" type="button">Community Hub</button>
+      <div class="steam-spp-apphub-name">${escHtml(gameTitle)}</div>
+    </div>`;
+
+  const mediaLeftHtml = heroShot
+    ? `<div class="steam-spp-media-hero"><img src="${heroShot}" alt=""></div>
+       ${shots.length > 1 ? `<div class="steam-spp-media-thumbs">${shots.map(s => `<img src="${_screenshotSrc(s)}" alt="">`).join('')}</div>` : ''}`
+    : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
+
+  const capsuleHtml = headerImgSrc
+    ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
+    : `<div class="steam-spp-capsule-img steam-spp-media-empty">Header Image</div>`;
+
+  const glanceHtml = `
+    <div class="steam-spp-glance">
+      ${capsuleHtml}
+      <div class="steam-spp-shortdesc">${shortDesc}</div>
+      <div class="steam-spp-reviews-row">
+        <span class="steam-spp-label">All Reviews:</span>
+        <span class="steam-spp-muted">No user reviews</span>
+      </div>
+      <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span> <span class="steam-spp-link-text">${devName}</span></div>
+      <div class="steam-spp-devrow"><span class="steam-spp-label">Publisher:</span> <span class="steam-spp-link-text">${pubName}</span></div>
+      <div class="steam-spp-tags">
+        <div class="steam-spp-muted" style="margin-bottom:6px;">No tags entered yet</div>
+        <button class="steam-spp-tag-add" type="button">+ Add your own tags</button>
+      </div>
+    </div>`;
+
+  const mediaBlockHtml = `
+    <div class="steam-spp-media-block">
+      <div class="steam-spp-media-left">${mediaLeftHtml}</div>
+      ${glanceHtml}
+    </div>`;
+
+  const queueRowHtml = `
+    <div class="steam-spp-queue-row">
+      <button class="steam-spp-queue-btn" type="button">+ Follow</button>
+      <button class="steam-spp-queue-btn" type="button">Ignore ⌄</button>
+      <button class="steam-spp-queue-btn" type="button">Share</button>
+      <span class="steam-spp-queue-spacer"></span>
+      <span class="steam-spp-queue-link">View Your Queue →</span>
+    </div>`;
+
+  const langWarningHtml = supportsEnglish ? '' : `
+    <div class="steam-spp-langwarn">
+      <strong>English language not supported</strong>
+      <p>This game may not support English. Please review the supported languages before purchase.</p>
+      <p>You can adjust your <span class="steam-spp-link-text">language preferences</span> here.</p>
+    </div>`;
+
+  const purchaseAreaHtml = isFreeGame
+    ? `
+      <div class="steam-spp-purchase">
+        <div class="steam-spp-purchase-icon">${platformIcon('steam', 24)}</div>
+        <div class="steam-spp-purchase-title">Play ${escHtml(gameTitle)}</div>
+        <div class="steam-spp-purchase-price">Free To Play</div>
+        <button class="steam-spp-btn steam-spp-btn-green" type="button">Play Game</button>
+      </div>`
+    : `
+      <div class="steam-spp-purchase">
+        <div class="steam-spp-purchase-icon">${platformIcon('steam', 24)}</div>
+        <div class="steam-spp-purchase-title">Buy ${escHtml(gameTitle)}</div>
+        <div class="steam-spp-purchase-price">${rawPrice ? escHtml(rawPrice) : '<span class="steam-spp-placeholder">Price not set</span>'}</div>
+        <button class="steam-spp-btn steam-spp-btn-blue" type="button">Add to Cart</button>
+      </div>`;
+
+  const aiDisclosureHtml = !usesAI ? '' : `
+    <div class="steam-spp-section">
+      <h2 class="steam-spp-h2">AI Generated Content Disclosure</h2>
+      <p class="steam-spp-p">The developers describe how their game uses AI Generated Content like this:</p>
+      <p class="steam-spp-p steam-spp-italic">${aiDescRaw ? escHtml(aiDescRaw) : 'No description provided yet — add one in the Content Questions step.'}</p>
+    </div>`;
+
+  const leftColHtml = `
+    ${langWarningHtml}
+    ${purchaseAreaHtml}
+    <div class="steam-spp-section">
+      <h2 class="steam-spp-h2">About This Game</h2>
+      ${aboutGameHtml}
+    </div>
+    ${aiDisclosureHtml}`;
+
+  const relevanceCardHtml = supportsEnglish ? '' : `
+    <div class="steam-spp-side-block">
+      <div class="steam-spp-side-heading">Is this game relevant to you?</div>
+      <div class="steam-spp-reason">Unavailable in your <span class="steam-spp-link-text">preferred languages</span></div>
+    </div>`;
+
+  const featuresHtml = `
+    <div class="steam-spp-side-block">
+      <div class="steam-spp-side-heading">Features</div>
+      <div class="steam-spp-features-row">
+        <div class="steam-spp-feature"><span class="steam-spp-feature-icon">📊</span><span>Stats</span></div>
+        <div class="steam-spp-feature"><span class="steam-spp-feature-icon">👪</span><span>Family Sharing</span></div>
+        ${usesAI ? `<div class="steam-spp-feature steam-spp-feature-warn" title="This game is not currently eligible to appear in certain showcases on your Steam Profile, and does not contribute to global Achievement or game collector counts."><span class="steam-spp-feature-icon">ⓘ</span><span>Profile Features Limited</span></div>` : ''}
+      </div>
+      ${aiThirdParty ? `<div class="steam-spp-drm-notice">Connects to 3rd-Party Service for AI Content Generation: <span class="steam-spp-link-text">${aiServiceName}</span></div>` : ''}
+    </div>`;
+
+  const langRows = langCodes.map(code => `
+      <tr><td class="steam-spp-lang-name">${escHtml(OB_LANG_NAMES[code] || code)}</td><td class="steam-spp-lang-check">✓</td><td class="steam-spp-lang-check">—</td><td class="steam-spp-lang-check">—</td></tr>`).join('');
+  const languagesHtml = `
+    <div class="steam-spp-side-block">
+      <div class="steam-spp-side-heading">Languages</div>
+      <table class="steam-spp-lang-table">
+        <tr><th></th><th>Interface</th><th>Full Audio</th><th>Subtitles</th></tr>
+        ${langRows}
+      </table>
+    </div>`;
+
+  const deckHtml = `
+    <div class="steam-spp-side-block">
+      <div class="steam-spp-side-heading">Steam Deck Compatibility</div>
+      <div class="steam-spp-deck-row">
+        <span class="steam-spp-deck-icon">?</span>
+        <span>Unknown</span>
+        <button class="steam-spp-deck-btn" type="button">Learn more</button>
+      </div>
+    </div>`;
+
+  const infoBlockHtml = `
+    <div class="steam-spp-side-block">
+      <div class="steam-spp-info-line"><strong>Title:</strong> ${escHtml(gameTitle)}</div>
+      <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
+      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text">${devName}</span></div>
+      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text">${pubName}</span></div>
+    </div>`;
+
+  const linksHtml = `
+    <div class="steam-spp-side-block steam-spp-links">
+      <div class="steam-spp-linkbar">View update history ›</div>
+      <div class="steam-spp-linkbar">Read related news ›</div>
+      <div class="steam-spp-linkbar">View discussions ›</div>
+      <div class="steam-spp-linkbar">Find Community Groups ›</div>
+    </div>`;
+
+  const embedRowHtml = `
+    <div class="steam-spp-side-block steam-spp-embed-row">
+      <button class="steam-spp-hub-btn" type="button">Embed</button>
+      <button class="steam-spp-flag-btn" type="button" aria-label="Report this Product">⚑</button>
+    </div>`;
+
+  const rightColHtml = `
+    ${relevanceCardHtml}
+    ${featuresHtml}
+    ${languagesHtml}
+    ${deckHtml}
+    ${infoBlockHtml}
+    ${linksHtml}
+    ${embedRowHtml}`;
+
+  return `
+    <p class="steam-spp-intro">Preview of your public Steam store page — Steam's own page header and footer aren't shown here.</p>
+    <div class="steam-spp-proto">
+      ${breadcrumbHtml}
+      ${headerHtml}
+      ${mediaBlockHtml}
+      ${queueRowHtml}
+      <div class="steam-spp-columns">
+        <div class="steam-spp-col-main">${leftColHtml}</div>
+        <div class="steam-spp-col-side">${rightColHtml}</div>
+      </div>
+    </div>`;
 }
 
 /* Steam: "Select Key Art" — collects four Key Art images, sorted
