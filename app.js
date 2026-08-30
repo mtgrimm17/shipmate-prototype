@@ -8020,10 +8020,11 @@ function _steamSppTitleInput(value) {
    state.js). */
 function _steamSppSetField(field, value) {
   if (!state.webSite) return;
-  if (field === 'shortDesc')       state.webSite.description = value;
-  else if (field === 'aboutGame')  state.webSite.aboutGame   = value;
-  else if (field === 'developer')  state.webSite.developer   = value;
-  else if (field === 'publisher')  state.webSite.publisher   = value;
+  if (field === 'shortDesc')       state.webSite.description  = value;
+  else if (field === 'aboutGame')  state.webSite.aboutGame    = value;
+  else if (field === 'developer')  state.webSite.developer    = value;
+  else if (field === 'publisher')  state.webSite.publisher    = value;
+  else if (field === 'releaseDate') state.webSite.releaseDate = value;
 }
 
 /* Developer/Publisher are plain <input>s inline in the prototype's "glance"
@@ -8066,7 +8067,16 @@ function _steamSppAutoGrow(el) {
    by render.js. */
 function _steamSppCarouselSelect(el) {
   const strip = el.closest('.steam-spp-media-thumbs');
-  const hero  = strip?.parentElement?.querySelector('.steam-spp-media-hero');
+  // .closest('.steam-spp-media-left') rather than strip.parentElement — the
+  // v4.56 scrollbar-smoothness pass wrapped the thumb strip together with
+  // the scrollbar in its own .steam-spp-media-thumbs-wrap (so the two move
+  // as one unit under the bottom-alignment fix's margin-top:auto), which
+  // made the strip's immediate parentElement that wrapper instead of
+  // .steam-spp-media-left — silently breaking this lookup (the hero lives
+  // outside the wrapper, as the wrapper's own preceding sibling) and with it
+  // every thumbnail/trailer click. .closest() walks up past the wrapper
+  // however the DOM is nested, so it isn't tied to one specific level again.
+  const hero = strip?.closest('.steam-spp-media-left')?.querySelector('.steam-spp-media-hero');
   if (!hero) return;
   strip.querySelectorAll('.steam-spp-carousel-thumb').forEach(t => t.classList.remove('is-active'));
   el.classList.add('is-active');

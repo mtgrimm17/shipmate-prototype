@@ -6827,6 +6827,15 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-wide {
   max-width: 920px;
 }
+/* Steam's Store Page Preview - Prototype only — see renderStepModal's own
+   comment, render.js, for why this needs to be wider than
+   .submit-modal-wide rather than reusing it: the media carousel's 16:9
+   hero needs a wider column to grow tall enough to reach the "at a
+   glance" column's own height at its own font sizes, closing the gap that
+   would otherwise open up above the thumbnail strip. */
+.submit-modal.submit-modal-steam-spp {
+  max-width: 1180px;
+}
 .submit-modal {
   height: clamp(560px, 88vh, 860px);
   display: flex;
@@ -12429,7 +12438,10 @@ body.viewing-splash #app-guide { display: none; }
   font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
 }
 .steam-spp-btn-green { background: #5c7e10; }
-.steam-spp-btn-blue  { background: #2a6fd6; }
+/* .steam-spp-btn-blue (a #2a6fd6 "Add to Library" variant) was dropped along
+   with that button — see purchaseAreaHtml's isFreeGame branch, render.js:
+   a real Steam page's free-to-play purchase row shows a single "Play Game"
+   CTA next to the Free To Play price pill, not a second library button. */
 
 .steam-spp-section { margin-bottom: 18px; }
 .steam-spp-h2 { font-size: 16px; font-weight: 600; color: #fff; margin: 0 0 8px; }

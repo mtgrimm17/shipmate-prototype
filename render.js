@@ -4162,9 +4162,24 @@ function renderStepModal() {
   // Questionnaire contains privacy matrix — needs extra width for iOS and Android.
   // Preview Website needs extra width for the two-column presskit layout.
   const isWide = (stepId === 'questionnaire' && (platformId === 'ios' || platformId === 'android'))
-              || (stepId === 'storePreview' && platformId === 'web')
-              || (stepId === 'storePreviewPrototype' && platformId === 'steam');
-  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (state.showHighlights ? ' is-validating' : '');
+              || (stepId === 'storePreview' && platformId === 'web');
+  // Steam's Store Page Preview - Prototype gets its OWN (wider still)
+  // modifier rather than reusing .submit-modal-wide — its media-carousel
+  // column needs more room than the other .submit-modal-wide steps do: the
+  // hero image's fixed 16:9 aspect ratio means its rendered height is a
+  // direct function of the column's width, and at .submit-modal-wide's
+  // 920px that height fell well short of the "at a glance" column's own
+  // natural height (developer/publisher/release date/short description),
+  // leaving a real gap between the hero and the thumbnail strip beneath it
+  // (.steam-spp-tags's/.steam-spp-media-thumbs-wrap's margin-top:auto
+  // bottom-alignment trick pushes the strip down to close that gap at the
+  // BOTTOM, but can't do anything about the empty space it opens up between
+  // the hero and the strip). Widening the column instead grows the hero
+  // tall enough on its own to mostly close that gap at the source, per
+  // request, rather than shrinking fonts to force the glance column
+  // shorter.
+  const isSteamSpp = stepId === 'storePreviewPrototype' && platformId === 'steam';
+  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];
@@ -10087,6 +10102,19 @@ function buildSteamStorePreviewPrototypeSection() {
   const steamShortDescription = (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
   const shortDescRaw = (ws.description && ws.description.trim()) || steamShortDescription;
 
+  // Release Date — the exact same state.webSite.releaseDate field the
+  // preview website's own "About" > Release Date sub-section reads (see its
+  // comment in buildWebSitePreviewSection above, and webSite.releaseDate's
+  // own comment in state.js): free text, auto-populated once from Steam's
+  // appdetails 'release_date' when the linked title has one
+  // (_applySteamAboutData, app.js), otherwise "Coming soon" — but unlike
+  // that read-only display, editable inline here the same way
+  // Developer/Publisher are (an <input>, not a flip-to-a-panel field), per
+  // request. Falls back to the literal string for its VALUE (not just a
+  // placeholder) so the field always shows real, editable text rather than
+  // ever looking blank.
+  const releaseDateRaw = (ws.releaseDate && ws.releaseDate.trim()) || 'Coming soon';
+
   // Media carousel — up to two trailers first (the Steam-fetched one with a
   // real playable asset, then the general Assets-tab upload, which has none
   // — see _steamSppHeroMarkup above), followed by every uploaded screenshot
@@ -10254,6 +10282,9 @@ function buildSteamStorePreviewPrototypeSection() {
         <span class="steam-spp-label">All Reviews:</span>
         <span class="steam-spp-muted">No user reviews</span>
       </div>
+      <div class="steam-spp-devrow"><span class="steam-spp-label">Release Date:</span>
+        <input type="text" class="steam-spp-inline-input" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
+               oninput="_steamSppSetField('releaseDate', this.value)"></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
         <input type="text" class="steam-spp-inline-input${ws.developer ? '' : ' steam-spp-glow-empty'}" id="steam-spp-dev-input" value="${escHtml(ws.developer || '')}"
                placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
@@ -10318,6 +10349,11 @@ function buildSteamStorePreviewPrototypeSection() {
   const PURCHASE_ICON_SIZE = 16;
   const purchaseIconsHtml = `${_winIcon(PURCHASE_ICON_SIZE)}${hasMacSupport ? platformIcon('macos', PURCHASE_ICON_SIZE) : ''}`;
 
+  // Free-to-play branch shows a single "Play Game" CTA beside the "Free To
+  // Play" price pill — matching a real Steam page's own f2p purchase row —
+  // rather than also pairing it with a second "Add to Library" button
+  // (dropped by request: that extra button widened the bar well past what
+  // real Steam shows for a free title, part of what read as "too large").
   const purchaseAreaHtml = isFreeGame
     ? `
       <div class="steam-spp-purchase">
@@ -10329,7 +10365,6 @@ function buildSteamStorePreviewPrototypeSection() {
           <div class="steam-spp-purchase-bar">
             <div class="steam-spp-purchase-price">Free To Play</div>
             <button class="steam-spp-btn steam-spp-btn-green" type="button">Play Game</button>
-            <button class="steam-spp-btn steam-spp-btn-blue" type="button">Add to Library</button>
           </div>
         </div>
       </div>`
