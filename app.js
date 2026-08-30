@@ -7829,6 +7829,15 @@ function handleTrailerFiles(files) {
         <button class="btn btn-ghost btn-sm" onclick="removeTrailer('ob-')">Remove</button>
       </div>`;
   }
+  // Also refresh the "Select Steam Assets" section's own trailer row if
+  // that's the surface this upload came through (buildSteamAssetsEditSection,
+  // render.js — its dropzone calls this same function on the master field).
+  const steamAssetsInfo = document.getElementById('steam-assets-trailer-file-info');
+  if (steamAssetsInfo) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    steamAssetsInfo.style.display = 'block';
+    steamAssetsInfo.innerHTML = trailerFileRowHTML(file.name, mb, 'steam-assets-');
+  }
   // Force-sync into the Web platform's own independent trailer slot — see
   // the state.js comment above webSite.trailerFile for why this is a whole-
   // value overwrite rather than the coexisting per-id merge screenshots use.
@@ -7843,12 +7852,16 @@ function handleTrailerFiles(files) {
 }
 
 /* `prefix` distinguishes which trailer-file slot to clear: 'ob-' (or
-   omitted, the default) for Game Details' own state.uploads.trailer, 'ws-'
-   for the Web platform's independent state.webSite.trailerFile (see
-   _wsMediaFieldsHTML, render.js). Clearing Game Details' own trailer file
-   also force-clears the Web platform's copy to match (same one-way sync as
-   handleTrailerFiles above) — clearing the Web platform's own copy only
-   ever touches state.webSite, never state.uploads. */
+   omitted, the default) or 'steam-assets-' for Game Details' own
+   state.uploads.trailer (Steam's "Select Steam Assets" section edits the
+   exact same field via its own 'steam-assets-' prefixed DOM ids — see
+   buildSteamAssetsEditSection, render.js — so it needs no special-casing
+   here, same as 'ob-' falling into the same branch), 'ws-' for the Web
+   platform's independent state.webSite.trailerFile (see _wsMediaFieldsHTML,
+   render.js). Clearing Game Details' own trailer file also force-clears the
+   Web platform's copy to match (same one-way sync as handleTrailerFiles
+   above) — clearing the Web platform's own copy only ever touches
+   state.webSite, never state.uploads. */
 function removeTrailer(prefix) {
   prefix = prefix || 'ob-';
   if (prefix === 'ws-') {
@@ -7989,6 +8002,12 @@ function _steamSppTitleInput(value) {
   if (crumb)    crumb.textContent = shown;
   if (purchase) purchase.textContent = shown;
   if (info)     info.textContent = shown;
+  // Same empty-field pulse the App Store Product Page Preview's own
+  // selectable Title/Subtitle carry while blank (.ias-placeholder) — see
+  // .steam-spp-glow-empty in style.css and the comment above headerHtml in
+  // render.js.
+  const titleInput = document.getElementById('steam-spp-title-input');
+  if (titleInput) titleInput.classList.toggle('steam-spp-glow-empty', !value);
 }
 
 /* Short Description and About This Game are each entirely local to this
@@ -8020,6 +8039,11 @@ function _steamSppDevPubInput(field, value) {
   const infoId = field === 'developer' ? 'steam-spp-devname-info' : 'steam-spp-pubname-info';
   const el = document.getElementById(infoId);
   if (el) el.textContent = value || (field === 'developer' ? 'Developer Name' : 'Publisher Name');
+  // Same empty-field pulse as Title above (.steam-spp-glow-empty) — see the
+  // comment above headerHtml in render.js.
+  const inputId = field === 'developer' ? 'steam-spp-dev-input' : 'steam-spp-pub-input';
+  const input = document.getElementById(inputId);
+  if (input) input.classList.toggle('steam-spp-glow-empty', !value);
 }
 
 /* Grows a textarea to fit its content, no ceiling — About This Game can

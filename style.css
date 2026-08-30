@@ -12279,7 +12279,22 @@ body.viewing-splash #app-guide { display: none; }
 }
 .steam-spp-inline-input::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
 .steam-spp-inline-input:hover, .steam-spp-inline-input:focus { outline: none; border-bottom-color: #2a3f5a; }
-.steam-spp-tags { margin-top: 4px; }
+.steam-spp-tags { margin-top: auto; }
+
+/* Same "needs attention" pulse the App Store Product Page Preview's own
+   selectable Title/Subtitle fields carry while empty (.ias-placeholder,
+   @keyframes ias-meta-pulse — reused directly here rather than duplicated)
+   — applied to every inline-editable field on this prototype (Title, Short
+   Description, About This Game, Developer, Publisher) while it's still
+   showing fallback/placeholder copy. Toggled on/off per-keystroke by each
+   field's own input handler (render.js oninput attributes / app.js's
+   _steamSppTitleInput, _steamSppDevPubInput) rather than requiring a full
+   re-render, same "patch just this field" approach the rest of this
+   prototype's inline editing already follows. */
+.steam-spp-glow-empty {
+  animation: ias-meta-pulse 2s ease-in-out infinite;
+  border-radius: 4px;
+}
 
 /* "Select Steam Assets" button beneath the media carousel (assetsBtnHtml,
    buildSteamStorePreviewPrototypeSection, render.js) — modeled on
@@ -12292,7 +12307,6 @@ body.viewing-splash #app-guide { display: none; }
   transition: background 0.12s;
 }
 .steam-spp-assets-btn:hover { background: #356485; }
-.steam-spp-assets-btn-icon { font-size: 18px; flex-shrink: 0; }
 .steam-spp-assets-btn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .steam-spp-assets-btn-title { font-size: 13px; font-weight: 600; color: #fff; }
 .steam-spp-assets-btn-sub { font-size: 11px; color: #8f98a0; }
@@ -12329,14 +12343,22 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-purchase-title { font-size: 15px; color: #fff; }
 .steam-spp-purchase-icons { display: flex; align-items: center; gap: 8px; color: #c6d4df; flex-shrink: 0; }
 .steam-spp-purchase-bottom { display: flex; justify-content: flex-end; margin-top: 12px; }
-.steam-spp-purchase-bar { display: flex; border-radius: 2px; overflow: hidden; }
+/* Sized and weighted to read as the prominent, slightly "raised" call to
+   action a real Steam purchase bar has (a subtle drop shadow standing in
+   for the real page's floating/overlapping button treatment, without the
+   absolute-positioning overhaul that exact layout would need) — the price
+   box and buttons were previously undersized/flatter than their real-Steam
+   counterpart. Height bumped from 42px and font-size from 14px to line up
+   with .steam-spp-purchase-title's own 15px, so the price/button row reads
+   at the same visual weight as the title above it, matching the reference. */
+.steam-spp-purchase-bar { display: flex; border-radius: 3px; overflow: hidden; box-shadow: 0 3px 6px rgba(0,0,0,0.35); }
 .steam-spp-purchase-price {
-  background: #000; color: #c6d4df; font-size: 14px; font-weight: 600;
-  display: flex; align-items: center; padding: 0 16px;
+  background: #000; color: #c6d4df; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; padding: 0 18px;
 }
 .steam-spp-btn {
-  border: none; padding: 0 20px; height: 42px; display: flex; align-items: center;
-  font-size: 14px; font-weight: 600; cursor: pointer; color: #fff;
+  border: none; padding: 0 22px; height: 46px; display: flex; align-items: center;
+  font-size: 15px; font-weight: 600; cursor: pointer; color: #fff;
 }
 .steam-spp-btn-green { background: #5c7e10; }
 .steam-spp-btn-blue  { background: #2a6fd6; }

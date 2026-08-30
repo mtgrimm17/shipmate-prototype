@@ -508,12 +508,18 @@ const _chevDown = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" s
 const _chevUp   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
 
 // Windows OS-compatibility glyph (Steam's own purchase-area icon row shows
-// this next to the Apple glyph — platformIcon('macos') — when a title
+// this next to the Apple glyph — platformIcon('macos', size) — when a title
 // supports macOS). Not one of Shipmate's own submission platforms, so it
 // isn't a PLATFORM_ICONS entry; a plain four-square grid rather than a
 // pixel copy of Microsoft's mark, current enough to read as "Windows" at
-// this size. Used by buildSteamStorePreviewPrototypeSection below.
-const _winIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="7" height="7"/><rect x="9" y="0" width="7" height="7"/><rect x="0" y="9" width="7" height="7"/><rect x="9" y="9" width="7" height="7"/></svg>`;
+// this size. `size` matches platformIcon's own param so both glyphs in the
+// purchase icon row (buildSteamStorePreviewPrototypeSection below) can share
+// one literal size value instead of drifting apart the way a hardcoded
+// 16-vs-18 split once did — a real Steam purchase bar's OS glyphs read as a
+// matched pair, not two different sizes.
+function _winIcon(size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="7" height="7"/><rect x="9" y="0" width="7" height="7"/><rect x="0" y="9" width="7" height="7"/><rect x="9" y="9" width="7" height="7"/></svg>`;
+}
 
 /* ── IGDB title picklist ─────────────────────────────── */
 
@@ -10152,9 +10158,19 @@ function buildSteamStorePreviewPrototypeSection() {
       <span class="steam-spp-crumb-current" id="steam-spp-crumb-title">${escHtml(gameTitle)}</span>
     </div>`;
 
+  // Title/Short Description/About This Game/Developer/Publisher below all
+  // carry .steam-spp-glow-empty while unfilled — the same pulsing
+  // "needs attention" ring the App Store Product Page Preview's own
+  // selectable Title/Subtitle fields use while empty (.ias-placeholder,
+  // reusing @keyframes ias-meta-pulse — see style.css). The class is
+  // computed here on every render and re-toggled directly by each field's
+  // input handler on every keystroke (_steamSppTitleInput/
+  // _steamSppDevPubInput, and inline for Short Description/About This Game
+  // — see their oninput handlers below), since these fields write to state
+  // and patch their own DOM without a full reRenderStepModal() call.
   const headerHtml = `
     <div class="steam-spp-apphub">
-      <input type="text" class="steam-spp-apphub-name" id="steam-spp-title-input"
+      <input type="text" class="steam-spp-apphub-name${fd.title ? '' : ' steam-spp-glow-empty'}" id="steam-spp-title-input"
              value="${escHtml(fd.title || '')}" placeholder="Your Game Title"
              oninput="_steamSppTitleInput(this.value)">
       <button class="steam-spp-hub-btn steam-spp-hub-btn-fixed" type="button">Community Hub</button>
@@ -10187,18 +10203,18 @@ function buildSteamStorePreviewPrototypeSection() {
   const glanceHtml = `
     <div class="steam-spp-glance">
       ${capsuleHtml}
-      <textarea class="steam-spp-shortdesc steam-spp-autogrow" rows="1"
+      <textarea class="steam-spp-shortdesc steam-spp-autogrow${shortDescRaw ? '' : ' steam-spp-glow-empty'}" rows="1"
                 placeholder="No short description yet."
-                oninput="_steamSppAutoGrow(this); _steamSppSetField('shortDesc', this.value)">${escHtml(shortDescRaw)}</textarea>
+                oninput="_steamSppAutoGrow(this); _steamSppSetField('shortDesc', this.value); this.classList.toggle('steam-spp-glow-empty', !this.value)">${escHtml(shortDescRaw)}</textarea>
       <div class="steam-spp-reviews-row">
         <span class="steam-spp-label">All Reviews:</span>
         <span class="steam-spp-muted">No user reviews</span>
       </div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
-        <input type="text" class="steam-spp-inline-input" value="${escHtml(ws.developer || '')}"
+        <input type="text" class="steam-spp-inline-input${ws.developer ? '' : ' steam-spp-glow-empty'}" id="steam-spp-dev-input" value="${escHtml(ws.developer || '')}"
                placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Publisher:</span>
-        <input type="text" class="steam-spp-inline-input" value="${escHtml(ws.publisher || '')}"
+        <input type="text" class="steam-spp-inline-input${ws.publisher ? '' : ' steam-spp-glow-empty'}" id="steam-spp-pub-input" value="${escHtml(ws.publisher || '')}"
                placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)"></div>
       <div class="steam-spp-tags">
         <div class="steam-spp-muted" style="margin-bottom:6px;">No tags entered yet</div>
@@ -10213,16 +10229,19 @@ function buildSteamStorePreviewPrototypeSection() {
     </div>`;
 
   // Flips the modal to buildSteamAssetsEditSection — manages
-  // state.uploads.screenshots (the array mediaLeftHtml's carousel is built
-  // from, above) and the Steam header capsule. Sits right under the
-  // carousel it feeds, same "the button for a section lives next to what it
-  // controls" placement Community Hub/the purchase area already follow.
+  // state.uploads.screenshots/trailer (the same array/field mediaLeftHtml's
+  // carousel is built from, above) and the Steam header capsule. Sits right
+  // under the carousel it feeds, same "the button for a section lives next
+  // to what it controls" placement Community Hub/the purchase area already
+  // follow. No leading icon (removed by request) — the arrow on the right
+  // is enough of a "this opens something" affordance, matching how
+  // Community Hub/the queue row's own buttons above don't lead with one
+  // either.
   const assetsBtnHtml = `
     <button class="steam-spp-assets-btn" type="button" onclick="openStorePreviewSection('steam','steamAssets')">
-      <span class="steam-spp-assets-btn-icon">🖼️</span>
       <span class="steam-spp-assets-btn-text">
         <span class="steam-spp-assets-btn-title">Select Steam Assets</span>
-        <span class="steam-spp-assets-btn-sub">Manage screenshots and the header capsule</span>
+        <span class="steam-spp-assets-btn-sub">Manage screenshots, trailer, and the header capsule</span>
       </span>
       <span class="steam-spp-assets-btn-arrow">›</span>
     </button>`;
@@ -10245,8 +10264,12 @@ function buildSteamStorePreviewPrototypeSection() {
 
   // Icon row — Windows always shown (every Steam title is assumed
   // Windows-compatible); Apple's glyph joins it only when Mac App Store is
-  // also an active submission platform (hasMacSupport above).
-  const purchaseIconsHtml = `${_winIcon}${hasMacSupport ? platformIcon('macos', 18) : ''}`;
+  // also an active submission platform (hasMacSupport above). Both share the
+  // one PURCHASE_ICON_SIZE literal (see _winIcon's own comment) so they
+  // always render as a matched pair, sized to read as prominently as they do
+  // on a real Steam page rather than as small meta-strip glyphs.
+  const PURCHASE_ICON_SIZE = 20;
+  const purchaseIconsHtml = `${_winIcon(PURCHASE_ICON_SIZE)}${hasMacSupport ? platformIcon('macos', PURCHASE_ICON_SIZE) : ''}`;
 
   const purchaseAreaHtml = isFreeGame
     ? `
@@ -10289,9 +10312,9 @@ function buildSteamStorePreviewPrototypeSection() {
     ${purchaseAreaHtml}
     <div class="steam-spp-section">
       <h2 class="steam-spp-h2">About This Game</h2>
-      <textarea class="steam-spp-about-textarea steam-spp-autogrow" rows="3"
+      <textarea class="steam-spp-about-textarea steam-spp-autogrow${aboutGameRaw ? '' : ' steam-spp-glow-empty'}" rows="3"
                 placeholder="Your game description will appear here once you fill in the Description field in Game Details."
-                oninput="_steamSppAutoGrow(this); _steamSppSetField('aboutGame', this.value)">${escHtml(aboutGameRaw)}</textarea>
+                oninput="_steamSppAutoGrow(this); _steamSppSetField('aboutGame', this.value); this.classList.toggle('steam-spp-glow-empty', !this.value)">${escHtml(aboutGameRaw)}</textarea>
     </div>
     ${aiDisclosureHtml}`;
 
@@ -10382,19 +10405,31 @@ function buildSteamStorePreviewPrototypeSection() {
 /* Steam Store Page Preview - Prototype: "Select Steam Assets" — reached by
    the button beneath the media carousel (see assetsBtnHtml in
    buildSteamStorePreviewPrototypeSection above, and the 'steamAssets' flip
-   target dispatched from buildStorePreviewFlipSection). Manages the exact
-   same state.uploads.screenshots array the carousel itself reads (upload,
-   remove, reorder — moveUploadScreenshot in app.js), so changes here show
-   up in the carousel the moment the modal flips back, plus the Steam
-   header capsule (state.uploads.steamHeaderImage), reusing the same
-   _steamKeyArtUploadHTML row Web's "Key Art" section uses for that field —
-   both are just editors over the one shared field. */
+   target dispatched from buildStorePreviewFlipSection). Manages every asset
+   that carousel is built from:
+     - Screenshots — the exact same state.uploads.screenshots array (upload,
+       remove, reorder — moveUploadScreenshot in app.js), so changes here
+       show up in the carousel the moment the modal flips back.
+     - Trailer — the exact same state.uploads.trailer the Assets tab's own
+       Trailer dropzone manages (handleTrailerDrop/handleTrailerFiles/
+       removeTrailer in app.js, same functions, just a third 'steam-assets-'
+       prefixed DOM target alongside their existing 'ob-'/'ws-' ones — see
+       handleTrailerFiles' own comment in app.js). The read-only Steam-
+       fetched trailer reference (state.uploads.steamTrailer,
+       _steamTrailerPreviewHTML) is shown alongside it, same as the Assets
+       tab and Web's own Media section — it's sourced from the linked Steam
+       page itself, never edited from any of these three surfaces.
+   Also the Steam header capsule (state.uploads.steamHeaderImage), reusing
+   the same _steamKeyArtUploadHTML row Web's "Key Art" section uses for that
+   field — both are just editors over the one shared field. */
 function buildSteamAssetsEditSection() {
   const ups = state.uploads || {};
+  const trailerFile = ups.trailer || null;
+  const steamTrailerHTML = _steamTrailerPreviewHTML(ups.steamTrailer);
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Manage the screenshots and header capsule shown on your Steam store page.
+        Manage the screenshots, trailer, and header capsule shown on your Steam store page.
       </p>
 
       <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
@@ -10411,6 +10446,22 @@ function buildSteamAssetsEditSection() {
                onchange="handleScreenshotFiles(this.files); this.value=''">
       </div>
       <div class="asset-grid" id="steam-assets-screenshot-grid" style="margin-bottom:20px;">${_steamAssetsScreenshotGridHTML()}</div>
+
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailer</label>
+      <div class="asset-guidance">This is the same trailer file your store page's media carousel is built from — see Game Details' own Assets step.</div>
+      <div class="asset-dropzone asset-dropzone-sm" id="steam-assets-trailer-dropzone"
+           onclick="document.getElementById('steam-assets-trailer-input').click()"
+           ondragover="event.preventDefault(); this.classList.add('is-over')"
+           ondragleave="this.classList.remove('is-over')"
+           ondrop="handleTrailerDrop(event); this.classList.remove('is-over')">
+        <div class="asset-dropzone-icon">↑</div>
+        <div class="asset-dropzone-label">Drop a trailer file here, or click to browse</div>
+        <div class="asset-dropzone-hint">MP4 or MOV, any size</div>
+        <input type="file" id="steam-assets-trailer-input" accept="video/*" style="display:none"
+               onchange="handleTrailerFiles(this.files); this.value=''">
+      </div>
+      ${steamTrailerHTML}
+      <div id="steam-assets-trailer-file-info" style="margin-bottom:20px;${trailerFile ? '' : 'display:none;'}">${trailerFile ? trailerFileRowHTML(trailerFile.name, (trailerFile.size / 1024 / 1024).toFixed(1), 'steam-assets-') : ''}</div>
 
       <div class="pk-edit-group-label">Header Capsule</div>
       <div class="asset-guidance">Recommended 460 &times; 215 (landscape). Shown at the top of your store page's media.</div>
