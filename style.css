@@ -12271,12 +12271,18 @@ body.viewing-splash #app-guide { display: none; }
   width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; border: none;
 }
 .steam-spp-media-hero .steam-trailer-video { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
-/* min-height reserves the strip's height even at 0-1 items (thumbs row is
-   now always rendered — see mediaLeftHtml, buildSteamStorePreviewPrototypeSection,
-   render.js) so .steam-spp-media-left's total height stays constant whether
-   or not screenshots have been added, which the bottom-alignment fix on
-   .steam-spp-tags (below) depends on. */
-.steam-spp-media-thumbs { display: flex; gap: 4px; margin-top: 6px; overflow-x: auto; min-height: 52px; }
+/* No min-height here on purpose: with 0 screenshots the strip has nothing
+   inside it (carouselThumbsHtml is an empty string — see mediaLeftHtml,
+   buildSteamStorePreviewPrototypeSection, render.js), and reserving 52px
+   for it anyway left a large dead gap between the "No screenshots yet"
+   placeholder and the scrollbar beneath it. Letting the strip collapse to
+   0 height when empty removes that gap; .steam-spp-media-left's overall
+   height (and the bottom-alignment fix on .steam-spp-tags, below) doesn't
+   depend on this strip specifically — it comes from CSS Grid's own
+   align-items:stretch on .steam-spp-media-block plus each side's
+   margin-top:auto on its own trailing group, which already accounts for
+   whatever height the strip actually has, empty or not. */
+.steam-spp-media-thumbs { display: flex; gap: 4px; margin-top: 6px; overflow-x: auto; }
 .steam-spp-carousel-thumb {
   position: relative; width: 92px; height: 52px; border-radius: 3px; overflow: hidden;
   flex-shrink: 0; cursor: pointer; background: #16202d; border: 2px solid transparent;
@@ -12345,10 +12351,24 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-link-text { color: #67c1f5; }
 .steam-spp-placeholder { color: #5a6a75; font-style: italic; }
 .steam-spp-reviews-row, .steam-spp-devrow { font-size: 12px; }
+/* Real Steam's glance column doesn't space every field evenly: there's a
+   noticeably bigger gap between the short description and "ALL REVIEWS:"
+   than between the reviews/release-date/developer rows themselves (which
+   share the .steam-spp-glance flex gap of 8px below), and Developer/
+   Publisher sit as a tight, gap-less pair rather than each getting that
+   same 8px — measured directly off a real Steam page
+   (store.steampowered.com/app/4037180/Go_Ape_Ship). This adds to the
+   existing 8px flex gap rather than replacing it. */
+.steam-spp-reviews-row { margin-top: 8px; }
 /* Developer/Publisher rows are inline-editable inputs (see
    buildSteamStorePreviewPrototypeSection, render.js) rather than plain
    text, so the row needs to lay the label and input out side by side. */
 .steam-spp-devrow { display: flex; align-items: center; gap: 5px; }
+/* Cancels the flex gap above the Publisher row specifically (see
+   buildSteamStorePreviewPrototypeSection, render.js — only Publisher's
+   devrow carries this class) so it sits directly under Developer with no
+   separating gap, matching real Steam. */
+.steam-spp-devrow-close { margin-top: -8px; }
 .steam-spp-inline-input {
   flex: 1; min-width: 0; font-size: 12px; color: #c6d4df;
   background: transparent; border: none; border-bottom: 1px dashed transparent;
@@ -12400,7 +12420,15 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-queue-spacer { flex: 1; }
 .steam-spp-queue-link { color: #67c1f5; font-size: 12px; }
 
-.steam-spp-columns { display: grid; grid-template-columns: 1fr 260px; gap: 20px; align-items: start; }
+/* Same 2.15fr/1fr ratio and 14px gap as .steam-spp-media-block above,
+   rather than a fixed 260px sidebar — so .steam-spp-col-side (Features/
+   Languages/Steam Deck Compatibility) always comes out exactly as wide as
+   .steam-spp-glance (the header capsule/short description column), no
+   matter the modal width. A fixed px sidebar and the fr-based glance
+   column happened to diverge once the media ratio changed (v4.58); tying
+   both grids to the same ratio+gap keeps them locked together going
+   forward instead of needing to be re-matched by hand again. */
+.steam-spp-columns { display: grid; grid-template-columns: 2.15fr 1fr; gap: 14px; align-items: start; }
 .steam-spp-col-main { min-width: 0; }
 .steam-spp-col-side { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 

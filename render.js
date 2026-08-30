@@ -10288,7 +10288,7 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
         <input type="text" class="steam-spp-inline-input${ws.developer ? '' : ' steam-spp-glow-empty'}" id="steam-spp-dev-input" value="${escHtml(ws.developer || '')}"
                placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
-      <div class="steam-spp-devrow"><span class="steam-spp-label">Publisher:</span>
+      <div class="steam-spp-devrow steam-spp-devrow-close"><span class="steam-spp-label">Publisher:</span>
         <input type="text" class="steam-spp-inline-input${ws.publisher ? '' : ' steam-spp-glow-empty'}" id="steam-spp-pub-input" value="${escHtml(ws.publisher || '')}"
                placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)"></div>
       <div class="steam-spp-tags">
