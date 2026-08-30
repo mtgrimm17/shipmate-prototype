@@ -4320,6 +4320,16 @@ function renderStepModal() {
   // Init distribution map after render if this is the distribution step
   if (stepId === 'distribution') requestAnimationFrame(() => initDistributionMap());
 
+  // Size the Store Page Preview - Prototype's editable textareas to their
+  // pre-filled content on first paint — otherwise a long About This Game
+  // stays clamped to its starting `rows` until the user's first keystroke
+  // triggers _steamSppAutoGrow itself.
+  if (stepId === 'storePreviewPrototype') {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.steam-spp-autogrow').forEach(_steamSppAutoGrow);
+    });
+  }
+
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
 }
@@ -9999,6 +10009,47 @@ function buildSteamStorePreviewSection() {
   `;
 }
 
+/* Builds the inner markup for the Store Page Preview - Prototype's media
+   "stage" (the large box above the thumbnail strip) for one carousel item.
+   Shared between the initial server-rendered HTML (buildSteamStorePreview
+   PrototypeSection below) and the click-driven update in
+   _steamSppCarouselSelect (app.js) — both need to produce identical markup
+   for a given item, so this is the one place that knows how. `kind` is
+   'screenshot' | 'steamTrailer' | 'trailer':
+     - 'screenshot' just shows the full-size image.
+     - 'steamTrailer' reuses the exact same clickable-thumbnail markup (and,
+       via playSteamTrailer, the exact same click-to-play behavior) as the
+       Assets tab and preview website's own Steam-trailer preview
+       (_steamTrailerPreviewHTML above) — scaled up to fill the stage via
+       the .steam-spp-media-hero-scoped overrides in style.css, rather than
+       reimplementing HLS playback a second time.
+     - 'trailer' is the general Assets-tab trailer upload (state.uploads.
+       trailer, app.js/handleTrailerFiles) — file name + size only, no
+       playable asset, so it renders as a labeled placeholder instead of a
+       thumbnail. */
+function _steamSppHeroMarkup(kind, name, src, thumb, hls) {
+  if (kind === 'screenshot') {
+    return `<img src="${escHtml(src)}" alt="${escHtml(name)}">`;
+  }
+  if (kind === 'steamTrailer') {
+    return `
+      <div class="steam-trailer-preview" data-hls-url="${escHtml(hls)}">
+        <div class="steam-trailer-thumb-link" onclick="event.stopPropagation(); playSteamTrailer(this)" role="button" tabindex="0" title="Play trailer">
+          <div class="steam-trailer-thumb">
+            <img src="${escHtml(thumb)}" alt="${escHtml(name)}">
+            <span class="steam-trailer-play-badge">▶</span>
+          </div>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="steam-spp-media-empty steam-spp-hero-trailer-placeholder">
+      <span style="font-size:26px;">🎬</span>
+      <span>${escHtml(name)}</span>
+      <span class="steam-spp-placeholder" style="font-size:11px;">Trailer preview not available in this prototype</span>
+    </div>`;
+}
+
 /* ── Steam: Store Page Preview - Prototype ────────────
    Full-page mockup of the game's public Steam store page, modeled on a real
    scraped store page's structure (this project's own reference export) and
@@ -10011,7 +10062,10 @@ function buildSteamStorePreviewSection() {
    copy everywhere else, same "seed once, then no source" story every other
    optional field on this page follows. Marks storePreviewPrototypeSeen on
    first render, same "visiting counts as done" treatment improveSubmission
-   and the existing Store Page Preview step both already use. */
+   and the existing Store Page Preview step both already use.
+   Title, Short Description, and About This Game are live inline-editable
+   fields (input/textarea, not read-only text) — see _steamSppTitleInput/
+   _steamSppSetField in app.js. */
 function buildSteamStorePreviewPrototypeSection() {
   const fd  = state.formData;
   const ws  = state.webSite;
@@ -10028,20 +10082,34 @@ function buildSteamStorePreviewPrototypeSection() {
   const devName = escHtml(ws.developer || 'Developer Name');
   const pubName = escHtml(ws.publisher || 'Publisher Name');
 
-  // Short description ("Hook") — same fallback chain as the preview website
-  // (ws.description → Steam's own cached short_description → Description).
-  const shortDescRaw = (ws.description && ws.description.trim())
-    || (state.steamLocInfo && state.steamLocInfo.shortDescription)
-    || fd.description || '';
-  const shortDescTrimmed = shortDescRaw.slice(0, 300) + (shortDescRaw.length > 300 ? '…' : '');
-  const shortDesc = shortDescRaw
-    ? escHtml(shortDescTrimmed)
-    : '<span class="steam-spp-placeholder">No short description yet.</span>';
+  // Short description ("Hook") — this prototype's own editable field, bound
+  // straight to ws.description with no fallback to Game Details' Description
+  // (unlike the preview website's own Hook field, which does fall back to
+  // it) — the brief this section was built from calls that out explicitly,
+  // so an unset Hook shows the field's own placeholder rather than
+  // borrowing text the developer typed somewhere else.
+  const shortDescRaw = ws.description || '';
 
-  // Screenshots — reuse the same manual/auto-import shape + resolver as
-  // every other screenshot surface in the app (_screenshotSrc, app.js).
-  const shots     = (ups.screenshots || []).slice(0, 5);
-  const heroShot  = shots[0] ? _screenshotSrc(shots[0]) : '';
+  // Media carousel — up to two trailers first (the Steam-fetched one with a
+  // real playable asset, then the general Assets-tab upload, which has none
+  // — see _steamSppHeroMarkup above), followed by every uploaded screenshot
+  // (_screenshotSrc, app.js, same manual/auto-import shape + resolver every
+  // other screenshot surface in the app already uses).
+  const carouselItems = [];
+  if (ups.steamTrailer) {
+    carouselItems.push({
+      kind: 'steamTrailer',
+      name: ups.steamTrailer.name || 'Trailer',
+      thumb: ups.steamTrailer.thumbnail,
+      hls: ups.steamTrailer.hlsUrl,
+    });
+  }
+  if (ups.trailer) {
+    carouselItems.push({ kind: 'trailer', name: ups.trailer.name || 'Trailer' });
+  }
+  (ups.screenshots || []).forEach((s, i) => {
+    carouselItems.push({ kind: 'screenshot', name: s.name || `Screenshot ${i + 1}`, src: _screenshotSrc(s) });
+  });
 
   // Header Image key art (460×215) — the asset Steam itself uses at the top
   // of a real store page's media block.
@@ -10066,13 +10134,17 @@ function buildSteamStorePreviewPrototypeSection() {
   const langCodes = Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
   const supportsEnglish = langCodes.includes('en');
 
-  // About This Game — kept in sync with Description, same fallback/paragraph
-  // handling as the preview website's own About This Game (_pkParagraphs).
-  const aboutGameRaw   = (ws.aboutGame && ws.aboutGame.trim()) || fd.description || '';
-  const aboutGameParas = _pkParagraphs(aboutGameRaw);
-  const aboutGameHtml  = aboutGameParas.length
-    ? aboutGameParas.map(lines => `<p class="steam-spp-p">${lines.map(escHtml).join('<br>')}</p>`).join('')
-    : '<p class="steam-spp-p steam-spp-placeholder">No description yet — fill in Game Details’ Description field.</p>';
+  // About This Game — this prototype's own editable field, pre-populated
+  // from Game Details' Description the same way the preview website's own
+  // About This Game is (ws.aboutGame is force-synced from formData.
+  // description elsewhere — _wsPropagateAboutGame, app.js — so reading it
+  // here already reflects the current Description; the `|| fd.description`
+  // fallback only matters for a project saved before that sync existed).
+  // Editing this field directly only ever writes ws.aboutGame (via
+  // _steamSppSetField below) — same one-way "doesn't write back to
+  // Description" rule every other direct edit of this field already
+  // follows (see webSite.aboutGame's own comment in state.js).
+  const aboutGameRaw = (ws.aboutGame && ws.aboutGame.trim()) || fd.description || '';
 
   // AI Generated Content Disclosure + the "Profile Features Limited" /
   // 3rd-party-service DRM notice it triggers — all driven by the real
@@ -10087,18 +10159,35 @@ function buildSteamStorePreviewPrototypeSection() {
     <div class="steam-spp-breadcrumb">
       <span>All Games</span><span class="steam-spp-crumb-sep">›</span>
       <span>${escHtml(primaryGenre)}</span><span class="steam-spp-crumb-sep">›</span>
-      <span class="steam-spp-crumb-current">${escHtml(gameTitle)}</span>
+      <span class="steam-spp-crumb-current" id="steam-spp-crumb-title">${escHtml(gameTitle)}</span>
     </div>`;
 
   const headerHtml = `
     <div class="steam-spp-apphub">
-      <button class="steam-spp-hub-btn" type="button">Community Hub</button>
-      <div class="steam-spp-apphub-name">${escHtml(gameTitle)}</div>
+      <input type="text" class="steam-spp-apphub-name" id="steam-spp-title-input"
+             value="${escHtml(fd.title || '')}" placeholder="Your Game Title"
+             oninput="_steamSppTitleInput(this.value)">
+      <button class="steam-spp-hub-btn steam-spp-hub-btn-fixed" type="button">Community Hub</button>
     </div>`;
 
-  const mediaLeftHtml = heroShot
-    ? `<div class="steam-spp-media-hero"><img src="${heroShot}" alt=""></div>
-       ${shots.length > 1 ? `<div class="steam-spp-media-thumbs">${shots.map(s => `<img src="${_screenshotSrc(s)}" alt="">`).join('')}</div>` : ''}`
+  const firstCarouselItem = carouselItems[0];
+  const heroInnerHtml = firstCarouselItem
+    ? _steamSppHeroMarkup(firstCarouselItem.kind, firstCarouselItem.name, firstCarouselItem.src, firstCarouselItem.thumb, firstCarouselItem.hls)
+    : '';
+  const carouselThumbsHtml = carouselItems.map((item, i) => {
+    const thumbSrc  = item.kind === 'screenshot' ? item.src : (item.thumb || '');
+    const thumbImg  = thumbSrc ? `<img src="${escHtml(thumbSrc)}" alt="">` : `<span class="steam-spp-carousel-nothumb">🎬</span>`;
+    const playBadge = item.kind !== 'screenshot' ? `<span class="steam-spp-carousel-play">▶</span>` : '';
+    const attrs = [`data-kind="${item.kind}"`, `data-name="${escHtml(item.name)}"`];
+    if (item.src)   attrs.push(`data-src="${escHtml(item.src)}"`);
+    if (item.thumb) attrs.push(`data-thumb="${escHtml(item.thumb)}"`);
+    if (item.hls)   attrs.push(`data-hls="${escHtml(item.hls)}"`);
+    return `<div class="steam-spp-carousel-thumb${i === 0 ? ' is-active' : ''}" ${attrs.join(' ')} onclick="_steamSppCarouselSelect(this)">${thumbImg}${playBadge}</div>`;
+  }).join('');
+
+  const mediaLeftHtml = firstCarouselItem
+    ? `<div class="steam-spp-media-hero">${heroInnerHtml}</div>
+       ${carouselItems.length > 1 ? `<div class="steam-spp-media-thumbs">${carouselThumbsHtml}</div>` : ''}`
     : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
 
   const capsuleHtml = headerImgSrc
@@ -10108,7 +10197,9 @@ function buildSteamStorePreviewPrototypeSection() {
   const glanceHtml = `
     <div class="steam-spp-glance">
       ${capsuleHtml}
-      <div class="steam-spp-shortdesc">${shortDesc}</div>
+      <textarea class="steam-spp-shortdesc steam-spp-autogrow" rows="1"
+                placeholder="No short description yet."
+                oninput="_steamSppAutoGrow(this); _steamSppSetField('shortDesc', this.value)">${escHtml(shortDescRaw)}</textarea>
       <div class="steam-spp-reviews-row">
         <span class="steam-spp-label">All Reviews:</span>
         <span class="steam-spp-muted">No user reviews</span>
@@ -10152,7 +10243,7 @@ function buildSteamStorePreviewPrototypeSection() {
     ? `
       <div class="steam-spp-purchase">
         <div class="steam-spp-purchase-top">
-          <div class="steam-spp-purchase-title">Play ${escHtml(gameTitle)}</div>
+          <div class="steam-spp-purchase-title">Play <span id="steam-spp-purchase-title-text">${escHtml(gameTitle)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
         </div>
         <div class="steam-spp-purchase-bottom">
@@ -10166,7 +10257,7 @@ function buildSteamStorePreviewPrototypeSection() {
     : `
       <div class="steam-spp-purchase">
         <div class="steam-spp-purchase-top">
-          <div class="steam-spp-purchase-title">Buy ${escHtml(gameTitle)}</div>
+          <div class="steam-spp-purchase-title">Buy <span id="steam-spp-purchase-title-text">${escHtml(gameTitle)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
         </div>
         <div class="steam-spp-purchase-bottom">
@@ -10189,7 +10280,9 @@ function buildSteamStorePreviewPrototypeSection() {
     ${purchaseAreaHtml}
     <div class="steam-spp-section">
       <h2 class="steam-spp-h2">About This Game</h2>
-      ${aboutGameHtml}
+      <textarea class="steam-spp-about-textarea steam-spp-autogrow" rows="3"
+                placeholder="Your game description will appear here once you fill in the Description field in Game Details."
+                oninput="_steamSppAutoGrow(this); _steamSppSetField('aboutGame', this.value)">${escHtml(aboutGameRaw)}</textarea>
     </div>
     ${aiDisclosureHtml}`;
 
@@ -10233,7 +10326,7 @@ function buildSteamStorePreviewPrototypeSection() {
 
   const infoBlockHtml = `
     <div class="steam-spp-side-block">
-      <div class="steam-spp-info-line"><strong>Title:</strong> ${escHtml(gameTitle)}</div>
+      <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
       <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
       <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text">${devName}</span></div>
       <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text">${pubName}</span></div>

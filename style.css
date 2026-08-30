@@ -12153,14 +12153,23 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-crumb-current { color: #8f98a0; }
 
 .steam-spp-apphub {
-  display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px;
 }
-.steam-spp-apphub-name { font-size: 26px; font-weight: 400; color: #fff; }
+.steam-spp-apphub-name {
+  font-size: 26px; font-weight: 400; color: #fff; background: transparent;
+  border: none; border-bottom: 1px dashed transparent; padding: 2px 0;
+  font-family: inherit; flex: 1; min-width: 0;
+}
+.steam-spp-apphub-name::placeholder { color: #5a6a75; opacity: 1; }
+.steam-spp-apphub-name:hover, .steam-spp-apphub-name:focus {
+  outline: none; border-bottom-color: #4c6b8a;
+}
 
 .steam-spp-hub-btn, .steam-spp-tag-add, .steam-spp-deck-btn {
   background: #67c1f5; color: #1b2838; border: none; border-radius: 2px;
   padding: 6px 14px; font-size: 11px; font-weight: 600; cursor: pointer;
 }
+.steam-spp-hub-btn-fixed { flex-shrink: 0; }
 
 .steam-spp-media-block {
   display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-bottom: 14px;
@@ -12175,15 +12184,46 @@ body.viewing-splash #app-guide { display: none; }
   color: #4c6b8a; font-size: 12px; background: #16202d;
   border: 1px dashed #3a4b5c;
 }
+.steam-spp-hero-trailer-placeholder {
+  width: 100%; height: 100%; flex-direction: column; gap: 6px; text-align: center; padding: 0 20px;
+}
+/* Scaling the shared .steam-trailer-* preview/player (render.js's
+   _steamTrailerPreviewHTML / app.js's playSteamTrailer) up to fill this
+   stage rather than its native 160px Assets-tab thumbnail size. */
+.steam-spp-media-hero .steam-trailer-preview,
+.steam-spp-media-hero .steam-trailer-thumb-link { width: 100%; height: 100%; margin-top: 0; display: block; }
+.steam-spp-media-hero .steam-trailer-thumb {
+  width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; border: none;
+}
+.steam-spp-media-hero .steam-trailer-video { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
 .steam-spp-media-thumbs { display: flex; gap: 4px; margin-top: 6px; overflow-x: auto; }
-.steam-spp-media-thumbs img { height: 52px; border-radius: 3px; flex-shrink: 0; object-fit: cover; }
+.steam-spp-carousel-thumb {
+  position: relative; width: 92px; height: 52px; border-radius: 3px; overflow: hidden;
+  flex-shrink: 0; cursor: pointer; background: #16202d; border: 2px solid transparent;
+  display: flex; align-items: center; justify-content: center;
+}
+.steam-spp-carousel-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.steam-spp-carousel-thumb.is-active { border-color: #67c1f5; }
+.steam-spp-carousel-nothumb { font-size: 18px; color: #8f98a0; }
+.steam-spp-carousel-play {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,.6);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; padding-left: 1px;
+}
 
 .steam-spp-glance { display: flex; flex-direction: column; gap: 8px; }
 .steam-spp-capsule-img {
   width: 100%; aspect-ratio: 460/215; border-radius: 4px; object-fit: cover;
   font-size: 11px;
 }
-.steam-spp-shortdesc { font-size: 12px; color: #c6d4df; line-height: 1.5; }
+.steam-spp-shortdesc {
+  display: block; width: 100%; font-size: 12px; color: #c6d4df; line-height: 1.5;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  padding: 2px 0; font-family: inherit; resize: none; overflow: hidden;
+}
+.steam-spp-shortdesc::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
+.steam-spp-shortdesc:hover, .steam-spp-shortdesc:focus { outline: none; border-bottom-color: #2a3f5a; }
 .steam-spp-label { color: #8f98a0; }
 .steam-spp-muted { color: #8f98a0; font-size: 12px; }
 .steam-spp-link-text { color: #67c1f5; }
@@ -12238,6 +12278,13 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-h2 { font-size: 16px; font-weight: 600; color: #fff; margin: 0 0 8px; }
 .steam-spp-p { margin: 0 0 10px; font-size: 13px; color: #c6d4df; }
 .steam-spp-italic { font-style: italic; color: #a3b3c2; }
+.steam-spp-about-textarea {
+  display: block; width: 100%; font-size: 13px; color: #c6d4df; line-height: 1.6;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  padding: 2px 0; font-family: inherit; resize: none; overflow: hidden;
+}
+.steam-spp-about-textarea::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
+.steam-spp-about-textarea:hover, .steam-spp-about-textarea:focus { outline: none; border-bottom-color: #2a3f5a; }
 
 .steam-spp-side-block { font-size: 12px; }
 .steam-spp-side-heading {

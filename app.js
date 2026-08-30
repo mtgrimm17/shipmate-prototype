@@ -7942,6 +7942,72 @@ function playSteamTrailer(el) {
   document.addEventListener('click', closeOnClickAway, true);
 }
 
+/* ── Steam: Store Page Preview - Prototype — inline editing + carousel ──
+   The prototype's Title/Short Description/About This Game fields are real
+   <input>/<textarea> elements (buildSteamStorePreviewPrototypeSection,
+   render.js), not click-to-open-a-modal glow boxes like the rest of the
+   app's preview surfaces — these four helpers are what make that work. */
+
+/* Title lives in a single <input> (#steam-spp-title-input) but is echoed
+   read-only in three other spots on the same page (breadcrumb, purchase
+   strip, genre/manufacturer block) — cheaper to patch those three
+   textContent nodes directly on every keystroke than to re-render the
+   whole modal body. Writes through syncField so Title stays the one
+   shared Game Details field every other surface in the app already reads
+   (project bar, Shippy Guide, etc. all react to it the same way). */
+function _steamSppTitleInput(value) {
+  syncField('title', value);
+  const shown = value || 'Your Game Title';
+  const crumb = document.getElementById('steam-spp-crumb-title');
+  const purchase = document.getElementById('steam-spp-purchase-title-text');
+  const info = document.getElementById('steam-spp-info-title');
+  if (crumb)    crumb.textContent = shown;
+  if (purchase) purchase.textContent = shown;
+  if (info)     info.textContent = shown;
+}
+
+/* Short Description and About This Game are each entirely local to this
+   one preview (state.webSite.description / .aboutGame) with nothing else
+   on the page to keep in sync, so a plain state write is enough — no
+   targeted DOM patching needed the way Title's echoes require. Editing
+   About This Game here deliberately never writes back to Game Details'
+   Description — same one-way rule the Web preview website's own About
+   This Game field already follows (see webSite.aboutGame's comment in
+   state.js). */
+function _steamSppSetField(field, value) {
+  if (!state.webSite) return;
+  if (field === 'shortDesc')       state.webSite.description = value;
+  else if (field === 'aboutGame')  state.webSite.aboutGame   = value;
+}
+
+/* Grows a textarea to fit its content, no ceiling — About This Game can
+   run to several paragraphs and shouldn't start scrolling internally
+   inside an already-scrollable modal. Called on input, and once per
+   textarea right after the modal first renders (see the storePreviewPrototype
+   branch in renderStepModal, render.js) so pre-filled content sizes
+   correctly before the user ever types. */
+function _steamSppAutoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+/* Clicking a thumbnail in the media carousel's strip swaps the big stage
+   above it to match — screenshot, the real playable Steam trailer, or the
+   general Assets-tab trailer's placeholder (_steamSppHeroMarkup, render.js,
+   shared with the initial server-rendered markup so both paths agree on
+   what each item kind looks like). `el` is the clicked
+   .steam-spp-carousel-thumb; its item data travels in data-* attributes set
+   by render.js. */
+function _steamSppCarouselSelect(el) {
+  const strip = el.closest('.steam-spp-media-thumbs');
+  const hero  = strip?.parentElement?.querySelector('.steam-spp-media-hero');
+  if (!hero) return;
+  strip.querySelectorAll('.steam-spp-carousel-thumb').forEach(t => t.classList.remove('is-active'));
+  el.classList.add('is-active');
+  const { kind, name, src, thumb, hls } = el.dataset;
+  hero.innerHTML = _steamSppHeroMarkup(kind, name, src, thumb, hls);
+}
+
 /* onload handler for the preview website's capsule image (.pk-capsule-img,
    see capsuleHTML in buildWebSitePreviewSection, render.js) — corrects the
    box's aspect-ratio to the REAL loaded image's own naturalWidth/
