@@ -1237,11 +1237,6 @@ async function openStepModal(pid, stepId) {
 }
 
 function closeStepModal() {
-  // Clear the "came from Web's Key Art modal" detour flag whenever the step
-  // modal closes by any means, so a stray future visit to Steam's Key Art
-  // section (not via openSteamKeyArtFromWebEdit) doesn't inherit it.
-  state.steamKeyArtFromWebEdit = false;
-
   // Record that this step has been saved/attempted at least once
   // (drives red-dot visibility and required-field alert visibility)
   const sm = state.stepModal;
@@ -4241,6 +4236,11 @@ function handleScreenshotFiles(files) {
       state.webSite.screenshots.push({ ...entry });
       const wsGrid = document.getElementById('ws-screenshot-grid');
       if (wsGrid) renderWebScreenshotGridInto(wsGrid);
+      // Also refresh the "Select Steam Assets" grid if that's the surface
+      // this upload came through (buildSteamAssetsEditSection, render.js —
+      // its dropzone calls this same function on the master array).
+      const steamAssetsGrid = document.getElementById('steam-assets-screenshot-grid');
+      if (steamAssetsGrid) steamAssetsGrid.innerHTML = _steamAssetsScreenshotGridHTML();
     };
     reader.readAsDataURL(file);
   });
@@ -7690,6 +7690,31 @@ function removeScreenshot(id) {
     const wsGrid = document.getElementById('ws-screenshot-grid');
     if (wsGrid) renderWebScreenshotGridInto(wsGrid);
   }
+  // Also refresh the "Select Steam Assets" grid if that's the surface this
+  // removal came through (buildSteamAssetsEditSection, render.js — its
+  // Remove buttons call this same function on the master array).
+  const steamAssetsGrid = document.getElementById('steam-assets-screenshot-grid');
+  if (steamAssetsGrid) steamAssetsGrid.innerHTML = _steamAssetsScreenshotGridHTML();
+}
+
+/* Reorders state.uploads.screenshots in place by swapping the item at `id`
+   with its neighbor in direction `dir` (-1 = left/up, +1 = right/down) —
+   the same master array removeScreenshot above operates on, so a reorder
+   here is immediately visible everywhere that array is read (Assets tab,
+   Steam SPP's own media carousel, other platform pickers). Called from the
+   "Select Steam Assets" flip section's reorder buttons
+   (_steamAssetsScreenshotGridHTML, render.js). Does not touch
+   state.webSite.screenshots — that's Web's own independent copy with its
+   own ordering, untouched by reorders made anywhere else. */
+function moveUploadScreenshot(id, dir) {
+  const arr = state.uploads.screenshots;
+  const idx = arr.findIndex(s => s.id === id);
+  if (idx === -1) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  const grid = document.getElementById('steam-assets-screenshot-grid');
+  if (grid) grid.innerHTML = _steamAssetsScreenshotGridHTML();
 }
 
 /* ── Web platform's own Media section — screenshots/trailer dropzones ────
@@ -7978,6 +8003,23 @@ function _steamSppSetField(field, value) {
   if (!state.webSite) return;
   if (field === 'shortDesc')       state.webSite.description = value;
   else if (field === 'aboutGame')  state.webSite.aboutGame   = value;
+  else if (field === 'developer')  state.webSite.developer   = value;
+  else if (field === 'publisher')  state.webSite.publisher   = value;
+}
+
+/* Developer/Publisher are plain <input>s inline in the prototype's "glance"
+   block (buildSteamStorePreviewPrototypeSection, render.js) that write
+   straight to state.webSite.developer/.publisher — the exact same fields
+   Web's own Factsheet edits — so the two surfaces stay in sync with no
+   extra propagation logic (single source of truth, same pattern as Title
+   above). The read-only echo further down the same modal (the info block's
+   "Developer:"/"Publisher:" row) still needs a manual DOM patch on every
+   keystroke since it isn't the same input element. */
+function _steamSppDevPubInput(field, value) {
+  _steamSppSetField(field, value);
+  const infoId = field === 'developer' ? 'steam-spp-devname-info' : 'steam-spp-pubname-info';
+  const el = document.getElementById(infoId);
+  if (el) el.textContent = value || (field === 'developer' ? 'Developer Name' : 'Publisher Name');
 }
 
 /* Grows a textarea to fit its content, no ceiling — About This Game can
@@ -9599,20 +9641,23 @@ function setWebCapsuleSource(source) {
   reRenderStepModal();
 }
 
-/* Steam: "Select Key Art" uploads (Capsule Image / Header Image / IGDB
-   Cover Art / Library Hero) — single-image uploads with a live dataURL
-   preview, same pattern as handleFeatureFiles/removeFeatureGraphic above.
-   This is the canonical source for state.uploads.steamCapsuleImage/
-   steamHeaderImage/steamKeyArtCapsule/steamKeyArtHero — the Web platform's
-   read-only "Key Art" flip modal (buildWebKeyArtEditSection) links here
-   via openSteamKeyArtFromWebEdit for all four fields, same relationship
-   the Web platform's Trailers/Screenshots sub-sections have with
-   Shipmate's Assets step. Each reRenderStepModal() call refreshes this
-   modal (buildSteamKeyArtEditSection) and, once the user flips back, the
-   Web preview's hero/capsule (buildWebSitePreviewSection) if that's
-   currently open instead (only IGDB Cover Art/Library Hero feed that
-   preview; Capsule Image/Header Image have no preview-website
-   counterpart). */
+/* Key Art uploads (Capsule Image / Header Image / IGDB Cover Art / Library
+   Hero) for Web's "Key Art" section (buildWebKeyArtEditSection) —
+   single-image uploads with a live dataURL preview, same pattern as
+   handleFeatureFiles/removeFeatureGraphic above. This is the canonical
+   source for state.uploads.steamCapsuleImage/steamHeaderImage/
+   steamKeyArtCapsule/steamKeyArtHero (their "steam"-prefixed names predate
+   this living on the Web platform — see buildWebKeyArtEditSection's own
+   comment). Each reRenderStepModal() call refreshes this modal and, once
+   the user flips back, the Web preview's hero/capsule
+   (buildWebSitePreviewSection) if that's currently open instead (only IGDB
+   Cover Art/Library Hero feed that preview; Capsule Image/Header Image
+   have no preview-website counterpart). handleSteamKeyArtHeaderImage{Drop,
+   Files}/removeSteamKeyArtHeaderImage below are also the upload handlers
+   for the Steam Store Page Preview - Prototype's own "Select Steam Assets"
+   section (buildSteamAssetsEditSection) — both sections edit the same
+   state.uploads.steamHeaderImage field, so reRenderStepModal() there
+   refreshes whichever of the two is actually open. */
 function handleSteamKeyArtCapsuleDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('is-over');
@@ -9691,27 +9736,6 @@ function handleSteamKeyArtHeaderImageFiles(files) {
 function removeSteamKeyArtHeaderImage() {
   state.uploads.steamHeaderImage = null;
   reRenderStepModal();
-}
-
-/* Jumps from the Web platform's read-only "Key Art" flip modal to Steam's
-   "Select Key Art" section (Store Page Preview step) — a cross-platform
-   detour. Caller closes Web's step modal first (see _wsKeyArtFieldsHTML's
-   onclick). */
-async function openSteamKeyArtFromWebEdit() {
-  state.steamKeyArtFromWebEdit = true;
-  await openStepModal('steam', 'storePreview');
-  await openStorePreviewSection('steam', 'keyArt');
-}
-
-/* "Save & Return to Web" button on Steam's Key Art flip modal when it was
-   opened via openSteamKeyArtFromWebEdit — returns to Web's Key Art modal
-   instead of Steam's own Store Page Preview. See the submit-modal-footer
-   logic in renderStepModal (render.js). */
-async function backFromSteamKeyArtToWebEdit() {
-  state.steamKeyArtFromWebEdit = false;
-  closeStepModal();
-  await openStepModal('web', 'storePreview');
-  await openStorePreviewSection('web', 'webKeyArt');
 }
 
 /* ══════════════════════════════════════════════════════

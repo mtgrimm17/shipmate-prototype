@@ -6516,6 +6516,31 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 .asset-remove:hover { background: var(--magenta); }
 
+/* Reorder controls — same absolute-positioned circular-button treatment as
+   .asset-remove above, mirrored to the top-left corner so the two never
+   overlap. Used by the "Select Steam Assets" screenshot grid
+   (_steamAssetsScreenshotGridHTML, render.js); the leftmost/rightmost thumb
+   simply omits the button that would move it out of range rather than
+   rendering a disabled state. */
+.asset-reorder {
+  position: absolute;
+  top: 5px; left: 5px;
+  display: flex; gap: 3px;
+}
+
+.asset-reorder-btn {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1; transition: background 0.12s;
+}
+.asset-reorder-btn:hover { background: var(--accent, #2a475e); }
+
 .asset-name {
   font-size: 10px; color: var(--text-faint);
   padding: 4px 6px;
@@ -12243,7 +12268,35 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-link-text { color: #67c1f5; }
 .steam-spp-placeholder { color: #5a6a75; font-style: italic; }
 .steam-spp-reviews-row, .steam-spp-devrow { font-size: 12px; }
+/* Developer/Publisher rows are inline-editable inputs (see
+   buildSteamStorePreviewPrototypeSection, render.js) rather than plain
+   text, so the row needs to lay the label and input out side by side. */
+.steam-spp-devrow { display: flex; align-items: center; gap: 5px; }
+.steam-spp-inline-input {
+  flex: 1; min-width: 0; font-size: 12px; color: #c6d4df;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  padding: 1px 0; font-family: inherit;
+}
+.steam-spp-inline-input::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
+.steam-spp-inline-input:hover, .steam-spp-inline-input:focus { outline: none; border-bottom-color: #2a3f5a; }
 .steam-spp-tags { margin-top: 4px; }
+
+/* "Select Steam Assets" button beneath the media carousel (assetsBtnHtml,
+   buildSteamStorePreviewPrototypeSection, render.js) — modeled on
+   .steam-spp-queue-btn's dark-blue Steam-panel treatment, sized as a full
+   row rather than an inline pill since it carries a title + subtitle. */
+.steam-spp-assets-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: #2a475e; color: #c6d4df; border: none; border-radius: 2px;
+  padding: 10px 14px; margin-top: 10px; cursor: pointer; text-align: left;
+  transition: background 0.12s;
+}
+.steam-spp-assets-btn:hover { background: #356485; }
+.steam-spp-assets-btn-icon { font-size: 18px; flex-shrink: 0; }
+.steam-spp-assets-btn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.steam-spp-assets-btn-title { font-size: 13px; font-weight: 600; color: #fff; }
+.steam-spp-assets-btn-sub { font-size: 11px; color: #8f98a0; }
+.steam-spp-assets-btn-arrow { font-size: 18px; color: #67c1f5; flex-shrink: 0; }
 
 .steam-spp-queue-row {
   display: flex; align-items: center; gap: 8px; padding: 10px 0;

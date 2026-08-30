@@ -4185,8 +4185,14 @@ function renderStepModal() {
     // (Removed the "Please review ALL answers before submitting" footer note.)
   }
 
-  // Store Preview flip — which sub-section is currently showing inside the preview modal
-  const flipTarget = stepId === 'storePreview'
+  // Store Preview flip — which sub-section is currently showing inside the preview modal.
+  // storePreviewPrototype shares the same platformId-keyed flip state as
+  // storePreview (state.storePreviewFlipTarget) — only one step modal is
+  // ever open at a time, so there's no risk of the two stepping on each
+  // other, and it means openStorePreviewSection/closeStorePreviewSection
+  // need no changes to also drive storePreviewPrototype's own "Select Steam
+  // Assets" flip target (steamAssets, below).
+  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype')
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
   const FLIP_LABELS = {
@@ -4199,7 +4205,7 @@ function renderStepModal() {
     webDescription:'Description',
     webMedia:      'Media',
     webKeyArt:     'Key Art',
-    keyArt:        'Select Key Art',
+    steamAssets:   'Select Steam Assets',
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
   };
@@ -4254,7 +4260,7 @@ function renderStepModal() {
     else if (stepId === 'business')           body = buildAndroidBusinessSection();
   } else if (platformId === 'steam') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewSection();
-    else if (stepId === 'storePreviewPrototype') body = buildSteamStorePreviewPrototypeSection();
+    else if (stepId === 'storePreviewPrototype') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
     // Legacy / questionnaire kept for backward-compat
     else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
@@ -4301,18 +4307,16 @@ function renderStepModal() {
       ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
       ${isFlipped
-        ? (platformId === 'steam' && flipTarget === 'keyArt' && state.steamKeyArtFromWebEdit)
-          ? `<button class="btn btn-primary" onclick="backFromSteamKeyArtToWebEdit()">Save &amp; Return to Web</button>`
-          // IAP Locs is reached FROM Business Questions (the "IAP Locs" button
-          // on the IAP Products row, buildIapSection) rather than from the
-          // un-flipped Store Preview itself, so its own "Save & Return" flips
-          // back to 'business' specifically — closeStorePreviewSection's
-          // default (flip to null) would instead dump the user out to the
-          // Store Preview, skipping right over the Business Questions they
-          // actually came from.
-          : flipTarget === 'iapLocalizations'
-            ? `<button class="btn btn-primary" onclick="openStorePreviewSection('${platformId}','business')">Save &amp; Return</button>`
-            : `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
+        // IAP Locs is reached FROM Business Questions (the "IAP Locs" button
+        // on the IAP Products row, buildIapSection) rather than from the
+        // un-flipped Store Preview itself, so its own "Save & Return" flips
+        // back to 'business' specifically — closeStorePreviewSection's
+        // default (flip to null) would instead dump the user out to the
+        // Store Preview, skipping right over the Business Questions they
+        // actually came from.
+        ? flipTarget === 'iapLocalizations'
+          ? `<button class="btn btn-primary" onclick="openStorePreviewSection('${platformId}','business')">Save &amp; Return</button>`
+          : `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
         : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
@@ -4411,13 +4415,13 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'screenshots') {
     return buildScreenshotsSection(platformId);
   }
-  // Steam-only: the "Select Key Art" section of the Store Page Preview step
-  // (see buildSteamStorePreviewSection's spp-sections-list). The Web
-  // platform's Key Art modal reads state.uploads.steamKeyArtCapsule/
-  // steamKeyArtHero read-only rather than dispatching here — see
-  // buildWebKeyArtEditSection.
-  if (target === 'keyArt') {
-    return buildSteamKeyArtEditSection();
+  // Steam-only: the Store Page Preview - Prototype's "Select Steam Assets"
+  // button (see buildSteamStorePreviewPrototypeSection) — manages
+  // state.uploads.screenshots (the same array the prototype's own media
+  // carousel reads) and the Steam header capsule. See
+  // buildSteamAssetsEditSection.
+  if (target === 'steamAssets') {
+    return buildSteamAssetsEditSection();
   }
   // The App Store / Mac App Store Product Page Preview's "Localizations"
   // button. Mac App Store gets its own builder (own review-UI scratch state —
@@ -4539,7 +4543,7 @@ function _webCapsuleSourceField(source) {
    together, the full asset is always shown uncropped, whatever shape it
    is, rather than being forced into a mismatched box.
    igdbCoverArt is 264×374 — IGDB's own "cover_big" image size (see
-   buildSteamKeyArtEditSection's doc comment and _applySteamCapsuleFromCover
+   buildWebKeyArtEditSection's doc comment and _applySteamCapsuleFromCover
    in app.js), NOT Steam's 748×896 vertical-capsule spec used above; those
    two numbers describe two different things that happen to occupy the same
    preview-website box. Using 748/896 here (as this box briefly did) leaves
@@ -4613,11 +4617,11 @@ function buildWebSitePreviewSection() {
   const placeholderTitleLine = fd.title ? `${escHtml(fd.title)}<br>` : '';
 
   // Hero banner — shows the uploaded image (state.uploads.steamKeyArtHero)
-  // once set via Steam's "Select Key Art" section (Store Page Preview step —
-  // see buildSteamKeyArtEditSection); falls back to the placeholder graphic
+  // once set via this platform's own "Key Art" section (see
+  // buildWebKeyArtEditSection); falls back to the placeholder graphic
   // otherwise. Glowing + clickable like the four main sections (see
-  // .pk-glowbox / pk-glow-pulse), opening Web's own read-only "Key Art" flip
-  // modal (buildWebKeyArtEditSection), which links to Steam to manage it.
+  // .pk-glowbox / pk-glow-pulse), opening that same Key Art flip modal to
+  // manage it.
   const heroUpload = ups.steamKeyArtHero;
   const heroHTML = heroUpload ? `
     <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
@@ -5276,59 +5280,29 @@ function buildWebMediaEditSection() {
 }
 
 /* Key Art fields: Capsule Image, Header Image, IGDB Cover Art, Library
-   Hero (alphabetical, matching buildSteamKeyArtEditSection's own order) —
-   read-only summaries of the same assets managed in Steam's "Select Key
-   Art" section (Store Page Preview step, see buildSteamKeyArtEditSection).
-   "Manage" jumps to Steam via openSteamKeyArtFromWebEdit — unlike the
-   Media section's own Screenshots/Trailer above, these aren't mirrored
-   into an independent Web-owned copy, so a "Manage" jump-away (rather than
-   inline dropzones) is still the right treatment here. */
-function _wsKeyArtFieldsHTML() {
-  const ups = state.uploads || {};
-  const capsuleImageSummary = ups.steamCapsuleImage ? `Uploaded: ${ups.steamCapsuleImage.name}` : 'No capsule image added yet';
-  const headerImageSummary  = ups.steamHeaderImage  ? `Uploaded: ${ups.steamHeaderImage.name}`  : 'No header image added yet';
-  const capsuleSummary = ups.steamKeyArtCapsule ? `Uploaded: ${ups.steamKeyArtCapsule.name}` : 'No IGDB cover art added yet';
-  const heroSummary    = ups.steamKeyArtHero    ? `Uploaded: ${ups.steamKeyArtHero.name}`    : 'No library hero added yet';
-  return `
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Capsule Image</label>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
-      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(capsuleImageSummary)}</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
-    </div>
-
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Header Image</label>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
-      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(headerImageSummary)}</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
-    </div>
-
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">IGDB Cover Art</label>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
-      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(capsuleSummary)}</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
-    </div>
-
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Library Hero</label>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding:10px 12px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">
-      <span style="font-size:13px;color:var(--text-muted,#6b7280);">${escHtml(heroSummary)}</span>
-      <button class="btn btn-ghost btn-sm" type="button" onclick="closeStepModal(); openSteamKeyArtFromWebEdit();">Manage ›</button>
-    </div>`;
-}
-
-/* Key Art fields: Capsule Image, Header Image, IGDB Cover Art, Library
-   Hero — all four are managed from Steam's Store Page Preview, not here
-   (see _wsKeyArtFieldsHTML), and any change made there (upload, removal,
-   or auto-fill) is reflected on the preview website the next time it
-   renders, since buildWebSitePreviewSection always reads the current
-   upload state fresh rather than a cached copy. Library Hero is always
-   the preview website's hero placeholder; the capsule placeholder's
-   source is a choice among the other three (see the selector below,
-   backed by state.webSite.capsuleSource / setWebCapsuleSource in app.js /
-   _webCapsuleSourceField above buildWebSitePreviewSection) — defaulting
-   to IGDB Cover Art, this section's original sole capsule source, so
-   existing games don't see their preview capsule change without an
-   explicit choice. */
+   Hero — all four are managed directly from this section (upload/remove,
+   via the shared _steamKeyArtUploadHTML row below), not mirrored from a
+   separate Steam-side section as they used to be (Steam's own "Select Key
+   Art" section has been removed — see this file's git history around v4.52
+   if that split ever needs revisiting). Any change made here is reflected
+   on the preview website the next time it renders, since
+   buildWebSitePreviewSection always reads the current upload state fresh
+   rather than a cached copy. Library Hero is always the preview website's
+   hero placeholder; the capsule placeholder's source is a choice among the
+   other three (see the selector below, backed by
+   state.webSite.capsuleSource / setWebCapsuleSource in app.js /
+   _webCapsuleSourceField above buildWebSitePreviewSection) — defaulting to
+   IGDB Cover Art, this section's original sole capsule source, so existing
+   games don't see their preview capsule change without an explicit choice.
+   steamCapsuleImage/steamHeaderImage keep their "steam"-prefixed field
+   names (they're still Steam-appdetails-sourced auto-fills) even though
+   this is no longer a Steam-platform section — renaming them would touch
+   every auto-fill/read site below for no functional benefit. Header Image
+   also gets a second, convenience upload surface on Steam's own Store Page
+   Preview - Prototype (see buildSteamAssetsEditSection) — both read/write
+   the same state.uploads.steamHeaderImage field. */
 function buildWebKeyArtEditSection() {
+  const ups = state.uploads || {};
   const source = (state.webSite && state.webSite.capsuleSource) || 'igdbCoverArt';
   const CAPSULE_SOURCE_OPTIONS = [
     { value: 'capsuleImage', label: 'Capsule Image' },
@@ -5338,7 +5312,7 @@ function buildWebKeyArtEditSection() {
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Key art is managed from the Steam platform's Store Page Preview — uploading it there also updates this preview website.
+        Upload the key art for your preview website. IGDB Cover Art and Library Hero are shown on it directly; Capsule Image and Header Image are also available as capsule sources below.
       </p>
 
       <div class="form-group" style="margin-bottom:20px;">
@@ -5349,7 +5323,21 @@ function buildWebKeyArtEditSection() {
         </select>
       </div>
 
-      ${_wsKeyArtFieldsHTML()}
+      <div class="pk-edit-group-label">Capsule Image</div>
+      <div class="asset-guidance">Recommended 231 &times; 87 (landscape).</div>
+      ${_steamKeyArtUploadHTML('CapsuleImage', 'PNG or JPG, up to ~5MB', ups.steamCapsuleImage)}
+
+      <div class="pk-edit-group-label">Header Image</div>
+      <div class="asset-guidance">Recommended 460 &times; 215 (landscape).</div>
+      ${_steamKeyArtUploadHTML('HeaderImage', 'PNG or JPG, up to ~5MB', ups.steamHeaderImage)}
+
+      <div class="pk-edit-group-label">IGDB Cover Art</div>
+      <div class="asset-guidance">Recommended 264 &times; 374 (portrait).</div>
+      ${_steamKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.steamKeyArtCapsule)}
+
+      <div class="pk-edit-group-label">Library Hero</div>
+      <div class="asset-guidance">Recommended 3840 &times; 1240 (widescreen).</div>
+      ${_steamKeyArtUploadHTML('Hero', 'PNG or JPG, up to ~5MB', ups.steamKeyArtHero)}
     </div>`;
 }
 
@@ -9929,10 +9917,6 @@ function buildSteamStorePreviewSection() {
   const privUrl         = (state.steamSubmitAnswers.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
   const dataDone        = !!privUrl;
   const screenshotsDone = isSteamSectionComplete('screenshots');
-  // Key Art isn't part of Steam's required-section completeness tracking
-  // (isSteamSectionComplete) — it's optional here, same as the rest of this
-  // preview's own "done" checkmarks are purely local UI state.
-  const keyArtDone      = !!(ups.steamKeyArtCapsule && ups.steamKeyArtHero);
 
   function _sppBtn(target, label, sub, isDone) {
     if (isDone) {
@@ -9958,7 +9942,6 @@ function buildSteamStorePreviewSection() {
   const SPP_SECTIONS = [
     { target: 'content',     done: contentDone,     label: 'Answer Content Questions'        },
     { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'              },
-    { target: 'keyArt',      done: keyArtDone,      label: 'Select Key Art'                  },
     { target: 'business',    done: businessDone,    label: 'Answer Business Questions'       },
     { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
   ];
@@ -9999,7 +9982,6 @@ function buildSteamStorePreviewSection() {
     </div>
 
     <div class="spp-sections-list" style="margin-top:14px;">
-      ${_sppBtn('keyArt',   'Select Key Art',                  'Upload your store and library key art', keyArtDone)}
       ${_sppBtn('content',  'Answer Content Questions',        'Mature content, AI usage, and IARC rating',    contentDone)}
       ${_sppBtn('business', 'Answer Business Questions',       'Store tags, genre, and technical details',     businessDone)}
       ${_sppBtn('data',     'Answer Data Collection Questions','Add your privacy policy URL',                  dataDone)}
@@ -10079,16 +10061,24 @@ function buildSteamStorePreviewPrototypeSection() {
   const genreText   = genreList.length ? genreList.join(', ') : 'Indie';
   const primaryGenre = genreList[0] || 'Games';
 
+  // Developer/Publisher — same state.webSite fields the preview website's
+  // own Factsheet edits (setWebSiteField in app.js), so editing either one
+  // here or there updates both. Editable inline below (glanceHtml) via
+  // _steamSppDevPubInput (app.js), which also keeps this fallback-decorated
+  // copy — shown read-only in the sidebar's info block further down — in
+  // sync without a full re-render.
   const devName = escHtml(ws.developer || 'Developer Name');
   const pubName = escHtml(ws.publisher || 'Publisher Name');
 
   // Short description ("Hook") — this prototype's own editable field, bound
-  // straight to ws.description with no fallback to Game Details' Description
-  // (unlike the preview website's own Hook field, which does fall back to
-  // it) — the brief this section was built from calls that out explicitly,
-  // so an unset Hook shows the field's own placeholder rather than
-  // borrowing text the developer typed somewhere else.
-  const shortDescRaw = ws.description || '';
+  // to ws.description with the same fallback the preview website's own Hook
+  // field uses: Steam's own short_description for the linked store page
+  // (state.steamLocInfo.shortDescription, cached by _applySteamAboutData in
+  // app.js) when nothing's been typed here yet. Still never falls back to
+  // Game Details' Description (formData.description) — that fallback chain
+  // belongs to About This Game below, not this field.
+  const steamShortDescription = (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
+  const shortDescRaw = (ws.description && ws.description.trim()) || steamShortDescription;
 
   // Media carousel — up to two trailers first (the Steam-fetched one with a
   // real playable asset, then the general Assets-tab upload, which has none
@@ -10204,8 +10194,12 @@ function buildSteamStorePreviewPrototypeSection() {
         <span class="steam-spp-label">All Reviews:</span>
         <span class="steam-spp-muted">No user reviews</span>
       </div>
-      <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span> <span class="steam-spp-link-text">${devName}</span></div>
-      <div class="steam-spp-devrow"><span class="steam-spp-label">Publisher:</span> <span class="steam-spp-link-text">${pubName}</span></div>
+      <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
+        <input type="text" class="steam-spp-inline-input" value="${escHtml(ws.developer || '')}"
+               placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
+      <div class="steam-spp-devrow"><span class="steam-spp-label">Publisher:</span>
+        <input type="text" class="steam-spp-inline-input" value="${escHtml(ws.publisher || '')}"
+               placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)"></div>
       <div class="steam-spp-tags">
         <div class="steam-spp-muted" style="margin-bottom:6px;">No tags entered yet</div>
         <button class="steam-spp-tag-add" type="button">+ Add your own tags</button>
@@ -10217,6 +10211,21 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-media-left">${mediaLeftHtml}</div>
       ${glanceHtml}
     </div>`;
+
+  // Flips the modal to buildSteamAssetsEditSection — manages
+  // state.uploads.screenshots (the array mediaLeftHtml's carousel is built
+  // from, above) and the Steam header capsule. Sits right under the
+  // carousel it feeds, same "the button for a section lives next to what it
+  // controls" placement Community Hub/the purchase area already follow.
+  const assetsBtnHtml = `
+    <button class="steam-spp-assets-btn" type="button" onclick="openStorePreviewSection('steam','steamAssets')">
+      <span class="steam-spp-assets-btn-icon">🖼️</span>
+      <span class="steam-spp-assets-btn-text">
+        <span class="steam-spp-assets-btn-title">Select Steam Assets</span>
+        <span class="steam-spp-assets-btn-sub">Manage screenshots and the header capsule</span>
+      </span>
+      <span class="steam-spp-assets-btn-arrow">›</span>
+    </button>`;
 
   const queueRowHtml = `
     <div class="steam-spp-queue-row">
@@ -10328,8 +10337,8 @@ function buildSteamStorePreviewPrototypeSection() {
     <div class="steam-spp-side-block">
       <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
       <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
-      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text">${devName}</span></div>
-      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text">${pubName}</span></div>
+      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${devName}</span></div>
+      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text" id="steam-spp-pubname-info">${pubName}</span></div>
     </div>`;
 
   const linksHtml = `
@@ -10361,6 +10370,7 @@ function buildSteamStorePreviewPrototypeSection() {
       ${breadcrumbHtml}
       ${headerHtml}
       ${mediaBlockHtml}
+      ${assetsBtnHtml}
       ${queueRowHtml}
       <div class="steam-spp-columns">
         <div class="steam-spp-col-main">${leftColHtml}</div>
@@ -10369,66 +10379,90 @@ function buildSteamStorePreviewPrototypeSection() {
     </div>`;
 }
 
-/* Steam: "Select Key Art" — collects four Key Art images, sorted
-   alphabetically by section label:
-     - Capsule Image (231×87)     — state.uploads.steamCapsuleImage
-     - Header Image  (460×215)    — state.uploads.steamHeaderImage
-     - IGDB Cover Art (264×374)   — state.uploads.steamKeyArtCapsule
-     - Library Hero   (3840×1240) — state.uploads.steamKeyArtHero
-   Capsule Image and Header Image are Steam's own appdetails-sourced
-   capsule_image/header_image, fetched (alongside Description/Developer/
-   About This Game/Screenshots/Genres) by _applySteamAboutData in app.js
-   when the picked title has a linked Steam page. IGDB Cover Art and
-   Library Hero are auto-filled from IGDB's cover art / Steam's
-   library_hero.jpg respectively — see
-   _applySteamCapsuleFromCover/_applySteamHeroBanner in app.js. All four
-   are also what the Web platform's "Key Art" flip modal
-   (buildWebKeyArtEditSection) reads read-only and links back here via
-   "Manage". Uploading calls reRenderStepModal(), so this modal (and, for
-   IGDB Cover Art/Library Hero, the Web preview behind it) always reflect
-   the latest upload.
-   (A "Library Capsule"/"Logo" pair, auto-filled from Steam's own
-   library_600x900.jpg/logo.png, briefly lived here as well — removed by
-   request; see git history around v3.02 if reviving that is ever needed.) */
-function buildSteamKeyArtEditSection() {
+/* Steam Store Page Preview - Prototype: "Select Steam Assets" — reached by
+   the button beneath the media carousel (see assetsBtnHtml in
+   buildSteamStorePreviewPrototypeSection above, and the 'steamAssets' flip
+   target dispatched from buildStorePreviewFlipSection). Manages the exact
+   same state.uploads.screenshots array the carousel itself reads (upload,
+   remove, reorder — moveUploadScreenshot in app.js), so changes here show
+   up in the carousel the moment the modal flips back, plus the Steam
+   header capsule (state.uploads.steamHeaderImage), reusing the same
+   _steamKeyArtUploadHTML row Web's "Key Art" section uses for that field —
+   both are just editors over the one shared field. */
+function buildSteamAssetsEditSection() {
   const ups = state.uploads || {};
   return `
     <div class="qs-section" style="padding:4px 2px;">
       <p style="margin:0 0 16px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Upload the key art for your Steam store page. IGDB Cover Art and Library Hero are also shown on your preview website.
+        Manage the screenshots and header capsule shown on your Steam store page.
       </p>
 
-      <div class="pk-edit-group-label">Capsule Image</div>
-      <div class="asset-guidance">Recommended 231 &times; 87 (landscape).</div>
-      ${_steamKeyArtUploadHTML('CapsuleImage', 'PNG or JPG, up to ~5MB', ups.steamCapsuleImage)}
+      <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
+      <div class="asset-guidance">This is the same screenshot list your store page's media carousel is built from — reorder it here with the ‹ › arrows on a thumbnail.</div>
+      <div class="asset-dropzone" id="steam-assets-screenshot-dropzone"
+           onclick="document.getElementById('steam-assets-screenshot-input').click()"
+           ondragover="event.preventDefault(); this.classList.add('is-over')"
+           ondragleave="this.classList.remove('is-over')"
+           ondrop="handleScreenshotDrop(event); this.classList.remove('is-over')">
+        <div class="asset-dropzone-icon">↑</div>
+        <div class="asset-dropzone-label">Drop screenshots here, or click to browse</div>
+        <div class="asset-dropzone-hint">PNG or JPG, any size</div>
+        <input type="file" id="steam-assets-screenshot-input" multiple accept="image/*" style="display:none"
+               onchange="handleScreenshotFiles(this.files); this.value=''">
+      </div>
+      <div class="asset-grid" id="steam-assets-screenshot-grid" style="margin-bottom:20px;">${_steamAssetsScreenshotGridHTML()}</div>
 
-      <div class="pk-edit-group-label">Header Image</div>
-      <div class="asset-guidance">Recommended 460 &times; 215 (landscape).</div>
+      <div class="pk-edit-group-label">Header Capsule</div>
+      <div class="asset-guidance">Recommended 460 &times; 215 (landscape). Shown at the top of your store page's media.</div>
       ${_steamKeyArtUploadHTML('HeaderImage', 'PNG or JPG, up to ~5MB', ups.steamHeaderImage)}
-
-      <div class="pk-edit-group-label">IGDB Cover Art</div>
-      <div class="asset-guidance">Recommended 264 &times; 374 (portrait).</div>
-      ${_steamKeyArtUploadHTML('Capsule', 'PNG or JPG, up to ~5MB', ups.steamKeyArtCapsule)}
-
-      <div class="pk-edit-group-label">Library Hero</div>
-      <div class="asset-guidance">Recommended 3840 &times; 1240 (widescreen).</div>
-      ${_steamKeyArtUploadHTML('Hero', 'PNG or JPG, up to ~5MB', ups.steamKeyArtHero)}
     </div>`;
 }
 
+/* Screenshot grid for buildSteamAssetsEditSection above — same
+   state.uploads.screenshots array and .asset-thumb/.asset-remove markup as
+   the Assets tab's own #ob-screenshot-grid (renderScreenshotGridInto,
+   app.js) and Web's independent #ws-screenshot-grid (_wsScreenshotGridHTML
+   above), plus a pair of ‹ › reorder buttons (.asset-reorder,
+   moveUploadScreenshot in app.js) neither of those needs. Returned as a
+   plain string, patched into #steam-assets-screenshot-grid by
+   handleScreenshotFiles/removeScreenshot/moveUploadScreenshot after each
+   change, same "patch just the grid" approach as those other two grids. */
+function _steamAssetsScreenshotGridHTML() {
+  const shots = state.uploads.screenshots || [];
+  if (!shots.length) return '';
+  return shots.map((s, i) => `
+    <div class="asset-thumb" onclick="openScreenshotLightbox(this)">
+      <img src="${_screenshotSrc(s)}" alt="${escHtml(s.name)}">
+      <button class="asset-remove" onclick="event.stopPropagation(); removeScreenshot('${s.id}')" title="Remove">×</button>
+      <div class="asset-reorder">
+        <button type="button" class="asset-reorder-btn" onclick="event.stopPropagation(); moveUploadScreenshot('${s.id}', -1)" ${i === 0 ? 'disabled' : ''} title="Move earlier">‹</button>
+        <button type="button" class="asset-reorder-btn" onclick="event.stopPropagation(); moveUploadScreenshot('${s.id}', 1)" ${i === shots.length - 1 ? 'disabled' : ''} title="Move later">›</button>
+      </div>
+      <div class="asset-name">${escHtml(s.name)}</div>
+    </div>
+  `).join('');
+}
+
 /* Key Art upload row — shared by the Capsule Image / Header Image / IGDB
-   Cover Art / Library Hero sub-sections above. Presentation mirrors the
+   Cover Art / Library Hero sub-sections of Web's "Key Art" section
+   (buildWebKeyArtEditSection) — this used to be Steam's own "Select Key
+   Art" section (Store Page Preview step); that section has been removed
+   and its four fields now live directly on Web's Key Art section instead,
+   which is what calls this. Header Image also gets a second call site: the
+   "Select Steam Assets" section on Steam's own Store Page Preview -
+   Prototype (buildSteamAssetsEditSection), for convenience while working
+   on that page specifically — both write the same
+   state.uploads.steamHeaderImage field. Presentation mirrors the
    Screenshots/Trailer dropzones in the Assets tab (see buildAssetsTab's
    .asset-dropzone markup), but with a live dataURL preview once uploaded
    (like state.uploads.featureGraphic/appIcon), since this is always an
    image. `kind` is 'CapsuleImage', 'HeaderImage', 'Capsule', or 'Hero',
    matching the handleSteamKeyArt{kind}Drop/Files and removeSteamKeyArt{kind}
-   functions in app.js. Each upload sits in a box sized to that asset's
-   real aspect ratio (see .pk-keyart-box in
-   style.css), so the box shows the actual shape/crop before and after
-   uploading — same treatment used for Web's Key Art modal before it became
-   a read-only "Manage" link to
-   here. */
+   functions in app.js (their "steam"-prefixed names are unchanged from
+   when this lived on the Steam platform — see those functions' own doc
+   comment in app.js). Each upload sits in a box sized to that asset's real
+   aspect ratio (see .pk-keyart-box in style.css), so the box shows the
+   actual shape/crop before and after uploading. */
 function _steamKeyArtUploadHTML(kind, hint, upload) {
   const dropId   = `steam-keyart-${kind.toLowerCase()}-dropzone`;
   const inputId  = `steam-keyart-${kind.toLowerCase()}-input`;

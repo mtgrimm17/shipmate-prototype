@@ -2116,12 +2116,13 @@ function makeBlankUploads() {
     screenshots:    [],
     featureGraphic: null,
     trailer:        null,
-    // Key Art (Steam platform's "Select Key Art" section — see
-    // buildSteamKeyArtEditSection in render.js) — four image slots, shown
-    // in alphabetical order: Capsule Image, Header Image, IGDB Cover Art,
-    // Library Hero. Every field can be either { name, dataUrl } for a
-    // manual upload, or { name, url } when auto-populated. Auto-fill
-    // sources:
+    // Key Art (Web platform's "Key Art" section — see
+    // buildWebKeyArtEditSection in render.js, which manages all four fields
+    // directly rather than mirroring a separate Steam-side section) — four
+    // image slots, shown in alphabetical order: Capsule Image, Header
+    // Image, IGDB Cover Art, Library Hero. Every field can be either
+    // { name, dataUrl } for a manual upload, or { name, url } when
+    // auto-populated. Auto-fill sources:
     //   - steamCapsuleImage ("Capsule Image", 231×87) ← Steam's own
     //     appdetails.capsule_image, fetched by _applySteamAboutData in
     //     app.js (same fetchSteamAppDetails call already used for
@@ -2139,10 +2140,13 @@ function makeBlankUploads() {
     //     manual-upload-only rather than erroring.
     // _screenshotSrc in app.js resolves either shape (dataUrl or url,
     // proxying images.igdb.com URLs through wsrv.nl) to a render-ready
-    // <img> src. All four fields are mirrored read-only on the Web
-    // platform's "Key Art" flip modal (buildWebKeyArtEditSection); only
-    // IGDB Cover Art/Library Hero also feed the public preview website's
-    // hero/capsule glow boxes.
+    // <img> src. IGDB Cover Art/Library Hero also feed the public preview
+    // website's hero/capsule glow boxes. steamHeaderImage additionally gets
+    // a second, convenience upload surface on Steam's own Store Page
+    // Preview - Prototype (its "Select Steam Assets" section — see
+    // buildSteamAssetsEditSection in render.js) — both editors read and
+    // write this exact same field, so an upload from either place shows up
+    // in the other.
     // (A "Library Capsule"/"Logo" pair, auto-filled from Steam's own
     // library_600x900.jpg/logo.png, briefly lived here as well — removed by
     // request; see git history around v3.02 if reviving that is ever needed.)
@@ -2317,15 +2321,6 @@ const state = {
   onboardingComplete: false,
   onboardingTab: 0,          // 0 = About, 1 = Distribution, 2 = Assets, 3 = Compliance (unreachable via Next — dead tab)
   _newProjectMode: false,    // true when onboarding is creating a 2nd+ project
-
-  // True while Steam's "Select Key Art" flip section (Store Page Preview
-  // step) was opened via the "Manage" button in the Web platform's "Key Art"
-  // flip modal, rather than through Steam's own normal navigation — while
-  // true, the flip modal footer's "Save & Return" button returns to Web's
-  // Key Art modal instead of Steam's own Store Page Preview. See
-  // openSteamKeyArtFromWebEdit/backFromSteamKeyArtToWebEdit in app.js and
-  // the submit-modal-footer logic in renderStepModal (render.js).
-  steamKeyArtFromWebEdit: false,
 
   // Modal
   activeModal: null,
