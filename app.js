@@ -363,6 +363,31 @@ function calToday() {
   _calRerender();
 }
 function calSetView(v) { state.calendar.view = v; _calRerender(); }
+
+/* "+ New event" opens the composer on today when today is in the month you're
+   looking at, and on the 1st otherwise — dropping a new item into a month you
+   can't see would be worse than picking a visible day for it. */
+function calNewToday(ev) {
+  const today = _calToday();
+  const first = _calMonth();
+  const inView = today.getFullYear() === first.getFullYear() && today.getMonth() === first.getMonth();
+  calNewItem(_calISO(inView ? today : first), ev);
+}
+
+/* Typing rebuilds the grid, which rebuilds the field — so the caret is put back
+   where it was afterwards, or every keystroke would drop focus. */
+function calSearch(v) {
+  state.calendar.query = v;
+  const el = document.getElementById('mcal-search');
+  const pos = el ? el.selectionStart : null;
+  _calRerender();
+  requestAnimationFrame(() => {
+    const next = document.getElementById('mcal-search');
+    if (!next) return;
+    next.focus();
+    if (pos != null) { try { next.setSelectionRange(pos, pos); } catch (_) {} }
+  });
+}
 /* Clicking the selected week again clears it — the gutter is a toggle, so there
    is always a way back to the whole month without hunting for a control. */
 function calSelectWeek(iso) {
@@ -553,13 +578,35 @@ function calDraftDelete() {
 let _calDragKey = null;
 function calDragStart(ev, key) {
   _calDragKey = key;
+  state.calendar.hintDone = true;   // it's been learnt; the hint retires on the next paint
   ev.dataTransfer.effectAllowed = 'move';
   ev.dataTransfer.setData('text/plain', key);
-  ev.currentTarget.classList.add('is-dragging');
+
+  /* The thing under the cursor and the thing left in the cell are two different
+     objects, so each gets its own look.
+     A clone is handed to setDragImage rather than letting the browser photograph
+     the element itself: left to its own devices it takes the picture after this
+     handler returns AND washes it out, which defeated the point of making it
+     solid. The clone is styled .is-flying — its kind's colour at full strength,
+     dark text — parked off-screen only long enough to be captured, and dropped
+     on the next tick. */
+  const el = ev.currentTarget;
+  const ghost = el.cloneNode(true);
+  ghost.classList.add('is-flying');
+  ghost.style.position = 'fixed';
+  ghost.style.top = '-9999px';
+  ghost.style.left = '-9999px';
+  ghost.style.width = el.offsetWidth + 'px';
+  document.body.appendChild(ghost);
+  try { ev.dataTransfer.setDragImage(ghost, ev.offsetX, ev.offsetY); } catch (_) {}
+  setTimeout(() => ghost.remove(), 0);
+
+  el.classList.add('is-dragging');
 }
 function calDragEnd() {
   _calDragKey = null;
-  document.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+  document.querySelectorAll('.is-dragging, .is-flying')
+    .forEach(el => el.classList.remove('is-dragging', 'is-flying'));
   document.querySelectorAll('.mcal-day.is-drop').forEach(el => el.classList.remove('is-drop'));
 }
 function calDragOver(ev) {

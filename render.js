@@ -2445,7 +2445,7 @@ function buildCalendarMonth() {
   const start = _calGridStart(first);
   const end   = _calDay(start, 41);              // 6 weeks, so the grid never reflows
   const today = _calToday();
-  const items = _calItems(start, end);
+  const items = _calItems(start, end).filter(_calMatch);
 
   const byDay = {};
   items.forEach(it => { (byDay[_calISO(it.date)] ||= []).push(it); });
@@ -2492,42 +2492,72 @@ function buildCalendarMonth() {
                 <span class="mcal-chip-lbl">${escHtml(it.label)}</span>
               </button>`).join('')}
             ${more > 0 ? `<span class="mcal-more">+${more} more</span>` : ''}
-          </div>
-          ${launchIt ? `<button class="mcal-launch${_calDone(launchIt) ? ' is-done' : ''}" data-key="${launchIt.key}" draggable="true"
+            ${launchIt ? `<button class="mcal-launch${_calDone(launchIt) ? ' is-done' : ''}" data-key="${launchIt.key}" draggable="true"
                        ondragstart="event.stopPropagation(); calDragStart(event, '${launchIt.key}')"
                        ondragend="calDragEnd()"
                        onclick="event.stopPropagation(); calOpenItem('${launchIt.key}', event)"
                        title="Drag to move the launch date">${escHtml(launchIt.label)}</button>` : ''}
+          </div>
         </div>`;
     }
   }
 
-  const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  /* Week and Day exist as destinations but aren't built — shown disabled rather
-     than hidden, so the month view reads as one of three, the way a calendar app
-     behaves. */
+  /* Apple Calendar's arrangement, in our furniture: an action and a view
+     switcher across the top with search at the far end, then the month name
+     large on its own line with the date nav opposite it.
+     Day, Week and Year exist as destinations but aren't built — shown disabled
+     rather than hidden, so Month reads as one of four the way a calendar does. */
   const views = [
-    { id: 'month', label: 'Month', on: true },
-    { id: 'week',  label: 'Week' },
     { id: 'day',   label: 'Day' },
+    { id: 'week',  label: 'Week' },
+    { id: 'month', label: 'Month', on: true },
+    { id: 'year',  label: 'Year' },
   ].map(v => `<button class="mcal-view${cal.view === v.id ? ' is-on' : ''}${v.on ? '' : ' is-soon'}"
        ${v.on ? `onclick="calSetView('${v.id}')"` : 'disabled title="Coming soon"'}>${v.label}</button>`).join('');
 
+  const q = cal.query || '';
+
   return `
     <div class="mcal-wrap">
-      <div class="mcal-toolbar">
+      <div class="mcal-bar">
+        <button class="mcal-newbtn" onclick="calNewToday(event)">
+          <span class="mcal-newbtn-plus">+</span>New event
+        </button>
+        <div class="mcal-views">${views}</div>
+        <label class="mcal-search${q ? ' is-filled' : ''}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input class="mcal-search-input" id="mcal-search" type="search" placeholder="Search"
+                 value="${escHtml(q)}" oninput="calSearch(this.value)">
+        </label>
+      </div>
+      <div class="mcal-titlerow">
+        <h3 class="mcal-month">
+          <span class="mcal-month-m">${first.toLocaleDateString('en-US', { month: 'long' })}</span>
+          <span class="mcal-month-y">${first.getFullYear()}</span>
+        </h3>
         <div class="mcal-nav">
           <button class="mcal-arrow" onclick="calShiftMonth(-1)" aria-label="Previous month">‹</button>
-          <button class="mcal-arrow" onclick="calShiftMonth(1)" aria-label="Next month">›</button>
           <button class="mcal-today" onclick="calToday()">Today</button>
-          <h3 class="mcal-month">${monthName}</h3>
+          <button class="mcal-arrow" onclick="calShiftMonth(1)" aria-label="Next month">›</button>
         </div>
-        <div class="mcal-views">${views}</div>
       </div>
       <div class="mcal-legend">
         ${Object.entries(CAL_KIND).map(([k, v]) =>
           `<span class="mcal-key"><span class="mcal-key-dot" style="background:${v.color}"></span>${v.label}</span>`).join('')}
-        ${cal.selectedWeek ? `<button class="mcal-clearwk" onclick="calSelectWeek('${cal.selectedWeek}')">Showing one week · clear</button>` : ''}
+        ${q ? `<button class="mcal-clearwk" onclick="calSearch('')">Filtered by “${escHtml(q)}” · clear</button>`
+            : cal.selectedWeek ? `<button class="mcal-clearwk" onclick="calSelectWeek('${cal.selectedWeek}')">Showing one week · clear</button>`
+            /* Teaches the one gesture nothing else announces. Rides in the
+               legend's right-hand slot so it costs no vertical space, and
+               retires itself the first time an event is dragged. */
+            : !cal.hintDone ? `<span class="mcal-hint">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M18 11V6a2 2 0 0 0-4 0"/>
+                  <path d="M14 10V4a2 2 0 0 0-4 0v2"/>
+                  <path d="M10 10.5V6a2 2 0 0 0-4 0v8"/>
+                  <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+                </svg>Drag events to reschedule</span>` : ''}
       </div>
       <div class="mcal-grid">${cells}</div>
       ${_calDraftHTML()}
@@ -2535,6 +2565,14 @@ function buildCalendarMonth() {
 }
 
 const _calDone = it => !!(state.calendar.done || {})[it.key];
+/* The search box filters what's drawn, not what exists: an item that doesn't
+   match simply isn't rendered this pass. Applied at the two places that build a
+   visible list, so the grid and the checklist always agree on what's showing. */
+function _calMatch(it) {
+  const q = (state.calendar.query || '').trim().toLowerCase();
+  if (!q) return true;
+  return `${it.label} ${it.note || ''}`.toLowerCase().includes(q);
+}
 
 /* Where an item is actually resolved, spelled out for a button label:
    "Marketing · Press", "Game Details · Content rating", "Submission".
@@ -2644,9 +2682,7 @@ function _calDetailHTML(d) {
                stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
-      <span class="mcal-pop-tag" style="--k:${kind.color}">
-        <span class="mcal-pop-tagdot"></span>${kind.label}
-      </span>
+      <span class="mcal-pop-tag" style="--k:${kind.color}">${kind.label}</span>
       <h4 class="mcal-pop-h">${escHtml(d.text || '')}</h4>
       <div class="mcal-pop-when">${when}${repeats ? `<span class="mcal-pop-rep-note">${repeats}</span>` : ''}</div>
       ${d.note ? `<p class="mcal-pop-notetext">${escHtml(d.note).replace(/\n/g, '<br>')}</p>` : ''}
@@ -2690,7 +2726,7 @@ function buildCalChecklist() {
     scope = 'Next 7 days';
   }
 
-  const items   = _calItems(from, to, { withUndated: true });
+  const items   = _calItems(from, to, { withUndated: true }).filter(_calMatch);
   const dated   = items.filter(i => i.date);
   const undated = items.filter(i => !i.date);
   /* Counted per section. A single total over both read as wrong, because the
@@ -2707,12 +2743,6 @@ function buildCalChecklist() {
             onclick="event.stopPropagation(); calToggleDone('${it.key}')">&#10003;</span>
       <span class="mcal-task-label">${escHtml(it.label)}</span>
       <span class="mcal-task-date">${it.date ? fmtDateShort(it.date) : '—'}</span>
-      ${it.go ? `<span class="mcal-task-go" title="Open ${escHtml(_calGoLabel(it.go))}"
-                 onclick="event.stopPropagation(); calGoItem('${it.key}')">
-             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-           </span>`
-              : `<span class="mcal-task-go is-empty"></span>`}
     </button>`;
 
   return `

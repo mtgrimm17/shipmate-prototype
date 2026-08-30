@@ -2352,8 +2352,10 @@ const state = {
                     Keyed on the item's natural key, so moving its date doesn't
                     lose the edit.
        hidden       { [itemKey]: true } — generated items removed from view
+       query        search text; filters what the grid and checklist draw
+       hintDone     true once an event has been dragged — retires the hint
        draft        the open composer, or null */
-  calendar: { monthOffset: 1, view: 'month', selectedWeek: null, done: {}, custom: [], overrides: {}, hidden: {}, draft: null },
+  calendar: { monthOffset: 1, view: 'month', selectedWeek: null, done: {}, custom: [], overrides: {}, hidden: {}, query: '', hintDone: false, draft: null },
 
   // Game Details sub-tabs: 'gamedetails' | 'distribution' | 'localization' | 'assets' | 'content'
   details: { section: 'gamedetails', contentPlatform: null },

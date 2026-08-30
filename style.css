@@ -1990,15 +1990,59 @@ body.viewing-splash .app-subnav { display: none; }
    colour arrives as --k from the renderer (the Submission / Marketing tab
    accents), so nothing here hard-codes which is which.
    ══════════════════════════════════════════════════════════════════ */
-.mcal-toolbar {
+/* Top row: action, view switcher, search. Apple's arrangement, our parts. */
+.mcal-bar {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 18px;
+}
+.mcal-newbtn {
+  display: inline-flex; align-items: center; gap: 8px; flex: none;
+  padding: 9px 16px 9px 13px; border-radius: 10px; cursor: pointer;
+  background: rgba(159, 104, 240, .14); border: 1px solid rgba(159, 104, 240, .32);
+  color: #c9b3f2;
+  font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.mcal-newbtn:hover { background: rgba(159, 104, 240, .24); color: #e6d9ff; border-color: rgba(159, 104, 240, .5); }
+.mcal-newbtn-plus { font-size: 16px; line-height: 1; margin-top: -1px; }
+
+/* The switcher sits centred between the two, the way the calendar app has it. */
+.mcal-views {
+  display: flex; align-items: center; gap: 2px; margin: 0 auto;
+  padding: 3px; border-radius: 11px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+
+.mcal-search {
+  display: flex; align-items: center; gap: 8px; flex: none; width: 190px;
+  padding: 0 11px; height: 34px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--text-faint);
+  transition: border-color .15s, color .15s;
+}
+.mcal-search:focus-within, .mcal-search.is-filled { border-color: var(--purple); color: var(--purple); }
+.mcal-search svg { flex: none; display: block; }
+.mcal-search-input {
+  flex: 1; min-width: 0; background: none; border: 0; outline: none; padding: 0;
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: 0; color: var(--text);
+}
+.mcal-search-input::placeholder { color: var(--text-faint); }
+.mcal-search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* Second row: the month, large, with the date nav opposite. */
+/* Centred, not baseline-aligned: the month is 26px and the nav buttons are
+   13px in a 30px box, so sharing a baseline left the month sitting low. */
+.mcal-titlerow {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+  gap: 16px; margin-bottom: 12px;
 }
-.mcal-nav { display: flex; align-items: center; gap: 8px; }
+.mcal-nav { display: flex; align-items: center; gap: 6px; }
 .mcal-month {
-  font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: 0;
-  color: var(--text); margin: 0 0 0 6px;
+  font-family: var(--mono); font-size: 26px; letter-spacing: 0;
+  color: var(--text); margin: 0;
 }
+.mcal-month-m { font-weight: 700; }
+.mcal-month-y { font-weight: 400; color: var(--text-dim); margin-left: 8px; }
 .mcal-arrow, .mcal-today {
   height: 30px; padding: 0 10px; min-width: 30px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
@@ -2028,6 +2072,12 @@ body.viewing-splash .app-subnav { display: none; }
   font-family: var(--mono); font-size: 12px; color: var(--text-dim);
 }
 .mcal-key-dot { width: 8px; height: 8px; border-radius: 50%; }
+.mcal-hint {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 12px;
+  letter-spacing: 0; color: var(--text-faint);
+}
+.mcal-hint svg { flex: none; display: block; }
 .mcal-clearwk {
   margin-left: auto; background: none; border: 0; cursor: pointer;
   font-family: var(--mono); font-size: 12px; color: var(--purple);
@@ -2119,7 +2169,13 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--k); text-align: left;
   transition: background .12s, opacity .12s;
 }
-.mcal-chip:hover { background: color-mix(in srgb, var(--k) 24%, transparent); }
+/* Floats a pixel off the cell on approach: enough to read as a loose object
+   that could be picked up, rather than text printed on the day. */
+.mcal-chip:hover {
+  background: color-mix(in srgb, var(--k) 24%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px -4px rgba(0, 0, 0, .8);
+}
 /* Two lines before it gives up, so "Connect with five content creators" reads
    in full instead of dying at an ellipsis. The clamp still catches anything
    longer, and the cell grows to fit rather than clipping. */
@@ -2150,7 +2206,11 @@ body.viewing-splash .app-subnav { display: none; }
    day number leaves. No tint on the cell and no ring — the block is the
    statement, and layering more around it only muddied it. */
 .mcal-launch {
-  flex: 1; width: 100%; min-height: 34px; margin-top: 2px; padding: 6px;
+  /* Two two-line chips tall, and no taller: a chip is 3px of padding either side
+     of two 14.3px lines (11px at 1.3), so 2 x 34.6 plus the 3px that would sit
+     between them ≈ 72. `flex: none` because it used to stretch to whatever the
+     cell had left, which made it a different size in every month. */
+  flex: none; width: 100%; min-height: 72px; padding: 6px;
   display: grid; place-items: center; text-align: center;
   border: 0; border-radius: 6px; cursor: pointer;
   /* Same language as the chips — the kind's colour on a wash of itself — but
@@ -2161,7 +2221,11 @@ body.viewing-splash .app-subnav { display: none; }
   text-transform: uppercase; letter-spacing: 0;
   transition: background .12s;
 }
-.mcal-launch:hover { background: color-mix(in srgb, var(--green) 26%, transparent); }
+.mcal-launch:hover {
+  background: color-mix(in srgb, var(--green) 26%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px -4px rgba(0, 0, 0, .8);
+}
 .mcal-launch.is-done { opacity: .5; text-decoration: line-through; }
 .mcal-day.is-launchday .mcal-daynum { color: var(--green); font-weight: 700; }
 .mcal-more { font-family: var(--mono); font-size: 10px; color: var(--text-faint); padding-left: 6px; }
@@ -2232,8 +2296,11 @@ body.viewing-splash .app-subnav { display: none; }
 .mcal-pop-title:focus, .mcal-pop-note:focus, .mcal-pop-date:focus { border-color: var(--purple); }
 .mcal-pop-title::placeholder, .mcal-pop-note::placeholder { color: var(--text-faint); }
 .mcal-pop-row { display: flex; align-items: center; gap: 10px; }
+/* Indented by the fields' own 10px of padding, so DATE and REPEAT start on the
+   same line as the text inside "New item" and "Add a note" above them. Sized
+   border-box, so the 48px of label still get their width. */
 .mcal-pop-lbl {
-  flex: none; width: 48px;
+  flex: none; width: 58px; padding-left: 10px; box-sizing: border-box;
   font-family: var(--mono); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0; color: var(--text-faint);
 }
@@ -2274,14 +2341,13 @@ body.viewing-splash .app-subnav { display: none; }
    right edge. */
 .mcal-pop--read.is-roomy { width: 380px; }
 .mcal-pop--read .mcal-pop-go { margin-top: 6px; }
+/* Just the word, in the kind's colour. The pill and its dot were three ways of
+   saying the same thing. */
 .mcal-pop-tag {
-  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-  padding: 3px 9px 3px 7px; border-radius: 999px;
-  background: color-mix(in srgb, var(--k) 16%, transparent);
-  color: var(--k);
-  font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0;
+  align-self: flex-start; color: var(--k);
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0;
 }
-.mcal-pop-tagdot { width: 6px; height: 6px; border-radius: 50%; background: var(--k); }
 .mcal-pop-h {
   margin: 2px 0 0; font-family: var(--mono); font-size: 15px; font-weight: 600;
   line-height: 1.35; letter-spacing: 0; color: var(--text);
@@ -2354,10 +2420,28 @@ body.viewing-splash .app-subnav { display: none; }
 .mcal-task.is-loose { cursor: grab; }
 .mcal-task.is-loose:active { cursor: grabbing; }
 .mcal-task.is-dragging { opacity: .4; }
-/* Events move between days by dragging too. Grab only while the pointer is
-   down, so the chip still reads as clickable at rest. */
-.mcal-chip:active, .mcal-launch:active { cursor: grabbing; }
-.mcal-chip.is-dragging, .mcal-launch.is-dragging { opacity: .4; }
+/* Events move between days by dragging, and the cursor says so on approach —
+   a plain pointer gave no hint that they could be picked up at all.
+   The cursor itself can't be animated (not an animatable property, and only one
+   frame of an animated image is ever used), so the feedback goes on the chip:
+   it presses in under the pointer at the moment of grabbing... */
+.mcal-chip, .mcal-launch { cursor: grab; transition: background .12s, opacity .12s, transform .1s ease; }
+.mcal-chip:active, .mcal-launch:active { cursor: grabbing; transform: scale(.97); }
+/* What the cursor carries: solid, in its own kind's colour with dark text, so
+   it stays legible over any cell it crosses. Only ever worn by the off-screen
+   clone that setDragImage photographs (see calDragStart) — never by anything
+   on the page. */
+.mcal-chip.is-flying, .mcal-launch.is-flying {
+  opacity: 1; transform: none; box-shadow: none;
+  background: var(--k); color: #0a0a0a; font-weight: 600;
+  -webkit-line-clamp: none;
+}
+.mcal-launch.is-flying { background: var(--green); }
+/* ...and what stays behind reads as the hole it came out of, not a copy. */
+.mcal-chip.is-dragging, .mcal-launch.is-dragging {
+  opacity: .35; transform: none;
+  background: transparent; box-shadow: inset 0 0 0 1px currentColor;
+}
 /* The same disc as .gd-task-box in the Shippy guide, value for value: 20px,
    12px glyph at weight 800, no ring, and the tick punched out in the card's own
    background colour. The only difference is the source of the colour — here it
@@ -2377,27 +2461,14 @@ body.viewing-splash .app-subnav { display: none; }
    execution detail nobody needs while scanning the week. */
 .mcal-task-label { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--text); letter-spacing: 0; }
 .mcal-task.is-done .mcal-task-label { color: var(--text-faint); text-decoration: line-through; }
-/* Right-aligned in a fixed column so the dates stack into a readable edge
-   instead of drifting with the length of each label. Tabular figures keep the
-   digits on the same rhythm. */
+/* Last thing in the row, so its right edge is the card's content edge — the
+   same line the section counter ("2/5") ends on in .guide-tasks-head above.
+   Tabular figures keep the digits on the same rhythm. */
 .mcal-task-date {
-  flex: none; min-width: 48px; text-align: right;
+  flex: none; text-align: right;
   font-size: 11px; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-/* The jump lives on the row itself too, so you don't have to open an item to
-   find out it has somewhere to go. Faint until the row is hovered. */
-.mcal-task-go {
-  flex: none; display: grid; place-items: center;
-  width: 20px; height: 20px; margin: 0 -4px 0 2px; border-radius: 6px;
-  color: var(--text-faint); opacity: 0;
-  transition: opacity .12s, color .12s, background .12s;
-}
-.mcal-task:hover .mcal-task-go { opacity: 1; }
-/* Rows with nowhere to go keep the slot anyway, so every date lands on the
-   same right edge. */
-.mcal-task-go.is-empty { pointer-events: none; }
-.mcal-task-go:hover { color: var(--text); background: rgba(255, 255, 255, .10); }
 .mcal-empty { font-family: var(--mono); font-size: 12px; color: var(--text-faint); padding: 6px 0; }
 
 /* Below the guide's breakpoint the month grid stops being readable at 7
