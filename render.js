@@ -10312,14 +10312,21 @@ function buildSteamStorePreviewPrototypeSection() {
   // is enough of a "this opens something" affordance, matching how
   // Community Hub/the queue row's own buttons above don't lead with one
   // either.
+  // .steam-spp-assets-btn-row reuses .steam-spp-media-block's own
+  // grid-template-columns (see style.css — same 2.15fr/1fr literal) so the
+  // button — its only child, auto-placed into the first (2.15fr) track —
+  // always comes out exactly as wide as the media carousel above it rather
+  // than the full row (media + gap + glance).
   const assetsBtnHtml = `
+    <div class="steam-spp-assets-btn-row">
     <button class="steam-spp-assets-btn" type="button" onclick="openStorePreviewSection('steam','steamAssets')">
       <span class="steam-spp-assets-btn-text">
         <span class="steam-spp-assets-btn-title">Select Steam Assets</span>
         <span class="steam-spp-assets-btn-sub">Manage screenshots, trailer, and the header capsule</span>
       </span>
       <span class="steam-spp-assets-btn-arrow">›</span>
-    </button>`;
+    </button>
+    </div>`;
 
   const queueRowHtml = `
     <div class="steam-spp-queue-row">

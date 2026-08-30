@@ -12196,14 +12196,22 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-apphub {
   display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px;
 }
+/* padding/margin: the extra 4px of horizontal padding is what the hover
+   background (below) fills — the equal-and-opposite negative margin keeps
+   this field's own box (and everything laid out around it) exactly the
+   same size it always was, so the highlight can bleed slightly past the
+   text without shifting the Community Hub button beside it. Same trick
+   .ias-editable (App Store Product Page Preview) already uses for its own
+   click-to-edit fields. */
 .steam-spp-apphub-name {
   font-size: 26px; font-weight: 400; color: #fff; background: transparent;
-  border: none; border-bottom: 1px dashed transparent; padding: 2px 0;
+  border: none; border-bottom: 1px dashed transparent; padding: 2px 4px;
+  margin: 0 -4px; border-radius: 4px;
   font-family: inherit; flex: 1; min-width: 0;
 }
 .steam-spp-apphub-name::placeholder { color: #5a6a75; opacity: 1; }
 .steam-spp-apphub-name:hover, .steam-spp-apphub-name:focus {
-  outline: none; border-bottom-color: #4c6b8a;
+  outline: none; border-bottom-color: #4c6b8a; background: rgba(103, 193, 245, .12);
 }
 
 .steam-spp-hub-btn, .steam-spp-tag-add, .steam-spp-deck-btn {
@@ -12336,13 +12344,16 @@ body.viewing-splash #app-guide { display: none; }
   width: 100%; aspect-ratio: 460/215; border-radius: 4px; object-fit: cover;
   font-size: 11px;
 }
+/* Same padding/negative-margin hover trick as .steam-spp-apphub-name
+   above — see its comment. */
 .steam-spp-shortdesc {
   display: block; width: 100%; font-size: 12px; color: #c6d4df; line-height: 1.5;
   background: transparent; border: none; border-bottom: 1px dashed transparent;
-  padding: 2px 0; font-family: inherit; resize: none; overflow: hidden;
+  padding: 2px 4px; margin: 0 -4px; border-radius: 4px;
+  font-family: inherit; resize: none; overflow: hidden;
 }
 .steam-spp-shortdesc::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
-.steam-spp-shortdesc:hover, .steam-spp-shortdesc:focus { outline: none; border-bottom-color: #2a3f5a; }
+.steam-spp-shortdesc:hover, .steam-spp-shortdesc:focus { outline: none; border-bottom-color: #2a3f5a; background: rgba(103, 193, 245, .12); }
 /* Real Steam renders these ("ALL REVIEWS:", "RELEASE DATE:", etc.) in
    uppercase with slight letter-spacing, not title case — same treatment
    .steam-spp-side-heading already uses elsewhere in this file. */
@@ -12369,13 +12380,16 @@ body.viewing-splash #app-guide { display: none; }
    devrow carries this class) so it sits directly under Developer with no
    separating gap, matching real Steam. */
 .steam-spp-devrow-close { margin-top: -8px; }
+/* Same padding/negative-margin hover trick as .steam-spp-apphub-name
+   above — see its comment. */
 .steam-spp-inline-input {
   flex: 1; min-width: 0; font-size: 12px; color: #c6d4df;
   background: transparent; border: none; border-bottom: 1px dashed transparent;
-  padding: 1px 0; font-family: inherit;
+  padding: 1px 4px; margin: 0 -4px; border-radius: 4px;
+  font-family: inherit;
 }
 .steam-spp-inline-input::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
-.steam-spp-inline-input:hover, .steam-spp-inline-input:focus { outline: none; border-bottom-color: #2a3f5a; }
+.steam-spp-inline-input:hover, .steam-spp-inline-input:focus { outline: none; border-bottom-color: #2a3f5a; background: rgba(103, 193, 245, .12); }
 .steam-spp-tags { margin-top: auto; }
 
 /* Same "needs attention" pulse the App Store Product Page Preview's own
@@ -12393,6 +12407,13 @@ body.viewing-splash #app-guide { display: none; }
   border-radius: 4px;
 }
 
+/* Same 2.15fr/1fr ratio + 14px gap as .steam-spp-media-block and
+   .steam-spp-columns above — the button (its only child) auto-places into
+   the first (2.15fr) track, so it's exactly as wide as the media carousel
+   above it rather than the full media+glance row. The unused second track
+   still reserves its own share of the row's width even with nothing in
+   it, which is what keeps this locked to the media column specifically. */
+.steam-spp-assets-btn-row { display: grid; grid-template-columns: 2.15fr 1fr; gap: 14px; }
 /* "Select Steam Assets" button beneath the media carousel (assetsBtnHtml,
    buildSteamStorePreviewPrototypeSection, render.js) — modeled on
    .steam-spp-queue-btn's dark-blue Steam-panel treatment, sized as a full
@@ -12490,13 +12511,16 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-h2 { font-size: 16px; font-weight: 600; color: #fff; margin: 0 0 8px; }
 .steam-spp-p { margin: 0 0 10px; font-size: 13px; color: #c6d4df; }
 .steam-spp-italic { font-style: italic; color: #a3b3c2; }
+/* Same padding/negative-margin hover trick as .steam-spp-apphub-name
+   above — see its comment. */
 .steam-spp-about-textarea {
   display: block; width: 100%; font-size: 13px; color: #c6d4df; line-height: 1.6;
   background: transparent; border: none; border-bottom: 1px dashed transparent;
-  padding: 2px 0; font-family: inherit; resize: none; overflow: hidden;
+  padding: 2px 4px; margin: 0 -4px; border-radius: 4px;
+  font-family: inherit; resize: none; overflow: hidden;
 }
 .steam-spp-about-textarea::placeholder { color: #5a6a75; font-style: italic; opacity: 1; }
-.steam-spp-about-textarea:hover, .steam-spp-about-textarea:focus { outline: none; border-bottom-color: #2a3f5a; }
+.steam-spp-about-textarea:hover, .steam-spp-about-textarea:focus { outline: none; border-bottom-color: #2a3f5a; background: rgba(103, 193, 245, .12); }
 
 .steam-spp-side-block { font-size: 12px; }
 .steam-spp-side-heading {
@@ -12539,4 +12563,5 @@ body.viewing-splash #app-guide { display: none; }
 @media (max-width: 720px) {
   .steam-spp-media-block { grid-template-columns: 1fr; }
   .steam-spp-columns { grid-template-columns: 1fr; }
+  .steam-spp-assets-btn-row { grid-template-columns: 1fr; }
 }
