@@ -507,6 +507,14 @@ function regTip(code) {
 const _chevDown = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 const _chevUp   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
 
+// Windows OS-compatibility glyph (Steam's own purchase-area icon row shows
+// this next to the Apple glyph — platformIcon('macos') — when a title
+// supports macOS). Not one of Shipmate's own submission platforms, so it
+// isn't a PLATFORM_ICONS entry; a plain four-square grid rather than a
+// pixel copy of Microsoft's mark, current enough to read as "Windows" at
+// this size. Used by buildSteamStorePreviewPrototypeSection below.
+const _winIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="7" height="7"/><rect x="9" y="0" width="7" height="7"/><rect x="0" y="9" width="7" height="7"/><rect x="9" y="9" width="7" height="7"/></svg>`;
+
 /* ── IGDB title picklist ─────────────────────────────── */
 
 // Canonical sort order for platform icons in the picklist
@@ -10045,6 +10053,11 @@ function buildSteamStorePreviewPrototypeSection() {
   const rawPrice   = (ws.price || '').trim();
   const isFreeGame = !rawPrice || /^free$/i.test(rawPrice) || rawPrice === '0' || rawPrice === '0.00';
 
+  // Mac support — same signal Steam itself would key off (a build actually
+  // targeting macOS) approximated the only way Shipmate can: whether the
+  // developer has also activated Mac App Store as a submission platform.
+  const hasMacSupport = state.activePlatforms?.has('macos');
+
   // Supported languages — primary + any localizations picked in Game
   // Details (state.formData), same source Distribution/Localization
   // Review read elsewhere. Gates the "language not supported" warning and
@@ -10130,20 +10143,38 @@ function buildSteamStorePreviewPrototypeSection() {
       <p>You can adjust your <span class="steam-spp-link-text">language preferences</span> here.</p>
     </div>`;
 
+  // Icon row — Windows always shown (every Steam title is assumed
+  // Windows-compatible); Apple's glyph joins it only when Mac App Store is
+  // also an active submission platform (hasMacSupport above).
+  const purchaseIconsHtml = `${_winIcon}${hasMacSupport ? platformIcon('macos', 18) : ''}`;
+
   const purchaseAreaHtml = isFreeGame
     ? `
       <div class="steam-spp-purchase">
-        <div class="steam-spp-purchase-icon">${platformIcon('steam', 24)}</div>
-        <div class="steam-spp-purchase-title">Play ${escHtml(gameTitle)}</div>
-        <div class="steam-spp-purchase-price">Free To Play</div>
-        <button class="steam-spp-btn steam-spp-btn-green" type="button">Play Game</button>
+        <div class="steam-spp-purchase-top">
+          <div class="steam-spp-purchase-title">Play ${escHtml(gameTitle)}</div>
+          <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
+        </div>
+        <div class="steam-spp-purchase-bottom">
+          <div class="steam-spp-purchase-bar">
+            <div class="steam-spp-purchase-price">Free To Play</div>
+            <button class="steam-spp-btn steam-spp-btn-green" type="button">Play Game</button>
+            <button class="steam-spp-btn steam-spp-btn-blue" type="button">Add to Library</button>
+          </div>
+        </div>
       </div>`
     : `
       <div class="steam-spp-purchase">
-        <div class="steam-spp-purchase-icon">${platformIcon('steam', 24)}</div>
-        <div class="steam-spp-purchase-title">Buy ${escHtml(gameTitle)}</div>
-        <div class="steam-spp-purchase-price">${rawPrice ? escHtml(rawPrice) : '<span class="steam-spp-placeholder">Price not set</span>'}</div>
-        <button class="steam-spp-btn steam-spp-btn-blue" type="button">Add to Cart</button>
+        <div class="steam-spp-purchase-top">
+          <div class="steam-spp-purchase-title">Buy ${escHtml(gameTitle)}</div>
+          <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
+        </div>
+        <div class="steam-spp-purchase-bottom">
+          <div class="steam-spp-purchase-bar">
+            <div class="steam-spp-purchase-price">${rawPrice ? escHtml(rawPrice) : '<span class="steam-spp-placeholder">Price not set</span>'}</div>
+            <button class="steam-spp-btn steam-spp-btn-green" type="button">Add to Cart</button>
+          </div>
+        </div>
       </div>`;
 
   const aiDisclosureHtml = !usesAI ? '' : `

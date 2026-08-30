@@ -12214,17 +12214,25 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-langwarn p { margin: 4px 0 0; }
 
 .steam-spp-purchase {
-  display: flex; align-items: center; gap: 12px; background: #131924;
-  border-radius: 4px; padding: 12px 14px; margin-bottom: 16px;
+  background: #131924; border-radius: 4px; padding: 14px 16px 12px; margin-bottom: 16px;
 }
-.steam-spp-purchase-title { flex: 1; font-size: 15px; color: #fff; }
-.steam-spp-purchase-price { font-size: 15px; color: #a4d007; font-weight: 600; }
+.steam-spp-purchase-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.steam-spp-purchase-title { font-size: 15px; color: #fff; }
+.steam-spp-purchase-icons { display: flex; align-items: center; gap: 8px; color: #c6d4df; flex-shrink: 0; }
+.steam-spp-purchase-bottom { display: flex; justify-content: flex-end; margin-top: 12px; }
+.steam-spp-purchase-bar { display: flex; border-radius: 2px; overflow: hidden; }
+.steam-spp-purchase-price {
+  background: #000; color: #c6d4df; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; padding: 0 16px;
+}
 .steam-spp-btn {
-  border: none; border-radius: 2px; padding: 8px 18px; font-size: 13px;
-  font-weight: 600; cursor: pointer; color: #fff;
+  border: none; padding: 0 20px; height: 42px; display: flex; align-items: center;
+  font-size: 14px; font-weight: 600; cursor: pointer; color: #fff;
 }
 .steam-spp-btn-green { background: #5c7e10; }
-.steam-spp-btn-blue  { background: #4c7b8a; }
+.steam-spp-btn-blue  { background: #2a6fd6; }
 
 .steam-spp-section { margin-bottom: 18px; }
 .steam-spp-h2 { font-size: 16px; font-weight: 600; color: #fff; margin: 0 0 8px; }
