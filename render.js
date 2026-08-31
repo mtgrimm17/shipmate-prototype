@@ -2791,7 +2791,6 @@ function renderBroadcast() {
     <div class="sec-solo">
       <div class="sec-panel">
         <div class="mkt-body">${buildMktSection(section)}</div>
-        ${buildStepNav('broadcast')}
       </div>
     </div>`;
 }
