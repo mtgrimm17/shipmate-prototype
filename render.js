@@ -10329,19 +10329,25 @@ function buildSteamStorePreviewPrototypeSection() {
   const heroInnerHtml = firstCarouselItem
     ? _steamSppHeroMarkup(firstCarouselItem.kind, firstCarouselItem.name, firstCarouselItem.src, firstCarouselItem.thumb, firstCarouselItem.hls)
     : '';
+  // Clicking a thumbnail opens Select Steam Assets scrolled to that item's
+  // own section (_steamSppCarouselItemClick, app.js) rather than swapping
+  // the hero preview in place — see that function's comment for why.
   const carouselThumbsHtml = carouselItems.map((item, i) => {
     const thumbSrc  = item.kind === 'screenshot' ? item.src : (item.thumb || '');
     const thumbImg  = thumbSrc ? `<img src="${escHtml(thumbSrc)}" alt="">` : `<span class="steam-spp-carousel-nothumb">🎬</span>`;
     const playBadge = item.kind !== 'screenshot' ? `<span class="steam-spp-carousel-play">▶</span>` : '';
-    const attrs = [`data-kind="${item.kind}"`, `data-name="${escHtml(item.name)}"`];
-    if (item.src)   attrs.push(`data-src="${escHtml(item.src)}"`);
-    if (item.thumb) attrs.push(`data-thumb="${escHtml(item.thumb)}"`);
-    if (item.hls)   attrs.push(`data-hls="${escHtml(item.hls)}"`);
-    return `<div class="steam-spp-carousel-thumb${i === 0 ? ' is-active' : ''}" ${attrs.join(' ')} onclick="_steamSppCarouselSelect(this)">${thumbImg}${playBadge}</div>`;
+    return `<div class="steam-spp-carousel-thumb${i === 0 ? ' is-active' : ''}" onclick="_steamSppCarouselItemClick('${item.kind}')">${thumbImg}${playBadge}</div>`;
   }).join('');
 
+  // The hero/stage is likewise clickable — same destination as the
+  // thumbnail for whatever's currently shown there (always
+  // firstCarouselItem; the hero no longer swaps on thumbnail click, so this
+  // binding never goes stale without a full re-render). For a steamTrailer,
+  // the inner Play control's own onclick (_steamSppHeroMarkup above) calls
+  // event.stopPropagation() before this ever fires, so Play still plays
+  // instead of navigating away.
   const heroHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero">${heroInnerHtml}</div>`
+    ? `<div class="steam-spp-media-hero" onclick="_steamSppCarouselItemClick('${firstCarouselItem.kind}')">${heroInnerHtml}</div>`
     : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
@@ -10456,30 +10462,13 @@ function buildSteamStorePreviewPrototypeSection() {
       ${glanceHtml}
     </div>`;
 
-  // Flips the modal to buildSteamAssetsEditSection — manages
-  // state.uploads.screenshots/trailer (the same array/field mediaLeftHtml's
-  // carousel is built from, above) and the Steam header capsule. Sits right
-  // under the carousel it feeds, same "the button for a section lives next
-  // to what it controls" placement Community Hub/the purchase area already
-  // follow. No leading icon (removed by request) — the arrow on the right
-  // is enough of a "this opens something" affordance, matching how
-  // Community Hub/the queue row's own buttons above don't lead with one
-  // either.
-  // .steam-spp-assets-btn-row reuses .steam-spp-media-block's own
-  // grid-template-columns (see style.css — same 2.15fr/1fr literal) so the
-  // button — its only child, auto-placed into the first (2.15fr) track —
-  // always comes out exactly as wide as the media carousel above it rather
-  // than the full row (media + gap + glance).
-  const assetsBtnHtml = `
-    <div class="steam-spp-assets-btn-row">
-    <button class="steam-spp-assets-btn" type="button" onclick="openStorePreviewSection('steam','steamAssets')">
-      <span class="steam-spp-assets-btn-text">
-        <span class="steam-spp-assets-btn-title">Select Steam Assets</span>
-        <span class="steam-spp-assets-btn-sub">Manage screenshots, trailer, and the header capsule</span>
-      </span>
-      <span class="steam-spp-assets-btn-arrow">›</span>
-    </button>
-    </div>`;
+  // The standalone "Select Steam Assets" button that used to sit here was
+  // removed by request — Select Steam Assets is now reached exclusively by
+  // clicking the specific thing you want to edit (a screenshot/trailer in
+  // the media carousel via _steamSppCarouselItemClick, or the header
+  // capsule via openSteamHeaderCapsuleSection), consistent with how every
+  // other section of this prototype is already click-to-edit rather than
+  // button-to-edit.
 
   const queueRowHtml = `
     <div class="steam-spp-queue-row">
@@ -10691,7 +10680,6 @@ function buildSteamStorePreviewPrototypeSection() {
       ${breadcrumbHtml}
       ${headerHtml}
       ${mediaBlockHtml}
-      ${assetsBtnHtml}
       ${queueRowHtml}
       <div class="steam-spp-columns">
         <div class="steam-spp-col-main">${leftColHtml}</div>
@@ -10701,9 +10689,10 @@ function buildSteamStorePreviewPrototypeSection() {
 }
 
 /* Steam Store Page Preview - Prototype: "Select Steam Assets" — reached by
-   the button beneath the media carousel (see assetsBtnHtml in
-   buildSteamStorePreviewPrototypeSection above, and the 'steamAssets' flip
-   target dispatched from buildStorePreviewFlipSection). Manages every asset
+   clicking a screenshot/trailer in the media carousel
+   (_steamSppCarouselItemClick, app.js) or the header capsule
+   (openSteamHeaderCapsuleSection, app.js); see the 'steamAssets' flip
+   target dispatched from buildStorePreviewFlipSection. Manages every asset
    that carousel is built from:
      - Screenshots — the exact same state.uploads.screenshots array (upload,
        remove, reorder — moveUploadScreenshot in app.js), so changes here
@@ -10730,36 +10719,40 @@ function buildSteamAssetsEditSection() {
         Manage the screenshots, trailer, and header capsule shown on your Steam store page.
       </p>
 
-      <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
-      <div class="asset-guidance">This is the same screenshot list your store page's media carousel is built from — reorder it here with the ‹ › arrows on a thumbnail.</div>
-      <div class="asset-dropzone" id="steam-assets-screenshot-dropzone"
-           onclick="document.getElementById('steam-assets-screenshot-input').click()"
-           ondragover="event.preventDefault(); this.classList.add('is-over')"
-           ondragleave="this.classList.remove('is-over')"
-           ondrop="handleScreenshotDrop(event); this.classList.remove('is-over')">
-        <div class="asset-dropzone-icon">↑</div>
-        <div class="asset-dropzone-label">Drop screenshots here, or click to browse</div>
-        <div class="asset-dropzone-hint">PNG or JPG, any size</div>
-        <input type="file" id="steam-assets-screenshot-input" multiple accept="image/*" style="display:none"
-               onchange="handleScreenshotFiles(this.files); this.value=''">
+      <div id="steam-assets-screenshots-section">
+        <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
+        <div class="asset-guidance">This is the same screenshot list your store page's media carousel is built from — reorder it here with the ‹ › arrows on a thumbnail.</div>
+        <div class="asset-dropzone" id="steam-assets-screenshot-dropzone"
+             onclick="document.getElementById('steam-assets-screenshot-input').click()"
+             ondragover="event.preventDefault(); this.classList.add('is-over')"
+             ondragleave="this.classList.remove('is-over')"
+             ondrop="handleScreenshotDrop(event); this.classList.remove('is-over')">
+          <div class="asset-dropzone-icon">↑</div>
+          <div class="asset-dropzone-label">Drop screenshots here, or click to browse</div>
+          <div class="asset-dropzone-hint">PNG or JPG, any size</div>
+          <input type="file" id="steam-assets-screenshot-input" multiple accept="image/*" style="display:none"
+                 onchange="handleScreenshotFiles(this.files); this.value=''">
+        </div>
+        <div class="asset-grid" id="steam-assets-screenshot-grid" style="margin-bottom:20px;">${_steamAssetsScreenshotGridHTML()}</div>
       </div>
-      <div class="asset-grid" id="steam-assets-screenshot-grid" style="margin-bottom:20px;">${_steamAssetsScreenshotGridHTML()}</div>
 
-      <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailer</label>
-      <div class="asset-guidance">This is the same trailer file your store page's media carousel is built from — see Game Details' own Assets step.</div>
-      <div class="asset-dropzone asset-dropzone-sm" id="steam-assets-trailer-dropzone"
-           onclick="document.getElementById('steam-assets-trailer-input').click()"
-           ondragover="event.preventDefault(); this.classList.add('is-over')"
-           ondragleave="this.classList.remove('is-over')"
-           ondrop="handleTrailerDrop(event); this.classList.remove('is-over')">
-        <div class="asset-dropzone-icon">↑</div>
-        <div class="asset-dropzone-label">Drop a trailer file here, or click to browse</div>
-        <div class="asset-dropzone-hint">MP4 or MOV, any size</div>
-        <input type="file" id="steam-assets-trailer-input" accept="video/*" style="display:none"
-               onchange="handleTrailerFiles(this.files); this.value=''">
+      <div id="steam-assets-trailer-section">
+        <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailer</label>
+        <div class="asset-guidance">This is the same trailer file your store page's media carousel is built from — see Game Details' own Assets step.</div>
+        <div class="asset-dropzone asset-dropzone-sm" id="steam-assets-trailer-dropzone"
+             onclick="document.getElementById('steam-assets-trailer-input').click()"
+             ondragover="event.preventDefault(); this.classList.add('is-over')"
+             ondragleave="this.classList.remove('is-over')"
+             ondrop="handleTrailerDrop(event); this.classList.remove('is-over')">
+          <div class="asset-dropzone-icon">↑</div>
+          <div class="asset-dropzone-label">Drop a trailer file here, or click to browse</div>
+          <div class="asset-dropzone-hint">MP4 or MOV, any size</div>
+          <input type="file" id="steam-assets-trailer-input" accept="video/*" style="display:none"
+                 onchange="handleTrailerFiles(this.files); this.value=''">
+        </div>
+        ${steamTrailerHTML}
+        <div id="steam-assets-trailer-file-info" style="margin-bottom:20px;${trailerFile ? '' : 'display:none;'}">${trailerFile ? trailerFileRowHTML(trailerFile.name, (trailerFile.size / 1024 / 1024).toFixed(1), 'steam-assets-') : ''}</div>
       </div>
-      ${steamTrailerHTML}
-      <div id="steam-assets-trailer-file-info" style="margin-bottom:20px;${trailerFile ? '' : 'display:none;'}">${trailerFile ? trailerFileRowHTML(trailerFile.name, (trailerFile.size / 1024 / 1024).toFixed(1), 'steam-assets-') : ''}</div>
 
       <div id="steam-assets-headercapsule-section">
         <div class="pk-edit-group-label">Header Capsule</div>

@@ -8058,30 +8058,33 @@ function _steamSppAutoGrow(el) {
   el.style.height = el.scrollHeight + 'px';
 }
 
-/* Clicking a thumbnail in the media carousel's strip swaps the big stage
-   above it to match — screenshot, the real playable Steam trailer, or the
-   general Assets-tab trailer's placeholder (_steamSppHeroMarkup, render.js,
-   shared with the initial server-rendered markup so both paths agree on
-   what each item kind looks like). `el` is the clicked
-   .steam-spp-carousel-thumb; its item data travels in data-* attributes set
-   by render.js. */
-function _steamSppCarouselSelect(el) {
-  const strip = el.closest('.steam-spp-media-thumbs');
-  // .closest('.steam-spp-media-left') rather than strip.parentElement — the
-  // v4.56 scrollbar-smoothness pass wrapped the thumb strip together with
-  // the scrollbar in its own .steam-spp-media-thumbs-wrap (so the two move
-  // as one unit under the bottom-alignment fix's margin-top:auto), which
-  // made the strip's immediate parentElement that wrapper instead of
-  // .steam-spp-media-left — silently breaking this lookup (the hero lives
-  // outside the wrapper, as the wrapper's own preceding sibling) and with it
-  // every thumbnail/trailer click. .closest() walks up past the wrapper
-  // however the DOM is nested, so it isn't tied to one specific level again.
-  const hero = strip?.closest('.steam-spp-media-left')?.querySelector('.steam-spp-media-hero');
-  if (!hero) return;
-  strip.querySelectorAll('.steam-spp-carousel-thumb').forEach(t => t.classList.remove('is-active'));
-  el.classList.add('is-active');
-  const { kind, name, src, thumb, hls } = el.dataset;
-  hero.innerHTML = _steamSppHeroMarkup(kind, name, src, thumb, hls);
+/* Clicking a screenshot or trailer anywhere in the media carousel — the big
+   stage above the strip, or a thumbnail in the strip itself — opens Select
+   Steam Assets scrolled to that item's own section, the same "click an
+   editable-looking field, land on its editor" pattern the header capsule
+   (openSteamHeaderCapsuleSection below) and every other selectable field in
+   this prototype already follow (replacing an earlier v4.56-era behavior
+   where a thumbnail click just swapped the hero preview in place — this is
+   Shipmate's own editor, not the real customer-facing store page, so
+   "take the developer to the editor" fits the rest of this prototype
+   better than an in-place preview swap). A trailer's own inline Play
+   control (playSteamTrailer's onclick, on .steam-trailer-thumb-link) calls
+   event.stopPropagation() before this ever fires, so clicking Play plays
+   the trailer instead of navigating away — see _steamSppHeroMarkup,
+   render.js. `kind` is 'screenshot' | 'steamTrailer' | 'trailer'; only
+   screenshot gets its own section, the other two both land on Trailer. */
+async function _steamSppCarouselItemClick(kind) {
+  await _steamSppOpenAssetsSection(kind === 'screenshot' ? 'steam-assets-screenshots-section' : 'steam-assets-trailer-section');
+}
+
+/* Shared by every click-to-edit entry point into Select Steam Assets
+   (_steamSppCarouselItemClick above, openSteamHeaderCapsuleSection below) —
+   opens the 'steamAssets' flip target, then scrolls straight to the
+   relevant sub-section's anchor rather than leaving the user to scroll past
+   Screenshots/Trailer/Header Capsule to find what they clicked. */
+async function _steamSppOpenAssetsSection(anchorId) {
+  await openStorePreviewSection('steam', 'steamAssets');
+  document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* Horizontal scrollbar under the media carousel (scrollbarHtml,
@@ -9794,15 +9797,13 @@ async function openStorePreviewSection(pid, target) {
 }
 
 // Store Page Preview - Prototype's header capsule image (capsuleHtml,
-// buildSteamStorePreviewPrototypeSection) is clickable — this opens the same
-// "Select Steam Assets" section its own "Select Steam Assets" button opens
-// (the 'steamAssets' flip target), then scrolls straight to that section's
-// Header Capsule upload block (#steam-assets-headercapsule-section,
-// buildSteamAssetsEditSection) rather than leaving the user to scroll past
-// Screenshots/Trailer to find it themselves.
+// buildSteamStorePreviewPrototypeSection) is clickable — opens Select Steam
+// Assets (the 'steamAssets' flip target) scrolled straight to its Header
+// Capsule upload block (#steam-assets-headercapsule-section,
+// buildSteamAssetsEditSection), the same pattern
+// _steamSppCarouselItemClick above uses for screenshots/trailers.
 async function openSteamHeaderCapsuleSection() {
-  await openStorePreviewSection('steam', 'steamAssets');
-  document.getElementById('steam-assets-headercapsule-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await _steamSppOpenAssetsSection('steam-assets-headercapsule-section');
 }
 
 function closeStorePreviewSection(pid) {
