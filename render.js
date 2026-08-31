@@ -8551,11 +8551,19 @@ function buildBusinessSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
   // Unanswered/All filter — hide answered rows in Unanswered view
-  // Tax category defaults to 'games' — always hide in Unanswered view if it has a value
+  // Tax category defaults to 'games' (state.js) and is never touched by AI
+  // inference, so its raw value is truthy from app load and can't be used
+  // to mean "answered" — that previously hid this row the instant ANY
+  // snapshot existed for this platform (e.g. as a side effect of a
+  // DIFFERENT platform's inference run via _postInferenceSetup), even
+  // though the developer never looked at Tax Category. The only genuine
+  // signal that this field was actually reviewed is the human-confirmed
+  // flag answerIOSField sets when the dropdown itself is changed.
   const bsAnswered    = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const bsCollapse    = bsAnswered !== null;
   const bsShowAll     = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
-  const hideTaxCat    = bsCollapse && !bsShowAll && !!a.taxCategory;
+  const taxCatMeta    = _appStoreAnswerMeta(pid, 'taxCategory');
+  const hideTaxCat    = bsCollapse && !bsShowAll && taxCatMeta?.taxCategory?.humanConfirmed === true;
 
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
 
