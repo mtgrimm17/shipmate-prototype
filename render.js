@@ -2059,8 +2059,9 @@ const GD_SUBS = [
   { id: 'gamedetails',  label: 'Basic info' },
   { id: 'distribution', label: 'Distribution' },
   { id: 'localization', label: 'Localization' },
-  { id: 'assets',       label: 'Assets' },       // before Content rating — screenshots feed the AI
-  { id: 'content',      label: 'Content rating' },
+  { id: 'assets',       label: 'Assets' },
+  // Content rating moved out of Game Details — it now lives as a dedicated step
+  // on each platform card (Submission) and inside each product-page preview.
 ];
 
 
@@ -2118,12 +2119,15 @@ function renderDetails() {
   const el = document.getElementById('details');
   if (!el) return;
   renderProjectBar();
-  const section = (state.details && state.details.section) || 'gamedetails';
+  let section = (state.details && state.details.section) || 'gamedetails';
+  // Content rating was removed from Game Details; normalize any stale/removed
+  // section (e.g. a saved 'content') back to Basic info so the tab never blanks.
+  if (!GD_SUBS.some(s => s.id === section)) {
+    section = 'gamedetails';
+    if (state.details) state.details.section = section;
+  }
   // Distribution + Localization share one builder (two id'd sections); CSS shows
   // the relevant inner section per sub-tab, so ids stay unique (rendered once).
-  // Content Questions pane is dynamic (loading vs questionnaire) — only build its
-  // body while it's the active sub-tab, so its inference loop isn't driven off-screen.
-  const contentBody = section === 'content' ? buildContentQuestionsPane() : '';
   el.innerHTML = `
     <div class="sec-solo">
       <div class="sec-panel">
@@ -2131,7 +2135,6 @@ function renderDetails() {
           <div class="gd-sub" data-gd="${section}">
             <div class="gd-pane gd-pane--gamedetails ob-body">${buildAboutTab()}</div>
             <div class="gd-pane gd-pane--distloc ob-body">${buildDistributionTab()}</div>
-            <div class="gd-pane gd-pane--content ob-body">${contentBody}</div>
             <div class="gd-pane gd-pane--assets ob-body">${buildAssetsTab()}</div>
           </div>
         </div>
@@ -2145,7 +2148,6 @@ function renderDetails() {
   requestAnimationFrame(() => initObDistMap());
   _setObValidating(false);
   updateObSectionStates();
-  if (section === 'content' && typeof _kickContentQ === 'function') _kickContentQ();
 }
 
 /* ── Marketing tab: subsections (Announce / Website / Press Kit / Influencers) ── */
@@ -2335,7 +2337,7 @@ const CAL_UNDATED = [
   { id: 'keyart-featuring', kind: 'marketing',  label: 'Submit key art for App Store featuring request', go: { view: 'details', section: 'assets' } },
   { id: 'press-kit',        kind: 'marketing',  label: 'Finish your press kit', go: { view: 'broadcast', section: 'press' } },
   { id: 'launch-stream',    kind: 'marketing',  label: 'Line up a launch-day stream', go: { view: 'broadcast', section: 'influencers' } },
-  { id: 'ratings-left',     kind: 'submission', label: 'Answer remaining content-rating questions', go: { view: 'details', section: 'content' } },
+  { id: 'ratings-left',     kind: 'submission', label: 'Answer remaining content-rating questions', go: { view: 'dashboard' } },
 ];
 
 const _calISO  = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2984,7 +2986,6 @@ function _chkGroups() {
       { label: 'List localizations',      section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
       { label: 'Upload screenshots',      section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
       { label: 'Add a trailer',           section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
-      { label: 'Complete content rating', section: 'content',                                    done: false },
     ] },
     { group: 'Platforms', view: 'dashboard', items: [
       { label: 'Set content ratings',      done: true },
@@ -4112,6 +4113,9 @@ function buildTaskContent(platformId, stepId, done) {
 
 /* ── Inference loading messages (per platform + step) ─── */
 function _getInferenceMsgs(platformId, stepId) {
+  // The Content Rating step shares the unified questionnaire inference, so it
+  // shows the same per-platform loading messages.
+  if (stepId === 'contentRating') stepId = 'questionnaire';
   if (stepId === 'questionnaire' && platformId === 'ios')
     return ['Scanning for content signals…','Checking violence, language & mature themes…','Reviewing data collection & business model…','Preparing your questionnaire…'];
   if (stepId === 'questionnaire' && platformId === 'android')
@@ -11702,27 +11706,50 @@ function buildSubmittedCard(pid, flipData) {
   const savedH = state.platformFlippedCardHeight?.[pid];
   const heightStyle = savedH ? ` style="height:${savedH}px;max-height:${savedH}px;overflow:hidden"` : '';
 
+  // Per-store review status: where the submission sits in the pipeline, plus a
+  // realistic review-time expectation. Web deploys are live immediately.
+  const REVIEW_ETA = {
+    ios:     'Apple review — typically 24–48 hours',
+    macos:   'Apple review — typically 24–48 hours',
+    android: 'Google Play review — usually within 3 days',
+    steam:   'Steam review — 1–5 business days',
+  };
+  const stages      = isWeb ? ['Built', 'Deploying', 'Live']
+                            : ['Submitted', 'In Review', 'Approved', 'Live'];
+  const stageIdx    = isWeb ? 2 : 1;   // web: live now; stores: in review
+  const statusValue = isWeb ? 'Live' : 'In Review';
+  const statusEta   = isWeb ? 'Deployed and reachable now' : (REVIEW_ETA[pid] || 'In review');
+
+  const timeline = stages.map((label, i) => {
+    const cls = i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : '';
+    const bar = i < stages.length - 1
+      ? `<span class="sub-tl-bar${i < stageIdx ? ' is-done' : ''}"></span>` : '';
+    return `<div class="sub-tl-step ${cls}"><span class="sub-tl-dot"></span><span class="sub-tl-label">${label}</span></div>${bar}`;
+  }).join('');
+
   return `
-    <div class="active-card submitted-card" id="active-card-${pid}"${heightStyle}>
+    <div class="active-card submitted-card${isWeb ? ' is-live' : ''}" id="active-card-${pid}"${heightStyle}>
       <div class="active-card-head" style="border-bottom:none;">
         <div class="active-card-platform">
           <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
           <div class="active-card-name">${platLabel(pid)}</div>
         </div>
+        ${(!isWeb && trackLabel) ? `<span class="submitted-track-chip">${escHtml(trackLabel)}</span>` : ''}
       </div>
       <div class="submitted-body">
-        <div class="submitted-status-row">
-          <span class="submitted-status-dot"></span>
-          <div class="submitted-status-text">
-            <div class="submitted-status-label">Current Status</div>
-            <div class="submitted-status-value">${isWeb ? 'Live' : 'Waiting for Review'}</div>
+        <div class="sub-status ${isWeb ? 'is-live' : 'is-review'}">
+          <span class="sub-status-dot"></span>
+          <div class="sub-status-text">
+            <div class="sub-status-value">${statusValue}</div>
+            <div class="sub-status-eta">${statusEta}</div>
           </div>
         </div>
-        <div class="submitted-meta">
-          ${(!isWeb && trackLabel) ? `<span class="submitted-track-chip">${escHtml(trackLabel)}</span>` : ''}
-          ${ts ? `<span class="submitted-ts">${isWeb ? 'Deployed' : 'Submitted'} ${ts}</span>` : ''}
+        <div class="sub-timeline">${timeline}</div>
+        ${ts ? `<div class="sub-submitted-ts">${isWeb ? 'Deployed' : 'Submitted'} ${ts}</div>` : ''}
+        <div class="sub-actions">
+          <button class="sub-marketing-link" onclick="setView('broadcast')">Announce your launch in Marketing&nbsp;→</button>
+          <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">${isWeb ? 'Take Down' : 'Cancel Submission'}</button>
         </div>
-        <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">${isWeb ? 'Take Down' : 'Cancel Submission'}</button>
       </div>
     </div>`;
 }

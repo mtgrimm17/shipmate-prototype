@@ -1646,8 +1646,11 @@ async function inferAllQuestionnaires() {
 async function runInference(pid, stepId) {
   if (!CLAUDE_API_KEY) throw new Error('NO_KEY');
 
-  // Questionnaire: one unified call answers all active platforms
-  if (stepId === 'questionnaire') {
+  // Questionnaire — and the standalone Content Rating step, which now lives on
+  // each platform card. Both run the one unified call that answers every active
+  // platform's content/data/business questionnaires at once (cached + deduped,
+  // so opening Content Rating and later Improve Your Submission never re-runs it).
+  if (stepId === 'questionnaire' || stepId === 'contentRating') {
     const uKey = 'unified:questionnaire';
     if (state.platformInferenceCache[uKey]) return; // already ran
     await inferAllQuestionnaires();

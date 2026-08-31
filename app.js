@@ -10706,7 +10706,7 @@ async function _retryInference(pid, stepId) {
 
 /* Post-inference setup: take filter snapshots + collapse to Unanswered for all active platforms */
 function _postInferenceSetup(stepId) {
-  if (stepId !== 'questionnaire') return;
+  if (stepId !== 'questionnaire' && stepId !== 'contentRating') return;
   for (const p of ['ios', 'android', 'steam']) {
     if (!state.activePlatforms.has(p)) continue;
     takeFilterSnapshot(p);

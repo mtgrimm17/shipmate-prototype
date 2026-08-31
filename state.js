@@ -729,6 +729,7 @@ const PLATFORMS = {
     id: 'steam', label: 'Steam', color: '#4c6b8a',
     steps: [
       { id: 'uploadBuild',            label: 'Upload Build'                            },
+      { id: 'contentRating',          label: 'Content Rating',        hasInference: true },
       { id: 'storePreviewPrototype',  label: 'Store Page Preview'                      },
       { id: 'improveSubmission',      label: 'Improve Your Submission'                 },
     ],
@@ -737,6 +738,7 @@ const PLATFORMS = {
     id: 'ios', label: 'App Store', color: '#007AFF',
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
@@ -753,6 +755,7 @@ const PLATFORMS = {
     id: 'macos', label: 'Mac App Store', color: '#007AFF',
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
@@ -761,6 +764,7 @@ const PLATFORMS = {
     id: 'android', label: 'Google Play', color: '#34A853',
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'storePreview',      label: 'Store Listing Preview'                        },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
