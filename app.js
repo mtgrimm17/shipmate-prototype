@@ -7874,6 +7874,30 @@ function removeTrailer(prefix) {
   if (info) { info.style.display = 'none'; info.innerHTML = ''; }
 }
 
+/* Click router for the Store Page Preview - Prototype hero's steamTrailer
+   preview only (_steamSppHeroMarkup, render.js) — NOT the smaller Assets
+   tab/preview website trailer thumbnail (_steamTrailerPreviewHTML), which
+   has no wrapping "click to navigate" behavior around it and so just plays
+   on any click, same as always. The hero is different: the hero itself is
+   also clickable to open Select Steam Assets' Trailer section
+   (_steamSppCarouselItemClick above), so per request only a click that
+   actually lands on the circular play badge in the middle should play the
+   trailer — a click anywhere else on the trailer (the background thumbnail
+   image, the empty space around the badge) should fall through to that
+   navigation instead. `linkEl` is always the .steam-trailer-thumb-link,
+   passed straight to playSteamTrailer unchanged regardless of where within
+   it the click landed, since that's the element playSteamTrailer replaces
+   with the <video> — swapping in a smaller element (the badge itself)
+   there would only replace the badge, not the whole preview. */
+function _steamSppHeroTrailerClick(e, linkEl) {
+  if (e.target.closest('.steam-trailer-play-badge')) {
+    e.stopPropagation();
+    playSteamTrailer(linkEl);
+  }
+  // Otherwise: don't stop propagation — let the click keep bubbling up to
+  // the hero's own onclick (_steamSppCarouselItemClick).
+}
+
 /* Click handler for the auto-filled Steam trailer thumbnail (see
    buildAssetsTab in render.js, state.uploads.steamTrailer/
    _steamTrailerFromMovies above). `el` is the clicked

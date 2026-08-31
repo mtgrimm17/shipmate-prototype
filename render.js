@@ -10151,12 +10151,21 @@ function buildSteamStorePreviewSection() {
    for a given item, so this is the one place that knows how. `kind` is
    'screenshot' | 'steamTrailer' | 'trailer':
      - 'screenshot' just shows the full-size image.
-     - 'steamTrailer' reuses the exact same clickable-thumbnail markup (and,
-       via playSteamTrailer, the exact same click-to-play behavior) as the
-       Assets tab and preview website's own Steam-trailer preview
-       (_steamTrailerPreviewHTML above) — scaled up to fill the stage via
-       the .steam-spp-media-hero-scoped overrides in style.css, rather than
-       reimplementing HLS playback a second time.
+     - 'steamTrailer' reuses the same thumb/play-badge markup as the Assets
+       tab and preview website's own Steam-trailer preview
+       (_steamTrailerPreviewHTML above), scaled up to fill the stage via the
+       .steam-spp-media-hero-scoped overrides in style.css, and the same
+       playSteamTrailer (app.js) for actual HLS playback. The click routing
+       differs from that smaller preview, though: there the whole thumbnail
+       plays on any click (there's nothing else to do with it). Here the
+       hero itself is also clickable to open Select Steam Assets' Trailer
+       section (_steamSppCarouselItemClick, app.js), so only a click that
+       actually lands on the circular play badge should play — anywhere
+       else on the trailer should navigate instead, per request.
+       _steamSppHeroTrailerClick (app.js) is the router that tells those two
+       apart; it still passes playSteamTrailer the .steam-trailer-thumb-link
+       itself (not the badge), since that's the element playSteamTrailer
+       replaces with the <video>.
      - 'trailer' is the general Assets-tab trailer upload (state.uploads.
        trailer, app.js/handleTrailerFiles) — file name + size only, no
        playable asset, so it renders as a labeled placeholder instead of a
@@ -10168,7 +10177,7 @@ function _steamSppHeroMarkup(kind, name, src, thumb, hls) {
   if (kind === 'steamTrailer') {
     return `
       <div class="steam-trailer-preview" data-hls-url="${escHtml(hls)}">
-        <div class="steam-trailer-thumb-link" onclick="event.stopPropagation(); playSteamTrailer(this)" role="button" tabindex="0" title="Play trailer">
+        <div class="steam-trailer-thumb-link" onclick="_steamSppHeroTrailerClick(event, this)" role="button" tabindex="0" title="Play trailer">
           <div class="steam-trailer-thumb">
             <img src="${escHtml(thumb)}" alt="${escHtml(name)}">
             <span class="steam-trailer-play-badge">▶</span>
