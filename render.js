@@ -6219,7 +6219,10 @@ function buildStorePreviewSection() {
   // content/business require the user to have actually visited the sub-section
   // (prevents auto-marking done from onboarding data without user review)
   const seenSections    = state.storePreviewSectionSeen?.ios || {};
-  const contentDone     = !!(seenSections.content  && isIOSSectionComplete('contentRating'));
+  // Content rating is now completed as its own platform-card step, so the age
+  // rating reflects completion directly — no longer gated on visiting the
+  // preview's content section (matches Android/Steam behavior).
+  const contentDone     = isIOSSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
   const dataDone        = isIOSSectionComplete('privacy');
   const screenshotsDone = isIOSSectionComplete('screenshots');
@@ -6760,7 +6763,9 @@ function buildMacStorePreviewSection() {
   // Section completion status for DocuSign navigation — Mac App Store's own
   // storePreviewSectionSeen/isMacSectionComplete, independent of iOS's.
   const seenSections    = state.storePreviewSectionSeen?.macos || {};
-  const contentDone     = !!(seenSections.content  && isMacSectionComplete('contentRating'));
+  // Content rating is now its own platform-card step — reflect completion
+  // directly rather than requiring a visit to the preview's content section.
+  const contentDone     = isMacSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isMacSectionComplete('business'));
   const dataDone        = isMacSectionComplete('privacy');
   const screenshotsDone = isMacSectionComplete('screenshots');
