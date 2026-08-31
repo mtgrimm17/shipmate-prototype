@@ -8058,23 +8058,60 @@ function _steamSppAutoGrow(el) {
   el.style.height = el.scrollHeight + 'px';
 }
 
-/* Clicking a screenshot or trailer anywhere in the media carousel — the big
-   stage above the strip, or a thumbnail in the strip itself — opens Select
-   Steam Assets scrolled to that item's own section, the same "click an
-   editable-looking field, land on its editor" pattern the header capsule
-   (openSteamHeaderCapsuleSection below) and every other selectable field in
-   this prototype already follow (replacing an earlier v4.56-era behavior
-   where a thumbnail click just swapped the hero preview in place — this is
-   Shipmate's own editor, not the real customer-facing store page, so
-   "take the developer to the editor" fits the rest of this prototype
-   better than an in-place preview swap). A trailer's own inline Play
-   control (playSteamTrailer's onclick, on .steam-trailer-thumb-link) calls
-   event.stopPropagation() before this ever fires, so clicking Play plays
-   the trailer instead of navigating away — see _steamSppHeroMarkup,
-   render.js. `kind` is 'screenshot' | 'steamTrailer' | 'trailer'; only
-   screenshot gets its own section, the other two both land on Trailer. */
+/* Clicking the hero/stage itself (NOT a thumbnail — see
+   _steamSppCarouselSelect below for that) opens Select Steam Assets
+   scrolled to whichever section matches what the hero is currently
+   showing, the same "click an editable-looking field, land on its editor"
+   pattern the header capsule (openSteamHeaderCapsuleSection below) and
+   every other selectable field in this prototype already follow. `kind`
+   comes from the hero element's own data-kind attribute at click time
+   (render.js's heroHtml, kept current by _steamSppCarouselSelect on every
+   thumbnail swap) rather than a value baked in at render time, so this
+   still opens the right section even after browsing the carousel. A
+   trailer's own inline Play control (playSteamTrailer's onclick, on
+   .steam-trailer-thumb-link) calls event.stopPropagation() before this
+   ever fires, so clicking Play plays the trailer instead of navigating
+   away — see _steamSppHeroMarkup, render.js. `kind` is 'screenshot' |
+   'steamTrailer' | 'trailer'; only screenshot gets its own section, the
+   other two both land on Trailer. */
 async function _steamSppCarouselItemClick(kind) {
   await _steamSppOpenAssetsSection(kind === 'screenshot' ? 'steam-assets-screenshots-section' : 'steam-assets-trailer-section');
+}
+
+/* Clicking a thumbnail in the media carousel's strip swaps the big stage
+   above it to match — screenshot, the real playable Steam trailer, or the
+   general Assets-tab trailer's placeholder (_steamSppHeroMarkup, render.js,
+   shared with the initial server-rendered markup so both paths agree on
+   what each item kind looks like) — WITHOUT navigating to Select Steam
+   Assets; browsing thumbnails is meant to stay a lightweight preview
+   action (restored by request — a brief v4.65-v4.67 detour made every
+   carousel click, thumbnail included, jump straight to the asset editor,
+   which turned out to get in the way of just previewing what's already
+   uploaded). Clicking the hero stage itself still opens the editor — see
+   _steamSppCarouselItemClick above. `el` is the clicked
+   .steam-spp-carousel-thumb; its item data travels in data-* attributes set
+   by render.js. */
+function _steamSppCarouselSelect(el) {
+  const strip = el.closest('.steam-spp-media-thumbs');
+  // .closest('.steam-spp-media-left') rather than strip.parentElement — the
+  // v4.56 scrollbar-smoothness pass wrapped the thumb strip together with
+  // the scrollbar in its own .steam-spp-media-thumbs-wrap (so the two move
+  // as one unit under the bottom-alignment fix's margin-top:auto), which
+  // made the strip's immediate parentElement that wrapper instead of
+  // .steam-spp-media-left — silently breaking this lookup (the hero lives
+  // outside the wrapper, as the wrapper's own preceding sibling) and with it
+  // every thumbnail/trailer click. .closest() walks up past the wrapper
+  // however the DOM is nested, so it isn't tied to one specific level again.
+  const hero = strip?.closest('.steam-spp-media-left')?.querySelector('.steam-spp-media-hero');
+  if (!hero) return;
+  strip.querySelectorAll('.steam-spp-carousel-thumb').forEach(t => t.classList.remove('is-active'));
+  el.classList.add('is-active');
+  const { kind, name, src, thumb, hls } = el.dataset;
+  hero.innerHTML = _steamSppHeroMarkup(kind, name, src, thumb, hls);
+  // Keep the hero's own data-kind in sync so a later click ON the hero
+  // (_steamSppCarouselItemClick above) opens the section matching whatever
+  // is now actually shown, not whatever was first rendered.
+  hero.dataset.kind = kind;
 }
 
 /* Shared by every click-to-edit entry point into Select Steam Assets
@@ -9801,7 +9838,7 @@ async function openStorePreviewSection(pid, target) {
 // Assets (the 'steamAssets' flip target) scrolled straight to its Header
 // Capsule upload block (#steam-assets-headercapsule-section,
 // buildSteamAssetsEditSection), the same pattern
-// _steamSppCarouselItemClick above uses for screenshots/trailers.
+// _steamSppCarouselItemClick above uses for the media carousel's hero.
 async function openSteamHeaderCapsuleSection() {
   await _steamSppOpenAssetsSection('steam-assets-headercapsule-section');
 }

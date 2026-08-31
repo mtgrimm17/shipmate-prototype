@@ -10339,25 +10339,37 @@ function buildSteamStorePreviewPrototypeSection() {
   const heroInnerHtml = firstCarouselItem
     ? _steamSppHeroMarkup(firstCarouselItem.kind, firstCarouselItem.name, firstCarouselItem.src, firstCarouselItem.thumb, firstCarouselItem.hls)
     : '';
-  // Clicking a thumbnail opens Select Steam Assets scrolled to that item's
-  // own section (_steamSppCarouselItemClick, app.js) rather than swapping
-  // the hero preview in place — see that function's comment for why.
+  // Clicking a thumbnail swaps the hero stage above to match — the
+  // pre-v4.65 in-place-preview behavior, restored by request: browsing
+  // between screenshots/trailers via the thumbnail strip should stay a
+  // lightweight preview action, not a trip to Select Steam Assets.
+  // _steamSppCarouselSelect (app.js) reads kind/name/src/thumb/hls back off
+  // these data-* attributes to rebuild the hero via _steamSppHeroMarkup, and
+  // updates the hero's own data-kind (below) so a later click ON the hero
+  // still opens the right Select Steam Assets section for whatever's
+  // currently shown there.
   const carouselThumbsHtml = carouselItems.map((item, i) => {
     const thumbSrc  = item.kind === 'screenshot' ? item.src : (item.thumb || '');
     const thumbImg  = thumbSrc ? `<img src="${escHtml(thumbSrc)}" alt="">` : `<span class="steam-spp-carousel-nothumb">🎬</span>`;
     const playBadge = item.kind !== 'screenshot' ? `<span class="steam-spp-carousel-play">▶</span>` : '';
-    return `<div class="steam-spp-carousel-thumb${i === 0 ? ' is-active' : ''}" onclick="_steamSppCarouselItemClick('${item.kind}')">${thumbImg}${playBadge}</div>`;
+    const attrs = [`data-kind="${item.kind}"`, `data-name="${escHtml(item.name)}"`];
+    if (item.src)   attrs.push(`data-src="${escHtml(item.src)}"`);
+    if (item.thumb) attrs.push(`data-thumb="${escHtml(item.thumb)}"`);
+    if (item.hls)   attrs.push(`data-hls="${escHtml(item.hls)}"`);
+    return `<div class="steam-spp-carousel-thumb${i === 0 ? ' is-active' : ''}" ${attrs.join(' ')} onclick="_steamSppCarouselSelect(this)">${thumbImg}${playBadge}</div>`;
   }).join('');
 
-  // The hero/stage is likewise clickable — same destination as the
-  // thumbnail for whatever's currently shown there (always
-  // firstCarouselItem; the hero no longer swaps on thumbnail click, so this
-  // binding never goes stale without a full re-render). For a steamTrailer,
-  // the inner Play control's own onclick (_steamSppHeroMarkup above) calls
-  // event.stopPropagation() before this ever fires, so Play still plays
-  // instead of navigating away.
+  // The hero/stage is clickable too, but for a different destination than a
+  // thumbnail click: it opens Select Steam Assets scrolled to whichever
+  // section matches what's *currently* shown there (_steamSppCarouselItemClick,
+  // app.js, reading this element's own data-kind rather than a value baked
+  // in at render time — _steamSppCarouselSelect keeps data-kind current
+  // whenever a thumbnail swaps the preview, so this never goes stale without
+  // a full re-render). For a steamTrailer, the inner Play control's own
+  // onclick (_steamSppHeroMarkup above) calls event.stopPropagation() before
+  // this ever fires, so Play still plays instead of navigating away.
   const heroHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero" onclick="_steamSppCarouselItemClick('${firstCarouselItem.kind}')">${heroInnerHtml}</div>`
+    ? `<div class="steam-spp-media-hero" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div>`
     : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
@@ -10473,12 +10485,13 @@ function buildSteamStorePreviewPrototypeSection() {
     </div>`;
 
   // The standalone "Select Steam Assets" button that used to sit here was
-  // removed by request — Select Steam Assets is now reached exclusively by
-  // clicking the specific thing you want to edit (a screenshot/trailer in
-  // the media carousel via _steamSppCarouselItemClick, or the header
-  // capsule via openSteamHeaderCapsuleSection), consistent with how every
-  // other section of this prototype is already click-to-edit rather than
-  // button-to-edit.
+  // removed by request — Select Steam Assets is now reached by clicking the
+  // specific thing you want to edit: the media carousel's hero/stage
+  // (_steamSppCarouselItemClick, app.js — NOT a thumbnail, which just
+  // browses the carousel in place, see _steamSppCarouselSelect) or the
+  // header capsule (openSteamHeaderCapsuleSection), consistent with how
+  // every other section of this prototype is already click-to-edit rather
+  // than button-to-edit.
 
   const queueRowHtml = `
     <div class="steam-spp-queue-row">
@@ -10699,8 +10712,9 @@ function buildSteamStorePreviewPrototypeSection() {
 }
 
 /* Steam Store Page Preview - Prototype: "Select Steam Assets" — reached by
-   clicking a screenshot/trailer in the media carousel
-   (_steamSppCarouselItemClick, app.js) or the header capsule
+   clicking the media carousel's hero/stage (_steamSppCarouselItemClick,
+   app.js — a thumbnail just browses the carousel in place instead, see
+   _steamSppCarouselSelect) or the header capsule
    (openSteamHeaderCapsuleSection, app.js); see the 'steamAssets' flip
    target dispatched from buildStorePreviewFlipSection. Manages every asset
    that carousel is built from:
