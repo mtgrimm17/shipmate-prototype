@@ -4053,7 +4053,24 @@ async function _checkSteamLocalizedListing(lang) {
   if (localizedShortDesc && localizedShortDesc !== baselineShortDesc) {
     wsEntry.description           = localizedShortDesc;
     wsEntry.descriptionFromSteam  = true;
-    wsEntry.descriptionSourceText = ws.description || '';
+    // Fallback-inclusive, NOT raw ws.description — this is the real bug
+    // behind Task #26's intermittent "Chinese/Spanish aren't pulled"
+    // report. When the primary card relies on the Steam-scrape fallback
+    // (ws.description is '', real text comes from steamLocInfo.shortDescription
+    // — see _steamFieldValue), _steamTriggerAutoTranslate is triggered with
+    // that fallback text as `primaryValue` (_steamPropagateAllFields/
+    // toggleObLang already read through _steamFieldValue for this exact
+    // reason) — but this write used to cache '' here instead, so its
+    // anti-overwrite guard (`entry.descriptionSourceText === text`) could
+    // never match a non-empty `text` and never protected this write. The
+    // Steam-scrape fetch and the AI translate call race every time a
+    // supporting language is added; whichever caches '' here always loses
+    // that race regardless of resolution order, silently letting an AI
+    // guess clobber the genuine Steam localization moments after it landed.
+    // Confirmed live (Claude Browser against the real Steam API + the real
+    // Go Ape Ship! listing): 5/5 trials lost the race for Chinese and 4/5
+    // for Spanish before this fix; 4/4 held after it.
+    wsEntry.descriptionSourceText = _steamFieldValue('description', fd.primaryLanguage || 'en');
   }
 
   // Developer/Publisher — Steam essentially never localizes these, but

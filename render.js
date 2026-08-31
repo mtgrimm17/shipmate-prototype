@@ -11351,7 +11351,6 @@ function buildSteamStorePreviewPrototypeSection() {
 
   return `
     ${localizationHeaderHtml}
-    <p class="steam-spp-intro">Preview of your public Steam store page — Steam's own page header and footer aren't shown here.</p>
     <div class="steam-spp-proto">
       ${breadcrumbHtml}
       ${headerHtml}

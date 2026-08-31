@@ -12216,7 +12216,6 @@ body.viewing-splash #app-guide { display: none; }
    own light/dark theme — same treatment the existing compact Store Page
    Preview widget already gives its own #1b2838 box.
    ══════════════════════════════════════════════════════ */
-.steam-spp-intro { font-size: 12px; color: var(--text-faint); margin: 0 0 14px; }
 .steam-spp-proto {
   /* Real Steam pages use a clean sans-serif (Motiva Sans, falling back to
      Arial/Helvetica) — nothing like Shipmate's own app-wide monospace font
