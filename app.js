@@ -4027,8 +4027,29 @@ async function _checkSteamLocalizedListing(lang) {
   // short_description cached at link time (info.shortDescription), same
   // fallback value Short Description's own primary-language card falls
   // back to (see _steamFieldValue).
-  const localizedShortDesc = (data.short_description || '').trim();
-  const baselineShortDesc  = (info.shortDescription || '').trim();
+  //
+  // /api/appdetails's `l=` param isn't reliably honored for
+  // short_description on every app — confirmed live that a store page can
+  // correctly render a localized short description (via its own
+  // og:description/description meta tags) for a language this JSON field
+  // comes back empty, or identical to the default-language text, for. When
+  // that happens, fall back to scraping that meta tag directly off the
+  // store page itself (see fetchSteamStorePage/_parseSteamMetaDescription,
+  // claude.js) before giving up on this language's Short Description.
+  let localizedShortDesc = (data.short_description || '').trim();
+  const baselineShortDesc = (info.shortDescription || '').trim();
+  if (!localizedShortDesc || localizedShortDesc === baselineShortDesc) {
+    try {
+      const html = await fetchSteamStorePage(info.appId, steamLang);
+      // Re-check staleness — a second await elapsed since the guards above.
+      if (!state.steamLocInfo || state.steamLocInfo.appId !== info.appId) return;
+      if (!(state.formData.localizations || []).includes(lang)) return;
+      const metaDesc = (_parseSteamMetaDescription(html) || '').trim();
+      if (metaDesc && metaDesc !== baselineShortDesc) localizedShortDesc = metaDesc;
+    } catch (e) {
+      console.warn('[Steam Localized Listing] short_description HTML fallback failed for', lang, e.message);
+    }
+  }
   if (localizedShortDesc && localizedShortDesc !== baselineShortDesc) {
     wsEntry.description           = localizedShortDesc;
     wsEntry.descriptionFromSteam  = true;
@@ -6627,7 +6648,7 @@ function _steamLocReviewSourceBadge(field, lang) {
   const entry = ws && ws.localizedStoreText && ws.localizedStoreText[lang];
   if (!entry) return null;
   if (entry[field + 'FromSteam']) return 'steam';
-  if (_steamFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ws[field] || '')) return 'ai';
+  if (_steamFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === _steamFieldValue(field, primary)) return 'ai';
   return null;
 }
 

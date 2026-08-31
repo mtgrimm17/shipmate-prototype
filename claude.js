@@ -722,10 +722,47 @@ async function fetchSteamAppDetails(appId, lang) {
    store page's markup at any time with no notice and no deprecation
    window, unlike a documented/stable API. Used by _applySteamSocialLinks
    (app.js). */
-async function fetchSteamStorePage(appId) {
-  const res = await _fetchWithTimeout(_cors(`https://store.steampowered.com/app/${appId}/`));
+async function fetchSteamStorePage(appId, lang) {
+  const langParam = lang ? `?l=${encodeURIComponent(lang)}` : '';
+  const res = await _fetchWithTimeout(_cors(`https://store.steampowered.com/app/${appId}/${langParam}`));
   if (!res.ok) throw new Error('Steam store page fetch failed (' + res.status + ')');
   return await res.text();
+}
+
+/* Extracts and HTML-entity-decodes the store page's own short-description
+   text out of its raw HTML (see fetchSteamStorePage above) — used as a
+   fallback source for Localization Review's Short Description field
+   (_checkSteamLocalizedListing, app.js) when Steam's /api/appdetails JSON
+   endpoint doesn't return a genuinely localized short_description for a
+   given `l=` language (confirmed live: some store pages correctly localize
+   their own rendered <meta name="description">/<meta property="og:description">
+   tags for a language even when the JSON endpoint's short_description for
+   that same `l=` comes back empty or identical to the default-language
+   text — this endpoint is undocumented/unstable like every other
+   store-page-HTML scrape in this file, see fetchSteamStorePage's own
+   comment). Prefers og:description (Steam always populates this one),
+   falls back to the plain name="description" meta tag. Reuses the same
+   small HTML-entity table _steamHtmlToParagraphLines uses below, since a
+   meta content="..." attribute can carry the same escaped entities as
+   the page's other rendered text does. Returns '' (never throws) if
+   neither meta tag is present, matching this file's "best-effort" scraping
+   convention for undocumented markup. */
+function _parseSteamMetaDescription(html) {
+  if (!html) return '';
+  const decode = s => s
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+  const ogMatch = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]*)"/i)
+    || html.match(/<meta[^>]*content="([^"]*)"[^>]*property="og:description"/i);
+  if (ogMatch && ogMatch[1]) return decode(ogMatch[1]);
+  const nameMatch = html.match(/<meta[^>]*name="description"[^>]*content="([^"]*)"/i)
+    || html.match(/<meta[^>]*content="([^"]*)"[^>]*name="description"/i);
+  if (nameMatch && nameMatch[1]) return decode(nameMatch[1]);
+  return '';
 }
 
 /* Parses the store page's "Find Community"-style social-links row out of
