@@ -1557,6 +1557,8 @@ function answerIOSField(field, value) {
     ans[field] = value;
     meta[field] = { ...(fmeta || {}), humanConfirmed: true };
   }
+  // Saying "yes" to in-app purchases pre-fills a demo-ready product list.
+  if (field === 'hasIAP' && ans[field] === 'yes') _seedStubIapProducts(pid);
   reRenderStepModal();
 }
 
@@ -1876,6 +1878,27 @@ function removeIapProduct(id) {
   const ans = _appStoreAnswers(pid);
   ans.iapProducts = ans.iapProducts.filter(p => p.id !== id);
   reRenderStepModal();
+}
+
+/* Demo convenience: when a developer (or AI inference) says the app HAS in-app
+   purchases, pre-fill a few realistic, already-saved IAP products so the IAP
+   Products list is populated and reviewable at a glance instead of empty —
+   keeps the Business step fast to move through in a live demo. Only seeds when
+   the list is currently empty, so it never clobbers a developer's own entries.
+   Products are saved (collapsed) and span the common types incl. a subscription. */
+function _seedStubIapProducts(pid) {
+  const ans = _appStoreAnswers(pid);
+  if (!Array.isArray(ans.iapProducts)) ans.iapProducts = [];
+  if (ans.iapProducts.length) return;
+  const stubs = [
+    { name: 'Starter Gem Pack', desc: '500 gems to jump-start your adventure',          price: '4.99', type: 'consumable' },
+    { name: 'Remove Ads',       desc: 'Permanently remove all banner and video ads',     price: '2.99', type: 'non-consumable' },
+    { name: 'Pro Monthly',      desc: 'Unlimited energy and monthly exclusive cosmetics', price: '4.99', type: 'auto-renewable', trial: 'yes' },
+  ];
+  stubs.forEach(s => ans.iapProducts.push({
+    id: generateId('iap'), name: s.name, desc: s.desc, price: s.price,
+    type: s.type, trial: s.trial || 'no', collapsed: true, locs: {},
+  }));
 }
 function setIapProductField(id, key, value) {
   const pid = state.stepModal?.platformId || 'ios';
@@ -10794,6 +10817,12 @@ function _postInferenceSetup(stepId) {
     if (p === 'ios')     state.iosContentRatingExpanded     = false;
     if (p === 'android') state.androidContentRatingExpanded = false;
     if (p === 'steam')   state.steamContentRatingExpanded   = false;
+  }
+  // If inference concluded the app has IAPs, pre-fill demo-ready products so the
+  // Business step's IAP list is already populated (App Store + Mac App Store).
+  for (const p of ['ios', 'macos']) {
+    if (!state.activePlatforms.has(p)) continue;
+    if (_appStoreAnswers(p).hasIAP === 'yes') _seedStubIapProducts(p);
   }
 }
 

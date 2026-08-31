@@ -6252,7 +6252,7 @@ function buildStorePreviewSection() {
   // DocuSign-style "next required" nav bar
   const SPP_SECTIONS = [
     { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
-    { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'             },
+    { target: 'screenshots', done: screenshotsDone, label: 'Adjust Screenshots'             },
     { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
     { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
   ];
@@ -6303,7 +6303,7 @@ function buildStorePreviewSection() {
       <span>iPhone, iPad</span>
     </div>
     <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Select Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
+      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
     </div>`;
 
   // Privacy section
@@ -6793,7 +6793,7 @@ function buildMacStorePreviewSection() {
 
   const SPP_SECTIONS = [
     { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
-    { target: 'screenshots', done: screenshotsDone, label: 'Select Screenshots'             },
+    { target: 'screenshots', done: screenshotsDone, label: 'Adjust Screenshots'             },
     { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
     { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
   ];
@@ -6841,7 +6841,7 @@ function buildMacStorePreviewSection() {
       <span>Mac</span>
     </div>
     <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Select Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
+      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
     </div>`;
 
   const privacySection = dataDone
@@ -8345,7 +8345,13 @@ function buildContentRatingSection(pid = 'ios') {
       </div>
     </div>` : '';
 
-  const additionalSection = `
+  // "Not applicable" (like any set Age Category) is a sufficient answer, so once
+  // it's chosen the whole section is done and should drop out of the Unanswered
+  // view like every other answered question — rather than lingering forever.
+  const addlAnswered = a.ageCategory !== null
+    && !(a.ageCategory === 'made_for_kids'   && a.kidsAgeRange   === null)
+    && !(a.ageCategory === 'override_higher' && a.overrideRating === null);
+  const additionalSection = (collapseMode && !showAll && addlAnswered) ? '' : `
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Additional Information</div>
     <div class="ios-q-row" style="align-items:center;gap:12px;">
@@ -11733,50 +11739,58 @@ function buildSubmittedCard(pid, flipData) {
   const savedH = state.platformFlippedCardHeight?.[pid];
   const heightStyle = savedH ? ` style="height:${savedH}px;max-height:${savedH}px;overflow:hidden"` : '';
 
-  // Per-store review status: where the submission sits in the pipeline, plus a
-  // realistic review-time expectation. Web deploys are live immediately.
-  const REVIEW_ETA = {
-    ios:     'Apple review — typically 24–48 hours',
-    macos:   'Apple review — typically 24–48 hours',
-    android: 'Google Play review — usually within 3 days',
-    steam:   'Steam review — 1–5 business days',
-  };
-  const stages      = isWeb ? ['Built', 'Deploying', 'Live']
-                            : ['Submitted', 'In Review', 'Approved', 'Live'];
-  const stageIdx    = isWeb ? 2 : 1;   // web: live now; stores: in review
-  const statusValue = isWeb ? 'Live' : 'In Review';
-  const statusEta   = isWeb ? 'Deployed and reachable now' : (REVIEW_ETA[pid] || 'In review');
+  // Review-time model: how long this store typically takes, used to derive the
+  // "Day X of Y" counter and the Est. live date. Web deploys are live at once.
+  const REVIEW_DAYS = { ios: 2, macos: 2, android: 3, steam: 5 };
+  const reviewDays  = REVIEW_DAYS[pid] || 2;
 
-  const timeline = stages.map((label, i) => {
-    const cls = i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : '';
-    const bar = i < stages.length - 1
-      ? `<span class="sub-tl-bar${i < stageIdx ? ' is-done' : ''}"></span>` : '';
-    return `<div class="sub-tl-step ${cls}"><span class="sub-tl-dot"></span><span class="sub-tl-label">${label}</span></div>${bar}`;
-  }).join('');
+  const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const submittedDate = (flipData && flipData.time) ? new Date(flipData.time) : new Date();
+  const estLiveDate   = new Date(submittedDate); estLiveDate.setDate(estLiveDate.getDate() + reviewDays);
+  const submittedStr  = fmtDate(submittedDate);
+  const estLiveStr    = fmtDate(estLiveDate);
+  const daysElapsed   = Math.max(1, Math.min(reviewDays,
+    Math.floor((Date.now() - submittedDate.getTime()) / 86400000) + 1));
+
+  // 4-segment review progress bar. Stores sit at "In Review" (1 done, 1 current);
+  // web is fully live (all segments filled green).
+  const SEG_COUNT = 4;
+  const stageIdx  = isWeb ? SEG_COUNT : 1;
+  const segbar = Array.from({ length: SEG_COUNT }, (_, i) =>
+    `<span class="sub-seg ${i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : ''}"></span>`).join('');
+
+  const waitText = isWeb
+    ? 'Your game is live. Announce it everywhere and turn launch day into momentum.'
+    : 'Reviews are quiet time. Line up your announcement so launch day runs itself.';
 
   return `
     <div class="active-card submitted-card${isWeb ? ' is-live' : ''}" id="active-card-${pid}"${heightStyle}>
-      <div class="active-card-head" style="border-bottom:none;">
-        <div class="active-card-platform">
-          <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
-          <div class="active-card-name">${platLabel(pid)}</div>
-        </div>
-        ${(!isWeb && trackLabel) ? `<span class="submitted-track-chip">${escHtml(trackLabel)}</span>` : ''}
+      <div class="sub-review-bar${isWeb ? ' is-live' : ''}">
+        <span class="sub-review-status">${isWeb ? 'LIVE' : 'IN REVIEW'}</span>
+        ${isWeb ? '' : `<span class="sub-review-day">Day <b>${daysElapsed}</b> of <b>${reviewDays}</b></span>`}
       </div>
       <div class="submitted-body">
-        <div class="sub-status ${isWeb ? 'is-live' : 'is-review'}">
-          <span class="sub-status-dot"></span>
-          <div class="sub-status-text">
-            <div class="sub-status-value">${statusValue}</div>
-            <div class="sub-status-eta">${statusEta}</div>
+        <div class="sub-plat-row">
+          <div class="sub-plat-icon">${platformIcon(pid, 24, 'white')}</div>
+          <div class="sub-plat-text">
+            <div class="sub-plat-name">${platLabel(pid)}</div>
+            ${trackLabel ? `<div class="sub-plat-sub">${escHtml(trackLabel)}</div>` : ''}
           </div>
+          <span class="sub-plat-menu" aria-hidden="true">•••</span>
         </div>
-        <div class="sub-timeline">${timeline}</div>
-        ${ts ? `<div class="sub-submitted-ts">${isWeb ? 'Deployed' : 'Submitted'} ${ts}</div>` : ''}
-        <div class="sub-actions">
-          <button class="sub-marketing-link" onclick="setView('broadcast')">Announce your launch in Marketing&nbsp;→</button>
-          <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">${isWeb ? 'Take Down' : 'Cancel Submission'}</button>
+        <div class="sub-segbar">${segbar}</div>
+        <div class="sub-dates">
+          <span>${isWeb ? 'Deployed' : 'Submitted'} ${submittedStr}</span>
+          ${isWeb
+            ? `<span class="sub-est"><b>Live now</b></span>`
+            : `<span class="sub-est"><b>Est. live</b> ${estLiveStr}</span>`}
         </div>
+        <div class="sub-wait-card">
+          <div class="sub-wait-head">${isWeb ? 'Now live' : 'While you wait'}</div>
+          <div class="sub-wait-body">${waitText}</div>
+          <button class="sub-wait-link" onclick="setView('broadcast')">Open Marketing →</button>
+        </div>
+        <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">${isWeb ? 'Take Down' : 'Cancel submission'}</button>
       </div>
     </div>`;
 }

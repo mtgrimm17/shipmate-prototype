@@ -4472,6 +4472,9 @@ body.viewing-splash .app-subnav { display: none; }
   box-sizing: border-box; border: 1px solid transparent;
 }
 .ias-placeholder { animation: ias-meta-pulse 2s ease-in-out infinite; }
+/* "What's New" is optional for a first submission (only required for updates),
+   so it should not pulse/glow as a mandatory empty field. Still click-to-edit. */
+.ias-wn-notes.ias-placeholder { animation: none; }
 
 /* Title and Subtitle sit directly adjacent in normal block flow, so their
    ias-editable negative top/bottom margins (which exist only to offset
@@ -10836,104 +10839,94 @@ body.is-splash .ai-disclaimer { display: none; }
    ══════════════════════════════════════════════════════ */
 
 .submitted-card {
-  border-color: rgba(47, 220, 128, 0.25);
+  border-color: rgba(255, 149, 0, 0.28);
   display: flex;
   flex-direction: column;
 }
 .submitted-card.is-live { border-color: rgba(47, 220, 128, 0.4); }
 
-/* Track chip lives in the header now, pushed to the right */
-.submitted-card .active-card-head { justify-content: space-between; }
+/* Amber "IN REVIEW · Day X of Y" header bar (green when live) */
+.sub-review-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 18px;
+  background: linear-gradient(180deg, #d9772e 0%, #c9631f 100%);
+  color: #fff;
+}
+.sub-review-bar.is-live { background: linear-gradient(180deg, #24a866 0%, #1c8a54 100%); }
+.sub-review-status { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; }
+.sub-review-day    { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.02em; }
+.sub-review-day b  { font-weight: 800; color: #fff; }
 
 .submitted-body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 16px 18px 20px;
+  padding: 16px 18px 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
-/* Status hero */
-.sub-status {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-.sub-status.is-review { background: rgba(255, 149, 0, 0.09); border: 1px solid rgba(255, 149, 0, 0.28); }
-.sub-status.is-live   { background: rgba(47, 220, 128, 0.10); border: 1px solid rgba(47, 220, 128, 0.30); }
-
-.sub-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.sub-status.is-review .sub-status-dot { background: #ff9500; animation: pulse-status-dot 1.8s ease-in-out infinite; }
-.sub-status.is-live   .sub-status-dot { background: #2fdc80; }
-
-@keyframes pulse-status-dot {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.45); }
-  50%       { opacity: 0.75; box-shadow: 0 0 0 5px rgba(255, 149, 0, 0); }
-}
-
-.sub-status-text { display: flex; flex-direction: column; gap: 2px; }
-.sub-status-value { font-size: 14px; font-weight: 700; letter-spacing: 0.01em; }
-.sub-status.is-review .sub-status-value { color: #ff9500; }
-.sub-status.is-live   .sub-status-value { color: #2fdc80; }
-.sub-status-eta { font-size: 11px; color: var(--text-dim); line-height: 1.3; }
-
-/* Review-stage timeline */
-.sub-timeline { display: flex; align-items: flex-start; padding: 2px 4px 0; }
-.sub-tl-step { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
-.sub-tl-dot {
-  width: 11px; height: 11px; border-radius: 50%;
-  background: var(--panel-2); border: 2px solid var(--border);
-  box-sizing: border-box;
-}
-.sub-tl-label { font-size: 9.5px; letter-spacing: 0.02em; color: var(--text-faint); white-space: nowrap; }
-.sub-tl-step.is-done .sub-tl-dot { background: #2fdc80; border-color: #2fdc80; }
-.sub-tl-step.is-done .sub-tl-label { color: var(--text-dim); }
-.sub-tl-step.is-current .sub-tl-dot { background: #ff9500; border-color: #ff9500; box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.18); }
-.sub-tl-step.is-current .sub-tl-label { color: #ff9500; font-weight: 600; }
-.sub-tl-bar { flex: 1 1 auto; height: 2px; background: var(--border); margin-top: 4.5px; min-width: 12px; border-radius: 1px; }
-.sub-tl-bar.is-done { background: #2fdc80; }
-
-.sub-submitted-ts { font-size: 11px; color: var(--text-faint); }
-
-.submitted-track-chip {
-  font-size: 11px;
-  color: var(--text-dim);
-  background: var(--panel-2);
+/* Platform row */
+.sub-plat-row { display: flex; align-items: center; gap: 12px; }
+.sub-plat-icon {
+  width: 44px; height: 44px; border-radius: 11px; flex-shrink: 0;
+  background: #1c1d1f; display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 11px;
-  letter-spacing: 0.01em;
 }
+.sub-plat-text { flex: 1 1 auto; min-width: 0; }
+.sub-plat-name { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 0.01em; }
+.sub-plat-sub  { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+.sub-plat-menu { color: var(--text-faint); font-size: 15px; letter-spacing: 1px; align-self: flex-start; }
 
-/* Secondary actions pinned to the bottom of the card */
-.sub-actions { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+/* 4-segment review progress bar */
+.sub-segbar { display: flex; gap: 6px; }
+.sub-seg {
+  flex: 1 1 0; height: 6px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.sub-seg.is-done    { background: #2fdc80; }
+.sub-seg.is-current { background: #e07b2e; }
 
-.sub-marketing-link {
-  font-size: 12px; font-weight: 600; font-family: inherit;
+/* Date row */
+.sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
+.sub-est { color: var(--text-dim); }
+.sub-est b { color: var(--text); font-weight: 600; }
+
+/* "While you wait" marketing nudge */
+.sub-wait-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 15px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sub-wait-head { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--purple, #9F68F0); }
+.sub-wait-body { font-size: 13px; line-height: 1.5; color: var(--text); }
+.sub-wait-link {
+  align-self: flex-start;
+  font-size: 13px; font-weight: 600; font-family: inherit;
   color: var(--purple, #9F68F0);
-  background: none; border: none; text-align: left; padding: 0;
-  cursor: pointer; letter-spacing: 0.01em; transition: opacity 0.15s;
+  background: none; border: none; padding: 0; cursor: pointer;
+  letter-spacing: 0.01em; transition: opacity 0.15s;
 }
-.sub-marketing-link:hover { opacity: 0.8; }
+.sub-wait-link:hover { opacity: 0.8; }
 
+/* Cancel — de-emphasized, bottom-right */
 .cancel-submission-btn {
-  padding: 8px 14px;
-  font-size: 12px;
+  margin-top: auto;
+  align-self: flex-end;
+  padding: 6px 4px 2px;
+  font-size: 13px;
   font-family: inherit;
   font-weight: 600;
-  color: var(--red, #ff3d61);
+  color: var(--magenta, #FF3B76);
   background: transparent;
-  border: 1px solid rgba(255, 61, 97, 0.4);
-  border-radius: 8px;
+  border: none;
   cursor: pointer;
   letter-spacing: 0.01em;
-  transition: background 0.15s, opacity 0.15s;
+  transition: opacity 0.15s;
 }
-.cancel-submission-btn:hover  { background: rgba(255, 61, 97, 0.08); }
-.cancel-submission-btn:active { opacity: 0.7; }
+.cancel-submission-btn:hover  { opacity: 0.8; }
+.cancel-submission-btn:active { opacity: 0.6; }
 
 /* Inline error chip when submitting without a track */
 .submit-track-err {

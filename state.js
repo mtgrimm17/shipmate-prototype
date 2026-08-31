@@ -1334,10 +1334,14 @@ function isIOSSectionComplete(sectionId) {
     return !!(state.platformBuilds?.ios) && !state.platformBuildProcessing?.ios;
   }
 
-  // Screenshots (now embedded inside storePreview flow)
+  // Screenshots (now embedded inside storePreview flow). Optional-once-present:
+  // the preview pre-populates from the Game Details screenshots and those already
+  // display, so any available screenshot is sufficient to submit — the developer
+  // only opens "Adjust Screenshots" if they want to curate. Not a hard gate.
   if (sectionId === 'screenshots') {
     const ps = state.platformScreenshots?.ios;
-    return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
+    if (ps && (ps.selected.length > 0 || ps.custom.length > 0)) return true;
+    return (state.uploads?.screenshots || []).length > 0;
   }
   if (sectionId === 'improveSubmission') return !!state.iosSubmitAnswers.improveSubmissionSeen;
 
@@ -1473,8 +1477,11 @@ function isMacSectionComplete(sectionId) {
   }
 
   if (sectionId === 'screenshots') {
+    // Optional-once-present, same as iOS — the preview shows Game Details
+    // screenshots by default, so any available screenshot is enough to submit.
     const ps = state.platformScreenshots?.macos;
-    return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
+    if (ps && (ps.selected.length > 0 || ps.custom.length > 0)) return true;
+    return (state.uploads?.screenshots || []).length > 0;
   }
   if (sectionId === 'improveSubmission') return !!state.macSubmitAnswers.improveSubmissionSeen;
 
