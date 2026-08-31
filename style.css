@@ -9422,7 +9422,10 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   background: #16202b; border-radius: 3px; padding: 8px 12px;
 }
 .steam-players-preview-icon {
-  width: 20px; flex-shrink: 0; text-align: center; font-size: 13px; color: #8f98a0;
+  /* min-width, not width — the three-person badge icon (computeSteamPlayerBadges,
+     render.js) is wider than a single glyph and needs to grow past this floor
+     instead of being clipped; single-glyph icons still land at exactly 20px. */
+  min-width: 20px; flex-shrink: 0; text-align: center; font-size: 13px; color: #8f98a0;
 }
 .steam-players-preview-label { color: #67c1f5; font-size: 13px; }
 
@@ -12589,7 +12592,10 @@ body.viewing-splash #app-guide { display: none; }
    hotlinking Steam's assets. */
 .steam-spp-features-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .steam-spp-feature { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #66c0f4; text-align: left; }
-.steam-spp-feature-icon { font-size: 15px; width: 18px; flex-shrink: 0; text-align: center; }
+/* min-width, not width — same reason as .steam-players-preview-icon above:
+   the three-person badge icon (computeSteamPlayerBadges, render.js) needs
+   to grow past this floor instead of being clipped. */
+.steam-spp-feature-icon { font-size: 15px; min-width: 18px; flex-shrink: 0; text-align: center; }
 /* "Full Controller Support" — a plain, icon-less label above the
    Xbox/PlayStation Controllers rows, matching how a real Steam page
    renders it (verified live via the Browser pane): flush with the row

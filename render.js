@@ -9885,25 +9885,28 @@ function buildSteamStoreTagsSection() {
    any child is picked. */
 function computeSteamPlayerBadges() {
   const p = state.steamSubmitAnswers.players || {};
-  const ICON_SOLO  = '👤';
-  // MMO/PvP/Cross-Platform Multiplayer all read as "many players, not
-  // necessarily working together" so they share the plain group-of-people
-  // icon; Co-op gets its own handshake icon since it specifically means
-  // players teaming up toward a common goal (players2.png reference) — the
-  // two families need to look different at a glance, not just say
-  // different words.
-  const ICON_GROUP = '👥';
-  const ICON_COOP  = '🤝';
+  const ICON_SOLO = '👤';
+  // Co-op gets the plain two-person icon (a duo working together); MMO/PvP/
+  // Cross-Platform Multiplayer get a three-person icon since they all imply
+  // a wider pool of players than just a duo (players2.png reference). There
+  // isn't a single well-supported "three silhouettes" emoji codepoint (the
+  // family/ZWJ options render as an unsupported-glyph box in this app's
+  // fonts), so the three-person icon is the solo bust tripled — verified by
+  // screenshot to render as three distinct figures rather than overlapping
+  // mush. .steam-players-preview-icon/.steam-spp-feature-icon use min-width
+  // (not width) precisely so this wider glyph isn't clipped.
+  const ICON_TWO   = '👥';
+  const ICON_THREE = '👤👤👤';
   const badges = [];
   if (p.singlePlayer) badges.push({ icon: ICON_SOLO, label: 'Single-player' });
-  if (p.mmo) badges.push({ icon: ICON_GROUP, label: 'MMO' });
+  if (p.mmo) badges.push({ icon: ICON_THREE, label: 'MMO' });
   if (p.pvp) {
     const children = [
       p.pvpOnline && 'Online PvP',
       p.pvpLan    && 'LAN PvP',
       p.pvpLocal  && 'Shared/Split Screen PvP',
     ].filter(Boolean);
-    (children.length ? children : ['PvP']).forEach(label => badges.push({ icon: ICON_GROUP, label }));
+    (children.length ? children : ['PvP']).forEach(label => badges.push({ icon: ICON_THREE, label }));
   }
   if (p.coop) {
     const children = [
@@ -9911,9 +9914,9 @@ function computeSteamPlayerBadges() {
       p.coopLan    && 'LAN Co-op',
       p.coopLocal  && 'Shared/Split Screen Co-op',
     ].filter(Boolean);
-    (children.length ? children : ['Co-op']).forEach(label => badges.push({ icon: ICON_COOP, label }));
+    (children.length ? children : ['Co-op']).forEach(label => badges.push({ icon: ICON_TWO, label }));
   }
-  if (p.crossPlatform) badges.push({ icon: ICON_GROUP, label: 'Cross-Platform Multiplayer' });
+  if (p.crossPlatform) badges.push({ icon: ICON_THREE, label: 'Cross-Platform Multiplayer' });
   return badges;
 }
 
