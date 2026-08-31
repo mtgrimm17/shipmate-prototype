@@ -4417,10 +4417,11 @@ function buildStorePreviewFlipSection(platformId, target) {
   }
   if (target === 'business') {
     if (platformId === 'android') return buildAndroidBusinessSection();
-    if (platformId === 'steam') {
-      return `<div class="qs-section"><div class="qs-section-header">Store Tags</div>${buildSteamStoreTagsSection()}</div>
-              <div class="qs-section qs-section-divided"><div class="qs-section-header">Technical</div>${buildSteamTechnicalSection()}</div>`;
-    }
+    // Steam's Business Questions used to bundle Store Tags + Technical here
+    // (see buildSteamBusinessSection's own comment for the full history) —
+    // now just Price, reached instead from their own standalone 'tags'/
+    // 'technical' targets below.
+    if (platformId === 'steam') return buildSteamBusinessSection();
     return buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
   }
   if (target === 'data') {
@@ -4441,23 +4442,23 @@ function buildStorePreviewFlipSection(platformId, target) {
   }
   // Steam-only: the Store Page Preview - Prototype's own "Tags" block
   // (under the header capsule/Developer/Publisher — see
-  // buildSteamStorePreviewPrototypeSection's glanceHtml) — the same
-  // Top-Level Genre/Genre/Sub-genre picker Business Questions' "Store
-  // Tags" section already used (buildSteamStoreTagsSection), now also
-  // reachable as its own standalone section rather than only bundled in
-  // with Technical under Business Questions. Wrapped in .qs-section with
-  // no internal header, same as 'steamAssets' below — the modal's own
-  // title (FLIP_LABELS.tags, above) already reads "Tags".
+  // buildSteamStorePreviewPrototypeSection's glanceHtml) — the Top-Level
+  // Genre/Genre/Sub-genre picker (buildSteamStoreTagsSection). Used to also
+  // be reachable bundled into Business Questions; that bundling is gone
+  // now (see buildSteamBusinessSection's comment), so this standalone
+  // section is Store Tags' only home. Wrapped in .qs-section with no
+  // internal header, same as 'steamAssets' below — the modal's own title
+  // (FLIP_LABELS.tags, above) already reads "Tags".
   if (target === 'tags') {
     return `<div class="qs-section">${buildSteamStoreTagsSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Features" block (see
-  // featuresHtml, buildSteamStorePreviewPrototypeSection) — the same Input
-  // Support/Accessibility picker Business Questions' "Technical" section
-  // already used (buildSteamTechnicalSection), now also reachable as its
-  // own standalone section rather than only bundled in with Store Tags
-  // under Business Questions. Wrapped in .qs-section with no internal
-  // header, same as 'tags'/'steamAssets' — the modal's own title
+  // featuresHtml, buildSteamStorePreviewPrototypeSection) — the Input
+  // Support/Accessibility picker (buildSteamTechnicalSection). Used to also
+  // be reachable bundled into Business Questions; that bundling is gone
+  // now (see buildSteamBusinessSection's comment), so this standalone
+  // section is Technical's only home. Wrapped in .qs-section with no
+  // internal header, same as 'tags'/'steamAssets' — the modal's own title
   // (FLIP_LABELS.technical, above) already reads "Technical".
   if (target === 'technical') {
     return `<div class="qs-section">${buildSteamTechnicalSection()}</div>`;
@@ -8302,7 +8303,7 @@ function buildBusinessSection(pid = 'ios') {
           <span class="tooltip-body">Your base price for iOS. Leave blank or enter 0 for free. Shipmate will convert to local currencies across all regions.</span>
         </span>
       </label>
-      <input class="form-input" id="${pid}-price" type="text" placeholder="4.99 (or 0 for free)"
+      <input class="form-input" id="${pid}-price" type="text" placeholder="e.g., 4.99 (or 0 for free)"
              value="${priceVal}"
              oninput="syncField('price', this.value)"
              onblur="roundPrice(this)">
@@ -10045,6 +10046,40 @@ function buildSteamTechnicalSection() {
     <div class="cq-check-list">${accessChecks}</div>`;
 }
 
+/* ── Steam: Business Questions — Price ──────────────────
+   Unlike App Store/Mac App Store (buildBusinessSection above, which
+   deliberately share ONE game-wide price via state.formData.price since
+   Apple bills both platforms at a single base price), Steam gets its own
+   independent price — state.webSite.price, the exact same field the Store
+   Page Preview - Prototype's Purchase area already reads to decide "Play
+   Game" (free) vs "Buy Game" (paid) — see rawPrice/isFreeGame,
+   buildSteamStorePreviewPrototypeSection. That's also why that Purchase
+   area is itself selectable straight back to this section (its own
+   onclick, buildSteamStorePreviewPrototypeSection) — editing Price here is
+   exactly what changes what that section shows.
+   Business Questions used to bundle Store Tags and Technical here too (see
+   buildStorePreviewFlipSection's 'business' case) — both had already grown
+   their own standalone sections ('tags'/'technical' flip targets, reached
+   from the Store Page Preview - Prototype's own Tags/Features blocks) and
+   were only still reachable here as a secondary, largely redundant path;
+   removed by request now that Price has taken this section over instead. */
+function buildSteamBusinessSection() {
+  const priceVal = (state.webSite && state.webSite.price) || '';
+  return `
+    <div class="form-group">
+      <label class="form-label">Price (USD)
+        <span class="tooltip-anchor">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-body">Your base price for Steam. Leave blank or enter 0 for free. Steam will convert to local currencies across all regions.</span>
+        </span>
+      </label>
+      <input class="form-input" id="steam-price" type="text" placeholder="e.g., 4.99 (or 0 for free)"
+             value="${priceVal}"
+             oninput="setWebSiteField('price', this.value)"
+             onblur="roundSteamPrice(this)">
+    </div>`;
+}
+
 /* ── Steam: Store Page Preview ──────────────────────── */
 function buildSteamStorePreviewSection() {
   const pid  = 'steam';
@@ -10065,7 +10100,10 @@ function buildSteamStorePreviewSection() {
 
   // Section completion
   const contentDone     = isSteamSectionComplete('contentRating');
-  const businessDone    = isSteamSectionComplete('storeTags') && isSteamSectionComplete('technical');
+  // Business Questions is just Price now (buildSteamBusinessSection) —
+  // "done" means a price has actually been entered, same "gate on the one
+  // field that's actually there" treatment dataDone below gives Privacy.
+  const businessDone    = !!((state.webSite && state.webSite.price) || '').trim();
   const privUrl         = (state.steamSubmitAnswers.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
   const dataDone        = !!privUrl;
   const screenshotsDone = isSteamSectionComplete('screenshots');
@@ -10135,7 +10173,7 @@ function buildSteamStorePreviewSection() {
 
     <div class="spp-sections-list" style="margin-top:14px;">
       ${_sppBtn('content',  'Answer Content Questions',        'Mature content, AI usage, and IARC rating',    contentDone)}
-      ${_sppBtn('business', 'Answer Business Questions',       'Store tags, genre, and technical details',     businessDone)}
+      ${_sppBtn('business', 'Answer Business Questions',       'Set your base price for Steam',                businessDone)}
       ${_sppBtn('data',     'Answer Data Collection Questions','Add your privacy policy URL',                  dataDone)}
     </div>
 
@@ -10218,6 +10256,12 @@ function buildSteamStorePreviewPrototypeSection() {
   ssa.storePreviewPrototypeSeen = true;
 
   const gameTitle = fd.title || 'Your Game Title';
+  // The Play/Buy purchase title below (purchaseAreaHtml) gets its own
+  // shorter fallback — "Your Game" rather than "Your Game Title" — per
+  // request; every other echo of the title on this page (breadcrumb, info
+  // block) keeps the shared gameTitle fallback above. _steamSppTitleInput
+  // (app.js) mirrors this same distinction when live-patching on keystroke.
+  const purchaseTitleText = fd.title || 'Your Game';
   const genreList   = (ssa.topGenres || []);
   const genreText   = genreList.length ? genreList.join(', ') : 'Indie';
   const primaryGenre = genreList[0] || 'Games';
@@ -10535,11 +10579,17 @@ function buildSteamStorePreviewPrototypeSection() {
   // rather than also pairing it with a second "Add to Library" button
   // (dropped by request: that extra button widened the bar well past what
   // real Steam shows for a free title, part of what read as "too large").
+  // The whole panel is itself selectable — clicking anywhere on it (the
+  // "Play Game"/"Add to Cart" buttons are decorative, same as everywhere
+  // else in this prototype) opens Steam's own Business Questions, where
+  // Price — the exact field free-vs-paid above is computed from — now
+  // lives (buildSteamBusinessSection). Consistent with the Content/
+  // Features side blocks' own "click the whole card" pattern just below.
   const purchaseAreaHtml = isFreeGame
     ? `
-      <div class="steam-spp-purchase">
+      <div class="steam-spp-purchase" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
-          <div class="steam-spp-purchase-title">Play <span id="steam-spp-purchase-title-text">${escHtml(gameTitle)}</span></div>
+          <div class="steam-spp-purchase-title">Play <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
         </div>
         <div class="steam-spp-purchase-bottom">
@@ -10550,9 +10600,9 @@ function buildSteamStorePreviewPrototypeSection() {
         </div>
       </div>`
     : `
-      <div class="steam-spp-purchase">
+      <div class="steam-spp-purchase" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
-          <div class="steam-spp-purchase-title">Buy <span id="steam-spp-purchase-title-text">${escHtml(gameTitle)}</span></div>
+          <div class="steam-spp-purchase-title">Buy <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
         </div>
         <div class="steam-spp-purchase-bottom">

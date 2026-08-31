@@ -2578,6 +2578,22 @@ function roundPrice(inputEl) {
   state.formData['price'] = result;
 }
 
+// Same "round to a .99 price" polish as the base game price (roundPrice
+// above) — kept as its own function rather than reusing roundPrice
+// directly, since that one hardcodes state.formData.price (the App Store/
+// Mac App Store shared price) and would overwrite that field instead of
+// Steam's own, independent price (state.webSite.price — see
+// buildSteamBusinessSection, render.js, for why Steam gets its own).
+function roundSteamPrice(inputEl) {
+  let val = parseFloat(inputEl.value);
+  if (isNaN(val) || val <= 0) return; // free / blank — leave as-is
+  if (Math.abs(val - Math.floor(val) - 0.99) < 0.001) return;
+  const rounded = Math.round(val);
+  const result = rounded > 0 ? (rounded - 0.01).toFixed(2) : val.toFixed(2);
+  inputEl.value = result;
+  setWebSiteField('price', result);
+}
+
 /* ── Onboarding section rail predicates ──────────────── */
 
 // Returns true when all required fields for a given section are filled.
@@ -8020,11 +8036,15 @@ function playSteamTrailer(el) {
 function _steamSppTitleInput(value) {
   syncField('title', value);
   const shown = value || 'Your Game Title';
+  // The Play/Buy purchase title gets its own shorter fallback ("Your Game")
+  // than the breadcrumb/info block's "Your Game Title" — matches
+  // purchaseTitleText in buildSteamStorePreviewPrototypeSection, render.js.
+  const purchaseShown = value || 'Your Game';
   const crumb = document.getElementById('steam-spp-crumb-title');
   const purchase = document.getElementById('steam-spp-purchase-title-text');
   const info = document.getElementById('steam-spp-info-title');
   if (crumb)    crumb.textContent = shown;
-  if (purchase) purchase.textContent = shown;
+  if (purchase) purchase.textContent = purchaseShown;
   if (info)     info.textContent = shown;
   // Same empty-field pulse the App Store Product Page Preview's own
   // selectable Title/Subtitle carry while blank (.ias-placeholder) — see

@@ -12525,7 +12525,23 @@ body.viewing-splash #app-guide { display: none; }
   position: relative;
   background: linear-gradient(90deg, #30404d, #56647a);
   border-radius: 4px; padding: 12px 16px 26px; margin-bottom: 30px;
+  cursor: pointer;
 }
+/* Selectable — opens Steam's Business Questions (openStorePreviewSection
+   call on the div itself, buildSteamStorePreviewPrototypeSection). Same
+   translucent-tint-on-hover recipe as .steam-spp-capsule-wrap (an ::after
+   overlay rather than swapping `background` directly, which would blow
+   away the gradient above). inset extends -16px past the box's own bottom
+   edge to also cover .steam-spp-purchase-bottom's own 16px overhang (its
+   comment above has the exact measurement) — without that extra inset the
+   tint would stop at the gradient panel's edge and visibly exclude the
+   price/button bar hanging just past it, splitting one clickable area into
+   a highlighted part and an unhighlighted part. */
+.steam-spp-purchase::after {
+  content: ''; position: absolute; inset: 0 0 -16px 0; border-radius: 4px;
+  background: rgba(103, 193, 245, .12); opacity: 0; transition: opacity 0.12s; pointer-events: none;
+}
+.steam-spp-purchase:hover::after { opacity: 1; }
 .steam-spp-purchase-top {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
