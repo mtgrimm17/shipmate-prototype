@@ -9886,7 +9886,14 @@ function buildSteamStoreTagsSection() {
 function computeSteamPlayerBadges() {
   const p = state.steamSubmitAnswers.players || {};
   const ICON_SOLO  = '👤';
+  // MMO/PvP/Cross-Platform Multiplayer all read as "many players, not
+  // necessarily working together" so they share the plain group-of-people
+  // icon; Co-op gets its own handshake icon since it specifically means
+  // players teaming up toward a common goal (players2.png reference) — the
+  // two families need to look different at a glance, not just say
+  // different words.
   const ICON_GROUP = '👥';
+  const ICON_COOP  = '🤝';
   const badges = [];
   if (p.singlePlayer) badges.push({ icon: ICON_SOLO, label: 'Single-player' });
   if (p.mmo) badges.push({ icon: ICON_GROUP, label: 'MMO' });
@@ -9904,7 +9911,7 @@ function computeSteamPlayerBadges() {
       p.coopLan    && 'LAN Co-op',
       p.coopLocal  && 'Shared/Split Screen Co-op',
     ].filter(Boolean);
-    (children.length ? children : ['Co-op']).forEach(label => badges.push({ icon: ICON_GROUP, label }));
+    (children.length ? children : ['Co-op']).forEach(label => badges.push({ icon: ICON_COOP, label }));
   }
   if (p.crossPlatform) badges.push({ icon: ICON_GROUP, label: 'Cross-Platform Multiplayer' });
   return badges;
