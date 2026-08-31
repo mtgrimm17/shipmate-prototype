@@ -4494,13 +4494,16 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'steamAssets') {
     return buildSteamAssetsEditSection();
   }
-  // The App Store / Mac App Store Product Page Preview's "Localizations"
-  // button. Mac App Store gets its own builder (own review-UI scratch state —
-  // back-translation cache, undo history — even though Title/Subtitle's
-  // underlying data is shared with the App Store; see buildMacLocalizationReviewSection's
-  // own header comment for why).
+  // The App Store / Mac App Store / Steam Store Page Preview's own
+  // "Localizations" button. Mac App Store and Steam each get their own
+  // builder (own review-UI scratch state — back-translation cache, undo
+  // history — even though Title's underlying data is shared with the App
+  // Store; see buildMacLocalizationReviewSection's/buildSteamLocalizationReviewSection's
+  // own header comments for why).
   if (target === 'localization') {
-    return platformId === 'macos' ? buildMacLocalizationReviewSection() : buildLocalizationReviewSection();
+    if (platformId === 'macos') return buildMacLocalizationReviewSection();
+    if (platformId === 'steam') return buildSteamLocalizationReviewSection();
+    return buildLocalizationReviewSection();
   }
   // Business Questions' "IAP Locs" button (buildIapSection, further above) —
   // flips the whole modal over from 'business' to this section rather than
@@ -7327,6 +7330,194 @@ function buildMacLocalizationReviewSection() {
       <div class="loc-review-header-controls">
         <button class="loc-review-toggle-btn" onclick="toggleMasLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
         ${swSelect('mas-loc-review-field', field, fieldOptions, 'setMasLocReviewField', '160px', 'right')}
+      </div>
+    </div>
+    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
+}
+
+/* Steam's own 5-field dropdown for buildSteamLocalizationReviewSection below —
+   shape-matches LOC_REVIEW_FIELDS above, just Steam's own 5 fields (Title,
+   plus its own independent Short Description/Developer/Publisher/About This
+   Game) instead of the App Store's 4. */
+const STEAM_LOC_REVIEW_FIELDS = [
+  { value: 'title',       label: 'Title' },
+  { value: 'description', label: 'Short Description' },
+  { value: 'developer',   label: 'Developer' },
+  { value: 'publisher',   label: 'Publisher' },
+  { value: 'aboutGame',   label: 'About This Game' },
+];
+
+/* ── Steam Store Page Preview - Prototype flip section: "Localization
+   Review" ──────────────────────────────────────────────────────────────
+   Full twin of buildLocalizationReviewSection/buildMacLocalizationReviewSection
+   above — same markup/classes, same Review/back-translation flip and
+   per-field undo/redo — reading/writing through _steamFieldValue/
+   _steamSetFieldValue and Steam's own review-UI state (steamLocReviewField/
+   steamLocReviewMode/steamLocReviewBackTranslation/steamLocReviewUndoHistory,
+   state.js) via the "_steamLoc"/"steamLoc" prefixed handler cluster (app.js)
+   instead of Localization Review's/Mac App Store's own. Opened via the Store
+   Page Preview - Prototype's own new "Localizations" button
+   (openStorePreviewSection('steam','localization')).
+
+   Title reads/writes the exact SAME underlying value as the App Store's own
+   Localization Review (_steamFieldValue/_steamSetFieldValue delegate that
+   one field straight to state.formData — see STEAM_SHARED_LISTING_FIELDS,
+   app.js) — editing it here is instantly reflected in the App Store's own
+   Localization Review, Preview, or Steam's own main preview on next render.
+   Short Description/Developer/Publisher/About This Game remain fully
+   independent (state.webSite.localizedStoreText).
+
+   Two deliberate differences from the App Store's/Mac App Store's own
+   sections:
+     1. Steam invents NO character limit for any of its 5 fields — every
+        card's field (both the non-flipped side and a flipped card's TOP
+        half) uses the same "no limit" block the App Store's own Review side
+        reserves for just its back-translation bottom half (fieldBlockNoLimit,
+        buildLocalizationReviewSection above) — no counter row, no
+        over-limit styling, no "Must be less than N characters." message,
+        anywhere in this section.
+     2. The "Automatically translated fields" gear here offers ONLY Short
+        Description/Developer/Publisher/About This Game — Title has no
+        independent auto-translate setting of its own here, same precedent
+        as Mac App Store's own settings menu omitting Title/Subtitle (see
+        buildMacLocalizationReviewSection's own comment): it's governed by
+        the single shared iasAutoTranslateFields.title setting (the App
+        Store's own gear) instead. */
+function buildSteamLocalizationReviewSection() {
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.steamLocReviewField || 'title';
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.steamLocReviewMode === 'review';
+  // Description/About This Game can run fairly long — same fixed-height/
+  // scroll fallback the App Store's own Review side uses for its own long
+  // fields (loc-review-cards--long-field, style.css) so a long card doesn't
+  // dwarf every other card in the row — even though Steam invents no actual
+  // character LIMIT for any of its 5 fields (see fieldBlock below).
+  const isLongField = field === 'description' || field === 'aboutGame';
+
+  // No per-language warning icon in the field dropdown — there's no
+  // character limit for any field to be over (see this function's own
+  // header comment, point 1).
+  const fieldOptions = STEAM_LOC_REVIEW_FIELDS.map(f => ({ value: f.value, label: f.label, warning: false }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _steamLocReviewUndoState(kind, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); steamLocReviewUndo('${kind}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); steamLocReviewRedo('${kind}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  // The one and only field+counter block Steam's own Review section uses —
+  // no character limit anywhere in this section (see this function's own
+  // header comment, point 1), so every card's field, in both the non-flipped
+  // and flipped-TOP-half positions, uses this "no limit" shape (matching
+  // fieldBlockNoLimit's own look in buildLocalizationReviewSection above,
+  // just under this section's own name since there's no limited counterpart
+  // here to distinguish it from).
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _steamFieldValue(field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _steamLocReviewBackTranslationValue(field, lang);
+      const topStatusHtml = _steamFieldTranslatePending(field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="loc-review-card">
+        <div class="loc-review-side">
+          <div class="loc-review-half loc-review-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startSteamLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="loc-review-half loc-review-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlock(back.text, `startSteamLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _steamFieldTranslatePending(field, lang);
+    const srcBadge = _steamLocReviewSourceBadge(field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
+    return `
+      <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startSteamLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  // Only Short Description/Developer/Publisher/About This Game have their
+  // own independently-toggleable auto-translate setting — see this
+  // function's own top comment, point 2.
+  const autoCfg = state.steamAutoTranslateFields
+    || { description: true, developer: false, publisher: false, aboutGame: true };
+  const settingsOpen = !!state.steamReviewSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_steamToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="steam-loc-review-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_steamToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('description', 'Short Description')}
+          ${settingsRow('developer', 'Developer')}
+          ${settingsRow('publisher', 'Publisher')}
+          ${settingsRow('aboutGame', 'About This Game')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="loc-review-header">
+      <div class="loc-review-title-group">
+        <div class="loc-review-title">Localization Review</div>
+        ${settingsMenu}
+      </div>
+      <div class="loc-review-header-controls">
+        <button class="loc-review-toggle-btn" onclick="toggleSteamLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        ${swSelect('steam-loc-review-field', field, fieldOptions, 'setSteamLocReviewField', '170px', 'right')}
       </div>
     </div>
     <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
@@ -10410,35 +10601,96 @@ function buildSteamStorePreviewPrototypeSection() {
 
   ssa.storePreviewPrototypeSeen = true;
 
-  const gameTitle = fd.title || 'Your Game Title';
+  // Language dropdown (top-right of the modal, above the preview) — same
+  // Primary-Language-first + alphabetically-sorted-supported-languages
+  // derivation as the App Store's own Product Page Preview dropdown (see
+  // buildStorePreviewSection's own comment above); previewLang is shared
+  // with app.js's _steamSppTitleInput/_steamSppSetField/_steamSppDevPubInput
+  // (_steamEffectivePreviewLang) so the preview's display and its
+  // click-to-edit fields never disagree about which language is currently
+  // showing. No per-language warning icon — Steam invents no character
+  // limit for any of its 5 Localization Review fields (see
+  // buildSteamLocalizationReviewSection's own comment), unlike the App
+  // Store's own dropdown (_iasLangHasOverLimitField).
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
+  const previewLangOptions = previewLangCodes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l, warning: false }));
+  const previewLang = _steamEffectivePreviewLang();
+  const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
+
+  // Same loading/error status line as the App Store's/Mac App Store's own
+  // Product Page Preview (_iasStatusLine/_masStatusLine, above) — shown
+  // directly under a field only while previewing a non-primary language,
+  // since the primary language is never itself a translation target. Steam's
+  // own Short Description/Developer/Publisher/About This Game each get one
+  // (Title doesn't need its own here — it isn't auto-translated by default
+  // and shares the App Store's own status surface when it is).
+  const _steamStatusLine = (field, tryAgainLabel) => {
+    if (previewLang === previewPrimaryLang) return '';
+    const status = state.steamTranslateStatus?.[field];
+    if (status === 'loading') {
+      return `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating ${tryAgainLabel} to ${previewLangName}…</div>`;
+    }
+    if (status === 'error') {
+      return `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_steamRetryTranslate('${field}')">Try again</button></div>`;
+    }
+    return '';
+  };
+  const shortDescStatusHtml = _steamStatusLine('description', 'short description');
+  const devStatusHtml       = _steamStatusLine('developer', 'developer name');
+  const pubStatusHtml       = _steamStatusLine('publisher', 'publisher name');
+  const aboutGameStatusHtml = _steamStatusLine('aboutGame', 'about this game');
+
+  // Title is shared with the App Store's own listing (STEAM_SHARED_LISTING_FIELDS,
+  // app.js) — read here via the same _iasFieldValue every other Title
+  // surface in the app reads, keyed by whichever language previewLang above
+  // is currently showing rather than always the Primary Language's own
+  // fd.title, so switching this preview's own language dropdown actually
+  // changes what's shown/edited here, same as the App Store's own preview.
+  const titleRaw = _iasFieldValue('title', previewLang);
+  const gameTitle = titleRaw || 'Your Game Title';
   // The Play/Buy purchase title below (purchaseAreaHtml) gets its own
   // shorter fallback — "Your Game" rather than "Your Game Title" — per
   // request; every other echo of the title on this page (breadcrumb, info
   // block) keeps the shared gameTitle fallback above. _steamSppTitleInput
   // (app.js) mirrors this same distinction when live-patching on keystroke.
-  const purchaseTitleText = fd.title || 'Your Game';
+  const purchaseTitleText = titleRaw || 'Your Game';
   const genreList   = (ssa.topGenres || []);
   const genreText   = genreList.length ? genreList.join(', ') : 'Indie';
   const primaryGenre = genreList[0] || 'Games';
 
-  // Developer/Publisher — same state.webSite fields the preview website's
-  // own Factsheet edits (setWebSiteField in app.js), so editing either one
-  // here or there updates both. Editable inline below (glanceHtml) via
-  // _steamSppDevPubInput (app.js), which also keeps this fallback-decorated
-  // copy — shown read-only in the sidebar's info block further down — in
-  // sync without a full re-render.
-  const devName = escHtml(ws.developer || 'Developer Name');
-  const pubName = escHtml(ws.publisher || 'Publisher Name');
+  // Developer/Publisher — Steam's own independent per-language storage
+  // (state.webSite.localizedStoreText, via _steamFieldValue), whose Primary
+  // Language copy is the exact same flat state.webSite fields the preview
+  // website's own Factsheet edits (setWebSiteField in app.js) — so editing
+  // either one here or there still updates both for the Primary Language.
+  // Editable inline below (glanceHtml) via _steamSppDevPubInput (app.js),
+  // which also keeps this fallback-decorated copy — shown read-only in the
+  // sidebar's info block further down — in sync without a full re-render.
+  const devRaw = _steamFieldValue('developer', previewLang);
+  const pubRaw = _steamFieldValue('publisher', previewLang);
+  const devName = escHtml(devRaw || 'Developer Name');
+  const pubName = escHtml(pubRaw || 'Publisher Name');
 
-  // Short description ("Hook") — this prototype's own editable field, bound
-  // to ws.description with the same fallback the preview website's own Hook
-  // field uses: Steam's own short_description for the linked store page
-  // (state.steamLocInfo.shortDescription, cached by _applySteamAboutData in
-  // app.js) when nothing's been typed here yet. Still never falls back to
+  // Short description ("Hook") — this prototype's own editable field, now
+  // Steam's own independent per-language storage (_steamFieldValue), whose
+  // Primary Language copy carries the same fallback the preview website's
+  // own Hook field uses: Steam's own short_description for the linked store
+  // page (state.steamLocInfo.shortDescription, cached by _applySteamAboutData
+  // in app.js) when nothing's been typed here yet. That fallback only ever
+  // applies to the PRIMARY Language's own card/field — a supporting
+  // language has no equivalent Steam-sourced text to fall back to, so it
+  // just reads blank until translated or typed. Still never falls back to
   // Game Details' Description (formData.description) — that fallback chain
   // belongs to About This Game below, not this field.
   const steamShortDescription = (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
-  const shortDescRaw = (ws.description && ws.description.trim()) || steamShortDescription;
+  const shortDescOwn = _steamFieldValue('description', previewLang);
+  const shortDescRaw = (shortDescOwn && shortDescOwn.trim())
+    ? shortDescOwn
+    : (previewLang === previewPrimaryLang ? steamShortDescription : '');
 
   // Release Date — the exact same state.webSite.releaseDate field the
   // preview website's own "About" > Release Date sub-section reads (see its
@@ -10503,17 +10755,26 @@ function buildSteamStorePreviewPrototypeSection() {
     : Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
   const supportsEnglish = langCodes.includes('en');
 
-  // About This Game — this prototype's own editable field, pre-populated
-  // from Game Details' Description the same way the preview website's own
-  // About This Game is (ws.aboutGame is force-synced from formData.
-  // description elsewhere — _wsPropagateAboutGame, app.js — so reading it
-  // here already reflects the current Description; the `|| fd.description`
-  // fallback only matters for a project saved before that sync existed).
-  // Editing this field directly only ever writes ws.aboutGame (via
-  // _steamSppSetField below) — same one-way "doesn't write back to
-  // Description" rule every other direct edit of this field already
-  // follows (see webSite.aboutGame's own comment in state.js).
-  const aboutGameRaw = (ws.aboutGame && ws.aboutGame.trim()) || fd.description || '';
+  // About This Game — this prototype's own editable field, now Steam's own
+  // independent per-language storage (_steamFieldValue). The Primary
+  // Language's own copy is pre-populated from Game Details' Description the
+  // same way the preview website's own About This Game is (ws.aboutGame is
+  // force-synced from formData.description elsewhere — _wsPropagateAboutGame,
+  // app.js — so reading it here already reflects the current Description;
+  // the `|| fd.description` fallback only matters for a project saved
+  // before that sync existed, or before this field's own per-language entry
+  // existed) — a supporting language has no such fallback, since Game
+  // Details' Description has no language of its own to translate from
+  // directly (this field's own auto-translate, when on, is what populates
+  // it instead). Editing this field directly only ever writes into this
+  // per-language storage (via _steamSppSetField below), never into Game
+  // Details' Description — same one-way rule every other direct edit of
+  // this field already follows (see webSite.aboutGame's own comment in
+  // state.js).
+  const aboutGameOwn = _steamFieldValue('aboutGame', previewLang);
+  const aboutGameRaw = (aboutGameOwn && aboutGameOwn.trim())
+    ? aboutGameOwn
+    : (previewLang === previewPrimaryLang ? (fd.description || '') : '');
 
   // AI Generated Content Disclosure + the "Profile Features Limited" /
   // 3rd-party-service DRM notice it triggers — all driven by the real
@@ -10543,8 +10804,8 @@ function buildSteamStorePreviewPrototypeSection() {
   // and patch their own DOM without a full reRenderStepModal() call.
   const headerHtml = `
     <div class="steam-spp-apphub">
-      <input type="text" class="steam-spp-apphub-name${fd.title ? '' : ' steam-spp-glow-empty'}" id="steam-spp-title-input"
-             value="${escHtml(fd.title || '')}" placeholder="Your Game Title"
+      <input type="text" class="steam-spp-apphub-name${titleRaw ? '' : ' steam-spp-glow-empty'}" id="steam-spp-title-input"
+             value="${escHtml(titleRaw)}" placeholder="Your Game Title"
              oninput="_steamSppTitleInput(this.value)">
       <button class="steam-spp-hub-btn steam-spp-hub-btn-fixed" type="button">Community Hub</button>
     </div>`;
@@ -10677,6 +10938,7 @@ function buildSteamStorePreviewPrototypeSection() {
       <textarea class="steam-spp-shortdesc steam-spp-autogrow${shortDescRaw ? '' : ' steam-spp-glow-empty'}" rows="1"
                 placeholder="No short description yet."
                 oninput="_steamSppAutoGrow(this); _steamSppSetField('shortDesc', this.value); this.classList.toggle('steam-spp-glow-empty', !this.value)">${escHtml(shortDescRaw)}</textarea>
+      ${shortDescStatusHtml}
       <div class="steam-spp-reviews-row">
         <span class="steam-spp-label">All Reviews:</span>
         <span class="steam-spp-muted">No user reviews</span>
@@ -10685,11 +10947,13 @@ function buildSteamStorePreviewPrototypeSection() {
         <input type="text" class="steam-spp-inline-input" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
                oninput="_steamSppSetField('releaseDate', this.value)"></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
-        <input type="text" class="steam-spp-inline-input${ws.developer ? '' : ' steam-spp-glow-empty'}" id="steam-spp-dev-input" value="${escHtml(ws.developer || '')}"
+        <input type="text" class="steam-spp-inline-input${devRaw ? '' : ' steam-spp-glow-empty'}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
                placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
+      ${devStatusHtml}
       <div class="steam-spp-devrow steam-spp-devrow-close"><span class="steam-spp-label">Publisher:</span>
-        <input type="text" class="steam-spp-inline-input${ws.publisher ? '' : ' steam-spp-glow-empty'}" id="steam-spp-pub-input" value="${escHtml(ws.publisher || '')}"
+        <input type="text" class="steam-spp-inline-input${pubRaw ? '' : ' steam-spp-glow-empty'}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
                placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)"></div>
+      ${pubStatusHtml}
       <div class="steam-spp-tags">
         <div class="steam-spp-tags-inner${hasTags ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','tags')">
           ${tagsBodyHtml}
@@ -10794,6 +11058,7 @@ function buildSteamStorePreviewPrototypeSection() {
       <textarea class="steam-spp-about-textarea steam-spp-autogrow${aboutGameRaw ? '' : ' steam-spp-glow-empty'}" rows="3"
                 placeholder="Your game description will appear here once you fill in the Description field in Game Details."
                 oninput="_steamSppAutoGrow(this); _steamSppSetField('aboutGame', this.value); this.classList.toggle('steam-spp-glow-empty', !this.value)">${escHtml(aboutGameRaw)}</textarea>
+      ${aboutGameStatusHtml}
     </div>
     ${aiDisclosureHtml}`;
 
@@ -10961,7 +11226,33 @@ function buildSteamStorePreviewPrototypeSection() {
     ${embedRowHtml}
     ${contentSectionHtml}`;
 
+  // Header row (top-right of the modal, above the preview) — full parity
+  // with the App Store Product Page Preview's own language dropdown +
+  // "Localizations" button (buildStorePreviewSection's own ias-label-row,
+  // above), reusing those exact CSS classes unmodified: only a new left-side
+  // badge ("Steam Store Preview" instead of "App Store Preview") is added,
+  // so .ias-label-row's own space-between still pushes this right-side group
+  // to the right the same way it already does there. Opens Steam's own
+  // Localization Review via the same openStorePreviewSection(pid,'localization')
+  // mechanism every other Steam flip section already uses (see the
+  // 'localization' target's own dispatch, buildStorePreviewFlipSection).
+  const localizationHeaderHtml = `
+    <div class="ias-label-row">
+      <span class="ias-label-badge">
+        <svg viewBox="0 0 16 16" fill="none" width="11" height="11" style="margin-right:4px;vertical-align:-1px;"><path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm.75 10.25h-1.5v-5h1.5v5zm0-6.5h-1.5v-1.5h1.5v1.5z" fill="currentColor"/></svg>
+        Steam Store Preview
+      </span>
+      <div class="ias-label-right">
+        <span class="ias-label-note">Reflects your submission data</span>
+        <div class="ias-locs-lang-group">
+          <button class="ias-all-locs-btn" onclick="openStorePreviewSection('steam','localization')" title="Review every localized field side by side">Localizations</button>
+          ${swSelect('steam-preview-lang', previewLang, previewLangOptions, 'setSteamPreviewLang', '150px', 'right')}
+        </div>
+      </div>
+    </div>`;
+
   return `
+    ${localizationHeaderHtml}
     <p class="steam-spp-intro">Preview of your public Steam store page — Steam's own page header and footer aren't shown here.</p>
     <div class="steam-spp-proto">
       ${breadcrumbHtml}

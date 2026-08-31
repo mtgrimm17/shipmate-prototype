@@ -2939,6 +2939,17 @@ function selectLocPrimary(lang) {
       _promoteLangPrimary(state.macAppStoreListing, oldPrimary, lang, oldPrimaryKept, _masBlankLocalizedText, ['description', 'releaseNotes']);
       _masPropagateAllFields();
     }
+
+    // Steam's own Store Page Preview - Prototype listing text (Short
+    // Description/Developer/Publisher/About This Game) shares this same
+    // stash/promote/re-propagate dance, against its own independent storage
+    // (state.webSite.localizedStoreText) — always present (state.webSite is
+    // never lazily created the way state.macAppStoreListing is), so this
+    // call is unconditional. Title is NOT included here — it's promoted once
+    // by the App Store's own call above, into the single shared storage
+    // every platform's Title reads (see STEAM_SHARED_LISTING_FIELDS, app.js).
+    _promoteLangPrimary(state.webSite, oldPrimary, lang, oldPrimaryKept, _steamBlankLocalizedText, ['description', 'developer', 'publisher', 'aboutGame']);
+    _steamPropagateAllFields();
   }
   closeAllDropdowns();
   updateObLangListWrap();
@@ -2956,6 +2967,7 @@ function setObLangPreset(preset) {
   // language needs its own initial translation pass triggered here.
   _iasPropagateAllFields();
   _masPropagateAllFields(); // no-op until Mac App Store is activated
+  _steamPropagateAllFields();
   // Same reasoning as toggleObLang — bulk selection also bypasses the
   // per-language Steam localization check, so run it for every language
   // this preset newly added.
@@ -2980,6 +2992,7 @@ function applyObLangPreset() {
   updateObLangListWrap();
   _iasPropagateAllFields();
   _masPropagateAllFields(); // no-op until Mac App Store is activated
+  _steamPropagateAllFields();
   _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, state.formData.localizations);
 }
 
@@ -2996,6 +3009,7 @@ function toggleObLang(lang) {
     // than waiting for those fields to change again.
     _iasPropagateAllFields();
     _masPropagateAllFields(); // no-op until Mac App Store is activated
+    _steamPropagateAllFields();
     // If this game is Steam-linked and its store page has been localized
     // into this language, prefer Steam's own "About This Game" copy for the
     // Description field over the Claude translation just triggered above
@@ -5780,6 +5794,590 @@ function _masToggleAutoTranslateField(field) {
   reRenderStepModal();
 }
 
+/* ── Steam Store Page Preview - Prototype — own independent listing text ──
+   Full twins of the _ias-/_mas-prefixed helpers above, reading/writing
+   state.webSite (via _steamFieldValue/_steamSetFieldValue) for Steam's own
+   Short Description/Developer/Publisher/About This Game instead of iOS's
+   state.formData or Mac App Store's state.macAppStoreListing — full parity
+   with the App Store's own Localization Review, per the task spec, NOT a
+   stripped-down version.
+
+   Title is SHARED with the App Store — literally the same listing text,
+   stored once in state.formData/formData.localizedStoreText, even when
+   read/written from Steam's own Preview or Localization Review. Mirrors
+   MAS_SHARED_LISTING_FIELDS above (same sharing concept, here just the one
+   field — Steam has no Subtitle of its own to share). Short Description/
+   Developer/Publisher/About This Game remain fully independent, in
+   state.webSite.localizedStoreText (state.js).
+
+   Steam also gets its own Localization Review (buildSteamLocalizationReviewSection,
+   render.js, reached via the Store Page Preview - Prototype's own new
+   "Localizations" button) — a full twin of Localization Review's own
+   back-translation/undo-redo machinery, with its OWN independent review-UI
+   scratch state (state.steamLocReviewField/steamLocReviewMode/
+   steamLocReviewBackTranslation/steamLocReviewUndoHistory, state.js) — same
+   "duplicate the stateful UI, not the data" tradeoff as Mac App Store's own
+   Localization Review (see its own header comment above for why), including
+   for Title: reviewing Title's back-translation from Steam's own
+   Localization Review uses its own draft cache, separate from the App
+   Store's/Mac App Store's, even though the real Title text underneath is
+   the one shared value.
+
+   One deliberate divergence from _iasTriggerAutoTranslate: no
+   descriptionFromSteam-style authority guard — that wrinkle exists only
+   because the App Store's own Description can be auto-imported from a
+   linked Steam store page (_checkSteamLocalizedDescription) and needs to
+   defer to that page's own genuine localization; Steam's own Short
+   Description/About This Game fields here ARE that Steam store page's
+   text, so there's no second, more-authoritative source to defer to.
+   Another: Steam invents NO character limit for any of its 5 fields (see
+   buildSteamLocalizationReviewSection, render.js), so nothing here tracks
+   or enforces one, unlike IAS_FIELD_CHAR_LIMITS. */
+
+// Title is shared with the App Store's own listing — see this cluster's own
+// header comment above. Mirrors MAS_SHARED_LISTING_FIELDS.
+const STEAM_SHARED_LISTING_FIELDS = new Set(['title']);
+
+// The 4 fields Steam keeps its own independent per-language copy of — NOT
+// Title (shared, see STEAM_SHARED_LISTING_FIELDS above). Used as the
+// fallback "which fields ever auto-translate" list if steamAutoTranslateFields
+// is ever missing (e.g. a hand-built `state` in older tests) — mirrors
+// IAS_TRANSLATABLE_FIELDS's own role, but reflects THIS feature's own
+// defaults (Short Description/About This Game on, Developer/Publisher off —
+// state.js's own comment on steamAutoTranslateFields explains why) rather
+// than "every field except the mirrored one", since Steam has no mirrored
+// field of its own.
+const STEAM_LOC_TRANSLATABLE_FIELDS = ['description', 'developer', 'publisher', 'aboutGame'];
+const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'aboutGame'];
+
+// Prompt labels for Steam's own translate call, mirroring IAS_FIELD_LABELS.
+const STEAM_FIELD_LABELS = {
+  description: 'short description',
+  developer:   'developer name',
+  publisher:   'publisher name',
+  aboutGame:   'about this game description',
+};
+
+function _steamEffectivePreviewLang() {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const valid = new Set([primary, ...(fd.localizations || [])]);
+  return valid.has(state.steamPreviewLang) ? state.steamPreviewLang : primary;
+}
+
+function _steamBlankLocalizedText() {
+  return { description: '', developer: '', publisher: '', aboutGame: '' };
+}
+
+function _steamFieldValue(field, lang) {
+  if (STEAM_SHARED_LISTING_FIELDS.has(field)) return _iasFieldValue(field, lang);
+  const ws = state.webSite;
+  if (!ws) return '';
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return ws[field] || '';
+  const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
+  return (entry && entry[field]) || '';
+}
+
+function _steamSetFieldValue(field, lang, value) {
+  // Title writes straight through to the App Store's own storage
+  // (_iasSetFieldValue) rather than to state.webSite — there is no
+  // independent Steam copy of this field to write into.
+  if (STEAM_SHARED_LISTING_FIELDS.has(field)) { _iasSetFieldValue(field, lang, value); return; }
+  const ws = state.webSite;
+  if (!ws) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    ws[field] = value;
+    if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, value);
+    return;
+  }
+  if (!ws.localizedStoreText) ws.localizedStoreText = {};
+  if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
+  ws.localizedStoreText[lang][field] = value;
+}
+
+function _steamFieldAutoTranslateEnabled(field) {
+  const cfg = state.steamAutoTranslateFields;
+  if (!cfg) return STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
+// Mirrors _masTriggerAutoTranslate — no descriptionFromSteam-style authority
+// guard (see this cluster's own header comment above for why that doesn't
+// apply here). Only ever invoked for Short Description/Developer/Publisher/
+// About This Game (Title bypasses to _iasSetFieldValue before reaching
+// here), so no shared/independent branching is needed inside this function
+// itself.
+async function _steamTriggerAutoTranslate(field, primaryValue) {
+  if (!_steamFieldAutoTranslateEnabled(field)) return;
+  const ws = state.webSite;
+  if (!ws) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  const eligible = supportedLangs.filter(lang => {
+    const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    if (!ws.localizedStoreText) ws.localizedStoreText = {};
+    eligible.forEach(lang => {
+      if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
+      ws.localizedStoreText[lang][field]     = '';
+      ws.localizedStoreText[lang][sourceKey] = '';
+      const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== '') _steamLocReviewRefreshBackTranslation(field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.steamTranslateStatus = state.steamTranslateStatus || {};
+  state.steamTranslateStatus[field] = 'loading';
+  state.steamTranslatePendingLangs = state.steamTranslatePendingLangs || {};
+  state.steamTranslatePendingLangs[field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel    = STEAM_FIELD_LABELS[field] || field;
+  const perLangBudget = field === 'aboutGame' ? 1200 : (field === 'description' ? 400 : 120);
+  const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following Steam store page ${fieldLabel} text for a video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone, meaning, and any line breaks in the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    if (!ws.localizedStoreText) ws.localizedStoreText = {};
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
+      const entry = ws.localizedStoreText[lang];
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== translated) _steamLocReviewRefreshBackTranslation(field, lang, translated);
+    });
+
+    state.steamTranslateStatus[field] = 'complete';
+  } catch (e) {
+    console.warn('[Steam Store Preview Translate]', field, e.message);
+    state.steamTranslateStatus[field] = 'error';
+  }
+  state.steamTranslatePendingLangs[field] = [];
+
+  reRenderStepModal();
+}
+
+// Mirrors _masFieldTranslatePending — Title defers to _iasFieldTranslatePending
+// (the shared translate-in-progress status), same as _masFieldTranslatePending
+// does for its own shared fields.
+function _steamFieldTranslatePending(field, lang) {
+  if (STEAM_SHARED_LISTING_FIELDS.has(field)) return _iasFieldTranslatePending(field, lang);
+  if (!state.steamTranslateStatus || state.steamTranslateStatus[field] !== 'loading') return false;
+  const pending = state.steamTranslatePendingLangs && state.steamTranslatePendingLangs[field];
+  return !!(pending && pending.includes(lang));
+}
+
+function _steamRetryTranslate(field) {
+  _steamTriggerAutoTranslate(field, _steamFieldValue(field, state.formData.primaryLanguage || 'en'));
+}
+
+// Re-triggers translation of Steam's own independent fields (Short
+// Description/Developer/Publisher/About This Game) from their current
+// primary-language values. Called alongside _iasPropagateAllFields/
+// _masPropagateAllFields (never instead of them) wherever the SHARED
+// language list changes — selectLocPrimary/setObLangPreset/
+// applyObLangPreset/toggleObLang — and safe to call before state.webSite
+// exists (it doesn't, in practice — state.webSite is never lazily created
+// the way state.macAppStoreListing is — but _steamTriggerAutoTranslate's own
+// guard covers it regardless). Title is NOT re-propagated here — it's
+// shared with the App Store (STEAM_SHARED_LISTING_FIELDS above), so the
+// _iasPropagateAllFields() call every one of these same call sites already
+// makes re-propagates it once, into the one shared storage every platform
+// reads; doing it again here would just repeat the same writes.
+function _steamPropagateAllFields() {
+  const ws = state.webSite;
+  if (!ws) return;
+  STEAM_LOC_TRANSLATABLE_FIELDS.forEach(field => _steamTriggerAutoTranslate(field, ws[field]));
+}
+
+// Mirrors _masToggleAutoTranslateField — Steam's own "Automatically
+// translated fields" settings gear. Only ever invoked for Short
+// Description/Developer/Publisher/About This Game — buildSteamLocalizationReviewSection's
+// own settings menu omits Title entirely, since it's governed by the single
+// shared iasAutoTranslateFields.title setting (the App Store's own gear),
+// not a per-platform one.
+function _steamToggleAutoTranslateField(field) {
+  state.steamAutoTranslateFields = state.steamAutoTranslateFields || {};
+  state.steamAutoTranslateFields[field] = !state.steamAutoTranslateFields[field];
+  if (state.steamAutoTranslateFields[field]) {
+    const ws = state.webSite;
+    if (ws) _steamTriggerAutoTranslate(field, ws[field] || '');
+  }
+  reRenderStepModal();
+}
+
+/* ── Steam's OWN Localization Review — back-translation ──────────────────
+   Full twin of the App Store's own Localization Review back-translation
+   cluster (_locReviewBackTranslationValue through _locReviewCommitPrimaryEdit
+   above) and Mac App Store's own (_masLocReviewBackTranslationValue etc.) —
+   same mechanics, reading/writing through _steamFieldValue/_steamSetFieldValue
+   (which delegate Title straight to the shared App Store storage, same as
+   every other write path in this cluster) and Steam's own independent
+   review-UI scratch state (state.steamLocReviewBackTranslation, state.js).
+   Reuses _iasTranslateSingle directly (generic, not iOS-specific) rather
+   than duplicating it — same reuse Mac App Store's own cluster makes. */
+
+function _steamLocReviewBackTranslationValue(field, lang) {
+  const entry = state.steamLocReviewBackTranslation
+    && state.steamLocReviewBackTranslation[field]
+    && state.steamLocReviewBackTranslation[field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+
+function _steamLocReviewBackTranslationEntry(field, lang) {
+  if (!state.steamLocReviewBackTranslation) state.steamLocReviewBackTranslation = {};
+  const forField = state.steamLocReviewBackTranslation[field] || (state.steamLocReviewBackTranslation[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+
+function _steamLocReviewSyncBackTranslations() {
+  const fd = state.formData;
+  const field = state.steamLocReviewField || 'title';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _steamFieldValue(field, lang);
+    const entry = _steamLocReviewBackTranslationEntry(field, lang);
+    if (entry.syncedTopText === topText) return; // already in sync, including both blank
+    jobs.push(_steamLocReviewRefreshBackTranslation(field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _steamLocReviewRefreshBackTranslation(field, lang, topText) {
+  const entry = _steamLocReviewBackTranslationEntry(field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _steamFieldValue(field, lang);
+  if (currentTop !== topText) { _steamLocReviewRefreshBackTranslation(field, lang, currentTop); return; }
+
+  const freshEntry = _steamLocReviewBackTranslationEntry(field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+async function _steamLocReviewCommitPrimaryEdit(field, lang, value) {
+  const entry = _steamLocReviewBackTranslationEntry(field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _steamSetFieldValue(field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _steamLocReviewBackTranslationEntry(field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _steamSetFieldValue(field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+
+/* Steam's own Localization Review per-card click-to-edit — same swap-to-
+   input mechanics as startLocReviewInlineEdit/startMasLocReviewInlineEdit
+   above, but with NO character-limit enforcement at all — no counter row,
+   no is-over-limit styling, no "Must be less than N characters." message —
+   since Steam invents no character limit for any of its 5 fields (see
+   buildSteamLocalizationReviewSection, render.js). Description/About This
+   Game get a taller multi-line textarea (Steam's own longer-form fields);
+   Title/Developer/Publisher stay single-line inputs. */
+function startSteamLocReviewInlineEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'aboutGame';
+  const inHalf = !!(el.closest && el.closest('.loc-review-half'));
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = inHalf ? 4 : 8;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _steamFieldValue(field, lang);
+
+  const commit = () => {
+    const previousValue = _steamFieldValue(field, lang);
+    if (input.value !== previousValue) _steamLocReviewPushUndo('real', field, lang, previousValue);
+    _steamSetFieldValue(field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== input.value) _steamLocReviewRefreshBackTranslation(field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+/* Review side's BOTTOM-half click-to-edit for Steam's own Localization
+   Review — mirrors startLocReviewBackTranslationEdit/
+   startMasLocReviewBackTranslationEdit above. Also has no character-limit
+   enforcement, same as startSteamLocReviewInlineEdit's own TOP half — Steam
+   has no length limit anywhere in this section, not just on the
+   back-translation scratch pad. */
+function startSteamLocReviewBackTranslationEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'aboutGame';
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _steamLocReviewBackTranslationValue(field, lang).text;
+
+  const commit = () => {
+    const previousValue = _steamLocReviewBackTranslationValue(field, lang).text;
+    if (input.value !== previousValue) _steamLocReviewPushUndo('draft', field, lang, previousValue);
+    _steamLocReviewCommitPrimaryEdit(field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+/* Mirrors _locReviewUndoEntry/_locReviewUndoState/_locReviewPushUndo/
+   _locReviewRestoreFieldValue/locReviewUndo/locReviewRedo (and their
+   _masLocReview* twins) — Steam's own per-field undo/redo, against
+   state.steamLocReviewUndoHistory. Reuses LOC_REVIEW_UNDO_LIMIT directly
+   rather than duplicating it. */
+function _steamLocReviewUndoEntry(kind, field, lang) {
+  if (!state.steamLocReviewUndoHistory) state.steamLocReviewUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.steamLocReviewUndoHistory[kind] || (state.steamLocReviewUndoHistory[kind] = {});
+  const forField = forKind[field] || (forKind[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+function _steamLocReviewUndoState(kind, field, lang) {
+  const entry = state.steamLocReviewUndoHistory
+    && state.steamLocReviewUndoHistory[kind]
+    && state.steamLocReviewUndoHistory[kind][field]
+    && state.steamLocReviewUndoHistory[kind][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+function _steamLocReviewPushUndo(kind, field, lang, previousValue) {
+  const entry = _steamLocReviewUndoEntry(kind, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > LOC_REVIEW_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+function _steamLocReviewRestoreFieldValue(kind, field, lang, value) {
+  if (kind === 'draft') {
+    _steamLocReviewCommitPrimaryEdit(field, lang, value);
+    return;
+  }
+  _steamSetFieldValue(field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.steamLocReviewMode === 'review' && lang !== primary) {
+    const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
+    if (backEntry.syncedTopText !== value) _steamLocReviewRefreshBackTranslation(field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+// The undo button's onclick (buildSteamLocalizationReviewSection, render.js).
+function steamLocReviewUndo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _steamLocReviewUndoEntry(kind, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _steamLocReviewBackTranslationValue(field, lang).text : _steamFieldValue(field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _steamLocReviewRestoreFieldValue(kind, field, lang, previous);
+}
+
+// The redo button's onclick (buildSteamLocalizationReviewSection, render.js).
+function steamLocReviewRedo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _steamLocReviewUndoEntry(kind, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _steamLocReviewBackTranslationValue(field, lang).text : _steamFieldValue(field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _steamLocReviewRestoreFieldValue(kind, field, lang, next);
+}
+
+// Mirrors toggleLocReviewMode/toggleMasLocReviewMode — Steam's own
+// "Review"/"All locs" toggle button.
+async function toggleSteamLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.steamLocReviewMode = state.steamLocReviewMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.steamLocReviewMode === 'review') _steamLocReviewSyncBackTranslations();
+
+  const enteringCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+
+// Mirrors setIasPreviewLang/setMasPreviewLang — Steam's own Store Page
+// Preview - Prototype's top-right language dropdown.
+function setSteamPreviewLang(lang) {
+  state.steamPreviewLang = lang;
+  reRenderStepModal();
+}
+
+// Mirrors setLocReviewField/setMasLocReviewField — Steam's own Localization
+// Review top-right field dropdown setter.
+function setSteamLocReviewField(field) {
+  state.steamLocReviewField = field;
+  reRenderStepModal();
+  if (state.steamLocReviewMode === 'review') _steamLocReviewSyncBackTranslations();
+}
+
+// Mirrors _masLocReviewSourceBadge — Steam's own Localization Review "source"
+// badge (buildSteamLocalizationReviewSection, render.js). No Steam-sourced-
+// description concept applies here (Steam's own field IS the Steam store
+// page's text — see this cluster's own header comment above for why there's
+// no second, more-authoritative source to defer to), so this only ever
+// returns 'ai' or null. For the shared field (Title) the authority check is
+// against the App Store's own state.formData entry/sourceText and its
+// iasAutoTranslateFields setting — the same single source of truth the App
+// Store's own Localization Review card would show for that language.
+function _steamLocReviewSourceBadge(field, lang) {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_steamFieldValue(field, lang)) return null;
+  if (STEAM_SHARED_LISTING_FIELDS.has(field)) {
+    const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
+    if (!entry) return null;
+    if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+    return null;
+  }
+  const ws = state.webSite;
+  const entry = ws && ws.localizedStoreText && ws.localizedStoreText[lang];
+  if (!entry) return null;
+  if (_steamFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ws[field] || '')) return 'ai';
+  return null;
+}
+
 /* Localization Review's per-card click-to-edit (buildLocalizationReviewSection,
    render.js) — the same swap-to-input mechanics as startIasInlineEdit above,
    for the same field types and the same soft IAS_FIELD_CHAR_LIMITS
@@ -8030,11 +8628,19 @@ function playSteamTrailer(el) {
    read-only in three other spots on the same page (breadcrumb, purchase
    strip, genre/manufacturer block) — cheaper to patch those three
    textContent nodes directly on every keystroke than to re-render the
-   whole modal body. Writes through syncField so Title stays the one
-   shared Game Details field every other surface in the app already reads
-   (project bar, Shippy Guide, etc. all react to it the same way). */
+   whole modal body. Reads/writes through _iasSetFieldValue at whichever
+   language the header's own preview dropdown is currently showing
+   (_steamEffectivePreviewLang) — the SAME shared storage the App Store's
+   own Title uses (STEAM_SHARED_LISTING_FIELDS above), using the same bare-
+   write convention startIasInlineEdit/startMasInlineEdit already use for
+   Product Page Preview inline edits (no syncField — this deliberately
+   forgoes syncField's extra side effects: the project bar title echo,
+   ob-title's own live-complete indicator, and the Shippy Guide checklist
+   refresh; those all still happen wherever the PRIMARY Title is edited via
+   Game Details' own ob-title field, which still calls syncField). */
 function _steamSppTitleInput(value) {
-  syncField('title', value);
+  const lang = _steamEffectivePreviewLang();
+  _iasSetFieldValue('title', lang, value);
   const shown = value || 'Your Game Title';
   // The Play/Buy purchase title gets its own shorter fallback ("Your Game")
   // than the breadcrumb/info block's "Your Game Title" — matches
@@ -8061,14 +8667,27 @@ function _steamSppTitleInput(value) {
    About This Game here deliberately never writes back to Game Details'
    Description — same one-way rule the Web preview website's own About
    This Game field already follows (see webSite.aboutGame's comment in
-   state.js). */
+   state.js).
+
+   Short Description/Developer/Publisher are now language-aware — each
+   writes through _steamSetFieldValue at whichever language the header's
+   own preview dropdown is currently showing (_steamEffectivePreviewLang),
+   same bare-write convention as Title above (no extra propagation side
+   effects beyond what _steamSetFieldValue itself does — auto-translating
+   into supporting languages when that field's own auto-translate setting is
+   on). For the Primary Language this still lands in the exact same flat
+   state.webSite field every other surface (the preview website, Web's own
+   Factsheet/Description edits) already reads — only a non-primary language
+   selection routes into state.webSite.localizedStoreText instead. Release
+   Date is NOT one of Steam's 5 localizable Localization Review fields (see
+   the task spec's field list) — it stays a plain, un-localized flat write,
+   same as before. */
 function _steamSppSetField(field, value) {
   if (!state.webSite) return;
-  if (field === 'shortDesc')       state.webSite.description  = value;
-  else if (field === 'aboutGame')  state.webSite.aboutGame    = value;
-  else if (field === 'developer')  state.webSite.developer    = value;
-  else if (field === 'publisher')  state.webSite.publisher    = value;
-  else if (field === 'releaseDate') state.webSite.releaseDate = value;
+  if (field === 'releaseDate') { state.webSite.releaseDate = value; return; }
+  const key = field === 'shortDesc' ? 'description' : field;
+  const lang = _steamEffectivePreviewLang();
+  _steamSetFieldValue(key, lang, value);
 }
 
 /* Developer/Publisher are plain <input>s inline in the prototype's "glance"
@@ -8557,6 +9176,10 @@ function closeAllDropdowns() {
   // masIapLocSettingsOpen, each independent of every other platform's.
   state.masReviewSettingsOpen = false;
   state.masIapLocSettingsOpen = false;
+  // Same treatment for Steam's own Localization Review settings menu
+  // (_steamToggleReviewSettingsMenu above) — its own independent flag/DOM id,
+  // never shared with either other platform's gear menu.
+  state.steamReviewSettingsOpen = false;
 }
 
 /* ── Language picker ─────────────────────────────────── */
@@ -8634,6 +9257,20 @@ function _masToggleReviewSettingsMenu(event) {
   if (!wasOpen) {
     state.masReviewSettingsOpen = true;
     document.getElementById('mas-loc-review-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* Steam's own Localization Review "Automatically translated fields"
+   settings — mirrors _iasToggleReviewSettingsMenu/_masToggleReviewSettingsMenu,
+   against steamReviewSettingsOpen and its own DOM id so it never shares open
+   state with either other platform's gear menu. */
+function _steamToggleReviewSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.steamReviewSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.steamReviewSettingsOpen = true;
+    document.getElementById('steam-loc-review-settings-wrap')?.classList.add('is-open');
   }
 }
 

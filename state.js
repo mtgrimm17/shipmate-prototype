@@ -2608,6 +2608,26 @@ const state = {
     // uses the same "default + force-overwrite-on-source-change" treatment
     // as About This Game has with Game Details' Description above.
     trailerFile: null, trailerUrl: '',
+
+    // Steam Store Page Preview - Prototype's own Localization Review —
+    // per-language overrides for Short Description/Developer/Publisher/
+    // About This Game, deliberately reusing the same key name/shape
+    // (localizedStoreText) as state.formData.localizedStoreText above, just
+    // on this different parent object — that's what lets the generic
+    // _promoteLangPrimary() helper (app.js) work unmodified for Steam's own
+    // listing, the same way it already does for the App Store's and Mac
+    // App Store's. The Primary Language's own copy is the flat
+    // description/developer/publisher/aboutGame fields above (unchanged);
+    // every additional language selected in formData.localizations gets its
+    // own { description, developer, publisher, aboutGame } entry here, keyed
+    // by language code, created lazily on first edit (see
+    // _steamSetFieldValue, app.js) — same "lazy" convention as the App
+    // Store's own localizedStoreText. Title is NOT one of these four fields
+    // — it's governed entirely by the shared state.formData/
+    // localizedStoreText machinery instead (see STEAM_SHARED_LISTING_FIELDS,
+    // app.js), the same way Mac App Store's Title/Subtitle are shared rather
+    // than duplicated (MAS_SHARED_LISTING_FIELDS, app.js).
+    localizedStoreText: {},
   },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)
@@ -2816,6 +2836,35 @@ const state = {
   // to survive that re-render by being read back in at render time instead
   // of living only in a DOM class that render would otherwise wipe out.
   iasReviewSettingsOpen: false,
+
+  // ── Steam Store Page Preview - Prototype — own Localization Review ─────
+  // Full twins of masPreviewLang/masLocReviewField/masLocReviewMode/
+  // masLocReviewBackTranslation/masLocReviewUndoHistory/masTranslateStatus/
+  // masTranslatePendingLangs/masAutoTranslateFields/masReviewSettingsOpen
+  // above, substituting "steam" for "mas" — same shapes/defaults, own
+  // independent copies, scoped to Steam's own Store Page Preview - Prototype
+  // (buildSteamStorePreviewPrototypeSection/buildSteamLocalizationReviewSection,
+  // render.js) instead of Mac App Store's Product Page Preview. Covers
+  // Title (shared with the App Store's own state.formData — see
+  // STEAM_SHARED_LISTING_FIELDS, app.js) plus Steam's own independent Short
+  // Description/Developer/Publisher/About This Game (state.webSite.
+  // localizedStoreText, above). Unlike the App Store's defaults (Subtitle/
+  // Description/What's New on, Title off), Steam's own four fields default
+  // Short Description and About This Game ON (real marketing copy worth
+  // translating) and Developer/Publisher OFF (proper names, typically kept
+  // as-is across locales) — see _steamFieldAutoTranslateEnabled, app.js.
+  // Steam invents NO character limit for any of its 5 fields, unlike the App
+  // Store's own IAS_FIELD_CHAR_LIMITS — see buildSteamLocalizationReviewSection's
+  // own comment, render.js, for how that's reflected in its markup.
+  steamPreviewLang: null,
+  steamLocReviewField: null,
+  steamLocReviewMode: 'locs',
+  steamLocReviewBackTranslation: {},
+  steamLocReviewUndoHistory: { real: {}, draft: {} },
+  steamTranslateStatus: {},
+  steamTranslatePendingLangs: {},
+  steamAutoTranslateFields: { description: true, developer: false, publisher: false, aboutGame: true },
+  steamReviewSettingsOpen: false,
 
   // ── Business — "IAP Localizations" ──────────────────────────────────
   // A full parallel of the nine locReview*/iasTranslate*/iasAutoTranslate*
