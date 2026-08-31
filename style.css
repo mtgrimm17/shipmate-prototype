@@ -12553,6 +12553,11 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-features-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .steam-spp-feature { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #c6d4df; text-align: left; }
 .steam-spp-feature-icon { font-size: 15px; width: 18px; flex-shrink: 0; text-align: center; }
+/* "Full Controller Support" — a plain, icon-less label above the
+   Xbox/PlayStation Controllers rows, matching how a real Steam page
+   renders it (verified live via the Browser pane): flush with the row
+   icons' left edge rather than indented to align with the label text. */
+.steam-spp-feature-subheading { font-size: 12px; color: #c6d4df; }
 .steam-spp-feature-warn { color: #a3b3c2; }
 .steam-spp-drm-notice { font-size: 11px; color: #8f98a0; padding-top: 8px; border-top: 1px solid #2a3f5a; }
 

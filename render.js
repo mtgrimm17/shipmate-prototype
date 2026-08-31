@@ -10468,18 +10468,27 @@ function buildSteamStorePreviewPrototypeSection() {
   // (isSteamSectionComplete('technical')), and shares
   // .steam-spp-content-block's exact hover/glow CSS recipe (combined
   // selector, see style.css) so both blocks highlight identically.
-  // "Full Controller Support" is derived from the real Technical answer
-  // (ssa.xboxFullSupport) rather than hardcoded, so this section reflects
-  // actual submitted data once it links to Technical; "Single-player" is
-  // kept as a static default since Shipmate has no dedicated
-  // single-player/multiplayer/co-op state field to derive it from (see
-  // state.js's free-text keyword lists, which only feed AI/privacy
-  // detection elsewhere, not a structured feature flag). Matched to a real
-  // Steam page's inline icon+label row style rather than the previous
-  // icon-over-label tile layout — see the updated
+  // "Full Controller Support" is derived from the real Technical answers
+  // (ssa.xboxFullSupport, ssa.psControllers) rather than hardcoded, so this
+  // section reflects actual submitted data once it links to Technical.
+  // Verified live against the reference page
+  // (store.steampowered.com/app/4037180/Go_Ape_Ship) via the Browser pane:
+  // "Full Controller Support" itself renders as a plain, icon-less label —
+  // NOT a badge like the others — immediately followed by "Xbox
+  // Controllers" and "PlayStation Controllers" as their own separate
+  // icon+label rows underneath, one per platform actually supported,
+  // rather than a single combined "Full Controller Support" badge.
+  // "Single-player" is kept as a static default since Shipmate has no
+  // dedicated single-player/multiplayer/co-op state field to derive it
+  // from (see state.js's free-text keyword lists, which only feed
+  // AI/privacy detection elsewhere, not a structured feature flag).
+  // Matched to a real Steam page's inline icon+label row style rather than
+  // the previous icon-over-label tile layout — see the updated
   // .steam-spp-features-row/.steam-spp-feature rules in style.css.
   const technicalDone = isSteamSectionComplete('technical');
-  const fullControllerSupport = ssa.xboxFullSupport === 'yes';
+  const hasXboxSupport = ssa.xboxFullSupport === 'yes';
+  const hasPsSupport = (ssa.psControllers || []).length > 0 && !ssa.psControllers.includes('ps_none');
+  const showFullControllerGroup = hasXboxSupport || hasPsSupport;
   const featuresHtml = `
     <div class="steam-spp-side-block steam-spp-features-block${technicalDone ? '' : ' steam-spp-glow-empty'}"
          onclick="openStorePreviewSection('steam','technical')">
@@ -10487,7 +10496,10 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-features-row">
         <div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Single-player</span></div>
         <div class="steam-spp-feature"><span class="steam-spp-feature-icon">👪</span><span>Family Sharing</span></div>
-        ${fullControllerSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🕹️</span><span>Full Controller Support</span></div>` : ''}
+        ${showFullControllerGroup ? `
+        <div class="steam-spp-feature-subheading">Full Controller Support</div>
+        ${hasXboxSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Xbox Controllers</span></div>` : ''}
+        ${hasPsSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>PlayStation Controllers</span></div>` : ''}` : ''}
         ${usesAI ? `<div class="steam-spp-feature steam-spp-feature-warn" title="This game is not currently eligible to appear in certain showcases on your Steam Profile, and does not contribute to global Achievement or game collector counts."><span class="steam-spp-feature-icon">ⓘ</span><span>Profile Features Limited</span></div>` : ''}
       </div>
       ${aiThirdParty ? `<div class="steam-spp-drm-notice">Connects to 3rd-Party Service for AI Content Generation: <span class="steam-spp-link-text">${aiServiceName}</span></div>` : ''}
