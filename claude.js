@@ -687,7 +687,10 @@ function steamLibraryHeroUrl(appId) {
    see STEAM_LOCALIZATION_LANG_MAP, app.js) requests appdetails localized
    into that language via Steam's own `l=` query param, used by
    _checkSteamLocalizedDescription (app.js) to fetch a supporting language's
-   localized "About This Game" (about_the_game) copy. Steam does not error
+   localized "About This Game" (about_the_game) copy, and by
+   _checkSteamLocalizedListing (app.js) to fetch that same language's
+   localized Title/Short Description/Developer/Publisher/About This Game for
+   Steam's own Localization Review. Steam does not error
    for a language it has no real translation for — it silently falls back
    to the game's default listing language instead, so a caller requesting a
    specific language must compare the result's about_the_game against the

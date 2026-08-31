@@ -7369,37 +7369,55 @@ const STEAM_LOC_REVIEW_FIELDS = [
 
    Two deliberate differences from the App Store's/Mac App Store's own
    sections:
-     1. Steam invents NO character limit for any of its 5 fields — every
-        card's field (both the non-flipped side and a flipped card's TOP
-        half) uses the same "no limit" block the App Store's own Review side
-        reserves for just its back-translation bottom half (fieldBlockNoLimit,
-        buildLocalizationReviewSection above) — no counter row, no
-        over-limit styling, no "Must be less than N characters." message,
-        anywhere in this section.
-     2. The "Automatically translated fields" gear here offers ONLY Short
-        Description/Developer/Publisher/About This Game — Title has no
-        independent auto-translate setting of its own here, same precedent
-        as Mac App Store's own settings menu omitting Title/Subtitle (see
-        buildMacLocalizationReviewSection's own comment): it's governed by
-        the single shared iasAutoTranslateFields.title setting (the App
-        Store's own gear) instead. */
+     1. Only Short Description has a real character limit (300 — see
+        STEAM_FIELD_CHAR_LIMITS, app.js). Title/Developer/Publisher/About
+        This Game still have none, so THEIR card's field (both the
+        non-flipped side and a flipped card's TOP half) uses the same "no
+        limit" block the App Store's own Review side reserves for just its
+        back-translation bottom half (fieldBlockNoLimit below) — no counter
+        row, no over-limit styling, no "Must be less than N characters."
+        message. Short Description gets the full counter/over-limit
+        treatment (fieldBlock below), same shape as buildLocalizationReviewSection's
+        own. A flipped card's BOTTOM half (the back-translation draft) is
+        never limit-checked regardless of field, same as everywhere else —
+        it always uses fieldBlockNoLimit.
+     2. The "Automatically translated fields" gear here offers Short
+        Description/Developer/Publisher/About This Game as its own
+        independently-toggleable settings, PLUS a Title row wired to the
+        single shared iasAutoTranslateFields.title setting (the App Store's
+        own gear) instead of a Steam-specific one — same "Title has no
+        independent per-platform setting" precedent Mac App Store's own
+        settings menu follows (see buildMacLocalizationReviewSection's own
+        comment), just with that shared row surfaced here too rather than
+        omitted, since the task spec calls for Title to be selectable from
+        this menu. Off by default, matching iasAutoTranslateFields' own
+        default (state.js) — while off, Title still keeps every supporting
+        language's card in sync via a verbatim mirror of the Primary
+        Language's Title instead (_iasPropagateTitle, app.js), just not
+        through this AI-translate setting. */
 function buildSteamLocalizationReviewSection() {
   const langCodes = _iasAllPreviewLangCodes();
   const field = state.steamLocReviewField || 'title';
+  const limit = STEAM_FIELD_CHAR_LIMITS[field];
   const primary = state.formData.primaryLanguage || 'en';
   const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
   const reviewMode = state.steamLocReviewMode === 'review';
   // Description/About This Game can run fairly long — same fixed-height/
   // scroll fallback the App Store's own Review side uses for its own long
   // fields (loc-review-cards--long-field, style.css) so a long card doesn't
-  // dwarf every other card in the row — even though Steam invents no actual
-  // character LIMIT for any of its 5 fields (see fieldBlock below).
+  // dwarf every other card in the row, regardless of whether the field has
+  // a character limit (see fieldBlock/fieldBlockNoLimit below).
   const isLongField = field === 'description' || field === 'aboutGame';
 
-  // No per-language warning icon in the field dropdown — there's no
-  // character limit for any field to be over (see this function's own
-  // header comment, point 1).
-  const fieldOptions = STEAM_LOC_REVIEW_FIELDS.map(f => ({ value: f.value, label: f.label, warning: false }));
+  // warning flags a FIELD that's over limit for at least one language —
+  // mirrors buildLocalizationReviewSection's own (always false for a field
+  // absent from STEAM_FIELD_CHAR_LIMITS, i.e. every field but Short
+  // Description — see this function's own header comment, point 1).
+  const fieldOptions = STEAM_LOC_REVIEW_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _steamFieldHasOverLimitLang(f.value, langCodes),
+  }));
 
   const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -7420,20 +7438,40 @@ function buildSteamLocalizationReviewSection() {
   const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
   const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
 
-  // The one and only field+counter block Steam's own Review section uses —
-  // no character limit anywhere in this section (see this function's own
-  // header comment, point 1), so every card's field, in both the non-flipped
-  // and flipped-TOP-half positions, uses this "no limit" shape (matching
-  // fieldBlockNoLimit's own look in buildLocalizationReviewSection above,
-  // just under this section's own name since there's no limited counterpart
-  // here to distinguish it from).
-  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+  // The Review side's BOTTOM half (the Primary Language back-translation
+  // draft) is never limit-checked, regardless of field — same treatment
+  // buildLocalizationReviewSection's own fieldBlockNoLimit gives it, and
+  // also what every field's non-flipped card/TOP half falls back to when
+  // that field has no real limit at all (see fieldBlock just below).
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
     const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
     return `
         <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
              onclick="${onclickAttr}" title="Click to edit">${display}</div>
         <div class="ias-char-counter-row loc-review-counter-row--no-count">
           ${undoRedoHtml}
+        </div>`;
+  };
+
+  // Shared field+counter markup for the non-flipped card and the Review
+  // side's TOP half — matches buildLocalizationReviewSection's own fieldBlock
+  // exactly (placeholder, over-limit styling and message) when the current
+  // field has a real limit (Short Description only — STEAM_FIELD_CHAR_LIMITS,
+  // app.js); falls back to the always-no-limit shape above for every other
+  // field (Title/Developer/Publisher/About This Game), since none of them
+  // has a limit to enforce.
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    if (limit == null) return fieldBlockNoLimit(value, onclickAttr, undoRedoHtml);
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
         </div>`;
   };
 
@@ -7458,7 +7496,7 @@ function buildSteamLocalizationReviewSection() {
           </div>
           <div class="loc-review-half loc-review-half--bottom">
             <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
-            ${fieldBlock(back.text, `startSteamLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+            ${fieldBlockNoLimit(back.text, `startSteamLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
           </div>
         </div>
       </div>`;
@@ -7468,9 +7506,11 @@ function buildSteamLocalizationReviewSection() {
     const srcBadge = _steamLocReviewSourceBadge(field, lang);
     const badgeHtml = isPending
       ? locReviewLoadingSpinnerHtml
-      : srcBadge === 'ai'
-        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
-        : '';
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
 
     return `
       <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
@@ -7482,16 +7522,26 @@ function buildSteamLocalizationReviewSection() {
       </div>`;
   }).join('');
 
-  // Only Short Description/Developer/Publisher/About This Game have their
-  // own independently-toggleable auto-translate setting — see this
-  // function's own top comment, point 2.
+  // Short Description/Developer/Publisher/About This Game have their own
+  // independently-toggleable auto-translate setting; Title instead reads/
+  // writes the single SHARED iasAutoTranslateFields.title setting (the App
+  // Store's own gear) via _iasToggleAutoTranslateField, not a Steam-specific
+  // one — see this function's own top comment, point 2. Off by default,
+  // matching iasAutoTranslateFields' own default (state.js).
   const autoCfg = state.steamAutoTranslateFields
     || { description: true, developer: false, publisher: false, aboutGame: true };
+  const iasAutoCfg = state.iasAutoTranslateFields
+    || { title: false, subtitle: true, description: true, releaseNotes: true };
   const settingsOpen = !!state.steamReviewSettingsOpen;
   const settingsRow = (key, label) => `
         <label class="cq-check-row loc-review-settings-row">
           <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_steamToggleAutoTranslateField('${key}')">
           <span>${label}</span>
+        </label>`;
+  const titleSettingsRow = `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${iasAutoCfg.title ? 'checked' : ''} onchange="_iasToggleAutoTranslateField('title')">
+          <span>Title</span>
         </label>`;
   const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
@@ -7502,6 +7552,7 @@ function buildSteamLocalizationReviewSection() {
         <button class="loc-review-settings-btn" type="button" onclick="_steamToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
         <div class="loc-dropdown loc-review-settings-dropdown">
           <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${titleSettingsRow}
           ${settingsRow('description', 'Short Description')}
           ${settingsRow('developer', 'Developer')}
           ${settingsRow('publisher', 'Publisher')}
@@ -10617,7 +10668,7 @@ function buildSteamStorePreviewPrototypeSection() {
     .slice()
     .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
   const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
-  const previewLangOptions = previewLangCodes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l, warning: false }));
+  const previewLangOptions = previewLangCodes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l, warning: _steamLangHasOverLimitField(l) }));
   const previewLang = _steamEffectivePreviewLang();
   const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
 
@@ -10675,22 +10726,19 @@ function buildSteamStorePreviewPrototypeSection() {
   const devName = escHtml(devRaw || 'Developer Name');
   const pubName = escHtml(pubRaw || 'Publisher Name');
 
-  // Short description ("Hook") — this prototype's own editable field, now
-  // Steam's own independent per-language storage (_steamFieldValue), whose
-  // Primary Language copy carries the same fallback the preview website's
-  // own Hook field uses: Steam's own short_description for the linked store
-  // page (state.steamLocInfo.shortDescription, cached by _applySteamAboutData
-  // in app.js) when nothing's been typed here yet. That fallback only ever
-  // applies to the PRIMARY Language's own card/field — a supporting
-  // language has no equivalent Steam-sourced text to fall back to, so it
-  // just reads blank until translated or typed. Still never falls back to
-  // Game Details' Description (formData.description) — that fallback chain
-  // belongs to About This Game below, not this field.
-  const steamShortDescription = (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
-  const shortDescOwn = _steamFieldValue('description', previewLang);
-  const shortDescRaw = (shortDescOwn && shortDescOwn.trim())
-    ? shortDescOwn
-    : (previewLang === previewPrimaryLang ? steamShortDescription : '');
+  // Short description ("Hook") — this prototype's own editable field, Steam's
+  // own independent per-language storage (_steamFieldValue). The Primary
+  // Language's own card carries the exact same fallback the preview
+  // website's own Hook field uses — Steam's own short_description for the
+  // linked store page (state.steamLocInfo.shortDescription, cached by
+  // _applySteamAboutData in app.js) when nothing's been typed here yet — now
+  // centralized inside _steamFieldValue itself (see its own comment) rather
+  // than duplicated here. A supporting language has no equivalent fallback
+  // of its own (it just reads blank until translated, typed, or a genuine
+  // Steam-scraped localization arrives via _checkSteamLocalizedListing).
+  // Still never falls back to Game Details' Description (formData.description)
+  // — that fallback chain belongs to About This Game below, not this field.
+  const shortDescRaw = _steamFieldValue('description', previewLang);
 
   // Release Date — the exact same state.webSite.releaseDate field the
   // preview website's own "About" > Release Date sub-section reads (see its

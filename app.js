@@ -3014,8 +3014,11 @@ function toggleObLang(lang) {
     // into this language, prefer Steam's own "About This Game" copy for the
     // Description field over the Claude translation just triggered above
     // (see _checkSteamLocalizedDescription — it's async and, if it finds a
-    // genuine localization, overwrites the field after the fact).
+    // genuine localization, overwrites the field after the fact). Same idea
+    // for Steam's own Localization Review fields (Title/Short Description/
+    // Developer/Publisher/About This Game) via _checkSteamLocalizedListing.
     _checkSteamLocalizedDescription(lang);
+    _checkSteamLocalizedListing(lang);
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;
@@ -3944,31 +3947,173 @@ async function _checkSteamLocalizedDescription(lang) {
   reRenderStepModal();
 }
 
-// Defense-in-depth backstop for the descriptionFromSteam flag (see
-// _checkSteamLocalizedDescription) — called whenever a different title is
-// selected from the picklist. Normally the flag's authority already
-// expires on its own the instant the new game's primary Description loads
-// (_iasTriggerAutoTranslate's staleness check no longer matches the old
-// game's cached source text), but that natural expiry relies on the new
-// primary text actually differing from the old one — in the unlikely case
-// where two different games' initial Descriptions are textually identical,
-// the stale flag would otherwise be wrongly treated as still authoritative
-// for the new game's (unrelated) Steam page. Clearing it unconditionally
-// here removes that edge case entirely.
-function _clearSteamDescriptionAuthority() {
-  const lst = state.formData.localizedStoreText;
-  if (!lst) return;
-  Object.keys(lst).forEach(lang => { delete lst[lang].descriptionFromSteam; });
+// Sibling to _checkSteamLocalizedDescription above — same "genuine Steam
+// localization beats an AI-translated guess" idea, extended to Steam's OWN
+// Localization Review fields (Title/Short Description/Developer/Publisher/
+// About This Game — buildSteamLocalizationReviewSection, render.js) rather
+// than the App Store's own Description. Kept as a fully separate function
+// with its own fetchSteamAppDetails(appId, steamLang) call rather than
+// folded into _checkSteamLocalizedDescription, even though the two request
+// the exact same response for the same appId+lang: keeping them apart means
+// this newer, less-tested code path can never risk the already-shipped iOS
+// Description-localization behavior — worth one redundant network call per
+// language-add event. Same call sites/timing as _checkSteamLocalizedDescription
+// (toggleObLang, _checkSteamLocalizedDescriptionForNewLangs,
+// _applySteamAboutData's initial already-selected-languages pass).
+//
+// Each field is checked independently against its own cached baseline —
+// state.steamLocInfo's baselineName/baselineDescription/baselineDeveloper/
+// baselinePublisher/shortDescription, all cached at Steam-link time by
+// _applySteamAboutData — the same "differs from baseline" test
+// _checkSteamLocalizedDescription uses to tell a genuine per-language
+// translation apart from Steam silently falling back to the store page's
+// default listing language. A field whose localized value doesn't differ
+// from its baseline (true for Developer/Publisher almost always, and often
+// for Title — Steam rarely localizes a game's own name or its makers') is
+// simply left alone; no flag, no write.
+//
+// Title writes through the SHARED App Store storage (_iasSetFieldValue,
+// titleFromSteam/titleSourceText on formData.localizedStoreText[lang] —
+// mirrors descriptionFromSteam/descriptionSourceText exactly, just for
+// Title); Short Description/Developer/Publisher/About This Game write
+// through Steam's own independent storage (webSite.localizedStoreText[lang],
+// `${field}FromSteam`/`${field}SourceText`). Each flag is later read by
+// _steamLocReviewSourceBadge/_locReviewSourceBadge (the 'steam' badge) and
+// guarded against being clobbered by an in-flight AI translation inside
+// _steamTriggerAutoTranslate's/_iasTriggerAutoTranslate's own write-time
+// checks (see those functions for the exact race this closes).
+async function _checkSteamLocalizedListing(lang) {
+  const info = state.steamLocInfo;
+  if (!info || !info.appId) return;
+  const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
+  if (!steamLang) return;
+  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+
+  let data = null;
+  try {
+    data = await fetchSteamAppDetails(info.appId, steamLang);
+  } catch (e) {
+    console.warn('[Steam Localized Listing]', lang, e.message);
+    return;
+  }
+
+  // Stale guards — bail if the user switched to a different title, or
+  // deselected this language again, while the fetch was in flight.
+  if (!state.steamLocInfo || state.steamLocInfo.appId !== info.appId) return;
+  if (!(state.formData.localizations || []).includes(lang)) return;
+
+  const fd = state.formData;
+  const ws = state.webSite;
+  if (!ws) return;
+
+  // Title — shared with the App Store, same storage _iasSetFieldValue
+  // writes through for every other Title edit.
+  const localizedName = (data.name || '').trim();
+  const baselineName  = (info.baselineName || '').trim();
+  if (localizedName && localizedName !== baselineName) {
+    _iasSetFieldValue('title', lang, localizedName);
+    if (fd.localizedStoreText && fd.localizedStoreText[lang]) {
+      const entry = fd.localizedStoreText[lang];
+      entry.titleFromSteam  = true;
+      entry.titleSourceText = fd.title || '';
+    }
+  }
+
+  if (!ws.localizedStoreText) ws.localizedStoreText = {};
+  if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
+  const wsEntry = ws.localizedStoreText[lang];
+
+  // Short Description — compared against the default-language
+  // short_description cached at link time (info.shortDescription), same
+  // fallback value Short Description's own primary-language card falls
+  // back to (see _steamFieldValue).
+  const localizedShortDesc = (data.short_description || '').trim();
+  const baselineShortDesc  = (info.shortDescription || '').trim();
+  if (localizedShortDesc && localizedShortDesc !== baselineShortDesc) {
+    wsEntry.description           = localizedShortDesc;
+    wsEntry.descriptionFromSteam  = true;
+    wsEntry.descriptionSourceText = ws.description || '';
+  }
+
+  // Developer/Publisher — Steam essentially never localizes these, but
+  // checked for full parity with the other 3 fields; compared against the
+  // baseline cached at link time rather than the current primary value, so
+  // a developer's own manual edit in between doesn't get misread as "Steam
+  // disagrees with the primary text" here.
+  const localizedDeveloper = (data.developers || []).join(', ').trim();
+  const baselineDeveloper  = (info.baselineDeveloper || '').trim();
+  if (localizedDeveloper && localizedDeveloper !== baselineDeveloper) {
+    wsEntry.developer           = localizedDeveloper;
+    wsEntry.developerFromSteam  = true;
+    wsEntry.developerSourceText = ws.developer || '';
+  }
+  const localizedPublisher = (data.publishers || []).join(', ').trim();
+  const baselinePublisher  = (info.baselinePublisher || '').trim();
+  if (localizedPublisher && localizedPublisher !== baselinePublisher) {
+    wsEntry.publisher           = localizedPublisher;
+    wsEntry.publisherFromSteam  = true;
+    wsEntry.publisherSourceText = ws.publisher || '';
+  }
+
+  // About This Game — same about_the_game field/HTML-to-plain-text
+  // conversion and baseline comparison _checkSteamLocalizedDescription uses
+  // for the App Store's own Description, just written into Steam's own
+  // independent About This Game field instead.
+  const localizedAboutGame = _steamHtmlToParagraphLines(data.about_the_game || '').trim();
+  const baselineAboutGame  = (info.baselineDescription || '').trim();
+  if (localizedAboutGame && localizedAboutGame !== baselineAboutGame) {
+    wsEntry.aboutGame           = localizedAboutGame;
+    wsEntry.aboutGameFromSteam  = true;
+    wsEntry.aboutGameSourceText = ws.aboutGame || '';
+  }
+
+  reRenderStepModal();
 }
 
-// Runs _checkSteamLocalizedDescription for every language present in
-// `afterLangs` but not in `beforeLangs` — used by the bulk language-preset
-// paths (setObLangPreset/applyObLangPreset), which set the whole
-// localizations array in one shot rather than adding languages one at a
-// time like toggleObLang.
+// Defense-in-depth backstop for every "*FromSteam" authority flag this
+// feature cluster sets — descriptionFromSteam/titleFromSteam on
+// state.formData.localizedStoreText (see _checkSteamLocalizedDescription/
+// _checkSteamLocalizedListing above), plus description/developer/publisher/
+// aboutGame FromSteam on state.webSite.localizedStoreText (_checkSteamLocalizedListing)
+// — called whenever a different title is selected from the picklist.
+// Normally each flag's authority already expires on its own the instant the
+// new game's corresponding primary-language field loads
+// (_iasTriggerAutoTranslate's/_steamTriggerAutoTranslate's staleness checks
+// no longer match the old game's cached source text), but that natural
+// expiry relies on the new primary text actually differing from the old
+// one — in the unlikely case where two different games' initial text is
+// textually identical for some field, the stale flag would otherwise be
+// wrongly treated as still authoritative for the new game's (unrelated)
+// Steam page. Clearing everything unconditionally here removes that edge
+// case entirely.
+function _clearSteamDescriptionAuthority() {
+  const lst = state.formData.localizedStoreText;
+  if (lst) {
+    Object.keys(lst).forEach(lang => {
+      delete lst[lang].descriptionFromSteam;
+      delete lst[lang].titleFromSteam;
+    });
+  }
+  const wlst = state.webSite && state.webSite.localizedStoreText;
+  if (wlst) {
+    Object.keys(wlst).forEach(lang => {
+      ['description', 'developer', 'publisher', 'aboutGame'].forEach(f => { delete wlst[lang][f + 'FromSteam']; });
+    });
+  }
+}
+
+// Runs _checkSteamLocalizedDescription/_checkSteamLocalizedListing for every
+// language present in `afterLangs` but not in `beforeLangs` — used by the
+// bulk language-preset paths (setObLangPreset/applyObLangPreset), which set
+// the whole localizations array in one shot rather than adding languages
+// one at a time like toggleObLang.
 function _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, afterLangs) {
   const before = new Set(beforeLangs || []);
-  (afterLangs || []).forEach(lang => { if (!before.has(lang)) _checkSteamLocalizedDescription(lang); });
+  (afterLangs || []).forEach(lang => {
+    if (before.has(lang)) return;
+    _checkSteamLocalizedDescription(lang);
+    _checkSteamLocalizedListing(lang);
+  });
 }
 
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
@@ -4102,16 +4247,28 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // Game Details' Description before that role moved to About This Game.
     state.steamLocInfo = {
       appId,
-      baselineDescription:   aboutGameText,
-      shortDescription:      data.short_description || '',
-      supportedLanguagesRaw: data.supported_languages || '',
+      // baselineName/baselineDeveloper/baselinePublisher, alongside
+      // baselineDescription/shortDescription below, give
+      // _checkSteamLocalizedListing (above) a same-language-as-default
+      // value to compare each of Steam's own Localization Review fields
+      // against, so it can tell a genuine per-language localization apart
+      // from Steam silently falling back to this default listing language.
+      baselineName:           data.name || '',
+      baselineDescription:    aboutGameText,
+      baselineDeveloper:      (data.developers || []).join(', '),
+      baselinePublisher:      (data.publishers || []).join(', '),
+      shortDescription:       data.short_description || '',
+      supportedLanguagesRaw:  data.supported_languages || '',
     };
     // Any supported languages already selected before this game finished
     // loading (e.g. left over from a prior title, or set via a language
     // preset that ran before this async fetch resolved) haven't had a
     // chance to be checked against this game's Steam localization yet —
     // check them now rather than only checking languages added afterward.
-    (state.formData.localizations || []).forEach(lang => _checkSteamLocalizedDescription(lang));
+    (state.formData.localizations || []).forEach(lang => {
+      _checkSteamLocalizedDescription(lang);
+      _checkSteamLocalizedListing(lang);
+    });
   } else {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
     _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);
@@ -4841,6 +4998,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
       fd.localizedStoreText[lang][field]     = '';
       fd.localizedStoreText[lang][sourceKey] = '';
       if (field === 'description') delete fd.localizedStoreText[lang].descriptionFromSteam;
+      if (field === 'title') delete fd.localizedStoreText[lang].titleFromSteam;
       // Top text just changed (cleared) for this language — refresh its
       // Review-side bottom-half draft to match, same dedup check used
       // everywhere else so this is a no-op if it's already in sync.
@@ -4939,6 +5097,15 @@ Rules:
       // gets to supply a language's *initial* Description; every edit
       // after that translates and wins normally.
       if (field === 'description' && entry.descriptionFromSteam && entry.descriptionSourceText === text) return;
+      // Same guard, extended to Title: a genuine Steam-scraped localized
+      // title (_checkSteamLocalizedListing, titleFromSteam/titleSourceText)
+      // is authoritative over an AI translation of the SAME primary Title
+      // text for the same reason Description is — this only ever matters
+      // when Title's own "Automatically translated fields" toggle is on
+      // (off by default), since that's the only way this function gets
+      // called for field === 'title' at all (see _iasPropagateTitle, which
+      // mirrors verbatim instead while the toggle is off).
+      if (field === 'title' && entry.titleFromSteam && entry.titleSourceText === text) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       // This write just replaced whatever Steam may have supplied with a
@@ -4946,6 +5113,7 @@ Rules:
       // so the flag no longer applies (if it was even set; harmless no-op
       // otherwise).
       if (field === 'description') delete entry.descriptionFromSteam;
+      if (field === 'title') delete entry.titleFromSteam;
       // This language's top-half text just changed as a result of the
       // primary-language edit that kicked off this whole batch — refresh
       // its Review-side bottom-half draft once this top text has actually
@@ -5823,16 +5991,31 @@ function _masToggleAutoTranslateField(field) {
    Store's/Mac App Store's, even though the real Title text underneath is
    the one shared value.
 
-   One deliberate divergence from _iasTriggerAutoTranslate: no
-   descriptionFromSteam-style authority guard — that wrinkle exists only
-   because the App Store's own Description can be auto-imported from a
-   linked Steam store page (_checkSteamLocalizedDescription) and needs to
-   defer to that page's own genuine localization; Steam's own Short
-   Description/About This Game fields here ARE that Steam store page's
-   text, so there's no second, more-authoritative source to defer to.
-   Another: Steam invents NO character limit for any of its 5 fields (see
-   buildSteamLocalizationReviewSection, render.js), so nothing here tracks
-   or enforces one, unlike IAS_FIELD_CHAR_LIMITS. */
+   Steam's own Short Description/Developer/Publisher/About This Game fields
+   here ALSO get a descriptionFromSteam-style authority guard, same idea as
+   the App Store's own Description: _checkSteamLocalizedListing scrapes each
+   supporting language's genuinely-localized counterpart straight off that
+   language's own Steam store page (a different fetch than the game's own
+   default-language appdetails call _applySteamAboutData already makes) and
+   flags it `${field}FromSteam` + `${field}SourceText`, and
+   _steamTriggerAutoTranslate's write-time guard (below) won't let an
+   already-in-flight AI translation clobber it — see that function and
+   _checkSteamLocalizedListing (above _applySteamAboutData) for the exact
+   mechanics. Title (shared field) gets the same treatment through the App
+   Store's own _iasTriggerAutoTranslate instead, since Title's real storage
+   lives there.
+   One remaining divergence: only Short Description has an actual character
+   limit (STEAM_FIELD_CHAR_LIMITS, below) — Title/Developer/Publisher/About
+   This Game still have none, unlike every one of IAS_FIELD_CHAR_LIMITS'S
+   own 4 fields. */
+
+// Only Short Description has a real character limit in Steam's own
+// Localization Review (buildSteamLocalizationReviewSection, render.js) —
+// Title/Developer/Publisher/About This Game are intentionally absent here,
+// which every reader (fieldBlock's limit lookup, _steamLangHasOverLimitField/
+// _steamFieldHasOverLimitLang below) treats as "no limit" for that field.
+// Mirrors IAS_FIELD_CHAR_LIMITS's own role, just Steam's own single limit.
+const STEAM_FIELD_CHAR_LIMITS = { description: 300 };
 
 // Title is shared with the App Store's own listing — see this cluster's own
 // header comment above. Mirrors MAS_SHARED_LISTING_FIELDS.
@@ -5875,9 +6058,48 @@ function _steamFieldValue(field, lang) {
   if (!ws) return '';
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
-  if (lang === primary) return ws[field] || '';
+  if (lang === primary) {
+    const own = ws[field] || '';
+    if (own) return own;
+    // Short Description falls back to Steam's own scraped short_description
+    // (state.steamLocInfo.shortDescription, cached by _applySteamAboutData)
+    // when nothing's been typed here yet — the exact same fallback the main
+    // Store Page Preview - Prototype (buildSteamStorePreviewPrototypeSection)
+    // and Web - Store Page Preview's Hook field already show, centralized
+    // here so every other reader of this function (Localization Review's
+    // primary-language card, _steamPropagateAllFields, the settings gear's
+    // retranslate-on-enable path) sees the same value rather than a blank
+    // one. Only the Primary Language's own card gets this — a supporting
+    // language has no equivalent Steam-sourced text of its own to fall back
+    // to here (it gets one via _checkSteamLocalizedListing instead, when
+    // Steam's page is actually localized into that language).
+    if (field === 'description') return (state.steamLocInfo && state.steamLocInfo.shortDescription) || '';
+    return '';
+  }
   const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
   return (entry && entry[field]) || '';
+}
+
+// Mirrors _iasLangHasOverLimitField — whether ANY field with a real limit
+// (STEAM_FIELD_CHAR_LIMITS above — currently just Short Description) is over
+// it for this one language. Drives the warning icon next to a language in
+// the main Store Page Preview - Prototype's own language dropdown
+// (previewLangOptions, buildSteamStorePreviewPrototypeSection, render.js).
+function _steamLangHasOverLimitField(lang) {
+  return Object.keys(STEAM_FIELD_CHAR_LIMITS).some(field =>
+    _steamFieldValue(field, lang).length > STEAM_FIELD_CHAR_LIMITS[field]);
+}
+
+// Mirrors _iasFieldHasOverLimitLang — the transpose of the above: whether
+// ANY language (across every language Steam's own Localization Review
+// covers) has THIS ONE field over its character limit (always false for a
+// field absent from STEAM_FIELD_CHAR_LIMITS). Drives the warning icon next
+// to a field in Steam's own Localization Review's top-right field dropdown
+// (buildSteamLocalizationReviewSection, render.js).
+function _steamFieldHasOverLimitLang(field, langCodes) {
+  const limit = STEAM_FIELD_CHAR_LIMITS[field];
+  if (limit == null) return false;
+  return langCodes.some(lang => _steamFieldValue(field, lang).length > limit);
 }
 
 function _steamSetFieldValue(field, lang, value) {
@@ -5935,6 +6157,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
       if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
       ws.localizedStoreText[lang][field]     = '';
       ws.localizedStoreText[lang][sourceKey] = '';
+      delete ws.localizedStoreText[lang][field + 'FromSteam'];
       const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _steamLocReviewRefreshBackTranslation(field, lang, '');
     });
@@ -6004,8 +6227,23 @@ Rules:
       if (typeof translated !== 'string' || !translated.trim()) return;
       if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
       const entry = ws.localizedStoreText[lang];
+      // Re-check Steam authority at write time, not just when this batch
+      // was kicked off — mirrors _iasTriggerAutoTranslate's own guard (see
+      // its comment) for the same race: _checkSteamLocalizedListing's Steam
+      // fetch can resolve WHILE this translate call is still in flight,
+      // and without this guard the slower-but-already-in-flight translation
+      // would land afterward and silently clobber the just-arrived Steam
+      // text. Only fires while Steam's cached source text still equals what
+      // THIS call is translating — a genuine primary-field edit in between
+      // makes this language stale like any other and lets the translation
+      // through, same as everywhere else.
+      if (entry[field + 'FromSteam'] && entry[sourceKey] === text) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
+      // This write just replaced whatever Steam may have supplied with a
+      // fresh AI translation — no longer Steam's own text, so the flag no
+      // longer applies (harmless no-op if it was never set).
+      delete entry[field + 'FromSteam'];
       const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== translated) _steamLocReviewRefreshBackTranslation(field, lang, translated);
     });
@@ -6050,7 +6288,12 @@ function _steamRetryTranslate(field) {
 function _steamPropagateAllFields() {
   const ws = state.webSite;
   if (!ws) return;
-  STEAM_LOC_TRANSLATABLE_FIELDS.forEach(field => _steamTriggerAutoTranslate(field, ws[field]));
+  const primary = state.formData.primaryLanguage || 'en';
+  // Reads through _steamFieldValue rather than raw ws[field] so Short
+  // Description's Steam-scraped fallback (see that function's own comment)
+  // is what actually gets propagated/translated when nothing's been typed
+  // into Short Description directly yet.
+  STEAM_LOC_TRANSLATABLE_FIELDS.forEach(field => _steamTriggerAutoTranslate(field, _steamFieldValue(field, primary)));
 }
 
 // Mirrors _masToggleAutoTranslateField — Steam's own "Automatically
@@ -6064,7 +6307,10 @@ function _steamToggleAutoTranslateField(field) {
   state.steamAutoTranslateFields[field] = !state.steamAutoTranslateFields[field];
   if (state.steamAutoTranslateFields[field]) {
     const ws = state.webSite;
-    if (ws) _steamTriggerAutoTranslate(field, ws[field] || '');
+    // Reads through _steamFieldValue (see its own comment) so turning Short
+    // Description's auto-translate on retranslates its Steam-scraped
+    // fallback value too, not just a directly-typed one.
+    if (ws) _steamTriggerAutoTranslate(field, _steamFieldValue(field, state.formData.primaryLanguage || 'en'));
   }
   reRenderStepModal();
 }
@@ -6351,15 +6597,20 @@ function setSteamLocReviewField(field) {
   if (state.steamLocReviewMode === 'review') _steamLocReviewSyncBackTranslations();
 }
 
-// Mirrors _masLocReviewSourceBadge — Steam's own Localization Review "source"
-// badge (buildSteamLocalizationReviewSection, render.js). No Steam-sourced-
-// description concept applies here (Steam's own field IS the Steam store
-// page's text — see this cluster's own header comment above for why there's
-// no second, more-authoritative source to defer to), so this only ever
-// returns 'ai' or null. For the shared field (Title) the authority check is
-// against the App Store's own state.formData entry/sourceText and its
-// iasAutoTranslateFields setting — the same single source of truth the App
-// Store's own Localization Review card would show for that language.
+// Mirrors _locReviewSourceBadge/_masLocReviewSourceBadge — Steam's own
+// Localization Review "source" badge (buildSteamLocalizationReviewSection,
+// render.js). Returns 'steam' when a supporting language's current text for
+// `field` is a genuine localization scraped from the game's own Steam store
+// page (_checkSteamLocalizedListing set `${field}FromSteam`, and the
+// primary-language field hasn't changed since — see _steamTriggerAutoTranslate's/
+// _iasTriggerAutoTranslate's write-time guards for how that authority
+// expires), 'ai' when it's a live AI translation of the current primary text
+// (its cached `${field}SourceText` still matches), or null otherwise (the
+// Primary Language's own card, a blank field, or manually-typed/stale text).
+// For the shared field (Title) the check is against the App Store's own
+// state.formData entry/sourceText/iasAutoTranslateFields setting — the same
+// single source of truth the App Store's own Localization Review card would
+// show for that language.
 function _steamLocReviewSourceBadge(field, lang) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -6368,12 +6619,14 @@ function _steamLocReviewSourceBadge(field, lang) {
   if (STEAM_SHARED_LISTING_FIELDS.has(field)) {
     const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
     if (!entry) return null;
+    if (entry[field + 'FromSteam']) return 'steam';
     if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
     return null;
   }
   const ws = state.webSite;
   const entry = ws && ws.localizedStoreText && ws.localizedStoreText[lang];
   if (!entry) return null;
+  if (entry[field + 'FromSteam']) return 'steam';
   if (_steamFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ws[field] || '')) return 'ai';
   return null;
 }
