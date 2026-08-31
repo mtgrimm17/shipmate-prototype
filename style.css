@@ -12520,6 +12520,25 @@ body.viewing-splash #app-guide { display: none; }
   border-radius: 4px;
 }
 
+/* One-shot "you just navigated here" cue for Select Steam Assets
+   (_steamSppOpenAssetsSection, app.js) — reuses the exact same glow ring
+   (@keyframes ias-meta-pulse, above) every other "needs attention" glow in
+   this prototype uses, just for a FIXED number of pulses instead of
+   steam-spp-glow-empty's infinite loop: clicking the header capsule, a
+   screenshot, or the trailer on the main preview jumps here and scrolls to
+   the matching sub-section, and this glow is what actually draws the eye to
+   which one of the three that was, rather than leaving the developer to
+   scan the whole page. Added/removed by JS (setTimeout, same restart-on-
+   reflow pattern as .doc-section-highlight above) rather than a CSS
+   animation-iteration-count trick alone, so a second click — on the same
+   sub-section or a different one — always restarts the pulse from its first
+   frame instead of silently doing nothing because the class never left the
+   element. */
+.steam-assets-nav-highlight {
+  animation: ias-meta-pulse 0.9s ease-in-out 3;
+  border-radius: 6px;
+}
+
 .steam-spp-queue-row {
   display: flex; align-items: center; gap: 8px; padding: 10px 0;
   border-top: 1px solid #2a3f5a; border-bottom: 1px solid #2a3f5a; margin-bottom: 16px;
@@ -12570,14 +12589,18 @@ body.viewing-splash #app-guide { display: none; }
    call on the div itself, buildSteamStorePreviewPrototypeSection). Same
    translucent-tint-on-hover recipe as .steam-spp-capsule-wrap (an ::after
    overlay rather than swapping `background` directly, which would blow
-   away the gradient above). inset extends -16px past the box's own bottom
-   edge to also cover .steam-spp-purchase-bottom's own 16px overhang (its
-   comment above has the exact measurement) — without that extra inset the
-   tint would stop at the gradient panel's edge and visibly exclude the
-   price/button bar hanging just past it, splitting one clickable area into
-   a highlighted part and an unhighlighted part. */
+   away the gradient above). inset:0 — matches the gradient panel's own
+   rectangle exactly, deliberately NOT extended down to also cover
+   .steam-spp-purchase-bottom's overhanging price/button bar (a previous
+   pass extended it -16px to do that; per direct feedback that visibly
+   over-highlighted past the "Play/Buy [Game]" box's own edges, since the
+   overhang isn't actually part of this rectangle — it just hangs past it,
+   same as on a real Steam page). The overhang itself stays fully clickable
+   (it's still inside .steam-spp-purchase, which carries the onclick) —
+   only the highlight's own visible extent is what's now confined to the
+   panel's rectangle. */
 .steam-spp-purchase::after {
-  content: ''; position: absolute; inset: 0 0 -16px 0; border-radius: 4px;
+  content: ''; position: absolute; inset: 0; border-radius: 4px;
   background: rgba(103, 193, 245, .12); opacity: 0; transition: opacity 0.12s; pointer-events: none;
 }
 .steam-spp-purchase:hover::after { opacity: 1; }

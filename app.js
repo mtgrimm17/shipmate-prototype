@@ -9034,10 +9034,25 @@ function _steamSppCarouselSelect(el) {
    (_steamSppCarouselItemClick above, openSteamHeaderCapsuleSection below) —
    opens the 'steamAssets' flip target, then scrolls straight to the
    relevant sub-section's anchor rather than leaving the user to scroll past
-   Screenshots/Trailer/Header Capsule to find what they clicked. */
+   Screenshots/Trailer/Header Capsule to find what they clicked, and glows
+   it (.steam-assets-nav-highlight, style.css) for a few pulses so it's
+   obvious at a glance which of the three sub-sections is the one that was
+   actually clicked, not just where the scroll happened to land. */
 async function _steamSppOpenAssetsSection(anchorId) {
   await openStorePreviewSection('steam', 'steamAssets');
-  document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const target = document.getElementById(anchorId);
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!target) return;
+  // Remove any still-running highlight first, then force a reflow before
+  // re-adding — same restart-a-flash pattern .doc-section-highlight already
+  // uses elsewhere — so a second click right after the first (same
+  // sub-section or a different one) always restarts the pulse from its
+  // first frame instead of silently no-op'ing because the class never left
+  // the element.
+  document.querySelectorAll('.steam-assets-nav-highlight').forEach(el => el.classList.remove('steam-assets-nav-highlight'));
+  void target.offsetWidth; // force reflow so the animation restarts
+  target.classList.add('steam-assets-nav-highlight');
+  setTimeout(() => target.classList.remove('steam-assets-nav-highlight'), 2800);
 }
 
 /* Horizontal scrollbar under the media carousel (scrollbarHtml,
