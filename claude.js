@@ -894,6 +894,22 @@ function _steamHtmlToParagraphLines(html) {
     }
   }
 
+  // The reverse case: a bullet line running straight into a non-bullet,
+  // non-blank line right after it (the list ended and prose resumes with
+  // no paragraph break in between — e.g. Steam's about_the_game HTML often
+  // has no </ul>/<p> boundary between a feature list's last <li> and the
+  // next line) reads as if that line were still part of the list. Insert a
+  // blank line so a finished bullet list always gets its own paragraph
+  // break before whatever follows. No need to guard against an existing
+  // blank line here — the pass above already collapsed runs of blank lines
+  // down to at most one, so lines[i + 1] is either that single blank or
+  // genuine next content.
+  for (let i = lines.length - 2; i >= 0; i--) {
+    if (isBullet(lines[i]) && lines[i + 1] !== '' && !isBullet(lines[i + 1])) {
+      lines.splice(i + 1, 0, '');
+    }
+  }
+
   return lines.join('\n');
 }
 
