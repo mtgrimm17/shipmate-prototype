@@ -9411,6 +9411,21 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   cursor: pointer;
 }
 
+/* Steam Technical's "Players" subsection (buildSteamTechnicalSection) —
+   live preview list of computeSteamPlayerBadges' output, shown right below
+   the checkbox tree so a developer can see exactly which badges their
+   answers will produce on the Store Page Preview - Prototype's Features
+   block, matching players2.png's dark-row/icon-box/blue-label design. */
+.steam-players-preview-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.steam-players-preview-row {
+  display: flex; align-items: center; gap: 10px;
+  background: #16202b; border-radius: 3px; padding: 8px 12px;
+}
+.steam-players-preview-icon {
+  width: 20px; flex-shrink: 0; text-align: center; font-size: 13px; color: #8f98a0;
+}
+.steam-players-preview-label { color: #67c1f5; font-size: 13px; }
+
 .cq-textarea {
   width: 100%;
   background: var(--surface-raised, #2c2c2e);
@@ -12307,32 +12322,39 @@ body.viewing-splash #app-guide { display: none; }
 }
 
 /* Horizontal scrollbar beneath the media carousel (scrollbarHtml,
-   buildSteamStorePreviewPrototypeSection, render.js) — mirrors real Steam's
-   own left-arrow/thumb-on-track/right-arrow control under the screenshot
-   strip: a chunky rounded-rect arrow button flush against a similarly
-   chunky, lighter rounded-rect "thumb" segment, on a thin dark track.
-   Always rendered (even with 0-1 items) so it also contributes to
-   .steam-spp-media-left's constant reserved height. Thumb width/position are
-   computed from #steam-spp-media-thumbs's scroll metrics by
-   _steamSppUpdateScrollbar (app.js). */
-.steam-spp-media-scrollbar { display: flex; align-items: center; gap: 3px; margin-top: 6px; height: 22px; }
+   buildSteamStorePreviewPrototypeSection, render.js) — dimensions and
+   colors measured live off the real widget via the Browser pane
+   (store.steampowered.com/app/4037180/Go_Ape_Ship uses hashed CSS-module
+   classes, but its actual arrow/track/thumb geometry reads directly off
+   getBoundingClientRect/getComputedStyle): 38×18 arrow buttons flush
+   against an 18px-tall track (no gap — each element's own 3px
+   border-radius is what visually separates them), thumb full-height within
+   the track, arrows and thumb both rgba(35,60,81,.8), track
+   rgba(0,0,0,.2). Always rendered (even with 0-1 items) so it also
+   contributes to .steam-spp-media-left's constant reserved height. Thumb
+   width/position are computed from #steam-spp-media-thumbs's own scroll
+   metrics by _steamSppUpdateScrollbar (app.js) — proportional to this
+   prototype's actual content, the same way a real scrollbar's thumb is
+   proportional to its own; the 16px JS-side minimum (Math.max(16, ...))
+   matches this rule's min-width so the two can't disagree. */
+.steam-spp-media-scrollbar { display: flex; align-items: center; gap: 0; margin-top: 6px; height: 18px; }
 .steam-spp-scrollbar-arrow {
-  flex: 0 0 auto; width: 26px; height: 22px; border: none; border-radius: 4px;
-  background: #2a475e; color: #c6d4df; font-size: 12px; line-height: 1;
+  flex: 0 0 auto; width: 38px; height: 18px; border: none; border-radius: 3px;
+  background: rgba(35, 60, 81, .8); color: #c6d4df; font-size: 11px; line-height: 1;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   padding: 0;
 }
-.steam-spp-scrollbar-arrow:hover { background: #356485; }
-.steam-spp-scrollbar-arrow:disabled { background: #1c2b38; color: #4c6b8a; cursor: default; }
+.steam-spp-scrollbar-arrow:hover { background: rgba(53, 100, 133, .9); }
+.steam-spp-scrollbar-arrow:disabled { background: rgba(28, 43, 56, .6); color: #4c6b8a; cursor: default; }
 .steam-spp-scrollbar-track {
-  position: relative; flex: 1 1 auto; height: 22px; background: #0e1a24;
-  border-radius: 4px; cursor: pointer; overflow: hidden;
+  position: relative; flex: 1 1 auto; height: 18px; background: rgba(0, 0, 0, .2);
+  border-radius: 3px; cursor: pointer; overflow: hidden;
 }
 .steam-spp-scrollbar-thumb {
-  position: absolute; top: 0; left: 0; height: 100%; min-width: 24px;
-  background: #3a5a75; border-radius: 4px; cursor: grab;
+  position: absolute; top: 0; left: 0; height: 100%; min-width: 16px;
+  background: rgba(35, 60, 81, .8); border-radius: 3px; cursor: grab;
 }
-.steam-spp-scrollbar-thumb:hover { background: #4c6f8c; }
+.steam-spp-scrollbar-thumb:hover { background: rgba(53, 100, 133, .9); }
 .steam-spp-scrollbar-thumb:active { cursor: grabbing; }
 
 /* Same automatic-minimum-width guard as .steam-spp-media-left (see its
@@ -12340,6 +12362,22 @@ body.viewing-splash #app-guide { display: none; }
    unbroken developer/publisher name could otherwise floor this column wider
    than its 1fr share too. */
 .steam-spp-glance { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Header capsule (capsuleHtml, buildSteamStorePreviewPrototypeSection) is
+   clickable — opens Select Steam Assets' Header Capsule block
+   (openSteamHeaderCapsuleSection, app.js). Every other editable field in
+   this prototype highlights on hover via the padding/negative-margin trick
+   (.steam-spp-apphub-name's comment has the full rationale), but that only
+   works because those fields' own background can peek out around their
+   text; object-fit:cover means the image here fully opaquely covers its
+   box, so a background-color behind it would never show through. A ::after
+   overlay painted on top of the image is used instead, at the same
+   rgba(103,193,245,.12) tint every other field's hover highlight uses. */
+.steam-spp-capsule-wrap { position: relative; cursor: pointer; border-radius: 4px; }
+.steam-spp-capsule-wrap::after {
+  content: ''; position: absolute; inset: 0; border-radius: 4px;
+  background: rgba(103, 193, 245, .12); opacity: 0; transition: opacity 0.12s; pointer-events: none;
+}
+.steam-spp-capsule-wrap:hover::after { opacity: 1; }
 .steam-spp-capsule-img {
   width: 100%; aspect-ratio: 460/215; border-radius: 4px; object-fit: cover;
   font-size: 11px;
@@ -12549,15 +12587,23 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-reason { color: #a3b3c2; }
 /* Inline icon+label rows (icon to the left of text, stacked vertically),
    matching a real Steam store page's Features list more closely than the
-   previous icon-over-label tile layout. */
+   previous icon-over-label tile layout. Label color (#66c0f4) and the
+   subheading's muted grey (#8f98a0) below were both read directly off the
+   live reference page's computed styles via the Browser pane — Steam's own
+   category links (Single-player/Online Co-op/Cross-Platform
+   Multiplayer/Family Sharing/Xbox Controllers/PlayStation Controllers) all
+   render in that link-blue, while "Full Controller Support" itself is
+   plain #8f98a0 text. Real icons are Steam's own CDN sprites
+   (ico_singlePlayer.png etc.) — approximated here with emoji rather than
+   hotlinking Steam's assets. */
 .steam-spp-features-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.steam-spp-feature { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #c6d4df; text-align: left; }
+.steam-spp-feature { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #66c0f4; text-align: left; }
 .steam-spp-feature-icon { font-size: 15px; width: 18px; flex-shrink: 0; text-align: center; }
 /* "Full Controller Support" — a plain, icon-less label above the
    Xbox/PlayStation Controllers rows, matching how a real Steam page
    renders it (verified live via the Browser pane): flush with the row
    icons' left edge rather than indented to align with the label text. */
-.steam-spp-feature-subheading { font-size: 12px; color: #c6d4df; }
+.steam-spp-feature-subheading { font-size: 12px; color: #8f98a0; }
 .steam-spp-feature-warn { color: #a3b3c2; }
 .steam-spp-drm-notice { font-size: 11px; color: #8f98a0; padding-top: 8px; border-top: 1px solid #2a3f5a; }
 

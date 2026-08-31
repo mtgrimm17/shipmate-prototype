@@ -9869,9 +9869,103 @@ function buildSteamStoreTagsSection() {
     <div class="cq-check-list" style="max-height:200px;overflow-y:auto;">${subGenreChecks}</div>`;
 }
 
+/* Derives the ordered list of player-mode badges (icon + label) from
+   state.steamSubmitAnswers.players — shared by the Players subsection's own
+   live preview list (buildSteamTechnicalSection) and the Store Page Preview
+   - Prototype's Features block (featuresHtml,
+   buildSteamStorePreviewPrototypeSection), so the two stay in sync by
+   construction rather than by duplicated logic. Mirrors real Steam's own
+   tag set (verified live via the Browser pane against
+   store.steampowered.com/app/4037180/Go_Ape_Ship, which uses
+   ico_singlePlayer/ico_coop/ico_multiPlayer icons for exactly these
+   categories): Multi-player itself never produces a badge (it's purely a
+   gate that reveals the PvP/Co-op breakdown); PvP/Co-op each collapse to a
+   single bare badge when checked with no Online/LAN/Local children picked,
+   or expand to one badge per checked child (dropping the bare badge) once
+   any child is picked. */
+function computeSteamPlayerBadges() {
+  const p = state.steamSubmitAnswers.players || {};
+  const ICON_SOLO  = '👤';
+  const ICON_GROUP = '👥';
+  const badges = [];
+  if (p.singlePlayer) badges.push({ icon: ICON_SOLO, label: 'Single-player' });
+  if (p.mmo) badges.push({ icon: ICON_GROUP, label: 'MMO' });
+  if (p.pvp) {
+    const children = [
+      p.pvpOnline && 'Online PvP',
+      p.pvpLan    && 'LAN PvP',
+      p.pvpLocal  && 'Shared/Split Screen PvP',
+    ].filter(Boolean);
+    (children.length ? children : ['PvP']).forEach(label => badges.push({ icon: ICON_GROUP, label }));
+  }
+  if (p.coop) {
+    const children = [
+      p.coopOnline && 'Online Co-op',
+      p.coopLan    && 'LAN Co-op',
+      p.coopLocal  && 'Shared/Split Screen Co-op',
+    ].filter(Boolean);
+    (children.length ? children : ['Co-op']).forEach(label => badges.push({ icon: ICON_GROUP, label }));
+  }
+  if (p.crossPlatform) badges.push({ icon: ICON_GROUP, label: 'Cross-Platform Multiplayer' });
+  return badges;
+}
+
 /* ── Steam: Technical (PDFs 10 + 11) ───────────────── */
 function buildSteamTechnicalSection() {
   const a = state.steamSubmitAnswers;
+  const p = a.players;
+
+  // Players — mirrors Steamworks' own "Players" checkbox tree (see the
+  // players.png/players2.png reference mockups this was built from): three
+  // top-level modes (Single-player/Multi-player/MMO), a "Multiplayer modes"
+  // breakdown that only appears once Multi-player is checked (same
+  // reveal-on-check pattern as gamepadBlock below), and Cross-Platform
+  // Multiplayer as its own top-level toggle after that breakdown. Each
+  // PvP/Co-op child row (Online/LAN/Local) only renders while its own
+  // parent checkbox is checked. computeSteamPlayerBadges (above) turns this
+  // into the ordered badge list shown both in the live preview list right
+  // below the checkboxes and in the Store Page Preview - Prototype's own
+  // Features block.
+  const playerRow = (fieldId, label, tip, indentPx) => `
+    <label class="cq-check-row"${indentPx ? ` style="margin-left:${indentPx}px;"` : ''}>
+      <input type="checkbox" ${p[fieldId] ? 'checked' : ''} onchange="toggleSteamPlayer('${fieldId}', this.checked)">
+      <span>${escHtml(label)} <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(tip)}</span></span></span>
+    </label>`;
+
+  const pvpChildrenHtml = p.pvp ? `
+    ${playerRow('pvpOnline', 'Online', 'Players compete against each other over the internet.', 40)}
+    ${playerRow('pvpLan', 'LAN', 'Players compete against each other over a local network.', 40)}
+    ${playerRow('pvpLocal', 'Local', 'Players compete against each other on the same screen or device.', 40)}` : '';
+
+  const coopChildrenHtml = p.coop ? `
+    ${playerRow('coopOnline', 'Online', 'Players work together toward a common goal over the internet.', 40)}
+    ${playerRow('coopLan', 'LAN', 'Players work together toward a common goal over a local network.', 40)}
+    ${playerRow('coopLocal', 'Local', 'Players work together toward a common goal on the same screen or device.', 40)}` : '';
+
+  const multiplayerModesHtml = p.multiPlayer ? `
+    <div class="form-label" style="margin:8px 0 4px;">Multiplayer modes:</div>
+    ${playerRow('pvp', 'PvP', 'Players compete directly against each other.', 20)}
+    ${pvpChildrenHtml}
+    ${playerRow('coop', 'Co-op', 'Players work together toward a common goal.', 20)}
+    ${coopChildrenHtml}` : '';
+
+  const playerBadges = computeSteamPlayerBadges();
+  const playersPreviewHtml = playerBadges.length ? `
+    <div class="steam-players-preview-list">
+      ${playerBadges.map(b => `<div class="steam-players-preview-row"><span class="steam-players-preview-icon">${b.icon}</span><span class="steam-players-preview-label">${escHtml(b.label)}</span></div>`).join('')}
+    </div>` : `<div class="steam-spp-muted" style="margin-top:8px;">No player modes selected yet.</div>`;
+
+  const playersHtml = `
+    <div class="ios-content-step-label" style="margin-top:0;">Players <span style="color:#e0555a;">*</span> <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(check one or more, as appropriate)</span></div>
+    <div class="cq-check-list">
+      ${playerRow('singlePlayer', 'Single-player', 'The game can be played entirely alone, with no other players involved.')}
+      ${playerRow('multiPlayer', 'Multi-player', 'The game supports more than one player at the same time.')}
+      ${playerRow('mmo', 'MMO', 'The game is a massively multiplayer online game.')}
+      ${multiplayerModesHtml}
+      ${playerRow('crossPlatform', 'Cross-Platform Multiplayer', 'Players on different platforms (PC, Mac, console, mobile) can play together.')}
+    </div>
+    ${playersPreviewHtml}
+    <div class="ios-q-divider"></div>`;
 
   const INPUT_OPTS = [
     { id: 'keyboard_only',     label: 'Mouse and keyboard only' },
@@ -9932,7 +10026,8 @@ function buildSteamTechnicalSection() {
   }).join('');
 
   return `
-    <div class="ios-content-step-label" style="margin-top:0;">Input Support</div>
+    ${playersHtml}
+    <div class="ios-content-step-label">Input Support</div>
     ${inputHtml}
     ${gamepadBlock}
     <div class="ios-q-divider"></div>
@@ -10293,9 +10388,21 @@ function buildSteamStorePreviewPrototypeSection() {
     </div>`;
   const mediaLeftHtml = `${heroHtml}${thumbsWrapHtml}`;
 
-  const capsuleHtml = headerImgSrc
-    ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
-    : `<div class="steam-spp-capsule-img steam-spp-media-empty">Header Image</div>`;
+  // Clickable/hoverable like every other editable field in this prototype —
+  // opens the same "Select Steam Assets" section its own "Select Steam
+  // Assets" button opens, then jumps straight to that section's Header
+  // Capsule upload block (openSteamHeaderCapsuleSection, app.js) instead of
+  // leaving the user to scroll past Screenshots/Trailer to find it. The
+  // hover highlight is a ::after overlay (see .steam-spp-capsule-wrap,
+  // style.css) rather than the padding/negative-margin trick every other
+  // field uses, since object-fit:cover means a background-color behind the
+  // image would never actually show through it.
+  const capsuleHtml = `
+    <div class="steam-spp-capsule-wrap" onclick="openSteamHeaderCapsuleSection()" title="Edit Header Capsule">
+      ${headerImgSrc
+        ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
+        : `<div class="steam-spp-capsule-img steam-spp-media-empty">Header Image</div>`}
+    </div>`;
 
   // Tags — reads the same Top-Level Genre/Genre/Sub-genre picker that used
   // to live only inside Business Questions (buildSteamStoreTagsSection,
@@ -10460,41 +10567,43 @@ function buildSteamStorePreviewPrototypeSection() {
     </div>`;
 
   // Features — clickable entry point into the new standalone "Technical"
-  // section (Input Support/Accessibility, formerly only reachable via
-  // Business Questions — see the 'technical' flip target,
+  // section (Players/Input Support/Accessibility, formerly only reachable
+  // via Business Questions — see the 'technical' flip target,
   // buildStorePreviewFlipSection/buildSteamTechnicalSection). Glows with
   // the same ias-meta-pulse ring as every other unanswered field in this
   // prototype until Technical has been answered
   // (isSteamSectionComplete('technical')), and shares
   // .steam-spp-content-block's exact hover/glow CSS recipe (combined
   // selector, see style.css) so both blocks highlight identically.
-  // "Full Controller Support" is derived from the real Technical answers
-  // (ssa.xboxFullSupport, ssa.psControllers) rather than hardcoded, so this
-  // section reflects actual submitted data once it links to Technical.
+  // Player badges (Single-player/MMO/PvP.../Co-op.../Cross-Platform
+  // Multiplayer) come from computeSteamPlayerBadges (shared with the
+  // Players subsection's own live preview list, above) rather than a
+  // hardcoded "Single-player" line, so this section now reflects real
+  // submitted data end to end. "Full Controller Support" similarly reads
+  // the real Technical answers (ssa.xboxFullSupport, ssa.psControllers).
   // Verified live against the reference page
   // (store.steampowered.com/app/4037180/Go_Ape_Ship) via the Browser pane:
-  // "Full Controller Support" itself renders as a plain, icon-less label —
-  // NOT a badge like the others — immediately followed by "Xbox
-  // Controllers" and "PlayStation Controllers" as their own separate
-  // icon+label rows underneath, one per platform actually supported,
-  // rather than a single combined "Full Controller Support" badge.
-  // "Single-player" is kept as a static default since Shipmate has no
-  // dedicated single-player/multiplayer/co-op state field to derive it
-  // from (see state.js's free-text keyword lists, which only feed
-  // AI/privacy detection elsewhere, not a structured feature flag).
-  // Matched to a real Steam page's inline icon+label row style rather than
-  // the previous icon-over-label tile layout — see the updated
-  // .steam-spp-features-row/.steam-spp-feature rules in style.css.
+  // badge label color (#66c0f4, Steam's link-blue — real icons are
+  // ico_singlePlayer/ico_coop/ico_multiPlayer/ico_familysharing.png, which
+  // this prototype approximates with emoji rather than hotlinking Steam's
+  // own CDN assets), and "Full Controller Support" itself renders as a
+  // plain, icon-less #8f98a0 label — NOT a badge like the others —
+  // immediately followed by "Xbox Controllers" and "PlayStation
+  // Controllers" as their own separate icon+label rows underneath, one per
+  // platform actually supported, rather than a single combined badge.
   const technicalDone = isSteamSectionComplete('technical');
   const hasXboxSupport = ssa.xboxFullSupport === 'yes';
   const hasPsSupport = (ssa.psControllers || []).length > 0 && !ssa.psControllers.includes('ps_none');
   const showFullControllerGroup = hasXboxSupport || hasPsSupport;
+  const playerFeatureBadgesHtml = computeSteamPlayerBadges()
+    .map(b => `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">${b.icon}</span><span>${escHtml(b.label)}</span></div>`)
+    .join('');
   const featuresHtml = `
     <div class="steam-spp-side-block steam-spp-features-block${technicalDone ? '' : ' steam-spp-glow-empty'}"
          onclick="openStorePreviewSection('steam','technical')">
       <div class="steam-spp-side-heading">Features</div>
       <div class="steam-spp-features-row">
-        <div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Single-player</span></div>
+        ${playerFeatureBadgesHtml}
         <div class="steam-spp-feature"><span class="steam-spp-feature-icon">👪</span><span>Family Sharing</span></div>
         ${showFullControllerGroup ? `
         <div class="steam-spp-feature-subheading">Full Controller Support</div>
@@ -10652,9 +10761,11 @@ function buildSteamAssetsEditSection() {
       ${steamTrailerHTML}
       <div id="steam-assets-trailer-file-info" style="margin-bottom:20px;${trailerFile ? '' : 'display:none;'}">${trailerFile ? trailerFileRowHTML(trailerFile.name, (trailerFile.size / 1024 / 1024).toFixed(1), 'steam-assets-') : ''}</div>
 
-      <div class="pk-edit-group-label">Header Capsule</div>
-      <div class="asset-guidance">Recommended 460 &times; 215 (landscape). Shown at the top of your store page's media.</div>
-      ${_steamKeyArtUploadHTML('HeaderImage', 'PNG or JPG, up to ~5MB', ups.steamHeaderImage)}
+      <div id="steam-assets-headercapsule-section">
+        <div class="pk-edit-group-label">Header Capsule</div>
+        <div class="asset-guidance">Recommended 460 &times; 215 (landscape). Shown at the top of your store page's media.</div>
+        ${_steamKeyArtUploadHTML('HeaderImage', 'PNG or JPG, up to ~5MB', ups.steamHeaderImage)}
+      </div>
     </div>`;
 }
 

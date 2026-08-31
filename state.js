@@ -3236,7 +3236,26 @@ function makeBlankSteamAnswers() {
     topGenres:          [],
     genres:             [],
     subGenres:          [],
-    // Technical
+    // Technical — Players (mirrors Steamworks' own "Players" checkbox tree:
+    // three top-level modes, an optional PvP/Co-op breakdown each with
+    // Online/LAN/Local granularity, and Cross-Platform Multiplayer as its
+    // own top-level toggle). Read by buildSteamTechnicalSection's Players
+    // subsection and computeSteamPlayerBadges (render.js), the latter also
+    // feeding the Store Page Preview - Prototype's Features block.
+    players: {
+      singlePlayer: false,
+      multiPlayer:  false,
+      mmo:          false,
+      pvp:          false,
+      pvpOnline:    false,
+      pvpLan:       false,
+      pvpLocal:     false,
+      coop:         false,
+      coopOnline:   false,
+      coopLan:      false,
+      coopLocal:    false,
+      crossPlatform: false,
+    },
     inputSupport:       null,
     xboxFullSupport:    null,
     psControllers:      [],

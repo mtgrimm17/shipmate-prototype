@@ -9597,6 +9597,21 @@ function toggleSteamAccessibility(featureId, checked) {
   updateSteamCard();
 }
 
+// Players checkbox tree (Technical section, buildSteamTechnicalSection) —
+// state.steamSubmitAnswers.players. A full re-render (not just a DOM
+// checked-state flip like toggleSteamAccessibility above) is needed because
+// checking/unchecking Multi-player, PvP, or Co-op shows/hides their nested
+// child rows, and the live preview list + Store Page Preview - Prototype's
+// Features block (computeSteamPlayerBadges, render.js) both need to reflect
+// the new state immediately. Deliberately does NOT cascade-clear children
+// when a parent is unchecked, so re-checking a parent restores whatever
+// children were previously picked rather than forcing the user to redo them.
+function toggleSteamPlayer(field, checked) {
+  state.steamSubmitAnswers.players[field] = checked;
+  reRenderSteamStepModal();
+  updateSteamCard();
+}
+
 /* Retry inference for any platform+step */
 async function _retryInference(pid, stepId) {
   // Questionnaire steps use the shared unified cache key
@@ -9776,6 +9791,18 @@ async function openStorePreviewSection(pid, target) {
     if (elapsed < 2000) await new Promise(r => setTimeout(r, 2000 - elapsed));
     reRenderStepModal();
   }
+}
+
+// Store Page Preview - Prototype's header capsule image (capsuleHtml,
+// buildSteamStorePreviewPrototypeSection) is clickable — this opens the same
+// "Select Steam Assets" section its own "Select Steam Assets" button opens
+// (the 'steamAssets' flip target), then scrolls straight to that section's
+// Header Capsule upload block (#steam-assets-headercapsule-section,
+// buildSteamAssetsEditSection) rather than leaving the user to scroll past
+// Screenshots/Trailer to find it themselves.
+async function openSteamHeaderCapsuleSection() {
+  await openStorePreviewSection('steam', 'steamAssets');
+  document.getElementById('steam-assets-headercapsule-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function closeStorePreviewSection(pid) {
