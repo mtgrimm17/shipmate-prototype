@@ -2723,6 +2723,10 @@ body.viewing-splash .app-subnav { display: none; }
 .step-nav-btn:hover { background: rgba(159, 104, 240, .24); color: #e6d9ff; border-color: rgba(159, 104, 240, .5); }
 .step-nav-btn:active { transform: translateY(1px); }
 .step-nav-btn svg { display: block; }
+/* "Submission" hand-off button on the last Game Details sub-tab — a filled,
+   primary-looking CTA so it clearly reads as "go here next". */
+.step-nav-finish { background: var(--purple, #9F68F0); color: #fff; border-color: var(--purple, #9F68F0); }
+.step-nav-finish:hover { background: #b184f5; color: #fff; border-color: #b184f5; }
 
 /* Submission "+ Add platform" → a simple list of available platforms. */
 .add-plat-list { display: flex; flex-direction: column; gap: 8px; }
@@ -10876,7 +10880,17 @@ body.is-splash .ai-disclaimer { display: none; }
 .sub-plat-text { flex: 1 1 auto; min-width: 0; }
 .sub-plat-name { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 0.01em; }
 .sub-plat-sub  { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
-.sub-plat-menu { color: var(--text-faint); font-size: 15px; letter-spacing: 1px; align-self: flex-start; }
+/* Circle-slash cancel control (top-right of the platform row) */
+.sub-cancel-icon {
+  align-self: flex-start; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px; margin: -2px -2px 0 0;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-faint);
+  transition: color 0.15s;
+}
+.sub-cancel-icon:hover { color: var(--magenta, #FF3B76); }
+.sub-cancel-icon svg { display: block; }
 
 /* 4-segment review progress bar */
 .sub-segbar { display: flex; gap: 6px; }
@@ -10892,8 +10906,10 @@ body.is-splash .ai-disclaimer { display: none; }
 .sub-est { color: var(--text-dim); }
 .sub-est b { color: var(--text); font-weight: 600; }
 
-/* "While you wait" marketing nudge */
+/* "While you wait" marketing nudge — anchored to the bottom of the card so the
+   card fills its locked height cleanly (the cancel control now lives up top). */
 .sub-wait-card {
+  margin-top: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px 15px;

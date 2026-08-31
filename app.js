@@ -1881,24 +1881,24 @@ function removeIapProduct(id) {
 }
 
 /* Demo convenience: when a developer (or AI inference) says the app HAS in-app
-   purchases, pre-fill a few realistic, already-saved IAP products so the IAP
-   Products list is populated and reviewable at a glance instead of empty —
-   keeps the Business step fast to move through in a live demo. Only seeds when
-   the list is currently empty, so it never clobbers a developer's own entries.
-   Products are saved (collapsed) and span the common types incl. a subscription. */
+   purchases, open ONE pre-filled product card ready to save — so the whole demo
+   IAP flow is: click "Yes" → a filled-in product appears → click "Save". Left
+   expanded (collapsed:false) so its fields are visible for review. Only seeds
+   when the list is empty, so it never clobbers a developer's own entries. */
 function _seedStubIapProducts(pid) {
   const ans = _appStoreAnswers(pid);
   if (!Array.isArray(ans.iapProducts)) ans.iapProducts = [];
   if (ans.iapProducts.length) return;
-  const stubs = [
-    { name: 'Starter Gem Pack', desc: '500 gems to jump-start your adventure',          price: '4.99', type: 'consumable' },
-    { name: 'Remove Ads',       desc: 'Permanently remove all banner and video ads',     price: '2.99', type: 'non-consumable' },
-    { name: 'Pro Monthly',      desc: 'Unlimited energy and monthly exclusive cosmetics', price: '4.99', type: 'auto-renewable', trial: 'yes' },
-  ];
-  stubs.forEach(s => ans.iapProducts.push({
-    id: generateId('iap'), name: s.name, desc: s.desc, price: s.price,
-    type: s.type, trial: s.trial || 'no', collapsed: true, locs: {},
-  }));
+  ans.iapProducts.push({
+    id: generateId('iap'),
+    name: 'Full Game Unlock',
+    desc: 'Unlock the remainder of the game',
+    price: '4.99',
+    type: 'non-consumable',
+    trial: 'no',
+    collapsed: false,
+    locs: {},
+  });
 }
 function setIapProductField(id, key, value) {
   const pid = state.stepModal?.platformId || 'ios';

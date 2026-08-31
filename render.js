@@ -3283,9 +3283,14 @@ function buildStepNav(view) {
   const prevBtn = prev
     ? `<button class="step-nav-btn step-nav-prev" onclick="${data.fn}('${prev.id}')">${arrowL}<span>${prev.label}</span></button>`
     : '<span></span>';
+  // On the last Game Details sub-tab (Assets), the "next" action sends the user
+  // on to the Submission tab rather than dead-ending — a clear "where to go next"
+  // hand-off. Submission is a top-level tab with no prev/next of its own.
   const nextBtn = next
     ? `<button class="step-nav-btn step-nav-next" onclick="${data.fn}('${next.id}')"><span>${next.label}</span>${arrowR}</button>`
-    : '<span></span>';
+    : (view === 'details'
+        ? `<button class="step-nav-btn step-nav-next step-nav-finish" onclick="setView('dashboard')"><span>Submission</span>${arrowR}</button>`
+        : '<span></span>');
   return `<div class="step-nav-row">${prevBtn}${nextBtn}</div>`;
 }
 
@@ -5657,10 +5662,13 @@ function buildImproveSubmissionSection(platformId) {
   }
   const startTier   = _initialGradeTier(totalItems);
   const currentTier = Math.max(0, startTier - acceptedCount);
+  // Grade the Store Page section by its OWN actionable suggestions only: the
+  // number of store-page fixes offered sets the starting tier (2 → B), and each
+  // accepted fix moves it up a letter (toward A). Previously this folded in the
+  // AI's separate assets/metadata grades, which had no fixes to accept here, so
+  // they permanently dragged the grade down (a store page with just two fixable
+  // issues could never rise above C no matter what the developer accepted).
   const spGrade = (!spi?.loading && !spi?.error) ? GRADE_LETTERS[currentTier] : null;
-  const assGrade = ana?.scores?.assets   || null;
-  const metGrade = ana?.scores?.metadata || null;
-  const mergedGrade = _worseGrade(spGrade, _worseGrade(assGrade, metGrade));
 
   // For description fields: find the first word where current and fix diverge,
   // then show context around that point so the actual change is visible.
@@ -5746,7 +5754,7 @@ function buildImproveSubmissionSection(platformId) {
       }
     }
   }
-  const spPageSection = _section('Store Page', mergedGrade, spPageContent, spPageFooter);
+  const spPageSection = _section('Store Page', spGrade, spPageContent, spPageFooter);
 
   // ── LOCALIZATION SECTION ──────────────────────────────
   const langRec  = _highestImpactUnselectedLang();
@@ -11776,7 +11784,9 @@ function buildSubmittedCard(pid, flipData) {
             <div class="sub-plat-name">${platLabel(pid)}</div>
             ${trackLabel ? `<div class="sub-plat-sub">${escHtml(trackLabel)}</div>` : ''}
           </div>
-          <span class="sub-plat-menu" aria-hidden="true">•••</span>
+          <button class="sub-cancel-icon" onclick="cancelSubmission('${pid}')" title="${isWeb ? 'Take down' : 'Cancel submission'}" aria-label="${isWeb ? 'Take down' : 'Cancel submission'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"/></svg>
+          </button>
         </div>
         <div class="sub-segbar">${segbar}</div>
         <div class="sub-dates">
@@ -11790,7 +11800,6 @@ function buildSubmittedCard(pid, flipData) {
           <div class="sub-wait-body">${waitText}</div>
           <button class="sub-wait-link" onclick="setView('broadcast')">Open Marketing →</button>
         </div>
-        <button class="cancel-submission-btn" onclick="cancelSubmission('${pid}')">${isWeb ? 'Take Down' : 'Cancel submission'}</button>
       </div>
     </div>`;
 }
