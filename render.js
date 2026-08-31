@@ -4228,6 +4228,7 @@ function renderStepModal() {
     webKeyArt:     'Key Art',
     steamAssets:   'Select Steam Assets',
     tags:          'Tags',
+    technical:     'Technical',
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
   };
@@ -4449,6 +4450,17 @@ function buildStorePreviewFlipSection(platformId, target) {
   // title (FLIP_LABELS.tags, above) already reads "Tags".
   if (target === 'tags') {
     return `<div class="qs-section">${buildSteamStoreTagsSection()}</div>`;
+  }
+  // Steam-only: the Store Page Preview - Prototype's "Features" block (see
+  // featuresHtml, buildSteamStorePreviewPrototypeSection) — the same Input
+  // Support/Accessibility picker Business Questions' "Technical" section
+  // already used (buildSteamTechnicalSection), now also reachable as its
+  // own standalone section rather than only bundled in with Store Tags
+  // under Business Questions. Wrapped in .qs-section with no internal
+  // header, same as 'tags'/'steamAssets' — the modal's own title
+  // (FLIP_LABELS.technical, above) already reads "Technical".
+  if (target === 'technical') {
+    return `<div class="qs-section">${buildSteamTechnicalSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Select Steam Assets"
   // button (see buildSteamStorePreviewPrototypeSection) — manages
@@ -10292,7 +10304,10 @@ function buildSteamStorePreviewPrototypeSection() {
   // .steam-spp-tags below (see the 'tags' flip target,
   // buildStorePreviewFlipSection). Deduped since a value picked as e.g. a
   // top-level genre could in principle also appear in the sub-genre list.
-  const tagsList = Array.from(new Set([...(ssa.topGenres || []), ...(ssa.genres || []), ...(ssa.subGenres || [])]));
+  // Capped at 5 and ordered most-specific-first (Sub-genre, then Genre,
+  // then Top-Level Genre) to mirror how a real Steam store page leads with
+  // its most descriptive tags rather than its broadest ones.
+  const tagsList = Array.from(new Set([...(ssa.subGenres || []), ...(ssa.genres || []), ...(ssa.topGenres || [])])).slice(0, 5);
   const hasTags = tagsList.length > 0;
   const tagsBodyHtml = hasTags
     ? `<div class="steam-spp-tag-pills">
@@ -10444,12 +10459,35 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-reason">Unavailable in your <span class="steam-spp-link-text">preferred languages</span></div>
     </div>`;
 
+  // Features — clickable entry point into the new standalone "Technical"
+  // section (Input Support/Accessibility, formerly only reachable via
+  // Business Questions — see the 'technical' flip target,
+  // buildStorePreviewFlipSection/buildSteamTechnicalSection). Glows with
+  // the same ias-meta-pulse ring as every other unanswered field in this
+  // prototype until Technical has been answered
+  // (isSteamSectionComplete('technical')), and shares
+  // .steam-spp-content-block's exact hover/glow CSS recipe (combined
+  // selector, see style.css) so both blocks highlight identically.
+  // "Full Controller Support" is derived from the real Technical answer
+  // (ssa.xboxFullSupport) rather than hardcoded, so this section reflects
+  // actual submitted data once it links to Technical; "Single-player" is
+  // kept as a static default since Shipmate has no dedicated
+  // single-player/multiplayer/co-op state field to derive it from (see
+  // state.js's free-text keyword lists, which only feed AI/privacy
+  // detection elsewhere, not a structured feature flag). Matched to a real
+  // Steam page's inline icon+label row style rather than the previous
+  // icon-over-label tile layout — see the updated
+  // .steam-spp-features-row/.steam-spp-feature rules in style.css.
+  const technicalDone = isSteamSectionComplete('technical');
+  const fullControllerSupport = ssa.xboxFullSupport === 'yes';
   const featuresHtml = `
-    <div class="steam-spp-side-block">
+    <div class="steam-spp-side-block steam-spp-features-block${technicalDone ? '' : ' steam-spp-glow-empty'}"
+         onclick="openStorePreviewSection('steam','technical')">
       <div class="steam-spp-side-heading">Features</div>
       <div class="steam-spp-features-row">
-        <div class="steam-spp-feature"><span class="steam-spp-feature-icon">📊</span><span>Stats</span></div>
+        <div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Single-player</span></div>
         <div class="steam-spp-feature"><span class="steam-spp-feature-icon">👪</span><span>Family Sharing</span></div>
+        ${fullControllerSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🕹️</span><span>Full Controller Support</span></div>` : ''}
         ${usesAI ? `<div class="steam-spp-feature steam-spp-feature-warn" title="This game is not currently eligible to appear in certain showcases on your Steam Profile, and does not contribute to global Achievement or game collector counts."><span class="steam-spp-feature-icon">ⓘ</span><span>Profile Features Limited</span></div>` : ''}
       </div>
       ${aiThirdParty ? `<div class="steam-spp-drm-notice">Connects to 3rd-Party Service for AI Content Generation: <span class="steam-spp-link-text">${aiServiceName}</span></div>` : ''}
