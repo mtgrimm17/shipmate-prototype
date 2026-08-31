@@ -4473,6 +4473,49 @@ function handleScreenshotFiles(files) {
 
 /* ── Improve Your Submission — AI visual analysis ───────────── */
 
+/* Robustly pull the JSON payload out of a raw Claude text response for the
+   Store Page card's two inference calls (runImproveSubmissionAnalysis and
+   runStorePageInsights below). Both prompts say "Respond ONLY with valid
+   JSON — no markdown" but Claude doesn't reliably comply, and the old code
+   here just stripped one leading and one trailing code-fence marker with a
+   pair of ^-and-$-anchored regexes, hardcoded to strip EXACTLY one leading
+   and one trailing run of 3 backticks. That broke in ways that exactly
+   matched the intermittently-failing "Store Page" analysis reported by
+   users:
+     - Claude occasionally fences the JSON with 4 backticks instead of 3
+       (a markdown convention for escaping content that itself contains
+       ``` — models use it inconsistently even when not strictly needed).
+       Stripping only 3 of the 4 left ONE stray backtick as the very first
+       (and/or last) character, and JSON.parse on a string starting with a
+       stray backtick throws exactly "Unrecognized token '`'".
+     - Any one-line preamble or postamble around the fence ("Here's the
+       analysis:\n\n```json...") meant the leading/trailing anchors
+       (^ and $) never matched at all, leaving the fence completely
+       unstripped and the whole response un-parseable.
+   This retry is why pressing "Retry" so often "fixes" it — Claude's exact
+   fencing/preamble choice varies run to run, so a different roll sometimes
+   avoids whichever quirk broke the last one.
+   Fix: search for a fenced block ANYWHERE in the text with a fence-length-
+   agnostic pattern (3+ backticks on each side, whatever the model used),
+   and fall back — when there's no fence at all — to slicing from the first
+   { or [ to the last matching } or ], so stray prose around a bare JSON
+   blob no longer breaks the parse either. */
+function _extractJSONPayload(text) {
+  let t = (text || '').trim();
+  if (!t) return t;
+
+  const fenced = t.match(/`{3,}[a-zA-Z]*\s*([\s\S]*?)\s*`{3,}/);
+  if (fenced) {
+    t = fenced[1].trim();
+  } else {
+    const start = t.search(/[{[]/);
+    if (start > 0) t = t.slice(start);
+    const end = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
+    if (end !== -1 && end < t.length - 1) t = t.slice(0, end + 1);
+  }
+  return t.trim();
+}
+
 /* Tolerant parse for the analysis JSON. Tries a straight JSON.parse first;
    if that throws (e.g. the model response was cut off mid-string despite the
    raised token ceiling), it salvages a partial result: keep the "scores"
@@ -4658,7 +4701,7 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
     if (!res.ok) throw new Error('API ' + res.status);
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const cleaned = _extractJSONPayload(raw);
     const parsed  = _parseAnalysisJSON(cleaned);
     // Support both new { scores, items } format and legacy flat array
     if (Array.isArray(parsed)) {
@@ -4734,7 +4777,7 @@ Return an EMPTY ARRAY [] if no high-impact improvements exist. Return FEWER than
     if (!res.ok) throw new Error('API ' + res.status);
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const cleaned = _extractJSONPayload(raw);
     const parsed  = JSON.parse(cleaned);
     const issues  = (Array.isArray(parsed) ? parsed : [parsed]).slice(0, 5);
     state.storePageInsights = { issues, index: 0 };
