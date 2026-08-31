@@ -4230,6 +4230,7 @@ function renderStepModal() {
     tags:          'Tags',
     technical:     'Technical',
     languages:     'Languages',
+    info:          'Info',
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
   };
@@ -4473,6 +4474,17 @@ function buildStorePreviewFlipSection(platformId, target) {
   // "Languages".
   if (target === 'languages') {
     return `<div class="qs-section">${buildSteamLanguagesEditSection()}</div>`;
+  }
+  // Steam-only: the Store Page Preview - Prototype's "Info" block (see
+  // infoBlockHtml, buildSteamStorePreviewPrototypeSection) — Title/Genre/
+  // Developer/Publisher plus a Links list, each field a live editor for
+  // data that lives elsewhere (buildSteamInfoEditSection's own header
+  // comment has the full breakdown of what's linked to what). Wrapped in
+  // .qs-section with no internal header, same as 'tags'/'technical'/
+  // 'languages' — the modal's own title (FLIP_LABELS.info, above) already
+  // reads "Info".
+  if (target === 'info') {
+    return `<div class="qs-section">${buildSteamInfoEditSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Select Steam Assets"
   // button (see buildSteamStorePreviewPrototypeSection) — manages
@@ -10117,6 +10129,78 @@ function buildSteamLanguagesEditSection() {
     ${tableHtml}`;
 }
 
+/* ── Steam: Store Page Preview - Prototype's "Info" block ───────────
+   Reached by clicking the Info side-block (Title/Genre/Developer/Publisher,
+   just beneath Steam Deck Compatibility — see infoBlockHtml,
+   buildSteamStorePreviewPrototypeSection). Every field here edits data that
+   already lives elsewhere rather than an independent copy of it:
+     - Title writes through _steamSppTitleInput (app.js) — the exact
+       function the prototype's own title input already uses — so Game
+       Details' Title field (and every other echo of it: breadcrumb,
+       purchase strip) stays in sync no matter which input the edit
+       started from.
+     - Genre IS the Top-Level Genre checkbox picker from Steam - Tags
+       (buildSteamStoreTagsSection, STEAM_TOP_GENRES + toggleSteamTag) —
+       not a separate value copied from it. Checking/unchecking here
+       mutates state.steamSubmitAnswers.topGenres, the exact same array
+       Tags edits, so the two stay identical by construction.
+     - Developer/Publisher write through _steamSppDevPubInput (app.js), the
+       same function the prototype's own Developer/Publisher inputs use —
+       shared with Web - About's own Factsheet fields
+       (state.webSite.developer/.publisher).
+     - Links reuses Web - About's own repeatable name+URL list as-is
+       (state.webSite.links, addWebLink/removeWebLink/setWebLinkField,
+       _wsLinkRowHTML — app.js/render.js, all further above) rather than a
+       duplicate, so a link added/edited/removed here shows up there too
+       and vice versa. */
+function buildSteamInfoEditSection() {
+  const fd  = state.formData;
+  const ws  = state.webSite;
+  const ssa = state.steamSubmitAnswers;
+
+  const topGenreChecks = STEAM_TOP_GENRES.map(g => {
+    const checked = ssa.topGenres.includes(g);
+    return `<label class="cq-check-row${checked ? ' is-checked' : ''}">
+      <input type="checkbox" ${checked ? 'checked' : ''}
+             onchange="toggleSteamTag('topGenres','${g}',this.checked,2)">
+      <span>${escHtml(g)}</span></label>`;
+  }).join('');
+
+  return `
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-input" type="text" id="steam-info-title-input" value="${escHtml(fd.title || '')}"
+             placeholder="Your Game Title" oninput="_steamSppTitleInput(this.value)">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Genre
+        <span class="tooltip-anchor">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-body">The same Top-Level Genre selection made in Steam - Tags (choose one or two).</span>
+        </span>
+      </label>
+      <div class="cq-check-list">${topGenreChecks}</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Developer</label>
+      <input class="form-input" type="text" id="steam-info-dev-input" value="${escHtml(ws.developer || '')}"
+             placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Publisher</label>
+      <input class="form-input" type="text" id="steam-info-pub-input" value="${escHtml(ws.publisher || '')}"
+             placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)">
+    </div>
+
+    <div class="ios-q-divider"></div>
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Links</label>
+    ${(ws.links || []).map(_wsLinkRowHTML).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addWebLink()">Add</button>`;
+}
+
 /* ── Steam: Business Questions — Price ──────────────────
    Unlike App Store/Mac App Store (buildBusinessSection above, which
    deliberately share ONE game-wide price via state.formData.price since
@@ -10793,7 +10877,8 @@ function buildSteamStorePreviewPrototypeSection() {
     </div>`;
 
   const infoBlockHtml = `
-    <div class="steam-spp-side-block">
+    <div class="steam-spp-side-block steam-spp-info-block" onclick="openStorePreviewSection('steam','info')">
+      <div class="steam-spp-side-heading">Info</div>
       <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
       <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
       <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${devName}</span></div>

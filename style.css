@@ -12299,13 +12299,23 @@ body.viewing-splash #app-guide { display: none; }
 .steam-spp-media-thumbs-wrap { margin-top: auto; }
 .steam-spp-media-hero {
   width: 100%; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden;
-  background: #000;
+  background: #000; position: relative;
 }
 /* Only the non-empty hero carries onclick (_steamSppCarouselItemClick,
    app.js) — the "No screenshots yet" placeholder has none, so scoping the
    pointer cursor to [onclick] keeps it off that state rather than
-   misleadingly suggesting it's clickable too. */
+   misleadingly suggesting it's clickable too. Highlight uses the same
+   ::after-overlay recipe as .steam-spp-capsule-wrap (below) rather than a
+   plain background-color, for the same reason: whatever fills the hero
+   (a screenshot img, the trailer preview/player) is fully opaque via
+   object-fit:cover, so a background-color behind it would never show
+   through — an overlay painted on top is the only way to actually see it. */
 .steam-spp-media-hero[onclick] { cursor: pointer; }
+.steam-spp-media-hero[onclick]::after {
+  content: ''; position: absolute; inset: 0; border-radius: 4px;
+  background: rgba(103, 193, 245, .12); opacity: 0; transition: opacity 0.12s; pointer-events: none;
+}
+.steam-spp-media-hero[onclick]:hover::after { opacity: 1; }
 .steam-spp-media-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .steam-spp-media-empty {
   display: flex; align-items: center; justify-content: center;
@@ -12668,23 +12678,26 @@ body.viewing-splash #app-guide { display: none; }
   width: 30px; height: 30px; cursor: pointer;
 }
 
-/* Content / Features / Languages — clickable entry points into Steam's
-   Content Questions, standalone Technical section, and (new) standalone
-   Languages section respectively (see contentSectionHtml/featuresHtml/
-   languagesHtml, buildSteamStorePreviewPrototypeSection). Share one recipe:
-   the same padding/negative-margin hover trick as every other interactive
-   field in this prototype (.steam-spp-apphub-name's comment has the full
-   rationale) so the highlight can bleed slightly past
-   .steam-spp-side-heading/.steam-spp-reason's own text without disturbing
-   .steam-spp-col-side's 16px gap between blocks. steam-spp-glow-empty
-   (toggled server-side in render.js based on whether Content Questions /
-   Technical / Languages has been visited) layers the same ias-meta-pulse
-   ring every other unanswered field in this prototype already uses. */
-.steam-spp-content-block, .steam-spp-features-block, .steam-spp-languages-block {
+/* Content / Features / Languages / Info — clickable entry points into
+   Steam's Content Questions, standalone Technical section, standalone
+   Languages section, and standalone Info section respectively (see
+   contentSectionHtml/featuresHtml/languagesHtml/infoBlockHtml,
+   buildSteamStorePreviewPrototypeSection). Share one recipe: the same
+   padding/negative-margin hover trick as every other interactive field in
+   this prototype (.steam-spp-apphub-name's comment has the full rationale)
+   so the highlight can bleed slightly past .steam-spp-side-heading/
+   .steam-spp-reason's own text without disturbing .steam-spp-col-side's
+   16px gap between blocks. steam-spp-glow-empty (toggled server-side in
+   render.js based on whether Content Questions / Technical / Languages has
+   been visited) layers the same ias-meta-pulse ring every other unanswered
+   field in this prototype already uses — Info has no such gate (its fields
+   always show *something*, even if just placeholder-style defaults), so it
+   never carries that class. */
+.steam-spp-content-block, .steam-spp-features-block, .steam-spp-languages-block, .steam-spp-info-block {
   cursor: pointer; border-radius: 6px; margin: -6px -8px; padding: 6px 8px;
   transition: background 0.12s;
 }
-.steam-spp-content-block:hover, .steam-spp-features-block:hover, .steam-spp-languages-block:hover { background: rgba(103, 193, 245, .12); }
+.steam-spp-content-block:hover, .steam-spp-features-block:hover, .steam-spp-languages-block:hover, .steam-spp-info-block:hover { background: rgba(103, 193, 245, .12); }
 
 @media (max-width: 720px) {
   .steam-spp-media-block { grid-template-columns: 1fr; }
