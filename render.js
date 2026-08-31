@@ -10702,8 +10702,13 @@ function buildSteamStorePreviewPrototypeSection() {
   // Developer/Publisher are (an <input>, not a flip-to-a-panel field), per
   // request. Falls back to the literal string for its VALUE (not just a
   // placeholder) so the field always shows real, editable text rather than
-  // ever looking blank.
-  const releaseDateRaw = (ws.releaseDate && ws.releaseDate.trim()) || 'Coming soon';
+  // ever looking blank. releaseDateSet tracks whether that's a REAL answer
+  // or still just the "Coming soon" filler, so the field can carry the same
+  // steam-spp-glow-empty pulse every other unanswered field in this
+  // prototype uses (Developer/Publisher's own glow, just above, follows the
+  // identical "raw value" vs. "decorated fallback" split).
+  const releaseDateSet = !!(ws.releaseDate && ws.releaseDate.trim());
+  const releaseDateRaw = releaseDateSet ? ws.releaseDate.trim() : 'Coming soon';
 
   // Media carousel — up to two trailers first (the Steam-fetched one with a
   // real playable asset, then the general Assets-tab upload, which has none
@@ -10847,10 +10852,26 @@ function buildSteamStorePreviewPrototypeSection() {
   // to Select Steam Assets' Screenshots section (there's no data-kind to
   // read yet since nothing's been added), so the carousel reads as
   // interactive — and highlights on hover via the shared [onclick] rule
-  // below — even before the first screenshot or trailer is uploaded.
+  // below — even before the first screenshot or trailer is uploaded. It
+  // also carries the same ias-meta-pulse glow (steam-spp-glow-empty) every
+  // other unanswered/unvisited section in this prototype uses, gated on
+  // isSteamSectionComplete('screenshots') — the same check the old
+  // checklist-style buildSteamStorePreviewSection's own "Select
+  // Screenshots" button reads for its own screenshotsDone, just computed
+  // fresh here since that's a different function's own local — so it keeps
+  // pulsing until at least one screenshot has actually been added, then
+  // goes quiet the same way Title/Short Description/Developer/Publisher do
+  // once filled in. The glow itself is on a separate outer wrap
+  // (steam-spp-media-hero-glow-wrap, style.css) rather than the hero div
+  // itself: the hero needs
+  // overflow:hidden to clip screenshots/trailer video to its rounded
+  // corners, which would also clip the pulse's own outward box-shadow ring
+  // into invisibility if it carried the class directly.
+  const screenshotsDone = isSteamSectionComplete('screenshots');
+  const heroGlowClass = screenshotsDone ? '' : ' steam-spp-glow-empty';
   const heroHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div>`
-    : `<div class="steam-spp-media-hero steam-spp-media-empty" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div>`;
+    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
+    : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
   // rather than gated behind carouselItems.length, so there's always a
@@ -10944,8 +10965,8 @@ function buildSteamStorePreviewPrototypeSection() {
         <span class="steam-spp-muted">No user reviews</span>
       </div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Release Date:</span>
-        <input type="text" class="steam-spp-inline-input" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
-               oninput="_steamSppSetField('releaseDate', this.value)"></div>
+        <input type="text" class="steam-spp-inline-input${releaseDateSet ? '' : ' steam-spp-glow-empty'}" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
+               oninput="_steamSppSetField('releaseDate', this.value); this.classList.toggle('steam-spp-glow-empty', !this.value)"></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
         <input type="text" class="steam-spp-inline-input${devRaw ? '' : ' steam-spp-glow-empty'}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
                placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
@@ -11015,9 +11036,20 @@ function buildSteamStorePreviewPrototypeSection() {
   // Price — the exact field free-vs-paid above is computed from — now
   // lives (buildSteamBusinessSection). Consistent with the Content/
   // Features side blocks' own "click the whole card" pattern just below.
+  // Also carries the same steam-spp-glow-empty pulse as those blocks, gated
+  // on whether Price has actually been answered rather than on isFreeGame —
+  // isFreeGame is also true before Price has ever been answered (empty
+  // string reads as free), so gating on that instead would leave a
+  // genuinely-answered free game glowing forever. businessDone distinguishes
+  // "never answered" from "answered, and the answer happens to be
+  // Free/blank-price" — same underlying rawPrice check
+  // buildSteamStorePreviewSection's own old checklist-style "Answer
+  // Business Questions" button reads for its own businessDone, just reusing
+  // this function's own rawPrice (above) instead of re-deriving it.
+  const businessDone = !!rawPrice;
   const purchaseAreaHtml = isFreeGame
     ? `
-      <div class="steam-spp-purchase" onclick="openStorePreviewSection('steam','business')">
+      <div class="steam-spp-purchase${businessDone ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
           <div class="steam-spp-purchase-title">Play <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
@@ -11030,7 +11062,7 @@ function buildSteamStorePreviewPrototypeSection() {
         </div>
       </div>`
     : `
-      <div class="steam-spp-purchase" onclick="openStorePreviewSection('steam','business')">
+      <div class="steam-spp-purchase${businessDone ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
           <div class="steam-spp-purchase-title">Buy <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
@@ -11152,15 +11184,28 @@ function buildSteamStorePreviewPrototypeSection() {
   // by buildStorePreviewFlipSection the first time any flip target opens,
   // same "has this been visited" signal Languages uses via its own seeded
   // check (languagesDone, above).
+  //
+  // This one box now also carries the social links AND the four static
+  // community/news rows (View update history/Read related news/View
+  // discussions/Find Community Groups) that used to be their own two
+  // separate .steam-spp-side-block cards below it — merged into one so the
+  // glow/hover/click-to-open-Info treatment covers the whole group, matching
+  // how a real Steam store page visually runs these together as one block
+  // in its right-hand column rather than as separate boxed cards. Social
+  // links are real clickable anchors (event.stopPropagation() on each one
+  // keeps a link click from ALSO triggering this card's own
+  // openStorePreviewSection navigation) — the four static rows have no link
+  // of their own to follow (there's no real store page behind this
+  // prototype), so clicking one of those still just opens Info, same as
+  // clicking anywhere else on the card.
   const infoDone = !!(state.storePreviewSectionSeen?.steam?.info);
-  const infoBlockHtml = `
-    <div class="steam-spp-side-block steam-spp-info-block${infoDone ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','info')">
-      <div class="steam-spp-side-heading">Info</div>
-      <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
-      <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
-      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${devName}</span></div>
-      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text" id="steam-spp-pubname-info">${pubName}</span></div>
-    </div>`;
+
+  // Turns a raw URL-ish string (with or without a scheme) into a safe
+  // absolute href — same one-liner buildWebSitePreviewSection's own
+  // _pkLinkHref uses for these exact links (state.webSite.links) elsewhere
+  // in the app; duplicated rather than hoisted since that one's scoped
+  // local to its own function.
+  const _steamLinkHref = raw => /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 
   // Social links — reads the exact same state.webSite.links list the Steam
   // - Info section's own Links subsection edits (buildSteamInfoEditSection,
@@ -11173,22 +11218,29 @@ function buildSteamStorePreviewPrototypeSection() {
   // these (verified via that page's own accessibility tree — an
   // image alt="External" sits right after each link's name) — never a
   // per-brand logo, since Shipmate has no way to know what site an
-  // arbitrary user-typed link name actually points to. Read-only here
-  // (cursor: default, same as linksHtml below) — editing happens by
-  // clicking into the Info section above, not by clicking one of these.
+  // arbitrary user-typed link name actually points to. Each one is a real
+  // <a> that opens the actual linked site in a new tab, same
+  // target="_blank" rel="noopener" convention buildWebSitePreviewSection's
+  // own socialLinksBlock already uses for these same links.
   const steamSocialLinks = (ws.links || []).filter(l => l && l.name && l.name.trim() && l.url && l.url.trim());
   const externalLinkIconSvg = `<svg class="steam-spp-extlink-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14L21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const socialLinksHtml = steamSocialLinks.length ? `
-    <div class="steam-spp-side-block steam-spp-links">
-      ${steamSocialLinks.map(l => `<div class="steam-spp-linkbar steam-spp-social-linkbar">${escHtml(l.name.trim())} ${externalLinkIconSvg}</div>`).join('')}
-    </div>` : '';
+  const steamSocialLinksHtml = steamSocialLinks.map(l => `
+      <a class="steam-spp-linkbar steam-spp-social-linkbar" href="${escHtml(_steamLinkHref(l.url.trim()))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(l.name.trim())} ${externalLinkIconSvg}</a>`).join('');
 
-  const linksHtml = `
-    <div class="steam-spp-side-block steam-spp-links">
-      <div class="steam-spp-linkbar">View update history ›</div>
-      <div class="steam-spp-linkbar">Read related news ›</div>
-      <div class="steam-spp-linkbar">View discussions ›</div>
-      <div class="steam-spp-linkbar">Find Community Groups ›</div>
+  const infoBlockHtml = `
+    <div class="steam-spp-side-block steam-spp-info-block${infoDone ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','info')">
+      <div class="steam-spp-side-heading">Info</div>
+      <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
+      <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
+      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${devName}</span></div>
+      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text" id="steam-spp-pubname-info">${pubName}</span></div>
+      <div class="steam-spp-info-links-group">
+        ${steamSocialLinksHtml}
+        <div class="steam-spp-linkbar">View update history ›</div>
+        <div class="steam-spp-linkbar">Read related news ›</div>
+        <div class="steam-spp-linkbar">View discussions ›</div>
+        <div class="steam-spp-linkbar">Find Community Groups ›</div>
+      </div>
     </div>`;
 
   const embedRowHtml = `
@@ -11221,8 +11273,6 @@ function buildSteamStorePreviewPrototypeSection() {
     ${languagesHtml}
     ${deckHtml}
     ${infoBlockHtml}
-    ${socialLinksHtml}
-    ${linksHtml}
     ${embedRowHtml}
     ${contentSectionHtml}`;
 

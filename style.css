@@ -12297,6 +12297,13 @@ body.viewing-splash #app-guide { display: none; }
    group to match. */
 .steam-spp-media-left { min-width: 0; display: flex; flex-direction: column; }
 .steam-spp-media-thumbs-wrap { margin-top: auto; }
+/* Undecorated wrapper around .steam-spp-media-hero, existing solely so the
+   "no screenshots yet" glow (steam-spp-glow-empty, heroHtml's own comment
+   in render.js) has somewhere to pulse its outward box-shadow ring without
+   being clipped by the hero's own overflow:hidden (needed there to crop
+   screenshots/trailer video to its rounded corners). Purely structural —
+   no size of its own beyond what the hero inside dictates. */
+.steam-spp-media-hero-glow-wrap { border-radius: 4px; }
 .steam-spp-media-hero {
   width: 100%; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden;
   background: #000; position: relative;
@@ -12667,15 +12674,27 @@ body.viewing-splash #app-guide { display: none; }
 
 .steam-spp-info-line { margin-bottom: 4px; }
 
+/* Wraps the social links + the four static community/news rows inside the
+   merged Info card (infoBlockHtml, buildSteamStorePreviewPrototypeSection)
+   — just enough top margin to visually separate the group from the
+   Title/Genre/Developer/Publisher lines above it, since both groups now
+   share one card instead of being split across two. */
+.steam-spp-info-links-group { margin-top: 8px; }
+
 .steam-spp-linkbar {
-  padding: 6px 0; border-bottom: 1px solid #2a3f5a; color: #67c1f5; cursor: default;
+  display: block; padding: 6px 0; border-bottom: 1px solid #2a3f5a; color: #67c1f5; cursor: default;
+  text-decoration: none;
 }
 .steam-spp-linkbar:last-child { border-bottom: none; }
 /* Social links (steamSocialLinks, buildSteamStorePreviewPrototypeSection) —
    same row/divider treatment as .steam-spp-linkbar above, just with the
    small "external link" glyph real Steam shows after each one (see that
-   variable's own comment) inline after the name instead of a trailing ›. */
-.steam-spp-social-linkbar { display: flex; align-items: center; gap: 5px; }
+   variable's own comment) inline after the name instead of a trailing ›,
+   and (unlike the plain <div> rows above/below it) a real <a> that opens
+   the actual linked site — cursor:pointer here overrides the plain rows'
+   own cursor:default since this one row really is its own clickable
+   target, not just part of the bigger card-wide click area. */
+.steam-spp-social-linkbar { display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .steam-spp-extlink-icon { flex-shrink: 0; opacity: .8; }
 
 .steam-spp-embed-row { display: flex; gap: 8px; }
@@ -12694,11 +12713,12 @@ body.viewing-splash #app-guide { display: none; }
    so the highlight can bleed slightly past .steam-spp-side-heading/
    .steam-spp-reason's own text without disturbing .steam-spp-col-side's
    16px gap between blocks. steam-spp-glow-empty (toggled server-side in
-   render.js based on whether Content Questions / Technical / Languages has
-   been visited) layers the same ias-meta-pulse ring every other unanswered
-   field in this prototype already uses — Info has no such gate (its fields
-   always show *something*, even if just placeholder-style defaults), so it
-   never carries that class. */
+   render.js based on whether Content Questions / Technical / Languages /
+   Info has been visited) layers the same ias-meta-pulse ring every other
+   unanswered field in this prototype already uses — Info now gates on
+   whether it's ever been opened (infoDone, render.js), same as Languages'
+   own "has this been seeded" gate, even though its fields always show
+   *something* on their own (placeholder-style defaults). */
 .steam-spp-content-block, .steam-spp-features-block, .steam-spp-languages-block, .steam-spp-info-block {
   cursor: pointer; border-radius: 6px; margin: -6px -8px; padding: 6px 8px;
   transition: background 0.12s;
