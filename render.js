@@ -8676,10 +8676,25 @@ function buildIapSection(pid = 'ios') {
       ${iapProductsHTML}
     </div>` : '';
 
-  return `
+  const body = `
     ${hideIAPQuestion ? '' : iosYNRow('Does your app include in-app purchases?', 'hasIAP',
       'Includes any paid upgrades, cosmetics, virtual currency, or subscriptions.', undefined, false, pid)}
     ${iapFollowUp}`;
+
+  // Nothing to show (question hidden by the Unanswered filter and no IAP
+  // follow-up to display) — return '' rather than a floating empty category
+  // header. Otherwise, give In-App Purchases its own dedicated category —
+  // same divider + label pattern buildContentRatingSection uses for its own
+  // category groupings (e.g. "Violence", "Additional Information") — so the
+  // question and its saved products list read as one distinct group within
+  // Business Questions rather than running straight into Export Compliance
+  // or Price/Tax Category above.
+  if (!body.trim()) return '';
+
+  return `
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">In-App Purchases</div>
+    ${body}`;
 }
 
 /* Localization Review's field dropdown analog for IAP Products — only Name
