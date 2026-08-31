@@ -12671,6 +12671,12 @@ body.viewing-splash #app-guide { display: none; }
   padding: 6px 0; border-bottom: 1px solid #2a3f5a; color: #67c1f5; cursor: default;
 }
 .steam-spp-linkbar:last-child { border-bottom: none; }
+/* Social links (steamSocialLinks, buildSteamStorePreviewPrototypeSection) —
+   same row/divider treatment as .steam-spp-linkbar above, just with the
+   small "external link" glyph real Steam shows after each one (see that
+   variable's own comment) inline after the name instead of a trailing ›. */
+.steam-spp-social-linkbar { display: flex; align-items: center; gap: 5px; }
+.steam-spp-extlink-icon { flex-shrink: 0; opacity: .8; }
 
 .steam-spp-embed-row { display: flex; gap: 8px; }
 .steam-spp-flag-btn {

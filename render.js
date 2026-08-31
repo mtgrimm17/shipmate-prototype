@@ -10582,9 +10582,14 @@ function buildSteamStorePreviewPrototypeSection() {
   // a full re-render). For a steamTrailer, the inner Play control's own
   // onclick (_steamSppHeroMarkup above) calls event.stopPropagation() before
   // this ever fires, so Play still plays instead of navigating away.
+  // The empty ("No screenshots yet") placeholder is ALSO clickable, straight
+  // to Select Steam Assets' Screenshots section (there's no data-kind to
+  // read yet since nothing's been added), so the carousel reads as
+  // interactive — and highlights on hover via the shared [onclick] rule
+  // below — even before the first screenshot or trailer is uploaded.
   const heroHtml = firstCarouselItem
     ? `<div class="steam-spp-media-hero" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div>`
-    : `<div class="steam-spp-media-hero steam-spp-media-empty">No screenshots yet</div>`;
+    : `<div class="steam-spp-media-hero steam-spp-media-empty" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
   // rather than gated behind carouselItems.length, so there's always a
@@ -10876,14 +10881,42 @@ function buildSteamStorePreviewPrototypeSection() {
       </div>
     </div>`;
 
+  // Glows (same ias-meta-pulse ring every other unanswered/unvisited field
+  // in this prototype uses) until the Info section has actually been
+  // visited once — state.storePreviewSectionSeen.steam.info, set generically
+  // by buildStorePreviewFlipSection the first time any flip target opens,
+  // same "has this been visited" signal Languages uses via its own seeded
+  // check (languagesDone, above).
+  const infoDone = !!(state.storePreviewSectionSeen?.steam?.info);
   const infoBlockHtml = `
-    <div class="steam-spp-side-block steam-spp-info-block" onclick="openStorePreviewSection('steam','info')">
+    <div class="steam-spp-side-block steam-spp-info-block${infoDone ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','info')">
       <div class="steam-spp-side-heading">Info</div>
       <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
       <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
       <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${devName}</span></div>
       <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text" id="steam-spp-pubname-info">${pubName}</span></div>
     </div>`;
+
+  // Social links — reads the exact same state.webSite.links list the Steam
+  // - Info section's own Links subsection edits (buildSteamInfoEditSection,
+  // further above), same filter Web's own preview website page uses for its
+  // social links block (socialLinks, further above). Presentation matches a
+  // real Steam store page (verified live via the Browser pane against
+  // store.steampowered.com/app/4037180/Go_Ape_Ship): each link stacked on
+  // its own row as its plain name in Steam's link-blue, followed by the
+  // same small "external link" glyph real Steam shows next to every one of
+  // these (verified via that page's own accessibility tree — an
+  // image alt="External" sits right after each link's name) — never a
+  // per-brand logo, since Shipmate has no way to know what site an
+  // arbitrary user-typed link name actually points to. Read-only here
+  // (cursor: default, same as linksHtml below) — editing happens by
+  // clicking into the Info section above, not by clicking one of these.
+  const steamSocialLinks = (ws.links || []).filter(l => l && l.name && l.name.trim() && l.url && l.url.trim());
+  const externalLinkIconSvg = `<svg class="steam-spp-extlink-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14L21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const socialLinksHtml = steamSocialLinks.length ? `
+    <div class="steam-spp-side-block steam-spp-links">
+      ${steamSocialLinks.map(l => `<div class="steam-spp-linkbar steam-spp-social-linkbar">${escHtml(l.name.trim())} ${externalLinkIconSvg}</div>`).join('')}
+    </div>` : '';
 
   const linksHtml = `
     <div class="steam-spp-side-block steam-spp-links">
@@ -10923,6 +10956,7 @@ function buildSteamStorePreviewPrototypeSection() {
     ${languagesHtml}
     ${deckHtml}
     ${infoBlockHtml}
+    ${socialLinksHtml}
     ${linksHtml}
     ${embedRowHtml}
     ${contentSectionHtml}`;
