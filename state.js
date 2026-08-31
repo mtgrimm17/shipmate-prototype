@@ -729,8 +729,7 @@ const PLATFORMS = {
     id: 'steam', label: 'Steam', color: '#4c6b8a',
     steps: [
       { id: 'uploadBuild',            label: 'Upload Build'                            },
-      { id: 'storePreview',           label: 'Store Page Preview'                      },
-      { id: 'storePreviewPrototype',  label: 'Store Page Preview - Prototype'          },
+      { id: 'storePreviewPrototype',  label: 'Store Page Preview'                      },
       { id: 'improveSubmission',      label: 'Improve Your Submission'                 },
     ],
   },
@@ -3342,13 +3341,6 @@ function isSteamSectionComplete(sectionId) {
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
   if (sectionId === 'storePreviewPrototype') return !!state.steamSubmitAnswers.storePreviewPrototypeSeen;
 
-  if (sectionId === 'storePreview') {
-    return isSteamSectionComplete('contentRating') &&
-           isSteamSectionComplete('storeTags') &&
-           isSteamSectionComplete('technical') &&
-           isSteamSectionComplete('screenshots');
-  }
-
   if (sectionId === 'questionnaire') {
     return isSteamSectionComplete('contentRating') &&
            isSteamSectionComplete('storeTags') &&
@@ -3369,10 +3361,6 @@ function isSteamSectionComplete(sectionId) {
     if (a.inputSupport !== 'keyboard_only' && a.xboxFullSupport === null) return false;
     return true;
   }
-  if (sectionId === 'storePreview') {
-    const privUrl = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
-    return !!a.storePreviewSeen && !!privUrl;
-  }
   return false;
 }
 
@@ -3387,10 +3375,5 @@ function computeSteamSectionRisk(sectionId) {
   if (sectionId === 'contentRating') return a.usesAI === null ? 'HIGH' : 'LOW';
   if (sectionId === 'storeTags')     return a.topGenres.length === 0 ? 'HIGH' : 'LOW';
   if (sectionId === 'technical')     return a.inputSupport === null  ? 'HIGH' : 'LOW';
-  if (sectionId === 'storePreview') {
-    const privUrl = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
-    if (!privUrl) return 'HIGH';
-    return 'LOW';
-  }
   return 'LOW';
 }

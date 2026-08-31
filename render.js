@@ -4284,8 +4284,7 @@ function renderStepModal() {
     else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
     else if (stepId === 'business')           body = buildAndroidBusinessSection();
   } else if (platformId === 'steam') {
-    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewSection();
-    else if (stepId === 'storePreviewPrototype') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
+    if (stepId === 'storePreviewPrototype')   body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
     // Legacy / questionnaire kept for backward-compat
     else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
