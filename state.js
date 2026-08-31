@@ -3267,6 +3267,15 @@ function makeBlankSteamAnswers() {
     privacyPolicyUrl:   '',
     // Store Page Preview - Prototype — full-page mockup, marks complete on first view
     storePreviewPrototypeSeen: false,
+    // Store Page Preview - Prototype's "Languages" block — null until the
+    // user has opened it once (_steamSeedLanguagesIfNeeded, app.js), which
+    // seeds it from Game Details' Primary + Supported languages as
+    // [{code, interface, fullAudio, subtitles}, ...]. Once seeded it's
+    // never re-synced from Game Details again — same "seed once, then
+    // freely editable" pattern as Developer/Publisher/Price elsewhere in
+    // this prototype — so edits/removals made in
+    // buildSteamLanguagesEditSection (render.js) stick.
+    languages:          null,
     // Improve Your Submission — marks complete on first view
     improveSubmissionSeen: false,
   };

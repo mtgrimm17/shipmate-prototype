@@ -4229,6 +4229,7 @@ function renderStepModal() {
     steamAssets:   'Select Steam Assets',
     tags:          'Tags',
     technical:     'Technical',
+    languages:     'Languages',
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
   };
@@ -4462,6 +4463,16 @@ function buildStorePreviewFlipSection(platformId, target) {
   // (FLIP_LABELS.technical, above) already reads "Technical".
   if (target === 'technical') {
     return `<div class="qs-section">${buildSteamTechnicalSection()}</div>`;
+  }
+  // Steam-only: the Store Page Preview - Prototype's "Languages" block (see
+  // languagesHtml, buildSteamStorePreviewPrototypeSection) — the editable
+  // Interface/Full Audio/Subtitles checkbox table (buildSteamLanguagesEditSection),
+  // seeded once from Game Details' Primary + Supported languages. Wrapped in
+  // .qs-section with no internal header, same as 'tags'/'technical' —
+  // the modal's own title (FLIP_LABELS.languages, above) already reads
+  // "Languages".
+  if (target === 'languages') {
+    return `<div class="qs-section">${buildSteamLanguagesEditSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Select Steam Assets"
   // button (see buildSteamStorePreviewPrototypeSection) — manages
@@ -9888,16 +9899,12 @@ function computeSteamPlayerBadges() {
   const p = state.steamSubmitAnswers.players || {};
   const ICON_SOLO = '👤';
   // Co-op gets the plain two-person icon (a duo working together); MMO/PvP/
-  // Cross-Platform Multiplayer get a three-person icon since they all imply
-  // a wider pool of players than just a duo (players2.png reference). There
-  // isn't a single well-supported "three silhouettes" emoji codepoint (the
-  // family/ZWJ options render as an unsupported-glyph box in this app's
-  // fonts), so the three-person icon is the solo bust tripled — verified by
-  // screenshot to render as three distinct figures rather than overlapping
-  // mush. .steam-players-preview-icon/.steam-spp-feature-icon use min-width
-  // (not width) precisely so this wider glyph isn't clipped.
+  // Cross-Platform Multiplayer get a group icon since they all imply a wider
+  // pool of players than just a duo (players2.png reference).
+  // .steam-players-preview-icon/.steam-spp-feature-icon use min-width (not
+  // width) precisely so this wider ZWJ glyph isn't clipped.
   const ICON_TWO   = '👥';
-  const ICON_THREE = '👤👤👤';
+  const ICON_THREE = '🧑‍🧑‍🧒‍🧒';
   const badges = [];
   if (p.singlePlayer) badges.push({ icon: ICON_SOLO, label: 'Single-player' });
   if (p.mmo) badges.push({ icon: ICON_THREE, label: 'MMO' });
@@ -10044,6 +10051,70 @@ function buildSteamTechnicalSection() {
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Accessibility Features <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — select all that apply)</span></div>
     <div class="cq-check-list">${accessChecks}</div>`;
+}
+
+/* ── Steam: Store Page Preview - Prototype's "Languages" block ──────
+   Reached by clicking the Languages side-block on the prototype page (see
+   languagesHtml, buildSteamStorePreviewPrototypeSection). Mirrors the App
+   Store Data Collection Questions' full matrix table (buildPrivacyMatrix,
+   above) — same .prv-matrix-wrap/.prv-matrix/.prv-type-cell/.prv-check-cell/
+   .prv-cb classes — but simpler: every listed language is already "in" by
+   definition (no row-level on/off gate the way a data type needs one before
+   its purpose columns unlock), so each Interface/Full Audio/Subtitles
+   checkbox is independently togglable straight away, plus a per-row remove
+   button to drop a language entirely.
+   Backed by state.steamSubmitAnswers.languages, seeded once — the first
+   time this section is opened — from Game Details' Primary + Supported
+   languages (see _steamSeedLanguagesIfNeeded, app.js), then never
+   re-synced from Game Details again, so edits/removals made here stick.
+   Same "seed once, then freely editable" pattern already used for
+   Developer/Publisher/Price elsewhere in this prototype. */
+function buildSteamLanguagesEditSection() {
+  const ssa = state.steamSubmitAnswers;
+  const langs = ssa.languages || [];
+
+  const rows = langs.map(l => `
+    <tr class="prv-data-row is-on">
+      <td class="prv-type-cell"><span class="prv-type-name">${escHtml(OB_LANG_NAMES[l.code] || l.code)}</span></td>
+      <td class="prv-check-cell">
+        <input type="checkbox" class="prv-cb" ${l.interface ? 'checked' : ''}
+               onchange="toggleSteamLanguageFlag('${l.code}','interface',this.checked)">
+      </td>
+      <td class="prv-check-cell">
+        <input type="checkbox" class="prv-cb" ${l.fullAudio ? 'checked' : ''}
+               onchange="toggleSteamLanguageFlag('${l.code}','fullAudio',this.checked)">
+      </td>
+      <td class="prv-check-cell">
+        <input type="checkbox" class="prv-cb" ${l.subtitles ? 'checked' : ''}
+               onchange="toggleSteamLanguageFlag('${l.code}','subtitles',this.checked)">
+      </td>
+      <td class="steam-lang-remove-cell">
+        <button type="button" class="steam-lang-remove-btn" title="Remove language" onclick="removeSteamLanguage('${l.code}')">✕</button>
+      </td>
+    </tr>`).join('');
+
+  const tableHtml = langs.length ? `
+    <div class="prv-matrix-wrap">
+      <table class="prv-matrix steam-lang-matrix">
+        <thead>
+          <tr>
+            <th class="prv-type-hd">Language</th>
+            <th class="prv-col-hd">Interface</th>
+            <th class="prv-col-hd">Full Audio</th>
+            <th class="prv-col-hd">Subtitles</th>
+            <th class="prv-col-hd steam-lang-remove-hd"></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>` : `<div class="steam-spp-muted" style="margin-top:8px;">No languages selected yet — add Primary or Supported languages in Game Details - Localization.</div>`;
+
+  return `
+    <div class="ios-content-step-label" style="margin-top:0;">Languages</div>
+    <p style="padding:0 0 12px;color:var(--text-muted);font-size:13px;line-height:1.5;">
+      Pre-populated from the Primary and Supported languages selected in Game Details - Localization. Check or uncheck Interface, Full Audio, and Subtitles support per language, or remove a language you don't want listed here.
+    </p>
+    ${tableHtml}`;
 }
 
 /* ── Steam: Business Questions — Price ──────────────────
@@ -10334,12 +10405,18 @@ function buildSteamStorePreviewPrototypeSection() {
   // developer has also activated Mac App Store as a submission platform.
   const hasMacSupport = state.activePlatforms?.has('macos');
 
-  // Supported languages — primary + any localizations picked in Game
-  // Details (state.formData), same source Distribution/Localization
-  // Review read elsewhere. Gates the "language not supported" warning and
-  // the sidebar's "Is this game relevant to you?" card, same as a real
-  // Steam page gates them on the visitor's own language preference.
-  const langCodes = Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
+  // Supported languages — once the user has opened the Languages section
+  // (openStorePreviewSection -> _steamSeedLanguagesIfNeeded, app.js) this
+  // reads their own edited state.steamSubmitAnswers.languages list instead
+  // (letting removals/edits made there stick); until then it falls back to
+  // primary + any localizations picked in Game Details (state.formData),
+  // same source Distribution/Localization Review reads elsewhere. Gates the
+  // "language not supported" warning and the sidebar's "Is this game
+  // relevant to you?" card, same as a real Steam page gates them on the
+  // visitor's own language preference.
+  const langCodes = ssa.languages
+    ? ssa.languages.map(l => l.code)
+    : Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
   const supportsEnglish = langCodes.includes('en');
 
   // About This Game — this prototype's own editable field, pre-populated
@@ -10675,7 +10752,6 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-side-heading">Features</div>
       <div class="steam-spp-features-row">
         ${playerFeatureBadgesHtml}
-        <div class="steam-spp-feature"><span class="steam-spp-feature-icon">👪</span><span>Family Sharing</span></div>
         ${showFullControllerGroup ? `
         <div class="steam-spp-feature-subheading">Full Controller Support</div>
         ${hasXboxSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Xbox Controllers</span></div>` : ''}
@@ -10685,10 +10761,20 @@ function buildSteamStorePreviewPrototypeSection() {
       ${aiThirdParty ? `<div class="steam-spp-drm-notice">Connects to 3rd-Party Service for AI Content Generation: <span class="steam-spp-link-text">${aiServiceName}</span></div>` : ''}
     </div>`;
 
-  const langRows = langCodes.map(code => `
-      <tr><td class="steam-spp-lang-name">${escHtml(OB_LANG_NAMES[code] || code)}</td><td class="steam-spp-lang-check">✓</td><td class="steam-spp-lang-check">—</td><td class="steam-spp-lang-check">—</td></tr>`).join('');
+  // Flags read from the seeded, user-editable list once it exists; the
+  // unseeded fallback (plain langCodes from Game Details) shows the same
+  // Interface-on/Full-Audio-off/Subtitles-off defaults the editable table
+  // seeds a language with (see _steamSeedLanguagesIfNeeded, app.js), so this
+  // read-only preview never flashes different values than editing reveals.
+  const langFlags = ssa.languages
+    ? ssa.languages
+    : langCodes.map(code => ({ code, interface: true, fullAudio: false, subtitles: false }));
+  const langRows = langFlags.map(l => `
+      <tr><td class="steam-spp-lang-name">${escHtml(OB_LANG_NAMES[l.code] || l.code)}</td><td class="steam-spp-lang-check">${l.interface ? '✓' : '—'}</td><td class="steam-spp-lang-check">${l.fullAudio ? '✓' : '—'}</td><td class="steam-spp-lang-check">${l.subtitles ? '✓' : '—'}</td></tr>`).join('');
+  const languagesDone = !!ssa.languages;
   const languagesHtml = `
-    <div class="steam-spp-side-block">
+    <div class="steam-spp-side-block steam-spp-languages-block${languagesDone ? '' : ' steam-spp-glow-empty'}"
+         onclick="openStorePreviewSection('steam','languages')">
       <div class="steam-spp-side-heading">Languages</div>
       <table class="steam-spp-lang-table">
         <tr><th></th><th>Interface</th><th>Full Audio</th><th>Subtitles</th></tr>

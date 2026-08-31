@@ -8639,6 +8639,28 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
 
 /* No placeholder dots — checkboxes only appear when a row is selected (opacity:0 when disabled) */
 
+/* ── Steam Languages edit table (buildSteamLanguagesEditSection) ──────
+   Reuses .prv-matrix/.prv-matrix-wrap/.prv-type-cell/.prv-check-cell/.prv-cb
+   above as-is (every row is always "on" here, so none of the is-on/disabled
+   gating applies) — just adds a narrow trailing remove-button column. */
+.steam-lang-remove-hd { width: 32px; }
+.steam-lang-remove-cell { text-align: center; }
+.steam-lang-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+.steam-lang-remove-btn:hover {
+  color: var(--orange);
+  background: var(--orange-soft);
+}
+
 /* ── Privacy preset chips ─────────────────────────────── */
 .prv-preset-wrap {
   margin-bottom: 14px;
@@ -12646,22 +12668,23 @@ body.viewing-splash #app-guide { display: none; }
   width: 30px; height: 30px; cursor: pointer;
 }
 
-/* Content / Features — clickable entry points into Steam's Content
-   Questions and (new) standalone Technical section respectively (see
-   contentSectionHtml/featuresHtml, buildSteamStorePreviewPrototypeSection).
-   Share one recipe: the same padding/negative-margin hover trick as every
-   other interactive field in this prototype (.steam-spp-apphub-name's
-   comment has the full rationale) so the highlight can bleed slightly past
+/* Content / Features / Languages — clickable entry points into Steam's
+   Content Questions, standalone Technical section, and (new) standalone
+   Languages section respectively (see contentSectionHtml/featuresHtml/
+   languagesHtml, buildSteamStorePreviewPrototypeSection). Share one recipe:
+   the same padding/negative-margin hover trick as every other interactive
+   field in this prototype (.steam-spp-apphub-name's comment has the full
+   rationale) so the highlight can bleed slightly past
    .steam-spp-side-heading/.steam-spp-reason's own text without disturbing
    .steam-spp-col-side's 16px gap between blocks. steam-spp-glow-empty
    (toggled server-side in render.js based on whether Content Questions /
-   Technical has been answered) layers the same ias-meta-pulse ring every
-   other unanswered field in this prototype already uses. */
-.steam-spp-content-block, .steam-spp-features-block {
+   Technical / Languages has been visited) layers the same ias-meta-pulse
+   ring every other unanswered field in this prototype already uses. */
+.steam-spp-content-block, .steam-spp-features-block, .steam-spp-languages-block {
   cursor: pointer; border-radius: 6px; margin: -6px -8px; padding: 6px 8px;
   transition: background 0.12s;
 }
-.steam-spp-content-block:hover, .steam-spp-features-block:hover { background: rgba(103, 193, 245, .12); }
+.steam-spp-content-block:hover, .steam-spp-features-block:hover, .steam-spp-languages-block:hover { background: rgba(103, 193, 245, .12); }
 
 @media (max-width: 720px) {
   .steam-spp-media-block { grid-template-columns: 1fr; }

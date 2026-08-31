@@ -9696,6 +9696,46 @@ function toggleSteamPlayer(field, checked) {
   updateSteamCard();
 }
 
+/* ── Store Page Preview - Prototype: Languages field ──────────────
+   state.steamSubmitAnswers.languages, edited via buildSteamLanguagesEditSection
+   (render.js) and summarized read-only in languagesHtml
+   (buildSteamStorePreviewPrototypeSection, render.js). See that state field's
+   own comment (state.js, makeBlankSteamAnswers) for the full "seed once,
+   then freely editable" rationale. */
+
+// One-time seed, called from openStorePreviewSection the first time the
+// Languages flip target is opened. Only fills the list while it's still
+// null — deliberately does NOT re-run on later opens, so a language the
+// user removed here doesn't reappear just because Game Details still lists
+// it as a Primary/Supported language. Each entry starts Interface-on,
+// Full Audio/Subtitles-off, matching what the read-only summary already
+// showed before this field existed (langRows' old hardcoded ✓/—/—).
+function _steamSeedLanguagesIfNeeded() {
+  const ssa = state.steamSubmitAnswers;
+  if (ssa.languages) return;
+  const fd = state.formData;
+  const codes = Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
+  ssa.languages = codes.map(code => ({ code, interface: true, fullAudio: false, subtitles: false }));
+}
+
+// Interface/Full Audio/Subtitles checkbox toggle — like togglePrivacyPurpose
+// (the App Store Data Collection matrix this mirrors), the checkbox manages
+// its own visual state so no full re-render is needed; the mutation is
+// picked up next time this section (or the read-only summary) renders.
+function toggleSteamLanguageFlag(code, field, checked) {
+  const lang = (state.steamSubmitAnswers.languages || []).find(l => l.code === code);
+  if (!lang) return;
+  lang[field] = checked;
+}
+
+// Drops a language from the field entirely. Full re-render needed (unlike
+// the checkbox toggle above) since a whole row disappears.
+function removeSteamLanguage(code) {
+  const ssa = state.steamSubmitAnswers;
+  ssa.languages = (ssa.languages || []).filter(l => l.code !== code);
+  reRenderSteamStepModal();
+}
+
 /* Retry inference for any platform+step */
 async function _retryInference(pid, stepId) {
   // Questionnaire steps use the shared unified cache key
@@ -9819,6 +9859,13 @@ function toggleBinFindingFix(pid) {
    ══════════════════════════════════════════════════════ */
 
 async function openStorePreviewSection(pid, target) {
+  // One-time seed: the first time Steam's Languages section is opened,
+  // populate it from Game Details' Primary + Supported languages. No-op on
+  // every later open (including via the read-only summary block's own
+  // click) since _steamSeedLanguagesIfNeeded only fills state.steamSubmitAnswers.languages
+  // while it's still null — see that function's own comment for why.
+  if (pid === 'steam' && target === 'languages') _steamSeedLanguagesIfNeeded();
+
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
   state.storePreviewFlipTarget[pid] = target;
 
