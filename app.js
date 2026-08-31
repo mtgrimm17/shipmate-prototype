@@ -4572,6 +4572,41 @@ function _parseAnalysisJSON(text) {
   return out;
 }
 
+/* Tolerant parse for a top-level JSON ARRAY of objects (the Store Page
+   suggestions shape). Straight JSON.parse first; if that throws because the
+   model response was cut off mid-string, salvage every COMPLETE {...} element
+   already closed inside the array and drop the truncated tail. Returns [] if
+   nothing usable — the UI then simply shows no suggestions instead of erroring. */
+function _parseAnalysisArray(text) {
+  try {
+    const p = JSON.parse(text);
+    return Array.isArray(p) ? p : [p];
+  } catch (_) {}
+
+  const out = [];
+  const arrOpen = text.indexOf('[');
+  let i = (arrOpen === -1 ? 0 : arrOpen + 1);
+  while (i < text.length) {
+    const objStart = text.indexOf('{', i);
+    if (objStart === -1) break;
+    let depth = 0, end = -1, inStr = false, esc = false;
+    for (let j = objStart; j < text.length; j++) {
+      const ch = text[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) { end = j; break; } }
+    }
+    if (end === -1) break;                    // truncated element — stop here
+    try { out.push(JSON.parse(text.slice(objStart, end + 1))); } catch (_) { break; }
+    i = end + 1;
+  }
+  return out;
+}
+
 async function runImproveSubmissionAnalysis(platformId) {
   if (!CLAUDE_API_KEY) {
     state.improveSubmissionAnalysis = { error: 'No API key configured.' };
@@ -4770,7 +4805,11 @@ Return an EMPTY ARRAY [] if no high-impact improvements exist. Return FEWER than
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 1200,
+        // Was 1200 — each suggestion can carry a full-length description rewrite,
+        // so five of them overran the limit and the JSON came back truncated
+        // ("Unterminated string in JSON"). Give real headroom; the tolerant
+        // array parse below is a second safety net against any future overrun.
+        max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -4778,8 +4817,7 @@ Return an EMPTY ARRAY [] if no high-impact improvements exist. Return FEWER than
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
     const cleaned = _extractJSONPayload(raw);
-    const parsed  = JSON.parse(cleaned);
-    const issues  = (Array.isArray(parsed) ? parsed : [parsed]).slice(0, 5);
+    const issues  = _parseAnalysisArray(cleaned).slice(0, 5);
     state.storePageInsights = { issues, index: 0 };
   } catch (err) {
     state.storePageInsights = { error: 'Analysis failed: ' + err.message };
