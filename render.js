@@ -4227,6 +4227,7 @@ function renderStepModal() {
     webMedia:      'Media',
     webKeyArt:     'Key Art',
     steamAssets:   'Select Steam Assets',
+    tags:          'Tags',
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
   };
@@ -4436,6 +4437,18 @@ function buildStorePreviewFlipSection(platformId, target) {
   }
   if (target === 'screenshots') {
     return buildScreenshotsSection(platformId);
+  }
+  // Steam-only: the Store Page Preview - Prototype's own "Tags" block
+  // (under the header capsule/Developer/Publisher — see
+  // buildSteamStorePreviewPrototypeSection's glanceHtml) — the same
+  // Top-Level Genre/Genre/Sub-genre picker Business Questions' "Store
+  // Tags" section already used (buildSteamStoreTagsSection), now also
+  // reachable as its own standalone section rather than only bundled in
+  // with Technical under Business Questions. Wrapped in .qs-section with
+  // no internal header, same as 'steamAssets' below — the modal's own
+  // title (FLIP_LABELS.tags, above) already reads "Tags".
+  if (target === 'tags') {
+    return `<div class="qs-section">${buildSteamStoreTagsSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Select Steam Assets"
   // button (see buildSteamStorePreviewPrototypeSection) — manages
@@ -10272,6 +10285,23 @@ function buildSteamStorePreviewPrototypeSection() {
     ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
     : `<div class="steam-spp-capsule-img steam-spp-media-empty">Header Image</div>`;
 
+  // Tags — reads the same Top-Level Genre/Genre/Sub-genre picker that used
+  // to live only inside Business Questions (buildSteamStoreTagsSection,
+  // state.steamSubmitAnswers.topGenres/genres/subGenres) now that it's also
+  // reachable as its own "Tags" section via a click anywhere on
+  // .steam-spp-tags below (see the 'tags' flip target,
+  // buildStorePreviewFlipSection). Deduped since a value picked as e.g. a
+  // top-level genre could in principle also appear in the sub-genre list.
+  const tagsList = Array.from(new Set([...(ssa.topGenres || []), ...(ssa.genres || []), ...(ssa.subGenres || [])]));
+  const hasTags = tagsList.length > 0;
+  const tagsBodyHtml = hasTags
+    ? `<div class="steam-spp-tag-pills">
+         ${tagsList.map(t => `<span class="steam-spp-tag-pill">${escHtml(t)}</span>`).join('')}
+         <button class="steam-spp-tag-pill steam-spp-tag-pill-add" type="button" aria-label="Add more tags">+</button>
+       </div>`
+    : `<div class="steam-spp-muted" style="margin-bottom:6px;">No tags entered yet</div>
+       <button class="steam-spp-tag-add" type="button">+ Add your own tags</button>`;
+
   const glanceHtml = `
     <div class="steam-spp-glance">
       ${capsuleHtml}
@@ -10292,8 +10322,9 @@ function buildSteamStorePreviewPrototypeSection() {
         <input type="text" class="steam-spp-inline-input${ws.publisher ? '' : ' steam-spp-glow-empty'}" id="steam-spp-pub-input" value="${escHtml(ws.publisher || '')}"
                placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)"></div>
       <div class="steam-spp-tags">
-        <div class="steam-spp-muted" style="margin-bottom:6px;">No tags entered yet</div>
-        <button class="steam-spp-tag-add" type="button">+ Add your own tags</button>
+        <div class="steam-spp-tags-inner${hasTags ? '' : ' steam-spp-glow-empty'}" onclick="openStorePreviewSection('steam','tags')">
+          ${tagsBodyHtml}
+        </div>
       </div>
     </div>`;
 
@@ -10467,6 +10498,24 @@ function buildSteamStorePreviewPrototypeSection() {
       <button class="steam-spp-flag-btn" type="button" aria-label="Report this Product">⚑</button>
     </div>`;
 
+  // Content — clickable entry point into Steam's Content Questions (the
+  // same 'content' flip target "Answer Content Questions" already uses
+  // elsewhere, see buildStorePreviewFlipSection/buildSteamContentRatingSection),
+  // surfaced here so it's reachable straight from the store page preview
+  // itself rather than only from the old checklist-style buttons. Glows
+  // with the same ias-meta-pulse animation (steam-spp-glow-empty, reused
+  // throughout this prototype for every other unanswered field) until
+  // Content Questions has actually been answered, then goes quiet —
+  // mirroring how Title/Short Description/Developer/Publisher stop
+  // pulsing once filled in.
+  const contentDone = isSteamSectionComplete('contentRating');
+  const contentSectionHtml = `
+    <div class="steam-spp-side-block steam-spp-content-block${contentDone ? '' : ' steam-spp-glow-empty'}"
+         onclick="openStorePreviewSection('steam','content')">
+      <div class="steam-spp-side-heading">Content</div>
+      <div class="steam-spp-reason">Mature content, AI usage, and age rating</div>
+    </div>`;
+
   const rightColHtml = `
     ${relevanceCardHtml}
     ${featuresHtml}
@@ -10474,7 +10523,8 @@ function buildSteamStorePreviewPrototypeSection() {
     ${deckHtml}
     ${infoBlockHtml}
     ${linksHtml}
-    ${embedRowHtml}`;
+    ${embedRowHtml}
+    ${contentSectionHtml}`;
 
   return `
     <p class="steam-spp-intro">Preview of your public Steam store page — Steam's own page header and footer aren't shown here.</p>
