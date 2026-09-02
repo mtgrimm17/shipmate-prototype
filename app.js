@@ -3541,15 +3541,43 @@ function selectPicklistItem(igdbId) {
   // no-Steam-link branch below) rather than leaving the About section and
   // screenshot grid empty.
   // IGDB_SEARCH_ENDPOINT's results never carry a Steam app ID (see
-  // claude.js) — fill the baseline from IGDB immediately so the fields
-  // aren't left blank, then resolve the real Steam link asynchronously
+  // claude.js) — fill the screenshot grid baseline from IGDB immediately so
+  // it isn't left blank, then resolve the real Steam link asynchronously
   // below and let it upgrade these once it resolves.
-  if (item.summary) _fillDescriptionField(item.summary);
+  //
+  // Description is handled differently: when this title might actually have
+  // a linked Steam page (item.platforms includes 'steam'), Steam's own
+  // "About This Game" text is the eventual source of truth for it (see
+  // _applySteamAboutData below) — filling Description from IGDB's summary
+  // here first would just flash that shorter/different text on screen for
+  // the moment before the async Steam lookup overwrites it. So that fill is
+  // deferred until the lookup below settles one way or the other, and IGDB's
+  // summary is used immediately only when no Steam lookup is coming at all.
+  const steamLinkPending = (item.platforms || []).includes('steam') && typeof _igdbFetchSteamAppId === 'function';
+  if (!steamLinkPending && item.summary) _fillDescriptionField(item.summary);
   _fillScreenshotGridFromIgdb(item.screenshots || []);
-  // Clear any Steam localization cache left over from a previously-selected
-  // game so a later language-add on THIS title can't be checked against the
-  // wrong game's Steam data before (or if) a real Steam link resolves below.
+  // Clear any Steam localization cache/content left over from a
+  // previously-selected game: state.steamLocInfo (the comparison baseline)
+  // so a later language-add on THIS title can't be checked against the
+  // wrong game's Steam data before (or if) a real Steam link resolves below,
+  // AND the actual per-language Steam Localization Review content itself
+  // (state.webSite.localizedStoreText — Short Description/Developer/
+  // Publisher/About This Game overrides, see state.js) plus its scratch
+  // review-UI state (back-translations, undo history, in-flight translate
+  // trackers) — otherwise the previous game's written/scraped/translated
+  // text would still be sitting in the Localization Review cards for
+  // whatever languages this new title happens to share, until each field
+  // happened to get individually re-translated. View-only state
+  // (steamPreviewLang/steamLocReviewField/steamLocReviewMode) and user
+  // preferences (steamAutoTranslateFields/steamReviewSettingsOpen) aren't
+  // game-specific, so those are deliberately left alone.
   state.steamLocInfo = null;
+  if (!state.webSite) state.webSite = {};
+  state.webSite.localizedStoreText = {};
+  state.steamLocReviewBackTranslation = {};
+  state.steamLocReviewUndoHistory = { real: {}, draft: {} };
+  state.steamTranslateStatus = {};
+  state.steamTranslatePendingLangs = {};
 
   // Resolve this title's Steam app ID with a small, targeted follow-up
   // query (_igdbFetchSteamAppId, claude.js) — only attempted when IGDB
@@ -3557,12 +3585,19 @@ function selectPicklistItem(igdbId) {
   // this title has a Steam listing, so titles with none skip the extra
   // request entirely. Fire-and-forget: the synchronous IGDB-sourced fill
   // above already leaves the app fully usable while this resolves.
-  if ((item.platforms || []).includes('steam') && typeof _igdbFetchSteamAppId === 'function') {
+  if (steamLinkPending) {
     _igdbFetchSteamAppId(item.id).then(steamAppId => {
-      if (!steamAppId) return;
       // Stale-title guard — the user may have picked a different title
       // (or edited it away) before this resolves.
       if ((state.formData.title || '').trim() !== (item.name || '').trim()) return;
+      if (!steamAppId) {
+        // IGDB's platform list said "steam" but the follow-up lookup found
+        // no linked app id after all — Description was deliberately left
+        // unfilled above in anticipation of Steam's data, so fall back to
+        // IGDB's summary now instead of leaving it blank.
+        if (item.summary) _fillDescriptionField(item.summary);
+        return;
+      }
       // Steam is now treated as the source of truth for Description / Web
       // Factsheet Developer / Publisher / Links "Official Website" / Web
       // "About This Game" / screenshots / Capsule Image / Header Image /
@@ -3573,7 +3608,15 @@ function selectPicklistItem(igdbId) {
       _applySteamAboutData(steamAppId, item.name, item);
       _applySteamHeroBanner(steamAppId, item.name);
       _applySteamSocialLinks(steamAppId, item.name);
-    }).catch(err => console.warn('[Picklist] Steam app ID lookup failed:', err.message));
+    }).catch(err => {
+      console.warn('[Picklist] Steam app ID lookup failed:', err.message);
+      // Same fallback reasoning as the !steamAppId branch above — the
+      // lookup itself failed, so Description was deferred for nothing;
+      // fill from IGDB's summary rather than leaving it blank.
+      if ((state.formData.title || '').trim() === (item.name || '').trim() && item.summary) {
+        _fillDescriptionField(item.summary);
+      }
+    });
   }
 
   // Auto-activate platforms — use strict activationPlatforms (no unconfirmed console ports)
@@ -4223,8 +4266,18 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // Guarded like item.summary in the no-Steam-link branch below — only
     // overwrite a field if Steam actually has content for it, rather than
     // blanking something the developer may have already typed in on the
-    // rare page missing one of these fields.
-    if (aboutGameText) _fillDescriptionField(aboutGameText);
+    // rare page missing one of these fields. Since selectPicklistItem now
+    // defers filling Description from IGDB until this function settles (to
+    // avoid flashing IGDB's text before Steam's arrives — see
+    // steamLinkPending there), a successful Steam fetch that happens to have
+    // no about_the_game text needs its own IGDB fallback here too, or the
+    // field would be left blank instead of getting IGDB's summary the way
+    // it always did before that deferral.
+    if (aboutGameText) {
+      _fillDescriptionField(aboutGameText);
+    } else if (fallbackItem && fallbackItem.summary) {
+      _fillDescriptionField(fallbackItem.summary);
+    }
     if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
     // Publisher — same "join Steam's list" treatment as Developer above,
     // just a different appdetails field (a game can, and often does, have
