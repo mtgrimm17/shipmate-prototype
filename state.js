@@ -713,6 +713,8 @@ const PLATFORM_ICONS = {
   // lookup, so this can't be a shared reference — it needs its own literal
   // copy of the same path data.
   macos:    'M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11',
+  // Mac App Store Full — same Apple glyph again, same reasoning as macos above.
+  macos_full: 'M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11',
   android:  'M3.18 23.76c.35.2.8.19 1.22-.05l13.32-7.73-3.37-3.47zM.3 1.05C.1 1.39 0 1.8 0 2.24v19.53c0 .44.1.85.3 1.19l.07.07 10.94-10.94v-.26L.37.98zm22.44 9.47l-3.01-1.75-3.71 3.71 3.72 3.72 3.02-1.76c.86-.5.86-1.32-.02-1.92zM4.4.29L17.72 8.02l-3.37 3.47L4.4.29z',
   steam:    'M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.029 4.524 4.524s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.663 0-3.015 1.353-3.015 3.015 0 1.663 1.352 3.015 3.015 3.015 1.663 0 3.015-1.352 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z',
   egs:      'M0 0v16.021h6.241v2.088H12V24h12V0zm19.017 19.818h-4.776v-4.06H9.225V24H4.449V4.182h4.776v4.06h5.016V4.182h4.776z',
@@ -758,6 +760,40 @@ const PLATFORMS = {
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
+    ],
+  },
+  // Mac App Store Full — a from-scratch, fully independent copy of the Mac
+  // App Store platform above, extended to cover every field an actual App
+  // Store Connect submission asks for (see this project's own field-gap
+  // research). Every one of its steps below is named after, and ordered to
+  // match, the real App Store Connect section it corresponds to — Content
+  // Rating is Apple's Age Rating questionnaire (still its own step, same as
+  // every other platform, since it's a whole multi-part flow in its own
+  // right) and In-App Purchases/Subscriptions/Game Center are split out into
+  // their own steps rather than folded into one "Business Questions" modal
+  // the way ios/macos do it, so the platform card itself reads as a section-
+  // by-section checklist. Nothing here is shared with ios/macos's own
+  // fields — see macFullSubmitAnswers/macFullAnswerMeta/
+  // macFullAppStoreListing further below, and _appStoreAnswers (app.js),
+  // which resolves macos_full to its own answer objects the same way it
+  // already does for macos.
+  macos_full: {
+    id: 'macos_full', label: 'Mac App Store Full', color: '#007AFF',
+    steps: [
+      { id: 'appInfo',         label: 'App Information'                              },
+      { id: 'contentRating',   label: 'Age Rating',                hasInference: true },
+      { id: 'pricing',         label: 'Pricing and Availability'                      },
+      { id: 'privacy',         label: 'App Privacy'                                   },
+      { id: 'versionInfo',     label: 'Version Information'                           },
+      { id: 'uploadBuild',     label: 'Upload Build'                                  },
+      { id: 'buildCompliance', label: 'Build & Compliance'                            },
+      { id: 'iap',             label: 'In-App Purchases'                              },
+      { id: 'subscriptions',   label: 'Subscriptions'                                 },
+      { id: 'gameCenter',      label: 'Game Center'                                   },
+      { id: 'reviewInfo',      label: 'App Review Information'                        },
+      { id: 'versionRelease',  label: 'Version Release'                               },
+      { id: 'storePreview',    label: 'Product Page Preview'                          },
+      { id: 'improveSubmission', label: 'Improve Your Submission'                     },
     ],
   },
   android: {
@@ -850,6 +886,12 @@ const PLATFORM_LOGIN = {
     portal: 'App Store Connect', provider: 'Apple',
     userLabel: 'Apple ID', userType: 'email', userPlaceholder: 'you@studio.com',
   },
+  // Same portal/credentials as macos — Mac App Store Full submits through
+  // the exact same App Store Connect, it just covers more of it.
+  macos_full: {
+    portal: 'App Store Connect', provider: 'Apple',
+    userLabel: 'Apple ID', userType: 'email', userPlaceholder: 'you@studio.com',
+  },
   android: {
     portal: 'Google Play Console', provider: 'Google',
     userLabel: 'Google Account', userType: 'email', userPlaceholder: 'you@studio.com',
@@ -891,6 +933,7 @@ const CONNECT_FLOWS = {
   steam:   { needsExtension: true,  auth: 'password', twofa: 'Steam Guard code',        role: 'Partner',          mintsKey: false, oauth: false },
   ios:     { needsExtension: true,  auth: 'apple',    twofa: 'Apple verification code', role: 'App Manager',      mintsKey: true,  oauth: false },
   macos:   { needsExtension: true,  auth: 'apple',    twofa: 'Apple verification code', role: 'App Manager',      mintsKey: true,  oauth: false },
+  macos_full: { needsExtension: true, auth: 'apple',  twofa: 'Apple verification code', role: 'App Manager',      mintsKey: true,  oauth: false },
   android: { needsExtension: false, auth: 'google',   twofa: null,                      role: 'Service account',  mintsKey: false, oauth: true  },
 };
 function connectFlowConfig(pid) { return CONNECT_FLOWS[pid] || CONNECT_FLOWS.steam; }
@@ -939,6 +982,15 @@ function platformStepCount(platformId) {
   // showing 0 of N complete on its dashboard card.
   if (platformId === 'macos') {
     const complete = p.steps.filter(s => isMacSectionComplete(s.id)).length;
+    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+  }
+  // Mac App Store Full: completion is computed from its own
+  // macFullSubmitAnswers, same reasoning as the 'macos' branch above —
+  // without this branch it would silently fall through to the generic
+  // platformStepStatus-based default below, which nothing ever sets for
+  // this platform's steps either.
+  if (platformId === 'macos_full') {
+    const complete = p.steps.filter(s => isMacFullSectionComplete(s.id)).length;
     return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   // Android: completion is computed from androidSubmitAnswers
@@ -1271,6 +1323,82 @@ function makeBlankIOSAnswers() {
   };
 }
 
+/* Mac App Store Full's blank-answers shape — starts from the exact same
+   Content Rating/Privacy/Export Compliance/IAP Products question set as
+   makeBlankIOSAnswers() above (spread in first), then adds every field
+   needed to cover the rest of a real App Store Connect submission end to
+   end, per this project's own field-gap research
+   (build_mas_fields_steam_equivalents_v2.py) and the "fully independent"
+   design decision: none of this is shared with iosSubmitAnswers or
+   macSubmitAnswers — see PLATFORMS.macos_full's comment and
+   _appStoreAnswers/_appStoreAnswerMeta (app.js), which resolve 'macos_full'
+   to state.macFullSubmitAnswers/macFullAnswerMeta the same way 'macos'
+   already resolves to their own objects. Fields are grouped below by the
+   App Store Connect section they belong to, matching PLATFORMS.macos_full's
+   own step order. Complex ASC constructs (Price Schedule, Subscription
+   Groups, Game Center) are deliberately simplified per the "simplified but
+   functional" design decision — flat repeatable lists capturing the
+   essential data points, not a replica of Apple's exact multi-screen flows. */
+function makeBlankMacFullAnswers() {
+  return {
+    ...makeBlankIOSAnswers(),
+
+    // App Information
+    category:                { primary: '', secondary: '' },  // from Apple's fixed category list
+    contentRights:            null,   // 'yes' / 'no' — "Does your app contain, show, or access third-party content?"
+    contentRightsExplanation: '',
+    bundleId:                 '',
+    sku:                      '',
+    appleId:                  '',
+    tradeRep:                 { name: '', address: '', phone: '', email: '' },
+    routingCoverageFile:      null,   // { name, size } — placeholder upload, no real parsing
+
+    // Pricing and Availability — base Price/Tax Category are deliberately
+    // NOT duplicated here; they stay shared game-wide via
+    // state.formData.price / this object's own taxCategory (inherited from
+    // makeBlankIOSAnswers above), same "shared by every store that bills in
+    // a single base price" design already used by ios/macos (see
+    // buildBusinessSection's comment, render.js). scheduledPriceChanges
+    // below covers ASC's "Price Schedule" concept on top of that shared
+    // base price.
+    scheduledPriceChanges:    [],   // { id, date, tier } — future price changes
+    availability:             { mode: 'all', countries: [] },  // mode: 'all' | 'select'
+    preOrder:                 { enabled: false, releaseDate: '' },
+    familySharing:            false,
+    customB2B:                { enabled: false, orgs: [] },   // orgs: [{ id, name }]
+
+    // Version Information — Screenshots/Description/What's New are covered
+    // by the existing generic buildScreenshotsSection('macos_full') and
+    // macFullAppStoreListing (state.js, further below) rather than fields
+    // on this object.
+    appPreviewUrl:            '',
+
+    // Build & Compliance
+    idfaDeclaration:          { usesIdfa: null, reasons: [] },  // reasons: subset of IDFA_REASONS ids
+
+    // App Review Information
+    reviewContact:            { firstName: '', lastName: '', phone: '', email: '' },
+    demoAccount:              { required: null, username: '', password: '' },  // required: 'yes' / 'no'
+    reviewNotes:              '',
+    reviewAttachment:         null,   // { name, size }
+
+    // Version Release
+    releaseOption:            'automatic',  // 'automatic' / 'manual' / 'scheduled'
+    scheduledReleaseDate:     '',
+    phasedRelease:            false,
+
+    // Subscriptions — repeatable groups, each with repeatable tiers
+    subscriptionGroups:       [],   // { id, name, tiers: [{ id, refName, productId, duration, price, hasIntroOffer }] }
+
+    // Game Center
+    gameCenter: {
+      leaderboards: [],   // { id, name, gcId, scoreFormat }
+      achievements: [],   // { id, name, description, points, hidden }
+      multiplayer:  { enabled: false, minPlayers: null, maxPlayers: null },
+    },
+  };
+}
+
 function computeIOSSectionRisk(sectionId) {
   if (sectionId === 'questionnaire') {
     const risks = ['privacy','contentRating','business'].map(computeIOSSectionRisk);
@@ -1529,6 +1657,175 @@ function isMacSectionComplete(sectionId) {
 
   if (sectionId === 'storePreview') {
     return !!state.macStorePreviewSeen;
+  }
+
+  return false;
+}
+
+/* Mac App Store Full twins of computeMacSectionRisk/isMacSectionComplete
+   above — but, per this platform's "fully independent" design decision
+   (see PLATFORMS.macos_full's comment), these NEVER delegate to iOS/Mac
+   App Store's own answers the way isMacSectionComplete does for privacy/
+   contentRating. Every section here reads state.macFullSubmitAnswers
+   directly. The step list itself is also organized by App Store Connect
+   section (see PLATFORMS.macos_full.steps) rather than iOS/Mac App
+   Store's smaller, more bundled step list, so this function's branches
+   don't mirror isMacSectionComplete's one-to-one — Content Rating/Privacy/
+   IAP/Export Compliance still read the same generic question sets, just
+   split across more, more narrowly-named steps. */
+function computeMacFullSectionRisk(sectionId) {
+  const a    = state.macFullSubmitAnswers;
+  const meta = state.macFullAnswerMeta;
+
+  function fieldStatus(fieldId) {
+    if (a[fieldId] === null || a[fieldId] === undefined) return 'missing';
+    const m = meta[fieldId];
+    if (!m) return 'human';
+    if (m.humanConfirmed) return 'human';
+    if (m.confidence >= 90) return 'certain';
+    return 'confident';
+  }
+
+  function evalFields(fieldIds) {
+    const statuses = fieldIds.map(fieldStatus);
+    if (statuses.includes('missing'))   return 'HIGH';
+    if (statuses.includes('confident')) return 'MEDIUM';
+    return 'LOW';
+  }
+
+  if (sectionId === 'privacy') {
+    return evalFields(['collectsData']);
+  }
+
+  if (sectionId === 'contentRating') {
+    const fields = [
+      ...IOS_INTENSITY_QUESTIONS.map(q => q.id),
+      ...IOS_CONTENT_YN_QUESTIONS.map(q => q.id),
+      'ageCategory',
+    ];
+    return evalFields(fields);
+  }
+
+  if (sectionId === 'appInfo') {
+    if (a.category.primary === '' || a.contentRights === null) return 'HIGH';
+    return 'LOW';
+  }
+
+  if (sectionId === 'pricing') {
+    if (a.availability.mode === 'select' && a.availability.countries.length === 0) return 'HIGH';
+    if (a.availability.countries.includes('CN')) return 'MEDIUM';
+    return 'LOW';
+  }
+
+  if (sectionId === 'buildCompliance') {
+    if (a.usesEncryption === null) return 'HIGH';
+    const fields = ['usesEncryption'];
+    if (a.usesEncryption === 'yes') fields.push('encryptionExempt');
+    return evalFields(fields);
+  }
+
+  if (sectionId === 'iap') {
+    return evalFields(['hasIAP']);
+  }
+
+  return 'NONE';
+}
+
+function isMacFullSectionComplete(sectionId) {
+  const a = state.macFullSubmitAnswers;
+
+  if (sectionId === 'uploadBuild') {
+    return !!(state.platformBuilds?.macos_full) && !state.platformBuildProcessing?.macos_full;
+  }
+
+  if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
+
+  if (sectionId === 'appInfo') {
+    if (!a.category.primary) return false;
+    if (a.contentRights === null) return false;
+    if (a.contentRights === 'yes' && !a.contentRightsExplanation.trim()) return false;
+    if (!a.bundleId.trim()) return false;
+    return true;
+  }
+
+  if (sectionId === 'contentRating') {
+    if (!IOS_INTENSITY_QUESTIONS.every(q => a[q.id] !== null)) return false;
+    if (!IOS_CONTENT_YN_QUESTIONS.every(q => a[q.id] !== null)) return false;
+    if (a.ageCategory === null) return false;
+    if (a.ageCategory === 'made_for_kids'   && a.kidsAgeRange  === null) return false;
+    if (a.ageCategory === 'override_higher' && a.overrideRating === null) return false;
+    return true;
+  }
+
+  if (sectionId === 'pricing') {
+    if (a.availability.mode === 'select' && a.availability.countries.length === 0) return false;
+    if (a.preOrder.enabled && !a.preOrder.releaseDate.trim()) return false;
+    return true;
+  }
+
+  if (sectionId === 'privacy') {
+    const url = (a.privacyPolicyUrl || '').trim();
+    if (!url) return false;
+    if (a.collectsData === null) return false;
+    if (a.collectsData === 'yes') {
+      const types = Object.entries(a.dataPerType);
+      if (types.length === 0) return false;
+      for (const [, t] of types) {
+        if (t.purposes.length === 0) return false;
+      }
+    }
+    return true;
+  }
+
+  if (sectionId === 'versionInfo') {
+    const listing = state.macFullAppStoreListing;
+    if (!listing || !(listing.description || '').trim() || !(listing.versionNumber || '').trim()) return false;
+    const ps = state.platformScreenshots?.macos_full;
+    const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
+                     (state.uploads?.screenshots || []).length > 0;
+    return hasShots;
+  }
+
+  if (sectionId === 'buildCompliance') {
+    if (a.usesEncryption === null) return false;
+    if (a.usesEncryption === 'yes') {
+      if (a.encryptionExempt === null) return false;
+      if (a.encryptionExempt === 'no') {
+        if (a.hasERN === null) return false;
+        if (a.hasERN === 'yes' && !a.ernNumber.trim()) return false;
+      }
+    }
+    if (a.idfaDeclaration.usesIdfa === null) return false;
+    return true;
+  }
+
+  if (sectionId === 'iap') {
+    return a.hasIAP !== null;
+  }
+
+  // Subscriptions and Game Center are purely additive, same convention as
+  // IAP Products (see makeBlankIOSAnswers's comment) — a developer with
+  // none simply leaves the list(s) empty, so an empty list never blocks
+  // completion.
+  if (sectionId === 'subscriptions') return true;
+  if (sectionId === 'gameCenter')    return true;
+
+  if (sectionId === 'reviewInfo') {
+    if (!a.reviewContact.firstName.trim() || !a.reviewContact.lastName.trim()) return false;
+    if (!a.reviewContact.email.trim()) return false;
+    if (a.demoAccount.required === null) return false;
+    if (a.demoAccount.required === 'yes' &&
+        (!a.demoAccount.username.trim() || !a.demoAccount.password.trim())) return false;
+    return true;
+  }
+
+  if (sectionId === 'versionRelease') {
+    if (a.releaseOption === 'scheduled' && !a.scheduledReleaseDate.trim()) return false;
+    return true;
+  }
+
+  if (sectionId === 'storePreview') {
+    return !!state.macFullStorePreviewSeen;
   }
 
   return false;
@@ -2431,25 +2728,27 @@ const state = {
 
   // Per-platform build uploads (one active build per platform)
   platformBuilds: {
-    ios:     null,
-    macos:   null,
-    android: null,
-    steam:   null,
+    ios:        null,
+    macos:      null,
+    macos_full: null,
+    android:    null,
+    steam:      null,
   },
 
   // Per-platform binary processing flag (true for 10s after upload while fake analysis runs)
   platformBuildProcessing: {
-    ios:     false,
-    macos:   false,
-    android: false,
-    steam:   false,
+    ios:        false,
+    macos:      false,
+    macos_full: false,
+    android:    false,
+    steam:      false,
   },
 
   // Which store preview sub-section is currently open in the flip animation
   // null = showing preview; 'content'|'business'|'data'|'screenshots' = flipped to sub-section
-  storePreviewFlipTarget:   { ios: null, macos: null, android: null, steam: null, web: null },
+  storePreviewFlipTarget:   { ios: null, macos: null, macos_full: null, android: null, steam: null, web: null },
   // Tracks which sub-sections the user has actually visited (gates "done" state)
-  storePreviewSectionSeen:  { ios: {}, macos: {}, android: {}, steam: {}, web: {} },
+  storePreviewSectionSeen:  { ios: {}, macos: {}, macos_full: {}, android: {}, steam: {}, web: {} },
 
   // Web self-distribution site — editable fields shown in the Preview Website
   // step, organized in "Edit site details" into four groups: Factsheet,
@@ -2649,10 +2948,11 @@ const state = {
   // Per-platform screenshot selections: which onboarding shots are selected,
   // plus any platform-specific uploads
   platformScreenshots: {
-    ios:     { selected: [], custom: [] },
-    macos:   { selected: [], custom: [] },
-    android: { selected: [], custom: [] },
-    steam:   { selected: [], custom: [] },
+    ios:        { selected: [], custom: [] },
+    macos:      { selected: [], custom: [] },
+    macos_full: { selected: [], custom: [] },
+    android:    { selected: [], custom: [] },
+    steam:      { selected: [], custom: [] },
   },
 
   // iOS step modal — which step is currently open
@@ -2671,6 +2971,14 @@ const state = {
   // (app.js) and buildMacContentRatingSection/buildMacPrivacySection/
   // buildMacBusinessSection/buildMacIapSection (render.js).
   macSubmitAnswers: makeBlankIOSAnswers(),
+
+  // Mac App Store Full submission questionnaire answers — a from-scratch,
+  // FULLY INDEPENDENT copy (see makeBlankMacFullAnswers' own comment):
+  // answering a question here never touches iosSubmitAnswers or
+  // macSubmitAnswers, and vice versa. See _appStoreAnswers/
+  // _appStoreAnswerMeta (app.js), which resolve 'macos_full' to this object
+  // the same way 'macos' resolves to macSubmitAnswers above.
+  macFullSubmitAnswers: makeBlankMacFullAnswers(),
 
   // Google Play submission questionnaire answers
   androidSubmitAnswers: makeBlankAndroidAnswers(),
@@ -2697,6 +3005,10 @@ const state = {
   // Mac App Store twin of iosAnswerMeta above — see macSubmitAnswers' comment.
   macAnswerMeta: {},
 
+  // Mac App Store Full twin of iosAnswerMeta/macAnswerMeta above — see
+  // macFullSubmitAnswers' comment.
+  macFullAnswerMeta: {},
+
   // Cached Claude analysis result — populated on first inference step open, reused thereafter
   claudeCache: null,
 
@@ -2705,6 +3017,9 @@ const state = {
 
   // Mac App Store twin of iosStorePreviewSeen above.
   macStorePreviewSeen: false,
+
+  // Mac App Store Full twin of iosStorePreviewSeen/macStorePreviewSeen above.
+  macFullStorePreviewSeen: false,
 
   // Mac App Store's OWN independent Product Page Preview listing text —
   // Title/Subtitle/Description/What's New, plus per-language overrides
@@ -2720,6 +3035,24 @@ const state = {
   // NOT duplicated here — that's a studio-wide decision shared with every
   // platform, not per-listing marketing copy.
   macAppStoreListing: null,
+
+  // Mac App Store Full's OWN independent Product Page Preview listing text
+  // — a superset of macAppStoreListing above (Name/Subtitle/Description/
+  // What's New), extended per the App Store Connect "Version Information"
+  // section to also cover Promotional Text, Keywords, Support URL,
+  // Marketing URL, Copyright (with company name — NOT the hardcoded
+  // "© {year}" the rest of Shipmate falls back to), and Version Number
+  // (independent, not the shared cross-platform one). Pre-filled ONCE from
+  // state.formData's current values the first time Mac App Store Full is
+  // activated (see seedMacFullAppStoreListing, app.js), same "auto-fill
+  // once, then freely editable" treatment as macAppStoreListing. Primary-
+  // language only, per the "simplified but functional" design decision —
+  // no per-language localization-review plumbing of its own (localizedStoreText
+  // below still exists for parity with macAppStoreListing's shape, but the
+  // per-language translate/review UI itself is out of scope for this
+  // platform). Editing this never writes back to state.formData or either
+  // sibling platform's own listing, and vice versa.
+  macFullAppStoreListing: null,
 
   // Which language Mac App Store's own Product Page Preview language
   // dropdown is currently showing — mirrors iasPreviewLang below, but kept
@@ -3012,6 +3345,10 @@ const state = {
   // never collapses or reveals rows on the other's.
   macAnsweredAtInference: null,
   macContentRatingExpanded: false,
+
+  // Mac App Store Full twins of the same pair, same independence rationale.
+  macFullAnsweredAtInference: null,
+  macFullContentRatingExpanded: false,
 
   // Same snapshot pattern for Android and Steam
   androidAnswerSnapshot: null,

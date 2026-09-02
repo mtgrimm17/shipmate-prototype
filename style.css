@@ -5829,6 +5829,10 @@ textarea.loc-review-field.ias-inline-input {
 .asset-url-row { margin-top: 12px; }
 
 .form-hint { font-size: 12px; color: var(--text-faint); margin-bottom: 6px; line-height: 1.5; }
+/* Inline "(optional)" / char-limit note appended directly after a .form-label's
+   own text — used across Mac App Store Full's own step builders (render.js) —
+   same muted treatment as .form-hint, just inline rather than on its own line. */
+.form-hint-inline { font-size: 11px; font-weight: 400; color: var(--text-faint); margin-left: 4px; }
 
 .form-input {
   width: 100%;

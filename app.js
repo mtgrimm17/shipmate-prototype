@@ -851,6 +851,8 @@ function toggleOnboardingPlatform(pid) {
     // listing text into its own independent copy (seedMacAppStoreListing is
     // a no-op on every activation after the first).
     if (pid === 'macos') seedMacAppStoreListing();
+    // Same one-time seed for Mac App Store Full's own independent listing.
+    if (pid === 'macos_full') seedMacFullAppStoreListing();
   }
   // Re-render just the platform tiles section in-place (platform is now in Game Details tab)
   const gridWrap = document.getElementById('ob-plat-grid-wrap');
@@ -1047,10 +1049,15 @@ function markTaskUndone(platformId, stepId) {
 // seedOnboardingToIOS and every Content Rating/Privacy/Business/IAP answer
 // handler below.
 function _appStoreAnswers(pid, fieldId) {
+  // Mac App Store Full is fully independent — see makeBlankMacFullAnswers'
+  // comment (state.js) — so it NEVER routes through the macos/iOS sharing
+  // check below, even for fields that are shared between those other two.
+  if (pid === 'macos_full') return state.macFullSubmitAnswers;
   if (pid === 'macos' && fieldId && IOS_MAC_SHARED_ANSWER_FIELDS.has(fieldId)) return state.iosSubmitAnswers;
   return pid === 'macos' ? state.macSubmitAnswers : state.iosSubmitAnswers;
 }
 function _appStoreAnswerMeta(pid, fieldId) {
+  if (pid === 'macos_full') return state.macFullAnswerMeta;
   if (pid === 'macos' && fieldId && IOS_MAC_SHARED_ANSWER_FIELDS.has(fieldId)) return state.iosAnswerMeta;
   return pid === 'macos' ? state.macAnswerMeta : state.iosAnswerMeta;
 }
@@ -1121,6 +1128,224 @@ function seedMacAppStoreListing() {
     // versa) — they only share a starting point, never live storage.
     localizedStoreText: JSON.parse(JSON.stringify(fd.localizedStoreText || {})),
   };
+}
+
+// Twin of seedMacAppStoreListing above, for Mac App Store Full's own
+// independent Product Page Preview listing (state.macFullAppStoreListing —
+// see its own comment, state.js). Same "seed once from Game Details, then
+// fully independent" treatment, extended with the extra Version Information
+// fields ASC actually asks for that macAppStoreListing doesn't carry
+// (Promotional Text, Keywords, Support URL, Marketing URL, Copyright,
+// Version Number) — Title/Subtitle are NOT shared with either sibling
+// platform here (no MAS_SHARED_LISTING_FIELDS-style routing for
+// macos_full), per the "fully independent" design decision.
+function seedMacFullAppStoreListing() {
+  if (state.macFullAppStoreListing) return;
+  const fd = state.formData;
+  state.macFullAppStoreListing = {
+    title:            fd.title            || '',
+    subtitle:         fd.subtitle         || '',
+    description:      fd.description      || '',
+    releaseNotes:     fd.releaseNotes     || '',
+    promotionalText:  '',
+    keywords:         '',
+    supportUrl:       '',
+    marketingUrl:     '',
+    copyright:        '',
+    // Deliberately NOT seeded from the shared cross-platform version model
+    // (state.projects/activeVersionId) — this is its own independent field,
+    // per the "fully independent" design decision — the developer types it
+    // directly, same as everything else on this listing.
+    versionNumber:    '',
+    localizedStoreText: JSON.parse(JSON.stringify(fd.localizedStoreText || {})),
+  };
+}
+
+/* ── Mac App Store Full — generic nested-field setters ──────────────────
+   Most of macFullSubmitAnswers' App-Store-Connect-specific fields are flat
+   top-level fields (contentRights, bundleId, hasIAP, etc.) and already work
+   through answerIOSField/updateIOSTextField above (both resolve pid from
+   state.stepModal generically, and _appStoreAnswers/_appStoreAnswerMeta
+   already route 'macos_full' to its own state.macFullSubmitAnswers/
+   macFullAnswerMeta — see those functions' own comments). A handful of
+   fields are nested objects instead (category.primary, tradeRep.email,
+   demoAccount.username, etc.) — these two helpers walk a dot-separated
+   path into state.macFullSubmitAnswers for those, rather than adding a
+   dedicated setter function per field. setMacFullField re-renders
+   immediately (for selects/toggles/checkboxes, where there's no focused
+   input to preserve); setMacFullTextField mutates silently (for oninput on
+   free-typing text inputs — call reRenderStepModal() separately on blur
+   where the row needs to react, matching updateIOSTextField's own
+   convention). Every one of macFullSubmitAnswers' new fields lives ONLY on
+   Mac App Store Full — there is no ios/macos equivalent field these could
+   ever collide with. */
+function _mfNestedContainer(path) {
+  const parts = path.split('.');
+  let obj = state.macFullSubmitAnswers;
+  for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+  return { obj, key: parts[parts.length - 1] };
+}
+function setMacFullField(path, value) {
+  const { obj, key } = _mfNestedContainer(path);
+  obj[key] = value;
+  reRenderStepModal();
+  updateIOSCard('macos_full');
+}
+function setMacFullTextField(path, value) {
+  const { obj, key } = _mfNestedContainer(path);
+  obj[key] = value;
+}
+
+/* ── Mac App Store Full — App Information ────────────────────────────── */
+function handleMacFullRoutingFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  state.macFullSubmitAnswers.routingCoverageFile = { name: file.name, size: file.size };
+  reRenderStepModal();
+}
+function removeMacFullRoutingFile() {
+  state.macFullSubmitAnswers.routingCoverageFile = null;
+  reRenderStepModal();
+}
+
+/* ── Mac App Store Full — Pricing and Availability ───────────────────── */
+function addMacFullPriceChange() {
+  state.macFullSubmitAnswers.scheduledPriceChanges.push({ id: generateId('price'), date: '', tier: '' });
+  reRenderStepModal();
+}
+function removeMacFullPriceChange(id) {
+  const a = state.macFullSubmitAnswers;
+  a.scheduledPriceChanges = a.scheduledPriceChanges.filter(p => p.id !== id);
+  reRenderStepModal();
+}
+function setMacFullPriceChangeField(id, key, value) {
+  const p = state.macFullSubmitAnswers.scheduledPriceChanges.find(p => p.id === id);
+  if (p) p[key] = value;
+}
+function setMacFullAvailabilityMode(mode) {
+  state.macFullSubmitAnswers.availability.mode = mode;
+  reRenderStepModal();
+}
+function toggleMacFullAvailabilityCountry(code) {
+  const av = state.macFullSubmitAnswers.availability;
+  const idx = av.countries.indexOf(code);
+  if (idx >= 0) av.countries.splice(idx, 1);
+  else av.countries.push(code);
+  reRenderStepModal();
+}
+function addMacFullB2BOrg() {
+  state.macFullSubmitAnswers.customB2B.orgs.push({ id: generateId('org'), name: '' });
+  reRenderStepModal();
+}
+function removeMacFullB2BOrg(id) {
+  const c = state.macFullSubmitAnswers.customB2B;
+  c.orgs = c.orgs.filter(o => o.id !== id);
+  reRenderStepModal();
+}
+function setMacFullB2BOrgField(id, value) {
+  const o = state.macFullSubmitAnswers.customB2B.orgs.find(o => o.id === id);
+  if (o) o.name = value;
+}
+
+/* ── Mac App Store Full — Version Information ────────────────────────── */
+// Writes straight into state.macFullAppStoreListing — the extended,
+// FULLY INDEPENDENT superset of macAppStoreListing (see its own comment,
+// state.js). Seeds first in case this is somehow the first touch of the
+// listing (defensive — openStepModal/toggleOnboardingPlatform/
+// activatePlatform already seed it before this step can be reached).
+function setMacFullListingField(field, value) {
+  seedMacFullAppStoreListing();
+  state.macFullAppStoreListing[field] = value;
+}
+
+/* ── Mac App Store Full — Build & Compliance ─────────────────────────── */
+function toggleMacFullIdfaReason(id) {
+  const idfa = state.macFullSubmitAnswers.idfaDeclaration;
+  const idx = idfa.reasons.indexOf(id);
+  if (idx >= 0) idfa.reasons.splice(idx, 1);
+  else idfa.reasons.push(id);
+  reRenderStepModal();
+}
+
+/* ── Mac App Store Full — Subscriptions ──────────────────────────────── */
+function addMacFullSubGroup() {
+  state.macFullSubmitAnswers.subscriptionGroups.push({ id: generateId('subgrp'), name: '', tiers: [] });
+  reRenderStepModal();
+}
+function removeMacFullSubGroup(id) {
+  const a = state.macFullSubmitAnswers;
+  a.subscriptionGroups = a.subscriptionGroups.filter(g => g.id !== id);
+  reRenderStepModal();
+}
+function setMacFullSubGroupField(id, key, value) {
+  const g = state.macFullSubmitAnswers.subscriptionGroups.find(g => g.id === id);
+  if (g) g[key] = value;
+}
+function addMacFullSubTier(groupId) {
+  const g = state.macFullSubmitAnswers.subscriptionGroups.find(g => g.id === groupId);
+  if (!g) return;
+  g.tiers.push({ id: generateId('tier'), refName: '', productId: '', duration: '1 Month', price: '', hasIntroOffer: false });
+  reRenderStepModal();
+}
+function removeMacFullSubTier(groupId, tierId) {
+  const g = state.macFullSubmitAnswers.subscriptionGroups.find(g => g.id === groupId);
+  if (!g) return;
+  g.tiers = g.tiers.filter(t => t.id !== tierId);
+  reRenderStepModal();
+}
+function setMacFullSubTierField(groupId, tierId, key, value) {
+  const g  = state.macFullSubmitAnswers.subscriptionGroups.find(g => g.id === groupId);
+  const tr = g?.tiers.find(t => t.id === tierId);
+  if (!tr) return;
+  tr[key] = value;
+  // Text fields (refName/productId/price) mutate silently on oninput, same
+  // convention as setIapProductField — Duration (a select) and Intro Offer
+  // (a yes/no toggle) re-render since they're not focus-sensitive.
+  if (key !== 'refName' && key !== 'productId' && key !== 'price') reRenderStepModal();
+}
+
+/* ── Mac App Store Full — Game Center ────────────────────────────────── */
+function addMacFullLeaderboard() {
+  state.macFullSubmitAnswers.gameCenter.leaderboards.push({ id: generateId('lb'), name: '', gcId: '', scoreFormat: 'Integer' });
+  reRenderStepModal();
+}
+function removeMacFullLeaderboard(id) {
+  const gc = state.macFullSubmitAnswers.gameCenter;
+  gc.leaderboards = gc.leaderboards.filter(l => l.id !== id);
+  reRenderStepModal();
+}
+function setMacFullLeaderboardField(id, key, value) {
+  const lb = state.macFullSubmitAnswers.gameCenter.leaderboards.find(l => l.id === id);
+  if (!lb) return;
+  lb[key] = value;
+  if (key === 'scoreFormat') reRenderStepModal();
+}
+function addMacFullAchievement() {
+  state.macFullSubmitAnswers.gameCenter.achievements.push({ id: generateId('ach'), name: '', description: '', points: 10, hidden: false });
+  reRenderStepModal();
+}
+function removeMacFullAchievement(id) {
+  const gc = state.macFullSubmitAnswers.gameCenter;
+  gc.achievements = gc.achievements.filter(a => a.id !== id);
+  reRenderStepModal();
+}
+function setMacFullAchievementField(id, key, value) {
+  const ac = state.macFullSubmitAnswers.gameCenter.achievements.find(a => a.id === id);
+  if (!ac) return;
+  ac[key] = value;
+  if (key === 'hidden') reRenderStepModal();
+}
+
+/* ── Mac App Store Full — App Review Information ─────────────────────── */
+function handleMacFullReviewAttachment(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  state.macFullSubmitAnswers.reviewAttachment = { name: file.name, size: file.size };
+  reRenderStepModal();
+}
+function removeMacFullReviewAttachment() {
+  state.macFullSubmitAnswers.reviewAttachment = null;
+  reRenderStepModal();
 }
 
 async function openStepModal(pid, stepId) {
@@ -1200,6 +1425,7 @@ async function openStepModal(pid, stepId) {
 
   seedOnboardingToIOS(pid);
   if (pid === 'macos') seedMacAppStoreListing();
+  if (pid === 'macos_full') seedMacFullAppStoreListing();
 
   state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
 
@@ -1207,8 +1433,9 @@ async function openStepModal(pid, stepId) {
   renderStepModal();
   // Mark Store Page Preview as visited before rendering
   if (stepId === 'storePreview') {
-    if (pid === 'macos') state.macStorePreviewSeen = true;
-    else                 state.iosStorePreviewSeen = true;
+    if (pid === 'macos')      state.macStorePreviewSeen     = true;
+    else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
+    else                      state.iosStorePreviewSeen     = true;
   }
 
   document.getElementById('submit-overlay').classList.remove('hidden');
@@ -1257,6 +1484,7 @@ function closeStepModal() {
   document.body.style.overflow = '';
   updateIOSCard();
   updateIOSCard('macos');
+  updateIOSCard('macos_full');
   updateAndroidCard();
   updateSteamCard();
   if (sm?.platformId === 'web') renderDashboard();
@@ -1584,10 +1812,16 @@ function setPrivacyUrl(url) {
   state.macSubmitAnswers.privacyPolicyUrl      = url;
   state.androidSubmitAnswers.privacyPolicyUrl  = url;
   state.steamSubmitAnswers.privacyPolicyUrl    = url;
+  // Unlike macSubmitAnswers above (inert redundancy — see this function's
+  // own comment further up), Mac App Store Full genuinely reads its own
+  // independent copy (_appStoreAnswers('macos_full', 'privacyPolicyUrl')
+  // never routes to iOS's — see makeBlankMacFullAnswers' comment, state.js),
+  // so this write is required, not redundant.
+  state.macFullSubmitAnswers.privacyPolicyUrl  = url;
   // Sync sibling platform inputs that are currently in the DOM
   // (but don't change the one that's actively focused — it's the source)
   const active = document.activeElement;
-  ['ios-privacy-url', 'macos-privacy-url', 'android-privacy-url', 'steam-privacy-url'].forEach(id => {
+  ['ios-privacy-url', 'macos-privacy-url', 'macos_full-privacy-url', 'android-privacy-url', 'steam-privacy-url'].forEach(id => {
     const el = document.getElementById(id);
     if (el && el !== active && el.value !== url) el.value = url;
   });
@@ -1597,6 +1831,7 @@ function setPrivacyUrl(url) {
   updateAndroidCard();
   updateIOSCard();
   updateIOSCard('macos');
+  updateIOSCard('macos_full');
   updateSteamCard?.();
 }
 
@@ -1611,8 +1846,9 @@ function toggleContentRatingExpanded(value) {
   const pid = state.stepModal?.platformId || 'ios';
   // Re-snapshot on "Unanswered" click so newly-answered questions get hidden
   if (!value) takeFilterSnapshot(pid);
-  if (pid === 'macos') state.macContentRatingExpanded = value;
-  else                 state.iosContentRatingExpanded = value;
+  if (pid === 'macos')      state.macContentRatingExpanded     = value;
+  else if (pid === 'macos_full') state.macFullContentRatingExpanded = value;
+  else                      state.iosContentRatingExpanded     = value;
   reRenderStepModal();   // routes to the inline pane when it's the active surface
 }
 
@@ -1657,12 +1893,22 @@ function togglePrivacyPreset(id) {
   const hasGuest  = selected.includes('guest');
   const pid       = state.stepModal?.platformId;
 
+  // Which App-Store-shaped answers object this preset click should write
+  // into. 'ios' and 'macos' both resolve to state.iosSubmitAnswers (macos's
+  // collectsData/privacyDescription are the SAME shared field — see
+  // buildPrivacySection's own comment above), matching this function's
+  // original iOS-only behavior exactly. 'macos_full' is fully independent
+  // (see makeBlankMacFullAnswers' comment, state.js) so it gets its own
+  // state.macFullSubmitAnswers instead — writing into iosSubmitAnswers here
+  // would silently corrupt the App Store's own privacy answers.
+  const iosAns = (pid === 'macos_full') ? state.macFullSubmitAnswers : state.iosSubmitAnswers;
+
   if (selected.length === 0) {
     // Nothing selected — clear descriptions AND any AI-inferred data types, then re-render
-    if (state.iosSubmitAnswers) {
-      state.iosSubmitAnswers.privacyDescription = '';
-      state.iosSubmitAnswers.dataPerType        = {};
-      state.iosSubmitAnswers.collectsData       = null;
+    if (iosAns) {
+      iosAns.privacyDescription = '';
+      iosAns.dataPerType        = {};
+      iosAns.collectsData       = null;
     }
     if (state.androidSubmitAnswers) {
       state.androidSubmitAnswers.androidDataDescription = '';
@@ -1673,28 +1919,28 @@ function togglePrivacyPreset(id) {
   }
 
   if (hasGuest) {
-    state.iosSubmitAnswers.collectsData            = 'no';
+    iosAns.collectsData                             = 'no';
     state.androidSubmitAnswers.collectsOrSharesData = 'no';
-    state.iosSubmitAnswers.privacyDescription       = '';
+    iosAns.privacyDescription                       = '';
     state.androidSubmitAnswers.androidDataDescription = '';
     reRenderStepModal();
     return;
   }
 
   // Non-guest presets selected
-  state.iosSubmitAnswers.collectsData            = 'yes';
+  iosAns.collectsData                             = 'yes';
   state.androidSubmitAnswers.collectsOrSharesData = 'yes';
   const combined = selected
     .map(pid2 => PRIVACY_PRESETS.find(p => p.id === pid2)?.description || '')
     .filter(Boolean)
     .join(' ');
-  state.iosSubmitAnswers.privacyDescription       = combined;
+  iosAns.privacyDescription                       = combined;
   state.androidSubmitAnswers.androidDataDescription = combined;
 
   // Trigger AI translation for the active platform only
   if (combined.length >= 20) {
-    if (pid === 'ios' || pid === 'macos') _triggerPrivacyAI(pid);
-    if (pid === 'android')                _triggerAndroidDataAI();
+    if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') _triggerPrivacyAI(pid);
+    if (pid === 'android')                                        _triggerAndroidDataAI();
   }
   reRenderStepModal();
 }
@@ -2337,6 +2583,7 @@ function activatePlatform(platformId) {
   // See toggleOnboardingPlatform's identical call — Submission's own
   // "add a platform" entry point needs the same one-time seed.
   if (platformId === 'macos') seedMacAppStoreListing();
+  if (platformId === 'macos_full') seedMacFullAppStoreListing();
   renderDashboard();
   // Shippy's platform item lives in the Details view, which renderDashboard()
   // never touches. Without this the checklist stays stale until something
@@ -10954,16 +11201,24 @@ async function _retryInference(pid, stepId) {
 /* Post-inference setup: take filter snapshots + collapse to Unanswered for all active platforms */
 function _postInferenceSetup(stepId) {
   if (stepId !== 'questionnaire' && stepId !== 'contentRating') return;
-  for (const p of ['ios', 'android', 'steam']) {
+  // Mac App Store Full is fully independent (never receives AI-inferred
+  // answers via the unified iOS/Android/Steam inference call — see
+  // inferAllQuestionnaires/runInference, claude.js), so it still needs its
+  // own filter snapshot taken here rather than via that call's results, the
+  // same way 'macos' itself never appears in this list either (its Content
+  // Rating is shared with iOS, so iOS's own snapshot already covers it).
+  for (const p of ['ios', 'android', 'steam', 'macos_full']) {
     if (!state.activePlatforms.has(p)) continue;
     takeFilterSnapshot(p);
-    if (p === 'ios')     state.iosContentRatingExpanded     = false;
-    if (p === 'android') state.androidContentRatingExpanded = false;
-    if (p === 'steam')   state.steamContentRatingExpanded   = false;
+    if (p === 'ios')        state.iosContentRatingExpanded     = false;
+    if (p === 'android')    state.androidContentRatingExpanded = false;
+    if (p === 'steam')      state.steamContentRatingExpanded   = false;
+    if (p === 'macos_full') state.macFullContentRatingExpanded = false;
   }
   // If inference concluded the app has IAPs, pre-fill demo-ready products so the
-  // Business step's IAP list is already populated (App Store + Mac App Store).
-  for (const p of ['ios', 'macos']) {
+  // Business step's IAP list is already populated (App Store + Mac App Store +
+  // Mac App Store Full).
+  for (const p of ['ios', 'macos', 'macos_full']) {
     if (!state.activePlatforms.has(p)) continue;
     if (_appStoreAnswers(p).hasIAP === 'yes') _seedStubIapProducts(p);
   }
@@ -11023,10 +11278,11 @@ function handleBuildUpload(pid, files) {
 function _refreshBuildUI(pid) {
   const card = document.getElementById('active-card-' + pid);
   if (card) {
-    if (pid === 'ios')          card.outerHTML = buildIOSActiveCard(pid);
-    else if (pid === 'macos')   card.outerHTML = buildIOSActiveCard(pid);
-    else if (pid === 'android') card.outerHTML = buildAndroidActiveCard(pid);
-    else if (pid === 'steam')   card.outerHTML = buildSteamActiveCard(pid);
+    if (pid === 'ios')             card.outerHTML = buildIOSActiveCard(pid);
+    else if (pid === 'macos')      card.outerHTML = buildIOSActiveCard(pid);
+    else if (pid === 'macos_full') card.outerHTML = buildIOSActiveCard(pid);
+    else if (pid === 'android')    card.outerHTML = buildAndroidActiveCard(pid);
+    else if (pid === 'steam')      card.outerHTML = buildSteamActiveCard(pid);
   } else {
     renderDashboard();
   }

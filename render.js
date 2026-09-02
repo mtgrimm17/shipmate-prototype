@@ -801,6 +801,11 @@ function buildObPlatTilesHTML() {
     // drives independence — toggling it only ever touches state.activePlatforms's
     // 'macos' entry, never 'ios'.
     { id:'macos',   iconKey:'ios',         label:'Mac App Store', comingSoon: false },
+    // Same icon-reuse treatment as Mac App Store above (iconKey: 'ios') —
+    // this is the fuller, section-by-section submission flow covering
+    // every App Store Connect requirement; its own tile/id ('macos_full')
+    // is what keeps it fully independent of both 'macos' and 'ios'.
+    { id:'macos_full', iconKey:'ios',      label:'Mac App Store Full', comingSoon: false },
     { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
     { id:'android', iconKey:'android',     label:'Google Play', comingSoon: false },
     { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
@@ -1755,7 +1760,7 @@ function buildConsolidatedBanner() {
 }
 
 // Canonical display order for platform cards (active and inactive sections)
-const PLATFORM_ORDER = ['steam', 'macos', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
+const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -3774,8 +3779,9 @@ function buildAccountCard(pid) {
 
 function buildActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
-  if (pid === 'ios')     return buildIOSActiveCard(pid, force);
-  if (pid === 'macos')   return buildIOSActiveCard(pid, force);
+  if (pid === 'ios')        return buildIOSActiveCard(pid, force);
+  if (pid === 'macos')      return buildIOSActiveCard(pid, force);
+  if (pid === 'macos_full') return buildIOSActiveCard(pid, force);
   if (pid === 'android') return buildAndroidActiveCard(pid, force);
   if (pid === 'steam')   return buildSteamActiveCard(pid, force);
 
@@ -3891,9 +3897,11 @@ function _openTrackMenu(pid) {
 // shared implementation instead of a second literal copy, while each
 // platform's actual completion/risk data stays fully separate.
 function _appStoreSectionComplete(pid, sectionId) {
+  if (pid === 'macos_full') return isMacFullSectionComplete(sectionId);
   return pid === 'macos' ? isMacSectionComplete(sectionId) : isIOSSectionComplete(sectionId);
 }
 function _appStoreSectionRisk(pid, sectionId) {
+  if (pid === 'macos_full') return computeMacFullSectionRisk(sectionId);
   return pid === 'macos' ? computeMacSectionRisk(sectionId) : computeIOSSectionRisk(sectionId);
 }
 
@@ -4302,6 +4310,27 @@ function renderStepModal() {
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
   } else if (platformId === 'web') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
+  } else if (platformId === 'macos_full') {
+    // Mac App Store Full — organized by App Store Connect section (see
+    // PLATFORMS.macos_full.steps, state.js). contentRating/privacy/
+    // improveSubmission reuse the same generic builders every other
+    // platform's App-Store-style step already calls (buildContentRatingSection/
+    // buildPrivacySection/buildImproveSubmissionSection all resolve via pid
+    // already); every other step gets its own dedicated builder below,
+    // since none of them have a real ios/macos equivalent to reuse.
+    if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
+    else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
+    else if (stepId === 'pricing')            body = buildMacFullPricingSection();
+    else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
+    else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
+    else if (stepId === 'buildCompliance')    body = buildMacFullBuildComplianceSection();
+    else if (stepId === 'iap')                body = buildIapSection(platformId);
+    else if (stepId === 'subscriptions')      body = buildMacFullSubscriptionsSection();
+    else if (stepId === 'gameCenter')         body = buildMacFullGameCenterSection();
+    else if (stepId === 'reviewInfo')         body = buildMacFullReviewInfoSection();
+    else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
+    else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
   } else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
@@ -4312,10 +4341,11 @@ function renderStepModal() {
   else if (stepId === 'privacy')              body = buildPrivacySection(platformId);
   else if (stepId === 'business')             body = buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
 
-  const complete = platformId === 'android' ? isAndroidSectionComplete(stepId)
-               : platformId === 'steam'   ? isSteamSectionComplete(stepId)
-               : platformId === 'web'     ? (state.platformStepStatus?.web?.[stepId] === 'complete')
-               : platformId === 'macos'   ? isMacSectionComplete(stepId)
+  const complete = platformId === 'android'    ? isAndroidSectionComplete(stepId)
+               : platformId === 'steam'        ? isSteamSectionComplete(stepId)
+               : platformId === 'web'          ? (state.platformStepStatus?.web?.[stepId] === 'complete')
+               : platformId === 'macos'        ? isMacSectionComplete(stepId)
+               : platformId === 'macos_full'   ? isMacFullSectionComplete(stepId)
                : isIOSSectionComplete(stepId);
 
   modal.innerHTML = `
@@ -5569,16 +5599,19 @@ function buildImproveSubmissionSection(platformId) {
   const isIos     = platformId === 'ios';
   const isAndroid = platformId === 'android';
   const isMac     = platformId === 'macos';
+  const isMacFull = platformId === 'macos_full';
 
   // Mark as seen on first render — triggers step completion in dashboard.
-  // Mac App Store tracks its own independent completion (state.macSubmitAnswers)
-  // even though it shares the SAME AI analysis content as iOS below
+  // Mac App Store (and Mac App Store Full) track their own independent
+  // completion (state.macSubmitAnswers / state.macFullSubmitAnswers) even
+  // though they share the SAME AI analysis content as iOS below
   // (state.storePageInsights/state.improveSubmissionAnalysis aren't pid-keyed —
-  // this section's suggestions are game-wide, not App-Store-vs-Mac-App-Store
+  // this section's suggestions are game-wide, not per-platform-listing
   // specific), so "seen" is the only thing that's actually independent here.
   if (isIos)          state.iosSubmitAnswers.improveSubmissionSeen     = true;
   else if (isAndroid) state.androidSubmitAnswers.improveSubmissionSeen = true;
   else if (isMac)     state.macSubmitAnswers.improveSubmissionSeen     = true;
+  else if (isMacFull) state.macFullSubmitAnswers.improveSubmissionSeen = true;
   else                state.steamSubmitAnswers.improveSubmissionSeen   = true;
 
   const spi = state.storePageInsights;
@@ -7707,20 +7740,22 @@ function renderTrackSubmitModal(pid) {
 // state.iosAnswerMeta so a shared field's AI-confidence badge always agrees
 // between platforms; anything else still resolves state.macAnswerMeta.
 function _getAnswerMeta(platformId, qid) {
-  if (platformId === 'ios')     return state.iosAnswerMeta[qid];
-  if (platformId === 'macos')   return _appStoreAnswerMeta('macos', qid)[qid];
-  if (platformId === 'android') return state.cqAnswerMeta[qid];
-  if (platformId === 'steam')   return state.steamAnswerMeta[qid];
+  if (platformId === 'ios')        return state.iosAnswerMeta[qid];
+  if (platformId === 'macos')      return _appStoreAnswerMeta('macos', qid)[qid];
+  if (platformId === 'macos_full') return _appStoreAnswerMeta('macos_full', qid)[qid];
+  if (platformId === 'android')    return state.cqAnswerMeta[qid];
+  if (platformId === 'steam')      return state.steamAnswerMeta[qid];
   return null;
 }
 
 // Get the live (current) answer value for any platform. Same shared-field
 // routing as _getAnswerMeta above, via _appStoreAnswers (app.js).
 function _getLiveAnswer(platformId, qid) {
-  if (platformId === 'ios')     return state.iosSubmitAnswers[qid];
-  if (platformId === 'macos')   return _appStoreAnswers('macos', qid)[qid];
-  if (platformId === 'android') return state.cqAnswers[qid];
-  if (platformId === 'steam')   return (state.steamSubmitAnswers.steamContentAnswers || {})[qid];
+  if (platformId === 'ios')        return state.iosSubmitAnswers[qid];
+  if (platformId === 'macos')      return _appStoreAnswers('macos', qid)[qid];
+  if (platformId === 'macos_full') return _appStoreAnswers('macos_full', qid)[qid];
+  if (platformId === 'android')    return state.cqAnswers[qid];
+  if (platformId === 'steam')      return (state.steamSubmitAnswers.steamContentAnswers || {})[qid];
   return null;
 }
 
@@ -7790,6 +7825,19 @@ function takeFilterSnapshot(platformId) {
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
     state.macAnsweredAtInference = s;
+  } else if (platformId === 'macos_full') {
+    // Fully independent — reads state.macFullSubmitAnswers directly, no
+    // delegation to iOS/Mac App Store's shared answers (see
+    // makeBlankMacFullAnswers' comment, state.js).
+    const a = state.macFullSubmitAnswers;
+    const s = new Set();
+    IOS_INTENSITY_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
+    IOS_CONTENT_YN_QUESTIONS.forEach(q => { if (a[q.id] !== null && a[q.id] !== undefined) s.add(q.id); });
+    if (a.hasIAP        !== null && a.hasIAP        !== undefined) s.add('hasIAP');
+    if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
+    if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
+    if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    state.macFullAnsweredAtInference = s;
   } else if (platformId === 'android') {
     const androidQs = CQ_QUESTIONS.filter(q => q.platforms.includes('android'));
     state.androidAnswerSnapshot = new Set(
@@ -8305,8 +8353,8 @@ function buildContentRatingSection(pid = 'ios') {
   };
 
   // Whether a question was answered at inference time (determines collapse eligibility)
-  const answered     = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference; // null = pre-inference, Set = post-inference
-  const showAll      = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded; // false = "Unanswered", true = "All"
+  const answered     = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference; // null = pre-inference, Set = post-inference
+  const showAll      = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded; // false = "Unanswered", true = "All"
   const collapseMode = answered !== null;
 
   // "Unanswered / All" toggle pill — shown only after AI inference has run
@@ -8422,9 +8470,9 @@ function buildExportComplianceSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
   // Respect the Unanswered/All filter — hide this section when usesEncryption is answered
-  const answered     = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
+  const answered     = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const collapseMode = answered !== null;
-  const showAll      = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
+  const showAll      = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
   if (collapseMode && !showAll && answered.has('usesEncryption')) return '';
 
   let followUp = '';
@@ -8578,9 +8626,9 @@ function buildBusinessSection(pid = 'ios') {
   // though the developer never looked at Tax Category. The only genuine
   // signal that this field was actually reviewed is the human-confirmed
   // flag answerIOSField sets when the dropdown itself is changed.
-  const bsAnswered    = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
+  const bsAnswered    = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const bsCollapse    = bsAnswered !== null;
-  const bsShowAll     = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
+  const bsShowAll     = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
   const taxCatMeta    = _appStoreAnswerMeta(pid, 'taxCategory');
   const hideTaxCat    = bsCollapse && !bsShowAll && taxCatMeta?.taxCategory?.humanConfirmed === true;
 
@@ -8642,9 +8690,9 @@ function buildIapSection(pid = 'ios') {
   // (and their localizations) disappear entirely the moment hasIAP was
   // answered and the view was collapsed to "Unanswered" — the exact
   // opposite of what this filter is for.
-  const bsAnswered = pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
+  const bsAnswered = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
   const bsCollapse = bsAnswered !== null;
-  const bsShowAll  = pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
+  const bsShowAll  = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
   const hideIAPQuestion = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
 
   const iapProducts = a.iapProducts || [];
@@ -8666,7 +8714,16 @@ function buildIapSection(pid = 'ios') {
   // buildStorePreviewFlipSection routes 'macos' to buildMacIapLocalizationsSection(),
   // which reads Mac App Store's own saved products
   // (state.macSubmitAnswers.iapProducts) rather than iOS's.
-  const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
+  // Mac App Store Full has no IAP Localization Review of its own — see
+  // buildStorePreviewFlipSection's 'iapLocalizations' target, which only
+  // knows how to route 'macos' (buildMacIapLocalizationsSection) or
+  // everything else to the App Store's own buildIapLocalizationsSection
+  // (reading state.iosSubmitAnswers.iapProducts). Showing this button here
+  // would flip macos_full's modal to iOS's own saved products and let
+  // edits there corrupt the App Store's data — out of scope for this
+  // platform per the "simplified but functional" design decision, so it's
+  // suppressed entirely rather than routed anywhere.
+  const hasSavedIapProducts = pid !== 'macos_full' && iapProducts.some(p => p.collapsed);
   const iapLocsBtn = hasSavedIapProducts
     ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('${pid}','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
     : '';
@@ -9091,6 +9148,577 @@ function buildMacIapLocalizationsSection() {
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   MAC APP STORE FULL — organized by App Store Connect section (see
+   PLATFORMS.macos_full.steps, state.js). Content Rating, App Privacy,
+   In-App Purchases, and Improve Your Submission all reuse the same
+   generic builders every other App-Store-shaped platform already calls
+   (buildContentRatingSection/buildPrivacySection/buildIapSection/
+   buildImproveSubmissionSection — see renderStepModal's 'macos_full'
+   branch above) since those questions are identical no matter which
+   Apple storefront is asking them. Every step below has no real ios/macos
+   equivalent worth reusing, so it gets its own dedicated builder reading
+   directly from state.macFullSubmitAnswers (via setMacFullField/
+   setMacFullTextField, app.js) and, for Version Information and Product
+   Page Preview, state.macFullAppStoreListing.
+   ═══════════════════════════════════════════════════ */
+
+// Apple's own primary/secondary App Store category list (App Store Connect
+// → App Information → Category). Kept as plain display strings rather than
+// {id,label} pairs, matching the value ASC itself shows and stores.
+const MAC_FULL_CATEGORIES = [
+  'Books', 'Business', 'Developer Tools', 'Education', 'Entertainment',
+  'Finance', 'Food & Drink', 'Games', 'Graphics & Design', 'Health & Fitness',
+  'Kids', 'Lifestyle', 'Magazines & Newspapers', 'Medical', 'Music',
+  'Navigation', 'News', 'Photo & Video', 'Productivity', 'Reference',
+  'Shopping', 'Social Networking', 'Sports', 'Travel', 'Utilities',
+  'Video', 'Weather',
+];
+
+// Apple's fixed App Tracking Transparency / IDFA usage reasons (App Store
+// Connect → App Privacy → "Advertising Identifier (IDFA)" declaration).
+const MAC_FULL_IDFA_REASONS = [
+  { id: 'serve-ads',         label: 'Serve advertisements within this app' },
+  { id: 'attribute-install', label: 'Attribute this app installation to a previously served advertisement' },
+  { id: 'attribute-action',  label: 'Attribute an action taken within this app to a previously served advertisement' },
+  { id: 'data-broker',       label: "Share this app's data with a data broker" },
+];
+
+// Apple's fixed subscription duration options (App Store Connect →
+// Subscriptions → a subscription's Duration).
+const MAC_FULL_SUB_DURATIONS = ['1 Week', '1 Month', '2 Months', '3 Months', '6 Months', '1 Year'];
+
+// Apple's fixed Game Center leaderboard score-format options (App Store
+// Connect → Game Center → Leaderboards → Score Format) — simplified to the
+// most common four rather than every format ASC itself offers.
+const MAC_FULL_SCORE_FORMATS = ['Integer', 'Decimal (Money)', 'Time (mm:ss)', 'Time (hh:mm:ss)'];
+
+// Generic single-line (or textarea) text field for Mac App Store Full's own
+// step builders below — writes into state.macFullSubmitAnswers via a
+// dot-separated path (see setMacFullTextField/_mfNestedContainer, app.js).
+// Mutates silently on oninput (no re-render, so typing never loses focus) —
+// none of these fields drive other UI that needs to react live, unlike the
+// YES/NO/select/checkbox fields elsewhere in this section, which call
+// setMacFullField instead.
+function _mfTextField(label, path, value, placeholder = '', type = 'text') {
+  const input = type === 'textarea'
+    ? `<textarea class="form-input" rows="3" placeholder="${escHtml(placeholder)}"
+                 oninput="setMacFullTextField('${path}', this.value)">${escHtml(value)}</textarea>`
+    : `<input class="form-input" type="text" value="${escHtml(value)}" placeholder="${escHtml(placeholder)}"
+              oninput="setMacFullTextField('${path}', this.value)">`;
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">${label}</label>
+      ${input}
+    </div>`;
+}
+
+// Same as _mfTextField above, but writes into state.macFullAppStoreListing
+// via setMacFullListingField (app.js) instead of macFullSubmitAnswers —
+// used only by buildMacFullVersionInfoSection below.
+function _mfListingField(label, field, value, placeholder = '', type = 'text') {
+  const input = type === 'textarea'
+    ? `<textarea class="form-input" rows="3" placeholder="${escHtml(placeholder)}"
+                 oninput="setMacFullListingField('${field}', this.value)">${escHtml(value)}</textarea>`
+    : `<input class="form-input" type="text" value="${escHtml(value)}" placeholder="${escHtml(placeholder)}"
+              oninput="setMacFullListingField('${field}', this.value)">`;
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">${label}</label>
+      ${input}
+    </div>`;
+}
+
+// Small file-row display shared by App Information's Routing App Coverage
+// File and App Review Information's attachment — mirrors trailerFileRowHTML's
+// convention (name + size + Remove button) with a generic file icon instead
+// of a video-specific one, and a KB size (these are tiny placeholder uploads,
+// not multi-megabyte trailers).
+function _mfFileRowHTML(file, removeOnclick) {
+  const kb = file.size ? Math.max(1, Math.round(file.size / 1024)) : 0;
+  return `
+    <div class="trailer-file-row">
+      <span class="trailer-file-name">📄 ${escHtml(file.name)}</span>
+      <span class="trailer-file-size">${kb} KB</span>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="${removeOnclick}">Remove</button>
+    </div>`;
+}
+
+/* ── Mac App Store Full — App Information ────────────────────────────── */
+function buildMacFullAppInfoSection() {
+  const a  = state.macFullSubmitAnswers;
+  const rf = a.routingCoverageFile;
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Primary Category</label>
+      <select class="form-input" onchange="setMacFullField('category.primary', this.value)">
+        <option value="">Select a category</option>
+        ${MAC_FULL_CATEGORIES.map(c => `<option value="${escHtml(c)}" ${a.category.primary === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Secondary Category <span class="form-hint-inline">(optional)</span></label>
+      <select class="form-input" onchange="setMacFullField('category.secondary', this.value)">
+        <option value="">None</option>
+        ${MAC_FULL_CATEGORIES.map(c => `<option value="${escHtml(c)}" ${a.category.secondary === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>
+
+    ${_mfTextField('Bundle ID', 'bundleId', a.bundleId, 'com.yourstudio.yourgame')}
+    ${_mfTextField('SKU', 'sku', a.sku, 'A unique ID not shown to players, e.g. YOURGAME001')}
+    ${_mfTextField('Apple ID', 'appleId', a.appleId, 'Assigned by App Store Connect once the app record is created')}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Does your app contain, show, or access third-party content?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.contentRights === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','yes')">YES</button>
+        <button class="yn-btn yn-no ${a.contentRights === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','no')">NO</button>
+      </div>
+    </div>
+    ${a.contentRights === 'yes' ? `
+    <div class="ios-followup">
+      ${_mfTextField('Explain your rights to use this content', 'contentRightsExplanation', a.contentRightsExplanation, 'e.g. licensed stock music, a third-party data API, etc.', 'textarea')}
+    </div>` : ''}
+
+    <div class="form-group" style="margin:20px 0 2px;">
+      <label class="form-label">Trade Representative Contact Information <span class="form-hint-inline">(EU only)</span></label>
+      <div class="form-hint">Required if your business is registered in the European Union — shown to EU users on your product page.</div>
+    </div>
+    ${_mfTextField('Name', 'tradeRep.name', a.tradeRep.name)}
+    ${_mfTextField('Address', 'tradeRep.address', a.tradeRep.address)}
+    ${_mfTextField('Phone', 'tradeRep.phone', a.tradeRep.phone)}
+    ${_mfTextField('Email', 'tradeRep.email', a.tradeRep.email)}
+
+    <div class="form-group" style="margin-top:6px;">
+      <label class="form-label">Routing App Coverage File <span class="form-hint-inline">(optional)</span></label>
+      <div class="form-hint">Only needed if your app uses Apple's Network Extension framework to route network traffic.</div>
+      ${rf
+        ? _mfFileRowHTML(rf, 'removeMacFullRoutingFile()')
+        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullRoutingFile(event)"></label>`}
+    </div>
+
+    <div class="form-group" style="margin-top:14px;">
+      <div class="form-hint">Privacy Policy URL is entered once, in the App Privacy step below — App Store Connect's own App Information tab reads the same URL from there.</div>
+    </div>`;
+}
+
+/* ── Mac App Store Full — Pricing and Availability ───────────────────────
+   Base Price/Tax Category stay shared game-wide via buildBusinessSection
+   ('macos_full') — see that function's own comment — with everything else
+   ASC's Pricing and Availability page asks for layered on below it. */
+function buildMacFullPricingSection() {
+  const a = state.macFullSubmitAnswers;
+
+  const priceChangesHTML = (a.scheduledPriceChanges || []).map(p => `
+    <div class="pk-link-edit-row" style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" class="form-input" style="flex:1;" value="${escHtml(p.date)}" placeholder="Effective date, e.g. 2027-01-01"
+             oninput="setMacFullPriceChangeField('${p.id}','date',this.value)">
+      <input type="text" class="form-input" style="flex:1;" value="${escHtml(p.tier)}" placeholder="New price tier, e.g. 6.99"
+             oninput="setMacFullPriceChangeField('${p.id}','tier',this.value)">
+      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;" onclick="removeMacFullPriceChange('${p.id}')" title="Remove">✕</button>
+    </div>`).join('');
+
+  const countryOptions = IOS_COUNTRIES.map(c =>
+    `<option value="${c.code}" ${a.availability.countries.includes(c.code) ? 'selected' : ''}>${c.name}</option>`
+  ).join('');
+
+  const orgsHTML = (a.customB2B.orgs || []).map(o => `
+    <div class="pk-link-edit-row" style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" class="form-input" style="flex:1;" value="${escHtml(o.name)}" placeholder="Organization name"
+             oninput="setMacFullB2BOrgField('${o.id}', this.value)">
+      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;" onclick="removeMacFullB2BOrg('${o.id}')" title="Remove">✕</button>
+    </div>`).join('');
+
+  return `
+    ${buildBusinessSection('macos_full')}
+
+    <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
+      <label class="form-label">Scheduled Price Changes <span class="form-hint-inline">(optional)</span></label>
+      <div class="form-hint">Covers App Store Connect's Price Schedule — a simplified list of future price changes rather than Apple's full multi-tier scheduling screen.</div>
+      ${priceChangesHTML}
+      <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullPriceChange()">+ Add Price Change</button>
+    </div>
+
+    <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
+      <label class="form-label">Availability</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.availability.mode === 'all' ? 'is-selected' : ''}" onclick="setMacFullAvailabilityMode('all')">All Countries</button>
+        <button class="yn-btn yn-no ${a.availability.mode === 'select' ? 'is-selected' : ''}" onclick="setMacFullAvailabilityMode('select')">Select Countries</button>
+      </div>
+    </div>
+    ${a.availability.mode === 'select' ? `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Countries and Regions</label>
+      <select class="form-input" multiple size="8" onchange="setMacFullField('availability.countries', Array.from(this.selectedOptions).map(o => o.value))">
+        ${countryOptions}
+      </select>
+      <div class="form-hint">Cmd/Ctrl-click to select multiple.</div>
+    </div>` : ''}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Pre-Order <span class="form-hint-inline">(optional)</span></label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.preOrder.enabled ? 'is-selected' : ''}" onclick="setMacFullField('preOrder.enabled', true)">ON</button>
+        <button class="yn-btn yn-no ${!a.preOrder.enabled ? 'is-selected' : ''}" onclick="setMacFullField('preOrder.enabled', false)">OFF</button>
+      </div>
+    </div>
+    ${a.preOrder.enabled ? `
+    <div class="ios-followup">
+      ${_mfTextField('Expected release date', 'preOrder.releaseDate', a.preOrder.releaseDate, 'e.g. 2027-03-01')}
+    </div>` : ''}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Family Sharing</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.familySharing ? 'is-selected' : ''}" onclick="setMacFullField('familySharing', true)">ON</button>
+        <button class="yn-btn yn-no ${!a.familySharing ? 'is-selected' : ''}" onclick="setMacFullField('familySharing', false)">OFF</button>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Custom App Pricing for Business <span class="form-hint-inline">(optional)</span></label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.customB2B.enabled ? 'is-selected' : ''}" onclick="setMacFullField('customB2B.enabled', true)">ON</button>
+        <button class="yn-btn yn-no ${!a.customB2B.enabled ? 'is-selected' : ''}" onclick="setMacFullField('customB2B.enabled', false)">OFF</button>
+      </div>
+    </div>
+    ${a.customB2B.enabled ? `
+    <div class="ios-followup">
+      ${orgsHTML}
+      <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullB2BOrg()">+ Add Organization</button>
+    </div>` : ''}`;
+}
+
+/* ── Mac App Store Full — Version Information ─────────────────────────────
+   Screenshots/Title/Subtitle are edited from the Product Page Preview step
+   further below (buildMacFullStorePreviewSection), same as every other
+   App-Store-shaped platform — this step covers the rest of what ASC's
+   Version Information page asks for. */
+function buildMacFullVersionInfoSection() {
+  seedMacFullAppStoreListing();
+  const l  = state.macFullAppStoreListing;
+  const ps = state.platformScreenshots?.macos_full;
+  const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
+                   (state.uploads?.screenshots || []).length > 0;
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <div class="form-hint">Screenshots, Title, and Subtitle are managed in the Product Page Preview step below${hasShots ? '' : ' — no screenshots are available yet'}.</div>
+    </div>
+    ${_mfListingField('Description', 'description', l.description, 'Describe your game for the App Store', 'textarea')}
+    ${_mfListingField("What's New in This Version", 'releaseNotes', l.releaseNotes, 'Summarize what changed in this version', 'textarea')}
+    ${_mfListingField('Promotional Text', 'promotionalText', l.promotionalText, 'Can be updated anytime without submitting a new build', 'textarea')}
+    ${_mfListingField('Keywords', 'keywords', l.keywords, 'Comma-separated, up to 100 characters total')}
+    ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'https://yourstudio.com/support')}
+    ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'https://yourstudio.com')}
+    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}
+    ${_mfListingField('Version Number', 'versionNumber', l.versionNumber, 'e.g. 1.0.0')}
+    ${_mfTextField('App Preview Video URL', 'appPreviewUrl', state.macFullSubmitAnswers.appPreviewUrl, 'Optional link to a preview video')}`;
+}
+
+/* ── Mac App Store Full — Build & Compliance ─────────────────────────── */
+function buildMacFullBuildComplianceSection() {
+  const a    = state.macFullSubmitAnswers;
+  const idfa = a.idfaDeclaration;
+  return `
+    ${buildExportComplianceSection('macos_full')}
+
+    <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
+      <label class="form-label">Does this app use the Advertising Identifier (IDFA)?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${idfa.usesIdfa === true ? 'is-selected' : ''}" onclick="setMacFullField('idfaDeclaration.usesIdfa', true)">YES</button>
+        <button class="yn-btn yn-no ${idfa.usesIdfa === false ? 'is-selected' : ''}" onclick="setMacFullField('idfaDeclaration.usesIdfa', false)">NO</button>
+      </div>
+    </div>
+    ${idfa.usesIdfa === true ? `
+    <div class="ios-followup">
+      <div class="form-hint">Select every way your app uses the IDFA:</div>
+      ${MAC_FULL_IDFA_REASONS.map(r => `
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
+          <input type="checkbox" ${idfa.reasons.includes(r.id) ? 'checked' : ''} onchange="toggleMacFullIdfaReason('${r.id}')">
+          ${r.label}
+        </label>`).join('')}
+    </div>` : ''}`;
+}
+
+/* One tier row of a Mac App Store Full subscription group — mirrors
+   buildIapProductRow's layout/classes so subscriptions visually match the
+   IAP Products list right above them in the step order. */
+function buildMacFullSubTierRow(groupId, tr) {
+  return `
+    <div class="iap-product-row" data-iap-id="${tr.id}">
+      <button class="iap-product-remove" type="button" onclick="removeMacFullSubTier('${groupId}','${tr.id}')" title="Remove tier" aria-label="Remove tier">✕</button>
+      <div class="iap-product-field">
+        <label class="form-label">Reference Name</label>
+        <input class="form-input" type="text" value="${escHtml(tr.refName)}" placeholder="Internal name"
+               oninput="setMacFullSubTierField('${groupId}','${tr.id}','refName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Product ID</label>
+        <input class="form-input" type="text" value="${escHtml(tr.productId)}" placeholder="com.yourstudio.game.sub.monthly"
+               oninput="setMacFullSubTierField('${groupId}','${tr.id}','productId',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Duration</label>
+        <select class="form-input" onchange="setMacFullSubTierField('${groupId}','${tr.id}','duration',this.value)">
+          ${MAC_FULL_SUB_DURATIONS.map(d => `<option value="${d}" ${tr.duration === d ? 'selected' : ''}>${d}</option>`).join('')}
+        </select>
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Price</label>
+        <input class="form-input" type="text" value="${escHtml(tr.price)}" placeholder="e.g., 4.99"
+               oninput="setMacFullSubTierField('${groupId}','${tr.id}','price',this.value)">
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Intro offer?</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${tr.hasIntroOffer ? 'is-selected' : ''}" onclick="setMacFullSubTierField('${groupId}','${tr.id}','hasIntroOffer',true)">YES</button>
+          <button class="yn-btn yn-no ${!tr.hasIntroOffer ? 'is-selected' : ''}" onclick="setMacFullSubTierField('${groupId}','${tr.id}','hasIntroOffer',false)">NO</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ── Mac App Store Full — Subscriptions ─────────────────────────────────
+   Simplified per the "simplified but functional" design decision: a
+   repeatable list of groups, each with a repeatable list of tiers, rather
+   than Apple's own full multi-screen Subscription Groups flow. */
+function buildMacFullSubscriptionsSection() {
+  const groups = state.macFullSubmitAnswers.subscriptionGroups || [];
+  return `
+    <div class="form-group" style="margin-bottom:10px;">
+      <div class="form-hint">Covers App Store Connect's Subscription Groups — a simplified repeatable list of groups and tiers rather than Apple's full multi-screen subscription setup. Leave empty if your game has no subscriptions.</div>
+    </div>
+    ${groups.map(g => `
+      <div class="iap-products-group" style="margin-bottom:20px;padding:14px;border:1px solid var(--border);border-radius:10px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input class="form-input" type="text" style="flex:1;" value="${escHtml(g.name)}" placeholder="Subscription group name"
+                 oninput="setMacFullSubGroupField('${g.id}','name',this.value)">
+          <button class="btn btn-ghost btn-sm" type="button" onclick="removeMacFullSubGroup('${g.id}')" title="Remove group">✕</button>
+        </div>
+        ${(g.tiers || []).map(tr => buildMacFullSubTierRow(g.id, tr)).join('')}
+        <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullSubTier('${g.id}')">+ Add Tier</button>
+      </div>`).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullSubGroup()">+ Add Subscription Group</button>`;
+}
+
+/* ── Mac App Store Full — Game Center ────────────────────────────────────
+   Leaderboards/Achievements are simplified repeatable lists (per the
+   "simplified but functional" design decision) rather than Apple's own
+   per-item localization/image-upload flows. Multiplayer is a single
+   on/off toggle plus a player-count range, covering the gist of Game
+   Center's Multiplayer configuration without replicating its matchmaking
+   rule builder. */
+function buildMacFullGameCenterSection() {
+  const gc = state.macFullSubmitAnswers.gameCenter;
+
+  const leaderboardsHTML = (gc.leaderboards || []).map(lb => `
+    <div class="iap-product-row" data-iap-id="${lb.id}">
+      <button class="iap-product-remove" type="button" onclick="removeMacFullLeaderboard('${lb.id}')" title="Remove leaderboard" aria-label="Remove leaderboard">✕</button>
+      <div class="iap-product-field">
+        <label class="form-label">Name</label>
+        <input class="form-input" type="text" value="${escHtml(lb.name)}" placeholder="e.g. Global High Scores"
+               oninput="setMacFullLeaderboardField('${lb.id}','name',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Leaderboard ID</label>
+        <input class="form-input" type="text" value="${escHtml(lb.gcId)}" placeholder="com.yourstudio.game.highscores"
+               oninput="setMacFullLeaderboardField('${lb.id}','gcId',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Score Format</label>
+        <select class="form-input" onchange="setMacFullLeaderboardField('${lb.id}','scoreFormat',this.value)">
+          ${MAC_FULL_SCORE_FORMATS.map(f => `<option value="${f}" ${lb.scoreFormat === f ? 'selected' : ''}>${f}</option>`).join('')}
+        </select>
+      </div>
+    </div>`).join('');
+
+  const achievementsHTML = (gc.achievements || []).map(ac => `
+    <div class="iap-product-row" data-iap-id="${ac.id}">
+      <button class="iap-product-remove" type="button" onclick="removeMacFullAchievement('${ac.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+      <div class="iap-product-field">
+        <label class="form-label">Name</label>
+        <input class="form-input" type="text" value="${escHtml(ac.name)}" placeholder="e.g. First Victory"
+               oninput="setMacFullAchievementField('${ac.id}','name',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Description</label>
+        <input class="form-input" type="text" value="${escHtml(ac.description)}" placeholder="How the player earns it"
+               oninput="setMacFullAchievementField('${ac.id}','description',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Points</label>
+        <input class="form-input" type="number" min="0" max="100" value="${ac.points}"
+               oninput="setMacFullAchievementField('${ac.id}','points',this.value)">
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Hidden?</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${ac.hidden ? 'is-selected' : ''}" onclick="setMacFullAchievementField('${ac.id}','hidden',true)">YES</button>
+          <button class="yn-btn yn-no ${!ac.hidden ? 'is-selected' : ''}" onclick="setMacFullAchievementField('${ac.id}','hidden',false)">NO</button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Multiplayer</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${gc.multiplayer.enabled ? 'is-selected' : ''}" onclick="setMacFullField('gameCenter.multiplayer.enabled', true)">ON</button>
+        <button class="yn-btn yn-no ${!gc.multiplayer.enabled ? 'is-selected' : ''}" onclick="setMacFullField('gameCenter.multiplayer.enabled', false)">OFF</button>
+      </div>
+    </div>
+    ${gc.multiplayer.enabled ? `
+    <div class="ios-followup" style="display:flex;gap:12px;margin-bottom:14px;">
+      <div class="form-group" style="flex:1;margin-bottom:0;">
+        <label class="form-label">Min Players</label>
+        <input class="form-input" type="number" min="1" value="${gc.multiplayer.minPlayers ?? ''}"
+               oninput="setMacFullTextField('gameCenter.multiplayer.minPlayers', this.value)">
+      </div>
+      <div class="form-group" style="flex:1;margin-bottom:0;">
+        <label class="form-label">Max Players</label>
+        <input class="form-input" type="number" min="1" value="${gc.multiplayer.maxPlayers ?? ''}"
+               oninput="setMacFullTextField('gameCenter.multiplayer.maxPlayers', this.value)">
+      </div>
+    </div>` : ''}
+
+    <div class="form-group" style="margin:14px 0 6px;">
+      <label class="form-label">Leaderboards <span class="form-hint-inline">(optional)</span></label>
+    </div>
+    ${leaderboardsHTML}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullLeaderboard()">+ Add Leaderboard</button>
+
+    <div class="form-group" style="margin:20px 0 6px;">
+      <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
+    </div>
+    ${achievementsHTML}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullAchievement()">+ Add Achievement</button>`;
+}
+
+/* ── Mac App Store Full — App Review Information ─────────────────────── */
+function buildMacFullReviewInfoSection() {
+  const a  = state.macFullSubmitAnswers;
+  const rc = a.reviewContact;
+  const da = a.demoAccount;
+  const att = a.reviewAttachment;
+  return `
+    ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
+    ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
+    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone)}
+    ${_mfTextField('Email', 'reviewContact.email', rc.email)}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Does your app require a demo account to sign in?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${da.required === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','yes')">YES</button>
+        <button class="yn-btn yn-no ${da.required === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','no')">NO</button>
+      </div>
+    </div>
+    ${da.required === 'yes' ? `
+    <div class="ios-followup">
+      ${_mfTextField('Username', 'demoAccount.username', da.username)}
+      ${_mfTextField('Password', 'demoAccount.password', da.password)}
+    </div>` : ''}
+
+    ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea')}
+
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Attachment <span class="form-hint-inline">(optional)</span></label>
+      ${att
+        ? _mfFileRowHTML(att, 'removeMacFullReviewAttachment()')
+        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullReviewAttachment(event)"></label>`}
+    </div>`;
+}
+
+/* ── Mac App Store Full — Version Release ─────────────────────────────── */
+function buildMacFullVersionReleaseSection() {
+  const a = state.macFullSubmitAnswers;
+  const opts = [
+    { value: 'automatic', label: 'Automatically release this version' },
+    { value: 'manual',    label: 'Manually release this version' },
+    { value: 'scheduled', label: 'Automatically release on a scheduled date' },
+  ];
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Release Option</label>
+      ${opts.map(o => `
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
+          <input type="radio" name="mf-release-option" ${a.releaseOption === o.value ? 'checked' : ''} onchange="setMacFullField('releaseOption','${o.value}')">
+          ${o.label}
+        </label>`).join('')}
+    </div>
+    ${a.releaseOption === 'scheduled' ? `
+    <div class="ios-followup">
+      ${_mfTextField('Scheduled Release Date', 'scheduledReleaseDate', a.scheduledReleaseDate, 'e.g. 2027-03-01')}
+    </div>` : ''}
+
+    <div class="form-group" style="margin-top:14px;margin-bottom:6px;">
+      <label class="form-label">Phased Release <span class="form-hint-inline">(optional)</span></label>
+      <div class="form-hint">Gradually rolls the update out to existing users over 7 days instead of all at once.</div>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.phasedRelease ? 'is-selected' : ''}" onclick="setMacFullField('phasedRelease', true)">ON</button>
+        <button class="yn-btn yn-no ${!a.phasedRelease ? 'is-selected' : ''}" onclick="setMacFullField('phasedRelease', false)">OFF</button>
+      </div>
+    </div>`;
+}
+
+/* ── Mac App Store Full — Product Page Preview ───────────────────────────
+   Deliberately a SIMPLIFIED READ-ONLY summary of what's been entered across
+   every other Mac App Store Full step, not a full click-to-edit/
+   translation-status replica of buildMacStorePreviewSection (which has its
+   own per-language inline editing, live translation, and a pixel-accurate
+   App Store card mockup). Building that full a replica for a platform whose
+   own fields are otherwise "simplified but functional" (per this platform's
+   design decision — see makeBlankMacFullAnswers' comment, state.js) would be
+   disproportionate scope for a page whose real job here is just "does
+   everything look right before you submit". Every field shown below is
+   still editable — just back on its own step, not inline from this page. */
+function buildMacFullStorePreviewSection() {
+  const l  = state.macFullAppStoreListing || {};
+  const a  = state.macFullSubmitAnswers;
+  const fd = state.formData;
+
+  const ps = state.platformScreenshots?.macos_full || { selected: [], custom: [] };
+  const allUploaded = (state.uploads?.screenshots || []);
+  const selectedIds = new Set(ps.selected);
+  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
+  const customShots = ps.custom || [];
+  const shots = selectedUploaded.length > 0 || customShots.length > 0
+    ? [...selectedUploaded, ...customShots]
+    : allUploaded;
+
+  const isFree    = !fd.price || parseFloat(fd.price) === 0;
+  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  const iapNote   = a.hasIAP === 'yes' ? ' + In-App Purchases' : '';
+
+  const summaryRow = (label, value) => `
+    <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="color:var(--text-faint);font-size:12px;flex:none;">${label}</span>
+      <span style="color:var(--text);font-size:13px;text-align:right;">${value}</span>
+    </div>`;
+
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <div class="form-hint">A read-only summary of your Mac App Store Full submission — edit any field on its own step above.</div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Screenshots</div>
+      ${shots.length > 0
+        ? `<div style="display:flex;gap:8px;overflow-x:auto;">${shots.map(s => `<img src="${s.dataUrl}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex:none;" alt="">`).join('')}</div>`
+        : `<div class="form-hint">No screenshots added yet.</div>`}
+    </div>
+
+    ${summaryRow('Title', escHtml(l.title || fd.title || 'Untitled'))}
+    ${summaryRow('Subtitle', escHtml(l.subtitle || fd.subtitle || '—'))}
+    ${summaryRow('Category', escHtml(a.category.primary || '—'))}
+    ${summaryRow('Price', priceText + iapNote)}
+    ${summaryRow('Version', escHtml(l.versionNumber || '—'))}
+    ${summaryRow('Description', l.description ? (escHtml(l.description.slice(0, 120)) + (l.description.length > 120 ? '…' : '')) : '—')}
+    ${summaryRow("What's New", l.releaseNotes ? (escHtml(l.releaseNotes.slice(0, 120)) + (l.releaseNotes.length > 120 ? '…' : '')) : '—')}
+    ${summaryRow('Support URL', escHtml(l.supportUrl || '—'))}
+    ${summaryRow('Copyright', escHtml(l.copyright || '—'))}`;
 }
 
 /* ── Distribution ────────────────────────────────────── */
@@ -11564,10 +12192,11 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
 function buildBuildDropdown(pid, inModal) {
   const build      = state.platformBuilds?.[pid] || null;
   const processing = !!(state.platformBuildProcessing?.[pid]);
-  const accept     = pid === 'ios'     ? '.ipa'
-                   : pid === 'macos'   ? '.pkg,.zip'
-                   : pid === 'android' ? '.apk,.aab'
-                   :                     '.exe,.zip';
+  const accept     = pid === 'ios'        ? '.ipa'
+                   : pid === 'macos'      ? '.pkg,.zip'
+                   : pid === 'macos_full' ? '.pkg,.zip'
+                   : pid === 'android'    ? '.apk,.aab'
+                   :                        '.exe,.zip';
   // Unique file input id — avoid clash between card header and modal instances
   const inputId    = inModal ? `build-file-modal-${pid}` : `build-file-${pid}`;
   const uploadSVG  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;opacity:0.6"><path d="M8 11V2M4 5l4-4 4 4M2 13v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
