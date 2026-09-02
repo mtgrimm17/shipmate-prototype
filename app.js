@@ -3578,6 +3578,33 @@ function selectPicklistItem(igdbId) {
   state.steamLocReviewUndoHistory = { real: {}, draft: {} };
   state.steamTranslateStatus = {};
   state.steamTranslatePendingLangs = {};
+  // Mac App Store's own independent Localization Review content is the same
+  // kind of stale-content risk as Steam's above, just one level further up:
+  // state.macAppStoreListing (Description/Release Notes + their own
+  // localizedStoreText) is seeded ONCE from formData the first time Mac App
+  // Store is activated (seedMacAppStoreListing) and never touched again —
+  // so if it was already seeded for a previously-selected game and Mac App
+  // Store stays active for this new one, it would otherwise keep showing
+  // the OLD game's Description/Release Notes and translations indefinitely.
+  // Nulling it here lets it reseed fresh from THIS game's data — either via
+  // _refreshLocalizationForNewGame below (once Description has its final
+  // value) or, failing that, the next time the Mac App Store step is
+  // opened. Its scratch review-UI state is cleared the same way Steam's is
+  // above, same reasoning.
+  state.macAppStoreListing = null;
+  state.masLocReviewBackTranslation = {};
+  state.masLocReviewUndoHistory = { real: {}, draft: {} };
+  state.masTranslateStatus = {};
+  state.masTranslatePendingLangs = {};
+  // No Steam lookup is coming for this title (see steamLinkPending above) —
+  // Description/webSite fields already have their final value from the
+  // IGDB-only fill just above, so this is the only chance to bring already-
+  // selected supporting languages' Steam/Mac App Store Localization Review
+  // cards up to date for this game (see _refreshLocalizationForNewGame's own
+  // comment for why nothing else does this on a game switch). When a Steam
+  // lookup IS pending, _applySteamAboutData/its own fallback branches below
+  // call this once Steam's data (or the lack of it) is known instead.
+  if (!steamLinkPending) _refreshLocalizationForNewGame();
 
   // Resolve this title's Steam app ID with a small, targeted follow-up
   // query (_igdbFetchSteamAppId, claude.js) — only attempted when IGDB
@@ -3596,6 +3623,10 @@ function selectPicklistItem(igdbId) {
         // unfilled above in anticipation of Steam's data, so fall back to
         // IGDB's summary now instead of leaving it blank.
         if (item.summary) _fillDescriptionField(item.summary);
+        // No Steam data is coming after all — this is the fallback path's
+        // own chance to bring supporting-language Localization Review cards
+        // up to date (see _refreshLocalizationForNewGame's comment).
+        _refreshLocalizationForNewGame();
         return;
       }
       // Steam is now treated as the source of truth for Description / Web
@@ -3615,6 +3646,9 @@ function selectPicklistItem(igdbId) {
       // fill from IGDB's summary rather than leaving it blank.
       if ((state.formData.title || '').trim() === (item.name || '').trim() && item.summary) {
         _fillDescriptionField(item.summary);
+        // Same reasoning as the !steamAppId branch above — bring supporting
+        // languages up to date now that no Steam data is coming.
+        _refreshLocalizationForNewGame();
       }
     });
   }
@@ -4220,6 +4254,54 @@ function _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, afterLangs) {
   });
 }
 
+// Brings Steam's own Localization Review (Short Description/Developer/
+// Publisher/About This Game) and Mac App Store's own independent one
+// (Description/Release Notes) up to date for every already-selected
+// supporting language, once a newly-picked game's primary-language content
+// has settled — called from selectPicklistItem's own IGDB-only path and
+// from every branch of the async Steam-link resolution that follows it
+// (found/not-found/failed), so exactly one of those calls fires per pick.
+//
+// This exists to close a gap that's easy to miss: _iasPropagateAllFields/
+// _masPropagateAllFields/_steamPropagateAllFields (the functions that
+// actually run an AI translation of a primary field into every supporting
+// language) are normally only called when the supporting-language LIST
+// itself changes (toggleObLang/setObLangPreset/applyObLangPreset/
+// selectLocPrimary) — nothing calls them when the GAME changes instead,
+// even though that's exactly when every one of these fields' primary text
+// just changed too. The App Store's own Description/Title are already
+// covered elsewhere (_fillDescriptionField's own _iasTriggerAutoTranslate
+// call; _iasPropagateTitle in selectPicklistItem) — this covers the rest.
+//
+// Without this, a supporting language Steam's own store page has no real
+// localization for (_checkSteamLocalizedListing/_checkSteamLocalizedDescription
+// correctly no-op rather than blank the field in that case — see their own
+// comments) is simply never populated for the new game at all: now that
+// selectPicklistItem correctly clears the previous game's stale content on
+// every pick (see its own comment), a language Steam doesn't cover is left
+// blank instead of falling back to a machine translation of the new
+// primary text, which is what should happen instead. Each translate call
+// below is race-safe against a genuine Steam scrape landing for the same
+// language (see their own *FromSteam write-time guards), so calling both
+// unconditionally here is safe regardless of which one resolves first.
+function _refreshLocalizationForNewGame() {
+  // Mac App Store's own Description/Release Notes were reset to null when
+  // this game was picked (selectPicklistItem) specifically so they'd
+  // reseed fresh here rather than keep showing the previous game's text —
+  // a no-op if something already reseeded it in the meantime (e.g. the
+  // user opened the Mac App Store step while this was still resolving).
+  // Gated on Mac App Store actually being an active platform for this game,
+  // matching seedMacAppStoreListing's own "first time the platform is
+  // activated" contract (state.js) — reseeding it unconditionally here
+  // would spuriously create state.macAppStoreListing (normally lazy, unlike
+  // state.webSite below) even for a game that never targets macOS at all.
+  if (state.activePlatforms && state.activePlatforms.has('macos')) {
+    seedMacAppStoreListing();
+    _masPropagateAllFields();
+  }
+  _steamPropagateAllFields();
+}
+
 async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
   let fetchFailed = false;
@@ -4392,6 +4474,14 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // localization info.
     state.steamLocInfo = null;
   }
+  // Description/webSite.developer/publisher/aboutGame all have their final
+  // values for this game now (either from Steam above, or IGDB's fallback
+  // in the else branch) — bring already-selected supporting languages'
+  // Steam/Mac App Store Localization Review cards up to date for whichever
+  // of those fields the localizations-forEach loop above (Steam's own
+  // scrape) didn't already cover (see _refreshLocalizationForNewGame's own
+  // comment).
+  _refreshLocalizationForNewGame();
   reRenderStepModal();
 }
 
