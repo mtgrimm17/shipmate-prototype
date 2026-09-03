@@ -3893,6 +3893,13 @@ function selectPicklistItem(igdbId) {
   // one) — it's purely derived from whichever title is currently selected,
   // so it's always safe to clear unconditionally here.
   state.uploads.steamTrailer = null;
+  // Same "clear only the auto-filled variant" convention as the Key Art
+  // slots above, applied to Mac App Store's Game Center Achievements
+  // (_applySteamAchievements below): an achievement imported from the
+  // PREVIOUS title's Steam page (fromSteam: true) is cleared eagerly so it
+  // can't linger or flash on screen for the new title, but anything the
+  // developer added or edited themselves (no fromSteam flag) is preserved.
+  state.macGameCenterAchievements = (state.macGameCenterAchievements || []).filter(a => !a.fromSteam);
 
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
@@ -4008,6 +4015,7 @@ function selectPicklistItem(igdbId) {
       _applySteamAboutData(steamAppId, item.name, item);
       _applySteamHeroBanner(steamAppId, item.name);
       _applySteamSocialLinks(steamAppId, item.name);
+      _applySteamAchievements(steamAppId, item.name);
     }).catch(err => {
       console.warn('[Picklist] Steam app ID lookup failed:', err.message);
       // Same fallback reasoning as the !steamAppId branch above — the
@@ -4924,6 +4932,65 @@ async function _applySteamSocialLinks(appId, expectedTitle) {
   if (!state.webSite) state.webSite = {};
   state.webSite.links = links.map(l => ({ id: generateId('link'), name: l.name, url: l.url }));
   reRenderStepModal();
+}
+
+/* Pre-populates Mac App Store's Game Center > Achievements section
+   (state.macGameCenterAchievements — see its own comment, state.js) from
+   Steam's public global achievement stats page (fetchSteamAchievementsPage /
+   _parseSteamAchievements, claude.js) the moment a Steam-linked title is
+   picked from the IGDB picklist. Follows the same fire-and-forget,
+   stale-title-guarded, never-overwrite-existing-work pattern as
+   _applySteamAboutData/_applySteamHeroBanner/_applySteamSocialLinks above:
+   only fills in achievements when the developer hasn't already added any of
+   their own (a non-empty list is left completely alone, even if every entry
+   is Steam-imported — once populated, this never re-syncs). Each imported
+   achievement is tagged `fromSteam: true` for potential future bulk-refresh
+   UI, though nothing currently reads that flag besides this guard's sibling
+   clear in selectPicklistItem. "Hidden" is inferred from the achievement
+   having no visible description on Steam's page — Steam blanks the
+   description for hidden achievements, which is the only signal this public
+   page gives us. Rows start collapsed since an imported achievement already
+   has a Reference Name and one localization filled in — no more work needed
+   unless the developer wants to review or add more languages. */
+async function _applySteamAchievements(appId, expectedTitle) {
+  let parsed = null;
+  try {
+    const html = await fetchSteamAchievementsPage(appId);
+    parsed = _parseSteamAchievements(html);
+  } catch (e) {
+    console.warn('[Steam Achievements] failed to fetch/parse achievements page for app', appId, e);
+    if ((state.formData.title || '').trim() === (expectedTitle || '').trim()) {
+      bcToast(`Couldn't load Steam's achievements for "${expectedTitle}" — add them manually under Game Center if needed.`);
+    }
+    return;
+  }
+
+  // Stale guard — bail if the user has since picked a different title.
+  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+  if (!parsed || !parsed.length) return;
+  // Never clobber a developer's own (or a previous Steam import's) work.
+  if (state.macGameCenterAchievements.length) return;
+
+  const primaryLang = state.formData.primaryLanguage || 'en';
+  state.macGameCenterAchievements = parsed.map(p => ({
+    id: generateId('ach'),
+    refName: p.name,
+    pointValue: '',
+    hidden: !p.description,
+    achievableMultipleTimes: false,
+    collapsed: true,
+    fromSteam: true,
+    localizations: [{
+      id: generateId('loc'),
+      language: primaryLang,
+      displayName: p.name,
+      earnedDescription: p.description || '',
+      preEarnedDescription: '',
+      image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
+    }],
+  }));
+  reRenderStepModal();
+  updateIOSCard('macos');
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */

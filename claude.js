@@ -808,6 +808,75 @@ function _parseSteamSocialLinks(html) {
   return links;
 }
 
+/* ── Steam global achievement stats page ──────────────────────────────
+   steamcommunity.com/stats/<appid>/achievements is Steam's own public,
+   no-login-required page listing every achievement in a game alongside
+   the percentage of all players who've unlocked it — a COMPLETELY
+   SEPARATE page from both appdetails (fetchSteamAppDetails above, which
+   has no achievement data at all) and the store page itself
+   (fetchSteamStorePage). Requires the same CORS proxy as those (see
+   _cors() above) since steamcommunity.com doesn't send permissive CORS
+   headers either. Used by _applySteamAchievements (app.js) to pre-populate
+   Mac App Store's Game Center > Achievements section
+   (state.macGameCenterAchievements) the moment a Steam-linked title is
+   picked from the IGDB picklist. */
+async function fetchSteamAchievementsPage(appId) {
+  const res = await _fetchWithTimeout(_cors(`https://steamcommunity.com/stats/${appId}/achievements`));
+  if (!res.ok) throw new Error('Steam achievements page fetch failed (' + res.status + ')');
+  return await res.text();
+}
+
+/* Parses the achievements page's own markup (see fetchSteamAchievementsPage
+   above) — each achievement is one `.achieveRow` block containing an icon
+   image, an `<h3>` name, an `<h5>` description (present when the
+   achievement isn't flagged "hidden" in Steamworks, blank/absent
+   otherwise — the one signal this page gives us for Hidden, used by
+   _applySteamAchievements, app.js), and a percentage-of-players figure
+   rendered as plain text somewhere in the row (wording/placement varies
+   slightly across pages, so this only looks for the first "NN.N%"-shaped
+   number rather than anchoring to a specific wrapper element around it).
+   Deliberately split on the repeating "achieveRow" marker rather than
+   matched with a single balanced regex (like _parseSteamSocialLinks
+   above) — each row nests multiple divs of its own, which a regex can't
+   reliably bound without a real HTML parser, while splitting just needs
+   the next occurrence of the same marker (or end of document, for the
+   last row) as its natural boundary. Same "best-effort scrape of
+   undocumented, changeable markup" caveat as fetchSteamStorePage's own
+   comment — returns [] rather than throwing on a totally unrecognized
+   page shape, and simply skips any individual block missing a name.
+   Returns an array of { name, description, iconUrl, percent } in the
+   same order the page itself lists them (highest-unlocked-first). */
+function _parseSteamAchievements(html) {
+  if (!html) return [];
+  const decode = s => (s || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const rows = html.split(/<div class="achieveRow/).slice(1);
+  const out = [];
+  for (const row of rows) {
+    const imgMatch  = row.match(/<img[^>]*\bsrc="([^"]+)"/);
+    const nameMatch = row.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
+    const descMatch = row.match(/<h5[^>]*>([\s\S]*?)<\/h5>/);
+    const pctMatch  = row.match(/(\d+(?:\.\d+)?)\s*%/);
+    const name = decode(nameMatch && nameMatch[1]);
+    if (!name) continue; // malformed/unrecognized block — skip rather than push a nameless achievement
+    out.push({
+      name,
+      description: decode(descMatch && descMatch[1]),
+      iconUrl: imgMatch ? imgMatch[1] : '',
+      percent: pctMatch ? parseFloat(pctMatch[1]) : null,
+    });
+  }
+  return out;
+}
+
 // Steam's "about_the_game" field is a fragment of raw store-page HTML
 // (<br>/<p> tags, the occasional list, HTML entities) rather than plain
 // text. state.webSite.aboutGame's convention (see state.js) is plain text
