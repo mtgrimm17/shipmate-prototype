@@ -7077,6 +7077,7 @@ function _macGcAchievementCollapsedRow(a) {
          ondragend="macGcAchievementDragEnd()">
       <span style="cursor:grab;color:var(--text-faint);font-size:14px;line-height:1;" title="Drag to reorder">⠿</span>
       <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
+      ${a.image ? `<img src="${a.image.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
       <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
     </div>`;
 }
@@ -7093,7 +7094,10 @@ function _macGcAchievementExpandedRow(a) {
     <div class="iap-product-row mac-gc-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveMacGcAchievement('${a.id}')" title="Click to collapse">
         <span class="iap-product-name-collapsed">${escHtml(headerLabel)}</span>
-        <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${img ? `<img src="${img.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+          <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+        </div>
       </div>
 
       <div class="iap-product-field">

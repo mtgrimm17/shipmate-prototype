@@ -1186,10 +1186,33 @@ function expandMacGcAchievement(id) {
 // the expanded row's own Save button AND by clicking the row's header bar
 // (render.js) — clicking the header of an achievement with no Reference
 // Name yet simply does nothing, same as the disabled Save button.
+//
+// Also propagates the three localizable fields out to every supporting
+// language — same "push to Localizations at save time" convention
+// saveIapProduct uses for an IAP product's Name/Description
+// (_iapLocPropagateName/_iapLocTriggerAutoTranslate). Achievement
+// Localizations itself only WRITES these fields on an already-saved
+// (collapsed) achievement (_masAchLocSavedAchievements filters on
+// `.collapsed`) — before this call was added here, a Display Name/Earned
+// Description/Pre-Earned Description typed on the achievement's own
+// expanded card (setMacGameCenterAchievementField, directly above) never
+// triggered auto-translate at all, so every supporting language stayed
+// blank in Achievement Localizations unless the developer happened to
+// retype the SAME text a second time from inside that section. Steam-
+// imported achievements never hit this gap (_checkSteamLocalizedAchievements
+// populates their locs independently, on its own schedule), which is why
+// the bug only ever showed up for non-Steam-sourced text. _masAchLocTriggerAutoTranslate
+// itself no-ops per field when that field's auto-translate toggle is off,
+// or when nothing actually changed since the last propagation, so calling
+// all three unconditionally on every save (first save AND any later
+// re-save after an edit) is always safe.
 function saveMacGcAchievement(id) {
   const a = state.macGameCenterAchievements.find(a => a.id === id);
   if (!a || !a.refName.trim()) return;
   a.collapsed = true;
+  _masAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
+  _masAchLocTriggerAutoTranslate(id, 'earnedDescription', a.earnedDescription);
+  _masAchLocTriggerAutoTranslate(id, 'preEarnedDescription', a.preEarnedDescription);
   reRenderStepModal();
 }
 
@@ -5034,6 +5057,28 @@ async function _applySteamAchievements(appId, expectedTitle) {
   }));
   reRenderStepModal();
   updateIOSCard('macos');
+
+  // Kick off an AI-translated fallback for every newly-imported
+  // achievement's three fields — the Steam-import counterpart to
+  // saveMacGcAchievement's own propagation call (see that function's
+  // comment for the full bug this closes). Achievements imported here are
+  // created already collapsed, bypassing saveMacGcAchievement entirely, so
+  // without this call a supporting language Steam doesn't genuinely
+  // localize (_checkSteamLocalizedAchievements below silently skips writing
+  // anything for it) would otherwise stay blank forever in Achievement
+  // Localizations — AI translation is the same fallback Localization
+  // Review already relies on for every other Mac App Store field.
+  // _masAchLocTriggerAutoTranslate's own write-time guard
+  // (entry[field+'FromSteam'] check) protects a genuine Steam localization
+  // — whether it arrives concurrently below or was already cached from a
+  // prior import of this same title — from being clobbered by this
+  // fallback, regardless of which of the two calls happens to resolve
+  // first. preEarnedDescription has no Steam source at all, so it's always
+  // eligible for this fallback (or stays blank if the developer hasn't
+  // typed one yet — _masAchLocTriggerAutoTranslate no-ops on empty text).
+  state.macGameCenterAchievements.forEach(a => {
+    ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _masAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  });
 
   // Bring every already-selected supporting language's Achievement
   // Localizations up to date with this game's own Steam data, same as
