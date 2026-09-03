@@ -4330,7 +4330,8 @@ function renderStepModal() {
     else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-  } else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
+  } else if (stepId === 'gameCenter' && platformId === 'macos') body = buildMacGameCenterSection();
+  else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
   // iOS legacy / questionnaire kept for backward-compat
@@ -7007,6 +7008,164 @@ function buildMacStorePreviewSection() {
 
     ${navBar}
   `;
+}
+
+/* ═══════════════════════════════════════════════════
+   MAC APP STORE — GAME CENTER ACHIEVEMENTS
+   Backs the "Game Center" step (PLATFORMS.macos.steps, right after Content
+   Rating — state.js), built to mirror App Store Connect's own Achievements
+   section: a reorderable list of achievements, each with its own
+   repeatable list of per-language localizations. Deliberately full
+   fidelity — unlike Mac App Store Full's simplified gameCenter.achievements
+   list (buildMacFullGameCenterSection, above) — since this step exists
+   specifically to demonstrate the real ASC Achievements workflow. Reuses
+   the IAP Products list's row/field classes (.iap-product-row,
+   .iap-product-field, .iap-product-remove, .iap-product-trial) purely for
+   visual consistency — these achievements have nothing to do with IAP.
+   ═══════════════════════════════════════════════════ */
+
+// One localization card within an expanded achievement — language picker,
+// the three ASC-defined text fields, and a single icon image. usedLangs is
+// every language already claimed by this achievement's OTHER localizations
+// (the current row's own language is always kept as an option on itself).
+function _macGcLocalizationRowHTML(achId, loc, usedLangs) {
+  const otherUsed = new Set(usedLangs);
+  otherUsed.delete(loc.language);
+  const langOptions = Object.entries(OB_LANG_NAMES)
+    .filter(([code]) => !otherUsed.has(code))
+    .map(([code, name]) => `<option value="${code}" ${loc.language === code ? 'selected' : ''}>${name}</option>`)
+    .join('');
+  const img = loc.image;
+  return `
+    <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+        <select class="form-input" style="max-width:240px;" onchange="setMacGcLocalizationField('${achId}','${loc.id}','language',this.value)">
+          ${langOptions}
+        </select>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="removeMacGcLocalization('${achId}','${loc.id}')" title="Remove localization" aria-label="Remove localization">✕</button>
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Display Name</label>
+        <input class="form-input" type="text" value="${escHtml(loc.displayName)}" placeholder="Shown to players, e.g. Speed Runner"
+               oninput="setMacGcLocalizationField('${achId}','${loc.id}','displayName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Earned Description</label>
+        <input class="form-input" type="text" value="${escHtml(loc.earnedDescription)}" placeholder="Shown after the player earns it"
+               oninput="setMacGcLocalizationField('${achId}','${loc.id}','earnedDescription',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Pre-Earned Description</label>
+        <input class="form-input" type="text" value="${escHtml(loc.preEarnedDescription)}" placeholder="Shown before the player earns it"
+               oninput="setMacGcLocalizationField('${achId}','${loc.id}','preEarnedDescription',this.value)">
+      </div>
+      <div class="form-group" style="margin-top:8px;margin-bottom:0;">
+        <label class="form-label">Image</label>
+        ${img
+          ? `<div style="display:flex;align-items:center;gap:10px;">
+               <img src="${img.dataUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
+               <button class="btn btn-ghost btn-sm" type="button" onclick="removeMacGcLocalizationImage('${achId}','${loc.id}')">Remove</button>
+             </div>`
+          : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload Image<input type="file" accept="image/*" hidden onchange="handleMacGcLocalizationImage(event,'${achId}','${loc.id}')"></label>`}
+      </div>
+    </div>`;
+}
+
+// Small ▲/▼ reorder control shared by both the collapsed and expanded row
+// below — disabled at either end of the list, same as _steamAssetsScreenshotGridHTML's
+// own reorder buttons (app.js's moveUploadScreenshot is the swap this drives).
+function _macGcReorderControls(id, idx, total) {
+  return `
+    <div style="display:flex;flex-direction:column;gap:2px;" onclick="event.stopPropagation();">
+      <button class="btn btn-ghost btn-sm" type="button" style="padding:1px 6px;font-size:9px;line-height:1;" onclick="moveMacGameCenterAchievement('${id}', -1)" ${idx === 0 ? 'disabled' : ''} title="Move up">▲</button>
+      <button class="btn btn-ghost btn-sm" type="button" style="padding:1px 6px;font-size:9px;line-height:1;" onclick="moveMacGameCenterAchievement('${id}', 1)" ${idx === total - 1 ? 'disabled' : ''} title="Move down">▼</button>
+    </div>`;
+}
+
+// Collapsed summary row — click anywhere on the row to re-expand
+// (expandMacGcAchievement), mirroring buildIapProductRow's own collapsed
+// state. Shows the primary-language Display Name when one exists, falling
+// back to the internal Reference Name so a not-yet-localized achievement
+// still has a recognizable label.
+function _macGcAchievementCollapsedRow(a, idx, total) {
+  const primaryLang = state.formData.primaryLanguage || 'en';
+  const loc = a.localizations.find(l => l.language === primaryLang) || a.localizations[0];
+  const displayName = loc?.displayName?.trim() || a.refName.trim() || 'Untitled Achievement';
+  const badges = [
+    a.pointValue ? `${escHtml(String(a.pointValue))} pts` : '',
+    a.hidden ? 'Hidden' : '',
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="iap-product-row is-collapsed" data-ach-id="${a.id}" onclick="expandMacGcAchievement('${a.id}')" style="display:flex;align-items:center;gap:10px;">
+      ${_macGcReorderControls(a.id, idx, total)}
+      <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
+      <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+    </div>`;
+}
+
+// Expanded editor — Reference Name/Point Value/Hidden/Achievable More Than
+// Once, then the Localizations list, then a Save button that collapses the
+// row (saveMacGcAchievement) once Reference Name is filled in.
+function _macGcAchievementExpandedRow(a, idx, total) {
+  const usedLangs = new Set(a.localizations.map(l => l.language));
+  return `
+    <div class="iap-product-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        ${_macGcReorderControls(a.id, idx, total)}
+        <button class="iap-product-remove" type="button" onclick="removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+      </div>
+
+      <div class="iap-product-field">
+        <label class="form-label">Reference Name</label>
+        <input class="form-input" type="text" value="${escHtml(a.refName)}" placeholder="Internal name, not shown to players"
+               oninput="setMacGameCenterAchievementField('${a.id}','refName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Point Value <span class="form-hint-inline">(optional)</span></label>
+        <input class="form-input" type="number" min="0" max="100" value="${escHtml(String(a.pointValue ?? ''))}" placeholder="0–100"
+               oninput="setMacGameCenterAchievementField('${a.id}','pointValue',this.value)">
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Hidden</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${a.hidden ? 'is-selected' : ''}" onclick="setMacGameCenterAchievementField('${a.id}','hidden',true)">YES</button>
+          <button class="yn-btn yn-no ${!a.hidden ? 'is-selected' : ''}" onclick="setMacGameCenterAchievementField('${a.id}','hidden',false)">NO</button>
+        </div>
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Achievable More Than Once</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacGameCenterAchievementField('${a.id}','achievableMultipleTimes',true)">YES</button>
+          <button class="yn-btn yn-no ${!a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacGameCenterAchievementField('${a.id}','achievableMultipleTimes',false)">NO</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label class="form-label" style="display:block;margin-bottom:8px;">Localizations</label>
+        ${a.localizations.map(loc => _macGcLocalizationRowHTML(a.id, loc, usedLangs)).join('')}
+        <button class="btn btn-ghost btn-sm" type="button" onclick="addMacGcLocalization('${a.id}')">+ Add Localization</button>
+      </div>
+
+      <div class="iap-product-actions" style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacGcAchievement('${a.id}')" ${!a.refName.trim() ? 'disabled' : ''}>Save</button>
+      </div>
+    </div>`;
+}
+
+function buildMacGameCenterSection() {
+  const achievements = state.macGameCenterAchievements || [];
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <div class="form-hint">Mirrors App Store Connect's Game Center Achievements — add, remove, and reorder achievements below, then add a localization for each language you support.</div>
+    </div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
+    </div>
+    ${achievements.map((a, i) => a.collapsed
+        ? _macGcAchievementCollapsedRow(a, i, achievements.length)
+        : _macGcAchievementExpandedRow(a, i, achievements.length)
+      ).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacGameCenterAchievement()">+ Add Achievement</button>`;
 }
 
 function buildLocalizationReviewSection() {

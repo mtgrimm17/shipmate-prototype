@@ -758,6 +758,7 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
+      { id: 'gameCenter',        label: 'Game Center'                                  },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
@@ -1599,6 +1600,12 @@ function isMacSectionComplete(sectionId) {
     return (state.uploads?.screenshots || []).length > 0;
   }
   if (sectionId === 'improveSubmission') return !!state.macSubmitAnswers.improveSubmissionSeen;
+
+  // Game Center Achievements are purely additive — same convention as IAP
+  // Products elsewhere (see makeBlankIOSAnswers' comment): a developer with
+  // no achievements simply leaves the list empty, so an empty list never
+  // blocks submission.
+  if (sectionId === 'gameCenter') return true;
 
   // Content Rating and Data Privacy are answered ONCE, shared with the App
   // Store (state.iosSubmitAnswers — see IOS_MAC_SHARED_ANSWER_FIELDS and
@@ -2944,6 +2951,22 @@ const state = {
   // (app.js) and buildMacContentRatingSection/buildMacPrivacySection/
   // buildMacBusinessSection/buildMacIapSection (render.js).
   macSubmitAnswers: makeBlankIOSAnswers(),
+
+  // Mac App Store's own Game Center Achievements — the "Game Center" step
+  // (PLATFORMS.macos.steps, right after Content Rating) mimics App Store
+  // Connect's real Achievements section: a reorderable list of achievements
+  // (add/remove/reorder — see addMacGameCenterAchievement/
+  // removeMacGameCenterAchievement/moveMacGameCenterAchievement, app.js),
+  // each { id, refName, pointValue, hidden, achievableMultipleTimes,
+  // collapsed, localizations }, where localizations is its own repeatable
+  // list of { id, language, displayName, earnedDescription,
+  // preEarnedDescription, image } — one entry per language, seeded with a
+  // single entry in the developer's primary language when an achievement is
+  // added. Deliberately a FULL-FIDELITY build (unlike Mac App Store Full's
+  // own simplified gameCenter.achievements list — see
+  // makeBlankMacFullAnswers' comment) since this is the one place in
+  // Shipmate meant to actually mirror ASC's Achievements UI end to end.
+  macGameCenterAchievements: [],
 
   // Mac App Store Full submission questionnaire answers — a from-scratch,
   // FULLY INDEPENDENT copy (see makeBlankMacFullAnswers' own comment):
