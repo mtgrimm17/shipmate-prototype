@@ -9177,6 +9177,16 @@ const MAC_FULL_CATEGORIES = [
   'Video', 'Weather',
 ];
 
+// Apple's fixed Games subcategory list (App Store Connect → App Information
+// → Category → Games). Only Primary Category = Games gets two of these
+// dropdowns (Games Subcategory 1/2) — Shipmate hard-sets Primary Category to
+// Games (see buildMacFullAppInfoSection below), so both are always shown.
+const MAC_FULL_GAME_SUBCATEGORIES = [
+  'Action', 'Adventure', 'Arcade', 'Board', 'Card', 'Casino', 'Casual',
+  'Dice', 'Educational', 'Family', 'Kids', 'Music', 'Puzzle', 'Racing',
+  'Role Playing', 'Simulation', 'Sports', 'Strategy', 'Trivia', 'Word',
+];
+
 // Apple's fixed App Tracking Transparency / IDFA usage reasons (App Store
 // Connect → App Privacy → "Advertising Identifier (IDFA)" declaration).
 const MAC_FULL_IDFA_REASONS = [
@@ -9247,15 +9257,31 @@ function _mfFileRowHTML(file, removeOnclick) {
 }
 
 /* ── Mac App Store Full — App Information ────────────────────────────── */
+// Primary Category is hard-set to Games (Shipmate only handles game
+// submissions) and rendered as a locked, disabled field rather than a
+// select — nothing ever calls setMacFullField('category.primary', ...).
+// Bundle ID is likewise locked: it shows fixed instructional text instead
+// of accepting player-typed input, since the real value has to come from
+// the Xcode project rather than App Store Connect.
 function buildMacFullAppInfoSection() {
-  const a  = state.macFullSubmitAnswers;
-  const rf = a.routingCoverageFile;
+  const a = state.macFullSubmitAnswers;
   return `
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Primary Category</label>
-      <select class="form-input" onchange="setMacFullField('category.primary', this.value)">
-        <option value="">Select a category</option>
-        ${MAC_FULL_CATEGORIES.map(c => `<option value="${escHtml(c)}" ${a.category.primary === c ? 'selected' : ''}>${c}</option>`).join('')}
+      <input class="form-input" type="text" value="${escHtml(a.category.primary)}" disabled>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Games Subcategory <span class="form-hint-inline">(optional)</span></label>
+      <select class="form-input" onchange="setMacFullField('category.subcategory1', this.value)">
+        <option value="">None</option>
+        ${MAC_FULL_GAME_SUBCATEGORIES.map(c => `<option value="${escHtml(c)}" ${a.category.subcategory1 === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Games Subcategory <span class="form-hint-inline">(optional)</span></label>
+      <select class="form-input" onchange="setMacFullField('category.subcategory2', this.value)">
+        <option value="">None</option>
+        ${MAC_FULL_GAME_SUBCATEGORIES.map(c => `<option value="${escHtml(c)}" ${a.category.subcategory2 === c ? 'selected' : ''}>${c}</option>`).join('')}
       </select>
     </div>
     <div class="form-group" style="margin-bottom:14px;">
@@ -9266,37 +9292,18 @@ function buildMacFullAppInfoSection() {
       </select>
     </div>
 
-    ${_mfTextField('Bundle ID', 'bundleId', a.bundleId, 'com.yourstudio.yourgame')}
-    ${_mfTextField('SKU', 'sku', a.sku, 'A unique ID not shown to players, e.g. YOURGAME001')}
-    ${_mfTextField('Apple ID', 'appleId', a.appleId, 'Assigned by App Store Connect once the app record is created')}
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Bundle ID</label>
+      <input class="form-input" type="text" value="${escHtml(a.bundleId)}" disabled>
+    </div>
+    ${_mfTextField('SKU', 'sku', a.sku, 'A unique ID for your app not visible to users.')}
 
     <div class="form-group" style="margin-bottom:6px;">
       <label class="form-label">Does your app contain, show, or access third-party content?</label>
       <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.contentRights === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','yes')">YES</button>
-        <button class="yn-btn yn-no ${a.contentRights === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','no')">NO</button>
+        <button class="yn-btn yn-yes ${a.contentRights === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','yes')">Yes, and I have the necessary rights</button>
+        <button class="yn-btn yn-no ${a.contentRights === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','no')">No</button>
       </div>
-    </div>
-    ${a.contentRights === 'yes' ? `
-    <div class="ios-followup">
-      ${_mfTextField('Explain your rights to use this content', 'contentRightsExplanation', a.contentRightsExplanation, 'e.g. licensed stock music, a third-party data API, etc.', 'textarea')}
-    </div>` : ''}
-
-    <div class="form-group" style="margin:20px 0 2px;">
-      <label class="form-label">Trade Representative Contact Information <span class="form-hint-inline">(EU only)</span></label>
-      <div class="form-hint">Required if your business is registered in the European Union — shown to EU users on your product page.</div>
-    </div>
-    ${_mfTextField('Name', 'tradeRep.name', a.tradeRep.name)}
-    ${_mfTextField('Address', 'tradeRep.address', a.tradeRep.address)}
-    ${_mfTextField('Phone', 'tradeRep.phone', a.tradeRep.phone)}
-    ${_mfTextField('Email', 'tradeRep.email', a.tradeRep.email)}
-
-    <div class="form-group" style="margin-top:6px;">
-      <label class="form-label">Routing App Coverage File <span class="form-hint-inline">(optional)</span></label>
-      <div class="form-hint">Only needed if your app uses Apple's Network Extension framework to route network traffic.</div>
-      ${rf
-        ? _mfFileRowHTML(rf, 'removeMacFullRoutingFile()')
-        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullRoutingFile(event)"></label>`}
     </div>
 
     <div class="form-group" style="margin-top:14px;">

@@ -1343,15 +1343,14 @@ function makeBlankMacFullAnswers() {
   return {
     ...makeBlankIOSAnswers(),
 
-    // App Information
-    category:                { primary: '', secondary: '' },  // from Apple's fixed category list
+    // App Information — Primary Category is hard-set to Games (Shipmate only
+    // handles game submissions) and Bundle ID is a locked instructional
+    // placeholder rather than real user input; see buildMacFullAppInfoSection,
+    // render.js, for both.
+    category:                { primary: 'Games', secondary: '', subcategory1: '', subcategory2: '' },
     contentRights:            null,   // 'yes' / 'no' — "Does your app contain, show, or access third-party content?"
-    contentRightsExplanation: '',
-    bundleId:                 '',
+    bundleId:                 'Must match the Bundle ID used in Xcode.',
     sku:                      '',
-    appleId:                  '',
-    tradeRep:                 { name: '', address: '', phone: '', email: '' },
-    routingCoverageFile:      null,   // { name, size } — placeholder upload, no real parsing
 
     // Pricing and Availability — base Price/Tax Category are deliberately
     // NOT duplicated here; they stay shared game-wide via
@@ -1707,7 +1706,7 @@ function computeMacFullSectionRisk(sectionId) {
   }
 
   if (sectionId === 'appInfo') {
-    if (a.category.primary === '' || a.contentRights === null) return 'HIGH';
+    if (a.contentRights === null) return 'HIGH';
     return 'LOW';
   }
 
@@ -1741,10 +1740,7 @@ function isMacFullSectionComplete(sectionId) {
   if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
 
   if (sectionId === 'appInfo') {
-    if (!a.category.primary) return false;
     if (a.contentRights === null) return false;
-    if (a.contentRights === 'yes' && !a.contentRightsExplanation.trim()) return false;
-    if (!a.bundleId.trim()) return false;
     return true;
   }
 

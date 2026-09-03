@@ -1168,8 +1168,8 @@ function seedMacFullAppStoreListing() {
    state.stepModal generically, and _appStoreAnswers/_appStoreAnswerMeta
    already route 'macos_full' to its own state.macFullSubmitAnswers/
    macFullAnswerMeta — see those functions' own comments). A handful of
-   fields are nested objects instead (category.primary, tradeRep.email,
-   demoAccount.username, etc.) — these two helpers walk a dot-separated
+   fields are nested objects instead (category.subcategory1, demoAccount.username,
+   etc.) — these two helpers walk a dot-separated
    path into state.macFullSubmitAnswers for those, rather than adding a
    dedicated setter function per field. setMacFullField re-renders
    immediately (for selects/toggles/checkboxes, where there's no focused
@@ -1194,18 +1194,6 @@ function setMacFullField(path, value) {
 function setMacFullTextField(path, value) {
   const { obj, key } = _mfNestedContainer(path);
   obj[key] = value;
-}
-
-/* ── Mac App Store Full — App Information ────────────────────────────── */
-function handleMacFullRoutingFile(event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  state.macFullSubmitAnswers.routingCoverageFile = { name: file.name, size: file.size };
-  reRenderStepModal();
-}
-function removeMacFullRoutingFile() {
-  state.macFullSubmitAnswers.routingCoverageFile = null;
-  reRenderStepModal();
 }
 
 /* ── Mac App Store Full — Pricing and Availability ───────────────────── */
