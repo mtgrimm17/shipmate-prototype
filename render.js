@@ -4460,6 +4460,10 @@ function buildStorePreviewFlipSection(platformId, target) {
     // now just Price, reached instead from their own standalone 'tags'/
     // 'technical' targets below.
     if (platformId === 'steam') return buildSteamBusinessSection();
+    // Mac App Store Full has no Export Compliance question of its own — its
+    // entire Build & Compliance step (which is where Export Compliance
+    // lived) was removed outright, unlike ios/macos which still ask it here.
+    if (platformId === 'macos_full') return buildBusinessSection(platformId) + buildIapSection(platformId);
     return buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
   }
   if (target === 'data') {
@@ -4538,6 +4542,7 @@ function buildStorePreviewFlipSection(platformId, target) {
   // own header comments for why).
   if (target === 'localization') {
     if (platformId === 'macos') return buildMacLocalizationReviewSection();
+    if (platformId === 'macos_full') return buildMacFullLocalizationReviewSection();
     if (platformId === 'steam') return buildSteamLocalizationReviewSection();
     return buildLocalizationReviewSection();
   }
@@ -4551,7 +4556,9 @@ function buildStorePreviewFlipSection(platformId, target) {
   // un-flipped Store Preview, since that's genuinely where the user came
   // from and where they'd expect to land back.
   if (target === 'iapLocalizations') {
-    return platformId === 'macos' ? buildMacIapLocalizationsSection() : buildIapLocalizationsSection();
+    if (platformId === 'macos') return buildMacIapLocalizationsSection();
+    if (platformId === 'macos_full') return buildMacFullIapLocalizationsSection();
+    return buildIapLocalizationsSection();
   }
   return '';
 }
@@ -8724,16 +8731,11 @@ function buildIapSection(pid = 'ios') {
   // buildStorePreviewFlipSection routes 'macos' to buildMacIapLocalizationsSection(),
   // which reads Mac App Store's own saved products
   // (state.macSubmitAnswers.iapProducts) rather than iOS's.
-  // Mac App Store Full has no IAP Localization Review of its own — see
-  // buildStorePreviewFlipSection's 'iapLocalizations' target, which only
-  // knows how to route 'macos' (buildMacIapLocalizationsSection) or
-  // everything else to the App Store's own buildIapLocalizationsSection
-  // (reading state.iosSubmitAnswers.iapProducts). Showing this button here
-  // would flip macos_full's modal to iOS's own saved products and let
-  // edits there corrupt the App Store's data — out of scope for this
-  // platform per the "simplified but functional" design decision, so it's
-  // suppressed entirely rather than routed anywhere.
-  const hasSavedIapProducts = pid !== 'macos_full' && iapProducts.some(p => p.collapsed);
+  // Mac App Store Full now has its own full IAP Localization Review too —
+  // see buildStorePreviewFlipSection's 'iapLocalizations' target, which
+  // routes 'macos_full' to buildMacFullIapLocalizationsSection (reading its
+  // own independent state.macFullSubmitAnswers.iapProducts, never iOS's).
+  const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
   const iapLocsBtn = hasSavedIapProducts
     ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('${pid}','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
     : '';
@@ -9661,49 +9663,751 @@ function buildMacFullVersionReleaseSection() {
    everything look right before you submit". Every field shown below is
    still editable — just back on its own step, not inline from this page. */
 function buildMacFullStorePreviewSection() {
-  const l  = state.macFullAppStoreListing || {};
-  const a  = state.macFullSubmitAnswers;
-  const fd = state.formData;
+  const fd    = state.formData;
+  const ups   = state.uploads;
+  const a     = state.macFullSubmitAnswers;                    // unified answers — Content Rating, Privacy, Business, and IAP all live here (no shared/own split, unlike Mac App Store's own)
+  const icon  = ups.appIcon;
+  const pid   = 'macos_full';
 
-  const ps = state.platformScreenshots?.macos_full || { selected: [], custom: [] };
-  const allUploaded = (state.uploads?.screenshots || []);
+  // Use the screenshots selected in the Select Screenshots step,
+  // falling back to all uploaded screenshots if none selected yet.
+  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
+  const allUploaded = ups.screenshots || [];
   const selectedIds = new Set(ps.selected);
   const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
   const customShots = ps.custom || [];
   const shots = selectedUploaded.length > 0 || customShots.length > 0
     ? [...selectedUploaded, ...customShots]
-    : allUploaded;
+    : allUploaded; // fall back to all if none selected yet
 
-  const isFree    = !fd.price || parseFloat(fd.price) === 0;
+  const category  = escHtml(a.category.primary || 'Games');
+  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
+  const price     = isFree ? 'GET' : `$${fd.price}`;
   const priceText = isFree ? 'Free' : `$${fd.price}`;
-  const iapNote   = a.hasIAP === 'yes' ? ' + In-App Purchases' : '';
+  const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
+  const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
+  const activeProj = state.projects.find(p => p.id === state.activeProjectId);
+  const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
+  const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
 
-  const summaryRow = (label, value) => `
-    <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
-      <span style="color:var(--text-faint);font-size:12px;flex:none;">${label}</span>
-      <span style="color:var(--text);font-size:13px;text-align:right;">${value}</span>
+  // Language dropdown — same shared primary/supported language list as the
+  // App Store's own preview (see buildStorePreviewSection's own comment);
+  // only the currently-PREVIEWED language (macFullPreviewLang) and the TEXT
+  // shown for it (state.macFullAppStoreListing) are independent.
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
+  const previewLangOptions = previewLangCodes.map(l => ({
+    value: l,
+    label: OB_LANG_NAMES[l] || l,
+    warning: _macFullLangHasOverLimitField(l),
+  }));
+  const previewLang = _macFullEffectivePreviewLang();
+  const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
+
+  // Title/Subtitle/Description/What's New — click-to-edit via startMacFullInlineEdit
+  // (app.js), reading/writing state.macFullAppStoreListing through _macFullFieldValue/
+  // _macFullSetFieldValue instead of the App Store's state.formData fields.
+  const titleRaw  = _macFullFieldValue('title', previewLang);
+  const title     = escHtml(titleRaw || 'Your Game Title');
+  const titleOverLimit = titleRaw.length > IAS_FIELD_CHAR_LIMITS.title;
+
+  const subtitleRaw = _macFullFieldValue('subtitle', previewLang);
+  const subtitle     = escHtml(subtitleRaw || 'Short subtitle');
+  const subtitleOverLimit = subtitleRaw.length > IAS_FIELD_CHAR_LIMITS.subtitle;
+
+  const descRaw = _macFullFieldValue('description', previewLang);
+  const descOverLimit = descRaw.length > IAS_FIELD_CHAR_LIMITS.description;
+  const descPlaceholder = previewLang === previewPrimaryLang
+    ? 'Your game description will appear here once you fill in the Description field in Game Details.'
+    : `Add a ${previewLangName} description to populate this section.`;
+  const descFull  = descRaw ? escHtml(descRaw) : descPlaceholder;
+  const descShort = descRaw.length > 240
+    ? escHtml(descRaw.slice(0, 240)) + '…'
+    : descFull;
+
+  // Subtitle/Description/What's New auto-translate via _macFullTriggerAutoTranslate
+  // (app.js) — same loading/error indicator treatment as the App Store's own
+  // preview, reading state.macFullTranslateStatus instead of state.iasTranslateStatus.
+  const _macFullStatusLine = (field, tryAgainLabel) => {
+    if (previewLang === previewPrimaryLang) return '';
+    const status = state.macFullTranslateStatus?.[field];
+    if (status === 'loading') {
+      return `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating ${tryAgainLabel} to ${previewLangName}…</div>`;
+    }
+    if (status === 'error') {
+      return `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_macFullRetryTranslate('${field}')">Try again</button></div>`;
+    }
+    return '';
+  };
+  const subtitleStatusHtml = _macFullStatusLine('subtitle', 'subtitle');
+  const descStatusHtml     = _macFullStatusLine('description', 'description');
+  const notesStatusHtml    = _macFullStatusLine('releaseNotes', "what's new");
+
+  // Age rating from Content Rating's own answers (fully unified on
+  // macFullSubmitAnswers -- no shared/own split, unlike Mac App Store's own).
+  const ageRating = (function() {
+    if (a.ageCategory === 'made_for_kids') return '4+';
+    const hasAdult = a.graphicSexual === 'frequent' || a.extendedViolence === 'frequent';
+    const hasTeen  = a.realisticViolence && a.realisticViolence !== 'none';
+    return hasAdult ? '17+' : hasTeen ? '12+' : '4+';
+  })();
+
+  // Privacy section content — identical Nutrition Label format, reading
+  // Data Privacy's own answers (fully unified on macFullSubmitAnswers --
+  // no shared/own split, unlike Mac App Store's own).
+  const privacyHtml = (function() {
+    if (a.collectsData === 'no') {
+      return `
+        <div class="ias-privacy-card ias-privacy-clean">
+          <svg viewBox="0 0 28 28" fill="none" width="32" height="32">
+            <circle cx="14" cy="14" r="13" stroke="#0a84ff" stroke-width="1.5"/>
+            <path d="M9 14l3.5 3.5L19 10" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="ias-privacy-clean-title">Data Not Collected</div>
+          <div class="ias-privacy-clean-sub">The developer does not collect any data from this app.</div>
+        </div>`;
+    }
+
+    const dataPerType = a.dataPerType || {};
+    const typeEntries = Object.entries(dataPerType);
+
+    if (a.collectsData !== 'yes' || typeEntries.length === 0) {
+      return `
+        <div class="ias-privacy-card ias-privacy-pending">
+          <div class="ias-privacy-pending-msg">Complete the Data Privacy step to populate this section.</div>
+        </div>`;
+    }
+
+    const tracking  = [];
+    const linked    = [];
+    const notLinked = [];
+
+    typeEntries.forEach(([id, td]) => {
+      if (td.tracking === 'yes')       tracking.push(id);
+      else if (td.identity === 'yes')  linked.push(id);
+      else                             notLinked.push(id);
+    });
+
+    function _groups(ids) {
+      const seen = new Set();
+      return ids.map(id => IOS_DATA_TYPE_LOOKUP[id]?.group || id.replace(/_/g,' ')).filter(g => {
+        if (seen.has(g)) return false; seen.add(g); return true;
+      });
+    }
+
+    function _groupIcon(groupName) {
+      const icons = {
+        'Purchases':        `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="4" y="7" width="12" height="10" rx="2" stroke="white" stroke-width="1.4"/><path d="M7 7V5.5a3 3 0 0 1 6 0V7" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+        'Contact Info':     `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="8.25" stroke="white" stroke-width="1.4"/><path d="M10 9v5" stroke="white" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="6.5" r="0.9" fill="white"/></svg>`,
+        'Identifiers':      `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="2.5" y="5.5" width="15" height="9" rx="2" stroke="white" stroke-width="1.4"/><path d="M6 9h2M6 11.5h5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="14" cy="10.25" r="1.75" stroke="white" stroke-width="1.2"/></svg>`,
+        'Usage Data':       `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M4 14V10M8 14V7M12 14V9M16 14V5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Diagnostics':      `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a8 8 0 1 1 0 16A8 8 0 0 1 10 2z" stroke="white" stroke-width="1.4"/><path d="M10 6v4l2.5 2.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        'Location':         `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a5.5 5.5 0 0 1 5.5 5.5c0 4-5.5 10.5-5.5 10.5S4.5 11.5 4.5 7.5A5.5 5.5 0 0 1 10 2z" stroke="white" stroke-width="1.4"/><circle cx="10" cy="7.5" r="1.8" stroke="white" stroke-width="1.3"/></svg>`,
+        'Financial Info':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="7.5" stroke="white" stroke-width="1.4"/><path d="M10 6v8M8 7.5h3a1.5 1.5 0 0 1 0 3H9a1.5 1.5 0 0 0 0 3h3" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        'Health & Fitness': `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 16s-7-4.5-7-8.5a4 4 0 0 1 7-2.65A4 4 0 0 1 17 7.5C17 11.5 10 16 10 16z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+        'User Content':     `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M5 3h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="white" stroke-width="1.4"/><path d="M7 8h6M7 11h4" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        'Browsing History': `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="10" cy="10" r="7.5" stroke="white" stroke-width="1.4"/><path d="M2.5 10h15M10 2.5a12 12 0 0 1 0 15M10 2.5a12 12 0 0 0 0 15" stroke="white" stroke-width="1.3"/></svg>`,
+        'Search History':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="9" cy="9" r="5.5" stroke="white" stroke-width="1.4"/><path d="M13 13l3.5 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Sensitive Info':   `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2l7 3.5V10c0 4-3.5 7-7 8-3.5-1-7-4-7-8V5.5L10 2z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+        'Contacts':         `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="8" cy="7.5" r="3" stroke="white" stroke-width="1.4"/><path d="M2 17c0-3.3 2.7-5 6-5" stroke="white" stroke-width="1.4" stroke-linecap="round"/><path d="M14 11v6M11 14h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        'Other Data':       `<svg viewBox="0 0 20 20" fill="none" width="18" height="18"><circle cx="5" cy="10" r="1.5" fill="white"/><circle cx="10" cy="10" r="1.5" fill="white"/><circle cx="15" cy="10" r="1.5" fill="white"/></svg>`,
+      };
+      return icons[groupName] || icons['Other Data'];
+    }
+
+    const personIcon = `
+      <div class="ias-pp-person-icon">
+        <svg viewBox="0 0 44 44" fill="none" width="44" height="44">
+          <circle cx="22" cy="22" r="22" fill="#0a84ff"/>
+          <circle cx="22" cy="17" r="6" fill="white"/>
+          <path d="M8 38c0-7.7 6.3-13 14-13s14 5.3 14 13" fill="white"/>
+        </svg>
+      </div>`;
+
+    function _ppCard(bucketTitle, bucketSubtitle, ids) {
+      if (!ids.length) return '';
+      const groups = _groups(ids);
+      return `
+        <div class="ias-pp-card">
+          ${personIcon}
+          <div class="ias-pp-card-title">${bucketTitle}</div>
+          <div class="ias-pp-card-subtitle">${bucketSubtitle}</div>
+          <div class="ias-pp-grid">
+            ${groups.map(g => `
+              <div class="ias-pp-grid-item">
+                ${_groupIcon(g)}
+                <span>${escHtml(g)}</span>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    const cardsHtml = _ppCard('Data Used to Track You',
+        'The following data may be used to track you across apps and websites owned by other companies:',
+        tracking)
+      + _ppCard('Data Linked to You',
+        'The following data may be collected and linked to your identity:',
+        linked)
+      + _ppCard('Data Not Linked to You',
+        'The following data may be collected but it is not linked to your identity:',
+        notLinked);
+
+    return cardsHtml || `<div class="ias-privacy-card ias-privacy-pending"><div class="ias-privacy-pending-msg">No data types configured.</div></div>`;
+  })();
+
+  // What's New section — click-to-edit via startMacFullInlineEdit, same
+  // per-language storage (_macFullFieldValue) as Title/Subtitle/Description above.
+  const releaseNotes = _macFullFieldValue('releaseNotes', previewLang);
+  const notesOverLimit = releaseNotes.length > IAS_FIELD_CHAR_LIMITS.releaseNotes;
+  const notesHtml = releaseNotes
+    ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
+    : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
+
+  const iconHtml = icon
+    ? `<img src="${icon.dataUrl}" class="ias-icon" alt="App icon">`
+    : `<div class="ias-icon ias-icon-empty">
+        <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
+          <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
+          <polygon points="20,3 32,14 8,14" fill="#666"/>
+        </svg>
+      </div>`;
+
+  // Show all selected shots (no cap) — scroll container handles overflow
+  const shotHtml = shots.length > 0
+    ? shots.map(s =>
+        `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
+      ).join('')
+    : ['Gameplay','Gameplay','Menu'].map(lbl =>
+        `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
+      ).join('');
+
+  const _infoRowHtml = r => `
+    <div class="ias-info-row">
+      <span class="ias-info-label">${r.label}</span>
+      <span class="ias-info-value">${r.value}</span>
     </div>`;
 
+  // Compatibility reads "Mac" — this is the Mac App Store, not iPhone/iPad.
+  const infoRowsTop = [
+    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Size',          value: '—'                 },
+    { label: 'Category',      value: category            },
+    { label: 'Compatibility', value: 'Mac'                },
+    { label: 'Languages',     value: langCode            },
+    { label: 'Age Rating',    value: ageRating           },
+  ].map(_infoRowHtml).join('');
+  const copyrightRowHtml = _infoRowHtml({ label: 'Copyright', value: `© ${new Date().getFullYear()}` });
+
+  const savedIapProducts = (a.iapProducts || []).filter(p => p.collapsed);
+  const iapPriceLabel = price => {
+    const val = parseFloat(price);
+    return (!price || isNaN(val) || val <= 0) ? 'Free' : `$${price}`;
+  };
+  const iapInfoBlock = savedIapProducts.length ? `
+    <div class="ias-info-subhead">In-App Purchases</div>
+    ${savedIapProducts.map(p => `
+      <div class="ias-info-row">
+        <span class="ias-iap-name">${escHtml(p.name) || 'Untitled IAP'}</span>
+        <span class="ias-iap-price">${iapPriceLabel(p.price)}</span>
+      </div>`).join('')}` : '';
+
+  const infoRows = `${infoRowsTop}${iapInfoBlock}${copyrightRowHtml}`;
+
+  // Section completion status for DocuSign navigation — Mac App Store's own
+  // storePreviewSectionSeen/isMacSectionComplete, independent of iOS's.
+  const seenSections    = state.storePreviewSectionSeen?.macos_full || {};
+  // Content rating is now its own platform-card step — reflect completion
+  // directly rather than requiring a visit to the preview's content section.
+  const contentDone     = isMacFullSectionComplete('contentRating');
+  const businessDone    = !!(seenSections.business && isMacFullSectionComplete('business'));
+  const dataDone        = isMacFullSectionComplete('privacy');
+  const screenshotsDone = isMacFullSectionComplete('screenshots');
+
+  function _sppBtn(target, label, sub, isDone) {
+    if (isDone) {
+      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="spp-section-btn-title">${label}</div>
+          <div class="spp-section-btn-sub">Tap to edit</div>
+        </div>
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>`;
+    }
+    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
+      <div>
+        <div class="spp-section-btn-title">${label}</div>
+        <div class="spp-section-btn-sub">${sub}</div>
+      </div>
+      <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto"><path d="M1 1l6 5-6 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>`;
+  }
+
+  const SPP_SECTIONS = [
+    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
+    { target: 'screenshots', done: screenshotsDone, label: 'Adjust Screenshots'             },
+    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
+    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  ];
+  const nextSection = SPP_SECTIONS.find(s => !s.done);
+  const navBar = nextSection ? `
+    <div class="spp-nav-bar">
+      <span class="spp-nav-label">Next required</span>
+      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
+        ${nextSection.label} →
+      </button>
+    </div>` : `
+    <div class="spp-nav-bar spp-nav-bar--done">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      All sections complete — ready to save
+    </div>`;
+
+  const ageCell = contentDone
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+         <div class="ias-meta-top ias-meta-age">${ageRating}</div>
+         <div class="ias-meta-bot">Age</div>
+       </div>`
+    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+         <div class="ias-meta-top ias-meta-action-icon">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
+         </div>
+         <div class="ias-meta-bot ias-meta-bot--action">Content</div>
+       </div>`;
+
+  const priceCell = businessDone
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
+         <div class="ias-meta-top">${priceText}</div>
+         <div class="ias-meta-bot">Price</div>
+       </div>`
+    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+         <div class="ias-meta-top ias-meta-action-icon">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
+         </div>
+         <div class="ias-meta-bot ias-meta-bot--action">Business</div>
+       </div>`;
+
+  const screenshotsArea = `
+    <div class="ias-shots-scroll">${shotHtml}</div>
+    <div class="ias-device-compat">
+      <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span>Mac</span>
+    </div>
+    <div style="padding:0 16px 10px;">
+      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
+    </div>`;
+
+  const privacySection = dataDone
+    ? `<div class="ias-section-head-row">
+         <span class="ias-section-head">App Privacy</span>
+         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+       </div>
+       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+       ${privacyHtml}
+       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
+
   return `
-    <div class="form-group" style="margin-bottom:14px;">
-      <div class="form-hint">A read-only summary of your Mac App Store Full submission — edit any field on its own step above.</div>
-    </div>
+    <div class="ias-device-wrap">
+      <div class="ias-label-row">
+        <span class="ias-label-badge">
+          <svg viewBox="0 0 16 16" fill="none" width="11" height="11" style="margin-right:4px;vertical-align:-1px;"><path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm.75 10.25h-1.5v-5h1.5v5zm0-6.5h-1.5v-1.5h1.5v1.5z" fill="currentColor"/></svg>
+          Mac App Store Full Preview
+        </span>
+        <div class="ias-label-right">
+          <span class="ias-label-note">Reflects your submission data</span>
+          <div class="ias-locs-lang-group">
+            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">Localizations</button>
+            ${swSelect('macfull-preview-lang', previewLang, previewLangOptions, 'setMacFullPreviewLang', '150px', 'right')}
+          </div>
+        </div>
+      </div>
 
-    <div style="margin-bottom:20px;">
-      <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Screenshots</div>
-      ${shots.length > 0
-        ? `<div style="display:flex;gap:8px;overflow-x:auto;">${shots.map(s => `<img src="${s.dataUrl}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex:none;" alt="">`).join('')}</div>`
-        : `<div class="form-hint">No screenshots added yet.</div>`}
-    </div>
+      <div class="ias-page">
 
-    ${summaryRow('Title', escHtml(l.title || fd.title || 'Untitled'))}
-    ${summaryRow('Subtitle', escHtml(l.subtitle || fd.subtitle || '—'))}
-    ${summaryRow('Category', escHtml(a.category.primary || '—'))}
-    ${summaryRow('Price', priceText + iapNote)}
-    ${summaryRow('Description', l.description ? (escHtml(l.description.slice(0, 120)) + (l.description.length > 120 ? '…' : '')) : '—')}
-    ${summaryRow("What's New", l.releaseNotes ? (escHtml(l.releaseNotes.slice(0, 120)) + (l.releaseNotes.length > 120 ? '…' : '')) : '—')}
-    ${summaryRow('Support URL', escHtml(l.supportUrl || '—'))}
-    ${summaryRow('Copyright', escHtml(l.copyright || '—'))}`;
+        <!-- ── Header ── -->
+        <div class="ias-header">
+          ${iconHtml}
+          <div class="ias-header-meta">
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}"
+                 onclick="startMacFullInlineEdit('title', this, event)" title="Click to edit">${title}</div>
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}"
+                 onclick="startMacFullInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
+            ${subtitleStatusHtml}
+            ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
+          </div>
+          <div class="ias-header-cta">
+            <button class="ias-get-btn">${price}</button>
+          </div>
+        </div>
+
+        <!-- ── Meta strip (Age → Content Qs, Price → Business Qs) ── -->
+        <div class="ias-meta-strip">
+          <div class="ias-meta-cell">
+            <div class="ias-meta-top">—</div>
+            <div class="ias-meta-bot">Ratings</div>
+          </div>
+          <div class="ias-meta-divider"></div>
+          ${ageCell}
+          <div class="ias-meta-divider"></div>
+          ${priceCell}
+          <div class="ias-meta-divider"></div>
+          <div class="ias-meta-cell ias-meta-cell-wide">
+            <div class="ias-meta-top">${category}</div>
+            <div class="ias-meta-bot">Category</div>
+          </div>
+        </div>
+
+        <!-- ── Screenshots (or Select Screenshots button) ── -->
+        ${screenshotsArea}
+
+        <!-- ── Description ── -->
+        <div class="ias-section">
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="macfull-desc-text"
+               onclick="startMacFullInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
+            ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
+          ${descStatusHtml}
+          <div class="ias-dev-row">
+            <span class="ias-dev-name">Developer</span>
+            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>
+
+        <!-- ── What's New ── -->
+        <div class="ias-section">
+          <div class="ias-section-head-row">
+            <span class="ias-section-head">What's New</span>
+            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="ias-wn-version">Version ${version}</div>
+          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
+               onclick="startMacFullInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
+          ${notesStatusHtml}
+          <div class="ias-wn-edit-hint">
+            <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
+            Click to edit
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>
+
+        <!-- ── App Privacy (or Data Collection button) ── -->
+        <div class="ias-section">
+          ${privacySection}
+        </div>
+
+        <div class="ias-section-divider"></div>
+
+        <!-- ── Information ── -->
+        <div class="ias-section">
+          <div class="ias-section-head">Information</div>
+          <div class="ias-info-grid">${infoRows}</div>
+          <div class="ias-info-link">Developer Website <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="ias-info-link">Privacy Policy <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+
+      </div><!-- /ias-page -->
+    </div><!-- /ias-device-wrap -->
+
+    ${navBar}
+  `;
+}
+
+function buildMacFullLocalizationReviewSection() {
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.macFullLocReviewField || 'title';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.macFullLocReviewMode === 'review';
+  const isLongField = field === 'description' || field === 'releaseNotes';
+
+  const fieldOptions = LOC_REVIEW_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _macFullFieldHasOverLimitLang(f.value, langCodes),
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _macFullLocReviewUndoState(kind, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); macFullLocReviewUndo('${kind}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); macFullLocReviewRedo('${kind}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _macFullFieldValue(field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _macFullLocReviewBackTranslationValue(field, lang);
+      const topStatusHtml = _macFullFieldTranslatePending(field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="loc-review-card">
+        <div class="loc-review-side">
+          <div class="loc-review-half loc-review-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startMacFullLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="loc-review-half loc-review-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startMacFullLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _macFullFieldTranslatePending(field, lang);
+    const srcBadge = _macFullLocReviewSourceBadge(field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
+    return `
+      <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startMacFullLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  // Only Description/What's New have their own independently-toggleable
+  // auto-translate setting — see this function's own top comment.
+  const autoCfg = state.macFullAutoTranslateFields
+    || { title: false, subtitle: true, description: true, releaseNotes: true };
+  const settingsOpen = !!state.macFullReviewSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_macFullToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="macfull-loc-review-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_macFullToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('description', 'Description')}
+          ${settingsRow('releaseNotes', "What's New")}
+        </div>
+      </div>`;
+
+  return `
+    <div class="loc-review-header">
+      <div class="loc-review-title-group">
+        <div class="loc-review-title">Localization Review</div>
+        ${settingsMenu}
+      </div>
+      <div class="loc-review-header-controls">
+        <button class="loc-review-toggle-btn" onclick="toggleMacFullLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        ${swSelect('macfull-loc-review-field', field, fieldOptions, 'setMacFullLocReviewField', '160px', 'right')}
+      </div>
+    </div>
+    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
+}
+
+function buildMacFullIapLocalizationsSection() {
+  const savedProducts = (state.macFullSubmitAnswers.iapProducts || []).filter(p => p.collapsed);
+  if (!savedProducts.length) return '';
+
+  const iapId = _macFullIapLocEffectiveIapId();
+  const product = savedProducts.find(p => p.id === iapId);
+  if (!product) return '';
+
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.macFullIapLocField || 'name';
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.macFullIapLocMode === 'review';
+
+  const fieldOptions = IAP_LOC_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _macFullIapLocFieldHasOverLimitLang(iapId, f.value, langCodes),
+  }));
+  const iapOptions = savedProducts.map(p => ({
+    value: p.id,
+    label: escHtml(p.name) || 'Untitled IAP',
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _macFullIapLocUndoState(kind, iapId, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); macFullIapLocUndo('${kind}','${iapId}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); macFullIapLocRedo('${kind}','${iapId}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _macFullIapLocFieldValue(iapId, field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _macFullIapLocBackTranslationValue(iapId, field, lang);
+      const topStatusHtml = _macFullIapLocFieldTranslatePending(iapId, field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="iap-loc-card">
+        <div class="iap-loc-side">
+          <div class="iap-loc-half iap-loc-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startMacFullIapLocInlineEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="iap-loc-half iap-loc-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startMacFullIapLocBackTranslationEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _macFullIapLocFieldTranslatePending(iapId, field, lang);
+    const srcBadge = _macFullIapLocSourceBadge(iapId, field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'ai'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+        : '';
+
+    return `
+      <div class="iap-loc-card${isPrimary ? ' iap-loc-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startMacFullIapLocInlineEdit('${iapId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  const autoCfg = state.macFullIapLocAutoTranslateFields || { name: true, desc: true };
+  const settingsOpen = !!state.macFullIapLocSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_macFullIapLocToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="macfull-iap-loc-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_macFullIapLocToggleSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('name', 'Name')}
+          ${settingsRow('desc', 'Description')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">IAP Localizations</div>
+          ${settingsMenu}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="toggleMacFullIapLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect('macfull-iap-loc-iap', iapId, iapOptions, 'setMacFullIapLocReviewIapId', 'auto', 'right')}
+        ${swSelect('macfull-iap-loc-field', field, fieldOptions, 'setMacFullIapLocField', 'auto', 'right')}
+      </div>
+      <div class="iap-loc-cards">${cards}</div>
+    </div>`;
 }
 
 /* ── Distribution ────────────────────────────────────── */

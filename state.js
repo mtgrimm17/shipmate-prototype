@@ -3029,17 +3029,59 @@ const state = {
   // editable" treatment as every other Steam-sourced field elsewhere in
   // Shipmate. Title/Subtitle are NOT shared with either sibling platform
   // here (no MAS_SHARED_LISTING_FIELDS-style routing for macos_full), per
-  // the "fully independent" design decision. Primary-language only, per
-  // the "simplified but functional" design decision — no per-language
-  // localization-review plumbing of its own (localizedStoreText below
-  // still exists for parity with macAppStoreListing's shape, but the
-  // per-language translate/review UI itself is out of scope for this
-  // platform). Editing this never writes back to state.formData or either
+  // the "fully independent" design decision. Unlike the original
+  // "simplified but functional" plan, Mac App Store Full's own Product
+  // Page Preview (buildMacFullStorePreviewSection, render.js) is a full
+  // parity port of Mac App Store's own — so localizedStoreText below is
+  // now genuinely live, driving Mac App Store Full's own Localization
+  // Review (buildMacFullLocalizationReviewSection) via the macFullPreviewLang/
+  // macFullLocReview*/macFullTranslate*/macFullAutoTranslateFields cluster
+  // just below, own independent copies of masPreviewLang/masLocReview*/
+  // masTranslate*/masAutoTranslateFields further below. Editing this never
+  // writes back to state.formData or either sibling platform's own
+  // listing, and vice versa — EXCEPT Description,
   // sibling platform's own listing, and vice versa — EXCEPT Description,
   // which is the one field kept forced in sync FROM state.formData.description
   // going forward (see _macFullPropagateDescription, app.js) — still never
   // writes back TO it.
   macFullAppStoreListing: null,
+
+  // Mac App Store Full's OWN Product Page Preview — full twins of
+  // masPreviewLang/masTranslateStatus/masTranslatePendingLangs/
+  // masAutoTranslateFields/masReviewSettingsOpen/masLocReviewField/
+  // masLocReviewMode/masLocReviewBackTranslation/masLocReviewUndoHistory
+  // further below, substituting "macFull" for "mas" — same shapes/
+  // defaults, own independent copies, scoped to macFullAppStoreListing
+  // above instead of macAppStoreListing. Unlike Mac App Store's own
+  // cluster, there is no MAS_SHARED_LISTING_FIELDS-style split for any of
+  // Title/Subtitle/Description/What's New here — every field is fully
+  // independent, per macFullAppStoreListing's own comment above.
+  macFullPreviewLang: null,
+  macFullTranslateStatus: {},
+  macFullTranslatePendingLangs: {},
+  macFullAutoTranslateFields: { title: false, subtitle: true, description: true, releaseNotes: true },
+  macFullReviewSettingsOpen: false,
+  macFullLocReviewField: null,
+  macFullLocReviewMode: 'locs',
+  macFullLocReviewBackTranslation: {},
+  macFullLocReviewUndoHistory: { real: {}, draft: {} },
+
+  // Mac App Store Full's OWN IAP Localizations — full twins of the nine
+  // masIapLocIapId/masIapLocField/masIapLocMode/masIapLocBackTranslation/
+  // masIapLocUndoHistory/masIapLocTranslateStatus/masIapLocTranslatePendingLangs/
+  // masIapLocAutoTranslateFields/masIapLocSettingsOpen fields further below,
+  // scoped to Mac App Store Full's own saved IAP products
+  // (state.macFullSubmitAnswers.iapProducts — already fully independent of
+  // every other platform's own) instead of Mac App Store's.
+  macFullIapLocIapId: null,
+  macFullIapLocField: null,
+  macFullIapLocMode: 'locs',
+  macFullIapLocBackTranslation: {},
+  macFullIapLocUndoHistory: { real: {}, draft: {} },
+  macFullIapLocTranslateStatus: {},
+  macFullIapLocTranslatePendingLangs: {},
+  macFullIapLocAutoTranslateFields: { name: true, desc: true },
+  macFullIapLocSettingsOpen: false,
 
   // Which language Mac App Store's own Product Page Preview language
   // dropdown is currently showing — mirrors iasPreviewLang below, but kept

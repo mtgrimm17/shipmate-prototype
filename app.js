@@ -1236,6 +1236,17 @@ function toggleMacFullAvailabilityArea(areaIndex, checked) {
 // activatePlatform already seed it before this step can be reached).
 function setMacFullListingField(field, value) {
   seedMacFullAppStoreListing();
+  // Description/What's New are also editable per-language from the Product
+  // Page Preview / Localization Review (_macFullSetFieldValue, further
+  // below) -- route through the same function here so an edit made from
+  // Version Information also kicks off auto-translation into supporting
+  // languages, rather than silently leaving their translations stale.
+  // Title/Subtitle are never edited from Version Information (see this
+  // step's own hint text), so they never reach this function at all.
+  if (field === 'description' || field === 'releaseNotes') {
+    _macFullSetFieldValue(field, state.formData.primaryLanguage || 'en', value);
+    return;
+  }
   state.macFullAppStoreListing[field] = value;
 }
 
@@ -3182,6 +3193,16 @@ function selectLocPrimary(lang) {
       _masPropagateAllFields();
     }
 
+    // Mac App Store Full's own independent listing goes through the same
+    // stash/promote/re-propagate dance, on its own storage -- all four
+    // fields this time (Title/Subtitle included), since none of them are
+    // shared with any other platform here (see macFullAppStoreListing's
+    // own comment, state.js).
+    if (state.macFullAppStoreListing) {
+      _promoteLangPrimary(state.macFullAppStoreListing, oldPrimary, lang, oldPrimaryKept, _macFullBlankLocalizedText);
+      _macFullPropagateAllFields();
+    }
+
     // Steam's own Store Page Preview - Prototype listing text (Short
     // Description/Developer/Publisher/About This Game) shares this same
     // stash/promote/re-propagate dance, against its own independent storage
@@ -3209,6 +3230,7 @@ function setObLangPreset(preset) {
   // language needs its own initial translation pass triggered here.
   _iasPropagateAllFields();
   _masPropagateAllFields(); // no-op until Mac App Store is activated
+  _macFullPropagateAllFields(); // no-op until Mac App Store Full is activated
   _steamPropagateAllFields();
   // Same reasoning as toggleObLang — bulk selection also bypasses the
   // per-language Steam localization check, so run it for every language
@@ -3234,6 +3256,7 @@ function applyObLangPreset() {
   updateObLangListWrap();
   _iasPropagateAllFields();
   _masPropagateAllFields(); // no-op until Mac App Store is activated
+  _macFullPropagateAllFields(); // no-op until Mac App Store Full is activated
   _steamPropagateAllFields();
   _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, state.formData.localizations);
 }
@@ -3251,6 +3274,7 @@ function toggleObLang(lang) {
     // than waiting for those fields to change again.
     _iasPropagateAllFields();
     _masPropagateAllFields(); // no-op until Mac App Store is activated
+    _macFullPropagateAllFields(); // no-op until Mac App Store Full is activated
     _steamPropagateAllFields();
     // If this game is Steam-linked and its store page has been localized
     // into this language, prefer Steam's own "About This Game" copy for the
@@ -4519,6 +4543,14 @@ function _refreshLocalizationForNewGame() {
   if (state.activePlatforms && state.activePlatforms.has('macos')) {
     seedMacAppStoreListing();
     _masPropagateAllFields();
+  }
+  // Mac App Store Full's own independent Description/Release Notes get the
+  // same treatment -- gated on the platform actually being active, same
+  // "don't spuriously create the listing" contract as seedMacFullAppStoreListing
+  // itself (see its own comment).
+  if (state.activePlatforms && state.activePlatforms.has('macos_full')) {
+    seedMacFullAppStoreListing();
+    _macFullPropagateAllFields();
   }
   _steamPropagateAllFields();
 }
@@ -7710,6 +7742,15 @@ function setMasPreviewLang(lang) {
   reRenderStepModal();
 }
 
+// Mac App Store Full's own twin of setIasPreviewLang/setMasPreviewLang
+// above — its own Product Page Preview's language dropdown
+// (buildMacFullStorePreviewSection, render.js) persists into
+// state.macFullPreviewLang instead, independent of every other platform's.
+function setMacFullPreviewLang(lang) {
+  state.macFullPreviewLang = lang;
+  reRenderStepModal();
+}
+
 /* Localization Review's top-right field dropdown (swSelect) — options are
    the four store-listing fields in the same order they appear in the App
    Store Product Page Preview (Title, Subtitle, Description, What's New),
@@ -10070,6 +10111,995 @@ function _masIapLocToggleSettingsMenu(event) {
   if (!wasOpen) {
     state.masIapLocSettingsOpen = true;
     document.getElementById('mas-iap-loc-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MAC APP STORE FULL -- Product Page Preview, Localization Review, IAP
+   Localizations
+   ══════════════════════════════════════════════════════════════════════
+   Full twins of the mas-prefixed and masIapLoc-prefixed clusters above
+   (Mac App Store's own Product Page Preview, Localization Review, and IAP
+   Localizations), reading and writing state.macFullAppStoreListing and
+   state.macFullSubmitAnswers.iapProducts instead of state.macAppStoreListing
+   and state.macSubmitAnswers.iapProducts -- own independent review-UI
+   scratch state too (macFullPreviewLang, macFullLocReview-prefixed,
+   macFullTranslate-prefixed, macFullAutoTranslateFields, macFullIapLoc-
+   prefixed fields, state.js), for the same "duplicate the stateful UI, not
+   generalize it" reason every other platform twin in this file is kept
+   separate (see _masIapLocSavedProducts' own comment above). Unlike Mac
+   App Store's own cluster, there is NO MAS_SHARED_LISTING_FIELDS-style
+   split anywhere in here -- Title, Subtitle, Description, and What's New
+   are all fully independent for Mac App Store Full, per
+   macFullAppStoreListing's own comment (state.js) -- so _macFullFieldValue,
+   _macFullSetFieldValue, _macFullFieldTranslatePending, and
+   _macFullLocReviewSourceBadge below are simpler than their Mac App Store
+   analogs (no shared-field branch), and _macFullPropagateTitle and
+   _macFullPropagateAllFields exist here with no mas-prefixed equivalent at
+   all -- Mac App Store never needs to propagate Title itself since it
+   delegates straight to the App Store's own _iasPropagateTitle. */
+
+
+function _macFullFieldValue(field, lang) {
+  const fd = state.formData;
+  const ml = state.macFullAppStoreListing;
+  if (!ml) return '';
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return ml[field] || '';
+  const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
+  return (entry && entry[field]) || '';
+}
+
+function _macFullSetFieldValue(field, lang, value) {
+  const ml = state.macFullAppStoreListing;
+  if (!ml) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    ml[field] = value;
+    if (field === 'title') _macFullPropagateTitle(value);
+    else if (_macFullFieldAutoTranslateEnabled(field)) _macFullTriggerAutoTranslate(field, value);
+    return;
+  }
+  if (!ml.localizedStoreText) ml.localizedStoreText = {};
+  if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
+  ml.localizedStoreText[lang][field] = value;
+}
+
+// Mirrors _iasPropagateTitle — Mac App Store Full has no MAS_SHARED_LISTING_FIELDS-
+// style sharing at all, so unlike Mac App Store's own cluster (which bypasses
+// straight to the App Store's shared storage for Title), this is Mac App Store
+// Full's own real mirror/auto-translate switch for Title.
+function _macFullPropagateTitle(primaryValue) {
+  if (_macFullFieldAutoTranslateEnabled('title')) { _macFullTriggerAutoTranslate('title', primaryValue); return; }
+  const ml = state.macFullAppStoreListing;
+  if (!ml) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+  if (!ml.localizedStoreText) ml.localizedStoreText = {};
+  supportedLangs.forEach(lang => {
+    if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
+    ml.localizedStoreText[lang].title = primaryValue || '';
+  });
+}
+
+// Mirrors _iasPropagateAllFields (NOT _masPropagateAllFields, which skips
+// Title/Subtitle because Mac App Store shares them with the App Store) —
+// Mac App Store Full has no such sharing, so every one of its four fields
+// needs re-propagating here.
+function _macFullPropagateAllFields() {
+  const ml = state.macFullAppStoreListing;
+  if (!ml) return;
+  _macFullPropagateTitle(ml.title);
+  IAS_TRANSLATABLE_FIELDS.forEach(field => _macFullTriggerAutoTranslate(field, ml[field]));
+}
+
+// Mirrors _iasFieldTranslatePending — no MAS_SHARED_LISTING_FIELDS-style
+// branch, since none of Mac App Store Full's four fields are shared with
+// any other platform.
+function _macFullFieldTranslatePending(field, lang) {
+  if (!state.macFullTranslateStatus || state.macFullTranslateStatus[field] !== 'loading') return false;
+  const pending = state.macFullTranslatePendingLangs && state.macFullTranslatePendingLangs[field];
+  return !!(pending && pending.includes(lang));
+}
+
+// Mirrors _masLocReviewSourceBadge, minus its MAS_SHARED_LISTING_FIELDS
+// branch — every field here reads/writes state.macFullAppStoreListing only.
+function _macFullLocReviewSourceBadge(field, lang) {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_macFullFieldValue(field, lang)) return null;
+  const ml = state.macFullAppStoreListing;
+  const entry = ml && ml.localizedStoreText && ml.localizedStoreText[lang];
+  if (!entry) return null;
+  if (_macFullFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ml[field] || '')) return 'ai';
+  return null;
+}
+
+function _macFullEffectivePreviewLang() {
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const valid = new Set([primary, ...(fd.localizations || [])]);
+  return valid.has(state.macFullPreviewLang) ? state.macFullPreviewLang : primary;
+}
+function _macFullBlankLocalizedText() {
+  return { title: '', subtitle: '', description: '', releaseNotes: '' };
+}
+function _macFullLangHasOverLimitField(lang) {
+  return Object.keys(IAS_FIELD_CHAR_LIMITS).some(field =>
+    _macFullFieldValue(field, lang).length > IAS_FIELD_CHAR_LIMITS[field]);
+}
+function _macFullFieldAutoTranslateEnabled(field) {
+  const cfg = state.macFullAutoTranslateFields;
+  if (!cfg) return IAS_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+async function _macFullTriggerAutoTranslate(field, primaryValue) {
+  if (!_macFullFieldAutoTranslateEnabled(field)) return;
+  const ml = state.macFullAppStoreListing;
+  if (!ml) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  const eligible = supportedLangs.filter(lang => {
+    const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    if (!ml.localizedStoreText) ml.localizedStoreText = {};
+    eligible.forEach(lang => {
+      if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
+      ml.localizedStoreText[lang][field]     = '';
+      ml.localizedStoreText[lang][sourceKey] = '';
+      const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== '') _macFullLocReviewRefreshBackTranslation(field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.macFullTranslateStatus = state.macFullTranslateStatus || {};
+  state.macFullTranslateStatus[field] = 'loading';
+  state.macFullTranslatePendingLangs = state.macFullTranslatePendingLangs || {};
+  state.macFullTranslatePendingLangs[field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel     = IAS_FIELD_LABELS[field] || field;
+  const perLangBudget  = (field === 'subtitle' || field === 'title') ? 120 : (field === 'releaseNotes' ? 600 : 1200);
+  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following Mac app store ${fieldLabel} text for a video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone, meaning, and any line breaks in the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    if (!ml.localizedStoreText) ml.localizedStoreText = {};
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
+      const entry = ml.localizedStoreText[lang];
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== translated) _macFullLocReviewRefreshBackTranslation(field, lang, translated);
+    });
+
+    state.macFullTranslateStatus[field] = 'complete';
+  } catch (e) {
+    console.warn('[Mac App Store Full Preview Translate]', field, e.message);
+    state.macFullTranslateStatus[field] = 'error';
+  }
+  state.macFullTranslatePendingLangs[field] = [];
+
+  reRenderStepModal();
+}
+function _macFullRetryTranslate(field) {
+  const ml = state.macFullAppStoreListing;
+  _macFullTriggerAutoTranslate(field, _macFullFieldValue(field, state.formData.primaryLanguage || 'en'));
+}
+function startMacFullInlineEdit(field, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const lang = _macFullEffectivePreviewLang();
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _macFullFieldValue(field, lang);
+
+  const counterRow = document.createElement('div');
+  counterRow.className = 'ias-char-counter-row';
+  const errorEl = document.createElement('span');
+  errorEl.className = 'ias-char-error';
+  const countEl = document.createElement('span');
+  countEl.className = 'ias-char-count';
+  counterRow.append(errorEl, countEl);
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    countEl.textContent = String(remaining);
+    countEl.classList.toggle('is-over', isOver);
+    errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    _macFullSetFieldValue(field, lang, input.value);
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.insertAdjacentElement('afterend', counterRow);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+function _macFullLocReviewBackTranslationValue(field, lang) {
+  const entry = state.macFullLocReviewBackTranslation
+    && state.macFullLocReviewBackTranslation[field]
+    && state.macFullLocReviewBackTranslation[field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+function _macFullLocReviewBackTranslationEntry(field, lang) {
+  if (!state.macFullLocReviewBackTranslation) state.macFullLocReviewBackTranslation = {};
+  const forField = state.macFullLocReviewBackTranslation[field] || (state.macFullLocReviewBackTranslation[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+function _macFullLocReviewSyncBackTranslations() {
+  const fd = state.formData;
+  const field = state.macFullLocReviewField || 'title';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _macFullFieldValue(field, lang);
+    const entry = _macFullLocReviewBackTranslationEntry(field, lang);
+    if (entry.syncedTopText === topText) return; // already in sync, including both blank
+    jobs.push(_macFullLocReviewRefreshBackTranslation(field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+async function _macFullLocReviewRefreshBackTranslation(field, lang, topText) {
+  const entry = _macFullLocReviewBackTranslationEntry(field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _macFullFieldValue(field, lang);
+  if (currentTop !== topText) { _macFullLocReviewRefreshBackTranslation(field, lang, currentTop); return; }
+
+  const freshEntry = _macFullLocReviewBackTranslationEntry(field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+async function _macFullLocReviewCommitPrimaryEdit(field, lang, value) {
+  const entry = _macFullLocReviewBackTranslationEntry(field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _macFullSetFieldValue(field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _macFullLocReviewBackTranslationEntry(field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _macFullSetFieldValue(field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+function startMacFullLocReviewInlineEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const inHalf = !!(el.closest && el.closest('.loc-review-half'));
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = inHalf ? 4 : 8;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _macFullFieldValue(field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _macFullFieldValue(field, lang);
+    if (input.value !== previousValue) _macFullLocReviewPushUndo('real', field, lang, previousValue);
+    _macFullSetFieldValue(field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
+      if (backEntry.syncedTopText !== input.value) _macFullLocReviewRefreshBackTranslation(field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+function startMacFullLocReviewBackTranslationEdit(field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const isMultiline = field === 'description' || field === 'releaseNotes';
+  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  if (isMultiline) {
+    input.rows = 4;
+  } else {
+    input.type = 'text';
+  }
+  input.value = _macFullLocReviewBackTranslationValue(field, lang).text;
+
+  const commit = () => {
+    const previousValue = _macFullLocReviewBackTranslationValue(field, lang).text;
+    if (input.value !== previousValue) _macFullLocReviewPushUndo('draft', field, lang, previousValue);
+    _macFullLocReviewCommitPrimaryEdit(field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  if (!isMultiline) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+function _macFullLocReviewUndoEntry(kind, field, lang) {
+  if (!state.macFullLocReviewUndoHistory) state.macFullLocReviewUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.macFullLocReviewUndoHistory[kind] || (state.macFullLocReviewUndoHistory[kind] = {});
+  const forField = forKind[field] || (forKind[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+function _macFullLocReviewUndoState(kind, field, lang) {
+  const entry = state.macFullLocReviewUndoHistory
+    && state.macFullLocReviewUndoHistory[kind]
+    && state.macFullLocReviewUndoHistory[kind][field]
+    && state.macFullLocReviewUndoHistory[kind][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+function _macFullLocReviewPushUndo(kind, field, lang, previousValue) {
+  const entry = _macFullLocReviewUndoEntry(kind, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > LOC_REVIEW_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+function _macFullLocReviewRestoreFieldValue(kind, field, lang, value) {
+  if (kind === 'draft') {
+    _macFullLocReviewCommitPrimaryEdit(field, lang, value);
+    return;
+  }
+  _macFullSetFieldValue(field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.macFullLocReviewMode === 'review' && lang !== primary) {
+    const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
+    if (backEntry.syncedTopText !== value) _macFullLocReviewRefreshBackTranslation(field, lang, value);
+  }
+  reRenderStepModal();
+}
+function macFullLocReviewUndo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _macFullLocReviewUndoEntry(kind, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _macFullLocReviewBackTranslationValue(field, lang).text : _macFullFieldValue(field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _macFullLocReviewRestoreFieldValue(kind, field, lang, previous);
+}
+function macFullLocReviewRedo(kind, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _macFullLocReviewUndoEntry(kind, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _macFullLocReviewBackTranslationValue(field, lang).text : _macFullFieldValue(field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _macFullLocReviewRestoreFieldValue(kind, field, lang, next);
+}
+async function toggleMacFullLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.macFullLocReviewMode = state.macFullLocReviewMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.macFullLocReviewMode === 'review') _macFullLocReviewSyncBackTranslations();
+
+  const enteringCards = Array.from(document.querySelectorAll('.loc-review-card:not(.loc-review-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+function setMacFullLocReviewField(field) {
+  state.macFullLocReviewField = field;
+  reRenderStepModal();
+  if (state.macFullLocReviewMode === 'review') _macFullLocReviewSyncBackTranslations();
+}
+function _macFullFieldHasOverLimitLang(field, langCodes) {
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  return langCodes.some(lang => _macFullFieldValue(field, lang).length > limit);
+}
+function _macFullToggleAutoTranslateField(field) {
+  state.macFullAutoTranslateFields = state.macFullAutoTranslateFields || {};
+  state.macFullAutoTranslateFields[field] = !state.macFullAutoTranslateFields[field];
+  if (state.macFullAutoTranslateFields[field]) {
+    const ml = state.macFullAppStoreListing;
+    if (ml) _macFullTriggerAutoTranslate(field, ml[field] || '');
+  }
+  reRenderStepModal();
+}
+function _macFullIapLocSavedProducts() {
+  return (state.macFullSubmitAnswers.iapProducts || []).filter(p => p.collapsed);
+}
+function _macFullIapLocEffectiveIapId() {
+  const saved = _macFullIapLocSavedProducts();
+  if (!saved.length) return null;
+  if (saved.some(p => p.id === state.macFullIapLocIapId)) return state.macFullIapLocIapId;
+  return saved[0].id;
+}
+function _macFullIapLocFieldValue(iapId, field, lang) {
+  const p = (state.macFullSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return '';
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return p[field] || '';
+  const entry = p.locs && p.locs[lang];
+  return (entry && entry[field]) || '';
+}
+function _macFullIapLocFieldHasOverLimitLang(iapId, field, langCodes) {
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  return langCodes.some(lang => _macFullIapLocFieldValue(iapId, field, lang).length > limit);
+}
+function _macFullIapLocSourceBadge(iapId, field, lang) {
+  const p = (state.macFullSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return null;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_macFullIapLocFieldValue(iapId, field, lang)) return null;
+  const entry = p.locs && p.locs[lang];
+  if (!entry) return null;
+  if (_macFullIapLocFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (p[field] || '')) return 'ai';
+  return null;
+}
+function _macFullIapLocSetFieldValue(iapId, field, lang, value) {
+  const p = (state.macFullSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    p[field] = value;
+    if (field === 'name') _macFullIapLocPropagateName(iapId, value);
+    else if (_macFullIapLocFieldAutoTranslateEnabled(field)) _macFullIapLocTriggerAutoTranslate(iapId, field, value);
+    return;
+  }
+  if (!p.locs) p.locs = {};
+  if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+  p.locs[lang][field] = value;
+}
+function _macFullIapLocPropagateName(iapId, primaryValue) {
+  if (_macFullIapLocFieldAutoTranslateEnabled('name')) { _macFullIapLocTriggerAutoTranslate(iapId, 'name', primaryValue); return; }
+  const p = (state.macFullSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+  if (!p.locs) p.locs = {};
+  supportedLangs.forEach(lang => {
+    if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+    p.locs[lang].name = primaryValue || '';
+  });
+}
+function _macFullIapLocFieldAutoTranslateEnabled(field) {
+  const cfg = state.macFullIapLocAutoTranslateFields;
+  if (!cfg) return IAP_LOC_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
+  if (!_macFullIapLocFieldAutoTranslateEnabled(field)) return;
+  const p = (state.macFullSubmitAnswers.iapProducts || []).find(pp => pp.id === iapId);
+  if (!p) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  if (!p.locs) p.locs = {};
+  const eligible = supportedLangs.filter(lang => {
+    const entry = p.locs[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    eligible.forEach(lang => {
+      if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+      p.locs[lang][field]     = '';
+      p.locs[lang][sourceKey] = '';
+      const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== '') _macFullIapLocRefreshBackTranslation(iapId, field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.macFullIapLocTranslateStatus = state.macFullIapLocTranslateStatus || {};
+  state.macFullIapLocTranslateStatus[iapId] = state.macFullIapLocTranslateStatus[iapId] || {};
+  state.macFullIapLocTranslateStatus[iapId][field] = 'loading';
+  state.macFullIapLocTranslatePendingLangs = state.macFullIapLocTranslatePendingLangs || {};
+  state.macFullIapLocTranslatePendingLangs[iapId] = state.macFullIapLocTranslatePendingLangs[iapId] || {};
+  state.macFullIapLocTranslatePendingLangs[iapId][field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
+  const perLangBudget = field === 'name' ? 80 : 200;
+  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following in-app purchase ${fieldLabel} text for a mobile/video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone and meaning of the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+      const entry = p.locs[lang];
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== translated) _macFullIapLocRefreshBackTranslation(iapId, field, lang, translated);
+    });
+
+    state.macFullIapLocTranslateStatus[iapId][field] = 'complete';
+  } catch (e) {
+    console.warn('[Mac App Store Full IAP Localizations Translate]', iapId, field, e.message);
+    state.macFullIapLocTranslateStatus[iapId][field] = 'error';
+  }
+  state.macFullIapLocTranslatePendingLangs[iapId][field] = [];
+  reRenderStepModal();
+}
+function _macFullIapLocFieldTranslatePending(iapId, field, lang) {
+  if (!state.macFullIapLocTranslateStatus || !state.macFullIapLocTranslateStatus[iapId] || state.macFullIapLocTranslateStatus[iapId][field] !== 'loading') return false;
+  const pending = state.macFullIapLocTranslatePendingLangs && state.macFullIapLocTranslatePendingLangs[iapId] && state.macFullIapLocTranslatePendingLangs[iapId][field];
+  return !!(pending && pending.includes(lang));
+}
+function _macFullIapLocToggleAutoTranslateField(field) {
+  state.macFullIapLocAutoTranslateFields = state.macFullIapLocAutoTranslateFields || {};
+  state.macFullIapLocAutoTranslateFields[field] = !state.macFullIapLocAutoTranslateFields[field];
+  if (state.macFullIapLocAutoTranslateFields[field]) {
+    _macFullIapLocSavedProducts().forEach(p => {
+      if (field === 'name') _macFullIapLocPropagateName(p.id, p.name || '');
+      else _macFullIapLocTriggerAutoTranslate(p.id, field, p.desc || '');
+    });
+  }
+  reRenderStepModal();
+}
+function startMacFullIapLocInlineEdit(iapId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const inHalf = !!(el.closest && el.closest('.iap-loc-half'));
+  const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _macFullIapLocFieldValue(iapId, field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _macFullIapLocFieldValue(iapId, field, lang);
+    if (input.value !== previousValue) _macFullIapLocPushUndo('real', iapId, field, lang, previousValue);
+    _macFullIapLocSetFieldValue(iapId, field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+      if (backEntry.syncedTopText !== input.value) _macFullIapLocRefreshBackTranslation(iapId, field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+function _macFullIapLocBackTranslationValue(iapId, field, lang) {
+  const entry = state.macFullIapLocBackTranslation
+    && state.macFullIapLocBackTranslation[iapId]
+    && state.macFullIapLocBackTranslation[iapId][field]
+    && state.macFullIapLocBackTranslation[iapId][field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+function _macFullIapLocBackTranslationEntry(iapId, field, lang) {
+  if (!state.macFullIapLocBackTranslation) state.macFullIapLocBackTranslation = {};
+  const forIap   = state.macFullIapLocBackTranslation[iapId] || (state.macFullIapLocBackTranslation[iapId] = {});
+  const forField = forIap[field] || (forIap[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+function _macFullIapLocSyncBackTranslations(iapId) {
+  if (!iapId) return Promise.resolve();
+  const fd = state.formData;
+  const field = state.macFullIapLocField || 'name';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _macFullIapLocFieldValue(iapId, field, lang);
+    const entry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+    if (entry.syncedTopText === topText) return;
+    jobs.push(_macFullIapLocRefreshBackTranslation(iapId, field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+async function _macFullIapLocRefreshBackTranslation(iapId, field, lang, topText) {
+  const entry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _macFullIapLocFieldValue(iapId, field, lang);
+  if (currentTop !== topText) { _macFullIapLocRefreshBackTranslation(iapId, field, lang, currentTop); return; }
+
+  const freshEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+async function _macFullIapLocCommitPrimaryEdit(iapId, field, lang, value) {
+  const entry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _macFullIapLocSetFieldValue(iapId, field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _macFullIapLocSetFieldValue(iapId, field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+function startMacFullIapLocBackTranslationEdit(iapId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _macFullIapLocBackTranslationValue(iapId, field, lang).text;
+
+  const commit = () => {
+    const previousValue = _macFullIapLocBackTranslationValue(iapId, field, lang).text;
+    if (input.value !== previousValue) _macFullIapLocPushUndo('draft', iapId, field, lang, previousValue);
+    _macFullIapLocCommitPrimaryEdit(iapId, field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+function _macFullIapLocUndoEntry(kind, iapId, field, lang) {
+  if (!state.macFullIapLocUndoHistory) state.macFullIapLocUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.macFullIapLocUndoHistory[kind] || (state.macFullIapLocUndoHistory[kind] = {});
+  const forIap   = forKind[iapId] || (forKind[iapId] = {});
+  const forField = forIap[field] || (forIap[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+function _macFullIapLocUndoState(kind, iapId, field, lang) {
+  const entry = state.macFullIapLocUndoHistory
+    && state.macFullIapLocUndoHistory[kind]
+    && state.macFullIapLocUndoHistory[kind][iapId]
+    && state.macFullIapLocUndoHistory[kind][iapId][field]
+    && state.macFullIapLocUndoHistory[kind][iapId][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+function _macFullIapLocPushUndo(kind, iapId, field, lang, previousValue) {
+  const entry = _macFullIapLocUndoEntry(kind, iapId, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > IAP_LOC_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+function _macFullIapLocRestoreFieldValue(kind, iapId, field, lang, value) {
+  if (kind === 'draft') {
+    _macFullIapLocCommitPrimaryEdit(iapId, field, lang, value);
+    return;
+  }
+  _macFullIapLocSetFieldValue(iapId, field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.macFullIapLocMode === 'review' && lang !== primary) {
+    const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
+    if (backEntry.syncedTopText !== value) _macFullIapLocRefreshBackTranslation(iapId, field, lang, value);
+  }
+  reRenderStepModal();
+}
+function macFullIapLocUndo(kind, iapId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _macFullIapLocUndoEntry(kind, iapId, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _macFullIapLocBackTranslationValue(iapId, field, lang).text : _macFullIapLocFieldValue(iapId, field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _macFullIapLocRestoreFieldValue(kind, iapId, field, lang, previous);
+}
+function macFullIapLocRedo(kind, iapId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _macFullIapLocUndoEntry(kind, iapId, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _macFullIapLocBackTranslationValue(iapId, field, lang).text : _macFullIapLocFieldValue(iapId, field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _macFullIapLocRestoreFieldValue(kind, iapId, field, lang, next);
+}
+async function toggleMacFullIapLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.macFullIapLocMode = state.macFullIapLocMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.macFullIapLocMode === 'review') _macFullIapLocSyncBackTranslations(_macFullIapLocEffectiveIapId());
+
+  const enteringCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+function setMacFullIapLocReviewIapId(iapId) {
+  state.macFullIapLocIapId = iapId;
+  reRenderStepModal();
+  if (state.macFullIapLocMode === 'review') _macFullIapLocSyncBackTranslations(iapId);
+}
+function setMacFullIapLocField(field) {
+  state.macFullIapLocField = field;
+  reRenderStepModal();
+  if (state.macFullIapLocMode === 'review') _macFullIapLocSyncBackTranslations(_macFullIapLocEffectiveIapId());
+}
+function _macFullToggleReviewSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.macFullReviewSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.macFullReviewSettingsOpen = true;
+    document.getElementById('macfull-loc-review-settings-wrap')?.classList.add('is-open');
+  }
+}
+function _macFullIapLocToggleSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.macFullIapLocSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.macFullIapLocSettingsOpen = true;
+    document.getElementById('macfull-iap-loc-settings-wrap')?.classList.add('is-open');
   }
 }
 
