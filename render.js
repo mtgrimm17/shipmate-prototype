@@ -6950,6 +6950,51 @@ function buildMacStorePreviewSection() {
        <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
     : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
 
+  // Achievements — a Game Center widget preview, mirroring the real App
+  // Store product page's own "GAME CENTER / Achievements" card (a game with
+  // no achievements at all shows no widget there either, so this section
+  // renders nothing when there are no SAVED achievements yet — same
+  // .collapsed convention buildMacGameCenterSection/hasSavedAchievements
+  // already use). Clicking anywhere on the card jumps straight to the
+  // Game Center step (openStepModal — the same function the platform
+  // card's own step buttons use), replacing this modal's content in place;
+  // it does NOT flip within Store Preview the way Content/Business's own
+  // meta cells do, since Game Center is its own separate step, not a
+  // storePreview sub-section.
+  //
+  // Always shows "0 / N Completed" with a locked placeholder, never the
+  // achievement's own artwork or a real completion count — this is a
+  // pre-install marketing preview, and that's genuinely what Apple's own
+  // product page shows for a game you haven't installed (or have, but
+  // haven't played): it has no player progress to report yet, and doesn't
+  // spoil locked achievement art. N is every saved achievement, in no
+  // particular featured order — Apple's own widget rotates which one it
+  // surfaces; this always shows a static lock rather than picking a
+  // "chosen" achievement to name-drop.
+  const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.collapsed);
+  const achievementsHtml = savedAchievements.length ? `
+        <div class="ias-section ias-achv-section" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
+          <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
+          <div class="ias-achv-title">Achievements</div>
+          <div class="ias-achv-card">
+            <div class="ias-achv-thumbs">
+              <div class="ias-achv-thumb ias-achv-thumb-back"></div>
+              <div class="ias-achv-thumb ias-achv-thumb-front">
+                <div class="ias-achv-lock-circle">
+                  <svg viewBox="0 0 12 14" fill="none" width="13" height="15"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="ias-achv-progress">
+              <span class="ias-achv-count">0<span class="ias-achv-total"> / ${savedAchievements.length}</span></span>
+              <span class="ias-achv-completed">Completed</span>
+            </div>
+            <svg class="ias-achv-chevron" viewBox="0 0 8 14" fill="none" width="6" height="11"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>` : '';
+
   return `
     <div class="ias-device-wrap">
       <div class="ias-label-row">
@@ -7017,6 +7062,8 @@ function buildMacStorePreviewSection() {
         </div>
 
         <div class="ias-section-divider"></div>
+
+        ${achievementsHtml}
 
         <!-- ── What's New ── -->
         <div class="ias-section">

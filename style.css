@@ -5055,6 +5055,41 @@ textarea.loc-review-field.ias-inline-input {
   font-size: 11px; color: var(--text-faint); margin-top: 10px;
 }
 
+/* Achievements (Game Center widget preview, Mac App Store's own Product
+   Page Preview — buildMacStorePreviewSection, render.js) */
+.ias-achv-section { cursor: pointer; }
+.ias-achv-kicker {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; color: #0a84ff;
+  text-transform: uppercase; letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+.ias-achv-kicker-icon { font-size: 13px; line-height: 1; }
+.ias-achv-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.ias-achv-card {
+  display: flex; align-items: center; gap: 12px;
+  border-radius: 12px; padding: 12px;
+  border: 1px solid var(--border); background: var(--panel-3);
+}
+.ias-achv-thumbs { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
+.ias-achv-thumb { position: absolute; width: 50px; height: 50px; border-radius: 10px; border: 1px solid var(--border); }
+.ias-achv-thumb-back  { top: 6px; left: 6px; background: var(--panel); }
+.ias-achv-thumb-front {
+  top: 0; left: 0; background: var(--panel-2);
+  display: flex; align-items: center; justify-content: center;
+}
+.ias-achv-lock-circle {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--text-faint);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-faint);
+}
+.ias-achv-progress { flex: 1; min-width: 0; }
+.ias-achv-count { font-size: 20px; font-weight: 700; color: var(--text); }
+.ias-achv-total  { font-size: 14px; font-weight: 500; color: var(--text-dim); }
+.ias-achv-completed { display: block; font-size: 13px; color: var(--text-dim); margin-top: 1px; }
+.ias-achv-chevron { color: var(--text-faint); flex-shrink: 0; }
+
 /* Privacy */
 .ias-privacy-card {
   border-radius: 12px; overflow: hidden; margin-bottom: 10px;
