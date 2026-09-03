@@ -827,8 +827,15 @@ function buildObPlatTilesHTML() {
      App Store's tile makes it seven, not six — one row, one column wider
      than the prototype's own layout ever needed (see style.css's .pg-7,
      added alongside .pg-6/.pg-3/.pg-2). The bare .platform-grid's
-     repeat(4,1fr) is only the fallback. */
-  const tiles = PLATFORMS_OB.map(({ id, iconKey, label, comingSoon }) => {
+     repeat(4,1fr) is only the fallback.
+
+     Mac App Store Full's own tile (id: 'macos_full' above) is filtered out
+     here while it's hidden (HIDDEN_PLATFORMS, further up this file) —
+     bringing it back later is deleting this one .filter() line, not
+     re-adding the tile. Leaves exactly 7 tiles again (the count pg-7 was
+     already sized for, before macos_full made it 8 without the grid class
+     ever being bumped to match — this filter incidentally restores that). */
+  const tiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id)).map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
     if (comingSoon) {
@@ -1761,6 +1768,19 @@ function buildConsolidatedBanner() {
 
 // Canonical display order for platform cards (active and inactive sections)
 const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
+
+// Platforms that stay fully defined in PLATFORMS (state.js) — steps, their
+// own answers/listing state, everything — but are deliberately hidden from
+// the UI while still in development, so bringing one back later is a
+// one-line change here instead of re-implementing it. Filtered out of
+// exactly two places, per this hide's own scope: Game Details' "Select
+// platforms" grid (buildObPlatTilesHTML below) and the Submission
+// section's "+ Add platform" picker (renderDashboard's own `inactive`
+// list). Deliberately NOT filtered anywhere else PLATFORM_ORDER/PLATFORMS
+// is walked (e.g. the Analysis folder's "Add Permissions" list,
+// buildPerfPermissions) — this only controls whether a hidden platform can
+// be newly selected/activated, not every place its id could ever appear.
+const HIDDEN_PLATFORMS = new Set(['macos_full']);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -3375,8 +3395,13 @@ function renderDashboard() {
 
   renderProjectBar();
 
+  // `active` deliberately does NOT filter HIDDEN_PLATFORMS — this hide only
+  // stops a hidden platform from being newly selected/activated (Basic
+  // Info's tile grid and the "+ Add platform" picker's `inactive` list
+  // just below); if one were somehow already active on a project (state
+  // predating the hide), its card stays right where it already is.
   const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
-  const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid));
+  const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
   const addOpen  = !!(state.submission && state.submission.addOpen);
 
   // Every activated platform, stacked in a single column.

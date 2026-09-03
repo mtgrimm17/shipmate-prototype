@@ -840,6 +840,15 @@ function nextOnboardingTab() {
 }
 
 function toggleOnboardingPlatform(pid) {
+  // Defensive, same reasoning as activatePlatform's own COMING_SOON_PLATFORMS
+  // guard below: Basic Info's Select Platforms grid (buildObPlatTilesHTML,
+  // render.js) already filters HIDDEN_PLATFORMS out of the tiles it draws,
+  // so this only matters if something ever calls toggleOnboardingPlatform
+  // directly instead of clicking a rendered tile. Only guards ACTIVATING a
+  // hidden platform — if one is already active (state predating the hide),
+  // clicking its (no longer rendered) tile isn't reachable anyway, but this
+  // still lets a direct call deactivate one without tripping the guard.
+  if (HIDDEN_PLATFORMS.has(pid) && !state.activePlatforms.has(pid)) return;
   if (state.activePlatforms.has(pid)) {
     state.activePlatforms.delete(pid);
   } else {
@@ -2716,6 +2725,11 @@ function activatePlatform(platformId) {
   // egs/psn/xbox/nintendo), so this only matters if something ever calls
   // activatePlatform directly instead of going through it.
   if (COMING_SOON_PLATFORMS.has(platformId)) return;
+  // Same reasoning, for a platform hidden while still in development
+  // (HIDDEN_PLATFORMS, render.js) — renderDashboard's own `inactive` list
+  // already excludes it from the picker entirely, so it can't be clicked
+  // there either; this only matters for a direct call.
+  if (HIDDEN_PLATFORMS.has(platformId)) return;
   state.activePlatforms.add(platformId);
   // See toggleOnboardingPlatform's identical call — Submission's own
   // "add a platform" entry point needs the same one-time seed.
