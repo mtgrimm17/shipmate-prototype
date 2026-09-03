@@ -1364,12 +1364,6 @@ function makeBlankMacFullAnswers() {
     // it here).
     availability:             { mode: 'all', countries: [] },  // mode: 'all' | 'select'
 
-    // Version Information — Screenshots/Description/What's New are covered
-    // by the existing generic buildScreenshotsSection('macos_full') and
-    // macFullAppStoreListing (state.js, further below) rather than fields
-    // on this object.
-    appPreviewUrl:            '',
-
     // Build & Compliance
     idfaDeclaration:          { usesIdfa: null, reasons: [] },  // reasons: subset of IDFA_REASONS ids
 
@@ -1772,7 +1766,7 @@ function isMacFullSectionComplete(sectionId) {
 
   if (sectionId === 'versionInfo') {
     const listing = state.macFullAppStoreListing;
-    if (!listing || !(listing.description || '').trim() || !(listing.versionNumber || '').trim()) return false;
+    if (!listing || !(listing.description || '').trim()) return false;
     const ps = state.platformScreenshots?.macos_full;
     const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
                      (state.uploads?.screenshots || []).length > 0;
@@ -3029,22 +3023,36 @@ const state = {
   // platform, not per-listing marketing copy.
   macAppStoreListing: null,
 
+  // Steam's appdetails 'support_info.url' field, captured at Steam-link
+  // time (_applySteamAboutData, app.js) purely as a cache — there's no
+  // preview-website field this backs, unlike officialWebsite (state.webSite)
+  // which is Steam's 'website' field doing double duty. Consumed once by
+  // seedMacFullAppStoreListing (app.js) to pre-populate Mac App Store
+  // Full's own Support URL field; never read anywhere else.
+  steamSupportUrl: '',
+
   // Mac App Store Full's OWN independent Product Page Preview listing text
   // — a superset of macAppStoreListing above (Name/Subtitle/Description/
   // What's New), extended per the App Store Connect "Version Information"
   // section to also cover Promotional Text, Keywords, Support URL,
-  // Marketing URL, Copyright (with company name — NOT the hardcoded
-  // "© {year}" the rest of Shipmate falls back to), and Version Number
-  // (independent, not the shared cross-platform one). Pre-filled ONCE from
-  // state.formData's current values the first time Mac App Store Full is
-  // activated (see seedMacFullAppStoreListing, app.js), same "auto-fill
-  // once, then freely editable" treatment as macAppStoreListing. Primary-
-  // language only, per the "simplified but functional" design decision —
-  // no per-language localization-review plumbing of its own (localizedStoreText
-  // below still exists for parity with macAppStoreListing's shape, but the
+  // Marketing URL, and Copyright (with company name — NOT the hardcoded
+  // "© {year}" the rest of Shipmate falls back to). Support URL/Marketing
+  // URL are pre-populated from Steam's appdetails 'support_info.url'/
+  // 'website' fields when available (steamSupportUrl above /
+  // state.webSite.officialWebsite), same "auto-fill once, then freely
+  // editable" treatment as every other Steam-sourced field elsewhere in
+  // Shipmate. Title/Subtitle are NOT shared with either sibling platform
+  // here (no MAS_SHARED_LISTING_FIELDS-style routing for macos_full), per
+  // the "fully independent" design decision. Primary-language only, per
+  // the "simplified but functional" design decision — no per-language
+  // localization-review plumbing of its own (localizedStoreText below
+  // still exists for parity with macAppStoreListing's shape, but the
   // per-language translate/review UI itself is out of scope for this
   // platform). Editing this never writes back to state.formData or either
-  // sibling platform's own listing, and vice versa.
+  // sibling platform's own listing, and vice versa — EXCEPT Description,
+  // which is the one field kept forced in sync FROM state.formData.description
+  // going forward (see _macFullPropagateDescription, app.js) — still never
+  // writes back TO it.
   macFullAppStoreListing: null,
 
   // Which language Mac App Store's own Product Page Preview language

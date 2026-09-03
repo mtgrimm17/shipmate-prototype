@@ -1135,10 +1135,13 @@ function seedMacAppStoreListing() {
 // see its own comment, state.js). Same "seed once from Game Details, then
 // fully independent" treatment, extended with the extra Version Information
 // fields ASC actually asks for that macAppStoreListing doesn't carry
-// (Promotional Text, Keywords, Support URL, Marketing URL, Copyright,
-// Version Number) — Title/Subtitle are NOT shared with either sibling
-// platform here (no MAS_SHARED_LISTING_FIELDS-style routing for
-// macos_full), per the "fully independent" design decision.
+// (Promotional Text, Keywords, Support URL, Marketing URL, Copyright) —
+// Title/Subtitle are NOT shared with either sibling platform here (no
+// MAS_SHARED_LISTING_FIELDS-style routing for macos_full), per the "fully
+// independent" design decision. Description is the one exception to "seed
+// once, then fully independent": it's kept forced in sync with Game
+// Details' Description going forward too — see
+// _macFullPropagateDescription above.
 function seedMacFullAppStoreListing() {
   if (state.macFullAppStoreListing) return;
   const fd = state.formData;
@@ -1149,14 +1152,16 @@ function seedMacFullAppStoreListing() {
     releaseNotes:     fd.releaseNotes     || '',
     promotionalText:  '',
     keywords:         '',
-    supportUrl:       '',
-    marketingUrl:     '',
+    // Pre-populated from Steam's appdetails 'support_info.url'/'website'
+    // fields when the linked title has a Steam page that provides them
+    // (state.steamSupportUrl / state.webSite.officialWebsite — see
+    // _applySteamAboutData, above) — same "auto-fill once, then freely
+    // editable" treatment as every other Steam-sourced field on this
+    // listing; left blank when Steam has nothing (or there's no Steam
+    // link at all).
+    supportUrl:       state.steamSupportUrl || '',
+    marketingUrl:     (state.webSite && state.webSite.officialWebsite) || '',
     copyright:        '',
-    // Deliberately NOT seeded from the shared cross-platform version model
-    // (state.projects/activeVersionId) — this is its own independent field,
-    // per the "fully independent" design decision — the developer types it
-    // directly, same as everything else on this listing.
-    versionNumber:    '',
     localizedStoreText: JSON.parse(JSON.stringify(fd.localizedStoreText || {})),
   };
 }
@@ -2938,7 +2943,7 @@ function syncField(field, value) {
     state.androidSubmitAnswers.privacyPolicyUrl = value;
   }
   if (field === 'title') _syncProjectBarTitle(value);
-  if (field === 'description') _wsPropagateAboutGame(value);
+  if (field === 'description') { _wsPropagateAboutGame(value); _macFullPropagateDescription(value); }
   // Force-sync into the Web platform's own independent trailer slot — same
   // whole-value overwrite treatment as the trailer FILE gets in
   // handleTrailerFiles/removeTrailer (see the state.js comment above
@@ -3544,6 +3549,7 @@ function confirmGameImport() {
   // Pre-populate the description field
   state.formData.description = ls.description;
   _wsPropagateAboutGame(ls.description);
+  _macFullPropagateDescription(ls.description);
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = ls.description;
@@ -3984,6 +3990,7 @@ function _applySteamCapsuleFromCover(url, expectedTitle) {
 function _fillDescriptionField(text) {
   state.formData.description = text || '';
   _wsPropagateAboutGame(text || '');
+  _macFullPropagateDescription(text || '');
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = text || '';
@@ -4594,6 +4601,17 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // whatever the developer already typed). Backs Factsheet > Developer >
     // Links > "Official Website".
     if (data.website) state.webSite.officialWebsite = data.website;
+    // Support URL — Steam's appdetails 'support_info' object (shaped like
+    // { url, email }), when the developer has filled one in on the store
+    // page. Cached on state.steamSupportUrl (see its own comment, state.js)
+    // rather than directly on state.macFullAppStoreListing, since that
+    // object may not exist yet (Mac App Store Full might not have been
+    // activated at all when this Steam fetch runs) — seedMacFullAppStoreListing
+    // (app.js) reads this cached value once, the same "auto-fill once,
+    // then freely editable" treatment as officialWebsite above, just for
+    // Mac App Store Full's own Support URL field instead of the preview
+    // website's.
+    if (data.support_info && data.support_info.url) state.steamSupportUrl = data.support_info.url;
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips
     // shown on the store page (appdetails has no field for those at all,
@@ -5269,6 +5287,7 @@ function _applyFieldValue(field, value) {
   if (field === 'description') {
     state.formData.description = value;
     _wsPropagateAboutGame(value);
+    _macFullPropagateDescription(value);
     const el = document.getElementById('ob-desc');
     if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
     _iasTriggerAutoTranslate('description', value);
@@ -11403,6 +11422,21 @@ function setWebSiteField(key, value) {
 function _wsPropagateAboutGame(value) {
   if (!state.webSite) state.webSite = {};
   state.webSite.aboutGame = value || '';
+}
+/* Twin of _wsPropagateAboutGame above for Mac App Store Full's own
+   Version Information > Description field (state.macFullAppStoreListing.
+   description): pre-populated from Game Details' Description the first
+   time seedMacFullAppStoreListing runs, then kept forced in sync with it
+   on every subsequent edit to Description — editing this field itself
+   must never write back to Description. Only applies once
+   macFullAppStoreListing actually exists (the platform's been activated
+   at least once); before that, seedMacFullAppStoreListing itself reads
+   Description's then-current value, so nothing is lost. Called from the
+   same call sites as _wsPropagateAboutGame (syncField, confirmGameImport,
+   _fillDescriptionField, _applyFieldValue). */
+function _macFullPropagateDescription(value) {
+  if (!state.macFullAppStoreListing) return;
+  state.macFullAppStoreListing.description = value || '';
 }
 function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};

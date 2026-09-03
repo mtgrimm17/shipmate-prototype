@@ -9404,22 +9404,37 @@ function buildMacFullPricingSection() {
 function buildMacFullVersionInfoSection() {
   seedMacFullAppStoreListing();
   const l  = state.macFullAppStoreListing;
+  const fd = state.formData;
   const ps = state.platformScreenshots?.macos_full;
   const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
                    (state.uploads?.screenshots || []).length > 0;
+
+  // Description is kept forced in sync with Game Details' Description field
+  // on every edit to Description (_macFullPropagateDescription, app.js) —
+  // same "must keep tracking Description going forward, but editing this
+  // field itself must never write back to Description" treatment as the
+  // Web platform's own "About This Game" field (_wsPropagateAboutGame). In
+  // practice l.description IS the current value; the `|| fd.description`
+  // fallback here only matters for a project saved before that propagation
+  // existed, where l.description could still be stale/blank.
+  const descriptionValue = (l.description && l.description.trim()) || fd.description || '';
+
   return `
     <div class="form-group" style="margin-bottom:14px;">
       <div class="form-hint">Screenshots, Title, and Subtitle are managed in the Product Page Preview step below${hasShots ? '' : ' — no screenshots are available yet'}.</div>
     </div>
-    ${_mfListingField('Description', 'description', l.description, 'Describe your game for the App Store', 'textarea')}
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Description</label>
+      <textarea class="form-input" rows="3" placeholder="Describe your game for the App Store"
+                oninput="setMacFullListingField('description', this.value)">${escHtml(descriptionValue)}</textarea>
+      <div class="form-hint">Defaults to and stays in sync with Game Details' Description — editing it here never changes Game Details.</div>
+    </div>
     ${_mfListingField("What's New in This Version", 'releaseNotes', l.releaseNotes, 'Summarize what changed in this version', 'textarea')}
     ${_mfListingField('Promotional Text', 'promotionalText', l.promotionalText, 'Can be updated anytime without submitting a new build', 'textarea')}
     ${_mfListingField('Keywords', 'keywords', l.keywords, 'Comma-separated, up to 100 characters total')}
-    ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'https://yourstudio.com/support')}
-    ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'https://yourstudio.com')}
-    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}
-    ${_mfListingField('Version Number', 'versionNumber', l.versionNumber, 'e.g. 1.0.0')}
-    ${_mfTextField('App Preview Video URL', 'appPreviewUrl', state.macFullSubmitAnswers.appPreviewUrl, 'Optional link to a preview video')}`;
+    ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com/support')}
+    ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com')}
+    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}`;
 }
 
 /* ── Mac App Store Full — Build & Compliance ─────────────────────────── */
@@ -9719,7 +9734,6 @@ function buildMacFullStorePreviewSection() {
     ${summaryRow('Subtitle', escHtml(l.subtitle || fd.subtitle || '—'))}
     ${summaryRow('Category', escHtml(a.category.primary || '—'))}
     ${summaryRow('Price', priceText + iapNote)}
-    ${summaryRow('Version', escHtml(l.versionNumber || '—'))}
     ${summaryRow('Description', l.description ? (escHtml(l.description.slice(0, 120)) + (l.description.length > 120 ? '…' : '')) : '—')}
     ${summaryRow("What's New", l.releaseNotes ? (escHtml(l.releaseNotes.slice(0, 120)) + (l.releaseNotes.length > 120 ? '…' : '')) : '—')}
     ${summaryRow('Support URL', escHtml(l.supportUrl || '—'))}
