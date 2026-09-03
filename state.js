@@ -2955,15 +2955,19 @@ const state = {
   // Mac App Store's own Game Center Achievements — the "Game Center" step
   // (PLATFORMS.macos.steps, right after Content Rating) mimics App Store
   // Connect's real Achievements section: a reorderable list of achievements
-  // (add/remove/reorder — see addMacGameCenterAchievement/
-  // removeMacGameCenterAchievement/moveMacGameCenterAchievement, app.js),
-  // each { id, refName, pointValue, hidden, achievableMultipleTimes,
-  // collapsed, localizations }, where localizations is its own repeatable
-  // list of { id, language, displayName, earnedDescription,
-  // preEarnedDescription, image } — one entry per language, seeded with a
-  // single entry in the developer's primary language when an achievement is
-  // added. Deliberately a FULL-FIDELITY build (unlike Mac App Store Full's
-  // own simplified gameCenter.achievements list — see
+  // (add/remove — see addMacGameCenterAchievement/
+  // removeMacGameCenterAchievement, app.js; reordering is drag-and-drop on
+  // the collapsed row — macGcAchievementDragStart/DragOver/Drop/DragEnd,
+  // app.js — not a function call), each
+  // { id, refName, pointValue, hidden, achievableMultipleTimes, collapsed,
+  // displayName, earnedDescription, preEarnedDescription, image }. No
+  // per-language Localizations sub-list (removed by request) — Display
+  // Name/Earned Description/Pre-Earned Description/Image are single-
+  // language fields directly on the achievement, same as every other field
+  // here. `image` is { name, dataUrl } or null. An achievement imported
+  // from Steam (_applySteamAchievements, app.js) is additionally tagged
+  // `fromSteam: true`. Deliberately a FULL-FIDELITY build (unlike Mac App
+  // Store Full's own simplified gameCenter.achievements list — see
   // makeBlankMacFullAnswers' comment) since this is the one place in
   // Shipmate meant to actually mirror ASC's Achievements UI end to end.
   macGameCenterAchievements: [],

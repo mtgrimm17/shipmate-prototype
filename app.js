@@ -1132,19 +1132,19 @@ function seedMacAppStoreListing() {
 
 /* ── Mac App Store — Game Center Achievements ─────────────────────────────
    Backs the "Game Center" step (PLATFORMS.macos.steps, state.js), built to
-   mirror App Store Connect's real Achievements section end to end — see
+   mirror App Store Connect's real Achievements section — see
    state.macGameCenterAchievements' own comment for the full shape. This is
    deliberately independent of, and higher-fidelity than, Mac App Store
    Full's own simplified gameCenter.achievements list (setMacFullField
-   etc., further below) — the two were never meant to share data. */
+   etc., further below) — the two were never meant to share data.
 
-// New achievements start expanded (collapsed: false) with one localization
-// pre-seeded in the developer's primary language — ASC itself requires at
-// least one (the "default") localization before an achievement can be
-// saved, so seeding one here just saves the extra "+ Add Localization"
-// click for the common case.
+   Per-language Localizations were removed by request: Display Name/Earned
+   Description/Pre-Earned Description/Image now live directly on the
+   achievement itself (single-language, matching how every other field here
+   already works) rather than in a repeatable per-language sub-list. */
+
+// New achievements start expanded (collapsed: false) with every field blank.
 function addMacGameCenterAchievement() {
-  const primaryLang = state.formData.primaryLanguage || 'en';
   state.macGameCenterAchievements.push({
     id: generateId('ach'),
     refName: '',
@@ -1152,9 +1152,10 @@ function addMacGameCenterAchievement() {
     hidden: false,
     achievableMultipleTimes: false,
     collapsed: false,
-    localizations: [
-      { id: generateId('loc'), language: primaryLang, displayName: '', earnedDescription: '', preEarnedDescription: '', image: null },
-    ],
+    displayName: '',
+    earnedDescription: '',
+    preEarnedDescription: '',
+    image: null,
   });
   reRenderStepModal();
 }
@@ -1162,21 +1163,9 @@ function removeMacGameCenterAchievement(id) {
   state.macGameCenterAchievements = state.macGameCenterAchievements.filter(a => a.id !== id);
   reRenderStepModal();
 }
-// Swaps the achievement at `id` with its neighbor in direction `dir`
-// (-1 = up, +1 = down) — same swap-with-neighbor convention as
-// moveUploadScreenshot (further below), applied to the reorderable
-// Achievements list instead of the screenshot grid.
-function moveMacGameCenterAchievement(id, dir) {
-  const arr = state.macGameCenterAchievements;
-  const idx = arr.findIndex(a => a.id === id);
-  if (idx === -1) return;
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= arr.length) return;
-  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
-  reRenderStepModal();
-}
-// Text fields (refName/pointValue) mutate silently via this same setter on
-// oninput — only Hidden/Achievable More Than Once (yes/no toggles, not
+// Text fields (refName/pointValue/displayName/earnedDescription/
+// preEarnedDescription) mutate silently via this same setter on oninput —
+// only Hidden/Achievable More Than Once (yes/no toggles, not
 // focus-sensitive) need the immediate re-render.
 function setMacGameCenterAchievementField(id, key, value) {
   const a = state.macGameCenterAchievements.find(a => a.id === id);
@@ -1193,7 +1182,10 @@ function expandMacGcAchievement(id) {
 }
 // Collapses an achievement into its summary row — same convention as
 // saveIapProduct. Reference Name is the one required field (mirroring ASC
-// itself, which won't let an achievement save without one).
+// itself, which won't let an achievement save without one). Used both by
+// the expanded row's own Save button AND by clicking the row's header bar
+// (render.js) — clicking the header of an achievement with no Reference
+// Name yet simply does nothing, same as the disabled Save button.
 function saveMacGcAchievement(id) {
   const a = state.macGameCenterAchievements.find(a => a.id === id);
   if (!a || !a.refName.trim()) return;
@@ -1201,58 +1193,72 @@ function saveMacGcAchievement(id) {
   reRenderStepModal();
 }
 
-// Adds a new localization defaulting to the first language not already used
-// by this achievement (falls back to 'en' if every language in OB_LANG_NAMES
-// is somehow already in use) — avoids handing the developer a duplicate-
-// language row they'd just have to change themselves.
-function addMacGcLocalization(achId) {
-  const a = state.macGameCenterAchievements.find(a => a.id === achId);
-  if (!a) return;
-  const used = new Set(a.localizations.map(l => l.language));
-  const nextLang = Object.keys(OB_LANG_NAMES).find(code => !used.has(code)) || 'en';
-  a.localizations.push({ id: generateId('loc'), language: nextLang, displayName: '', earnedDescription: '', preEarnedDescription: '', image: null });
-  reRenderStepModal();
-}
-function removeMacGcLocalization(achId, locId) {
-  const a = state.macGameCenterAchievements.find(a => a.id === achId);
-  if (!a) return;
-  a.localizations = a.localizations.filter(l => l.id !== locId);
-  reRenderStepModal();
-}
-// Text fields (displayName/earnedDescription/preEarnedDescription) mutate
-// silently on oninput; Language (a select) re-renders since changing it
-// changes which languages are offered in every other localization's own
-// dropdown (see the "not already used" filter, render.js).
-function setMacGcLocalizationField(achId, locId, key, value) {
-  const a   = state.macGameCenterAchievements.find(a => a.id === achId);
-  const loc = a?.localizations.find(l => l.id === locId);
-  if (!loc) return;
-  loc[key] = value;
-  if (key === 'language') reRenderStepModal();
-}
 // Same FileReader → dataUrl pattern as handleScreenshotFiles (further
-// below) — stores the raw image inline on the localization itself rather
-// than in a shared uploads array, since this image belongs to one specific
-// achievement's one specific language and is never reused elsewhere.
-function handleMacGcLocalizationImage(event, achId, locId) {
+// below) — stores the raw image inline on the achievement itself.
+function handleMacGcAchievementImage(event, achId) {
   const file = event.target.files?.[0];
   if (!file) return;
-  const a   = state.macGameCenterAchievements.find(a => a.id === achId);
-  const loc = a?.localizations.find(l => l.id === locId);
-  if (!loc) return;
+  const a = state.macGameCenterAchievements.find(a => a.id === achId);
+  if (!a) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    loc.image = { name: file.name, dataUrl: ev.target.result };
+    a.image = { name: file.name, dataUrl: ev.target.result };
     reRenderStepModal();
   };
   reader.readAsDataURL(file);
 }
-function removeMacGcLocalizationImage(achId, locId) {
-  const a   = state.macGameCenterAchievements.find(a => a.id === achId);
-  const loc = a?.localizations.find(l => l.id === locId);
-  if (!loc) return;
-  loc.image = null;
+function removeMacGcAchievementImage(achId) {
+  const a = state.macGameCenterAchievements.find(a => a.id === achId);
+  if (!a) return;
+  a.image = null;
   reRenderStepModal();
+}
+
+/* Drag-to-reorder for COLLAPSED achievement rows only (render.js only wires
+   draggable/ondragstart etc. onto the collapsed row markup — an expanded
+   row can't be dragged, mirroring the fact that App Store Connect's own
+   list only supports reordering the collapsed summary rows). Same
+   module-level-drag-key convention as calDragStart/calDrop above: the
+   dragged id is kept off-state (purely a transient UI gesture, not
+   something worth a state mutation of its own) and mirrored onto
+   dataTransfer for browsers that need it read back on drop. Dropping A
+   onto B moves A to B's current position — a plain splice-out/splice-in,
+   not a swap, so dragging one row past several others in one gesture
+   reorders correctly instead of only advancing by one slot. */
+let _macGcDragId = null;
+function macGcAchievementDragStart(ev, id) {
+  _macGcDragId = id;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', id);
+  ev.currentTarget.classList.add('is-dragging');
+}
+function macGcAchievementDragOver(ev, id) {
+  if (!_macGcDragId || _macGcDragId === id) return;
+  ev.preventDefault(); // required for drop to fire
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('is-drop');
+}
+function macGcAchievementDragLeave(ev) {
+  ev.currentTarget.classList.remove('is-drop');
+}
+function macGcAchievementDrop(ev, id) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('is-drop');
+  const fromId = _macGcDragId || ev.dataTransfer.getData('text/plain');
+  macGcAchievementDragEnd();
+  if (!fromId || fromId === id) return;
+  const arr = state.macGameCenterAchievements;
+  const fromIdx = arr.findIndex(a => a.id === fromId);
+  const toIdx   = arr.findIndex(a => a.id === id);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  reRenderStepModal();
+}
+function macGcAchievementDragEnd() {
+  _macGcDragId = null;
+  document.querySelectorAll('.mac-gc-row.is-dragging, .mac-gc-row.is-drop')
+    .forEach(el => el.classList.remove('is-dragging', 'is-drop'));
 }
 
 // Twin of seedMacAppStoreListing above, for Mac App Store Full's own
@@ -4961,8 +4967,8 @@ async function _applySteamSocialLinks(appId, expectedTitle) {
    achievement having no visible description on Steam's page — Steam blanks
    the description for hidden achievements, which is the only signal this
    public page gives us. Rows start collapsed since an imported achievement
-   already has a Reference Name and one localization filled in — no more
-   work needed unless the developer wants to review or add more languages. */
+   already has a Reference Name, Display Name, and Earned Description filled
+   in — no more work needed unless the developer wants to review it. */
 async function _applySteamAchievements(appId, expectedTitle) {
   let parsed = null;
   try {
@@ -4980,7 +4986,6 @@ async function _applySteamAchievements(appId, expectedTitle) {
   if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
   if (!parsed || !parsed.length) return;
 
-  const primaryLang = state.formData.primaryLanguage || 'en';
   state.macGameCenterAchievements = parsed.map(p => ({
     id: generateId('ach'),
     refName: p.name,
@@ -4989,14 +4994,10 @@ async function _applySteamAchievements(appId, expectedTitle) {
     achievableMultipleTimes: false,
     collapsed: true,
     fromSteam: true,
-    localizations: [{
-      id: generateId('loc'),
-      language: primaryLang,
-      displayName: p.name,
-      earnedDescription: p.description || '',
-      preEarnedDescription: '',
-      image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
-    }],
+    displayName: p.name,
+    earnedDescription: p.description || '',
+    preEarnedDescription: '',
+    image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
   }));
   reRenderStepModal();
   updateIOSCard('macos');

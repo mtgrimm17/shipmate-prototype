@@ -7743,6 +7743,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   color: var(--text);
 }
 
+/* Drag-to-reorder feedback for Game Center's collapsed achievement rows
+   (buildMacGameCenterSection/_macGcAchievementCollapsedRow, render.js;
+   macGcAchievementDragStart/Over/Drop/DragEnd, app.js). Scoped to
+   .mac-gc-row specifically so it never bleeds onto IAP's own
+   .iap-product-row (which shares the base class for visual consistency but
+   isn't draggable). is-dragging fades the row being carried; is-drop
+   highlights whichever row the pointer is currently over as the drop
+   target. */
+.mac-gc-row.is-dragging { opacity: 0.4; }
+.mac-gc-row.is-drop { border-color: var(--purple); }
+
 /* ── Business — "IAP Localizations" (buildIapLocalizationsSection, render.js) ──
    Modeled on Localization Review (further above) — reuses every one of its
    generic building blocks completely unchanged: .loc-review-header/-title/
