@@ -1239,15 +1239,6 @@ function setMacFullListingField(field, value) {
   state.macFullAppStoreListing[field] = value;
 }
 
-/* ── Mac App Store Full — Build & Compliance ─────────────────────────── */
-function toggleMacFullIdfaReason(id) {
-  const idfa = state.macFullSubmitAnswers.idfaDeclaration;
-  const idx = idfa.reasons.indexOf(id);
-  if (idx >= 0) idfa.reasons.splice(idx, 1);
-  else idfa.reasons.push(id);
-  reRenderStepModal();
-}
-
 /* ── Mac App Store Full — Subscriptions ──────────────────────────────── */
 function addMacFullSubGroup() {
   state.macFullSubmitAnswers.subscriptionGroups.push({ id: generateId('subgrp'), name: '', tiers: [] });

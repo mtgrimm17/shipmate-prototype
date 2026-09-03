@@ -786,7 +786,6 @@ const PLATFORMS = {
       { id: 'privacy',         label: 'App Privacy'                                   },
       { id: 'versionInfo',     label: 'Version Information'                           },
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
-      { id: 'buildCompliance', label: 'Build & Compliance'                            },
       { id: 'iap',             label: 'In-App Purchases'                              },
       { id: 'subscriptions',   label: 'Subscriptions'                                 },
       { id: 'gameCenter',      label: 'Game Center'                                   },
@@ -1364,9 +1363,6 @@ function makeBlankMacFullAnswers() {
     // it here).
     availability:             { mode: 'all', countries: [] },  // mode: 'all' | 'select'
 
-    // Build & Compliance
-    idfaDeclaration:          { usesIdfa: null, reasons: [] },  // reasons: subset of IDFA_REASONS ids
-
     // App Review Information
     reviewContact:            { firstName: '', lastName: '', phone: '', email: '' },
     demoAccount:              { required: null, username: '', password: '' },  // required: 'yes' / 'no'
@@ -1708,13 +1704,6 @@ function computeMacFullSectionRisk(sectionId) {
     return 'LOW';
   }
 
-  if (sectionId === 'buildCompliance') {
-    if (a.usesEncryption === null) return 'HIGH';
-    const fields = ['usesEncryption'];
-    if (a.usesEncryption === 'yes') fields.push('encryptionExempt');
-    return evalFields(fields);
-  }
-
   if (sectionId === 'iap') {
     return evalFields(['hasIAP']);
   }
@@ -1773,21 +1762,18 @@ function isMacFullSectionComplete(sectionId) {
     return hasShots;
   }
 
-  if (sectionId === 'buildCompliance') {
-    if (a.usesEncryption === null) return false;
-    if (a.usesEncryption === 'yes') {
-      if (a.encryptionExempt === null) return false;
-      if (a.encryptionExempt === 'no') {
-        if (a.hasERN === null) return false;
-        if (a.hasERN === 'yes' && !a.ernNumber.trim()) return false;
-      }
-    }
-    if (a.idfaDeclaration.usesIdfa === null) return false;
-    return true;
-  }
-
   if (sectionId === 'iap') {
     return a.hasIAP !== null;
+  }
+
+  if (sectionId === 'business') {
+    return a.hasIAP !== null;
+  }
+
+  if (sectionId === 'screenshots') {
+    const ps = state.platformScreenshots?.macos_full;
+    if (ps && (ps.selected.length > 0 || ps.custom.length > 0)) return true;
+    return (state.uploads?.screenshots || []).length > 0;
   }
 
   // Subscriptions and Game Center are purely additive, same convention as

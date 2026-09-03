@@ -4323,7 +4323,6 @@ function renderStepModal() {
     else if (stepId === 'pricing')            body = buildMacFullPricingSection();
     else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
     else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
-    else if (stepId === 'buildCompliance')    body = buildMacFullBuildComplianceSection();
     else if (stepId === 'iap')                body = buildIapSection(platformId);
     else if (stepId === 'subscriptions')      body = buildMacFullSubscriptionsSection();
     else if (stepId === 'gameCenter')         body = buildMacFullGameCenterSection();
@@ -9198,15 +9197,6 @@ const MAC_FULL_GAME_SUBCATEGORIES = [
   'Role Playing', 'Simulation', 'Sports', 'Strategy', 'Trivia', 'Word',
 ];
 
-// Apple's fixed App Tracking Transparency / IDFA usage reasons (App Store
-// Connect → App Privacy → "Advertising Identifier (IDFA)" declaration).
-const MAC_FULL_IDFA_REASONS = [
-  { id: 'serve-ads',         label: 'Serve advertisements within this app' },
-  { id: 'attribute-install', label: 'Attribute this app installation to a previously served advertisement' },
-  { id: 'attribute-action',  label: 'Attribute an action taken within this app to a previously served advertisement' },
-  { id: 'data-broker',       label: "Share this app's data with a data broker" },
-];
-
 // Apple's fixed subscription duration options (App Store Connect →
 // Subscriptions → a subscription's Duration).
 const MAC_FULL_SUB_DURATIONS = ['1 Week', '1 Month', '2 Months', '3 Months', '6 Months', '1 Year'];
@@ -9437,30 +9427,6 @@ function buildMacFullVersionInfoSection() {
     ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}`;
 }
 
-/* ── Mac App Store Full — Build & Compliance ─────────────────────────── */
-function buildMacFullBuildComplianceSection() {
-  const a    = state.macFullSubmitAnswers;
-  const idfa = a.idfaDeclaration;
-  return `
-    ${buildExportComplianceSection('macos_full')}
-
-    <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
-      <label class="form-label">Does this app use the Advertising Identifier (IDFA)?</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${idfa.usesIdfa === true ? 'is-selected' : ''}" onclick="setMacFullField('idfaDeclaration.usesIdfa', true)">YES</button>
-        <button class="yn-btn yn-no ${idfa.usesIdfa === false ? 'is-selected' : ''}" onclick="setMacFullField('idfaDeclaration.usesIdfa', false)">NO</button>
-      </div>
-    </div>
-    ${idfa.usesIdfa === true ? `
-    <div class="ios-followup">
-      <div class="form-hint">Select every way your app uses the IDFA:</div>
-      ${MAC_FULL_IDFA_REASONS.map(r => `
-        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
-          <input type="checkbox" ${idfa.reasons.includes(r.id) ? 'checked' : ''} onchange="toggleMacFullIdfaReason('${r.id}')">
-          ${r.label}
-        </label>`).join('')}
-    </div>` : ''}`;
-}
 
 /* One tier row of a Mac App Store Full subscription group — mirrors
    buildIapProductRow's layout/classes so subscriptions visually match the
