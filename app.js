@@ -3375,6 +3375,37 @@ function selectLocPrimary(lang) {
 // Legacy alias — kept for any older callers
 function setObPrimaryLang(lang) { selectLocPrimary(lang); }
 
+// Every "a new supporting language now exists" call site (toggleObLang,
+// setObLangPreset, applyObLangPreset, addLangFromSearch below) needs to
+// give that language an initial translation of every already-authored
+// primary-language field right away, for every platform/feature that
+// keeps its own per-language overrides (the app's own Title/Subtitle/
+// Description/What's New, Mac App Store's and Mac App Store Full's and
+// Steam's own independent listings, IAP Localizations for both IAP-product
+// pickers, and Mac App Store's Achievement Localizations) — otherwise a
+// field/product/achievement saved BEFORE this language existed shows a
+// blank card for it until whatever last touched it happens to be edited
+// again. Bundled into one helper — rather than each call site re-listing
+// every *PropagateAllFields function on its own — specifically so a future
+// propagatable feature only ever needs to be wired in HERE, not hunted
+// down across every "a language was just added" call site (this is
+// exactly the bug IAP Localizations and Achievement Localizations both had
+// until now: every one of the four call sites below had to independently
+// remember to call their own PropagateAllFields, and none of them did).
+// Every function called here already loops over ALL of
+// state.formData.localizations on its own, and no-ops per-language for
+// anything already in sync — so calling this once covers however many
+// languages just got added, whether one at a time or in bulk.
+function _propagateAllLocalizationFeatures() {
+  _iasPropagateAllFields();
+  _masPropagateAllFields();       // no-op until Mac App Store is activated
+  _macFullPropagateAllFields();   // no-op until Mac App Store Full is activated
+  _steamPropagateAllFields();
+  _iapLocPropagateAllFields();
+  _masIapLocPropagateAllFields(); // no-op until Mac App Store has saved IAP products
+  _masAchLocPropagateAllFields(); // no-op until Mac App Store has saved achievements
+}
+
 function setObLangPreset(preset) {
   const beforeLangs = state.formData.localizations || [];
   state.formData.localizationPreset = preset;
@@ -3382,10 +3413,7 @@ function setObLangPreset(preset) {
   updateObLangListWrap();
   // Bulk selection bypasses toggleObLang entirely, so any newly-added
   // language needs its own initial translation pass triggered here.
-  _iasPropagateAllFields();
-  _masPropagateAllFields(); // no-op until Mac App Store is activated
-  _macFullPropagateAllFields(); // no-op until Mac App Store Full is activated
-  _steamPropagateAllFields();
+  _propagateAllLocalizationFeatures();
   // Same reasoning as toggleObLang — bulk selection also bypasses the
   // per-language Steam localization check, so run it for every language
   // this preset newly added.
@@ -3408,10 +3436,7 @@ function applyObLangPreset() {
   const preset = state.formData.localizationPreset || 'recommended';
   state.formData.localizations = _computeLangPresetSelections(preset);
   updateObLangListWrap();
-  _iasPropagateAllFields();
-  _masPropagateAllFields(); // no-op until Mac App Store is activated
-  _macFullPropagateAllFields(); // no-op until Mac App Store Full is activated
-  _steamPropagateAllFields();
+  _propagateAllLocalizationFeatures();
   _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, state.formData.localizations);
 }
 
@@ -3423,13 +3448,10 @@ function toggleObLang(lang) {
   if (idx === -1) {
     arr.push(lang);
     state.formData.localizations = arr;
-    // Newly-added language — give it an initial translation of the primary
-    // language's current Subtitle/Description/What's New right away rather
-    // than waiting for those fields to change again.
-    _iasPropagateAllFields();
-    _masPropagateAllFields(); // no-op until Mac App Store is activated
-    _macFullPropagateAllFields(); // no-op until Mac App Store Full is activated
-    _steamPropagateAllFields();
+    // Newly-added language — give it an initial translation of every
+    // already-authored primary-language field right away rather than
+    // waiting for those fields to change again.
+    _propagateAllLocalizationFeatures();
     // If this game is Steam-linked and its store page has been localized
     // into this language, prefer Steam's own "About This Game" copy for the
     // Description field over the Claude translation just triggered above
@@ -8196,6 +8218,25 @@ function _iapLocPropagateName(iapId, primaryValue) {
   });
 }
 
+// Newly-added language — bring every already-saved IAP product's IAP
+// Localizations up to date right away, mirroring the job
+// _iasPropagateAllFields does for the app's own Title/Subtitle/Description/
+// What's New (called alongside it from toggleObLang). Without this, a
+// product saved BEFORE this language existed has no p.locs[lang] entry at
+// all — since _iapLocPropagateName/_iapLocTriggerAutoTranslate only ever
+// run at IAP-product save time (saveIapProduct) or on a primary-language
+// edit (_iapLocSetFieldValue), IAP Localizations would show a blank Name/
+// Description card for the new language until the product happened to be
+// reopened and re-saved. Loops every SAVED product (matching
+// buildIapLocalizationsSection's own dropdown, which only ever lists saved
+// products) rather than just the one currently selected in the picker.
+function _iapLocPropagateAllFields() {
+  _iapLocSavedProducts().forEach(p => {
+    _iapLocPropagateName(p.id, p.name);
+    _iapLocTriggerAutoTranslate(p.id, 'desc', p.desc);
+  });
+}
+
 // Which of Name/Description currently auto-translates from the Primary
 // Language into supporting languages — mirrors _iasFieldAutoTranslateEnabled.
 // Both default on (see state.iapLocAutoTranslateFields, state.js, for why
@@ -8731,6 +8772,16 @@ function _masIapLocPropagateName(iapId, primaryValue) {
   supportedLangs.forEach(lang => {
     if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
     p.locs[lang].name = primaryValue || '';
+  });
+}
+
+// Mac App Store's own version of _iapLocPropagateAllFields above — same
+// "retroactively populate a newly-added language for every already-saved
+// product" job, called alongside it from toggleObLang.
+function _masIapLocPropagateAllFields() {
+  _masIapLocSavedProducts().forEach(p => {
+    _masIapLocPropagateName(p.id, p.name);
+    _masIapLocTriggerAutoTranslate(p.id, 'desc', p.desc);
   });
 }
 
@@ -10508,6 +10559,25 @@ function _masAchLocSetFieldValue(achId, field, lang, value) {
   // automatically populated it before — same "developer's own typing is
   // final" rule every other inline-edit path in this file already follows.
   delete a.locs[lang][field + 'FromSteam'];
+}
+
+// Newly-added language — bring every already-saved achievement's
+// Achievement Localizations up to date right away, the same job
+// _iapLocPropagateAllFields/_masIapLocPropagateAllFields do for IAP
+// Localizations (all three called together from toggleObLang). Without
+// this, an achievement saved (or last edited) BEFORE this language existed
+// has no a.locs[lang] entry at all — saveMacGcAchievement/
+// _applySteamAchievements only ever propagate to the supporting languages
+// that exist AT THAT MOMENT — so every field would show blank in
+// Achievement Localizations until the achievement happened to be reopened
+// and re-saved. _checkSteamLocalizedAchievements (toggleObLang's other new-
+// language call) still runs alongside this and, per
+// _masAchLocTriggerAutoTranslate's own write-time guard, always wins if it
+// finds a genuine Steam localization for the same language/field.
+function _masAchLocPropagateAllFields() {
+  _masAchLocSavedAchievements().forEach(a => {
+    ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _masAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  });
 }
 
 function _masAchLocFieldAutoTranslateEnabled(field) {
@@ -12492,10 +12562,23 @@ function addLangFromSearch(code) {
   const idx = arr.indexOf(code);
   if (idx === -1) {
     arr.push(code);
+    state.formData.localizations = arr;
+    // The [+] search box is the OTHER way a supporting language gets added
+    // (for anything beyond the quick-toggle featured chips, toggleObLang's
+    // own job) — mirrors toggleObLang's newly-added-language branch exactly.
+    // This call was missing entirely before, so a language added this way
+    // got NO initial translation pass at all for ANY field — not just IAP/
+    // Achievement Localizations, but the app's own Title/Subtitle/
+    // Description/What's New too — until something else happened to
+    // re-touch it later.
+    _propagateAllLocalizationFeatures();
+    _checkSteamLocalizedDescription(code);
+    _checkSteamLocalizedListing(code);
+    _checkSteamLocalizedAchievements(code);
   } else {
     arr.splice(idx, 1);
+    state.formData.localizations = arr;
   }
-  state.formData.localizations = arr;
   updateObLangListWrap();
 }
 
