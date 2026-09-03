@@ -819,9 +819,25 @@ function _parseSteamSocialLinks(html) {
    headers either. Used by _applySteamAchievements (app.js) to pre-populate
    Mac App Store's Game Center > Achievements section
    (state.macGameCenterAchievements) the moment a Steam-linked title is
-   picked from the IGDB picklist. */
-async function fetchSteamAchievementsPage(appId) {
-  const res = await _fetchWithTimeout(_cors(`https://steamcommunity.com/stats/${appId}/achievements`));
+   picked from the IGDB picklist.
+
+   Optional `lang` (a Steam API language code, e.g. 'french', 'schinese' —
+   see STEAM_LOCALIZATION_LANG_MAP, app.js) requests this same page
+   localized into that language via Steam's own `l=` query param, used by
+   _checkSteamLocalizedAchievements (app.js) to source genuine
+   developer-authored translations for achievement Display Name/Earned
+   Description, the same way fetchSteamAppDetails' own `lang` param does for
+   the store listing. Verified live (Celeste, appid 504230, `?l=french`):
+   the page's achievement names/descriptions and its own chrome ("Total des
+   succès", "Succès généraux") both come back genuinely translated, not just
+   echoed in English. Steam does not error for a language it has no real
+   translation for — same as appdetails, it silently falls back to the
+   game's default listing language instead, so a caller requesting a
+   specific language must compare the result against a default-language
+   baseline to tell "genuinely localized" from "silently fell back". */
+async function fetchSteamAchievementsPage(appId, lang) {
+  const langParam = lang ? `?l=${encodeURIComponent(lang)}` : '';
+  const res = await _fetchWithTimeout(_cors(`https://steamcommunity.com/stats/${appId}/achievements${langParam}`));
   if (!res.ok) throw new Error('Steam achievements page fetch failed (' + res.status + ')');
   return await res.text();
 }

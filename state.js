@@ -2960,16 +2960,28 @@ const state = {
   // the collapsed row — macGcAchievementDragStart/DragOver/Drop/DragEnd,
   // app.js — not a function call), each
   // { id, refName, pointValue, hidden, achievableMultipleTimes, collapsed,
-  // displayName, earnedDescription, preEarnedDescription, image }. No
-  // per-language Localizations sub-list (removed by request) — Display
-  // Name/Earned Description/Pre-Earned Description/Image are single-
-  // language fields directly on the achievement, same as every other field
-  // here. `image` is { name, dataUrl } or null. An achievement imported
-  // from Steam (_applySteamAchievements, app.js) is additionally tagged
-  // `fromSteam: true`. Deliberately a FULL-FIDELITY build (unlike Mac App
-  // Store Full's own simplified gameCenter.achievements list — see
-  // makeBlankMacFullAnswers' comment) since this is the one place in
-  // Shipmate meant to actually mirror ASC's Achievements UI end to end.
+  // displayName, earnedDescription, preEarnedDescription, image, locs? }.
+  // Display Name/Earned Description/Pre-Earned Description/Image are the
+  // achievement's own PRIMARY-language fields, same as every other field
+  // here (no per-language Localizations sub-list on the achievement card
+  // itself — removed by request). Supporting-language overrides for those
+  // three text fields instead live in the achievement's own `locs` map —
+  // `a.locs[lang] = { displayName, earnedDescription, preEarnedDescription,
+  // <field>SourceText?, <field>FromSteam? }`, lazily created — read/written
+  // through Game Center's own "Achievement Localizations" section (the
+  // "_masAchLoc"/"masAchLoc" prefixed cluster, app.js;
+  // buildMacAchievementLocalizationsSection, render.js), the exact same
+  // shape/role IAP products' own `p.locs` plays for IAP Localizations.
+  // `image` is { name, dataUrl } or null. An achievement imported from
+  // Steam (_applySteamAchievements, app.js) is additionally tagged
+  // `fromSteam: true` and `steamIndex` (its position in Steam's own
+  // achievement listing at import time, stable across later drag-reorders —
+  // used by _checkSteamLocalizedAchievements, app.js, to match this
+  // achievement back up against a freshly-fetched localized listing).
+  // Deliberately a FULL-FIDELITY build (unlike Mac App Store Full's own
+  // simplified gameCenter.achievements list — see makeBlankMacFullAnswers'
+  // comment) since this is the one place in Shipmate meant to actually
+  // mirror ASC's Achievements UI end to end.
   macGameCenterAchievements: [],
 
   // Mac App Store Full submission questionnaire answers — a from-scratch,
@@ -3363,6 +3375,30 @@ const state = {
   masIapLocAutoTranslateFields: { name: true, desc: true },
   masIapLocSettingsOpen: false,
 
+  // Mac App Store Game Center's own "Achievement Localizations" section
+  // (buildMacAchievementLocalizationsSection, render.js — reached via the
+  // Game Center step's own "Localizations" button, above the Achievements
+  // list). A near-twin of the masIapLoc* fields directly above, keyed by
+  // achievement id (state.macGameCenterAchievements) instead of IAP product
+  // id, covering three fields (displayName/earnedDescription/
+  // preEarnedDescription) instead of two — see the "_masAchLoc"/"masAchLoc"
+  // prefixed handler cluster, app.js, for the full mechanics, including the
+  // one real departure from IAP Localizations: an achievement imported from
+  // Steam can carry a genuine Steam-authored translation
+  // (a.locs[lang].displayNameFromSteam/earnedDescriptionFromSteam, set by
+  // _checkSteamLocalizedAchievements) that outranks an AI translation the
+  // same way Steam's own store-listing localizations already do elsewhere
+  // in this file.
+  masAchLocAchId: null,
+  masAchLocField: null,
+  masAchLocMode: 'locs',
+  masAchLocBackTranslation: {},
+  masAchLocUndoHistory: { real: {}, draft: {} },
+  masAchLocTranslateStatus: {},
+  masAchLocTranslatePendingLangs: {},
+  masAchLocAutoTranslateFields: { displayName: true, earnedDescription: true, preEarnedDescription: true },
+  masAchLocSettingsOpen: false,
+
   // Cached Steam store-page info for the currently-selected Steam-linked
   // game — { appId, baselineDescription, shortDescription,
   // supportedLanguagesRaw } or null when no Steam-linked game is selected
@@ -3383,6 +3419,24 @@ const state = {
   // transient, not submission data, so it lives at the top level rather
   // than inside formData.
   steamLocInfo: null,
+
+  // Cached default-language ("baseline") name/description for every
+  // achievement on the currently-selected Steam-linked game's public
+  // achievement stats page — { appId, achievements: [{name, description}] }
+  // in the same order Steam itself lists them, or null when no Steam-linked
+  // game is selected (or its achievements fetch failed). Populated by
+  // _applySteamAchievements (app.js) right after it fetches/parses that
+  // page for the default language; consumed by _checkSteamLocalizedAchievements
+  // (app.js) whenever a supported language is added, the same
+  // "genuinely localized vs. Steam silently fell back to the default
+  // language" comparison steamLocInfo's own baseline fields support for the
+  // store listing. Kept as its own field rather than folded into
+  // steamLocInfo itself since the two are populated by separate,
+  // independently-timed fetches (_applySteamAboutData vs.
+  // _applySteamAchievements) — neither cache should have to guess whether
+  // the other has finished loading yet. Session-transient, not submission
+  // data, so it lives at the top level rather than inside formData.
+  steamAchievementsBaseline: null,
 
   // Whether the privacy matrix is showing all types (default: fully collapsed)
   privacyMatrixExpanded: false,

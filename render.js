@@ -4229,7 +4229,16 @@ function renderStepModal() {
   // other, and it means openStorePreviewSection/closeStorePreviewSection
   // need no changes to also drive storePreviewPrototype's own "Select Steam
   // Assets" flip target (steamAssets, below).
-  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype')
+  // Mac App Store's own Game Center step also gets a flip target now — its
+  // "Localizations" button (buildMacGameCenterSection) flips the whole step
+  // modal over to Achievement Localizations
+  // (openStorePreviewSection('macos','achievementLocalizations')) the exact
+  // same way Business Questions' "Localizations"/"IAP Locs" button flips
+  // over to IAP Localizations, reusing the SAME state.storePreviewFlipTarget
+  // (keyed by platformId, not by step) — safe for the same reason
+  // storePreviewPrototype already shares it with storePreview above: only
+  // one step modal is ever open at a time.
+  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && platformId === 'macos'))
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
   const FLIP_LABELS = {
@@ -4249,6 +4258,7 @@ function renderStepModal() {
     info:          'Info',
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
+    achievementLocalizations: 'Achievement Localizations',
   };
   const isFlipped = !!flipTarget;
   const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
@@ -4330,7 +4340,7 @@ function renderStepModal() {
     else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-  } else if (stepId === 'gameCenter' && platformId === 'macos') body = buildMacGameCenterSection();
+  } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
   else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
@@ -4560,6 +4570,19 @@ function buildStorePreviewFlipSection(platformId, target) {
     if (platformId === 'macos') return buildMacIapLocalizationsSection();
     if (platformId === 'macos_full') return buildMacFullIapLocalizationsSection();
     return buildIapLocalizationsSection();
+  }
+  // Mac App Store Game Center's own "Localizations" button
+  // (buildMacGameCenterSection, further below) — flips the whole Game
+  // Center step modal over to this section rather than rendering it inline
+  // beneath the Achievements list, the same "IAP Locs" pattern as
+  // 'iapLocalizations' just above. No default "Save & Return" special case
+  // needed here (unlike 'iapLocalizations' → 'business') — Game Center's
+  // own un-flipped view IS where this button lives, so
+  // closeStorePreviewSection's default (flip to null) already lands the
+  // user back exactly where they came from.
+  if (target === 'achievementLocalizations') {
+    if (platformId === 'macos') return buildMacAchievementLocalizationsSection();
+    return '';
   }
   return '';
 }
@@ -7130,9 +7153,27 @@ function _macGcAchievementExpandedRow(a) {
 
 function buildMacGameCenterSection() {
   const achievements = state.macGameCenterAchievements || [];
+  // "Localizations" — sits opposite the "Achievements" label, above the
+  // list itself, mirroring Business Questions' own "Localizations"/"IAP
+  // Locs" button (buildIapSection above) both in placement and mechanism:
+  // it flips the whole Game Center step modal over to Achievement
+  // Localizations (openStorePreviewSection('macos','achievementLocalizations')
+  // — see buildStorePreviewFlipSection's 'achievementLocalizations' target,
+  // further above) rather than rendering that section inline beneath the
+  // Achievements list. Only shown once there's at least one SAVED
+  // (collapsed) achievement to localize — same guard
+  // buildMacAchievementLocalizationsSection itself uses, so the button
+  // never opens an empty section.
+  const hasSavedAchievements = achievements.some(a => a.collapsed);
+  const achLocsBtn = hasSavedAchievements
+    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('macos','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
+    : '';
   return `
-    <div class="form-group" style="margin-bottom:8px;">
-      <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
+    <div class="form-group iap-products-group" style="margin-bottom:8px;">
+      <div class="iap-products-label-row">
+        <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
+        ${achLocsBtn}
+      </div>
     </div>
     ${achievements.map(a => a.collapsed
         ? _macGcAchievementCollapsedRow(a)
@@ -8868,8 +8909,13 @@ function buildIapSection(pid = 'ios') {
   // routes 'macos_full' to buildMacFullIapLocalizationsSection (reading its
   // own independent state.macFullSubmitAnswers.iapProducts, never iOS's).
   const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
+  // Mac App Store's own button reads just "Localizations" (by request) —
+  // iOS and Mac App Store Full keep the original "IAP Locs" label, since
+  // buildIapSection is shared across all three platforms (pid) and only Mac
+  // App Store's Business Questions was asked to change.
+  const iapLocsBtnLabel = pid === 'macos' ? 'Localizations' : 'IAP Locs';
   const iapLocsBtn = hasSavedIapProducts
-    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('${pid}','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">IAP Locs</button>`
+    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('${pid}','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">${iapLocsBtnLabel}</button>`
     : '';
 
   const iapProductsHTML = `
@@ -9289,6 +9335,213 @@ function buildMacIapLocalizationsSection() {
       <div class="iap-loc-selectors-row">
         ${swSelect('mas-iap-loc-iap', iapId, iapOptions, 'setMasIapLocReviewIapId', 'auto', 'right')}
         ${swSelect('mas-iap-loc-field', field, fieldOptions, 'setMasIapLocField', 'auto', 'right')}
+      </div>
+      <div class="iap-loc-cards">${cards}</div>
+    </div>`;
+}
+
+/* Localization Review's field dropdown analog for achievements — the three
+   localizable fields (Display Name, Earned Description, Pre-Earned
+   Description), in the same order they appear on each achievement's own
+   expanded card (_macGcAchievementExpandedRow above). */
+const ACHIEVEMENT_LOC_FIELDS = [
+  { value: 'displayName', label: 'Display Name' },
+  { value: 'earnedDescription', label: 'Earned Description' },
+  { value: 'preEarnedDescription', label: 'Pre-Earned Description' },
+];
+
+// Character limits for Game Center's own achievement text fields — the
+// achievement analog of IAP_PRODUCT_FIELD_LIMITS above (Display Name
+// mirrors App Store Connect's own Game Center limit; Earned/Pre-Earned
+// Description share a slightly longer one, matching how much room these
+// fields realistically need for a short earned/unearned blurb).
+const ACHIEVEMENT_FIELD_LIMITS = { displayName: 75, earnedDescription: 150, preEarnedDescription: 150 };
+
+/* ── Mac App Store Game Center — "Achievement Localizations" ─────────────
+   Full twin of buildMacIapLocalizationsSection above, scoped to ONE saved
+   (collapsed — see saveMacGcAchievement, app.js) achievement's Display
+   Name/Earned Description/Pre-Earned Description at a time instead of an
+   IAP product's Name/Description. Reached by flipping the whole Game
+   Center step modal via its own "Localizations" button
+   (buildMacGameCenterSection above,
+   openStorePreviewSection('macos','achievementLocalizations')) — see
+   buildStorePreviewFlipSection's 'achievementLocalizations' target for the
+   routing. Unlike IAP Localizations, closing this section needs no special-
+   cased "Save & Return" target (renderStepModal, further above) — Game
+   Center's own un-flipped view already is where this button lives.
+
+   Every language card here reads and writes the SAME underlying value the
+   Achievements list itself shows for that achievement's three text
+   fields — this section's Primary Language card IS the achievement's own
+   a.displayName/a.earnedDescription/a.preEarnedDescription, exactly how IAP
+   Localizations' own Primary Language card is simultaneously an IAP
+   product's real Name/Description (see _masAchLocFieldValue/
+   _masAchLocSetFieldValue, app.js). Only SAVED achievements are selectable
+   in the achievement picker dropdown below. The whole section is hidden
+   (returns '') until at least one achievement has been saved — the same
+   guard buildMacGameCenterSection's own "Localizations" button uses to
+   decide whether to show itself at all.
+
+   The one real addition over IAP Localizations: a language's card can show
+   a Steam-sourced badge (the same "Pulled from Steam" pill Localization
+   Review already uses — platformIcon('steam', ...) — see
+   _locReviewSourceBadge's own 'steam' case above) instead of the usual
+   AI-translated ✦ one, whenever _masAchLocSourceBadge (app.js) reports this
+   field's current text as a genuine Steam-authored translation
+   (_checkSteamLocalizedAchievements, app.js) rather than a Claude
+   translation of the primary text. See _masAchLocTriggerAutoTranslate's own
+   write-time guard (app.js) for how that authority is protected from being
+   silently clobbered by an in-flight AI translation. */
+function buildMacAchievementLocalizationsSection() {
+  const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.collapsed);
+  if (!savedAchievements.length) return '';
+
+  const achId = _masAchLocEffectiveAchId();
+  const achievement = savedAchievements.find(a => a.id === achId);
+  if (!achievement) return ''; // _masAchLocEffectiveAchId always picks a saved achievement when one exists — belt and suspenders
+
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.masAchLocField || 'displayName';
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.masAchLocMode === 'review';
+
+  const fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _masAchLocFieldHasOverLimitLang(achId, f.value, langCodes),
+  }));
+  const achOptions = savedAchievements.map(a => ({
+    value: a.id,
+    label: escHtml(a.displayName || a.refName) || 'Untitled Achievement',
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _masAchLocUndoState(kind, achId, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); masAchLocUndo('${kind}','${achId}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); masAchLocRedo('${kind}','${achId}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _masAchLocFieldValue(achId, field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _masAchLocBackTranslationValue(achId, field, lang);
+      const topStatusHtml = _masAchLocFieldTranslatePending(achId, field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="iap-loc-card">
+        <div class="iap-loc-side">
+          <div class="iap-loc-half iap-loc-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startMasAchLocInlineEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="iap-loc-half iap-loc-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startMasAchLocBackTranslationEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _masAchLocFieldTranslatePending(achId, field, lang);
+    const srcBadge = _masAchLocSourceBadge(achId, field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
+    return `
+      <div class="iap-loc-card${isPrimary ? ' iap-loc-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startMasAchLocInlineEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  const autoCfg = state.masAchLocAutoTranslateFields || { displayName: true, earnedDescription: true, preEarnedDescription: true };
+  const settingsOpen = !!state.masAchLocSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_masAchLocToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="mas-ach-loc-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_masAchLocToggleSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('displayName', 'Display Name')}
+          ${settingsRow('earnedDescription', 'Earned Description')}
+          ${settingsRow('preEarnedDescription', 'Pre-Earned Description')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">Achievement Localizations</div>
+          ${settingsMenu}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="toggleMasAchLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect('mas-ach-loc-ach', achId, achOptions, 'setMasAchLocReviewAchId', 'auto', 'right')}
+        ${swSelect('mas-ach-loc-field', field, fieldOptions, 'setMasAchLocField', 'auto', 'right')}
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;
