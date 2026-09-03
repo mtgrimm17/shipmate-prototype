@@ -755,10 +755,21 @@ const PLATFORMS = {
   // the other. Only the label differs ("Mac App Store" vs "App Store").
   macos: {
     id: 'macos', label: 'Mac App Store', color: '#007AFF',
+    // No 'gameCenter' step here (unlike macos_full's own steps list below) —
+    // removed as its own Submission step per request, now that Product Page
+    // Preview's Achievements card (buildMacStorePreviewSection, render.js)
+    // links straight into it. The step's content/id are otherwise fully
+    // intact and still reachable exactly as before: buildMacGameCenterSection
+    // (render.js) still renders it, openStepModal('macos','gameCenter') still
+    // opens it (that's exactly what the Achievements card calls), and
+    // isMacSectionComplete('gameCenter') (state.js) still answers `true` for
+    // it (Achievements were always optional/non-blocking) — none of that
+    // reasoning changes, it's just no longer counted as one of this
+    // platform's own steps (platformStepCount, and every step-card list
+    // that maps over PLATFORMS.macos.steps).
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      { id: 'gameCenter',        label: 'Game Center'                                  },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],

@@ -4286,7 +4286,15 @@ function renderStepModal() {
     achievementLocalizations: 'Achievement Localizations',
   };
   const isFlipped = !!flipTarget;
-  const displayStepLabel = isFlipped ? (FLIP_LABELS[flipTarget] || step?.label) : step?.label;
+  // Game Center (macos) is no longer one of PLATFORMS.macos.steps at all —
+  // removed as its own Submission step now that Product Page Preview's
+  // Achievements card links straight into it (see PLATFORMS.macos's own
+  // comment, state.js) — so `step` above is undefined whenever it's opened
+  // this way, and step?.label alone would render a blank modal title.
+  // Falls back to its own still-accurate, hardcoded label in that one case.
+  const displayStepLabel = isFlipped
+    ? (FLIP_LABELS[flipTarget] || step?.label)
+    : (step?.label || (stepId === 'gameCenter' && platformId === 'macos' ? 'Game Center' : ''));
 
   // Step body
   let body = '';
