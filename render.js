@@ -8637,6 +8637,29 @@ function buildBusinessSection(pid = 'ios') {
   const fd = state.formData;
   const priceVal = fd.price || '';
 
+  // Mac App Store Full only ever submits games, so its Tax Category is
+  // hard-set to Games and shown as a locked field — no dropdown, and
+  // nothing ever calls answerIOSField('taxCategory', ...) for this pid.
+  const taxCategoryHTML = pid === 'macos_full'
+    ? `
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Tax Category</label>
+      <input class="form-input" type="text" value="Games" disabled>
+    </div>`
+    : (hideTaxCat ? '' : `
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Tax Category
+        <span class="tooltip-anchor">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-body">Determines how Apple handles VAT and GST in each country. Choose the category that best describes your app.</span>
+        </span>
+      </label>
+      <select class="form-input" onchange="answerIOSField('taxCategory', this.value)">
+        <option value="">Select a category</option>
+        ${TAX_CATS.map(c => `<option value="${c.toLowerCase()}" ${a.taxCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>`);
+
   return `
     <div class="form-group">
       <label class="form-label">Price (USD)
@@ -8650,19 +8673,7 @@ function buildBusinessSection(pid = 'ios') {
              oninput="syncField('price', this.value)"
              onblur="roundPrice(this)">
     </div>
-    ${hideTaxCat ? '' : `
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Tax Category
-        <span class="tooltip-anchor">
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">Determines how Apple handles VAT and GST in each country. Choose the category that best describes your app.</span>
-        </span>
-      </label>
-      <select class="form-input" onchange="answerIOSField('taxCategory', this.value)">
-        <option value="">Select a category</option>
-        ${TAX_CATS.map(c => `<option value="${c.toLowerCase()}" ${a.taxCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
-      </select>
-    </div>`}`;
+    ${taxCategoryHTML}`;
 }
 
 /* ── Business — In-App Purchases ────────────────────────
@@ -9205,6 +9216,26 @@ const MAC_FULL_SUB_DURATIONS = ['1 Week', '1 Month', '2 Months', '3 Months', '6 
 // most common four rather than every format ASC itself offers.
 const MAC_FULL_SCORE_FORMATS = ['Integer', 'Decimal (Money)', 'Time (mm:ss)', 'Time (hh:mm:ss)'];
 
+// Apple's own territory grouping for the Pricing and Availability →
+// "Select Countries or Regions" picker (App Store Connect groups every
+// storefront into one of these five areas). Maps IOS_COUNTRIES' codes into
+// each area so buildMacFullPricingSection's Availability field can present
+// the same five groups, each with its own "select all" checkbox.
+const MAC_FULL_COUNTRY_AREAS = [
+  { label: 'The United States and Canada',
+    codes: ['US', 'CA'] },
+  { label: 'Europe',
+    codes: ['RU', 'DE', 'TR', 'GB', 'FR', 'IT', 'ES', 'PL', 'UA', 'NL', 'RO',
+             'SE', 'BE', 'CZ', 'PT', 'GR', 'HU', 'AT', 'CH', 'DK', 'FI', 'NO'] },
+  { label: 'Africa, Middle East, and India',
+    codes: ['IN', 'PK', 'EG', 'NG', 'ZA', 'SA', 'IQ', 'AE', 'IL', 'KW', 'QA'] },
+  { label: 'Latin America and the Caribbean',
+    codes: ['BR', 'MX', 'AR', 'CO', 'PE', 'CL'] },
+  { label: 'Asia Pacific',
+    codes: ['CN', 'ID', 'JP', 'VN', 'PH', 'TH', 'KR', 'MY', 'AU', 'TW', 'KZ',
+             'HK', 'SG', 'NZ'] },
+];
+
 // Generic single-line (or textarea) text field for Mac App Store Full's own
 // step builders below — writes into state.macFullSubmitAnswers via a
 // dot-separated path (see setMacFullTextField/_mfNestedContainer, app.js).
@@ -9313,40 +9344,42 @@ function buildMacFullAppInfoSection() {
 
 /* ── Mac App Store Full — Pricing and Availability ───────────────────────
    Base Price/Tax Category stay shared game-wide via buildBusinessSection
-   ('macos_full') — see that function's own comment — with everything else
-   ASC's Pricing and Availability page asks for layered on below it. */
+   ('macos_full') — see that function's own comment (Tax Category is
+   hard-set to Games there) — with Availability layered on below it. */
 function buildMacFullPricingSection() {
   const a = state.macFullSubmitAnswers;
 
-  const priceChangesHTML = (a.scheduledPriceChanges || []).map(p => `
-    <div class="pk-link-edit-row" style="display:flex;gap:8px;margin-bottom:8px;">
-      <input type="text" class="form-input" style="flex:1;" value="${escHtml(p.date)}" placeholder="Effective date, e.g. 2027-01-01"
-             oninput="setMacFullPriceChangeField('${p.id}','date',this.value)">
-      <input type="text" class="form-input" style="flex:1;" value="${escHtml(p.tier)}" placeholder="New price tier, e.g. 6.99"
-             oninput="setMacFullPriceChangeField('${p.id}','tier',this.value)">
-      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;" onclick="removeMacFullPriceChange('${p.id}')" title="Remove">✕</button>
-    </div>`).join('');
-
-  const countryOptions = IOS_COUNTRIES.map(c =>
-    `<option value="${c.code}" ${a.availability.countries.includes(c.code) ? 'selected' : ''}>${c.name}</option>`
-  ).join('');
-
-  const orgsHTML = (a.customB2B.orgs || []).map(o => `
-    <div class="pk-link-edit-row" style="display:flex;gap:8px;margin-bottom:8px;">
-      <input type="text" class="form-input" style="flex:1;" value="${escHtml(o.name)}" placeholder="Organization name"
-             oninput="setMacFullB2BOrgField('${o.id}', this.value)">
-      <button class="btn btn-ghost btn-sm" type="button" style="flex:none;" onclick="removeMacFullB2BOrg('${o.id}')" title="Remove">✕</button>
-    </div>`).join('');
+  // Grouped, checkbox-based Countries and Regions picker — mirrors App
+  // Store Connect's own five-area breakdown (MAC_FULL_COUNTRY_AREAS above)
+  // instead of a flat <select multiple>, so multi-selecting countries
+  // doesn't rely on a Cmd/Ctrl-click affordance nobody discovers on their
+  // own. Each area also gets its own "select all in this area" checkbox.
+  const areasHTML = MAC_FULL_COUNTRY_AREAS.map((area, areaIndex) => {
+    const codes = area.codes.filter(code => IOS_COUNTRIES.some(c => c.code === code));
+    const allSelected = codes.length > 0 && codes.every(code => a.availability.countries.includes(code));
+    const countryRows = codes.map(code => {
+      const c = IOS_COUNTRIES.find(cc => cc.code === code);
+      const checked = a.availability.countries.includes(code);
+      return `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleMacFullAvailabilityCountry('${code}')">
+          ${escHtml(c.name)}
+        </label>`;
+    }).join('');
+    return `
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:8px;">
+          <input type="checkbox" ${allSelected ? 'checked' : ''} onchange="toggleMacFullAvailabilityArea(${areaIndex}, this.checked)">
+          ${area.label}
+        </label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding-left:24px;">
+          ${countryRows}
+        </div>
+      </div>`;
+  }).join('');
 
   return `
     ${buildBusinessSection('macos_full')}
-
-    <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
-      <label class="form-label">Scheduled Price Changes <span class="form-hint-inline">(optional)</span></label>
-      <div class="form-hint">Covers App Store Connect's Price Schedule — a simplified list of future price changes rather than Apple's full multi-tier scheduling screen.</div>
-      ${priceChangesHTML}
-      <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullPriceChange()">+ Add Price Change</button>
-    </div>
 
     <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
       <label class="form-label">Availability</label>
@@ -9356,45 +9389,10 @@ function buildMacFullPricingSection() {
       </div>
     </div>
     ${a.availability.mode === 'select' ? `
-    <div class="form-group" style="margin-bottom:14px;">
+    <div class="form-group" style="margin-bottom:6px;">
       <label class="form-label">Countries and Regions</label>
-      <select class="form-input" multiple size="8" onchange="setMacFullField('availability.countries', Array.from(this.selectedOptions).map(o => o.value))">
-        ${countryOptions}
-      </select>
-      <div class="form-hint">Cmd/Ctrl-click to select multiple.</div>
-    </div>` : ''}
-
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Pre-Order <span class="form-hint-inline">(optional)</span></label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.preOrder.enabled ? 'is-selected' : ''}" onclick="setMacFullField('preOrder.enabled', true)">ON</button>
-        <button class="yn-btn yn-no ${!a.preOrder.enabled ? 'is-selected' : ''}" onclick="setMacFullField('preOrder.enabled', false)">OFF</button>
-      </div>
-    </div>
-    ${a.preOrder.enabled ? `
-    <div class="ios-followup">
-      ${_mfTextField('Expected release date', 'preOrder.releaseDate', a.preOrder.releaseDate, 'e.g. 2027-03-01')}
-    </div>` : ''}
-
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Family Sharing</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.familySharing ? 'is-selected' : ''}" onclick="setMacFullField('familySharing', true)">ON</button>
-        <button class="yn-btn yn-no ${!a.familySharing ? 'is-selected' : ''}" onclick="setMacFullField('familySharing', false)">OFF</button>
-      </div>
-    </div>
-
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Custom App Pricing for Business <span class="form-hint-inline">(optional)</span></label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.customB2B.enabled ? 'is-selected' : ''}" onclick="setMacFullField('customB2B.enabled', true)">ON</button>
-        <button class="yn-btn yn-no ${!a.customB2B.enabled ? 'is-selected' : ''}" onclick="setMacFullField('customB2B.enabled', false)">OFF</button>
-      </div>
-    </div>
-    ${a.customB2B.enabled ? `
-    <div class="ios-followup">
-      ${orgsHTML}
-      <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullB2BOrg()">+ Add Organization</button>
+      <div class="form-hint" style="margin-bottom:10px;">Select every country or region where this game should be available.</div>
+      ${areasHTML}
     </div>` : ''}`;
 }
 

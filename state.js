@@ -1352,19 +1352,17 @@ function makeBlankMacFullAnswers() {
     bundleId:                 'Must match the Bundle ID used in Xcode.',
     sku:                      '',
 
-    // Pricing and Availability — base Price/Tax Category are deliberately
-    // NOT duplicated here; they stay shared game-wide via
-    // state.formData.price / this object's own taxCategory (inherited from
-    // makeBlankIOSAnswers above), same "shared by every store that bills in
-    // a single base price" design already used by ios/macos (see
-    // buildBusinessSection's comment, render.js). scheduledPriceChanges
-    // below covers ASC's "Price Schedule" concept on top of that shared
-    // base price.
-    scheduledPriceChanges:    [],   // { id, date, tier } — future price changes
+    // Pricing and Availability — base Price is deliberately NOT duplicated
+    // here; it stays shared game-wide via state.formData.price, same
+    // "shared by every store that bills in a single base price" design
+    // already used by ios/macos (see buildBusinessSection's comment,
+    // render.js). Tax Category is likewise not read from state for this
+    // pid — buildBusinessSection('macos_full') renders a fixed, locked
+    // "Games" field directly rather than the shared taxCategory value
+    // inherited from makeBlankIOSAnswers above (that value still defaults
+    // to 'games' too, for parity with ios/macos, but nothing ever reads
+    // it here).
     availability:             { mode: 'all', countries: [] },  // mode: 'all' | 'select'
-    preOrder:                 { enabled: false, releaseDate: '' },
-    familySharing:            false,
-    customB2B:                { enabled: false, orgs: [] },   // orgs: [{ id, name }]
 
     // Version Information — Screenshots/Description/What's New are covered
     // by the existing generic buildScreenshotsSection('macos_full') and
@@ -1755,7 +1753,6 @@ function isMacFullSectionComplete(sectionId) {
 
   if (sectionId === 'pricing') {
     if (a.availability.mode === 'select' && a.availability.countries.length === 0) return false;
-    if (a.preOrder.enabled && !a.preOrder.releaseDate.trim()) return false;
     return true;
   }
 

@@ -1197,19 +1197,6 @@ function setMacFullTextField(path, value) {
 }
 
 /* ── Mac App Store Full — Pricing and Availability ───────────────────── */
-function addMacFullPriceChange() {
-  state.macFullSubmitAnswers.scheduledPriceChanges.push({ id: generateId('price'), date: '', tier: '' });
-  reRenderStepModal();
-}
-function removeMacFullPriceChange(id) {
-  const a = state.macFullSubmitAnswers;
-  a.scheduledPriceChanges = a.scheduledPriceChanges.filter(p => p.id !== id);
-  reRenderStepModal();
-}
-function setMacFullPriceChangeField(id, key, value) {
-  const p = state.macFullSubmitAnswers.scheduledPriceChanges.find(p => p.id === id);
-  if (p) p[key] = value;
-}
 function setMacFullAvailabilityMode(mode) {
   state.macFullSubmitAnswers.availability.mode = mode;
   reRenderStepModal();
@@ -1221,18 +1208,19 @@ function toggleMacFullAvailabilityCountry(code) {
   else av.countries.push(code);
   reRenderStepModal();
 }
-function addMacFullB2BOrg() {
-  state.macFullSubmitAnswers.customB2B.orgs.push({ id: generateId('org'), name: '' });
+// Bulk-toggles every country in one of MAC_FULL_COUNTRY_AREAS (render.js)
+// on or off in one go — backs each area's "select all in this area"
+// checkbox in buildMacFullPricingSection.
+function toggleMacFullAvailabilityArea(areaIndex, checked) {
+  const area = MAC_FULL_COUNTRY_AREAS[areaIndex];
+  if (!area) return;
+  const av = state.macFullSubmitAnswers.availability;
+  if (checked) {
+    area.codes.forEach(code => { if (!av.countries.includes(code)) av.countries.push(code); });
+  } else {
+    av.countries = av.countries.filter(code => !area.codes.includes(code));
+  }
   reRenderStepModal();
-}
-function removeMacFullB2BOrg(id) {
-  const c = state.macFullSubmitAnswers.customB2B;
-  c.orgs = c.orgs.filter(o => o.id !== id);
-  reRenderStepModal();
-}
-function setMacFullB2BOrgField(id, value) {
-  const o = state.macFullSubmitAnswers.customB2B.orgs.find(o => o.id === id);
-  if (o) o.name = value;
 }
 
 /* ── Mac App Store Full — Version Information ────────────────────────── */
