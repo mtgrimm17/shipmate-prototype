@@ -4951,7 +4951,19 @@ async function _applySteamSocialLinks(appId, expectedTitle) {
    description for hidden achievements, which is the only signal this public
    page gives us. Rows start collapsed since an imported achievement already
    has a Reference Name and one localization filled in — no more work needed
-   unless the developer wants to review or add more languages. */
+   unless the developer wants to review or add more languages.
+
+   Bug fix (found by live-reproducing a report that Steam achievements
+   "weren't scraping"): the never-clobber guard below fires on ANY existing
+   achievement, including a single leftover one from manually poking at the
+   Game Center UI — and it fired completely silently, with no toast and no
+   visual cue, unlike every other Steam-enrichment field (which is either
+   filled in or visibly blank). From the developer's seat this looked
+   exactly like "the Steam integration doesn't work" even though the Steam
+   app ID had resolved fine and other fields (Capsule/Header art, About
+   text) filled in correctly — only Game Center silently no-opped. The
+   guard itself is still correct (never overwrite a developer's own
+   achievements without being asked), but it now says so out loud. */
 async function _applySteamAchievements(appId, expectedTitle) {
   let parsed = null;
   try {
@@ -4968,8 +4980,12 @@ async function _applySteamAchievements(appId, expectedTitle) {
   // Stale guard — bail if the user has since picked a different title.
   if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
   if (!parsed || !parsed.length) return;
-  // Never clobber a developer's own (or a previous Steam import's) work.
-  if (state.macGameCenterAchievements.length) return;
+  // Never clobber a developer's own (or a previous Steam import's) work —
+  // but say so, rather than no-opping silently (see the bug-fix note above).
+  if (state.macGameCenterAchievements.length) {
+    bcToast(`"${expectedTitle}" has achievements on Steam, but Game Center already has achievements listed — remove them first if you want to import from Steam.`);
+    return;
+  }
 
   const primaryLang = state.formData.primaryLanguage || 'en';
   state.macGameCenterAchievements = parsed.map(p => ({
