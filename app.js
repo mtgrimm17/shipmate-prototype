@@ -3893,13 +3893,16 @@ function selectPicklistItem(igdbId) {
   // one) — it's purely derived from whichever title is currently selected,
   // so it's always safe to clear unconditionally here.
   state.uploads.steamTrailer = null;
-  // Same "clear only the auto-filled variant" convention as the Key Art
-  // slots above, applied to Mac App Store's Game Center Achievements
-  // (_applySteamAchievements below): an achievement imported from the
-  // PREVIOUS title's Steam page (fromSteam: true) is cleared eagerly so it
-  // can't linger or flash on screen for the new title, but anything the
-  // developer added or edited themselves (no fromSteam flag) is preserved.
-  state.macGameCenterAchievements = (state.macGameCenterAchievements || []).filter(a => !a.fromSteam);
+  // Per product decision: picking a new title always resets Mac App Store's
+  // Game Center Achievements — unlike the Key Art slots above, a manually
+  // entered achievement is NOT preserved across a title switch, since a new
+  // game means a new (or absent) achievement set entirely. This is cleared
+  // unconditionally and eagerly, before _applySteamAchievements' own async
+  // Steam lookup below has a chance to run, so the previous title's
+  // achievements can never linger or flash on screen for the new one. If
+  // the new title has Steam achievements, _applySteamAchievements
+  // repopulates the list; if not (or the lookup fails), it's left empty.
+  state.macGameCenterAchievements = [];
 
   // Where the rest of this game's data comes from depends on whether IGDB
   // links to a Steam store page for it. If it does, Steam is treated as the
@@ -4939,31 +4942,27 @@ async function _applySteamSocialLinks(appId, expectedTitle) {
    Steam's public global achievement stats page (fetchSteamAchievementsPage /
    _parseSteamAchievements, claude.js) the moment a Steam-linked title is
    picked from the IGDB picklist. Follows the same fire-and-forget,
-   stale-title-guarded, never-overwrite-existing-work pattern as
-   _applySteamAboutData/_applySteamHeroBanner/_applySteamSocialLinks above:
-   only fills in achievements when the developer hasn't already added any of
-   their own (a non-empty list is left completely alone, even if every entry
-   is Steam-imported — once populated, this never re-syncs). Each imported
-   achievement is tagged `fromSteam: true` for potential future bulk-refresh
-   UI, though nothing currently reads that flag besides this guard's sibling
-   clear in selectPicklistItem. "Hidden" is inferred from the achievement
-   having no visible description on Steam's page — Steam blanks the
-   description for hidden achievements, which is the only signal this public
-   page gives us. Rows start collapsed since an imported achievement already
-   has a Reference Name and one localization filled in — no more work needed
-   unless the developer wants to review or add more languages.
-
-   Bug fix (found by live-reproducing a report that Steam achievements
-   "weren't scraping"): the never-clobber guard below fires on ANY existing
-   achievement, including a single leftover one from manually poking at the
-   Game Center UI — and it fired completely silently, with no toast and no
-   visual cue, unlike every other Steam-enrichment field (which is either
-   filled in or visibly blank). From the developer's seat this looked
-   exactly like "the Steam integration doesn't work" even though the Steam
-   app ID had resolved fine and other fields (Capsule/Header art, About
-   text) filled in correctly — only Game Center silently no-opped. The
-   guard itself is still correct (never overwrite a developer's own
-   achievements without being asked), but it now says so out loud. */
+   stale-title-guarded pattern as _applySteamAboutData/_applySteamHeroBanner/
+   _applySteamSocialLinks above — but, per product decision, does NOT follow
+   their "never overwrite existing content" convention: selectPicklistItem
+   already wipes state.macGameCenterAchievements unconditionally the moment
+   a new title is picked (a new game means a new — or absent — achievement
+   set, full stop), and this function's only job is to repopulate it from
+   the new title's own Steam data, if any exists. So there's no "developer
+   already has achievements, don't clobber them" guard here to no-op
+   silently or need a toast for — an earlier version had exactly that guard,
+   which turned out to be the cause of a real bug report ("achievements
+   aren't scraping"): a single leftover manually-added achievement from
+   testing the Game Center UI silently blocked every future Steam import
+   with zero explanation, even though the rest of the Steam data (Capsule/
+   Header art, About text) filled in fine. Each imported achievement is
+   still tagged `fromSteam: true` for potential future bulk-refresh UI,
+   though nothing currently reads that flag. "Hidden" is inferred from the
+   achievement having no visible description on Steam's page — Steam blanks
+   the description for hidden achievements, which is the only signal this
+   public page gives us. Rows start collapsed since an imported achievement
+   already has a Reference Name and one localization filled in — no more
+   work needed unless the developer wants to review or add more languages. */
 async function _applySteamAchievements(appId, expectedTitle) {
   let parsed = null;
   try {
@@ -4980,12 +4979,6 @@ async function _applySteamAchievements(appId, expectedTitle) {
   // Stale guard — bail if the user has since picked a different title.
   if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
   if (!parsed || !parsed.length) return;
-  // Never clobber a developer's own (or a previous Steam import's) work —
-  // but say so, rather than no-opping silently (see the bug-fix note above).
-  if (state.macGameCenterAchievements.length) {
-    bcToast(`"${expectedTitle}" has achievements on Steam, but Game Center already has achievements listed — remove them first if you want to import from Steam.`);
-    return;
-  }
 
   const primaryLang = state.formData.primaryLanguage || 'en';
   state.macGameCenterAchievements = parsed.map(p => ({
