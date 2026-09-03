@@ -827,25 +827,31 @@ async function fetchSteamAchievementsPage(appId) {
 }
 
 /* Parses the achievements page's own markup (see fetchSteamAchievementsPage
-   above) — each achievement is one `.achieveRow` block containing an icon
-   image, an `<h3>` name, an `<h5>` description (present when the
-   achievement isn't flagged "hidden" in Steamworks, blank/absent
-   otherwise — the one signal this page gives us for Hidden, used by
-   _applySteamAchievements, app.js), and a percentage-of-players figure
-   rendered as plain text somewhere in the row (wording/placement varies
-   slightly across pages, so this only looks for the first "NN.N%"-shaped
-   number rather than anchoring to a specific wrapper element around it).
-   Deliberately split on the repeating "achieveRow" marker rather than
-   matched with a single balanced regex (like _parseSteamSocialLinks
-   above) — each row nests multiple divs of its own, which a regex can't
-   reliably bound without a real HTML parser, while splitting just needs
-   the next occurrence of the same marker (or end of document, for the
-   last row) as its natural boundary. Same "best-effort scrape of
-   undocumented, changeable markup" caveat as fetchSteamStorePage's own
-   comment — returns [] rather than throwing on a totally unrecognized
-   page shape, and simply skips any individual block missing a name.
-   Returns an array of { name, description, iconUrl, percent } in the
-   same order the page itself lists them (highest-unlocked-first). */
+   above) — verified live against Celeste (504230, 32/32 rows parsed
+   correctly) and Stardew Valley (413150, 49/49 rows parsed correctly,
+   correctly flagging its two well-known secret achievements "Legend" and
+   "Fector's Challenge" as Hidden) via a real browser session, since this
+   markup can't be reached from this codebase's own dev/CI tooling. Each
+   achievement is one `<div class="achieveRow ">` block containing an
+   `.achieveImgHolder > img`, an `.achieveTxtHolder` with an `.achieveFill`
+   progress-bar div (whose inline `width:NN%` style is a ROUNDED INTEGER —
+   deliberately not used for `percent` below), an `.achievePercent` div
+   holding the real one-decimal percentage text, and an `.achieveTxt` with
+   the `<h3>` name and an `<h5>` description. The `<h5>` is present when the
+   achievement isn't flagged "hidden" in Steamworks, and empty
+   (`<h5></h5>`) otherwise — confirmed against both games above — the one
+   signal this public page gives us for Hidden, used by
+   _applySteamAchievements (app.js). Deliberately split on the repeating
+   "achieveRow" marker rather than matched with a single balanced regex
+   (like _parseSteamSocialLinks above) — each row nests multiple divs of its
+   own, which a regex can't reliably bound without a real HTML parser, while
+   splitting just needs the next occurrence of the same marker (or end of
+   document, for the last row) as its natural boundary. Same "best-effort
+   scrape of undocumented, changeable markup" caveat as fetchSteamStorePage's
+   own comment — returns [] rather than throwing on a totally unrecognized
+   page shape, and simply skips any individual block missing a name. Returns
+   an array of { name, description, iconUrl, percent } in the same order the
+   page itself lists them (highest-unlocked-first). */
 function _parseSteamAchievements(html) {
   if (!html) return [];
   const decode = s => (s || '')
@@ -864,7 +870,12 @@ function _parseSteamAchievements(html) {
     const imgMatch  = row.match(/<img[^>]*\bsrc="([^"]+)"/);
     const nameMatch = row.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
     const descMatch = row.match(/<h5[^>]*>([\s\S]*?)<\/h5>/);
-    const pctMatch  = row.match(/(\d+(?:\.\d+)?)\s*%/);
+    // Anchored to the .achievePercent div specifically — NOT a bare
+    // "first NN.N%-shaped number in the row" scan, which would actually
+    // match the earlier .achieveFill progress-bar's rounded-integer
+    // `style="width: NN%"` first (e.g. "70%" instead of the real "70.7%"),
+    // confirmed live against Celeste's own markup above.
+    const pctMatch  = row.match(/achievePercent"[^>]*>\s*([\d.]+)\s*%/);
     const name = decode(nameMatch && nameMatch[1]);
     if (!name) continue; // malformed/unrecognized block — skip rather than push a nameless achievement
     out.push({
