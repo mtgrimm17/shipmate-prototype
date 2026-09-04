@@ -829,12 +829,13 @@ function buildObPlatTilesHTML() {
      added alongside .pg-6/.pg-3/.pg-2). The bare .platform-grid's
      repeat(4,1fr) is only the fallback.
 
-     Mac App Store Full's own tile (id: 'macos_full' above) is filtered out
-     here while it's hidden (HIDDEN_PLATFORMS, further up this file) —
-     bringing it back later is deleting this one .filter() line, not
-     re-adding the tile. Leaves exactly 7 tiles again (the count pg-7 was
-     already sized for, before macos_full made it 8 without the grid class
-     ever being bumped to match — this filter incidentally restores that). */
+     Mac App Store Full's own tile (id: 'macos_full' above) is un-hidden
+     now (HIDDEN_PLATFORMS, further up this file, is currently empty) —
+     the .filter() below is still here so hiding it again (or hiding some
+     future in-development platform) is a one-line HIDDEN_PLATFORMS change,
+     not re-wiring this. With all 8 tiles showing, the grid is pg-8 (see
+     this function's own closing div, further below) rather than the pg-7
+     it was sized for while macos_full was filtered out. */
   const tiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id)).map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -849,7 +850,7 @@ function buildObPlatTilesHTML() {
                     onclick="toggleOnboardingPlatform('${id}')"
                     data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="platform-grid pg-7">${tiles}</div>`;
+  return `<div class="platform-grid pg-8">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -1780,7 +1781,11 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // is walked (e.g. the Analysis folder's "Add Permissions" list,
 // buildPerfPermissions) — this only controls whether a hidden platform can
 // be newly selected/activated, not every place its id could ever appear.
-const HIDDEN_PLATFORMS = new Set(['macos_full']);
+// Empty for now — Mac App Store Full has been un-hidden (see its own
+// PLATFORMS_OB tile and grid-class comments, buildObPlatTilesHTML below);
+// this Set stays in place as the mechanism for hiding some future
+// in-development platform the same way.
+const HIDDEN_PLATFORMS = new Set([]);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
