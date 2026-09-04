@@ -6505,6 +6505,33 @@ function _masFieldAutoTranslateEnabled(field) {
 // sync — only ever called with field='description'|'releaseNotes' (Title/
 // Subtitle bypass to _iasSetFieldValue before reaching here), so no
 // shared/independent branching is needed inside this function itself.
+// Whether the Mac App Store's own Product Page Preview is currently open,
+// showing the un-flipped preview itself (not one of its flipped sub-sections
+// like Content Questions/Screenshots/etc.), AND previewing a non-primary
+// language — i.e. whether _masTriggerAutoTranslate's status line
+// (_masStatusLine, render.js — only ever visible for a non-primary preview
+// language) or the translated field text itself could actually be showing
+// right now. Guards _masTriggerAutoTranslate's reRenderStepModal() calls:
+// those fully replace #step-modal-body's DOM node (renderStepModal,
+// render.js), which is harmless while nothing it shows is changing, but
+// destroys any in-progress scroll/trackpad-momentum on the real, visible
+// preview when the user is actively scrolling it — the reported "unable to
+// scroll properly" bug. Selecting a language in Game Details - Localization
+// triggers a translation pass for every already-authored field
+// (toggleObLang → _propagateAllLocalizationFeatures → _masPropagateAllFields),
+// whose completion can land seconds later while the user has since moved on
+// to actually viewing the preview — but almost always still viewing the
+// PRIMARY language, for which this status line never shows at all, so most
+// of those re-renders were pure wasted DOM churn with nothing to show for
+// it. Skipping them entirely when they'd be invisible fixes the scroll
+// interruption without needing surgical DOM patching for the rarer visible
+// case, which still falls back to the normal full re-render below.
+function _masPreviewNeedsTranslateRefresh() {
+  if (state.stepModal?.platformId !== 'macos' || state.stepModal?.stepId !== 'storePreview') return false;
+  if (state.storePreviewFlipTarget?.macos) return false;
+  return _masEffectivePreviewLang() !== (state.formData.primaryLanguage || 'en');
+}
+
 async function _masTriggerAutoTranslate(field, primaryValue) {
   if (!_masFieldAutoTranslateEnabled(field)) return;
   const ml = state.macAppStoreListing;
@@ -6532,7 +6559,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _masLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _masLocReviewRefreshBackTranslation(field, lang, '');
     });
-    reRenderStepModal();
+    if (_masPreviewNeedsTranslateRefresh()) reRenderStepModal();
     return;
   }
 
@@ -6542,7 +6569,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
   state.masTranslateStatus[field] = 'loading';
   state.masTranslatePendingLangs = state.masTranslatePendingLangs || {};
   state.masTranslatePendingLangs[field] = eligible.slice();
-  reRenderStepModal();
+  if (_masPreviewNeedsTranslateRefresh()) reRenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -6611,7 +6638,7 @@ Rules:
   }
   state.masTranslatePendingLangs[field] = [];
 
-  reRenderStepModal();
+  if (_masPreviewNeedsTranslateRefresh()) reRenderStepModal();
 }
 
 function _masRetryTranslate(field) {
