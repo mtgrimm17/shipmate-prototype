@@ -763,10 +763,10 @@ const PLATFORMS = {
   // the other. Only the label differs ("Mac App Store" vs "App Store").
   macos: {
     id: 'macos', label: 'Mac App Store', color: '#007AFF',
-    // No 'gameCenter' step here (unlike macos_full's own steps list below) —
-    // removed as its own Submission step per request, now that Product Page
-    // Preview's Achievements card (buildMacStorePreviewSection, render.js)
-    // links straight into it. The step's content/id are otherwise fully
+    // No 'gameCenter' step here (same now true of macos_full's own steps
+    // list below too) — removed as its own Submission step per request, now
+    // that Product Page Preview's Achievements card (buildMacStorePreviewSection,
+    // render.js) links straight into it. The step's content/id are otherwise fully
     // intact and still reachable exactly as before: buildMacGameCenterSection
     // (render.js) still renders it, openStepModal('macos','gameCenter') still
     // opens it (that's exactly what the Achievements card calls), and
@@ -789,14 +789,22 @@ const PLATFORMS = {
   // match, the real App Store Connect section it corresponds to — Content
   // Rating is Apple's Age Rating questionnaire (still its own step, same as
   // every other platform, since it's a whole multi-part flow in its own
-  // right) and In-App Purchases/Subscriptions/Game Center are split out into
-  // their own steps rather than folded into one "Business Questions" modal
-  // the way ios/macos do it, so the platform card itself reads as a section-
-  // by-section checklist. Nothing here is shared with ios/macos's own
-  // fields — see macFullSubmitAnswers/macFullAnswerMeta/
-  // macFullAppStoreListing further below, and _appStoreAnswers (app.js),
-  // which resolves macos_full to its own answer objects the same way it
-  // already does for macos.
+  // right). Nothing here is shared with ios/macos's own fields — see
+  // macFullSubmitAnswers/macFullAnswerMeta/macFullAppStoreListing further
+  // below, and _appStoreAnswers (app.js), which resolves macos_full to its
+  // own answer objects the same way it already does for macos.
+  //
+  // No 'gameCenter' step here (same convention as macos's own steps list
+  // above) — removed as its own Submission step per request, now that
+  // Product Page Preview's Achievements card (buildMacFullStorePreviewSection,
+  // render.js) links straight into it. The step's content/id are otherwise
+  // fully intact and still reachable exactly as before:
+  // buildMacFullGameCenterSection (render.js) still renders it,
+  // openStepModal('macos_full','gameCenter') still opens it (that's exactly
+  // what the Achievements card calls), and isMacFullSectionComplete('gameCenter')
+  // (state.js) still answers `true` for it (Leaderboards are optional/
+  // non-blocking) — none of that reasoning changes, it's just no longer
+  // counted as one of this platform's own steps.
   macos_full: {
     id: 'macos_full', label: 'Mac App Store Full', color: '#007AFF',
     steps: [
@@ -805,7 +813,6 @@ const PLATFORMS = {
       { id: 'privacy',         label: 'App Privacy'                                   },
       { id: 'versionInfo',     label: 'Version Information'                           },
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
-      { id: 'gameCenter',      label: 'Game Center'                                   },
       { id: 'versionRelease',  label: 'Version Release'                               },
       { id: 'storePreview',    label: 'Product Page Preview'                          },
       { id: 'improveSubmission', label: 'Improve Your Submission'                     },

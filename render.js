@@ -4291,15 +4291,16 @@ function renderStepModal() {
     achievementLocalizations: 'Achievement Localizations',
   };
   const isFlipped = !!flipTarget;
-  // Game Center (macos, and now ios too) is not one of PLATFORMS.macos.steps/
-  // PLATFORMS.ios.steps at all — reached instead via Product Page Preview's
-  // Achievements card (see those arrays' own comments, state.js) — so `step`
-  // above is undefined whenever it's opened this way, and step?.label alone
-  // would render a blank modal title. Falls back to its own still-accurate,
-  // hardcoded label in that one case.
+  // Game Center (macos, ios, and now macos_full too) is not one of
+  // PLATFORMS.macos.steps/PLATFORMS.ios.steps/PLATFORMS.macos_full.steps at
+  // all — reached instead via Product Page Preview's Achievements card (see
+  // those arrays' own comments, state.js) — so `step` above is undefined
+  // whenever it's opened this way, and step?.label alone would render a
+  // blank modal title. Falls back to its own still-accurate, hardcoded
+  // label in that one case.
   const displayStepLabel = isFlipped
     ? (FLIP_LABELS[flipTarget] || step?.label)
-    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios') ? 'Game Center' : ''));
+    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
   // Step body
   let body = '';
@@ -6430,9 +6431,12 @@ function buildStorePreviewSection() {
   // buildMacStorePreviewSection's own achievementsHtml, added for full
   // feature parity with Mac App Store's Product Page Preview. See that
   // twin's own comment for the full rationale (static lock, no "chosen"
-  // achievement, etc.) — not re-explained here.
+  // achievement, etc.) — not re-explained here. Always shown, even with
+  // zero saved achievements yet (0 / 0) — this is a preview of the section
+  // developers can go set up, not a mirror of what a live product page
+  // would show for a game with none.
   const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.saved) : [];
-  const achievementsHtml = savedAchievements.length ? `
+  const achievementsHtml = `
         <div class="ias-section ias-achv-section" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
@@ -6453,7 +6457,7 @@ function buildStorePreviewSection() {
           </div>
         </div>
 
-        <div class="ias-section-divider"></div>` : '';
+        <div class="ias-section-divider"></div>`;
 
   return `
     <div class="ias-device-wrap">
@@ -6995,12 +6999,13 @@ function buildMacStorePreviewSection() {
     : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
 
   // Achievements — a Game Center widget preview, mirroring the real App
-  // Store product page's own "GAME CENTER / Achievements" card (a game with
-  // no achievements at all shows no widget there either, so this section
-  // renders nothing when there are no SAVED achievements yet — same
-  // persistent `.saved` flag buildMacGameCenterSection/hasSavedAchievements
-  // already use, NOT `.collapsed`, which just tracks whether a row's UI is
-  // currently expanded for editing). Clicking anywhere on the card jumps straight to the
+  // Store product page's own "GAME CENTER / Achievements" card. Always
+  // shown, even with zero SAVED achievements yet (same persistent `.saved`
+  // flag buildMacGameCenterSection/hasSavedAchievements already use, NOT
+  // `.collapsed`, which just tracks whether a row's UI is currently
+  // expanded for editing) — this is a preview of the section developers
+  // can go set up, not a mirror of what a live product page would show for
+  // a game with none. Clicking anywhere on the card jumps straight to the
   // Game Center step (openStepModal — the same function the platform
   // card's own step buttons use), replacing this modal's content in place;
   // it does NOT flip within Store Preview the way Content/Business's own
@@ -7017,7 +7022,7 @@ function buildMacStorePreviewSection() {
   // surfaces; this always shows a static lock rather than picking a
   // "chosen" achievement to name-drop.
   const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.saved);
-  const achievementsHtml = savedAchievements.length ? `
+  const achievementsHtml = `
         <div class="ias-section ias-achv-section" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
@@ -7038,7 +7043,7 @@ function buildMacStorePreviewSection() {
           </div>
         </div>
 
-        <div class="ias-section-divider"></div>` : '';
+        <div class="ias-section-divider"></div>`;
 
   return `
     <div class="ias-device-wrap">
@@ -10245,7 +10250,11 @@ function buildMacFullSubscriptionsSection() {
    Leaderboards is a simplified repeatable list (per the "simplified but
    functional" design decision) rather than Apple's own per-item
    localization/image-upload flow. Multiplayer and Achievements fields
-   were removed from this section per a later design decision. */
+   were removed from this section per a later design decision. No longer
+   one of PLATFORMS.macos_full.steps (see that array's own comment,
+   state.js) — reached instead via Product Page Preview's Achievements card
+   (buildMacFullStorePreviewSection's own achievementsHtml), same convention
+   macos/ios already use for their own Game Center. */
 function buildMacFullGameCenterSection() {
   const gc = state.macFullSubmitAnswers.gameCenter;
 
@@ -10669,6 +10678,40 @@ function buildMacFullStorePreviewSection() {
        <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
     : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
 
+  // Achievements — feature-complete copy of buildMacStorePreviewSection's own
+  // achievementsHtml (see that twin's comment for the full rationale: static
+  // lock, no "chosen" achievement, always shown even with zero saved
+  // achievements, etc. — not re-explained here). macos_full's own Game
+  // Center no longer has an Achievements list of its own (removed along
+  // with Multiplayer, an earlier request) — only Leaderboards remain, moved
+  // here from the old standalone Game Center step (see buildMacFullGameCenterSection) —
+  // so savedAchievements is always empty and this always reads "0 / 0", same
+  // as it would for any real game with none. Clicking the card still opens
+  // Game Center (openStepModal('macos_full','gameCenter')), same as macos/ios.
+  const savedAchievements = (state.macFullSubmitAnswers.gameCenter.achievements || []).filter(a => a.saved);
+  const achievementsHtml = `
+        <div class="ias-section ias-achv-section" onclick="openStepModal('macos_full','gameCenter')" title="View Game Center">
+          <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
+          <div class="ias-achv-title">Achievements</div>
+          <div class="ias-achv-card">
+            <div class="ias-achv-thumbs">
+              <div class="ias-achv-thumb ias-achv-thumb-back"></div>
+              <div class="ias-achv-thumb ias-achv-thumb-front">
+                <div class="ias-achv-lock-circle">
+                  <svg viewBox="0 0 12 14" fill="none" width="13" height="15"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="ias-achv-progress">
+              <span class="ias-achv-count">0<span class="ias-achv-total"> / ${savedAchievements.length}</span></span>
+              <span class="ias-achv-completed">Completed</span>
+            </div>
+            <svg class="ias-achv-chevron" viewBox="0 0 8 14" fill="none" width="6" height="11"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>`;
+
   return `
     <div class="ias-device-wrap">
       <div class="ias-label-row">
@@ -10736,6 +10779,8 @@ function buildMacFullStorePreviewSection() {
         </div>
 
         <div class="ias-section-divider"></div>
+
+        ${achievementsHtml}
 
         <!-- ── What's New ── -->
         <div class="ias-section">
