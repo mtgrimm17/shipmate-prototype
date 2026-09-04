@@ -587,17 +587,46 @@ function webPageBindDock() {
 /* An upload is the developer choosing, and it outranks anything fetched. Held
    as a data: URL on webSite.page.artOverride so the store's own art stays
    intact underneath — "use the store art" is then a revert, not a re-download. */
+/* ── PICKING A FILE ───────────────────────────────────────────────────────
+   THE INPUT IS PUT IN THE DOCUMENT, and that is the whole fix.
+
+   A file input created and clicked without ever being inserted is reachable
+   only from its own change handler, which the input in turn holds — a cycle
+   with no root outside itself. The file dialog is modal and can sit open for
+   as long as it takes to find a picture, and in that window the pair can be
+   collected: the dialog still opens, you still choose a file, and the change
+   event never arrives. Nothing errors; the upload just silently does nothing,
+   which is exactly what it looked like.
+
+   Attaching it gives it a root. It is removed again once the choice is made
+   or the dialog is dismissed, so nothing accumulates.
+
+   `cancel` matters too: without it, dismissing the dialog would leave the
+   input attached forever, one per attempt. */
 function wpReadImage(then) {
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
-  inp.onchange = () => {
+  inp.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0';
+  document.body.appendChild(inp);
+
+  const cleanup = () => { if (inp.parentNode) inp.parentNode.removeChild(inp); };
+
+  inp.addEventListener('change', () => {
     const f = inp.files && inp.files[0];
+    cleanup();
     if (!f) return;
     const r = new FileReader();
-    r.onload = () => { then({ name: f.name, dataUrl: r.result }); webPageRedraw(); };
+    r.onerror = () => console.error('web page: could not read', f.name);
+    r.onload  = () => { then({ name: f.name, dataUrl: r.result }); webPageRedraw(); };
     r.readAsDataURL(f);
-  };
+  });
+  // Fires when the picker is dismissed without choosing. Not in every browser,
+  // hence the timeout as a floor — an orphan input costs nothing but it is
+  // still litter in the DOM.
+  inp.addEventListener('cancel', cleanup);
+  setTimeout(cleanup, 5 * 60 * 1000);
+
   inp.click();
 }
 
