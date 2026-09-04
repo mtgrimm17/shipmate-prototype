@@ -11085,6 +11085,11 @@ function buildMacFullStorePreviewSection() {
   const businessDone    = !!(seenSections.business && isMacFullSectionComplete('business'));
   const dataDone        = isMacFullSectionComplete('privacy');
   const screenshotsDone = isMacFullSectionComplete('screenshots');
+  // Same "seen && complete" gate as Business — isMacFullSectionComplete('appInformation')
+  // is always true (see its own comment, state.js), so this reduces to
+  // "has the user visited the new App Information section yet" (drives the
+  // Information card's glow-until-visited treatment, below).
+  const infoDone        = !!(seenSections.appInformation && isMacFullSectionComplete('appInformation'));
 
   function _sppBtn(target, label, sub, isDone) {
     if (isDone) {
