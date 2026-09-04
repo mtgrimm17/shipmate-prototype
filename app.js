@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // when the lane above the fab exists — the loop no-ops otherwise.
   if (typeof bubbleLoop === 'function') bubbleLoop();
   initSubnavDebugToggle();
+  initWebPagePreviewToggle();
   initCalendarKeys();
   // Boot straight into the app (title bar persists) with the splash view showing.
   bootApp();
@@ -14970,6 +14971,84 @@ function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};
   state.webSite.accent = color;
   reRenderStepModal();
+}
+
+/* ── The switch between the two marketing-page designs ─────
+   Ctrl+Shift+W. Session-only and deliberately not persisted, like the Ctrl+D
+   sub-nav toggle above it: a switch that survives a reload is a switch
+   somebody forgets they left on, and then reports the other design's bugs.
+
+   In place rather than in the URL because nothing here is persisted — a
+   reload wipes the submission, so a flag you can only change by reloading
+   would mean re-linking the Steam page every time you wanted to compare.
+
+   TEMPORARY. When one design wins, delete this function, its call in
+   bootApp, state.webPageNew, and the branch at the top of
+   buildWebSitePreviewSection. */
+function initWebPagePreviewToggle() {
+  state.webPageNew = false;
+  document.addEventListener('keydown', e => {
+    if (!e.ctrlKey || !e.shiftKey || e.metaKey || e.altKey) return;
+    if ((e.key || '').toLowerCase() !== 'w') return;
+    e.preventDefault();
+    state.webPageNew = !state.webPageNew;
+    // Leaving the design leaves whatever was selected in it: coming back to
+    // find a zone still lit, with a dock over a page you have not touched in
+    // a while, is a state nobody asked for.
+    state.webPageSel = null;
+    // Only redraws if a step modal is actually open, which is the only place
+    // either design is visible.
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  });
+}
+
+/* ── The marketing page's PRESENTATION setters ─────────────
+   The siblings above write content — words a developer types into a form.
+   These write the decisions they make by looking at the page: where the key
+   art sits, which sections are drawn, whether the hero shows a button or the
+   store marks. See the note above state.webSite.page for why the two are
+   kept apart.
+
+   No re-render here either, and for a sharper reason than focus loss: these
+   are driven by dragging, and a drag fires continuously. Re-rendering the
+   modal on every pointermove would rebuild the very node being dragged. The
+   page updates itself live through CSS custom properties; this only records
+   where the gesture ended. */
+function _webPage() {
+  if (!state.webSite) state.webSite = {};
+  // Defensive rather than decorative: a project saved before this field
+  // existed deserializes without it, and every reader below would then be
+  // writing onto undefined.
+  if (!state.webSite.page) state.webSite.page = {};
+  return state.webSite.page;
+}
+
+function setWebPageField(key, value) {
+  _webPage()[key] = value;
+}
+
+/* Nested one level down, so the art's four values can be set together after a
+   drag or a zoom without three separate calls and three separate chances to
+   forget one. */
+function setWebPageArt(patch) {
+  const p = _webPage();
+  p.art = Object.assign({ ox: 0, oy: 0, zoom: 100, fit: 'fill' }, p.art, patch || {});
+}
+
+function setWebPageSection(id, shown) {
+  const p = _webPage();
+  if (!p.sections) p.sections = {};
+  p.sections[id] = !!shown;
+}
+
+/* Metadata rows are hidden BY LABEL, not by index: the band drops rows whose
+   field is empty, so a row's position moves the moment a developer fills in
+   their publisher. An index would silently start hiding a different row. */
+function toggleWebPageRow(label, hidden) {
+  const p = _webPage();
+  const rows = new Set(p.hiddenRows || []);
+  if (hidden) rows.add(label); else rows.delete(label);
+  p.hiddenRows = [...rows];
 }
 
 /* Factsheet > Developer > Links sub-section — the social-links list
