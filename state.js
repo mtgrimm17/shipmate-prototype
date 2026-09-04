@@ -1402,7 +1402,7 @@ function makeBlankMacFullAnswers() {
 
     // Game Center
     gameCenter: {
-      leaderboards: [],   // { id, name, gcId, scoreFormat }
+      leaderboards: [],   // { id, name, gcId, scoreFormat, collapsed, saved } — collapsed/saved drive the same collapse-on-save, one-expanded-at-a-time, drag-to-reorder presentation as macFullGameCenterAchievements (see addMacFullLeaderboard/saveMacFullLeaderboard, app.js)
       achievements: [],   // { id, name, description, points, hidden }
       multiplayer:  { enabled: false, minPlayers: null, maxPlayers: null },
     },

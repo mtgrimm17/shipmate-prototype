@@ -1679,8 +1679,18 @@ function setMacFullSubTierField(groupId, tierId, key, value) {
 }
 
 /* ── Mac App Store Full — Game Center ────────────────────────────────── */
+/* Leaderboards — collapse-on-save, one-expanded-at-a-time, drag-to-reorder
+   presentation, mirroring the Achievements cluster above
+   (addMacFullGameCenterAchievement through macFullGcAchievementDragEnd):
+   same "only one expanded at a time" invariant enforced by
+   _collapseOtherMacFullLeaderboards, same Name-required collapse gate in
+   saveMacFullLeaderboard, same drag-to-reorder mechanics. */
 function addMacFullLeaderboard() {
-  state.macFullSubmitAnswers.gameCenter.leaderboards.push({ id: generateId('lb'), name: '', gcId: '', scoreFormat: 'Integer' });
+  _collapseOtherMacFullLeaderboards(null);
+  state.macFullSubmitAnswers.gameCenter.leaderboards.push({
+    id: generateId('lb'), name: '', gcId: '', scoreFormat: 'Integer',
+    collapsed: false, saved: false,
+  });
   reRenderStepModal();
 }
 function removeMacFullLeaderboard(id) {
@@ -1693,6 +1703,60 @@ function setMacFullLeaderboardField(id, key, value) {
   if (!lb) return;
   lb[key] = value;
   if (key === 'scoreFormat') reRenderStepModal();
+}
+function _collapseOtherMacFullLeaderboards(keepId) {
+  state.macFullSubmitAnswers.gameCenter.leaderboards
+    .filter(l => l.id !== keepId && !l.collapsed)
+    .forEach(l => saveMacFullLeaderboard(l.id));
+}
+function expandMacFullLeaderboard(id) {
+  _collapseOtherMacFullLeaderboards(id);
+  const lb = state.macFullSubmitAnswers.gameCenter.leaderboards.find(l => l.id === id);
+  if (lb) lb.collapsed = false;
+  reRenderStepModal();
+}
+function saveMacFullLeaderboard(id) {
+  const lb = state.macFullSubmitAnswers.gameCenter.leaderboards.find(l => l.id === id);
+  if (!lb || !lb.name.trim()) return;
+  lb.collapsed = true;
+  lb.saved = true;
+  reRenderStepModal();
+}
+
+let _macFullLbDragId = null;
+function macFullLbDragStart(ev, id) {
+  _macFullLbDragId = id;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', id);
+  ev.currentTarget.classList.add('is-dragging');
+}
+function macFullLbDragOver(ev, id) {
+  if (!_macFullLbDragId || _macFullLbDragId === id) return;
+  ev.preventDefault(); // required for drop to fire
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('is-drop');
+}
+function macFullLbDragLeave(ev) {
+  ev.currentTarget.classList.remove('is-drop');
+}
+function macFullLbDrop(ev, id) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('is-drop');
+  const fromId = _macFullLbDragId || ev.dataTransfer.getData('text/plain');
+  macFullLbDragEnd();
+  if (!fromId || fromId === id) return;
+  const list = state.macFullSubmitAnswers.gameCenter.leaderboards;
+  const fromIdx = list.findIndex(l => l.id === fromId);
+  const toIdx   = list.findIndex(l => l.id === id);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const [moved] = list.splice(fromIdx, 1);
+  list.splice(toIdx, 0, moved);
+  reRenderStepModal();
+}
+function macFullLbDragEnd() {
+  _macFullLbDragId = null;
+  document.querySelectorAll('.macfull-lb-row.is-dragging, .macfull-lb-row.is-drop')
+    .forEach(el => el.classList.remove('is-dragging', 'is-drop'));
 }
 
 /* ── Mac App Store Full — App Review Information ─────────────────────── */

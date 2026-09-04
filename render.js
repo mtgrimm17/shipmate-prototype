@@ -10516,25 +10516,58 @@ function buildMacFullSubscriptionsSection() {
 }
 
 /* ── Mac App Store Full — Game Center ────────────────────────────────────
-   Leaderboards is a simplified repeatable list (per the "simplified but
-   functional" design decision) rather than Apple's own per-item
-   localization/image-upload flow. Multiplayer was removed from this
-   section per a later design decision. Achievements is a full-featured
-   list — same shape/mechanics as Mac App Store's own Game Center
-   (_macFullGcAchievementCollapsedRow/_macFullGcAchievementExpandedRow,
-   above — added for full feature parity with Mac App Store's Game
-   Center), including its own "Achievement Localizations" sub-section
-   (buildMacFullAchievementLocalizationsSection, further below). No longer
-   one of PLATFORMS.macos_full.steps (see that array's own comment,
-   state.js) — reached instead via Product Page Preview's Achievements card
-   (buildMacFullStorePreviewSection's own achievementsHtml), same convention
-   macos/ios already use for their own Game Center. */
-function buildMacFullGameCenterSection() {
-  const gc = state.macFullSubmitAnswers.gameCenter;
+   Leaderboards is a repeatable list (per the "simplified but functional"
+   design decision) rather than Apple's own per-item localization flow, but
+   its presentation now mirrors Achievements: collapse-on-save, only one
+   expanded at a time, drag-to-reorder, collapsed rows showing the
+   leaderboard's Name (_macFullLbCollapsedRow/_macFullLbExpandedRow, further
+   below). Multiplayer was removed from this section per a later design
+   decision. Achievements is a full-featured list — same shape/mechanics as
+   Mac App Store's own Game Center (_macFullGcAchievementCollapsedRow/
+   _macFullGcAchievementExpandedRow, above — added for full feature parity
+   with Mac App Store's Game Center), including its own "Achievement
+   Localizations" sub-section (buildMacFullAchievementLocalizationsSection,
+   further below). No longer one of PLATFORMS.macos_full.steps (see that
+   array's own comment, state.js) — reached instead via Product Page
+   Preview's Achievements card (buildMacFullStorePreviewSection's own
+   achievementsHtml), same convention macos/ios already use for their own
+   Game Center. */
+/* Leaderboards' own collapsed/expanded row builders — same collapse-on-save,
+   one-expanded-at-a-time, drag-to-reorder presentation as the Achievements
+   row builders above (_macFullGcAchievementCollapsedRow/
+   _macFullGcAchievementExpandedRow), reading/writing
+   state.macFullSubmitAnswers.gameCenter.leaderboards and calling the
+   "MacFullLb"-prefixed app.js cluster instead of the "MacFullGc"-prefixed
+   one. Collapsed rows show the leaderboard's Name (its one player-facing
+   identity in this list), same as Achievements shows Display Name. */
 
-  const leaderboardsHTML = (gc.leaderboards || []).map(lb => `
-    <div class="iap-product-row" data-iap-id="${lb.id}">
-      <button class="iap-product-remove" type="button" onclick="removeMacFullLeaderboard('${lb.id}')" title="Remove leaderboard" aria-label="Remove leaderboard">✕</button>
+function _macFullLbCollapsedRow(lb) {
+  const displayName = (lb.name || '').trim() || 'Untitled Leaderboard';
+  const badges = lb.scoreFormat ? escHtml(lb.scoreFormat) : '';
+  return `
+    <div class="iap-product-row macfull-lb-row is-collapsed" data-lb-id="${lb.id}" style="display:flex;align-items:center;gap:10px;"
+         draggable="true"
+         onclick="expandMacFullLeaderboard('${lb.id}')"
+         ondragstart="macFullLbDragStart(event,'${lb.id}')"
+         ondragover="macFullLbDragOver(event,'${lb.id}')"
+         ondragleave="macFullLbDragLeave(event)"
+         ondrop="macFullLbDrop(event,'${lb.id}')"
+         ondragend="macFullLbDragEnd()">
+      <span style="cursor:grab;color:var(--text-faint);font-size:14px;line-height:1;" title="Drag to reorder">⠿</span>
+      <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
+      <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacFullLeaderboard('${lb.id}')" title="Remove leaderboard" aria-label="Remove leaderboard">✕</button>
+    </div>`;
+}
+
+function _macFullLbExpandedRow(lb) {
+  const headerLabel = (lb.name || '').trim() || 'New Leaderboard';
+  return `
+    <div class="iap-product-row macfull-lb-row" data-lb-id="${lb.id}" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveMacFullLeaderboard('${lb.id}')" title="Click to collapse">
+        <span class="iap-product-name-collapsed">${escHtml(headerLabel)}</span>
+        <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacFullLeaderboard('${lb.id}')" title="Remove leaderboard" aria-label="Remove leaderboard">✕</button>
+      </div>
+
       <div class="iap-product-field">
         <label class="form-label">Name</label>
         <input class="form-input" type="text" value="${escHtml(lb.name)}" placeholder="e.g. Global High Scores"
@@ -10551,7 +10584,20 @@ function buildMacFullGameCenterSection() {
           ${MAC_FULL_SCORE_FORMATS.map(f => `<option value="${f}" ${lb.scoreFormat === f ? 'selected' : ''}>${f}</option>`).join('')}
         </select>
       </div>
-    </div>`).join('');
+
+      <div class="iap-product-actions" style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacFullLeaderboard('${lb.id}')" ${!lb.name.trim() ? 'disabled' : ''}>Save</button>
+      </div>
+    </div>`;
+}
+
+function buildMacFullGameCenterSection() {
+  const gc = state.macFullSubmitAnswers.gameCenter;
+
+  const leaderboardsHTML = (gc.leaderboards || []).map(lb => lb.collapsed
+      ? _macFullLbCollapsedRow(lb)
+      : _macFullLbExpandedRow(lb)
+    ).join('');
 
   const achievements = state.macFullGameCenterAchievements || [];
   const hasSavedAchievements = achievements.some(a => a.saved);
