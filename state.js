@@ -2991,6 +2991,23 @@ const state = {
          by a shadow — only by knocking it out. */
       logo: null,
       logoTint: 'original',
+      // Whether the supplied logotype is drawn. Separate from having one, so
+      // turning it off is not the same as throwing the file away.
+      logoShow: true,
+      // The hero tagline. It draws the Hook rather than a line of its own —
+      // see the note in web-page.js — so this is only whether it is shown.
+      hookShow: false,
+      // The game's name set in type over the art. ON, and the one in this
+      // group you might switch off: key art that already carries a logotype
+      // does not need the name a second time.
+      titleShow: true,
+
+      /* Where the two free pieces were dragged to, as { x, top, align } in
+         percentages of the hero's stage. Null means "never moved", which is
+         not the same as being at 50/50: an unplaced piece is laid out by the
+         opening arrangement, a placed one is left exactly where it was put. */
+      logoPos: null,
+      hookPos: null,
 
       // An alternative background, when the store's own art is not what the
       // developer wants on their site. Held separately from

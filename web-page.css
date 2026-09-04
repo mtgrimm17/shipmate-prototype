@@ -1,0 +1,983 @@
+/* ==========================================================================
+   THE MARKETING PAGE — [gamename].shipmate.games
+   ==========================================================================
+
+   Extracted from web-templates-mockup.html, where this layout was designed
+   against real Steam data before being wired to the submission. What came
+   across is only what draws the page: every rule here is scoped under #site,
+   which appears nowhere else in style.css, so nothing in this file can reach
+   the rest of Shipmate and nothing in style.css can reach the page.
+
+   What did NOT come across, and why:
+     · the mockup's own chrome — its dev bar, floating toolbar, dock and fake
+       browser frame. Adam's preview already has a browser frame (.pk-browser-
+       frame) and we use his;
+     · the Boutique and Arcade skins, ~150 rules. One page, one look;
+     · Press and Factsheet. No field holds press quotes and inventing them for
+       a real game is the worst thing this page could print; the factsheet
+       lost to the metadata band above it, same fields, same source;
+     · the editing affordances (.sel, [data-edit], the hover wash). They are
+       phase two, and left in they would fire on a page nobody can edit yet.
+
+   THE VARIABLES the page runs on, set on #site by the renderer:
+     --a    accent — section labels
+     --cta  the buy button's colour
+     --sc   scrim strength, 0–1 — how far the key art is darkened under the
+            title. Fixed at .50: how dark white type needs its ground to be is
+            a typographic fact, not a preference.
+   ========================================================================== */
+
+/* ==========================================================================
+   THE GENERATED SITE
+   --a accent      --cta buy-button colour      --sc scrim strength (0–1)
+   ========================================================================== */
+/* The page is a CONTAINER, and every responsive rule below queries it rather
+   than the window. That is not pedantry here: the page lives inside a
+   Shipmate panel whose width the bottom bar changes, so a @media rule keyed to
+   the browser window would keep reporting "desktop" while the page was being
+   squeezed to 420px, and nothing would reflow. Container queries ask the only
+   question that matters — how much room did the panel actually give me. */
+#site{--a:#52BAFF; --cta:#FF4D8D; --sc:.85; position:relative; min-height:100%;
+      container-type:inline-size; container-name:page;
+      /* THE MEASURE. One centred column governs every section — and, via
+         .hero-stage below, the logo and button too. --pad is each skin's own
+         gutter, declared per skin so the stage can subtract exactly the same
+         one the content bands use. */
+      /* TWO measures, on purpose.
+         --page    the full column: key art, screenshots, press — anything the
+                   eye scans rather than reads.
+         --measure the reading column: the description, and now the metadata
+                   band with it, so their left and right edges line up instead
+                   of the band overhanging the text it sits above.
+         Each skin declares its own --measure to match wherever its description
+         actually lands. */
+      --page:1200px; --measure:800px; --pad:clamp(20px,5vw,60px);
+      /* What the hero's stage must inset itself by. Equals --pad when the
+         hero runs full bleed, and 0 when the skin already gives the hero a
+         margin of its own — see .hero-stage. */
+      --stage-pad:var(--pad);
+      /* THE HERO'S HEIGHT. One number, honoured by all three skins, so the key
+         art is always the same size whichever look is picked. The skins used
+         to each set their own (a vh-clamp here, an aspect-ratio there), which
+         meant the art changed size when you only meant to change the styling.
+
+         625, not 800: on a 13" laptop the browser gives a page roughly 700–750
+         css px of height, so an 800px hero filled the whole first screen and
+         the page looked like it ended there. At 625 the top of the metadata
+         band shows under it — enough to say "keep going" without stealing from
+         the art. The one exception is fit:'whole', where the art's own
+         proportions decide the height instead. */
+      --hero-h:625px}
+
+/* And 50px less again on a short screen. This is the one place a viewport query
+   is right rather than a container query: every other rule in this file asks how
+   WIDE the panel is, but this one is about how much vertical room the reader
+   actually has — which the container cannot tell us, because the page scrolls
+   inside it and reports the height it wants, not the height it gets.
+   860px is where a 13" laptop lands once the OS bar, the browser chrome and
+   Shipmate's own frame have taken their share. */
+@media (max-height:860px){ #site{--hero-h:575px} }
+
+/* AND 50px LESS AGAIN WHEN THE PANEL IS NARROW.
+
+   Two independent reasons to shorten the header, worth 50px each, and they
+   stack: a short screen has less room to give it, and a narrow panel — 800px,
+   the pages pill in Shipmate — is not showing the art at anything like the
+   size it was cropped for, so the art earns less of the fold and the content
+   below it should come up to meet the reader.
+
+   The cut lives on .hero rather than on #site because a container query styles
+   the DESCENDANTS of its container, never the container itself — and #site is
+   the container. Substituting on .hero is what makes the override actually
+   take. */
+#site .hero{--hero-cut:0px}
+
+@container page (max-width:820px){ #site .hero{--hero-cut:50px} }
+
+#site *{box-sizing:border-box}
+
+/* Kill the browser's native image drag. Without this, pressing on the key art
+   starts Chrome's own drag-and-drop with a translucent ghost of the image, the
+   pointer stream is hijacked, and the pan only begins after you let go and
+   press a second time. The crop tool avoids it by putting pointer-events:none
+   on .shot-edit-img; here the art itself has to stay the drag target, so it is
+   suppressed directly instead (plus draggable="false" and a dragstart guard —
+   all three are needed to cover every browser). */
+#site img{display:block;max-width:100%;-webkit-user-drag:none;user-select:none}
+
+#site .hero{user-select:none;-webkit-user-select:none}
+
+#site .kart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+/* THE KEY ART ITSELF is placeable — pan and zoom, on the hero's direct child
+   only (screenshots and the video poster reuse .kart and must not inherit the
+   hero's framing).
+
+   TWO properties, because they do genuinely different things:
+
+   · object-position MOVES THE CROP inside the box. With object-fit:cover the
+     picture is scaled to fill and the excess is clipped AT THE ELEMENT'S EDGE,
+     so this is the only way to choose which part of it you see. It reveals
+     more art, and it can never leave a gap: 0% and 100% are the picture's own
+     edges. This is what dragging should spend itself on first.
+   · transform:translate MOVES THE WHOLE ELEMENT, clipped content and all. It
+     reveals nothing — it slides the already-cropped picture out of the window
+     and leaves empty space behind. Useless for reframing, which is what the
+     first version of this got wrong: it panned with translate, so dragging
+     shifted the picture instead of choosing the crop. It is kept only to reach
+     the extra overflow that ZOOM creates, where there is no cover slack left
+     to spend.
+
+   So a drag fills the cover slack first (real reframing) and only then starts
+   translating (the zoomed overflow). See applyArtPan. */
+#site .hero{--tx:0px;--ty:0px;--az:1}
+
+#site .hero > .kart{transform:translate(var(--tx),var(--ty)) scale(var(--az));transform-origin:center}
+
+/* THE HERO STAGE — the content column, projected onto the key art.
+   The art itself stays full bleed; that is what a hero is for. But the logo and
+   the button are positioned against THIS box, not against the artwork, because
+   their percentages have to mean the same thing as the layout underneath: put
+   the logotype on the left third and it lands on the left third of the text
+   column below it, at every window width. Position them against the full-bleed
+   art instead and the alignment drifts apart the wider the screen gets, which
+   is exactly the bug this prevents.
+   pointer-events:none so it never intercepts a press meant for panning the art
+   — only its children take the pointer back. */
+#site .hero-stage{
+  position:absolute;top:0;bottom:0;left:0;right:0;margin:0 auto;
+  /* --measure, NOT --page. The reading column is where the metadata band, the
+     description and the screenshots actually sit, so it is what the eye reads
+     as the page's margin. Measuring the hero against the full 1200 column put
+     its left edge 200px outside the content in Classic: a logotype flush to
+     the stage looked flush to nothing, and hung off the side of the page it
+     was supposed to line up with.
+     It also bounds the drag, since positions are clamped to the stage — so
+     nothing can be placed outside the margins by hand either.
+
+     --stage-pad, not --pad: in Classic the hero is full bleed, so the stage has
+     to inset itself by the page gutter to line up with the bands below. In
+     Boutique and Arcade the hero is a slab with its OWN margin, which already
+     is that gutter — subtracting --pad again inset the hero column by a second
+     gutter, and the title sat a margin's width inside the metadata beneath it.
+     So those skins set --stage-pad to 0 and let their margin do the work. */
+  width:min(calc(100% - 2 * var(--stage-pad)), var(--measure));
+  pointer-events:none;
+}
+
+#site .hero-stage > *{pointer-events:auto}
+
+/* ── 1 · HERO — two independent, draggable elements ───────────────────────── */
+/* The logotype and the CTA are separate: a call to action is not part of the
+   logo, and pinning them together meant you could never put the button in the
+   clear space the art actually leaves you. Each keeps its own x/y as a
+   percentage of the hero box, so both survive every viewport width. */
+#site .el{
+  position:absolute; z-index:5; cursor:grab; user-select:none;
+  /* ANCHORED, on both axes, to the edge it was aligned to.
+
+     Vertically that is always the top: when an element's height changes — the
+     tagline rewrapping, the logotype resized — a centre anchor grows it in
+     both directions and shifts everything lined up against it.
+
+     Horizontally the anchor follows the alignment. A left-aligned element is
+     anchored by its LEFT edge, so making it bigger grows it rightward and it
+     stays flush to the margin. Anchoring everything by the centre, which is
+     what this did, meant a left-aligned tagline drifted off the margin the
+     moment you touched its size slider — the same bug as the vertical one,
+     left uncorrected on the other axis. */
+  transform:translate(-50%,0);
+  /* REQUIRED, not cosmetic. With only `left` set, an absolutely positioned box
+     is sized shrink-to-fit, and its "available width" is the gap from `left` to
+     the containing block's right edge. Dragging rightwards shrinks that gap,
+     the box shrinks with it, and the global `#site img{max-width:100%}` then
+     crushes the logotype against the new parent width — the logo visibly shrank
+     as it moved right. translate(-50%,-50%) runs after layout, so it cannot
+     undo any of it. `max-content` makes the width intrinsic and independent of
+     available space. Overflowing the hero at the extremes is fine: the drag
+     clamps to 4–96% and the hero clips. */
+  width:max-content; max-width:none;
+}
+
+/* Same as the crop tool: the pointer belongs to the wrapper, and the artwork
+   inside must not swallow the press (cf. .shot-edit-img's pointer-events:none
+   in style.css). Text stays clickable so the caret can still land in it. */
+/* The anchor still moves the box; the TEXT is left in all three cases. A line
+   of type centred inside its own box, sitting inside a hero that is already
+   composed, only ever looks like a mistake. */
+#site .el{text-align:left}
+
+#site .el[data-align=left]  {transform:translate(0,0)}
+
+#site .el[data-align=center]{transform:translate(-50%,0)}
+
+#site .el[data-align=right] {transform:translate(-100%,0)}
+
+#site .el img{pointer-events:none}
+
+/* Only what can actually be dragged says so. The title and the button are
+   placed by the layout — see FIXED — so they show a pointer rather than a hand
+   promising a move that will not happen. */
+#site .el.fixed{cursor:pointer}
+
+#site.dragging .el.drag{cursor:grabbing}
+
+/* NO padding. It was here to give the selection outline room, which
+   outline-offset already does — and its only other effect was to hold the
+   letters 10px inside the element's own box, so a logotype flush to the
+   margin still had its ink indented from the metadata band below it. With
+   the padding gone the box edge IS the ink edge, and every alignment —
+   dragged, buttoned or from a layout — lands the letters on the margin. */
+#site .logo-el{color:#fff}
+
+#site .logo-el .logo-ink{position:relative;display:block;overflow:visible}
+
+#site .logo-el .logo-ink img{position:absolute;display:block;height:auto;max-width:none}
+
+/* SHADOW, and one TINT.
+   One --sh (0–1) drives offset, blur and alpha together, so the slider moves
+   along a single believable curve instead of exposing three numbers nobody
+   wants to balance by hand. drop-shadow (not box-shadow) follows the alpha
+   channel, so it hugs the glyphs of a transparent PNG rather than boxing it.
+
+   The tint is Original or White, and nothing else. It was cut once for being
+   clutter and came back the moment a real asset needed it: Chants of Sennaar's
+   logotype is dark, and on its own dark key art it disappears. No shadow can
+   fix dark-on-dark — the only move is to knock the artwork out to white.
+   brightness(0) crushes any colour to black and invert(1) lifts it to white,
+   so this works on a coloured logotype too, not only a black one. Note both
+   filters have to be declared in ONE property: a second `filter` on the same
+   element replaces the first rather than adding to it, which would silently
+   drop the shadow. */
+#site .logo-el{--sh:.5}
+
+#site .logo-el[data-tint=original] img{
+  filter:drop-shadow(0 calc(var(--sh) * 14px) calc(var(--sh) * 34px) rgba(0,0,0,calc(var(--sh) * .8)));
+}
+
+#site .logo-el[data-tint=white] img{
+  filter:brightness(0) invert(1)
+         drop-shadow(0 calc(var(--sh) * 14px) calc(var(--sh) * 34px) rgba(0,0,0,calc(var(--sh) * .8)));
+}
+
+/* Weight is a choice, not a constant. 800 was too heavy for most key art —
+   over a painted scene a heavy face reads as shouting — but a thin one loses
+   against busy artwork, so the range on offer is Medium to Bold rather than
+   the whole scale. Tracking tightens as the weight goes up, which is what
+   keeps a heavy setting from looking loose. *//* THE TITLE SIZES WITH THE PAGE, not with the screen. 64px was a constant, and
+   at 1440 that is right — but the frame this editor actually gets in Shipmate
+   is 800px wide, where a long name ("CHANTS OF SENNAAR") set at 64px runs
+   straight into the Buy pill it is supposed to share a line with.
+
+   cqw, not vw: the page is a container, and what matters is how wide the PANEL
+   is, not the window around it. The clamp keeps 64px wherever there is room
+   and never goes below something readable. --tz, the size slider, still
+   multiplies on top, so the developer's own choice is unaffected. *//* --tfit is the scale Text split applies so the name fits on ONE line. It is
+   measured, not chosen: the natural width against the room the button leaves.
+   1 everywhere else. */
+
+#site .title-w{font-weight:var(--tw,600);letter-spacing:var(--tls,-.015em);line-height:.95;color:var(--tfg);
+  font-size:calc(clamp(30px, 6cqw, 64px) * var(--tz) * var(--tfit, 1));
+  text-shadow:0 calc(var(--ts) * 2px) calc(var(--ts) * 24px) rgba(0,0,0,calc(var(--ts) * .75))}
+
+#site .title-el{--tz:1;--tfg:#fff;--ts:.6;--tw:600;--tls:-.015em}
+
+#site .buy{
+  display:inline-block;text-decoration:none;
+  font-family:'IBM Plex Mono',monospace;font-weight:600;letter-spacing:0;text-transform:uppercase;
+  background:var(--cta);transition:filter .18s;
+}
+
+#site .buy:hover{filter:brightness(1.08)}
+
+/* Continuous scale, driven by one --bz, so the button grows the way the logo
+   does. Padding scales with the type or a big button ends up a thin bar.
+   --bs is its shadow, on the same single-lever curve as the logotype's --sh,
+   but box-shadow rather than drop-shadow: this is a solid slab, so the shadow
+   should follow its rectangle, not trace its letters.
+   --bfg is the label colour. Two options only, black or white, because that is
+   the actual decision — a mid-tone on a saturated pill is never the answer,
+   and it is the one contrast choice that decides whether the CTA is legible. */
+#site .buy-el{--bz:1;--bs:.45;--bfg:#fff}
+
+#site .buy-el .buy{
+  font-size:calc(15px * var(--bz));
+  padding:calc(15px * var(--bz)) calc(40px * var(--bz));
+  color:var(--bfg);
+  box-shadow:0 calc(var(--bs) * 12px) calc(var(--bs) * 30px) rgba(0,0,0,calc(var(--bs) * .8));
+}
+
+/* THE PAGE HEADER — just the logotype, small, in the corner. No frosted bar of
+   its own: the browser chrome above it is already the glass, and stacking a
+   second translucent bar directly under the first only muddies both.
+   Offset clear of that chrome, which overlays the top of the page in both
+   modes — preview keeps the browser bar, so this clearance never changes. */
+#site .hero-head{
+  position:absolute;left:0;z-index:7;
+  top:calc(var(--chrome-h, 0px) + 24px);
+}
+
+#site .hero-head .hh-word{font-weight:800;font-size:19px;letter-spacing:-.01em;color:#fff;
+  text-shadow:0 3px 14px rgba(0,0,0,.6)}
+
+#site .hero-head img{filter:drop-shadow(0 2px 8px rgba(0,0,0,.4))}
+
+/* THE TAGLINE under the logotype. Its own element, so it drags, aligns and
+   sizes like everything else in the hero. max-width in ch, not px, so the line
+   breaks on a sensible number of words at any size. */
+#site .hook-el{--hz:1;--hfg:#fff;--hs:.6}
+
+#site .hook{
+  display:block;color:var(--hfg);font-weight:500;
+  font-size:calc(21px * var(--hz));line-height:1.32;max-width:40ch;
+  /* ONE soft shadow. A second tight layer was tried to bite harder against
+     bright art and it reads as a dirty edge on letterforms this thin — the
+     halo sits close enough to be seen as part of the glyph rather than behind
+     it. A single wide, low-contrast blur separates the line from the picture
+     without ever drawing attention to itself, and the slider goes to 0 if
+     even that is too much. */
+  text-shadow:0 calc(var(--hs) * 2px) calc(var(--hs) * 22px) rgba(0,0,0,calc(var(--hs) * .7));
+  /* pre-line so a typed Enter survives as a real break while ordinary wrapping
+     still happens.
+     NO overflow:hidden here. Capping the height that way clipped the text
+     shadow against the text box — the soft blur got sliced off in a straight
+     line under the words and read as a hard, fake edge. A shadow has to be
+     free to spill. The two-line limit is enforced while TYPING instead (see
+     the input handler), which is where a limit belongs anyway: it stops the
+     third line from existing rather than hiding it after the fact. */
+  white-space:pre-line;
+}
+
+/* The availability marks used AS the call to action, instead of a pill.
+   They get the same shadow lever as the button and the tagline, because over
+   artwork a flat white mark can land on a white cloud and vanish. drop-shadow
+   on the link, so it follows each mark's silhouette — the SVGs take
+   currentColor and the PNG fallbacks are already white. */
+#site .stores-el .stores{--store-h:calc(30px * var(--bz));--store-gap:calc(24px * var(--bz));color:var(--bfg)}
+
+#site .stores-el .stores a{
+  filter:drop-shadow(0 calc(var(--bs) * 3px) calc(var(--bs) * 13px) rgba(0,0,0,calc(var(--bs) * .9)));
+}
+
+/* GRID REFERENCES — the frame's thirds and centre, in the same hairline-white
+   language as the crop tool's .shot-crop-frame. Fixed lines, not a crosshair
+   following the cursor: a crosshair only tells you where the element already
+   is, which you can see; what you need is where the frame's thirds are, so you
+   can land ON one. Elements snap to whichever line they come near and that
+   line lights up to confirm. Lines never change width when they light up — a
+   1px→2px swap shifts them half a pixel, which reads as the guide jittering.
+   Shown whenever something in the hero is selected, so the reference is there
+   while you judge the framing, not only during the drag itself. */
+#site .guides{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .15s}
+
+#site .guides span{position:absolute;background:rgba(255,255,255,.22);transition:background .12s,box-shadow .12s}
+
+#site .guides .gv{top:0;bottom:0;width:1px}
+
+#site .guides .gh{left:0;right:0;height:1px}
+
+#site .guides .mid{background:rgba(255,255,255,.4)}
+
+#site .guides .hit{background:var(--a);box-shadow:0 0 10px color-mix(in srgb,var(--a) 70%,transparent)}
+
+/* ALIGNMENT GUIDES — relationships between the two hero elements, as opposed
+   to the fixed grid above. They appear only at the instant one element lines
+   up with the other's centre or one of its edges, and they get their own
+   colour (Shipmate's --magenta) precisely because they mean something
+   different: the grid says "you are on a third of the frame", these say "you
+   are aligned with that other thing". Sharing the accent colour would blur
+   two facts the eye needs to keep apart. */
+#site .aguides{position:absolute;inset:0;z-index:6;pointer-events:none}
+
+#site .aguides span{position:absolute;background:#FF3B76;opacity:0;transition:opacity .07s;
+  box-shadow:0 0 9px rgba(255,59,118,.85)}
+
+#site .aguides .av{top:0;bottom:0;width:1px}
+
+#site .aguides .ah{left:0;right:0;height:1px}
+
+#site .aguides span.on{opacity:1}
+
+/* ── 2 · STRIP ────────────────────────────────────────────────────────────── */
+/* Three per row, six fields, two full rows. A complete rectangle beats the
+   ragged 4 + 1 it replaced: nothing dangles, the two rows read as one block,
+   and at three columns each field is wide enough to hold a studio name or a
+   list of genres without wrapping into a mess. auto-fit used to do the
+   opposite, packing in as many as would technically fit. */
+/* The band is ONE grid, 1200 wide and centred, three equal columns, two rows.
+   The measure and the centring live here rather than being repeated per skin —
+   they were, and Arcade had quietly been left out of it, so its band ran the
+   full width while the other two were capped.
+   justify-items:start keeps each field hugging the left of its own column
+   instead of being stretched across it. */
+#site .strip-in{
+  width:100%;max-width:var(--measure);margin-inline:auto;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:30px 40px;align-items:start;justify-items:start;
+}
+
+/* Each field is a <dl>, and a <dl> carries a 1em top and bottom margin from the
+   browser's own stylesheet. That was silently adding 16px above and below every
+   cell, so a 28px row gap rendered as 60 and the two rows drifted apart. The
+   grid's gap should be the only thing setting this rhythm. */
+
+@container page (max-width:900px){ #site .strip-in{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+@container page (max-width:400px){ #site .strip-in{grid-template-columns:minmax(0,1fr)} }
+
+/* TYPOGRAPHY RULE for the whole generated page: labels in IBM Plex Mono with
+   NO tracking, content in Inter. Mono is doing a job here — it says "this is a
+   field name, not prose" — but letter-spacing on top of a monospace face is
+   belt and braces: the fixed advance width already spaces it out, and adding
+   tracking on top just loosens it into a rattle. Content never uses mono. */
+#site .sf dt{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0;
+  text-transform:uppercase;margin-bottom:9px;white-space:nowrap}
+
+#site .sf dd{margin:0;font-size:14.5px;line-height:1.5}
+
+#site .stores{display:flex;align-items:center;gap:var(--store-gap,16px);flex-wrap:wrap}
+
+#site .stores a{display:block;color:inherit;transition:.18s}
+
+#site .stores a:hover{transform:translateY(-2px)}
+
+/* The SVG marks fill a square box and inherit the band's text colour, so they
+   need no per-skin treatment. The PNG fallbacks are baked white, hence the
+   invert on the one light skin (see Boutique). */
+#site .stores .pi{display:block;width:var(--store-h,24px);height:var(--store-h,24px);opacity:.92}
+
+#site .stores a:hover .pi{opacity:1}
+
+#site .stores .pi svg{display:block;width:100%;height:100%}
+
+#site .stores img{height:var(--store-h,24px);width:auto;opacity:.92;transition:.18s}
+
+#site .stores a:hover img{opacity:1}
+/* ── 3 · LEAD ─────────────────────────────────────────────────────────────── *//* SCREENSHOT VIEWER. Lives outside #site so a re-render never disturbs it, and
+   it is a real feature of the generated page rather than editor chrome —
+   it works in preview too, because that is when a visitor would use it. *//* display:none BY DEFAULT, and the open state adds it back.
+   The first version relied on the `hidden` attribute while this rule said
+   `display:grid`. That does not work: `[hidden]{display:none}` lives in the
+   BROWSER's stylesheet, and any author rule beats it regardless of
+   specificity. So the viewer never actually went away — it stayed stretched
+   across the whole viewport at opacity:0, invisible but still painting a
+   zoom-out cursor and swallowing every click on the page. It looked exactly
+   like the app had frozen. Nothing was frozen; the page was under glass.
+   Visibility is a class here, and the attribute is belt and braces. */
+
+/* The cursor is the affordance — nothing else on the page zooms. */
+#site .shots img{cursor:zoom-in}
+
+/* ── 4 · VIDEO ────────────────────────────────────────────────────────────── */
+#site .video{position:relative;aspect-ratio:16/9;overflow:hidden;cursor:pointer;background:#000}
+
+#site .video .vbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.55)}
+
+#site .video .play{position:absolute;inset:0;display:grid;place-items:center}
+
+#site .video .play i{width:78px;height:78px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.85);backdrop-filter:blur(6px);transition:.2s}
+
+#site .video:hover .play i{background:var(--cta);border-color:var(--cta);transform:scale(1.07)}
+
+#site .video .play svg{width:26px;height:26px;fill:#fff;margin-left:4px}
+
+#site .vlabel{position:absolute;left:0;bottom:0;padding:14px 18px;font-family:'IBM Plex Mono',monospace;
+  font-size:10px;letter-spacing:0;text-transform:uppercase;color:rgba(255,255,255,.82);
+  text-shadow:0 2px 10px rgba(0,0,0,.7)}
+
+/* The empty trailer slot, in the same language as everything else you can act
+   on: a filled rounded rectangle, no stroke. It was dashed — the wireframe
+   convention for "something goes here" — but a page that has one dashed box
+   and one filled one is a page with two vocabularies for the same idea. */
+#site .slot{display:grid;place-items:center;gap:8px;text-align:center;padding:44px;
+  background:rgba(255,255,255,.05);border-radius:12px;
+  color:color-mix(in srgb,var(--a) 80%,#888);font-size:12px}
+
+#site .slot svg{width:26px;height:26px;opacity:.7}
+
+/* ── 8 · ABOUT — the long description, under the trailer ──────────────────── */
+/* pre-wrap so a developer can put blank lines between paragraphs and have them
+   survive; the text is edited as plain text, and this is what makes that
+   editing honest about what it will look like. */
+#site .about{font-size:15px;line-height:1.72;white-space:pre-wrap;opacity:.9}
+
+/* The About area is several blocks now — one per submission field — and they
+   have to read as ONE piece of writing, so the gap between them is a
+   paragraph break and nothing more. The day History and About the Developer
+   become their own scroll sections, this is where they stop being paragraphs
+   and start being sections. */
+#site .about + .about{margin-top:1.15em}
+
+/* ── 9 · FOOTER ───────────────────────────────────────────────────────────── */
+/* On the READING column in every skin, like the metadata band: these are five
+   short lines of text, and a row of them stretched across the full 1200 would
+   have the first and last a screen apart. */
+#site .contact .band-in{max-width:var(--measure)}
+
+/* Studio and date on one side, the ways to reach them on the other — and it
+   stacks rather than squeezes, because a footer that wraps mid-line reads as
+   broken in a way a two-row footer does not. */
+#site .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+  gap:14px 24px;padding-top:22px;border-top:1px solid currentColor}
+
+#site[data-tpl=classic]  .foot{border-color:rgba(255,255,255,.10)}
+
+#site .foot-who{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;opacity:.62}
+
+@container page (max-width:560px){ #site .foot{justify-content:flex-start} }
+
+/* Wraps rather than scrolls, and each channel keeps its icon and its handle
+   together — the pair is one thing, so `inline-flex` on the link and `gap` on
+   the row, never a grid that could break them onto separate lines. */
+#site .contact-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+/* A rounded square with a filled ground and no stroke — the same shape and the
+   same 5% wash as every other "you can act on this" surface in the editor. */
+#site .cc{
+  display:grid;place-items:center;width:38px;height:38px;
+  border-radius:11px;text-decoration:none;color:inherit;
+  background:rgba(255,255,255,.05);transition:background .14s,transform .14s;
+}
+
+#site .cc svg{width:19px;height:19px;display:block;opacity:.9}
+
+#site .cc:hover{background:rgba(255,255,255,.11)}
+
+#site .contact-empty{margin:0;font-size:13.5px;opacity:.45}
+
+/* Boutique is paper, so the wash is ink rather than light. */
+/* Arcade rounds nothing and fills with its accent on hover — the same language
+   as its hero border and its section rules. */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SKIN 1 — CLASSIC   (Jaco's layout)
+   ═════════════════════════════════════════════════════════════════════════ */
+#site[data-tpl=classic]{background:#0C0C0F;color:#F2F3F5;font-family:Inter,sans-serif}
+
+#site[data-tpl=classic] .hero{position:relative;height:calc(var(--hero-h) - var(--hero-cut,0px));overflow:hidden}
+
+/* Two layers, deliberately. The lower one is this skin's IDENTITY — art
+   dissolving into the page — and never varies, or the hero would end on a
+   visible seam. The upper one is the adjustable scrim, which is what has to
+   change between dark sci-fi art and Spilled!'s bright cosy art. Tuning them
+   as one gradient made every scrim below ~80% show that seam. */
+#site[data-tpl=classic] .hero::after{
+  content:'';position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:
+    linear-gradient(to bottom,rgba(12,12,15,calc(var(--sc)*.45)) 0%,transparent 32%,transparent 52%,rgba(12,12,15,calc(var(--sc)*.7)) 100%),
+    linear-gradient(to bottom,transparent 62%,#0C0C0F 100%);
+}
+
+#site[data-tpl=classic] .title-w{}
+
+#site[data-tpl=classic] .buy{border-radius:999px}
+
+#site[data-tpl=classic] .strip{padding:6px clamp(20px,5vw,60px) 46px}
+
+#site[data-tpl=classic] .sf dt{color:#8A8F98}
+
+#site[data-tpl=classic] .sf dd{color:#EDEFF2}
+
+#site[data-tpl=classic] .band{padding:0 clamp(20px,5vw,60px) clamp(48px,6vw,76px)}
+
+/* The one wrapper that is deliberately NARROWER than --page: running body text
+   across a 1200px line is unreadable, so prose gets its own measure and only
+   the full-width blocks (.band.wide) take the whole column. */
+#site[data-tpl=classic] .band-in{max-width:var(--measure,800px);margin:0 auto}
+
+#site[data-tpl=classic] .band.wide .band-in{max-width:var(--page)}
+
+/* The accent's job in the quiet skins: the section labels. Small, mono,
+   repeated down the page and far from the artwork — which is the only place
+   a second colour can live on a page whose whole point is the key art.
+   These were a fixed grey, which is how the Accent control ended up doing
+   nothing at all outside Arcade. */
+#site[data-tpl=classic] .h2{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0;
+  text-transform:uppercase;color:var(--a);margin:0 0 16px}
+
+#site[data-tpl=classic] .lead p{font-size:clamp(18px,2.1vw,23px);line-height:1.55;margin:0;color:#DDE0E5}
+
+#site[data-tpl=classic] .video{border-radius:10px}
+
+#site[data-tpl=classic] .shots{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory}
+
+#site[data-tpl=classic] .shots > *{flex:0 0 clamp(280px,42vw,540px);scroll-snap-align:start;
+  border-radius:10px;overflow:hidden;aspect-ratio:16/9;position:relative}
+
+/* ── RULES THE EXTRACTION SHOULD NOT HAVE TAKEN ───────────────────────────
+   The filter that pulled this file out of the mockup dropped every rule whose
+   selector mentioned `.sel`, `[data-edit]` or `.fact`, on the theory that
+   those were all editing affordances. Two of them were not, and both are
+   load-bearing. Restored here, at the end, where the reason is visible.
+
+   THE TITLE MUST NOT WRAP. This one rule is what a whole afternoon went into:
+   the title is SCALED to fit on one line beside the buy button, never wrapped,
+   because a two-line hero title next to one small pill reads as a mistake
+   however carefully the pill is aligned to it. The renderer sets data-nowrap
+   and computes the scale; without this rule the browser wraps anyway and every
+   measurement downstream — the scale, the button's centre, the hero's height —
+   is taken against a shape nobody intended. It carries [data-edit=title] in
+   its selector purely because that is how the title is identified, which is
+   what fooled the filter. */
+#site .el[data-edit=title][data-nowrap] .title-w{white-space:nowrap}
+
+/* The metadata band's tiles. Dropped for the word `.fact` in a selector it
+   shared with the factsheet, which is gone; the band, which is not, needs it. */
+#site .sf{margin:0}
+
+/* A row whose field is not filled in yet. Dimmer than a real value, so a
+   glance at the band still separates what is known from what is waiting —
+   the placeholder holds the shape without pretending to be information. */
+#site .sf-empty{opacity:.35}
+
+/* The Hook, before there is one. Same size as the real thing so the block
+   holds the height it will have and nothing below it jumps when the line
+   arrives — but italic and dimmed, because prompt text sitting at the widest
+   type on the page must never be mistaken for the developer's own words.
+   Slightly stronger than the band's placeholder at .55: this one is asking to
+   be read, where a dash in a grid is only holding a space. */
+#site .lead .mini-empty{opacity:.55;font-style:italic}
+
+/* ── AND ONE THING THE MOCKUP ASSUMED ─────────────────────────────────────
+   Its hero elements were draggable, so `.el` carries `cursor:grab`. Here they
+   are not — editing goes through Adam's panels — and a grab cursor promises a
+   gesture that does nothing. A click still opens the right panel, so pointer
+   is the honest cursor. Delete this when phase two makes them draggable. */
+#site .el{cursor:pointer}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EDITING ON THE PAGE
+   ══════════════════════════════════════════════════════════════════════════
+
+   A SOFT FILLED RECTANGLE, NOT A DASHED BOX. The dashed outline was borrowed
+   from wireframes: it draws a hard technical line around finished artwork and
+   makes an ordinary hover look like an error state. This is a rounded shape
+   with a 5% white wash and no stroke at all — it says "this is a thing you
+   can touch" without drawing anything.
+
+   Built as an ::after rather than an outline, because an outline cannot be
+   filled and does not follow a radius reliably, and because pointer-events:
+   none then guarantees it can never intercept the click it is advertising. */
+/* THE HERO IS EXCLUDED, and this is not fussiness — .hero::after IS the
+   scrim, the two stacked gradients that dissolve the key art into the page
+   and keep white type legible over it. Painting the wash into that same
+   pseudo-element replaces the gradients with flat white: the hero's whole
+   bottom edge vanished on hover and stayed vanished while it was selected.
+   The strip is out for the same class of reason. Both get their own
+   affordance below, on ::before, where there is nothing to overwrite. */
+/* :not(.el) IS LOAD-BEARING. The wash needs a positioned parent, but the
+   hero's own pieces — the title and the buy button — are ALREADY positioned,
+   absolutely, and that is how the whole hero layout works.
+
+   In the mockup this rule read `body:not(.preview) [data-edit]`, which has no
+   id and therefore loses to `#site .el{position:absolute}`. Porting it as
+   `#site [data-edit]` gave it an id, made it a specificity TIE, and a tie is
+   won by whichever comes later in the file — this one. The title and the
+   button quietly stopped being absolute, fell into normal flow at the top of
+   the stage, and their top/bottom percentages became offsets from there. The
+   button ended up under the browser chrome and the title vanished behind it.
+
+   Excluding .el is the fix. Never grant `position` to something that already
+   has one. */
+#site [data-edit]:not(.el){position:relative}
+
+/* IF IT CAN BE EDITED, THE CURSOR SAYS SO. The wash appears on hover, but a
+   wash is a hint you notice after you have already moved the pointer there;
+   the cursor is what tells you before you commit to the move. Every zone that
+   opens something gets a pointer — the metadata band, the hook, About, the
+   screenshots, the footer — and the two that are dragged instead get a grab
+   further down. */
+#site [data-edit],
+#site [data-sect]{cursor:pointer}
+#site [data-edit]:not([data-edit=art]):not([data-edit=strip])::after{
+  content:'';position:absolute;inset:-6px;border-radius:10px;z-index:8;
+  background:rgba(255,255,255,0);pointer-events:none;transition:background .12s;
+}
+/* Only the innermost thing under the pointer lights up. Without :has(), a
+   hover over the title would light the hero as well, and two nested washes
+   read as one big vague target instead of the specific thing you are about
+   to click. */
+#site [data-edit]:not([data-edit=art]):not([data-edit=strip]):hover:not(:has([data-edit]:hover))::after{
+  background:rgba(255,255,255,.05);
+}
+
+/* The hero's own wash, on ::before so the scrim on ::after is untouched.
+
+   z-index 4 is chosen, not inherited: it puts the wash above the key art and
+   above the scrim (2), and BELOW the title and the button (5). A wash lights
+   the thing you are about to edit — here, the picture — and laying it over
+   the type instead would veil the words with 5% white at exactly the moment
+   you are trying to judge whether they are readable against the crop. */
+#site .hero::before{
+  content:'';position:absolute;inset:0;z-index:4;
+  background:rgba(255,255,255,0);pointer-events:none;transition:background .12s;
+}
+/* AND IT FADES OUT AT THE BOTTOM. A flat wash over the whole hero lifted its
+   last few pixels — the ones the scrim is busy dissolving into the page — and
+   turned a transition into a visible seam between the art and the metadata
+   band. The wash now ends where the art ends, so hovering lights the zone
+   without redrawing its edge. */
+#site .hero:hover:not(:has([data-edit]:hover))::before,
+#site[data-sel="art"] .hero::before{
+  background:linear-gradient(to bottom,
+    rgba(255,255,255,.05) 0%, rgba(255,255,255,.05) 68%, rgba(255,255,255,0) 100%);
+}
+
+/* THE METADATA BAND lights up like everything else. It was excluded from the
+   generic affordance along with the hero, but for a reason that was the
+   hero's and not its own: in the mockup each tile was edited separately, so a
+   wash over the whole band would have been the wrong target. Here the band is
+   ONE zone that opens the Factsheet panel, and with no hover at all there was
+   nothing to say it could be clicked.
+
+   Its own rule rather than the generic one because it is a full-bleed band:
+   the generic wash insets by -6px and rounds its corners, which on something
+   that runs edge to edge overhangs the page and rounds nothing. */
+#site .strip{position:relative}
+#site .strip::before{
+  content:'';position:absolute;inset:0;z-index:1;
+  background:rgba(255,255,255,0);pointer-events:none;transition:background .12s;
+}
+#site .strip:hover::before{background:rgba(255,255,255,.05)}
+#site .strip > *{position:relative;z-index:2}
+
+/* THE SELECTED ZONE, and everything else stepping back. Opacity on the
+   siblings, never a covering layer: a layer eats every click on the page
+   underneath, so you could not go straight from one area to another without
+   dismissing something first. */
+#site[data-sel] > *{transition:opacity .18s}
+#site[data-sel="art"] > *:not(.hero){opacity:.35}
+
+/* Reframing is a MODE, not a hair-trigger: the grab cursor appears once the
+   art is selected, so an ordinary click on the page never feels like it might
+   drag something. */
+#site[data-sel="art"] .hero{cursor:grab}
+#site .hero.wp-panning{cursor:grabbing}
+#site .hero.wp-panning .kart{transition:none}
+
+/* THE PIECES THAT MOVE SAY SO, and the ones that do not stay silent. The
+   logotype and the tagline are placed by hand — where artwork sits over a
+   picture is a judgement only the person looking at it can make. The title
+   and the button are not: they are aligned to each other by a measured rule,
+   and a grab cursor on them would promise a gesture that is deliberately
+   refused. Unlike the art, these do not need the zone selected first: they
+   are small, specific targets, and there is nothing else to hit. */
+#site .el[data-edit="logo"],
+#site .el[data-edit="hook"]{cursor:grab}
+#site .el.wp-moving{cursor:grabbing;transition:none}
+#site .el[data-edit="title"],
+#site .el[data-edit="buy"]{cursor:pointer}
+
+/* ── THE DOCK ─────────────────────────────────────────────────────────────
+   An island, floated over the page rather than pinned to a rail: the thing
+   being edited is the page, and a panel that pushes the page aside changes
+   the very layout you are judging. Centred under the browser chrome so it
+   never covers the hero's title or its button, which are what the framing is
+   being aligned against.
+
+   It carries no state of its own — it is a view of state.webPageSel and
+   webSite.page — so it is rebuilt with the page on every render and there is
+   nothing in it that a redraw could lose. */
+.wp-dock{
+  position:absolute; left:50%; top:calc(var(--chrome-h,54px) + 12px); z-index:60;
+  transform:translateX(-50%);
+  /* Roomier than it was. The first version was sized like a toolbar and read
+     as cramped: a panel that floats over the thing it edits is competing with
+     that thing for attention, and winning that competition by being tight and
+     busy is the wrong way to win it. More air between the controls, a wider
+     zoom track, and a floor under the whole thing so it does not shrink to
+     the width of whatever the shortest panel happens to hold. */
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:11px 16px; border-radius:14px;
+  min-width:min(520px, calc(100% - 28px)); max-width:calc(100% - 28px);
+  background:rgba(16,16,19,.9); box-shadow:inset 0 0 0 1px rgba(255,255,255,.13), 0 12px 40px rgba(0,0,0,.5);
+  -webkit-backdrop-filter:blur(20px) saturate(1.2);
+          backdrop-filter:blur(20px) saturate(1.2);
+  font:500 11.5px/1 Inter,system-ui,sans-serif; color:#E8EAEE;
+}
+.wp-dock .wp-title{font-weight:600;letter-spacing:.01em}
+.wp-dock .wp-lbl{color:#8A8F98}
+.wp-dock .wp-val{color:#8A8F98;min-width:34px;text-align:right;
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px}
+.wp-dock .wp-sep{width:1px;height:16px;background:rgba(255,255,255,.13)}
+.wp-dock .wp-btn{
+  padding:6px 11px;border-radius:7px;cursor:pointer;font:inherit;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);
+  color:#E8EAEE;transition:.14s;
+}
+.wp-dock .wp-btn:hover:not(:disabled){background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.24)}
+.wp-dock .wp-btn:disabled{opacity:.4;cursor:default}
+/* A toggle that is on, and a mode that is chosen, look the same on purpose:
+   both answer "what is the page doing right now", and inventing two visual
+   languages for one question is how a small panel starts feeling large. */
+.wp-dock .wp-btn.on{
+  background:rgba(82,186,255,.22); border-color:rgba(82,186,255,.55); color:#CDEBFF;
+}
+.wp-dock .wp-btn.on:hover{background:rgba(82,186,255,.3)}
+.wp-dock .wp-done{color:#BFF0CE;background:rgba(74,222,128,.16);border-color:rgba(74,222,128,.4)}
+.wp-dock .wp-done:hover{background:rgba(74,222,128,.28);border-color:rgba(74,222,128,.6)}
+.wp-dock .wp-range{width:150px;accent-color:#52BAFF}
+/* The thumbnail is the one thing here worth looking at rather than reading,
+   so it gets the height to be legible as a picture. */
+.wp-dock .wp-thumb{height:36px}
+
+/* The accent swatches. A ring rather than a tick, because the swatch IS the
+   information and anything drawn on top of it obscures the one thing you are
+   trying to judge. */
+.wp-dock .wp-sw{
+  width:20px;height:20px;border-radius:50%;padding:0;cursor:pointer;
+  border:2px solid transparent;transition:.14s;
+}
+.wp-dock .wp-sw:hover{transform:scale(1.12)}
+.wp-dock .wp-sw.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+
+/* THE ART THUMBNAIL. The whole picture, with the part the header actually
+   shows drawn on it — the crop as a picture instead of as a percentage. What
+   falls outside is DIMMED, not hidden: seeing what you are cutting off is the
+   entire point of showing it, and a preview that only showed the kept part
+   would be the same information the header already gives you. */
+.wp-dock .wp-thumb{
+  position:relative;display:block;flex:0 0 auto;height:30px;
+  border-radius:4px;overflow:hidden;background:#000 center/cover no-repeat;
+  box-shadow:0 0 0 1px rgba(255,255,255,.18);
+}
+/* ONE element does both jobs: a hairline around the visible region, and a
+   huge spread shadow that dims everything outside it, clipped by the thumb's
+   own overflow. No second layer to keep in sync — and keeping two layers in
+   sync during a drag is exactly the kind of thing that goes half a frame out
+   and looks broken. */
+.wp-dock .wp-win{
+  position:absolute;
+  box-shadow:0 0 0 1.5px #52BAFF, 0 0 0 999px rgba(8,8,10,.62);
+  transition:left .06s linear, top .06s linear, width .06s linear, height .06s linear;
+}
+
+/* ── THE FRAME'S EDGE ─────────────────────────────────────────────────────
+   Adam's frame is drawn for a page on white: a real 1px border at 12% black,
+   plus a modest shadow. Around near-black key art that reads as a hard line
+   at full strength, and the page looks pasted onto Shipmate rather than set
+   into it.
+
+   The mockup's edge is a hairline of WHITE at 10%, and — the part that
+   matters — it is painted as an OVERLAY, not as a shadow on the frame itself.
+   An inset box-shadow on the frame is painted underneath its own children, so
+   the browser chrome and the page cover it and the hairline simply never
+   appears. (Written from experience: the first version of this rule made
+   exactly that mistake, and the edge was invisible.) An ::after inherits the
+   radius, sits above everything at z-index 50, and takes no clicks.
+
+   The heavy soft shadow does the separating; the hairline only keeps the top
+   edge from dissolving into a dark modal. */
+/* WIDTH IS DECLARED, NOT INHERITED, and that is not belt-and-braces — it is a
+   bug fix with a scar. The chrome below is position:absolute so the art can
+   run under it, and taking it out of the flow took away the frame's only
+   in-flow child with an intrinsic width (its URL bar is flex:1). The frame
+   then shrank to whatever the page's content happened to want — about a
+   quarter of its real width — and at that width the hero's title no longer
+   fits beside the buy button, so the layout switched to its stacked form and
+   the whole header looked broken. Nothing about the layout was wrong; it was
+   correctly laying out a 264px page.
+
+   The rule: if you take the last in-flow child out of the flow, say how wide
+   the parent is. */
+.wp-frame{
+  width:100%;
+  border:0;
+  border-radius:16px;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);
+  background:transparent;
+  position:relative;
+}
+/* HOW TALL THE BROWSER CHROME IS, so the things that live at the top of the
+   page can start below it. The chrome floats OVER the art — that is the
+   effect — which means anything positioned from the hero's top edge is
+   underneath it unless told otherwise. The corner header was, and vanished.
+
+   54px is the chrome's own box: 13px of padding, a 28px address capsule,
+   13px again. Declared rather than measured because it is a constant of the
+   design, and a value the layout can use before the chrome has painted. */
+.wp-frame #site{width:100%; --chrome-h:54px}
+.wp-frame::after{
+  content:'';position:absolute;inset:0;z-index:50;pointer-events:none;
+  border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
+}
+
+/* ── THE BROWSER CHROME, IN OUR OWN HAND ──────────────────────────────────
+   The frame's markup is Adam's and stays his; `.wp-frame` lays our look over
+   it. The difference that matters is the URL: his is a left-aligned rounded
+   rect, ours is a centred capsule with a hairline drawn INSIDE the shape.
+
+   Inset rather than a border on purpose — a real border would add a pixel to
+   the box and nudge the chrome's height, and this is a hairline whose whole
+   job is to separate two dark tones without announcing itself.
+
+   And the slug is bold because it is the point: the developer is being shown
+   the address their game is about to have, not a URL. */
+/* THE BAR FLOATS OVER THE ART, and that is the whole effect: not a solid
+   strip stacked above the page, but a frosted pane the key art reads through.
+   Absolute, so the hero starts at the very top of the frame and slides under
+   it; z-index 40, under the frame's own hairline at 50.
+
+   The tint is a hair off the flat #2B2B2E it replaced — enough dark grey to
+   keep the dots and the address legible over ANY artwork, with the picture
+   still coming through. Thinner than this and the chrome starts taking its
+   colour from whatever the game's key art happens to be, which is charming
+   for about one game and unreadable for the rest. */
+/* Out of the flow — see the width note on .wp-frame for what that cost the
+   first time it was done without declaring the frame's width. */
+.wp-frame .pk-browser-chrome{
+  position:absolute; top:0; left:0; right:0; z-index:40;
+  display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;
+  padding:13px 16px;
+  background:rgba(38,38,42,.82);
+  -webkit-backdrop-filter:blur(26px) saturate(1.3);
+          backdrop-filter:blur(26px) saturate(1.3);
+  box-shadow:inset 0 -1px 0 rgba(255,255,255,.10);
+}
+
+/* One element, not three, so the dots occupy ONE grid column. Loose, each dot
+   claimed a column of its own and the middle of the grid — where the address
+   sits — was not the middle of the frame. */
+.wp-frame .wp-dots{display:flex;gap:8px}
+.wp-frame .wp-dots i{width:12px;height:12px;border-radius:50%;display:block}
+/* The third column exists only to balance the first, which is what makes the
+   centre column actually central. */
+.wp-frame .wp-chrome-pad{display:block}
+
+.wp-frame .pk-browser-url{
+  flex:none; margin:0;
+  display:flex; align-items:center; justify-content:center;
+  min-width:min(340px,46vw); padding:7px 16px; border-radius:999px;
+  background:#161618; font-size:12px; color:#8A8F98; letter-spacing:.01em;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
+}
+.wp-frame .pk-browser-url b{color:#E8EAEE;font-weight:500}
+
+/* ── THE HERO IS SHORTER INSIDE THE PREVIEW ───────────────────────────────
+   The hero is 625px tall, and that is right for the page it will actually be:
+   a full browser window at [game].shipmate.games, where a key-art hero that
+   fills the fold is the whole point.
+
+   It is wrong inside this modal. The modal's page area is shorter than 625px,
+   so the hero ate all of it and everything underneath — the metadata band,
+   the hook, the trailer, About, the screenshots, the footer — sat below the
+   fold with no hint that it was there. A preview whose first screen shows
+   only one section is not previewing the page, it is previewing the hero.
+
+   So the override is scoped to the preview frame rather than written into the
+   page: `.wp-frame #site` is a class we invent and put only on this design. The real
+   page keeps its full height, which is what makes this an honest compromise
+   rather than a redesign — the thing being shrunk is the window, not the
+   design.
+
+   Viewport-relative so it tracks the modal, which is itself a percentage of
+   the window: about two fifths of the height, floored so it never collapses
+   on a short laptop and capped so it never outgrows the original. */
+.wp-frame #site{--hero-h:clamp(260px, 42vh, 460px)}
+
+/* THE SCREENSHOT VIEWER is deliberately absent. Shipmate already has one —
+   openScreenshotLightbox in app.js, styled in style.css — and the mockup's
+   own .lightbox rules collided with it by name. The page's screenshots call
+   his, which is the right answer twice over: one viewer to maintain, and it
+   already behaves the way the rest of the app does. */

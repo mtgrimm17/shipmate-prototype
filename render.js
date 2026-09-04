@@ -4766,7 +4766,25 @@ function _webCapsuleFactsheetMarginTop(source) {
   return map[source] || map.igdbCoverArt;
 }
 
+/* ── THE NEW MARKETING PAGE, BEHIND A SWITCH ──────────────────────────────
+   Two page designs live here at once, on purpose and temporarily. This one —
+   the full-bleed hero with the game's name set in type — was prototyped
+   standalone and is drawn by web-page.js from the same submission fields the
+   original reads. The original is still the default and still what everyone
+   sees; the switch is Ctrl+Shift+W (see initWebPagePreviewToggle in app.js).
+
+   It is a SWITCH rather than a URL flag because nothing in this prototype is
+   persisted: a reload wipes the submission, so a flag you can only change by
+   reloading would mean re-linking the Steam page every time you wanted to
+   compare. Toggled in place, the two designs can be flipped between over the
+   same data, which is the only way to actually judge one against the other.
+
+   WHEN THIS IS SETTLED, delete: this branch, state.webPageNew,
+   initWebPagePreviewToggle, and whichever of the two designs lost. A switch
+   nobody removes is how a codebase ends up with two of everything. */
 function buildWebSitePreviewSection() {
+  if (state.webPageNew) return _buildWebPageNew();
+
   const fd  = state.formData || {};
   const ups = state.uploads || {};
   const ws  = state.webSite || {};
@@ -5159,6 +5177,79 @@ function buildWebSitePreviewSection() {
             ${mediaHTML}
           </div>
         </div>
+      </div>
+
+      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="openStorePreviewSection('web','siteInfo')">
+        Edit site details ›
+      </button>
+    </div>`;
+}
+
+/* The new design, in the same browser frame and with the same edit button, so
+   what is being compared is the page and nothing else.
+
+   EDITING IS UNCHANGED. Every zone still opens one of Adam's flip panels —
+   they are forms over state.webSite.*, and they never depended on what the
+   preview looked like. The mapping:
+
+     the hero art and logotype   → webKeyArt
+     the metadata band's 6 tiles → webFactsheet
+     the hook and About         → webDescription
+     the trailer and shots      → webMedia
+     the footer                 → siteInfo
+
+   The band's sixth tile, "Available on", is the one that is not a webSite
+   field — it comes from which platforms are activated elsewhere in Shipmate,
+   and his Factsheet panel already renders it read-only saying exactly that.
+
+   webPageMount() is scheduled rather than called: the markup returned here is
+   not in the document yet, and the hero cannot be laid out until it is. */
+function _buildWebPageNew() {
+  if (typeof webPageHTML !== 'function') {
+    return `<div class="web-preview-wrap" style="padding:12px 2px;">
+      <p style="color:var(--text-muted,#6b7280);font-size:13px;">
+        The new page renderer (web-page.js) is not loaded.</p></div>`;
+  }
+  const fd   = state.formData || {};
+  const slug = (fd.title || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'yourgame';
+  let markup;
+  try {
+    markup = webPageHTML(state);
+  } catch (e) {
+    // A half-filled submission must never take the whole modal down with it.
+    console.error('web page render failed', e);
+    return `<div class="web-preview-wrap" style="padding:12px 2px;">
+      <p style="color:var(--text-muted,#6b7280);font-size:13px;">
+        The page could not be drawn: ${escHtml(e.message || String(e))}</p></div>`;
+  }
+  if (typeof webPageMount === 'function') requestAnimationFrame(() => webPageMount());
+
+  return `
+    <div class="web-preview-wrap" style="padding:4px 2px 8px;">
+      <p style="margin:0 0 12px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
+        Your game's own page, built from your submission. Click any part of it to edit the fields behind it.
+        <strong style="opacity:.7;">Ctrl+Shift+W</strong> switches back to the previous design.
+      </p>
+
+      <!-- Adam's browser frame, with our chrome's look layered on by wp-frame:
+           the URL sits in a centred capsule with a hairline rather than a
+           left-aligned rounded rect, and the game's own name is set in bold,
+           because the slug IS the thing the developer is being shown. One
+           markup, two skins, and deleting the class deletes the difference. -->
+      <!-- Adam's browser frame, wearing our chrome's look via wp-frame. The
+           three dots are wrapped in one element on purpose: the bar is a
+           1fr auto 1fr grid, so the address capsule is centred on the FRAME
+           rather than on whatever space the dots left over. Left loose, the
+           dots each took a column and the capsule sat visibly off-centre. -->
+      <div class="pk-browser-frame wp-frame">
+        <div class="pk-browser-chrome">
+          <span class="wp-dots">
+            <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
+          </span>
+          <span class="pk-browser-url"><b>${escHtml(slug)}</b>.shipmate.games</span>
+          <span class="wp-chrome-pad"></span>
+        </div>
+        ${markup}
       </div>
 
       <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="openStorePreviewSection('web','siteInfo')">

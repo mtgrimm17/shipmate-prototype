@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // when the lane above the fab exists — the loop no-ops otherwise.
   if (typeof bubbleLoop === 'function') bubbleLoop();
   initSubnavDebugToggle();
+  initWebPagePreviewToggle();
   initCalendarKeys();
   // Boot straight into the app (title bar persists) with the splash view showing.
   bootApp();
@@ -14188,6 +14189,35 @@ function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};
   state.webSite.accent = color;
   reRenderStepModal();
+}
+
+/* ── The switch between the two marketing-page designs ─────
+   Ctrl+Shift+W. Session-only and deliberately not persisted, like the Ctrl+D
+   sub-nav toggle above it: a switch that survives a reload is a switch
+   somebody forgets they left on, and then reports the other design's bugs.
+
+   In place rather than in the URL because nothing here is persisted — a
+   reload wipes the submission, so a flag you can only change by reloading
+   would mean re-linking the Steam page every time you wanted to compare.
+
+   TEMPORARY. When one design wins, delete this function, its call in
+   bootApp, state.webPageNew, and the branch at the top of
+   buildWebSitePreviewSection. */
+function initWebPagePreviewToggle() {
+  state.webPageNew = false;
+  document.addEventListener('keydown', e => {
+    if (!e.ctrlKey || !e.shiftKey || e.metaKey || e.altKey) return;
+    if ((e.key || '').toLowerCase() !== 'w') return;
+    e.preventDefault();
+    state.webPageNew = !state.webPageNew;
+    // Leaving the design leaves whatever was selected in it: coming back to
+    // find a zone still lit, with a dock over a page you have not touched in
+    // a while, is a state nobody asked for.
+    state.webPageSel = null;
+    // Only redraws if a step modal is actually open, which is the only place
+    // either design is visible.
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  });
 }
 
 /* ── The marketing page's PRESENTATION setters ─────────────
