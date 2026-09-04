@@ -2945,6 +2945,77 @@ const state = {
     // app.js), the same way Mac App Store's Title/Subtitle are shared rather
     // than duplicated (MAS_SHARED_LISTING_FIELDS, app.js).
     localizedStoreText: {},
+
+    /* ── THE MARKETING PAGE'S PRESENTATION ────────────────────────────────
+       Everything above this line is CONTENT: words and files about the game,
+       every one of them editable in the Web panel, most auto-filled from
+       Steam. This is the other kind of thing — the decisions a developer
+       makes by LOOKING at the page rather than by filling in a form.
+
+       They live together in one nested object rather than as nine more
+       siblings for a reason that is not tidiness: content and presentation
+       have different editors. Content goes through the flip panels, which
+       are forms. Presentation goes through direct manipulation on the page
+       itself — drag the art to reframe it, click a section to hide it —
+       because "is the ape's face cut off" is a question no form can ask.
+       Keeping the two apart in the state keeps them apart in the UI.
+
+       Everything here has a default that makes a page look finished, so a
+       developer who never opens this section still gets a good page. */
+    page: {
+      // Which sections are drawn, in page order. Metadata, Trailer, About and
+      // Screenshots earn their place by having content; Footer is here even
+      // though the template otherwise starts bare, because a marketing page
+      // with no way to reach the people who made the game is not a minimal
+      // page, it is a broken one.
+      sections: { strip: true, video: true, about: true, shots: true, footer: true },
+
+      /* HOW THE KEY ART SITS IN THE HERO. Steam's library_hero.jpg is
+         3840×1240 (about 3.10:1) against a hero nearer 2.18:1, so roughly a
+         third of its width is cropped no matter what — and which third is a
+         real decision, because key art is usually composed for a wider box
+         than ours. ox/oy are a pan offset in PIXELS, not a percentage, so the
+         drag tracks the pointer 1:1. zoom is a percentage, 100 = untouched.
+         fit 'fill' crops to the hero's proportions; 'whole' takes the art's
+         own and crops nothing. */
+      art: { ox: 0, oy: 0, zoom: 100, fit: 'fill' },
+
+      /* THE LOGOTYPE the developer supplied, when they did — same shape as
+         the uploads above ({ name, dataUrl } by hand, { name, url } when
+         found on Steam's CDN). Separate from uploads.* because it belongs to
+         the marketing page and nothing else submits it anywhere.
+
+         tint 'original' shows the artwork exactly as delivered, which is the
+         respectful default and right nearly always. 'white' knocks it out,
+         and exists because a dark logotype on dark key art cannot be rescued
+         by a shadow — only by knocking it out. */
+      logo: null,
+      logoTint: 'original',
+
+      // An alternative background, when the store's own art is not what the
+      // developer wants on their site. Held separately from
+      // uploads.steamKeyArtHero so that "use the store art" stays a revert
+      // rather than a re-download.
+      artOverride: null,
+
+      /* THE CALL TO ACTION in the hero. 'button' is one pill; 'stores' shows
+         the availability marks large instead, which reads better for a game
+         on five platforms than a single button pointing at one of them;
+         'none' leaves the hero to the art. A choice rather than a fixed
+         button because those three pages want genuinely different things. */
+      buyMode: 'button',
+
+      // The small logotype in the page's top-left corner, the way a normal
+      // site header works. OFF by default: the hero already names the game,
+      // in type, at the size it deserves, and a second small copy of the same
+      // name a few hundred pixels above it is repetition, not a header.
+      headerShow: false,
+
+      // Labels of metadata rows the developer has hidden, e.g. ['Publisher'].
+      // Stored as labels rather than indices so hiding a row survives the
+      // band gaining or losing rows when a field is filled in later.
+      hiddenRows: [],
+    },
   },
 
   // Binary finding navigation — which finding is currently shown (0-indexed per platform)

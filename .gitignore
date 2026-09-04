@@ -9,3 +9,8 @@ package.json
 package-lock.json
 .staging/
 _to_delete/
+
+# Real game art used to test the Web/Pages mockup locally. Ignored on purpose:
+# this repo is published via GitHub Pages, and third-party key art shouldn't
+# ship with it. Drop assets in here to test; nothing under it gets committed.
+test-assets/

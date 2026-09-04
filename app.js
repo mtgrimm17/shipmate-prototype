@@ -14190,6 +14190,55 @@ function setWebAccent(color) {
   reRenderStepModal();
 }
 
+/* ── The marketing page's PRESENTATION setters ─────────────
+   The siblings above write content — words a developer types into a form.
+   These write the decisions they make by looking at the page: where the key
+   art sits, which sections are drawn, whether the hero shows a button or the
+   store marks. See the note above state.webSite.page for why the two are
+   kept apart.
+
+   No re-render here either, and for a sharper reason than focus loss: these
+   are driven by dragging, and a drag fires continuously. Re-rendering the
+   modal on every pointermove would rebuild the very node being dragged. The
+   page updates itself live through CSS custom properties; this only records
+   where the gesture ended. */
+function _webPage() {
+  if (!state.webSite) state.webSite = {};
+  // Defensive rather than decorative: a project saved before this field
+  // existed deserializes without it, and every reader below would then be
+  // writing onto undefined.
+  if (!state.webSite.page) state.webSite.page = {};
+  return state.webSite.page;
+}
+
+function setWebPageField(key, value) {
+  _webPage()[key] = value;
+}
+
+/* Nested one level down, so the art's four values can be set together after a
+   drag or a zoom without three separate calls and three separate chances to
+   forget one. */
+function setWebPageArt(patch) {
+  const p = _webPage();
+  p.art = Object.assign({ ox: 0, oy: 0, zoom: 100, fit: 'fill' }, p.art, patch || {});
+}
+
+function setWebPageSection(id, shown) {
+  const p = _webPage();
+  if (!p.sections) p.sections = {};
+  p.sections[id] = !!shown;
+}
+
+/* Metadata rows are hidden BY LABEL, not by index: the band drops rows whose
+   field is empty, so a row's position moves the moment a developer fills in
+   their publisher. An index would silently start hiding a different row. */
+function toggleWebPageRow(label, hidden) {
+  const p = _webPage();
+  const rows = new Set(p.hiddenRows || []);
+  if (hidden) rows.add(label); else rows.delete(label);
+  p.hiddenRows = [...rows];
+}
+
 /* Factsheet > Developer > Links sub-section — the social-links list
    (state.webSite.links, each a { id, name, url } — see _wsLinkRowHTML in
    render.js and the state.js comment above webSite.links). Structural
