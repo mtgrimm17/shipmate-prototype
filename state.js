@@ -806,8 +806,6 @@ const PLATFORMS = {
       { id: 'privacy',         label: 'App Privacy'                                   },
       { id: 'versionInfo',     label: 'Version Information'                           },
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
-      { id: 'iap',             label: 'In-App Purchases'                              },
-      { id: 'subscriptions',   label: 'Subscriptions'                                 },
       { id: 'gameCenter',      label: 'Game Center'                                   },
       { id: 'reviewInfo',      label: 'App Review Information'                        },
       { id: 'versionRelease',  label: 'Version Release'                               },
@@ -1739,10 +1737,6 @@ function computeMacFullSectionRisk(sectionId) {
     return 'LOW';
   }
 
-  if (sectionId === 'iap') {
-    return evalFields(['hasIAP']);
-  }
-
   return 'NONE';
 }
 
@@ -1797,10 +1791,6 @@ function isMacFullSectionComplete(sectionId) {
     return hasShots;
   }
 
-  if (sectionId === 'iap') {
-    return a.hasIAP !== null;
-  }
-
   if (sectionId === 'business') {
     return a.hasIAP !== null;
   }
@@ -1811,11 +1801,9 @@ function isMacFullSectionComplete(sectionId) {
     return (state.uploads?.screenshots || []).length > 0;
   }
 
-  // Subscriptions and Game Center are purely additive, same convention as
-  // IAP Products (see makeBlankIOSAnswers's comment) — a developer with
-  // none simply leaves the list(s) empty, so an empty list never blocks
-  // completion.
-  if (sectionId === 'subscriptions') return true;
+  // Game Center is purely additive, same convention as IAP Products (see
+  // makeBlankIOSAnswers's comment) — a developer with none simply leaves
+  // the list(s) empty, so an empty list never blocks completion.
   if (sectionId === 'gameCenter')    return true;
 
   if (sectionId === 'reviewInfo') {

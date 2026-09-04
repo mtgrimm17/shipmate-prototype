@@ -1604,21 +1604,6 @@ function setMacFullLeaderboardField(id, key, value) {
   lb[key] = value;
   if (key === 'scoreFormat') reRenderStepModal();
 }
-function addMacFullAchievement() {
-  state.macFullSubmitAnswers.gameCenter.achievements.push({ id: generateId('ach'), name: '', description: '', points: 10, hidden: false });
-  reRenderStepModal();
-}
-function removeMacFullAchievement(id) {
-  const gc = state.macFullSubmitAnswers.gameCenter;
-  gc.achievements = gc.achievements.filter(a => a.id !== id);
-  reRenderStepModal();
-}
-function setMacFullAchievementField(id, key, value) {
-  const ac = state.macFullSubmitAnswers.gameCenter.achievements.find(a => a.id === id);
-  if (!ac) return;
-  ac[key] = value;
-  if (key === 'hidden') reRenderStepModal();
-}
 
 /* ── Mac App Store Full — App Review Information ─────────────────────── */
 function handleMacFullReviewAttachment(event) {

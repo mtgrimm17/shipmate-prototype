@@ -4371,8 +4371,6 @@ function renderStepModal() {
     else if (stepId === 'pricing')            body = buildMacFullPricingSection();
     else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
     else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
-    else if (stepId === 'iap')                body = buildIapSection(platformId);
-    else if (stepId === 'subscriptions')      body = buildMacFullSubscriptionsSection();
     else if (stepId === 'gameCenter')         body = buildMacFullGameCenterSection();
     else if (stepId === 'reviewInfo')         body = buildMacFullReviewInfoSection();
     else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
@@ -4513,7 +4511,7 @@ function buildStorePreviewFlipSection(platformId, target) {
     // Mac App Store Full has no Export Compliance question of its own — its
     // entire Build & Compliance step (which is where Export Compliance
     // lived) was removed outright, unlike ios/macos which still ask it here.
-    if (platformId === 'macos_full') return buildBusinessSection(platformId) + buildIapSection(platformId);
+    if (platformId === 'macos_full') return buildBusinessSection(platformId) + buildIapSection(platformId) + buildMacFullSubscriptionsSection();
     return buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
   }
   if (target === 'data') {
@@ -10255,10 +10253,15 @@ function buildMacFullSubTierRow(groupId, tr) {
 /* ── Mac App Store Full — Subscriptions ─────────────────────────────────
    Simplified per the "simplified but functional" design decision: a
    repeatable list of groups, each with a repeatable list of tiers, rather
-   than Apple's own full multi-screen Subscription Groups flow. */
+   than Apple's own full multi-screen Subscription Groups flow. Embedded
+   within Business Questions (buildStorePreviewFlipSection's 'business'
+   target), immediately after In-App Purchases — same divider + label
+   header pattern buildIapSection uses for its own section. */
 function buildMacFullSubscriptionsSection() {
   const groups = state.macFullSubmitAnswers.subscriptionGroups || [];
   return `
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Subscriptions</div>
     <div class="form-group" style="margin-bottom:10px;">
       <div class="form-hint">Covers App Store Connect's Subscription Groups — a simplified repeatable list of groups and tiers rather than Apple's full multi-screen subscription setup. Leave empty if your game has no subscriptions.</div>
     </div>
@@ -10276,12 +10279,10 @@ function buildMacFullSubscriptionsSection() {
 }
 
 /* ── Mac App Store Full — Game Center ────────────────────────────────────
-   Leaderboards/Achievements are simplified repeatable lists (per the
-   "simplified but functional" design decision) rather than Apple's own
-   per-item localization/image-upload flows. Multiplayer is a single
-   on/off toggle plus a player-count range, covering the gist of Game
-   Center's Multiplayer configuration without replicating its matchmaking
-   rule builder. */
+   Leaderboards is a simplified repeatable list (per the "simplified but
+   functional" design decision) rather than Apple's own per-item
+   localization/image-upload flow. Multiplayer and Achievements fields
+   were removed from this section per a later design decision. */
 function buildMacFullGameCenterSection() {
   const gc = state.macFullSubmitAnswers.gameCenter;
 
@@ -10306,66 +10307,12 @@ function buildMacFullGameCenterSection() {
       </div>
     </div>`).join('');
 
-  const achievementsHTML = (gc.achievements || []).map(ac => `
-    <div class="iap-product-row" data-iap-id="${ac.id}">
-      <button class="iap-product-remove" type="button" onclick="removeMacFullAchievement('${ac.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
-      <div class="iap-product-field">
-        <label class="form-label">Name</label>
-        <input class="form-input" type="text" value="${escHtml(ac.name)}" placeholder="e.g. First Victory"
-               oninput="setMacFullAchievementField('${ac.id}','name',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Description</label>
-        <input class="form-input" type="text" value="${escHtml(ac.description)}" placeholder="How the player earns it"
-               oninput="setMacFullAchievementField('${ac.id}','description',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Points</label>
-        <input class="form-input" type="number" min="0" max="100" value="${ac.points}"
-               oninput="setMacFullAchievementField('${ac.id}','points',this.value)">
-      </div>
-      <div class="iap-product-trial">
-        <span class="iap-product-trial-label">Hidden?</span>
-        <div class="question-yn">
-          <button class="yn-btn yn-yes ${ac.hidden ? 'is-selected' : ''}" onclick="setMacFullAchievementField('${ac.id}','hidden',true)">YES</button>
-          <button class="yn-btn yn-no ${!ac.hidden ? 'is-selected' : ''}" onclick="setMacFullAchievementField('${ac.id}','hidden',false)">NO</button>
-        </div>
-      </div>
-    </div>`).join('');
-
   return `
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Multiplayer</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${gc.multiplayer.enabled ? 'is-selected' : ''}" onclick="setMacFullField('gameCenter.multiplayer.enabled', true)">ON</button>
-        <button class="yn-btn yn-no ${!gc.multiplayer.enabled ? 'is-selected' : ''}" onclick="setMacFullField('gameCenter.multiplayer.enabled', false)">OFF</button>
-      </div>
-    </div>
-    ${gc.multiplayer.enabled ? `
-    <div class="ios-followup" style="display:flex;gap:12px;margin-bottom:14px;">
-      <div class="form-group" style="flex:1;margin-bottom:0;">
-        <label class="form-label">Min Players</label>
-        <input class="form-input" type="number" min="1" value="${gc.multiplayer.minPlayers ?? ''}"
-               oninput="setMacFullTextField('gameCenter.multiplayer.minPlayers', this.value)">
-      </div>
-      <div class="form-group" style="flex:1;margin-bottom:0;">
-        <label class="form-label">Max Players</label>
-        <input class="form-input" type="number" min="1" value="${gc.multiplayer.maxPlayers ?? ''}"
-               oninput="setMacFullTextField('gameCenter.multiplayer.maxPlayers', this.value)">
-      </div>
-    </div>` : ''}
-
     <div class="form-group" style="margin:14px 0 6px;">
       <label class="form-label">Leaderboards <span class="form-hint-inline">(optional)</span></label>
     </div>
     ${leaderboardsHTML}
-    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullLeaderboard()">+ Add Leaderboard</button>
-
-    <div class="form-group" style="margin:20px 0 6px;">
-      <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
-    </div>
-    ${achievementsHTML}
-    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullAchievement()">+ Add Achievement</button>`;
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullLeaderboard()">+ Add Leaderboard</button>`;
 }
 
 /* ── Mac App Store Full — App Review Information ─────────────────────── */
