@@ -1153,7 +1153,12 @@ function seedMacAppStoreListing() {
    already works) rather than in a repeatable per-language sub-list. */
 
 // New achievements start expanded (collapsed: false) with every field blank.
+// Only one achievement is ever expanded at a time (see
+// expandMacGcAchievement's own comment, directly below) — a new one starts
+// expanded too, so whatever else is currently open gets collapsed first,
+// the same way.
 function addMacGameCenterAchievement() {
+  _collapseOtherMacGcAchievements(null);
   state.macGameCenterAchievements.push({
     id: generateId('ach'),
     refName: '',
@@ -1182,9 +1187,31 @@ function setMacGameCenterAchievementField(id, key, value) {
   a[key] = value;
   if (key === 'hidden' || key === 'achievableMultipleTimes') reRenderStepModal();
 }
+// Collapses every OTHER currently-expanded achievement — "only one
+// achievement expanded at a time" (addMacGameCenterAchievement/
+// expandMacGcAchievement both call this before opening a new one, passing
+// the id of the one about to be opened — or null, from
+// addMacGameCenterAchievement, since the new achievement doesn't exist
+// yet at collapse-time). Reuses saveMacGcAchievement itself for the actual
+// collapse rather than a bare `a.collapsed = true`, so a collapse
+// triggered this way gets exactly the same Reference-Name-required gate
+// AND the same Localizations auto-translate propagation a real Save/
+// header-click collapse gets — an incomplete achievement with no
+// Reference Name yet simply stays open, same as clicking its own header
+// does today (so in that one edge case two achievements can end up
+// expanded at once — the alternative, silently discarding an in-progress
+// achievement's uncommitted fields, would be worse).
+function _collapseOtherMacGcAchievements(keepId) {
+  state.macGameCenterAchievements
+    .filter(a => a.id !== keepId && !a.collapsed)
+    .forEach(a => saveMacGcAchievement(a.id));
+}
 // Clicking a collapsed achievement's row re-expands it for editing — same
-// expand-on-click convention as expandIapProduct.
+// expand-on-click convention as expandIapProduct. Collapses whatever else
+// is currently open first (_collapseOtherMacGcAchievements above) so only
+// one achievement is ever expanded at a time.
 function expandMacGcAchievement(id) {
+  _collapseOtherMacGcAchievements(id);
   const a = state.macGameCenterAchievements.find(a => a.id === id);
   if (a) a.collapsed = false;
   reRenderStepModal();
