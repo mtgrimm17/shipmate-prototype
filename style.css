@@ -5245,6 +5245,26 @@ textarea.loc-review-field.ias-inline-input {
 }
 .ias-meta-bot--action { color: var(--accent); font-weight: 600; }
 
+/* ── Mac App Store Full only: Product Page Preview's Information section,
+   made selectable and glowing-until-visited like Subtitle/Content/Business
+   above (openStorePreviewSection('macos_full','appInformation') — flips to
+   the new App Information section, buildMacFullAppInformationSection,
+   render.js). Reuses the exact same @keyframes ias-meta-pulse ring every
+   other "needs attention" glow on this preview uses, just scaled to a full
+   section block instead of a small meta-strip cell. */
+.ias-info-section--action {
+  cursor: pointer; border-radius: 10px;
+  transition: background 0.12s;
+  animation: ias-meta-pulse 2s ease-in-out infinite;
+}
+.ias-info-section--action:hover { background: var(--panel-2); }
+/* Visited/done — still clickable but no pulse, green hover */
+.ias-info-section--seen {
+  cursor: pointer; border-radius: 10px;
+  animation: none;
+}
+.ias-info-section--seen:hover { background: rgba(52,199,89,0.08); }
+
 /* ── DocuSign-style section action buttons ── */
 @keyframes spp-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.25); }

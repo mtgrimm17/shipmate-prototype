@@ -4289,6 +4289,7 @@ function renderStepModal() {
     localization:  'Localization Review',
     iapLocalizations: 'IAP Localizations',
     achievementLocalizations: 'Achievement Localizations',
+    appInformation: 'App Information',
   };
   const isFlipped = !!flipTarget;
   // Game Center (macos, ios, and now macos_full too) is not one of
@@ -4528,6 +4529,17 @@ function buildStorePreviewFlipSection(platformId, target) {
   }
   if (target === 'screenshots') {
     return buildScreenshotsSection(platformId);
+  }
+  // Mac App Store Full only: Product Page Preview's own Information card
+  // (buildMacFullStorePreviewSection's own Information block) — flips the whole
+  // modal over to the new App Information section (buildMacFullAppInformationSection,
+  // above), same "flip from the un-flipped Store Preview itself" pattern
+  // Content/Business/Data Collection just above already use (no
+  // Game-Center-Achievements-style separate step modal here), which is what
+  // gives this section the same "seen" tracking (and therefore the same
+  // glow-until-visited treatment) those targets already get for free.
+  if (target === 'appInformation') {
+    return buildMacFullAppInformationSection();
   }
   // Steam-only: the Store Page Preview - Prototype's own "Tags" block
   // (under the header capsule/Developer/Publisher — see
@@ -10416,15 +10428,70 @@ function _mfFileRowHTML(file, removeOnclick) {
     </div>`;
 }
 
-/* ── Mac App Store Full — App Information ────────────────────────────── */
-// Primary Category is hard-set to Games (Shipmate only handles game
-// submissions) and rendered as a locked, disabled field rather than a
-// select — nothing ever calls setMacFullField('category.primary', ...).
-// Bundle ID is likewise locked: it shows fixed instructional text instead
-// of accepting player-typed input, since the real value has to come from
-// the Xcode project rather than App Store Connect.
+/* ── Mac App Store Full — App Information Full ───────────────────────────
+   Renamed from "App Information" (label only — step id stays 'appInfo') so
+   the label space is free for the NEW "App Information" section just below
+   (buildMacFullAppInformationSection), reached by clicking the Information
+   card on Product Page Preview. Primary Category/Games Subcategory (#1/#2)/
+   Secondary Category used to live here — moved to that new section (see its
+   own header comment for why) and removed from here entirely; nothing in
+   this function reads/writes state.macFullSubmitAnswers.category anymore.
+   Bundle ID is locked: it shows fixed instructional text instead of
+   accepting player-typed input, since the real value has to come from the
+   Xcode project rather than App Store Connect. */
 function buildMacFullAppInfoSection() {
   const a = state.macFullSubmitAnswers;
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Bundle ID</label>
+      <input class="form-input" type="text" value="${escHtml(a.bundleId)}" disabled>
+    </div>
+    ${_mfTextField('SKU', 'sku', a.sku, 'A unique ID for your app not visible to users.')}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Does your app contain, show, or access third-party content?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.contentRights === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','yes')">Yes, and I have the necessary rights</button>
+        <button class="yn-btn yn-no ${a.contentRights === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','no')">No</button>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:14px;">
+      <div class="form-hint">Privacy Policy URL is entered once, in the App Privacy step below — App Store Connect's own App Information tab reads the same URL from there.</div>
+    </div>`;
+}
+
+/* ── Mac App Store Full — App Information (new) ───────────────────────────
+   NOT one of PLATFORMS.macos_full.steps (see that array's own comment,
+   state.js) — reached instead by clicking the Information card on Product
+   Page Preview (buildMacFullStorePreviewSection's own Information block),
+   via openStorePreviewSection('macos_full','appInformation') and the
+   'appInformation' case in buildStorePreviewFlipSection, same "flip the
+   whole modal over" pattern Content/Business/Data Collection already use —
+   NOT the separate-step-modal pattern Game Center's Achievements card uses
+   (openStepModal). That gives this section the same "seen" tracking those
+   flip targets already get for free (buildStorePreviewFlipSection marks
+   storePreviewSectionSeen.macos_full.appInformation on open), which is what
+   drives the Information card's own glow-until-visited treatment.
+
+   Carries two groups of fields moved out of other steps, each removed from
+   its old home when it was added here:
+     • Primary Category/Games Subcategory (#1/#2)/Secondary Category — moved
+       from App Information Full (buildMacFullAppInfoSection, just above).
+     • Promotional Text/Keywords/Support URL/Marketing URL/Copyright — moved
+       from Version Information (buildMacFullVersionInfoSection, further
+       below), via the same _mfListingField/setMacFullListingField helpers
+       that step already used for them (state.macFullAppStoreListing).
+   Primary Category is still hard-set to Games (Shipmate only handles game
+   submissions) and rendered as a locked, disabled field — nothing calls
+   setMacFullField('category.primary', ...). Category and Copyright here are
+   exactly what Product Page Preview's Information card shows under
+   "Category"/"Copyright" (a.category.primary / state.macFullAppStoreListing.copyright,
+   both read directly — no separate copy). */
+function buildMacFullAppInformationSection() {
+  seedMacFullAppStoreListing();
+  const a = state.macFullSubmitAnswers;
+  const l = state.macFullAppStoreListing;
   return `
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Primary Category</label>
@@ -10452,23 +10519,12 @@ function buildMacFullAppInfoSection() {
       </select>
     </div>
 
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Bundle ID</label>
-      <input class="form-input" type="text" value="${escHtml(a.bundleId)}" disabled>
-    </div>
-    ${_mfTextField('SKU', 'sku', a.sku, 'A unique ID for your app not visible to users.')}
-
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Does your app contain, show, or access third-party content?</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.contentRights === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','yes')">Yes, and I have the necessary rights</button>
-        <button class="yn-btn yn-no ${a.contentRights === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('contentRights','no')">No</button>
-      </div>
-    </div>
-
-    <div class="form-group" style="margin-top:14px;">
-      <div class="form-hint">Privacy Policy URL is entered once, in the App Privacy step below — App Store Connect's own App Information tab reads the same URL from there.</div>
-    </div>`;
+    <div class="ios-q-divider"></div>
+    ${_mfListingField('Promotional Text', 'promotionalText', l.promotionalText, 'Can be updated anytime without submitting a new build', 'textarea')}
+    ${_mfListingField('Keywords', 'keywords', l.keywords, 'Comma-separated, up to 100 characters total')}
+    ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com/support')}
+    ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com')}
+    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}`;
 }
 
 
@@ -10479,10 +10535,13 @@ function buildMacFullAppInfoSection() {
    Version Information page asks for, plus an "App Review" section below
    (same divider + label header pattern buildIapSection uses for its own
    section) carrying everything from the former standalone App Review
-   Information step, since that step was folded in here and removed. */
+   Information step, since that step was folded in here and removed.
+   Promotional Text/Keywords/Support URL/Marketing URL/Copyright used to
+   live here too — moved to the new App Information section
+   (buildMacFullAppInformationSection, above) reached from Product Page
+   Preview's Information card, and removed from here entirely; this step no
+   longer touches state.macFullAppStoreListing at all. */
 function buildMacFullVersionInfoSection() {
-  seedMacFullAppStoreListing();
-  const l  = state.macFullAppStoreListing;
   const ps = state.platformScreenshots?.macos_full;
   const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
                    (state.uploads?.screenshots || []).length > 0;
@@ -10503,13 +10562,7 @@ function buildMacFullVersionInfoSection() {
     <div class="form-group" style="margin-bottom:14px;">
       <div class="form-hint">Screenshots, Title, Subtitle, Description, and What's New are managed in the Product Page Preview step below${hasShots ? '' : ' — no screenshots are available yet'}.</div>
     </div>
-    ${_mfListingField('Promotional Text', 'promotionalText', l.promotionalText, 'Can be updated anytime without submitting a new build', 'textarea')}
-    ${_mfListingField('Keywords', 'keywords', l.keywords, 'Comma-separated, up to 100 characters total')}
-    ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com/support')}
-    ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com')}
-    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}
 
-    <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">App Review</div>
     ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
     ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
@@ -10782,7 +10835,6 @@ function buildMacFullStorePreviewSection() {
   const price     = isFree ? 'GET' : `$${fd.price}`;
   const priceText = isFree ? 'Free' : `$${fd.price}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
-  const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
   const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
@@ -10988,15 +11040,26 @@ function buildMacFullStorePreviewSection() {
     </div>`;
 
   // Compatibility reads "Mac" — this is the Mac App Store, not iPhone/iPad.
+  // Languages shows every Primary + Supporting language selected in Game
+  // Details - Localization (previewLangCodes, computed above — exactly the
+  // same list the language-preview dropdown itself offers), not just the
+  // Primary language's own code, since Apple's own App Information page
+  // lists every language a listing is localized into.
+  const languagesValue = previewLangCodes.map(code => OB_LANG_NAMES[code] || code).join(', ');
   const infoRowsTop = [
     { label: 'Seller',        value: 'Your Company'      },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'Mac'                },
-    { label: 'Languages',     value: langCode            },
+    { label: 'Languages',     value: escHtml(languagesValue) },
     { label: 'Age Rating',    value: ageRating           },
   ].map(_infoRowHtml).join('');
-  const copyrightRowHtml = _infoRowHtml({ label: 'Copyright', value: `© ${new Date().getFullYear()}` });
+  // Reads the real Copyright field (state.macFullAppStoreListing.copyright,
+  // edited from the new App Information section — see
+  // buildMacFullAppInformationSection) rather than a hardcoded current-year
+  // placeholder, so this row always matches what's actually entered there.
+  const copyrightValue = (state.macFullAppStoreListing && state.macFullAppStoreListing.copyright) || `© ${new Date().getFullYear()}`;
+  const copyrightRowHtml = _infoRowHtml({ label: 'Copyright', value: escHtml(copyrightValue) });
 
   const savedIapProducts = (a.iapProducts || []).filter(p => p.collapsed);
   const iapPriceLabel = price => {
@@ -11236,8 +11299,9 @@ function buildMacFullStorePreviewSection() {
 
         <div class="ias-section-divider"></div>
 
-        <!-- ── Information ── -->
-        <div class="ias-section">
+        <!-- ── Information (selectable — opens the new App Information section) ── -->
+        <div class="ias-section ias-info-section${infoDone ? ' ias-info-section--seen' : ' ias-info-section--action'}"
+             onclick="openStorePreviewSection('${pid}','appInformation')" title="${infoDone ? 'Edit App Information' : 'Answer App Information'}">
           <div class="ias-section-head">Information</div>
           <div class="ias-info-grid">${infoRows}</div>
           <div class="ias-info-link">Developer Website <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>

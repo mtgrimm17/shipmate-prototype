@@ -1626,17 +1626,20 @@ function setMacFullTextField(path, value) {
   obj[key] = value;
 }
 
-/* ── Mac App Store Full — Version Information ────────────────────────── */
+/* ── Mac App Store Full — App Information (new) ──────────────────────── */
 // Writes straight into state.macFullAppStoreListing — the extended,
 // FULLY INDEPENDENT superset of macAppStoreListing (see its own comment,
 // state.js). Seeds first in case this is somehow the first touch of the
 // listing (defensive — openStepModal/toggleOnboardingPlatform/
 // activatePlatform already seed it before this step can be reached).
-// Version Information's own remaining fields (Promotional Text, Keywords,
-// Support URL, Marketing URL, Copyright) — plain, primary-language-only,
-// no per-language translation of their own. Title/Subtitle/Description/
-// What's New are edited only from the Product Page Preview / Localization
-// Review now (_macFullSetFieldValue, further below), never through here.
+// Promotional Text/Keywords/Support URL/Marketing URL/Copyright — plain,
+// primary-language-only, no per-language translation of their own — used
+// to be Version Information's own fields; now edited from the new App
+// Information section instead (buildMacFullAppInformationSection,
+// render.js), same setter, just called from a different step. Title/
+// Subtitle/Description/What's New are edited only from the Product Page
+// Preview / Localization Review now (_macFullSetFieldValue, further below),
+// never through here.
 function setMacFullListingField(field, value) {
   seedMacFullAppStoreListing();
   state.macFullAppStoreListing[field] = value;

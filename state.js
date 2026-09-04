@@ -809,7 +809,7 @@ const PLATFORMS = {
     id: 'macos_full', label: 'Mac App Store Full', color: '#007AFF',
     steps: [
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
-      { id: 'appInfo',         label: 'App Information'                              },
+      { id: 'appInfo',         label: 'App Information Full'                         },
       { id: 'versionInfo',     label: 'Version Information'                           },
       { id: 'contentRating',   label: 'Age Rating',                hasInference: true },
       { id: 'privacy',         label: 'App Privacy'                                   },
@@ -1807,6 +1807,18 @@ function isMacFullSectionComplete(sectionId) {
   // makeBlankIOSAnswers's comment) — a developer with none simply leaves
   // the list(s) empty, so an empty list never blocks completion.
   if (sectionId === 'gameCenter')    return true;
+
+  // App Information (the new, non-"Full" section reached from Product
+  // Page Preview's own Information card — see buildMacFullStorePreviewSection's
+  // infoDone/buildMacFullAppInformationSection, render.js) carries Primary
+  // Category (locked to Games), Subcategories/Secondary Category, and
+  // Promotional Text/Keywords/Support URL/Marketing URL/Copyright — every
+  // one of these was already optional in App Information Full/Version
+  // Information before the move, so this section is purely additive too,
+  // same as Game Center just above. The Preview's own "seen && complete"
+  // glow gate (mirroring Business's) therefore reduces to "seen" alone —
+  // the glow simply stops once the user has visited it.
+  if (sectionId === 'appInformation') return true;
 
   if (sectionId === 'versionRelease') {
     if (a.releaseOption === 'scheduled' && !a.scheduledReleaseDate.trim()) return false;
