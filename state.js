@@ -736,6 +736,14 @@ const PLATFORMS = {
       { id: 'improveSubmission',      label: 'Improve Your Submission'                 },
     ],
   },
+  // No 'gameCenter' step here — same "reached via Product Page Preview's
+  // Achievements card, not its own Submission step" treatment as Mac App
+  // Store's own steps list just below (see that array's own comment for
+  // the full reasoning). buildIosGameCenterSection (render.js) still
+  // renders it, openStepModal('ios','gameCenter') still opens it (exactly
+  // what the Achievements card calls — buildStorePreviewSection's own
+  // achievementsHtml, render.js), and isIOSSectionComplete('gameCenter')
+  // still answers `true` for it.
   ios: {
     id: 'ios', label: 'App Store', color: '#007AFF',
     steps: [
@@ -1471,6 +1479,15 @@ function isIOSSectionComplete(sectionId) {
     return (state.uploads?.screenshots || []).length > 0;
   }
   if (sectionId === 'improveSubmission') return !!state.iosSubmitAnswers.improveSubmissionSeen;
+
+  // Game Center Achievements are purely additive, same as Mac App Store's
+  // own (isMacSectionComplete's own comment) — an empty list never blocks
+  // submission. Not one of PLATFORMS.ios.steps (see that array's own
+  // comment, further above) — reached instead via Product Page Preview's
+  // Achievements card — but isIOSSectionComplete('gameCenter') is still
+  // asked for by the shared step-modal chrome (renderStepModal, render.js),
+  // so it needs an answer.
+  if (sectionId === 'gameCenter') return true;
 
   // storePreview is complete when all 4 sub-sections are done
   if (sectionId === 'storePreview') {
@@ -2995,6 +3012,29 @@ const state = {
   // mirror ASC's Achievements UI end to end.
   macGameCenterAchievements: [],
 
+  // App Store (ios)'s own Game Center Achievements — a FULL, independent
+  // twin of macGameCenterAchievements directly above, added for full
+  // feature parity with Mac App Store's Game Center: same shape
+  // ({ id, refName, pointValue, hidden, achievableMultipleTimes, collapsed,
+  // displayName, earnedDescription, preEarnedDescription, image, locs?,
+  // fromSteam?, steamIndex? }), same add/remove/save/expand/drag-reorder
+  // mechanics (the "Ios"/"IosGc"-prefixed cluster, app.js, right after the
+  // "Mac"/"MacGc"-prefixed one), same "Achievement Localizations" sub-
+  // section (the "_iasAchLoc"/"iasAchLoc"-prefixed cluster, app.js —
+  // buildIosAchievementLocalizationsSection, render.js). Kept as its own
+  // completely separate array — never shared with, or derived from,
+  // macGameCenterAchievements — since a game's iOS and Mac App Store
+  // Game Center setups (achievement lists, point values, Steam-imported
+  // text, etc.) are independent App Store Connect records in real life,
+  // same "duplicate the stateful UI, not generalize it" pattern this file
+  // already uses for macSubmitAnswers vs iosSubmitAnswers. The one place
+  // the two DO share a source: a Steam-linked title's achievement import
+  // (_applySteamAchievements, app.js) populates both arrays at once from
+  // the same Steam fetch, since that's genuinely the same underlying data —
+  // but from that point on each array is edited/localized/reordered fully
+  // independently.
+  iosGameCenterAchievements: [],
+
   // Mac App Store Full submission questionnaire answers — a from-scratch,
   // FULLY INDEPENDENT copy (see makeBlankMacFullAnswers' own comment):
   // answering a question here never touches iosSubmitAnswers or
@@ -3409,6 +3449,22 @@ const state = {
   masAchLocTranslatePendingLangs: {},
   masAchLocAutoTranslateFields: { displayName: true, earnedDescription: true, preEarnedDescription: true },
   masAchLocSettingsOpen: false,
+
+  // App Store (ios)'s own "Achievement Localizations" section — full twin
+  // of the masAchLoc* fields directly above, scoped to
+  // state.iosGameCenterAchievements instead of state.macGameCenterAchievements.
+  // See the "_iasAchLoc"/"iasAchLoc" prefixed handler cluster, app.js, for
+  // the full mechanics (identical to "_masAchLoc"/"masAchLoc" in every way
+  // except which achievement array it reads/writes).
+  iasAchLocAchId: null,
+  iasAchLocField: null,
+  iasAchLocMode: 'locs',
+  iasAchLocBackTranslation: {},
+  iasAchLocUndoHistory: { real: {}, draft: {} },
+  iasAchLocTranslateStatus: {},
+  iasAchLocTranslatePendingLangs: {},
+  iasAchLocAutoTranslateFields: { displayName: true, earnedDescription: true, preEarnedDescription: true },
+  iasAchLocSettingsOpen: false,
 
   // Cached Steam store-page info for the currently-selected Steam-linked
   // game — { appId, baselineDescription, shortDescription,

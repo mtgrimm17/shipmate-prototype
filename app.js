@@ -1320,6 +1320,117 @@ function macGcAchievementDragEnd() {
     .forEach(el => el.classList.remove('is-dragging', 'is-drop'));
 }
 
+/* ── App Store (ios) — Game Center Achievements ───────────────────────────
+   Full twin of the Mac App Store cluster directly above (addMacGameCenter-
+   Achievement through macGcAchievementDragEnd) — same shape, same "only one
+   expanded at a time" invariant, same Reference-Name-required collapse
+   gate, same drag-to-reorder — reading/writing state.iosGameCenterAchievements
+   instead of state.macGameCenterAchievements. Added for full feature parity
+   with Mac App Store's Game Center; see that cluster's own comments for the
+   complete rationale behind each piece — it isn't re-explained here. */
+
+function addIosGameCenterAchievement() {
+  _collapseOtherIosGcAchievements(null);
+  state.iosGameCenterAchievements.push({
+    id: generateId('ach'),
+    refName: '',
+    pointValue: '',
+    hidden: false,
+    achievableMultipleTimes: false,
+    collapsed: false,
+    displayName: '',
+    earnedDescription: '',
+    preEarnedDescription: '',
+    image: null,
+  });
+  reRenderStepModal();
+}
+function removeIosGameCenterAchievement(id) {
+  state.iosGameCenterAchievements = state.iosGameCenterAchievements.filter(a => a.id !== id);
+  reRenderStepModal();
+}
+function setIosGameCenterAchievementField(id, key, value) {
+  const a = state.iosGameCenterAchievements.find(a => a.id === id);
+  if (!a) return;
+  a[key] = value;
+  if (key === 'hidden' || key === 'achievableMultipleTimes') reRenderStepModal();
+}
+function _collapseOtherIosGcAchievements(keepId) {
+  state.iosGameCenterAchievements
+    .filter(a => a.id !== keepId && !a.collapsed)
+    .forEach(a => saveIosGcAchievement(a.id));
+}
+function expandIosGcAchievement(id) {
+  _collapseOtherIosGcAchievements(id);
+  const a = state.iosGameCenterAchievements.find(a => a.id === id);
+  if (a) a.collapsed = false;
+  reRenderStepModal();
+}
+function saveIosGcAchievement(id) {
+  const a = state.iosGameCenterAchievements.find(a => a.id === id);
+  if (!a || !a.refName.trim()) return;
+  a.collapsed = true;
+  _iasAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
+  _iasAchLocTriggerAutoTranslate(id, 'earnedDescription', a.earnedDescription);
+  _iasAchLocTriggerAutoTranslate(id, 'preEarnedDescription', a.preEarnedDescription);
+  reRenderStepModal();
+}
+
+function handleIosGcAchievementImage(event, achId) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const a = state.iosGameCenterAchievements.find(a => a.id === achId);
+  if (!a) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    a.image = { name: file.name, dataUrl: ev.target.result };
+    reRenderStepModal();
+  };
+  reader.readAsDataURL(file);
+}
+function removeIosGcAchievementImage(achId) {
+  const a = state.iosGameCenterAchievements.find(a => a.id === achId);
+  if (!a) return;
+  a.image = null;
+  reRenderStepModal();
+}
+
+let _iosGcDragId = null;
+function iosGcAchievementDragStart(ev, id) {
+  _iosGcDragId = id;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', id);
+  ev.currentTarget.classList.add('is-dragging');
+}
+function iosGcAchievementDragOver(ev, id) {
+  if (!_iosGcDragId || _iosGcDragId === id) return;
+  ev.preventDefault(); // required for drop to fire
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('is-drop');
+}
+function iosGcAchievementDragLeave(ev) {
+  ev.currentTarget.classList.remove('is-drop');
+}
+function iosGcAchievementDrop(ev, id) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('is-drop');
+  const fromId = _iosGcDragId || ev.dataTransfer.getData('text/plain');
+  iosGcAchievementDragEnd();
+  if (!fromId || fromId === id) return;
+  const arr = state.iosGameCenterAchievements;
+  const fromIdx = arr.findIndex(a => a.id === fromId);
+  const toIdx   = arr.findIndex(a => a.id === id);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  reRenderStepModal();
+}
+function iosGcAchievementDragEnd() {
+  _iosGcDragId = null;
+  document.querySelectorAll('.ios-gc-row.is-dragging, .ios-gc-row.is-drop')
+    .forEach(el => el.classList.remove('is-dragging', 'is-drop'));
+}
+
 // Twin of seedMacAppStoreListing above, for Mac App Store Full's own
 // independent Product Page Preview listing (state.macFullAppStoreListing —
 // see its own comment, state.js). Same "seed once from Game Details, then
@@ -3445,6 +3556,7 @@ function _propagateAllLocalizationFeatures() {
   _iapLocPropagateAllFields();
   _masIapLocPropagateAllFields(); // no-op until Mac App Store has saved IAP products
   _masAchLocPropagateAllFields(); // no-op until Mac App Store has saved achievements
+  _iasAchLocPropagateAllFields(); // no-op until the App Store has saved achievements
 }
 
 function setObLangPreset(preset) {
@@ -3505,6 +3617,7 @@ function toggleObLang(lang) {
     _checkSteamLocalizedDescription(lang);
     _checkSteamLocalizedListing(lang);
     _checkSteamLocalizedAchievements(lang);
+    _checkIosLocalizedAchievements(lang);
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;
@@ -4729,6 +4842,7 @@ function _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, afterLangs) {
     _checkSteamLocalizedDescription(lang);
     _checkSteamLocalizedListing(lang);
     _checkSteamLocalizedAchievements(lang);
+    _checkIosLocalizedAchievements(lang);
   });
 }
 
@@ -5118,8 +5232,28 @@ async function _applySteamAchievements(appId, expectedTitle) {
     preEarnedDescription: '',
     image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
   }));
+  // App Store (ios)'s own Game Center gets the SAME Steam import, at the
+  // same time, for full feature parity with Mac App Store's — a separate
+  // array with its own ids (generateId('ach') called fresh per platform)
+  // so editing/reordering/localizing one achievement list never touches the
+  // other, even though both started from identical Steam data just now.
+  state.iosGameCenterAchievements = parsed.map((p, idx) => ({
+    id: generateId('ach'),
+    refName: p.name,
+    pointValue: '',
+    hidden: !p.description,
+    achievableMultipleTimes: false,
+    collapsed: true,
+    fromSteam: true,
+    steamIndex: idx,
+    displayName: p.name,
+    earnedDescription: p.description || '',
+    preEarnedDescription: '',
+    image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
+  }));
   reRenderStepModal();
   updateIOSCard('macos');
+  updateIOSCard('ios');
 
   // Kick off an AI-translated fallback for every newly-imported
   // achievement's three fields — the Steam-import counterpart to
@@ -5142,13 +5276,21 @@ async function _applySteamAchievements(appId, expectedTitle) {
   state.macGameCenterAchievements.forEach(a => {
     ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _masAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
   });
+  // Same fallback, same reasoning, for App Store (ios)'s own newly-imported
+  // achievements — _iasAchLocTriggerAutoTranslate's own write-time guard.
+  state.iosGameCenterAchievements.forEach(a => {
+    ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _iasAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  });
 
   // Bring every already-selected supporting language's Achievement
   // Localizations up to date with this game's own Steam data, same as
   // _applySteamAboutData's own already-selected-languages pass for the
   // store listing — this fetch's baseline just became available, so
   // languages added before it resolved haven't had a chance to check yet.
-  (state.formData.localizations || []).forEach(lang => _checkSteamLocalizedAchievements(lang));
+  (state.formData.localizations || []).forEach(lang => {
+    _checkSteamLocalizedAchievements(lang);
+    _checkIosLocalizedAchievements(lang);
+  });
 }
 
 /* ── Prompt drawer (debug) ───────────────────────────────── */
@@ -11130,6 +11272,544 @@ async function _checkSteamLocalizedAchievements(lang) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   APP STORE (ios) — ACHIEVEMENT LOCALIZATIONS
+   ══════════════════════════════════════════════════════════════════════
+   Full twin of the "MAC APP STORE — ACHIEVEMENT LOCALIZATIONS" cluster
+   directly above — same fields, same mechanics, same Steam-authority write-
+   time guard — scoped to state.iosGameCenterAchievements/iasAchLoc*-prefixed
+   UI state instead of state.macGameCenterAchievements/masAchLoc*. Added for
+   full feature parity with Mac App Store's Game Center; see the "_masAchLoc"/
+   "masAchLoc" cluster's own header comment above for the complete rationale
+   behind every piece here — it isn't re-explained a second time. */
+
+function _iasAchLocSavedAchievements() {
+  return (state.iosGameCenterAchievements || []).filter(a => a.collapsed);
+}
+
+function _iasAchLocEffectiveAchId() {
+  const saved = _iasAchLocSavedAchievements();
+  if (!saved.length) return null;
+  if (saved.some(a => a.id === state.iasAchLocAchId)) return state.iasAchLocAchId;
+  return saved[0].id;
+}
+
+function _iasAchLocFieldValue(achId, field, lang) {
+  const a = (state.iosGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return '';
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return a[field] || '';
+  const entry = a.locs && a.locs[lang];
+  return (entry && entry[field]) || '';
+}
+
+function _iasAchLocFieldHasOverLimitLang(achId, field, langCodes) {
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  return langCodes.some(lang => _iasAchLocFieldValue(achId, field, lang).length > limit);
+}
+
+function _iasAchLocSourceBadge(achId, field, lang) {
+  const a = (state.iosGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return null;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_iasAchLocFieldValue(achId, field, lang)) return null;
+  const entry = a.locs && a.locs[lang];
+  if (!entry) return null;
+  if (entry[field + 'FromSteam']) return 'steam';
+  if (_iasAchLocFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (a[field] || '')) return 'ai';
+  return null;
+}
+
+function _iasAchLocSetFieldValue(achId, field, lang, value) {
+  const a = (state.iosGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    a[field] = value;
+    if (_iasAchLocFieldAutoTranslateEnabled(field)) _iasAchLocTriggerAutoTranslate(achId, field, value);
+    return;
+  }
+  if (!a.locs) a.locs = {};
+  if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+  a.locs[lang][field] = value;
+  delete a.locs[lang][field + 'FromSteam'];
+}
+
+function _iasAchLocPropagateAllFields() {
+  _iasAchLocSavedAchievements().forEach(a => {
+    ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _iasAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  });
+}
+
+function _iasAchLocFieldAutoTranslateEnabled(field) {
+  const cfg = state.iasAchLocAutoTranslateFields;
+  if (!cfg) return ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
+async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
+  if (!_iasAchLocFieldAutoTranslateEnabled(field)) return;
+  const a = (state.iosGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  if (!a.locs) a.locs = {};
+  const eligible = supportedLangs.filter(lang => {
+    const entry = a.locs[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    eligible.forEach(lang => {
+      if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+      a.locs[lang][field]     = '';
+      a.locs[lang][sourceKey] = '';
+      delete a.locs[lang][field + 'FromSteam'];
+      const backEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== '') _iasAchLocRefreshBackTranslation(achId, field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.iasAchLocTranslateStatus = state.iasAchLocTranslateStatus || {};
+  state.iasAchLocTranslateStatus[achId] = state.iasAchLocTranslateStatus[achId] || {};
+  state.iasAchLocTranslateStatus[achId][field] = 'loading';
+  state.iasAchLocTranslatePendingLangs = state.iasAchLocTranslatePendingLangs || {};
+  state.iasAchLocTranslatePendingLangs[achId] = state.iasAchLocTranslatePendingLangs[achId] || {};
+  state.iasAchLocTranslatePendingLangs[achId][field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
+  const perLangBudget = field === 'displayName' ? 80 : 200;
+  const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following Game Center achievement ${fieldLabel} text for a mobile/video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone and meaning of the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+      const entry = a.locs[lang];
+      if (entry[field + 'FromSteam'] && entry[sourceKey] === text) return;
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      delete entry[field + 'FromSteam'];
+      const backEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== translated) _iasAchLocRefreshBackTranslation(achId, field, lang, translated);
+    });
+
+    state.iasAchLocTranslateStatus[achId][field] = 'complete';
+  } catch (e) {
+    console.warn('[App Store Achievement Localizations Translate]', achId, field, e.message);
+    state.iasAchLocTranslateStatus[achId][field] = 'error';
+  }
+  state.iasAchLocTranslatePendingLangs[achId][field] = [];
+  reRenderStepModal();
+}
+
+function _iasAchLocFieldTranslatePending(achId, field, lang) {
+  if (!state.iasAchLocTranslateStatus || !state.iasAchLocTranslateStatus[achId] || state.iasAchLocTranslateStatus[achId][field] !== 'loading') return false;
+  const pending = state.iasAchLocTranslatePendingLangs && state.iasAchLocTranslatePendingLangs[achId] && state.iasAchLocTranslatePendingLangs[achId][field];
+  return !!(pending && pending.includes(lang));
+}
+
+function _iasAchLocToggleAutoTranslateField(field) {
+  state.iasAchLocAutoTranslateFields = state.iasAchLocAutoTranslateFields || {};
+  state.iasAchLocAutoTranslateFields[field] = !state.iasAchLocAutoTranslateFields[field];
+  if (state.iasAchLocAutoTranslateFields[field]) {
+    _iasAchLocSavedAchievements().forEach(a => _iasAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  }
+  reRenderStepModal();
+}
+
+function startIasAchLocInlineEdit(achId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const inHalf = !!(el.closest && el.closest('.iap-loc-half'));
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _iasAchLocFieldValue(achId, field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _iasAchLocFieldValue(achId, field, lang);
+    if (input.value !== previousValue) _iasAchLocPushUndo('real', achId, field, lang, previousValue);
+    _iasAchLocSetFieldValue(achId, field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== input.value) _iasAchLocRefreshBackTranslation(achId, field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+function _iasAchLocBackTranslationValue(achId, field, lang) {
+  const entry = state.iasAchLocBackTranslation
+    && state.iasAchLocBackTranslation[achId]
+    && state.iasAchLocBackTranslation[achId][field]
+    && state.iasAchLocBackTranslation[achId][field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+
+function _iasAchLocBackTranslationEntry(achId, field, lang) {
+  if (!state.iasAchLocBackTranslation) state.iasAchLocBackTranslation = {};
+  const forAch   = state.iasAchLocBackTranslation[achId] || (state.iasAchLocBackTranslation[achId] = {});
+  const forField = forAch[field] || (forAch[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+
+function _iasAchLocSyncBackTranslations(achId) {
+  if (!achId) return Promise.resolve();
+  const fd = state.formData;
+  const field = state.iasAchLocField || 'displayName';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _iasAchLocFieldValue(achId, field, lang);
+    const entry = _iasAchLocBackTranslationEntry(achId, field, lang);
+    if (entry.syncedTopText === topText) return;
+    jobs.push(_iasAchLocRefreshBackTranslation(achId, field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _iasAchLocRefreshBackTranslation(achId, field, lang, topText) {
+  const entry = _iasAchLocBackTranslationEntry(achId, field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _iasAchLocFieldValue(achId, field, lang);
+  if (currentTop !== topText) { _iasAchLocRefreshBackTranslation(achId, field, lang, currentTop); return; }
+
+  const freshEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+async function _iasAchLocCommitPrimaryEdit(achId, field, lang, value) {
+  const entry = _iasAchLocBackTranslationEntry(achId, field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _iasAchLocSetFieldValue(achId, field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _iasAchLocSetFieldValue(achId, field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+
+function startIasAchLocBackTranslationEdit(achId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _iasAchLocBackTranslationValue(achId, field, lang).text;
+
+  const commit = () => {
+    const previousValue = _iasAchLocBackTranslationValue(achId, field, lang).text;
+    if (input.value !== previousValue) _iasAchLocPushUndo('draft', achId, field, lang, previousValue);
+    _iasAchLocCommitPrimaryEdit(achId, field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function _iasAchLocUndoEntry(kind, achId, field, lang) {
+  if (!state.iasAchLocUndoHistory) state.iasAchLocUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.iasAchLocUndoHistory[kind] || (state.iasAchLocUndoHistory[kind] = {});
+  const forAch   = forKind[achId] || (forKind[achId] = {});
+  const forField = forAch[field] || (forAch[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+function _iasAchLocUndoState(kind, achId, field, lang) {
+  const entry = state.iasAchLocUndoHistory
+    && state.iasAchLocUndoHistory[kind]
+    && state.iasAchLocUndoHistory[kind][achId]
+    && state.iasAchLocUndoHistory[kind][achId][field]
+    && state.iasAchLocUndoHistory[kind][achId][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+function _iasAchLocPushUndo(kind, achId, field, lang, previousValue) {
+  const entry = _iasAchLocUndoEntry(kind, achId, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > IAP_LOC_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+function _iasAchLocRestoreFieldValue(kind, achId, field, lang, value) {
+  if (kind === 'draft') {
+    _iasAchLocCommitPrimaryEdit(achId, field, lang, value);
+    return;
+  }
+  _iasAchLocSetFieldValue(achId, field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.iasAchLocMode === 'review' && lang !== primary) {
+    const backEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
+    if (backEntry.syncedTopText !== value) _iasAchLocRefreshBackTranslation(achId, field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+function iasAchLocUndo(kind, achId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _iasAchLocUndoEntry(kind, achId, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _iasAchLocBackTranslationValue(achId, field, lang).text : _iasAchLocFieldValue(achId, field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _iasAchLocRestoreFieldValue(kind, achId, field, lang, previous);
+}
+
+function iasAchLocRedo(kind, achId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _iasAchLocUndoEntry(kind, achId, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _iasAchLocBackTranslationValue(achId, field, lang).text : _iasAchLocFieldValue(achId, field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _iasAchLocRestoreFieldValue(kind, achId, field, lang, next);
+}
+
+async function toggleIasAchLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.iasAchLocMode = state.iasAchLocMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.iasAchLocMode === 'review') _iasAchLocSyncBackTranslations(_iasAchLocEffectiveAchId());
+
+  const enteringCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+
+function setIasAchLocReviewAchId(achId) {
+  state.iasAchLocAchId = achId;
+  reRenderStepModal();
+  if (state.iasAchLocMode === 'review') _iasAchLocSyncBackTranslations(achId);
+}
+
+function setIasAchLocField(field) {
+  state.iasAchLocField = field;
+  reRenderStepModal();
+  if (state.iasAchLocMode === 'review') _iasAchLocSyncBackTranslations(_iasAchLocEffectiveAchId());
+}
+
+function _iasAchLocToggleSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.iasAchLocSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.iasAchLocSettingsOpen = true;
+    document.getElementById('ias-ach-loc-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* Checks whether the currently Steam-linked title's achievement stats page
+   has a genuine localized translation for `lang`, and if so, populates that
+   language's Display Name/Earned Description for every App Store (ios)
+   achievement imported from Steam with Steam's own text — full twin of
+   _checkSteamLocalizedAchievements above, scoped to
+   state.iosGameCenterAchievements instead of state.macGameCenterAchievements.
+   Shares the SAME state.steamAchievementsBaseline (set once, by
+   _applySteamAchievements, from the one Steam fetch that seeds BOTH
+   platforms' achievement lists at once) since it's genuinely the same
+   underlying Steam data either way — only which achievement array gets
+   written differs. */
+async function _checkIosLocalizedAchievements(lang) {
+  const baseline = state.steamAchievementsBaseline;
+  if (!baseline || !baseline.appId) return;
+  const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
+  if (!steamLang) return;
+  const info = state.steamLocInfo;
+  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+
+  let parsed = null;
+  try {
+    const html = await fetchSteamAchievementsPage(baseline.appId, steamLang);
+    parsed = _parseSteamAchievements(html);
+  } catch (e) {
+    console.warn('[Steam Localized Achievements - iOS]', lang, e.message);
+    return;
+  }
+
+  if (!state.steamAchievementsBaseline || state.steamAchievementsBaseline.appId !== baseline.appId) return;
+  if (!(state.formData.localizations || []).includes(lang)) return;
+  if (!parsed || !parsed.length) return;
+
+  let changed = false;
+  (state.iosGameCenterAchievements || []).forEach(a => {
+    if (!a.fromSteam || a.steamIndex == null) return;
+    const localized = parsed[a.steamIndex];
+    const base = baseline.achievements[a.steamIndex];
+    if (!localized || !base) return;
+
+    if (!a.locs) a.locs = {};
+    if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+    const entry = a.locs[lang];
+
+    const localizedName = (localized.name || '').trim();
+    const baseName       = (base.name || '').trim();
+    if (localizedName && localizedName !== baseName) {
+      entry.displayName            = localizedName;
+      entry.displayNameFromSteam   = true;
+      entry.displayNameSourceText  = a.displayName || '';
+      changed = true;
+      const backEntry = _iasAchLocBackTranslationEntry(a.id, 'displayName', lang);
+      if (backEntry.syncedTopText !== localizedName) _iasAchLocRefreshBackTranslation(a.id, 'displayName', lang, localizedName);
+    }
+
+    const localizedDesc = (localized.description || '').trim();
+    const baseDesc       = (base.description || '').trim();
+    if (localizedDesc && localizedDesc !== baseDesc) {
+      entry.earnedDescription           = localizedDesc;
+      entry.earnedDescriptionFromSteam  = true;
+      entry.earnedDescriptionSourceText = a.earnedDescription || '';
+      changed = true;
+      const backEntry = _iasAchLocBackTranslationEntry(a.id, 'earnedDescription', lang);
+      if (backEntry.syncedTopText !== localizedDesc) _iasAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
+    }
+  });
+  if (changed) reRenderStepModal();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    MAC APP STORE FULL -- Product Page Preview, Localization Review, IAP
    Localizations
    ══════════════════════════════════════════════════════════════════════
@@ -12616,6 +13296,7 @@ function addLangFromSearch(code) {
     _checkSteamLocalizedDescription(code);
     _checkSteamLocalizedListing(code);
     _checkSteamLocalizedAchievements(code);
+    _checkIosLocalizedAchievements(code);
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;

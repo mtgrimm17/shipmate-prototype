@@ -4263,7 +4263,7 @@ function renderStepModal() {
   // (keyed by platformId, not by step) — safe for the same reason
   // storePreviewPrototype already shares it with storePreview above: only
   // one step modal is ever open at a time.
-  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && platformId === 'macos'))
+  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios')))
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
   const FLIP_LABELS = {
@@ -4286,15 +4286,15 @@ function renderStepModal() {
     achievementLocalizations: 'Achievement Localizations',
   };
   const isFlipped = !!flipTarget;
-  // Game Center (macos) is no longer one of PLATFORMS.macos.steps at all —
-  // removed as its own Submission step now that Product Page Preview's
-  // Achievements card links straight into it (see PLATFORMS.macos's own
-  // comment, state.js) — so `step` above is undefined whenever it's opened
-  // this way, and step?.label alone would render a blank modal title.
-  // Falls back to its own still-accurate, hardcoded label in that one case.
+  // Game Center (macos, and now ios too) is not one of PLATFORMS.macos.steps/
+  // PLATFORMS.ios.steps at all — reached instead via Product Page Preview's
+  // Achievements card (see those arrays' own comments, state.js) — so `step`
+  // above is undefined whenever it's opened this way, and step?.label alone
+  // would render a blank modal title. Falls back to its own still-accurate,
+  // hardcoded label in that one case.
   const displayStepLabel = isFlipped
     ? (FLIP_LABELS[flipTarget] || step?.label)
-    : (step?.label || (stepId === 'gameCenter' && platformId === 'macos' ? 'Game Center' : ''));
+    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios') ? 'Game Center' : ''));
 
   // Step body
   let body = '';
@@ -4374,6 +4374,7 @@ function renderStepModal() {
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
   } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
+  else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
   else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
@@ -4615,6 +4616,7 @@ function buildStorePreviewFlipSection(platformId, target) {
   // user back exactly where they came from.
   if (target === 'achievementLocalizations') {
     if (platformId === 'macos') return buildMacAchievementLocalizationsSection();
+    if (platformId === 'ios') return buildIosAchievementLocalizationsSection();
     return '';
   }
   return '';
@@ -6421,6 +6423,37 @@ function buildStorePreviewSection() {
        <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
     : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
 
+  // Achievements widget — App Store (ios) only (this builder is also reused,
+  // unmodified, for android/steam/egs/psn/xbox/switch's own Product Page
+  // Preview, none of which have a Game Center of their own) — full twin of
+  // buildMacStorePreviewSection's own achievementsHtml, added for full
+  // feature parity with Mac App Store's Product Page Preview. See that
+  // twin's own comment for the full rationale (static lock, no "chosen"
+  // achievement, etc.) — not re-explained here.
+  const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.collapsed) : [];
+  const achievementsHtml = savedAchievements.length ? `
+        <div class="ias-section ias-achv-section" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
+          <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
+          <div class="ias-achv-title">Achievements</div>
+          <div class="ias-achv-card">
+            <div class="ias-achv-thumbs">
+              <div class="ias-achv-thumb ias-achv-thumb-back"></div>
+              <div class="ias-achv-thumb ias-achv-thumb-front">
+                <div class="ias-achv-lock-circle">
+                  <svg viewBox="0 0 12 14" fill="none" width="13" height="15"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="ias-achv-progress">
+              <span class="ias-achv-count">0<span class="ias-achv-total"> / ${savedAchievements.length}</span></span>
+              <span class="ias-achv-completed">Completed</span>
+            </div>
+            <svg class="ias-achv-chevron" viewBox="0 0 8 14" fill="none" width="6" height="11"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="ias-section-divider"></div>` : '';
+
   return `
     <div class="ias-device-wrap">
       <div class="ias-label-row">
@@ -6488,6 +6521,8 @@ function buildStorePreviewSection() {
         </div>
 
         <div class="ias-section-divider"></div>
+
+        ${achievementsHtml}
 
         <!-- ── What's New ── -->
         <div class="ias-section">
@@ -7264,6 +7299,129 @@ function buildMacGameCenterSection() {
         : _macGcAchievementExpandedRow(a)
       ).join('')}
     <button class="btn btn-ghost btn-sm" type="button" onclick="addMacGameCenterAchievement()">+ Add Achievement</button>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   APP STORE (ios) — GAME CENTER ACHIEVEMENTS
+   Full twin of the "MAC APP STORE — GAME CENTER ACHIEVEMENTS" cluster
+   directly above (_macGcAchievementCollapsedRow/_macGcAchievementExpandedRow/
+   buildMacGameCenterSection) — identical markup and mechanics, reading
+   state.iosGameCenterAchievements and calling the "Ios"/"IosGc"-prefixed
+   app.js cluster instead of the "Mac"/"MacGc"-prefixed one. Added for full
+   feature parity with Mac App Store's Game Center; reached the same way —
+   openStepModal('ios','gameCenter'), called by Product Page Preview's own
+   Achievements card (buildStorePreviewSection's achievementsHtml, further
+   below) — not one of PLATFORMS.ios.steps (state.js).
+   ═══════════════════════════════════════════════════ */
+
+function _iosGcAchievementCollapsedRow(a) {
+  const displayName = (a.displayName || '').trim() || a.refName.trim() || 'Untitled Achievement';
+  const badges = [
+    a.pointValue ? `${escHtml(String(a.pointValue))} pts` : '',
+    a.hidden ? 'Hidden' : '',
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="iap-product-row ios-gc-row is-collapsed" data-ach-id="${a.id}" style="display:flex;align-items:center;gap:10px;"
+         draggable="true"
+         onclick="expandIosGcAchievement('${a.id}')"
+         ondragstart="iosGcAchievementDragStart(event,'${a.id}')"
+         ondragover="iosGcAchievementDragOver(event,'${a.id}')"
+         ondragleave="iosGcAchievementDragLeave(event)"
+         ondrop="iosGcAchievementDrop(event,'${a.id}')"
+         ondragend="iosGcAchievementDragEnd()">
+      <span style="cursor:grab;color:var(--text-faint);font-size:14px;line-height:1;" title="Drag to reorder">⠿</span>
+      <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
+      ${a.image ? `<img src="${a.image.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+      <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeIosGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+    </div>`;
+}
+
+function _iosGcAchievementExpandedRow(a) {
+  const headerLabel = (a.displayName || '').trim() || a.refName.trim() || 'New Achievement';
+  const img = a.image;
+  return `
+    <div class="iap-product-row ios-gc-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveIosGcAchievement('${a.id}')" title="Click to collapse">
+        <span class="iap-product-name-collapsed">${escHtml(headerLabel)}</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${img ? `<img src="${img.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+          <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeIosGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+        </div>
+      </div>
+
+      <div class="iap-product-field">
+        <label class="form-label">Reference Name</label>
+        <input class="form-input" type="text" value="${escHtml(a.refName)}" placeholder="Internal name, not shown to players"
+               oninput="setIosGameCenterAchievementField('${a.id}','refName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Point Value <span class="form-hint-inline">(optional)</span></label>
+        <input class="form-input" type="number" min="0" max="100" value="${escHtml(String(a.pointValue ?? ''))}" placeholder="0–100"
+               oninput="setIosGameCenterAchievementField('${a.id}','pointValue',this.value)">
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Hidden</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${a.hidden ? 'is-selected' : ''}" onclick="setIosGameCenterAchievementField('${a.id}','hidden',true)">YES</button>
+          <button class="yn-btn yn-no ${!a.hidden ? 'is-selected' : ''}" onclick="setIosGameCenterAchievementField('${a.id}','hidden',false)">NO</button>
+        </div>
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Achievable More Than Once</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setIosGameCenterAchievementField('${a.id}','achievableMultipleTimes',true)">YES</button>
+          <button class="yn-btn yn-no ${!a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setIosGameCenterAchievementField('${a.id}','achievableMultipleTimes',false)">NO</button>
+        </div>
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Display Name</label>
+        <input class="form-input" type="text" value="${escHtml(a.displayName)}" placeholder="Shown to players, e.g. Speed Runner"
+               oninput="setIosGameCenterAchievementField('${a.id}','displayName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Earned Description</label>
+        <input class="form-input" type="text" value="${escHtml(a.earnedDescription)}" placeholder="Shown after the player earns it"
+               oninput="setIosGameCenterAchievementField('${a.id}','earnedDescription',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Pre-Earned Description</label>
+        <input class="form-input" type="text" value="${escHtml(a.preEarnedDescription)}" placeholder="Shown before the player earns it"
+               oninput="setIosGameCenterAchievementField('${a.id}','preEarnedDescription',this.value)">
+      </div>
+      <div class="form-group" style="margin-top:8px;margin-bottom:0;">
+        <label class="form-label">Image</label>
+        ${img
+          ? `<div style="display:flex;align-items:center;gap:10px;">
+               <img src="${img.dataUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
+               <button class="btn btn-ghost btn-sm" type="button" onclick="removeIosGcAchievementImage('${a.id}')">Remove</button>
+             </div>`
+          : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload Image<input type="file" accept="image/*" hidden onchange="handleIosGcAchievementImage(event,'${a.id}')"></label>`}
+      </div>
+
+      <div class="iap-product-actions" style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveIosGcAchievement('${a.id}')" ${!a.refName.trim() ? 'disabled' : ''}>Save</button>
+      </div>
+    </div>`;
+}
+
+function buildIosGameCenterSection() {
+  const achievements = state.iosGameCenterAchievements || [];
+  const hasSavedAchievements = achievements.some(a => a.collapsed);
+  const achLocsBtn = hasSavedAchievements
+    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('ios','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
+    : '';
+  return `
+    <div class="form-group iap-products-group" style="margin-bottom:8px;">
+      <div class="iap-products-label-row">
+        <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
+        ${achLocsBtn}
+      </div>
+    </div>
+    ${achievements.map(a => a.collapsed
+        ? _iosGcAchievementCollapsedRow(a)
+        : _iosGcAchievementExpandedRow(a)
+      ).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addIosGameCenterAchievement()">+ Add Achievement</button>`;
 }
 
 function buildLocalizationReviewSection() {
@@ -9626,6 +9784,168 @@ function buildMacAchievementLocalizationsSection() {
       <div class="iap-loc-selectors-row">
         ${swSelect('mas-ach-loc-ach', achId, achOptions, 'setMasAchLocReviewAchId', 'auto', 'right')}
         ${swSelect('mas-ach-loc-field', field, fieldOptions, 'setMasAchLocField', 'auto', 'right')}
+      </div>
+      <div class="iap-loc-cards">${cards}</div>
+    </div>`;
+}
+
+/* ── App Store (ios) Game Center — "Achievement Localizations" ───────────
+   Full twin of buildMacAchievementLocalizationsSection directly above —
+   identical layout and mechanics, scoped to state.iosGameCenterAchievements/
+   iasAchLoc*-prefixed state instead of state.macGameCenterAchievements/
+   masAchLoc*. Reached via buildIosGameCenterSection's own "Localizations"
+   button (openStorePreviewSection('ios','achievementLocalizations')). Added
+   for full feature parity with Mac App Store's Game Center. */
+function buildIosAchievementLocalizationsSection() {
+  const savedAchievements = (state.iosGameCenterAchievements || []).filter(a => a.collapsed);
+  if (!savedAchievements.length) return '';
+
+  const achId = _iasAchLocEffectiveAchId();
+  const achievement = savedAchievements.find(a => a.id === achId);
+  if (!achievement) return '';
+
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.iasAchLocField || 'displayName';
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.iasAchLocMode === 'review';
+
+  const fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _iasAchLocFieldHasOverLimitLang(achId, f.value, langCodes),
+  }));
+  const achOptions = savedAchievements.map(a => ({
+    value: a.id,
+    label: escHtml(a.displayName || a.refName) || 'Untitled Achievement',
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _iasAchLocUndoState(kind, achId, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); iasAchLocUndo('${kind}','${achId}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); iasAchLocRedo('${kind}','${achId}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _iasAchLocFieldValue(achId, field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _iasAchLocBackTranslationValue(achId, field, lang);
+      const topStatusHtml = _iasAchLocFieldTranslatePending(achId, field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="iap-loc-card">
+        <div class="iap-loc-side">
+          <div class="iap-loc-half iap-loc-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startIasAchLocInlineEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="iap-loc-half iap-loc-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startIasAchLocBackTranslationEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _iasAchLocFieldTranslatePending(achId, field, lang);
+    const srcBadge = _iasAchLocSourceBadge(achId, field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
+    return `
+      <div class="iap-loc-card${isPrimary ? ' iap-loc-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startIasAchLocInlineEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  const autoCfg = state.iasAchLocAutoTranslateFields || { displayName: true, earnedDescription: true, preEarnedDescription: true };
+  const settingsOpen = !!state.iasAchLocSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_iasAchLocToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="ias-ach-loc-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_iasAchLocToggleSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('displayName', 'Display Name')}
+          ${settingsRow('earnedDescription', 'Earned Description')}
+          ${settingsRow('preEarnedDescription', 'Pre-Earned Description')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">Achievement Localizations</div>
+          ${settingsMenu}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="toggleIasAchLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect('ias-ach-loc-ach', achId, achOptions, 'setIasAchLocReviewAchId', 'auto', 'right')}
+        ${swSelect('ias-ach-loc-field', field, fieldOptions, 'setIasAchLocField', 'auto', 'right')}
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;
