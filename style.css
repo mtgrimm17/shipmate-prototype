@@ -7797,6 +7797,14 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .ios-gc-row.is-dragging { opacity: 0.4; }
 .ios-gc-row.is-drop { border-color: var(--purple); }
 
+/* Same drag-to-reorder feedback, for Mac App Store Full's own Game Center
+   Achievements — full twin of .mac-gc-row/.ios-gc-row above, added for full
+   feature parity with Mac App Store's Game Center (buildMacFullGameCenterSection/
+   _macFullGcAchievementCollapsedRow, render.js; macFullGcAchievementDragStart/
+   Over/Drop/DragEnd, app.js). */
+.macfull-gc-row.is-dragging { opacity: 0.4; }
+.macfull-gc-row.is-drop { border-color: var(--purple); }
+
 /* ── Business — "IAP Localizations" (buildIapLocalizationsSection, render.js) ──
    Modeled on Localization Review (further above) — reuses every one of its
    generic building blocks completely unchanged: .loc-review-header/-title/

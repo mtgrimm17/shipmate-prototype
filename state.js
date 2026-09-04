@@ -808,11 +808,11 @@ const PLATFORMS = {
   macos_full: {
     id: 'macos_full', label: 'Mac App Store Full', color: '#007AFF',
     steps: [
+      { id: 'uploadBuild',     label: 'Upload Build'                                  },
       { id: 'appInfo',         label: 'App Information'                              },
+      { id: 'versionInfo',     label: 'Version Information'                           },
       { id: 'contentRating',   label: 'Age Rating',                hasInference: true },
       { id: 'privacy',         label: 'App Privacy'                                   },
-      { id: 'versionInfo',     label: 'Version Information'                           },
-      { id: 'uploadBuild',     label: 'Upload Build'                                  },
       { id: 'versionRelease',  label: 'Version Release'                               },
       { id: 'storePreview',    label: 'Product Page Preview'                          },
       { id: 'improveSubmission', label: 'Improve Your Submission'                     },
@@ -3016,6 +3016,26 @@ const state = {
   // independently.
   iosGameCenterAchievements: [],
 
+  // Mac App Store Full's own Game Center Achievements — a FULL, independent
+  // twin of macGameCenterAchievements/iosGameCenterAchievements above, added
+  // for full feature parity with Mac App Store's Game Center: same shape,
+  // same add/remove/save/expand/drag-reorder mechanics (the "MacFull"/
+  // "MacFullGc"-prefixed cluster, app.js, right after the "Ios"/"IosGc"-
+  // prefixed one), same "Achievement Localizations" sub-section (the
+  // "_macFullAchLoc"/"macFullAchLoc"-prefixed cluster, app.js —
+  // buildMacFullAchievementLocalizationsSection, render.js). Kept as its
+  // own completely separate array — never shared with, or derived from,
+  // macGameCenterAchievements/iosGameCenterAchievements — same "duplicate
+  // the stateful UI, not generalize it" pattern already used for those two.
+  // A Steam-linked title's achievement import (_applySteamAchievements,
+  // app.js) populates all three arrays at once from the same Steam fetch,
+  // same as it already does for macGameCenterAchievements/
+  // iosGameCenterAchievements. Supersedes the old, simpler
+  // macFullSubmitAnswers.gameCenter.achievements list (its UI removed along
+  // with Multiplayer, an earlier request) — this is the real, actively-used
+  // one now.
+  macFullGameCenterAchievements: [],
+
   // Mac App Store Full submission questionnaire answers — a from-scratch,
   // FULLY INDEPENDENT copy (see makeBlankMacFullAnswers' own comment):
   // answering a question here never touches iosSubmitAnswers or
@@ -3446,6 +3466,27 @@ const state = {
   iasAchLocTranslatePendingLangs: {},
   iasAchLocAutoTranslateFields: { displayName: true, earnedDescription: true, preEarnedDescription: true },
   iasAchLocSettingsOpen: false,
+
+  // Mac App Store Full Game Center's own "Achievement Localizations"
+  // section (buildMacFullAchievementLocalizationsSection, render.js —
+  // reached via the Game Center step's own "Localizations" button, above
+  // the Achievements list). Full twin of the masAchLoc*/iasAchLoc* fields
+  // above, keyed by achievement id (state.macFullGameCenterAchievements)
+  // instead of state.macGameCenterAchievements/state.iosGameCenterAchievements.
+  // See the "_macFullAchLoc"/"macFullAchLoc" prefixed handler cluster,
+  // app.js, for the full mechanics (identical to "_masAchLoc"/"masAchLoc"
+  // in every way except which achievement array it reads/writes) — same
+  // naming convention already established for IAP Localizations'
+  // macFullIapLoc* fields (see those, further above).
+  macFullAchLocAchId: null,
+  macFullAchLocField: null,
+  macFullAchLocMode: 'locs',
+  macFullAchLocBackTranslation: {},
+  macFullAchLocUndoHistory: { real: {}, draft: {} },
+  macFullAchLocTranslateStatus: {},
+  macFullAchLocTranslatePendingLangs: {},
+  macFullAchLocAutoTranslateFields: { displayName: true, earnedDescription: true, preEarnedDescription: true },
+  macFullAchLocSettingsOpen: false,
 
   // Cached Steam store-page info for the currently-selected Steam-linked
   // game — { appId, baselineDescription, shortDescription,

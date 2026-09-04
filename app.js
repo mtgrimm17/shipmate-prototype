@@ -1437,6 +1437,123 @@ function iosGcAchievementDragEnd() {
     .forEach(el => el.classList.remove('is-dragging', 'is-drop'));
 }
 
+/* ── Mac App Store Full — Game Center Achievements ────────────────────────
+   Full twin of the Mac App Store/App Store clusters above (addMacGameCenter-
+   Achievement through iosGcAchievementDragEnd) — same shape, same "only one
+   expanded at a time" invariant, same Reference-Name-required collapse
+   gate, same drag-to-reorder — reading/writing
+   state.macFullGameCenterAchievements instead of state.macGameCenterAchievements/
+   state.iosGameCenterAchievements. Added for full feature parity with Mac
+   App Store's Game Center; see that cluster's own comments for the complete
+   rationale behind each piece — it isn't re-explained here. This supersedes
+   the old, simpler macFullSubmitAnswers.gameCenter.achievements list
+   (removed along with its UI, an earlier request) — this top-level array is
+   the real, actively-used one now. */
+
+function addMacFullGameCenterAchievement() {
+  _collapseOtherMacFullGcAchievements(null);
+  state.macFullGameCenterAchievements.push({
+    id: generateId('ach'),
+    refName: '',
+    pointValue: '',
+    hidden: false,
+    achievableMultipleTimes: false,
+    collapsed: false,
+    saved: false,
+    displayName: '',
+    earnedDescription: '',
+    preEarnedDescription: '',
+    image: null,
+  });
+  reRenderStepModal();
+}
+function removeMacFullGameCenterAchievement(id) {
+  state.macFullGameCenterAchievements = state.macFullGameCenterAchievements.filter(a => a.id !== id);
+  reRenderStepModal();
+}
+function setMacFullGameCenterAchievementField(id, key, value) {
+  const a = state.macFullGameCenterAchievements.find(a => a.id === id);
+  if (!a) return;
+  a[key] = value;
+  if (key === 'hidden' || key === 'achievableMultipleTimes') reRenderStepModal();
+}
+function _collapseOtherMacFullGcAchievements(keepId) {
+  state.macFullGameCenterAchievements
+    .filter(a => a.id !== keepId && !a.collapsed)
+    .forEach(a => saveMacFullGcAchievement(a.id));
+}
+function expandMacFullGcAchievement(id) {
+  _collapseOtherMacFullGcAchievements(id);
+  const a = state.macFullGameCenterAchievements.find(a => a.id === id);
+  if (a) a.collapsed = false;
+  reRenderStepModal();
+}
+function saveMacFullGcAchievement(id) {
+  const a = state.macFullGameCenterAchievements.find(a => a.id === id);
+  if (!a || !a.refName.trim()) return;
+  a.collapsed = true;
+  a.saved = true;
+  _macFullAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
+  _macFullAchLocTriggerAutoTranslate(id, 'earnedDescription', a.earnedDescription);
+  _macFullAchLocTriggerAutoTranslate(id, 'preEarnedDescription', a.preEarnedDescription);
+  reRenderStepModal();
+}
+
+function handleMacFullGcAchievementImage(event, achId) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const a = state.macFullGameCenterAchievements.find(a => a.id === achId);
+  if (!a) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    a.image = { name: file.name, dataUrl: ev.target.result };
+    reRenderStepModal();
+  };
+  reader.readAsDataURL(file);
+}
+function removeMacFullGcAchievementImage(achId) {
+  const a = state.macFullGameCenterAchievements.find(a => a.id === achId);
+  if (!a) return;
+  a.image = null;
+  reRenderStepModal();
+}
+
+let _macFullGcDragId = null;
+function macFullGcAchievementDragStart(ev, id) {
+  _macFullGcDragId = id;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', id);
+  ev.currentTarget.classList.add('is-dragging');
+}
+function macFullGcAchievementDragOver(ev, id) {
+  if (!_macFullGcDragId || _macFullGcDragId === id) return;
+  ev.preventDefault(); // required for drop to fire
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('is-drop');
+}
+function macFullGcAchievementDragLeave(ev) {
+  ev.currentTarget.classList.remove('is-drop');
+}
+function macFullGcAchievementDrop(ev, id) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('is-drop');
+  const fromId = _macFullGcDragId || ev.dataTransfer.getData('text/plain');
+  macFullGcAchievementDragEnd();
+  if (!fromId || fromId === id) return;
+  const arr = state.macFullGameCenterAchievements;
+  const fromIdx = arr.findIndex(a => a.id === fromId);
+  const toIdx   = arr.findIndex(a => a.id === id);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  reRenderStepModal();
+}
+function macFullGcAchievementDragEnd() {
+  _macFullGcDragId = null;
+  document.querySelectorAll('.macfull-gc-row.is-dragging, .macfull-gc-row.is-drop')
+    .forEach(el => el.classList.remove('is-dragging', 'is-drop'));
+}
+
 // Twin of seedMacAppStoreListing above, for Mac App Store Full's own
 // independent Product Page Preview listing (state.macFullAppStoreListing —
 // see its own comment, state.js). Same "seed once from Game Details, then
@@ -3515,6 +3632,7 @@ function _propagateAllLocalizationFeatures() {
   _masIapLocPropagateAllFields(); // no-op until Mac App Store has saved IAP products
   _masAchLocPropagateAllFields(); // no-op until Mac App Store has saved achievements
   _iasAchLocPropagateAllFields(); // no-op until the App Store has saved achievements
+  _macFullAchLocPropagateAllFields(); // no-op until Mac App Store Full has saved achievements
 }
 
 function setObLangPreset(preset) {
@@ -3576,6 +3694,7 @@ function toggleObLang(lang) {
     _checkSteamLocalizedListing(lang);
     _checkSteamLocalizedAchievements(lang);
     _checkIosLocalizedAchievements(lang);
+    _checkMacFullLocalizedAchievements(lang);
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;
@@ -4801,6 +4920,7 @@ function _checkSteamLocalizedDescriptionForNewLangs(beforeLangs, afterLangs) {
     _checkSteamLocalizedListing(lang);
     _checkSteamLocalizedAchievements(lang);
     _checkIosLocalizedAchievements(lang);
+    _checkMacFullLocalizedAchievements(lang);
   });
 }
 
@@ -5211,9 +5331,29 @@ async function _applySteamAchievements(appId, expectedTitle) {
     preEarnedDescription: '',
     image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
   }));
+  // Mac App Store Full's own Game Center gets the SAME Steam import too,
+  // same reasoning as App Store (ios)'s own copy directly above — its own
+  // separate array/ids, full feature parity with Mac App Store's Game
+  // Center.
+  state.macFullGameCenterAchievements = parsed.map((p, idx) => ({
+    id: generateId('ach'),
+    refName: p.name,
+    pointValue: '',
+    hidden: !p.description,
+    achievableMultipleTimes: false,
+    collapsed: true,
+    saved: true,
+    fromSteam: true,
+    steamIndex: idx,
+    displayName: p.name,
+    earnedDescription: p.description || '',
+    preEarnedDescription: '',
+    image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
+  }));
   reRenderStepModal();
   updateIOSCard('macos');
   updateIOSCard('ios');
+  updateIOSCard('macos_full');
 
   // Kick off an AI-translated fallback for every newly-imported
   // achievement's three fields — the Steam-import counterpart to
@@ -5241,6 +5381,12 @@ async function _applySteamAchievements(appId, expectedTitle) {
   state.iosGameCenterAchievements.forEach(a => {
     ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _iasAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
   });
+  // Same fallback, same reasoning, for Mac App Store Full's own newly-
+  // imported achievements — _macFullAchLocTriggerAutoTranslate's own write-
+  // time guard.
+  state.macFullGameCenterAchievements.forEach(a => {
+    ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _macFullAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  });
 
   // Bring every already-selected supporting language's Achievement
   // Localizations up to date with this game's own Steam data, same as
@@ -5250,6 +5396,7 @@ async function _applySteamAchievements(appId, expectedTitle) {
   (state.formData.localizations || []).forEach(lang => {
     _checkSteamLocalizedAchievements(lang);
     _checkIosLocalizedAchievements(lang);
+    _checkMacFullLocalizedAchievements(lang);
   });
 }
 
@@ -11778,6 +11925,624 @@ async function _checkIosLocalizedAchievements(lang) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   MAC APP STORE FULL — ACHIEVEMENT LOCALIZATIONS
+   ══════════════════════════════════════════════════════════════════════
+   Full twin of the "MAC APP STORE — ACHIEVEMENT LOCALIZATIONS" cluster
+   above (and the "APP STORE (ios) — ACHIEVEMENT LOCALIZATIONS" cluster
+   right before this one) — same fields, same mechanics, same Steam-
+   authority write-time guard — scoped to state.macFullGameCenterAchievements/
+   macFullAchLoc*-prefixed state instead of state.macGameCenterAchievements/
+   masAchLoc* or state.iosGameCenterAchievements/iasAchLoc*. Reached via
+   buildMacFullGameCenterSection's own "Localizations" button
+   (openStorePreviewSection('macos_full','achievementLocalizations')). Added
+   for full feature parity with Mac App Store's Game Center; see the "MAC
+   APP STORE" cluster's own comments, above, for the complete rationale
+   behind each piece — it isn't re-explained here.
+
+   ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS/ACHIEVEMENT_LOC_FIELD_LABELS/
+   _achLocBlankLocalizedText (defined once, above) are shared across all
+   three platforms' Achievement Localizations clusters — not redefined
+   here. */
+
+// Filters on the persistent `.saved` flag (set once in saveMacFullGcAchievement
+// and never reset), NOT `.collapsed` — `.collapsed` only tracks whether the
+// row's UI is currently expanded for editing and flips back to false the
+// moment a previously-saved achievement is reopened, which would otherwise
+// make it vanish from here (and from the achievement picker dropdown that
+// reads this list) while the developer is mid-edit.
+function _macFullAchLocSavedAchievements() {
+  return (state.macFullGameCenterAchievements || []).filter(a => a.saved);
+}
+
+function _macFullAchLocEffectiveAchId() {
+  const saved = _macFullAchLocSavedAchievements();
+  if (!saved.length) return null;
+  if (saved.some(a => a.id === state.macFullAchLocAchId)) return state.macFullAchLocAchId;
+  return saved[0].id;
+}
+
+function _macFullAchLocFieldValue(achId, field, lang) {
+  const a = (state.macFullGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return '';
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return a[field] || '';
+  const entry = a.locs && a.locs[lang];
+  return (entry && entry[field]) || '';
+}
+
+function _macFullAchLocFieldHasOverLimitLang(achId, field, langCodes) {
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  return langCodes.some(lang => _macFullAchLocFieldValue(achId, field, lang).length > limit);
+}
+
+// Mirrors _masIapLocSourceBadge, plus a 'steam' case (an IAP product has no
+// Steam-sourced text at all; an achievement imported from Steam can) —
+// checked BEFORE 'ai' since a genuine Steam localization, while its
+// authority still holds, always outranks an AI-translated guess of the
+// same primary text (see _macFullAchLocTriggerAutoTranslate's write-time guard,
+// which enforces that same ordering when a translation is written).
+function _macFullAchLocSourceBadge(achId, field, lang) {
+  const a = (state.macFullGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return null;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) return null;
+  if (!_macFullAchLocFieldValue(achId, field, lang)) return null;
+  const entry = a.locs && a.locs[lang];
+  if (!entry) return null;
+  if (entry[field + 'FromSteam']) return 'steam';
+  if (_macFullAchLocFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (a[field] || '')) return 'ai';
+  return null;
+}
+
+function _macFullAchLocSetFieldValue(achId, field, lang, value) {
+  const a = (state.macFullGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return;
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  if (lang === primary) {
+    a[field] = value;
+    if (_macFullAchLocFieldAutoTranslateEnabled(field)) _macFullAchLocTriggerAutoTranslate(achId, field, value);
+    return;
+  }
+  if (!a.locs) a.locs = {};
+  if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+  a.locs[lang][field] = value;
+  // A manual edit of this language's own card always wins over whatever
+  // automatically populated it before — same "developer's own typing is
+  // final" rule every other inline-edit path in this file already follows.
+  delete a.locs[lang][field + 'FromSteam'];
+}
+
+// Newly-added language — bring every already-saved achievement's
+// Achievement Localizations up to date right away, the same job
+// _iapLocPropagateAllFields/_masIapLocPropagateAllFields do for IAP
+// Localizations (all three called together from toggleObLang). Without
+// this, an achievement saved (or last edited) BEFORE this language existed
+// has no a.locs[lang] entry at all — saveMacFullGcAchievement/
+// _applySteamAchievements only ever propagate to the supporting languages
+// that exist AT THAT MOMENT — so every field would show blank in
+// Achievement Localizations until the achievement happened to be reopened
+// and re-saved. _checkMacFullLocalizedAchievements (toggleObLang's other new-
+// language call) still runs alongside this and, per
+// _macFullAchLocTriggerAutoTranslate's own write-time guard, always wins if it
+// finds a genuine Steam localization for the same language/field.
+function _macFullAchLocPropagateAllFields() {
+  _macFullAchLocSavedAchievements().forEach(a => {
+    ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _macFullAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  });
+}
+
+function _macFullAchLocFieldAutoTranslateEnabled(field) {
+  const cfg = state.macFullAchLocAutoTranslateFields;
+  if (!cfg) return ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.includes(field);
+  return !!cfg[field];
+}
+
+async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
+  if (!_macFullAchLocFieldAutoTranslateEnabled(field)) return;
+  const a = (state.macFullGameCenterAchievements || []).find(x => x.id === achId);
+  if (!a) return;
+  const fd = state.formData;
+  const supportedLangs = fd.localizations || [];
+  if (!supportedLangs.length) return;
+
+  const text      = (primaryValue || '').trim();
+  const sourceKey = field + 'SourceText';
+
+  if (!a.locs) a.locs = {};
+  const eligible = supportedLangs.filter(lang => {
+    const entry = a.locs[lang];
+    const cachedSource = entry ? entry[sourceKey] : undefined;
+    return cachedSource !== text;
+  });
+  if (!eligible.length) return;
+
+  if (!text) {
+    eligible.forEach(lang => {
+      if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+      a.locs[lang][field]     = '';
+      a.locs[lang][sourceKey] = '';
+      delete a.locs[lang][field + 'FromSteam'];
+      const backEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== '') _macFullAchLocRefreshBackTranslation(achId, field, lang, '');
+    });
+    reRenderStepModal();
+    return;
+  }
+
+  if (!CLAUDE_API_KEY) return;
+
+  state.macFullAchLocTranslateStatus = state.macFullAchLocTranslateStatus || {};
+  state.macFullAchLocTranslateStatus[achId] = state.macFullAchLocTranslateStatus[achId] || {};
+  state.macFullAchLocTranslateStatus[achId][field] = 'loading';
+  state.macFullAchLocTranslatePendingLangs = state.macFullAchLocTranslatePendingLangs || {};
+  state.macFullAchLocTranslatePendingLangs[achId] = state.macFullAchLocTranslatePendingLangs[achId] || {};
+  state.macFullAchLocTranslatePendingLangs[achId][field] = eligible.slice();
+  reRenderStepModal();
+
+  const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+  const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
+  const perLangBudget = field === 'displayName' ? 80 : 200;
+  const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+  const prompt = `Translate the following Game Center achievement ${fieldLabel} text for a mobile/video game into each of the listed languages.
+
+Source text:
+"""
+${text}
+"""
+
+Target languages (ISO code: language name):
+${langList}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+  {
+    "translations": { "<language code>": "<translated text>", ... }
+  }
+
+Rules:
+- Preserve the tone and meaning of the source text.
+- Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+- Include every requested language code as a key.`;
+
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key':                                 CLAUDE_API_KEY,
+        'anthropic-version':                         '2023-06-01',
+        'content-type':                              'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      }),
+    });
+
+    if (!res.ok) throw new Error('API ' + res.status);
+    const data    = await res.json();
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed  = JSON.parse(cleaned);
+    const results = parsed.translations || {};
+
+    eligible.forEach(lang => {
+      const translated = results[lang];
+      if (typeof translated !== 'string' || !translated.trim()) return;
+      if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+      const entry = a.locs[lang];
+      // Same Steam-authority write-time guard as _iasTriggerAutoTranslate's
+      // own descriptionFromSteam check (see that function's comment for the
+      // full race explanation) — only fires when Steam's cached source text
+      // still equals what THIS call is translating, so a Steam localization
+      // that arrived after this translate kicked off (Steam's fetch is
+      // typically much faster than a Claude round trip) doesn't get
+      // silently overwritten by an in-flight AI translation of the same
+      // now-stale primary text.
+      if (entry[field + 'FromSteam'] && entry[sourceKey] === text) return;
+      entry[field]     = translated;
+      entry[sourceKey] = text;
+      delete entry[field + 'FromSteam'];
+      const backEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== translated) _macFullAchLocRefreshBackTranslation(achId, field, lang, translated);
+    });
+
+    state.macFullAchLocTranslateStatus[achId][field] = 'complete';
+  } catch (e) {
+    console.warn('[Mac App Store Full Achievement Localizations Translate]', achId, field, e.message);
+    state.macFullAchLocTranslateStatus[achId][field] = 'error';
+  }
+  state.macFullAchLocTranslatePendingLangs[achId][field] = [];
+  reRenderStepModal();
+}
+
+function _macFullAchLocFieldTranslatePending(achId, field, lang) {
+  if (!state.macFullAchLocTranslateStatus || !state.macFullAchLocTranslateStatus[achId] || state.macFullAchLocTranslateStatus[achId][field] !== 'loading') return false;
+  const pending = state.macFullAchLocTranslatePendingLangs && state.macFullAchLocTranslatePendingLangs[achId] && state.macFullAchLocTranslatePendingLangs[achId][field];
+  return !!(pending && pending.includes(lang));
+}
+
+function _macFullAchLocToggleAutoTranslateField(field) {
+  state.macFullAchLocAutoTranslateFields = state.macFullAchLocAutoTranslateFields || {};
+  state.macFullAchLocAutoTranslateFields[field] = !state.macFullAchLocAutoTranslateFields[field];
+  if (state.macFullAchLocAutoTranslateFields[field]) {
+    _macFullAchLocSavedAchievements().forEach(a => _macFullAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
+  }
+  reRenderStepModal();
+}
+
+function startMasAchLocInlineEdit(achId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const inHalf = !!(el.closest && el.closest('.iap-loc-half'));
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _macFullAchLocFieldValue(achId, field, lang);
+
+  const counterRow = el.nextElementSibling;
+  const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+  const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+  const updateCounter = () => {
+    const remaining = limit - input.value.length;
+    const isOver = remaining < 0;
+    if (countEl) {
+      countEl.textContent = String(remaining);
+      countEl.classList.toggle('is-over', isOver);
+    }
+    if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+    input.classList.toggle('is-over-limit', isOver);
+  };
+
+  const commit = () => {
+    const previousValue = _macFullAchLocFieldValue(achId, field, lang);
+    if (input.value !== previousValue) _macFullAchLocPushUndo('real', achId, field, lang, previousValue);
+    _macFullAchLocSetFieldValue(achId, field, lang, input.value);
+    if (inHalf) {
+      const backEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== input.value) _macFullAchLocRefreshBackTranslation(achId, field, lang, input.value);
+    }
+    reRenderStepModal();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('input', updateCounter);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  updateCounter();
+  input.focus();
+  input.select();
+}
+
+function _macFullAchLocBackTranslationValue(achId, field, lang) {
+  const entry = state.macFullAchLocBackTranslation
+    && state.macFullAchLocBackTranslation[achId]
+    && state.macFullAchLocBackTranslation[achId][field]
+    && state.macFullAchLocBackTranslation[achId][field][lang];
+  return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+}
+
+function _macFullAchLocBackTranslationEntry(achId, field, lang) {
+  if (!state.macFullAchLocBackTranslation) state.macFullAchLocBackTranslation = {};
+  const forAch   = state.macFullAchLocBackTranslation[achId] || (state.macFullAchLocBackTranslation[achId] = {});
+  const forField = forAch[field] || (forAch[field] = {});
+  return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+}
+
+function _macFullAchLocSyncBackTranslations(achId) {
+  if (!achId) return Promise.resolve();
+  const fd = state.formData;
+  const field = state.macFullAchLocField || 'displayName';
+  const supportedLangs = fd.localizations || [];
+
+  const jobs = [];
+  supportedLangs.forEach(lang => {
+    const topText = _macFullAchLocFieldValue(achId, field, lang);
+    const entry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+    if (entry.syncedTopText === topText) return;
+    jobs.push(_macFullAchLocRefreshBackTranslation(achId, field, lang, topText));
+  });
+  return Promise.all(jobs);
+}
+
+async function _macFullAchLocRefreshBackTranslation(achId, field, lang, topText) {
+  const entry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+
+  if (!topText.trim()) {
+    entry.text = '';
+    entry.syncedTopText = topText;
+    entry.status = null;
+    reRenderStepModal();
+    return;
+  }
+
+  entry.status = 'loading';
+  reRenderStepModal();
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(topText, lang, primary);
+
+  const currentTop = _macFullAchLocFieldValue(achId, field, lang);
+  if (currentTop !== topText) { _macFullAchLocRefreshBackTranslation(achId, field, lang, currentTop); return; }
+
+  const freshEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+  if (translated === null) {
+    freshEntry.status = 'error';
+  } else {
+    freshEntry.text = translated;
+    freshEntry.syncedTopText = topText;
+    freshEntry.status = null;
+  }
+  reRenderStepModal();
+}
+
+async function _macFullAchLocCommitPrimaryEdit(achId, field, lang, value) {
+  const entry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+  entry.text = value;
+  entry.syncedTopText = undefined;
+  entry.forwardStatus = value.trim() ? 'loading' : null;
+  reRenderStepModal();
+
+  if (!value.trim()) {
+    _macFullAchLocSetFieldValue(achId, field, lang, '');
+    entry.syncedTopText = '';
+    reRenderStepModal();
+    return;
+  }
+
+  const fd = state.formData;
+  const primary = fd.primaryLanguage || 'en';
+  const translated = await _iasTranslateSingle(value, primary, lang);
+
+  const currentEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+  if (currentEntry.text !== value) return;
+
+  if (translated === null) {
+    currentEntry.forwardStatus = 'error';
+  } else {
+    _macFullAchLocSetFieldValue(achId, field, lang, translated);
+    currentEntry.syncedTopText = translated;
+    currentEntry.forwardStatus = null;
+  }
+  reRenderStepModal();
+}
+
+function startMasAchLocBackTranslationEdit(achId, field, lang, el, ev) {
+  if (ev) ev.stopPropagation();
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  input.classList.add('ias-inline-input');
+  input.value = _macFullAchLocBackTranslationValue(achId, field, lang).text;
+
+  const commit = () => {
+    const previousValue = _macFullAchLocBackTranslationValue(achId, field, lang).text;
+    if (input.value !== previousValue) _macFullAchLocPushUndo('draft', achId, field, lang, previousValue);
+    _macFullAchLocCommitPrimaryEdit(achId, field, lang, input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  });
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function _macFullAchLocUndoEntry(kind, achId, field, lang) {
+  if (!state.macFullAchLocUndoHistory) state.macFullAchLocUndoHistory = { real: {}, draft: {} };
+  const forKind  = state.macFullAchLocUndoHistory[kind] || (state.macFullAchLocUndoHistory[kind] = {});
+  const forAch   = forKind[achId] || (forKind[achId] = {});
+  const forField = forAch[field] || (forAch[field] = {});
+  return forField[lang] || (forField[lang] = { past: [], future: [] });
+}
+
+function _macFullAchLocUndoState(kind, achId, field, lang) {
+  const entry = state.macFullAchLocUndoHistory
+    && state.macFullAchLocUndoHistory[kind]
+    && state.macFullAchLocUndoHistory[kind][achId]
+    && state.macFullAchLocUndoHistory[kind][achId][field]
+    && state.macFullAchLocUndoHistory[kind][achId][field][lang];
+  return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+}
+
+function _macFullAchLocPushUndo(kind, achId, field, lang, previousValue) {
+  const entry = _macFullAchLocUndoEntry(kind, achId, field, lang);
+  entry.past.push(previousValue);
+  if (entry.past.length > IAP_LOC_UNDO_LIMIT) entry.past.shift();
+  entry.future = [];
+}
+
+function _macFullAchLocRestoreFieldValue(kind, achId, field, lang, value) {
+  if (kind === 'draft') {
+    _macFullAchLocCommitPrimaryEdit(achId, field, lang, value);
+    return;
+  }
+  _macFullAchLocSetFieldValue(achId, field, lang, value);
+  const primary = state.formData.primaryLanguage || 'en';
+  if (state.macFullAchLocMode === 'review' && lang !== primary) {
+    const backEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
+    if (backEntry.syncedTopText !== value) _macFullAchLocRefreshBackTranslation(achId, field, lang, value);
+  }
+  reRenderStepModal();
+}
+
+function macFullAchLocUndo(kind, achId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _macFullAchLocUndoEntry(kind, achId, field, lang);
+  if (!entry.past.length) return;
+  const current  = kind === 'draft' ? _macFullAchLocBackTranslationValue(achId, field, lang).text : _macFullAchLocFieldValue(achId, field, lang);
+  const previous = entry.past.pop();
+  entry.future.push(current);
+  _macFullAchLocRestoreFieldValue(kind, achId, field, lang, previous);
+}
+
+function macFullAchLocRedo(kind, achId, field, lang, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = _macFullAchLocUndoEntry(kind, achId, field, lang);
+  if (!entry.future.length) return;
+  const current = kind === 'draft' ? _macFullAchLocBackTranslationValue(achId, field, lang).text : _macFullAchLocFieldValue(achId, field, lang);
+  const next     = entry.future.pop();
+  entry.past.push(current);
+  _macFullAchLocRestoreFieldValue(kind, achId, field, lang, next);
+}
+
+async function toggleMasAchLocReviewMode() {
+  const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+  await new Promise(r => setTimeout(r, 160));
+  exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+  state.macFullAchLocMode = state.macFullAchLocMode === 'review' ? 'locs' : 'review';
+  reRenderStepModal();
+  if (state.macFullAchLocMode === 'review') _macFullAchLocSyncBackTranslations(_macFullAchLocEffectiveAchId());
+
+  const enteringCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+  enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+  await new Promise(r => setTimeout(r, 280));
+  enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+}
+
+function setMasAchLocReviewAchId(achId) {
+  state.macFullAchLocAchId = achId;
+  reRenderStepModal();
+  if (state.macFullAchLocMode === 'review') _macFullAchLocSyncBackTranslations(achId);
+}
+
+function setMasAchLocField(field) {
+  state.macFullAchLocField = field;
+  reRenderStepModal();
+  if (state.macFullAchLocMode === 'review') _macFullAchLocSyncBackTranslations(_macFullAchLocEffectiveAchId());
+}
+
+/* Achievement Localizations' own "Automatically translated fields" settings
+   — mirrors _masIapLocToggleSettingsMenu, against macFullAchLocSettingsOpen and
+   its own DOM id. */
+function _macFullAchLocToggleSettingsMenu(event) {
+  event.stopPropagation();
+  const wasOpen = !!state.macFullAchLocSettingsOpen;
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.macFullAchLocSettingsOpen = true;
+    document.getElementById('macfull-ach-loc-settings-wrap')?.classList.add('is-open');
+  }
+}
+
+/* Checks whether the currently Steam-linked title's achievement stats page
+   has a genuine localized translation for `lang` (a Shipmate language
+   code), and if so, populates that language's Display Name/Earned
+   Description for every achievement imported from Steam with Steam's own
+   text — taking priority over an AI-translated guess, the same "real
+   developer-authored text beats a machine translation" idea as
+   _checkSteamLocalizedDescription/_checkSteamLocalizedListing above,
+   applied to achievements instead of the store listing. Called from the
+   same sites those two are (toggleObLang, _checkSteamLocalizedDescriptionForNewLangs,
+   and the already-selected-languages passes in both _applySteamAboutData
+   and _applySteamAchievements itself) — a complete no-op if the current
+   title isn't Steam-linked, or its achievement stats page hasn't finished
+   its own initial (default-language) fetch yet
+   (state.steamAchievementsBaseline, set by _applySteamAchievements), or
+   Steam has no localization support for `lang` at all
+   (STEAM_LOCALIZATION_LANG_MAP has no entry for it).
+
+   Matches a locally-tracked achievement back up against the freshly-fetched
+   localized listing purely by POSITION (a.steamIndex, set at import time by
+   _applySteamAchievements) rather than by name — Steam always returns
+   achievements for a given appId in this same order regardless of which
+   `l=` language was requested (confirmed live), and matching by position
+   means a later developer edit to Reference/Display Name, or a drag-reorder
+   in the Achievements list (macGcAchievementDrop), can never break the
+   match the way a name-based lookup could.
+
+   Steam's achievements page has no separate "before you've earned it" text
+   at all (see _applySteamAchievements' own comment on Hidden achievements
+   getting a blank `<h5>`) — only Display Name and Earned Description can
+   ever come from Steam here; Pre-Earned Description is never touched by
+   this function. */
+async function _checkMacFullLocalizedAchievements(lang) {
+  const baseline = state.steamAchievementsBaseline;
+  if (!baseline || !baseline.appId) return;
+  const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
+  if (!steamLang) return;
+  // steamLocInfo (populated by the separate _applySteamAboutData fetch) has
+  // the supported_languages pre-filter used elsewhere — reuse it when it
+  // happens to already be available for this same title, but don't block on
+  // it (unlike the store-listing checks, achievements have their own
+  // independently-timed fetch and shouldn't wait on a sibling one).
+  const info = state.steamLocInfo;
+  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+
+  let parsed = null;
+  try {
+    const html = await fetchSteamAchievementsPage(baseline.appId, steamLang);
+    parsed = _parseSteamAchievements(html);
+  } catch (e) {
+    console.warn('[Steam Localized Achievements - Mac App Store Full]', lang, e.message);
+    return;
+  }
+
+  // Stale guards — bail if the user switched to a different (or non-Steam)
+  // title, or deselected this language again, while the fetch was in flight.
+  if (!state.steamAchievementsBaseline || state.steamAchievementsBaseline.appId !== baseline.appId) return;
+  if (!(state.formData.localizations || []).includes(lang)) return;
+  if (!parsed || !parsed.length) return;
+
+  let changed = false;
+  (state.macFullGameCenterAchievements || []).forEach(a => {
+    if (!a.fromSteam || a.steamIndex == null) return;
+    const localized = parsed[a.steamIndex];
+    const base = baseline.achievements[a.steamIndex];
+    if (!localized || !base) return;
+
+    if (!a.locs) a.locs = {};
+    if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+    const entry = a.locs[lang];
+
+    // Steam silently falls back to the achievement stats page's default
+    // listing language instead of erroring when it has no real translation
+    // for the requested language — comparing against this import's own
+    // baseline is the only way to tell "genuinely localized" from "silently
+    // fell back", same as every other Steam-localization check in this file.
+    const localizedName = (localized.name || '').trim();
+    const baseName       = (base.name || '').trim();
+    if (localizedName && localizedName !== baseName) {
+      entry.displayName            = localizedName;
+      entry.displayNameFromSteam   = true;
+      entry.displayNameSourceText  = a.displayName || '';
+      changed = true;
+      const backEntry = _macFullAchLocBackTranslationEntry(a.id, 'displayName', lang);
+      if (backEntry.syncedTopText !== localizedName) _macFullAchLocRefreshBackTranslation(a.id, 'displayName', lang, localizedName);
+    }
+
+    const localizedDesc = (localized.description || '').trim();
+    const baseDesc       = (base.description || '').trim();
+    if (localizedDesc && localizedDesc !== baseDesc) {
+      entry.earnedDescription           = localizedDesc;
+      entry.earnedDescriptionFromSteam  = true;
+      entry.earnedDescriptionSourceText = a.earnedDescription || '';
+      changed = true;
+      const backEntry = _macFullAchLocBackTranslationEntry(a.id, 'earnedDescription', lang);
+      if (backEntry.syncedTopText !== localizedDesc) _macFullAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
+    }
+  });
+  if (changed) reRenderStepModal();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    MAC APP STORE FULL -- Product Page Preview, Localization Review, IAP
    Localizations
    ══════════════════════════════════════════════════════════════════════
@@ -13265,6 +14030,7 @@ function addLangFromSearch(code) {
     _checkSteamLocalizedListing(code);
     _checkSteamLocalizedAchievements(code);
     _checkIosLocalizedAchievements(code);
+    _checkMacFullLocalizedAchievements(code);
   } else {
     arr.splice(idx, 1);
     state.formData.localizations = arr;

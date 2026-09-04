@@ -4268,7 +4268,7 @@ function renderStepModal() {
   // (keyed by platformId, not by step) — safe for the same reason
   // storePreviewPrototype already shares it with storePreview above: only
   // one step modal is ever open at a time.
-  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios')))
+  const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full')))
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
   const FLIP_LABELS = {
@@ -4619,6 +4619,7 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'achievementLocalizations') {
     if (platformId === 'macos') return buildMacAchievementLocalizationsSection();
     if (platformId === 'ios') return buildIosAchievementLocalizationsSection();
+    if (platformId === 'macos_full') return buildMacFullAchievementLocalizationsSection();
     return '';
   }
   return '';
@@ -7431,6 +7432,110 @@ function buildIosGameCenterSection() {
     <button class="btn btn-ghost btn-sm" type="button" onclick="addIosGameCenterAchievement()">+ Add Achievement</button>`;
 }
 
+/* ═══════════════════════════════════════════════════
+   MAC APP STORE FULL — GAME CENTER ACHIEVEMENT ROWS
+   Full twin of the "MAC APP STORE — GAME CENTER ACHIEVEMENTS" and "APP
+   STORE (ios) — GAME CENTER ACHIEVEMENTS" clusters above
+   (_macGcAchievementCollapsedRow/_macGcAchievementExpandedRow and their ios
+   twins) — identical markup and mechanics, reading
+   state.macFullGameCenterAchievements and calling the "MacFull"/"MacFullGc"-
+   prefixed app.js cluster instead of the "Mac"/"MacGc"- or "Ios"/"IosGc"-
+   prefixed ones. Added for full feature parity with Mac App Store's Game
+   Center. Unlike mac/ios, macos_full's own Game Center step already has
+   Leaderboards content of its own (buildMacFullGameCenterSection, further
+   below) — these two row builders are called from THAT function directly,
+   rather than a separate standalone buildMacFullGameCenterSection twin. */
+
+function _macFullGcAchievementCollapsedRow(a) {
+  const displayName = (a.displayName || '').trim() || a.refName.trim() || 'Untitled Achievement';
+  const badges = [
+    a.pointValue ? `${escHtml(String(a.pointValue))} pts` : '',
+    a.hidden ? 'Hidden' : '',
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="iap-product-row macfull-gc-row is-collapsed" data-ach-id="${a.id}" style="display:flex;align-items:center;gap:10px;"
+         draggable="true"
+         onclick="expandMacFullGcAchievement('${a.id}')"
+         ondragstart="macFullGcAchievementDragStart(event,'${a.id}')"
+         ondragover="macFullGcAchievementDragOver(event,'${a.id}')"
+         ondragleave="macFullGcAchievementDragLeave(event)"
+         ondrop="macFullGcAchievementDrop(event,'${a.id}')"
+         ondragend="macFullGcAchievementDragEnd()">
+      <span style="cursor:grab;color:var(--text-faint);font-size:14px;line-height:1;" title="Drag to reorder">⠿</span>
+      <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
+      ${a.image ? `<img src="${a.image.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+      <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacFullGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+    </div>`;
+}
+
+function _macFullGcAchievementExpandedRow(a) {
+  const headerLabel = (a.displayName || '').trim() || a.refName.trim() || 'New Achievement';
+  const img = a.image;
+  return `
+    <div class="iap-product-row macfull-gc-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveMacFullGcAchievement('${a.id}')" title="Click to collapse">
+        <span class="iap-product-name-collapsed">${escHtml(headerLabel)}</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${img ? `<img src="${img.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+          <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacFullGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
+        </div>
+      </div>
+
+      <div class="iap-product-field">
+        <label class="form-label">Reference Name</label>
+        <input class="form-input" type="text" value="${escHtml(a.refName)}" placeholder="Internal name, not shown to players"
+               oninput="setMacFullGameCenterAchievementField('${a.id}','refName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Point Value <span class="form-hint-inline">(optional)</span></label>
+        <input class="form-input" type="number" min="0" max="100" value="${escHtml(String(a.pointValue ?? ''))}" placeholder="0–100"
+               oninput="setMacFullGameCenterAchievementField('${a.id}','pointValue',this.value)">
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Hidden</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${a.hidden ? 'is-selected' : ''}" onclick="setMacFullGameCenterAchievementField('${a.id}','hidden',true)">YES</button>
+          <button class="yn-btn yn-no ${!a.hidden ? 'is-selected' : ''}" onclick="setMacFullGameCenterAchievementField('${a.id}','hidden',false)">NO</button>
+        </div>
+      </div>
+      <div class="iap-product-trial">
+        <span class="iap-product-trial-label">Achievable More Than Once</span>
+        <div class="question-yn">
+          <button class="yn-btn yn-yes ${a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacFullGameCenterAchievementField('${a.id}','achievableMultipleTimes',true)">YES</button>
+          <button class="yn-btn yn-no ${!a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacFullGameCenterAchievementField('${a.id}','achievableMultipleTimes',false)">NO</button>
+        </div>
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Display Name</label>
+        <input class="form-input" type="text" value="${escHtml(a.displayName)}" placeholder="Shown to players, e.g. Speed Runner"
+               oninput="setMacFullGameCenterAchievementField('${a.id}','displayName',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Earned Description</label>
+        <input class="form-input" type="text" value="${escHtml(a.earnedDescription)}" placeholder="Shown after the player earns it"
+               oninput="setMacFullGameCenterAchievementField('${a.id}','earnedDescription',this.value)">
+      </div>
+      <div class="iap-product-field">
+        <label class="form-label">Pre-Earned Description</label>
+        <input class="form-input" type="text" value="${escHtml(a.preEarnedDescription)}" placeholder="Shown before the player earns it"
+               oninput="setMacFullGameCenterAchievementField('${a.id}','preEarnedDescription',this.value)">
+      </div>
+      <div class="form-group" style="margin-top:8px;margin-bottom:0;">
+        <label class="form-label">Image</label>
+        ${img
+          ? `<div style="display:flex;align-items:center;gap:10px;">
+               <img src="${img.dataUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
+               <button class="btn btn-ghost btn-sm" type="button" onclick="removeMacFullGcAchievementImage('${a.id}')">Remove</button>
+             </div>`
+          : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload Image<input type="file" accept="image/*" hidden onchange="handleMacFullGcAchievementImage(event,'${a.id}')"></label>`}
+      </div>
+
+      <div class="iap-product-actions" style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacFullGcAchievement('${a.id}')" ${!a.refName.trim() ? 'disabled' : ''}>Save</button>
+      </div>
+    </div>`;
+}
+
 function buildLocalizationReviewSection() {
   const langCodes = _iasAllPreviewLangCodes();
   const field = state.locReviewField || 'title';
@@ -9958,6 +10063,170 @@ function buildIosAchievementLocalizationsSection() {
     </div>`;
 }
 
+/* ── Mac App Store Full Game Center — "Achievement Localizations" ───────
+   Full twin of buildMacAchievementLocalizationsSection/
+   buildIosAchievementLocalizationsSection above — identical layout and
+   mechanics, scoped to state.macFullGameCenterAchievements/macFullAchLoc*-
+   prefixed state instead of state.macGameCenterAchievements/masAchLoc* or
+   state.iosGameCenterAchievements/iasAchLoc*. Reached via
+   buildMacFullGameCenterSection's own "Localizations" button
+   (openStorePreviewSection('macos_full','achievementLocalizations')). Added
+   for full feature parity with Mac App Store's Game Center. */
+function buildMacFullAchievementLocalizationsSection() {
+  const savedAchievements = (state.macFullGameCenterAchievements || []).filter(a => a.saved);
+  if (!savedAchievements.length) return '';
+
+  const achId = _macFullAchLocEffectiveAchId();
+  const achievement = savedAchievements.find(a => a.id === achId);
+  if (!achievement) return '';
+
+  const langCodes = _iasAllPreviewLangCodes();
+  const field = state.macFullAchLocField || 'displayName';
+  const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode = state.macFullAchLocMode === 'review';
+
+  const fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _macFullAchLocFieldHasOverLimitLang(achId, f.value, langCodes),
+  }));
+  const achOptions = savedAchievements.map(a => ({
+    value: a.id,
+    label: escHtml(a.displayName || a.refName) || 'Untitled Achievement',
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _macFullAchLocUndoState(kind, achId, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); macFullAchLocUndo('${kind}','${achId}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); macFullAchLocRedo('${kind}','${achId}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="iap-loc-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = _macFullAchLocFieldValue(achId, field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _macFullAchLocBackTranslationValue(achId, field, lang);
+      const topStatusHtml = _macFullAchLocFieldTranslatePending(achId, field, lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="iap-loc-card">
+        <div class="iap-loc-side">
+          <div class="iap-loc-half iap-loc-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startMacFullAchLocInlineEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="iap-loc-half iap-loc-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, `startMacFullAchLocBackTranslationEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && _macFullAchLocFieldTranslatePending(achId, field, lang);
+    const srcBadge = _macFullAchLocSourceBadge(achId, field, lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
+    return `
+      <div class="iap-loc-card${isPrimary ? ' iap-loc-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startMacFullAchLocInlineEdit('${achId}','${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  const autoCfg = state.macFullAchLocAutoTranslateFields || { displayName: true, earnedDescription: true, preEarnedDescription: true };
+  const settingsOpen = !!state.macFullAchLocSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_macFullAchLocToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="macfull-ach-loc-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_macFullAchLocToggleSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${settingsRow('displayName', 'Display Name')}
+          ${settingsRow('earnedDescription', 'Earned Description')}
+          ${settingsRow('preEarnedDescription', 'Pre-Earned Description')}
+        </div>
+      </div>`;
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">Achievement Localizations</div>
+          ${settingsMenu}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="toggleMacFullAchLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect('macfull-ach-loc-ach', achId, achOptions, 'setMacFullAchLocReviewAchId', 'auto', 'right')}
+        ${swSelect('macfull-ach-loc-field', field, fieldOptions, 'setMacFullAchLocField', 'auto', 'right')}
+      </div>
+      <div class="iap-loc-cards">${cards}</div>
+    </div>`;
+}
+
 /* ═══════════════════════════════════════════════════
    MAC APP STORE FULL — organized by App Store Connect section (see
    PLATFORMS.macos_full.steps, state.js). Content Rating, App Privacy,
@@ -10249,8 +10518,13 @@ function buildMacFullSubscriptionsSection() {
 /* ── Mac App Store Full — Game Center ────────────────────────────────────
    Leaderboards is a simplified repeatable list (per the "simplified but
    functional" design decision) rather than Apple's own per-item
-   localization/image-upload flow. Multiplayer and Achievements fields
-   were removed from this section per a later design decision. No longer
+   localization/image-upload flow. Multiplayer was removed from this
+   section per a later design decision. Achievements is a full-featured
+   list — same shape/mechanics as Mac App Store's own Game Center
+   (_macFullGcAchievementCollapsedRow/_macFullGcAchievementExpandedRow,
+   above — added for full feature parity with Mac App Store's Game
+   Center), including its own "Achievement Localizations" sub-section
+   (buildMacFullAchievementLocalizationsSection, further below). No longer
    one of PLATFORMS.macos_full.steps (see that array's own comment,
    state.js) — reached instead via Product Page Preview's Achievements card
    (buildMacFullStorePreviewSection's own achievementsHtml), same convention
@@ -10279,12 +10553,30 @@ function buildMacFullGameCenterSection() {
       </div>
     </div>`).join('');
 
+  const achievements = state.macFullGameCenterAchievements || [];
+  const hasSavedAchievements = achievements.some(a => a.saved);
+  const achLocsBtn = hasSavedAchievements
+    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('macos_full','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
+    : '';
+
   return `
     <div class="form-group" style="margin:14px 0 6px;">
       <label class="form-label">Leaderboards <span class="form-hint-inline">(optional)</span></label>
     </div>
     ${leaderboardsHTML}
-    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullLeaderboard()">+ Add Leaderboard</button>`;
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullLeaderboard()">+ Add Leaderboard</button>
+
+    <div class="form-group iap-products-group" style="margin:20px 0 8px;">
+      <div class="iap-products-label-row">
+        <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
+        ${achLocsBtn}
+      </div>
+    </div>
+    ${achievements.map(a => a.collapsed
+        ? _macFullGcAchievementCollapsedRow(a)
+        : _macFullGcAchievementExpandedRow(a)
+      ).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullGameCenterAchievement()">+ Add Achievement</button>`;
 }
 
 /* ── Mac App Store Full — Version Release ─────────────────────────────── */
@@ -10682,13 +10974,13 @@ function buildMacFullStorePreviewSection() {
   // achievementsHtml (see that twin's comment for the full rationale: static
   // lock, no "chosen" achievement, always shown even with zero saved
   // achievements, etc. — not re-explained here). macos_full's own Game
-  // Center no longer has an Achievements list of its own (removed along
-  // with Multiplayer, an earlier request) — only Leaderboards remain, moved
-  // here from the old standalone Game Center step (see buildMacFullGameCenterSection) —
-  // so savedAchievements is always empty and this always reads "0 / 0", same
-  // as it would for any real game with none. Clicking the card still opens
-  // Game Center (openStepModal('macos_full','gameCenter')), same as macos/ios.
-  const savedAchievements = (state.macFullSubmitAnswers.gameCenter.achievements || []).filter(a => a.saved);
+  // Center has its own full-featured Achievements list again
+  // (state.macFullGameCenterAchievements — see buildMacFullGameCenterSection,
+  // added for full feature parity with Mac App Store's Game Center), so this
+  // reads real saved-achievement counts the same way macos/ios do. Clicking
+  // the card still opens Game Center (openStepModal('macos_full','gameCenter')),
+  // same as macos/ios.
+  const savedAchievements = (state.macFullGameCenterAchievements || []).filter(a => a.saved);
   const achievementsHtml = `
         <div class="ias-section ias-achv-section" onclick="openStepModal('macos_full','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
