@@ -12270,7 +12270,7 @@ function _macFullAchLocToggleAutoTranslateField(field) {
   reRenderStepModal();
 }
 
-function startMasAchLocInlineEdit(achId, field, lang, el, ev) {
+function startMacFullAchLocInlineEdit(achId, field, lang, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
@@ -12413,7 +12413,7 @@ async function _macFullAchLocCommitPrimaryEdit(achId, field, lang, value) {
   reRenderStepModal();
 }
 
-function startMasAchLocBackTranslationEdit(achId, field, lang, el, ev) {
+function startMacFullAchLocBackTranslationEdit(achId, field, lang, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
@@ -12496,7 +12496,7 @@ function macFullAchLocRedo(kind, achId, field, lang, ev) {
   _macFullAchLocRestoreFieldValue(kind, achId, field, lang, next);
 }
 
-async function toggleMasAchLocReviewMode() {
+async function toggleMacFullAchLocReviewMode() {
   const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
   exitingCards.forEach(c => c.classList.add('is-flip-exit'));
   await new Promise(r => setTimeout(r, 160));
@@ -12512,13 +12512,13 @@ async function toggleMasAchLocReviewMode() {
   enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
 }
 
-function setMasAchLocReviewAchId(achId) {
+function setMacFullAchLocReviewAchId(achId) {
   state.macFullAchLocAchId = achId;
   reRenderStepModal();
   if (state.macFullAchLocMode === 'review') _macFullAchLocSyncBackTranslations(achId);
 }
 
-function setMasAchLocField(field) {
+function setMacFullAchLocField(field) {
   state.macFullAchLocField = field;
   reRenderStepModal();
   if (state.macFullAchLocMode === 'review') _macFullAchLocSyncBackTranslations(_macFullAchLocEffectiveAchId());
