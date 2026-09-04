@@ -802,12 +802,10 @@ const PLATFORMS = {
     steps: [
       { id: 'appInfo',         label: 'App Information'                              },
       { id: 'contentRating',   label: 'Age Rating',                hasInference: true },
-      { id: 'pricing',         label: 'Pricing and Availability'                      },
       { id: 'privacy',         label: 'App Privacy'                                   },
       { id: 'versionInfo',     label: 'Version Information'                           },
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
       { id: 'gameCenter',      label: 'Game Center'                                   },
-      { id: 'reviewInfo',      label: 'App Review Information'                        },
       { id: 'versionRelease',  label: 'Version Release'                               },
       { id: 'storePreview',    label: 'Product Page Preview'                          },
       { id: 'improveSubmission', label: 'Improve Your Submission'                     },
@@ -1731,12 +1729,6 @@ function computeMacFullSectionRisk(sectionId) {
     return 'LOW';
   }
 
-  if (sectionId === 'pricing') {
-    if (a.availability.mode === 'select' && a.availability.countries.length === 0) return 'HIGH';
-    if (a.availability.countries.includes('CN')) return 'MEDIUM';
-    return 'LOW';
-  }
-
   return 'NONE';
 }
 
@@ -1763,11 +1755,6 @@ function isMacFullSectionComplete(sectionId) {
     return true;
   }
 
-  if (sectionId === 'pricing') {
-    if (a.availability.mode === 'select' && a.availability.countries.length === 0) return false;
-    return true;
-  }
-
   if (sectionId === 'privacy') {
     const url = (a.privacyPolicyUrl || '').trim();
     if (!url) return false;
@@ -1788,7 +1775,15 @@ function isMacFullSectionComplete(sectionId) {
     const ps = state.platformScreenshots?.macos_full;
     const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
                      (state.uploads?.screenshots || []).length > 0;
-    return hasShots;
+    if (!hasShots) return false;
+    // App Review fields (merged in from the former standalone App Review
+    // Information step — now the "App Review" section here).
+    if (!a.reviewContact.firstName.trim() || !a.reviewContact.lastName.trim()) return false;
+    if (!a.reviewContact.email.trim()) return false;
+    if (a.demoAccount.required === null) return false;
+    if (a.demoAccount.required === 'yes' &&
+        (!a.demoAccount.username.trim() || !a.demoAccount.password.trim())) return false;
+    return true;
   }
 
   if (sectionId === 'business') {
@@ -1805,15 +1800,6 @@ function isMacFullSectionComplete(sectionId) {
   // makeBlankIOSAnswers's comment) — a developer with none simply leaves
   // the list(s) empty, so an empty list never blocks completion.
   if (sectionId === 'gameCenter')    return true;
-
-  if (sectionId === 'reviewInfo') {
-    if (!a.reviewContact.firstName.trim() || !a.reviewContact.lastName.trim()) return false;
-    if (!a.reviewContact.email.trim()) return false;
-    if (a.demoAccount.required === null) return false;
-    if (a.demoAccount.required === 'yes' &&
-        (!a.demoAccount.username.trim() || !a.demoAccount.password.trim())) return false;
-    return true;
-  }
 
   if (sectionId === 'versionRelease') {
     if (a.releaseOption === 'scheduled' && !a.scheduledReleaseDate.trim()) return false;

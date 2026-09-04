@@ -4368,11 +4368,9 @@ function renderStepModal() {
     // since none of them have a real ios/macos equivalent to reuse.
     if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
     else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
-    else if (stepId === 'pricing')            body = buildMacFullPricingSection();
     else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
     else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
     else if (stepId === 'gameCenter')         body = buildMacFullGameCenterSection();
-    else if (stepId === 'reviewInfo')         body = buildMacFullReviewInfoSection();
     else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -10001,25 +9999,6 @@ const MAC_FULL_SUB_DURATIONS = ['1 Week', '1 Month', '2 Months', '3 Months', '6 
 // most common four rather than every format ASC itself offers.
 const MAC_FULL_SCORE_FORMATS = ['Integer', 'Decimal (Money)', 'Time (mm:ss)', 'Time (hh:mm:ss)'];
 
-// Apple's own territory grouping for the Pricing and Availability →
-// "Select Countries or Regions" picker (App Store Connect groups every
-// storefront into one of these five areas). Maps IOS_COUNTRIES' codes into
-// each area so buildMacFullPricingSection's Availability field can present
-// the same five groups, each with its own "select all" checkbox.
-const MAC_FULL_COUNTRY_AREAS = [
-  { label: 'The United States and Canada',
-    codes: ['US', 'CA'] },
-  { label: 'Europe',
-    codes: ['RU', 'DE', 'TR', 'GB', 'FR', 'IT', 'ES', 'PL', 'UA', 'NL', 'RO',
-             'SE', 'BE', 'CZ', 'PT', 'GR', 'HU', 'AT', 'CH', 'DK', 'FI', 'NO'] },
-  { label: 'Africa, Middle East, and India',
-    codes: ['IN', 'PK', 'EG', 'NG', 'ZA', 'SA', 'IQ', 'AE', 'IL', 'KW', 'QA'] },
-  { label: 'Latin America and the Caribbean',
-    codes: ['BR', 'MX', 'AR', 'CO', 'PE', 'CL'] },
-  { label: 'Asia Pacific',
-    codes: ['CN', 'ID', 'JP', 'VN', 'PH', 'TH', 'KR', 'MY', 'AU', 'TW', 'KZ',
-             'HK', 'SG', 'NZ'] },
-];
 
 // Generic single-line (or textarea) text field for Mac App Store Full's own
 // step builders below — writes into state.macFullSubmitAnswers via a
@@ -10127,71 +10106,26 @@ function buildMacFullAppInfoSection() {
     </div>`;
 }
 
-/* ── Mac App Store Full — Pricing and Availability ───────────────────────
-   Base Price/Tax Category stay shared game-wide via buildBusinessSection
-   ('macos_full') — see that function's own comment (Tax Category is
-   hard-set to Games there) — with Availability layered on below it. */
-function buildMacFullPricingSection() {
-  const a = state.macFullSubmitAnswers;
-
-  // Grouped, checkbox-based Countries and Regions picker — mirrors App
-  // Store Connect's own five-area breakdown (MAC_FULL_COUNTRY_AREAS above)
-  // instead of a flat <select multiple>, so multi-selecting countries
-  // doesn't rely on a Cmd/Ctrl-click affordance nobody discovers on their
-  // own. Each area also gets its own "select all in this area" checkbox.
-  const areasHTML = MAC_FULL_COUNTRY_AREAS.map((area, areaIndex) => {
-    const codes = area.codes.filter(code => IOS_COUNTRIES.some(c => c.code === code));
-    const allSelected = codes.length > 0 && codes.every(code => a.availability.countries.includes(code));
-    const countryRows = codes.map(code => {
-      const c = IOS_COUNTRIES.find(cc => cc.code === code);
-      const checked = a.availability.countries.includes(code);
-      return `
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
-          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleMacFullAvailabilityCountry('${code}')">
-          ${escHtml(c.name)}
-        </label>`;
-    }).join('');
-    return `
-      <div class="form-group" style="margin-bottom:14px;">
-        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-bottom:8px;">
-          <input type="checkbox" ${allSelected ? 'checked' : ''} onchange="toggleMacFullAvailabilityArea(${areaIndex}, this.checked)">
-          ${area.label}
-        </label>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding-left:24px;">
-          ${countryRows}
-        </div>
-      </div>`;
-  }).join('');
-
-  return `
-    ${buildBusinessSection('macos_full')}
-
-    <div class="form-group" style="margin-top:20px;margin-bottom:6px;">
-      <label class="form-label">Availability</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.availability.mode === 'all' ? 'is-selected' : ''}" onclick="setMacFullAvailabilityMode('all')">All Countries</button>
-        <button class="yn-btn yn-no ${a.availability.mode === 'select' ? 'is-selected' : ''}" onclick="setMacFullAvailabilityMode('select')">Select Countries</button>
-      </div>
-    </div>
-    ${a.availability.mode === 'select' ? `
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Countries and Regions</label>
-      <div class="form-hint" style="margin-bottom:10px;">Select every country or region where this game should be available.</div>
-      ${areasHTML}
-    </div>` : ''}`;
-}
 
 /* ── Mac App Store Full — Version Information ─────────────────────────────
    Screenshots/Title/Subtitle are edited from the Product Page Preview step
    further below (buildMacFullStorePreviewSection), same as every other
    App-Store-shaped platform — this step covers the rest of what ASC's
-   Version Information page asks for. */
+   Version Information page asks for, plus an "App Review" section below
+   (same divider + label header pattern buildIapSection uses for its own
+   section) carrying everything from the former standalone App Review
+   Information step, since that step was folded in here and removed. */
 function buildMacFullVersionInfoSection() {
   seedMacFullAppStoreListing();
   const l  = state.macFullAppStoreListing;
   const ps = state.platformScreenshots?.macos_full;
   const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
                    (state.uploads?.screenshots || []).length > 0;
+
+  const a   = state.macFullSubmitAnswers;
+  const rc  = a.reviewContact;
+  const da  = a.demoAccount;
+  const att = a.reviewAttachment;
 
   // Description and What's New are edited in the Product Page Preview step
   // below now (click-to-edit, with per-language translation/Localization
@@ -10208,7 +10142,36 @@ function buildMacFullVersionInfoSection() {
     ${_mfListingField('Keywords', 'keywords', l.keywords, 'Comma-separated, up to 100 characters total')}
     ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com/support')}
     ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com')}
-    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}`;
+    ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">App Review</div>
+    ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
+    ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
+    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone)}
+    ${_mfTextField('Email', 'reviewContact.email', rc.email)}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Sign-in required to review all features?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${da.required === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','yes')">YES</button>
+        <button class="yn-btn yn-no ${da.required === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','no')">NO</button>
+      </div>
+    </div>
+    ${da.required === 'yes' ? `
+    <div class="ios-followup">
+      ${_mfTextField('Username', 'demoAccount.username', da.username)}
+      ${_mfTextField('Password', 'demoAccount.password', da.password)}
+    </div>` : ''}
+
+    ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea')}
+
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Attachment <span class="form-hint-inline">(optional)</span></label>
+      ${att
+        ? _mfFileRowHTML(att, 'removeMacFullReviewAttachment()')
+        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullReviewAttachment(event)"></label>`}
+    </div>`;
 }
 
 
@@ -10313,41 +10276,6 @@ function buildMacFullGameCenterSection() {
     </div>
     ${leaderboardsHTML}
     <button class="btn btn-ghost btn-sm" type="button" onclick="addMacFullLeaderboard()">+ Add Leaderboard</button>`;
-}
-
-/* ── Mac App Store Full — App Review Information ─────────────────────── */
-function buildMacFullReviewInfoSection() {
-  const a  = state.macFullSubmitAnswers;
-  const rc = a.reviewContact;
-  const da = a.demoAccount;
-  const att = a.reviewAttachment;
-  return `
-    ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
-    ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
-    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone)}
-    ${_mfTextField('Email', 'reviewContact.email', rc.email)}
-
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Does your app require a demo account to sign in?</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${da.required === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','yes')">YES</button>
-        <button class="yn-btn yn-no ${da.required === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','no')">NO</button>
-      </div>
-    </div>
-    ${da.required === 'yes' ? `
-    <div class="ios-followup">
-      ${_mfTextField('Username', 'demoAccount.username', da.username)}
-      ${_mfTextField('Password', 'demoAccount.password', da.password)}
-    </div>` : ''}
-
-    ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea')}
-
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Attachment <span class="form-hint-inline">(optional)</span></label>
-      ${att
-        ? _mfFileRowHTML(att, 'removeMacFullReviewAttachment()')
-        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullReviewAttachment(event)"></label>`}
-    </div>`;
 }
 
 /* ── Mac App Store Full — Version Release ─────────────────────────────── */

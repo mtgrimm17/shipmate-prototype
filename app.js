@@ -1508,33 +1508,6 @@ function setMacFullTextField(path, value) {
   obj[key] = value;
 }
 
-/* ── Mac App Store Full — Pricing and Availability ───────────────────── */
-function setMacFullAvailabilityMode(mode) {
-  state.macFullSubmitAnswers.availability.mode = mode;
-  reRenderStepModal();
-}
-function toggleMacFullAvailabilityCountry(code) {
-  const av = state.macFullSubmitAnswers.availability;
-  const idx = av.countries.indexOf(code);
-  if (idx >= 0) av.countries.splice(idx, 1);
-  else av.countries.push(code);
-  reRenderStepModal();
-}
-// Bulk-toggles every country in one of MAC_FULL_COUNTRY_AREAS (render.js)
-// on or off in one go — backs each area's "select all in this area"
-// checkbox in buildMacFullPricingSection.
-function toggleMacFullAvailabilityArea(areaIndex, checked) {
-  const area = MAC_FULL_COUNTRY_AREAS[areaIndex];
-  if (!area) return;
-  const av = state.macFullSubmitAnswers.availability;
-  if (checked) {
-    area.codes.forEach(code => { if (!av.countries.includes(code)) av.countries.push(code); });
-  } else {
-    av.countries = av.countries.filter(code => !area.codes.includes(code));
-  }
-  reRenderStepModal();
-}
-
 /* ── Mac App Store Full — Version Information ────────────────────────── */
 // Writes straight into state.macFullAppStoreListing — the extended,
 // FULLY INDEPENDENT superset of macAppStoreListing (see its own comment,
