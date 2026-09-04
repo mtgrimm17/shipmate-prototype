@@ -1541,19 +1541,13 @@ function toggleMacFullAvailabilityArea(areaIndex, checked) {
 // state.js). Seeds first in case this is somehow the first touch of the
 // listing (defensive — openStepModal/toggleOnboardingPlatform/
 // activatePlatform already seed it before this step can be reached).
+// Version Information's own remaining fields (Promotional Text, Keywords,
+// Support URL, Marketing URL, Copyright) — plain, primary-language-only,
+// no per-language translation of their own. Title/Subtitle/Description/
+// What's New are edited only from the Product Page Preview / Localization
+// Review now (_macFullSetFieldValue, further below), never through here.
 function setMacFullListingField(field, value) {
   seedMacFullAppStoreListing();
-  // Description/What's New are also editable per-language from the Product
-  // Page Preview / Localization Review (_macFullSetFieldValue, further
-  // below) -- route through the same function here so an edit made from
-  // Version Information also kicks off auto-translation into supporting
-  // languages, rather than silently leaving their translations stale.
-  // Title/Subtitle are never edited from Version Information (see this
-  // step's own hint text), so they never reach this function at all.
-  if (field === 'description' || field === 'releaseNotes') {
-    _macFullSetFieldValue(field, state.formData.primaryLanguage || 'en', value);
-    return;
-  }
   state.macFullAppStoreListing[field] = value;
 }
 
