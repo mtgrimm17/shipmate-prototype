@@ -1909,6 +1909,11 @@ function closeStepModal() {
   }
   overlay.classList.add('hidden');
   document.body.style.overflow = '';
+  // Nothing left to show a deferred background-translate re-render onto —
+  // drop it rather than let it fire pointlessly (harmlessly, but wastefully)
+  // against a closed modal later. See _deferredRerenderStepModal's own
+  // comment, further down this file.
+  _stepModalRerenderPending = false;
   updateIOSCard();
   updateIOSCard('macos');
   updateIOSCard('macos_full');
@@ -2130,6 +2135,88 @@ function reRenderStepModal() {
   const newBodyEl = document.getElementById('step-modal-body');
   if (newBodyEl) newBodyEl.scrollTop = scrollTop;
 }
+
+// ── Deferred step-modal re-render for background auto-translate updates ──
+// Adding a language (or bulk-applying a language preset) kicks off a wave
+// of background translation passes across every already-authored field —
+// Store Preview's own Title/Subtitle/Description/What's New, PLUS every
+// saved achievement's and IAP product's own localizable fields
+// (_propagateAllLocalizationFeatures, further up this file) — each a real,
+// separately-timed network call to Claude, for every platform at once.
+// Every one of those calls re-renders the open step modal both when it
+// starts (to show a loading spinner) and when it resolves (to show the
+// translated result), via reRenderStepModal() above — which works by
+// fully replacing #step-modal-body's HTML. That's fine when nothing is
+// happening, but destructive if the user is actively clicking a button or
+// scrolling through whichever step modal happens to be open at that exact
+// instant: a click's original target element doesn't survive having its
+// whole DOM subtree replaced out from under it mid-gesture (so the click
+// silently does nothing), and a scroll/trackpad gesture's native momentum
+// dies the same way — reported repeatedly as buttons and scrolling both
+// breaking "while translations are happening in background".
+//
+// _deferredRerenderStepModal() is what every one of those background call
+// sites (every *TriggerAutoTranslate function) uses instead of calling
+// reRenderStepModal() directly: it renders immediately, exactly as
+// before, UNLESS the user currently has a pointer down somewhere in the
+// modal or has scrolled it within the last moment — in which case it just
+// remembers a render is owed and performs it the instant that interaction
+// actually ends (pointerup/cancel, or once scrolling has been still for a
+// beat), so a background update can never land mid-gesture. Purely
+// additive — anything that isn't mid-interaction behaves exactly as it
+// did before this existed, and every OTHER reRenderStepModal() call in
+// this file (a direct result of the user's own current action — an inline
+// edit's blur, a dropdown's onchange, an undo/redo click) is untouched:
+// those need no deferring since nothing else can run concurrently with
+// them in the first place (JS is single-threaded — the handler for the
+// user's own action always finishes before any background completion
+// gets a chance to fire).
+let _stepModalPointerDown     = false;
+let _stepModalScrollingUntil  = 0;
+let _stepModalRerenderPending = false;
+
+function _stepModalInteractionActive() {
+  return _stepModalPointerDown || Date.now() < _stepModalScrollingUntil;
+}
+
+function _flushPendingStepModalRerender() {
+  if (_stepModalRerenderPending && !_stepModalInteractionActive()) {
+    _stepModalRerenderPending = false;
+    reRenderStepModal();
+  }
+}
+
+function _deferredRerenderStepModal() {
+  if (_stepModalInteractionActive()) {
+    _stepModalRerenderPending = true;
+    return;
+  }
+  reRenderStepModal();
+}
+
+(function initStepModalInteractionTracking() {
+  const inModal = el => !!(el && el.closest && el.closest('#submit-modal'));
+
+  document.addEventListener('pointerdown', e => {
+    if (inModal(e.target)) _stepModalPointerDown = true;
+  }, true);
+  document.addEventListener('pointerup', () => {
+    _stepModalPointerDown = false;
+    _flushPendingStepModalRerender();
+  }, true);
+  document.addEventListener('pointercancel', () => {
+    _stepModalPointerDown = false;
+    _flushPendingStepModalRerender();
+  }, true);
+  // 'scroll' doesn't bubble, but a capture-phase listener on document still
+  // sees it fire (on its way down) for any scrollable element inside the
+  // modal — #step-modal-body itself, or any nested scrollable region.
+  document.addEventListener('scroll', e => {
+    if (!inModal(e.target)) return;
+    _stepModalScrollingUntil = Date.now() + 200;
+    setTimeout(_flushPendingStepModalRerender, 210);
+  }, true);
+})();
 
 /* ── Global fixed-position tooltip ───────────────────── */
 // Single delegated handler on document — avoids overflow/z-index clipping
@@ -6222,7 +6309,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _locReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _locReviewRefreshBackTranslation(field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -6238,7 +6325,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
   // `eligible` above).
   state.iasTranslatePendingLangs = state.iasTranslatePendingLangs || {};
   state.iasTranslatePendingLangs[field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -6355,7 +6442,7 @@ Rules:
   // clearing this doesn't affect that.
   state.iasTranslatePendingLangs[field] = [];
 
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 // Read-only lookup for render.js (never mutates state) — whether `lang` is
@@ -6559,7 +6646,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _masLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _masLocReviewRefreshBackTranslation(field, lang, '');
     });
-    if (_masPreviewNeedsTranslateRefresh()) reRenderStepModal();
+    if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
     return;
   }
 
@@ -6569,7 +6656,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
   state.masTranslateStatus[field] = 'loading';
   state.masTranslatePendingLangs = state.masTranslatePendingLangs || {};
   state.masTranslatePendingLangs[field] = eligible.slice();
-  if (_masPreviewNeedsTranslateRefresh()) reRenderStepModal();
+  if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -6638,7 +6725,7 @@ Rules:
   }
   state.masTranslatePendingLangs[field] = [];
 
-  if (_masPreviewNeedsTranslateRefresh()) reRenderStepModal();
+  if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
 }
 
 function _masRetryTranslate(field) {
@@ -7405,7 +7492,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _steamLocReviewRefreshBackTranslation(field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -7415,7 +7502,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
   state.steamTranslateStatus[field] = 'loading';
   state.steamTranslatePendingLangs = state.steamTranslatePendingLangs || {};
   state.steamTranslatePendingLangs[field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = STEAM_FIELD_LABELS[field] || field;
@@ -7499,7 +7586,7 @@ Rules:
   }
   state.steamTranslatePendingLangs[field] = [];
 
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 // Mirrors _masFieldTranslatePending — Title defers to _iasFieldTranslatePending
@@ -8670,7 +8757,7 @@ async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
       const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
       if (backEntry.syncedTopText !== '') _iapLocRefreshBackTranslation(iapId, field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -8682,7 +8769,7 @@ async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
   state.iapLocTranslatePendingLangs = state.iapLocTranslatePendingLangs || {};
   state.iapLocTranslatePendingLangs[iapId] = state.iapLocTranslatePendingLangs[iapId] || {};
   state.iapLocTranslatePendingLangs[iapId][field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
@@ -8752,7 +8839,7 @@ Rules:
     state.iapLocTranslateStatus[iapId][field] = 'error';
   }
   state.iapLocTranslatePendingLangs[iapId][field] = [];
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 // Read-only lookup for render.js — mirrors _iasFieldTranslatePending.
@@ -9203,7 +9290,7 @@ async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
       const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
       if (backEntry.syncedTopText !== '') _masIapLocRefreshBackTranslation(iapId, field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -9215,7 +9302,7 @@ async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
   state.masIapLocTranslatePendingLangs = state.masIapLocTranslatePendingLangs || {};
   state.masIapLocTranslatePendingLangs[iapId] = state.masIapLocTranslatePendingLangs[iapId] || {};
   state.masIapLocTranslatePendingLangs[iapId][field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
@@ -9282,7 +9369,7 @@ Rules:
     state.masIapLocTranslateStatus[iapId][field] = 'error';
   }
   state.masIapLocTranslatePendingLangs[iapId][field] = [];
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 function _masIapLocFieldTranslatePending(iapId, field, lang) {
@@ -11005,7 +11092,7 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
       const backEntry = _masAchLocBackTranslationEntry(achId, field, lang);
       if (backEntry.syncedTopText !== '') _masAchLocRefreshBackTranslation(achId, field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -11017,7 +11104,7 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
   state.masAchLocTranslatePendingLangs = state.masAchLocTranslatePendingLangs || {};
   state.masAchLocTranslatePendingLangs[achId] = state.masAchLocTranslatePendingLangs[achId] || {};
   state.masAchLocTranslatePendingLangs[achId][field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
@@ -11094,7 +11181,7 @@ Rules:
     state.masAchLocTranslateStatus[achId][field] = 'error';
   }
   state.masAchLocTranslatePendingLangs[achId][field] = [];
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 function _masAchLocFieldTranslatePending(achId, field, lang) {
@@ -11588,7 +11675,7 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
       const backEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
       if (backEntry.syncedTopText !== '') _iasAchLocRefreshBackTranslation(achId, field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -11600,7 +11687,7 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
   state.iasAchLocTranslatePendingLangs = state.iasAchLocTranslatePendingLangs || {};
   state.iasAchLocTranslatePendingLangs[achId] = state.iasAchLocTranslatePendingLangs[achId] || {};
   state.iasAchLocTranslatePendingLangs[achId][field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
@@ -11669,7 +11756,7 @@ Rules:
     state.iasAchLocTranslateStatus[achId][field] = 'error';
   }
   state.iasAchLocTranslatePendingLangs[achId][field] = [];
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 function _iasAchLocFieldTranslatePending(achId, field, lang) {
@@ -12163,7 +12250,7 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
       const backEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
       if (backEntry.syncedTopText !== '') _macFullAchLocRefreshBackTranslation(achId, field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -12175,7 +12262,7 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
   state.macFullAchLocTranslatePendingLangs = state.macFullAchLocTranslatePendingLangs || {};
   state.macFullAchLocTranslatePendingLangs[achId] = state.macFullAchLocTranslatePendingLangs[achId] || {};
   state.macFullAchLocTranslatePendingLangs[achId][field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
@@ -12252,7 +12339,7 @@ Rules:
     state.macFullAchLocTranslateStatus[achId][field] = 'error';
   }
   state.macFullAchLocTranslatePendingLangs[achId][field] = [];
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 
 function _macFullAchLocFieldTranslatePending(achId, field, lang) {
@@ -12786,7 +12873,7 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _macFullLocReviewRefreshBackTranslation(field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -12796,7 +12883,7 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
   state.macFullTranslateStatus[field] = 'loading';
   state.macFullTranslatePendingLangs = state.macFullTranslatePendingLangs || {};
   state.macFullTranslatePendingLangs[field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -12865,7 +12952,7 @@ Rules:
   }
   state.macFullTranslatePendingLangs[field] = [];
 
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 function _macFullRetryTranslate(field) {
   const ml = state.macFullAppStoreListing;
@@ -13272,7 +13359,7 @@ async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
       const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
       if (backEntry.syncedTopText !== '') _macFullIapLocRefreshBackTranslation(iapId, field, lang, '');
     });
-    reRenderStepModal();
+    _deferredRerenderStepModal();
     return;
   }
 
@@ -13284,7 +13371,7 @@ async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
   state.macFullIapLocTranslatePendingLangs = state.macFullIapLocTranslatePendingLangs || {};
   state.macFullIapLocTranslatePendingLangs[iapId] = state.macFullIapLocTranslatePendingLangs[iapId] || {};
   state.macFullIapLocTranslatePendingLangs[iapId][field] = eligible.slice();
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
@@ -13351,7 +13438,7 @@ Rules:
     state.macFullIapLocTranslateStatus[iapId][field] = 'error';
   }
   state.macFullIapLocTranslatePendingLangs[iapId][field] = [];
-  reRenderStepModal();
+  _deferredRerenderStepModal();
 }
 function _macFullIapLocFieldTranslatePending(iapId, field, lang) {
   if (!state.macFullIapLocTranslateStatus || !state.macFullIapLocTranslateStatus[iapId] || state.macFullIapLocTranslateStatus[iapId][field] !== 'loading') return false;
