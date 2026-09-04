@@ -6430,7 +6430,7 @@ function buildStorePreviewSection() {
   // feature parity with Mac App Store's Product Page Preview. See that
   // twin's own comment for the full rationale (static lock, no "chosen"
   // achievement, etc.) — not re-explained here.
-  const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.collapsed) : [];
+  const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.saved) : [];
   const achievementsHtml = savedAchievements.length ? `
         <div class="ias-section ias-achv-section" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
@@ -6997,8 +6997,9 @@ function buildMacStorePreviewSection() {
   // Store product page's own "GAME CENTER / Achievements" card (a game with
   // no achievements at all shows no widget there either, so this section
   // renders nothing when there are no SAVED achievements yet — same
-  // .collapsed convention buildMacGameCenterSection/hasSavedAchievements
-  // already use). Clicking anywhere on the card jumps straight to the
+  // persistent `.saved` flag buildMacGameCenterSection/hasSavedAchievements
+  // already use, NOT `.collapsed`, which just tracks whether a row's UI is
+  // currently expanded for editing). Clicking anywhere on the card jumps straight to the
   // Game Center step (openStepModal — the same function the platform
   // card's own step buttons use), replacing this modal's content in place;
   // it does NOT flip within Store Preview the way Content/Business's own
@@ -7014,7 +7015,7 @@ function buildMacStorePreviewSection() {
   // particular featured order — Apple's own widget rotates which one it
   // surfaces; this always shows a static lock rather than picking a
   // "chosen" achievement to name-drop.
-  const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.collapsed);
+  const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.saved);
   const achievementsHtml = savedAchievements.length ? `
         <div class="ias-section ias-achv-section" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
@@ -7280,10 +7281,10 @@ function buildMacGameCenterSection() {
   // — see buildStorePreviewFlipSection's 'achievementLocalizations' target,
   // further above) rather than rendering that section inline beneath the
   // Achievements list. Only shown once there's at least one SAVED
-  // (collapsed) achievement to localize — same guard
+  // achievement (persistent `.saved` flag, NOT `.collapsed`) to localize — same guard
   // buildMacAchievementLocalizationsSection itself uses, so the button
   // never opens an empty section.
-  const hasSavedAchievements = achievements.some(a => a.collapsed);
+  const hasSavedAchievements = achievements.some(a => a.saved);
   const achLocsBtn = hasSavedAchievements
     ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('macos','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
     : '';
@@ -7406,7 +7407,7 @@ function _iosGcAchievementExpandedRow(a) {
 
 function buildIosGameCenterSection() {
   const achievements = state.iosGameCenterAchievements || [];
-  const hasSavedAchievements = achievements.some(a => a.collapsed);
+  const hasSavedAchievements = achievements.some(a => a.saved);
   const achLocsBtn = hasSavedAchievements
     ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('ios','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
     : '';
@@ -9635,7 +9636,7 @@ const ACHIEVEMENT_FIELD_LIMITS = { displayName: 75, earnedDescription: 150, preE
    write-time guard (app.js) for how that authority is protected from being
    silently clobbered by an in-flight AI translation. */
 function buildMacAchievementLocalizationsSection() {
-  const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.collapsed);
+  const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.saved);
   if (!savedAchievements.length) return '';
 
   const achId = _masAchLocEffectiveAchId();
@@ -9797,7 +9798,7 @@ function buildMacAchievementLocalizationsSection() {
    button (openStorePreviewSection('ios','achievementLocalizations')). Added
    for full feature parity with Mac App Store's Game Center. */
 function buildIosAchievementLocalizationsSection() {
-  const savedAchievements = (state.iosGameCenterAchievements || []).filter(a => a.collapsed);
+  const savedAchievements = (state.iosGameCenterAchievements || []).filter(a => a.saved);
   if (!savedAchievements.length) return '';
 
   const achId = _iasAchLocEffectiveAchId();

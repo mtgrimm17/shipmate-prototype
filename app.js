@@ -1166,6 +1166,7 @@ function addMacGameCenterAchievement() {
     hidden: false,
     achievableMultipleTimes: false,
     collapsed: false,
+    saved: false,
     displayName: '',
     earnedDescription: '',
     preEarnedDescription: '',
@@ -1228,8 +1229,10 @@ function expandMacGcAchievement(id) {
 // saveIapProduct uses for an IAP product's Name/Description
 // (_iapLocPropagateName/_iapLocTriggerAutoTranslate). Achievement
 // Localizations itself only WRITES these fields on an already-saved
-// (collapsed) achievement (_masAchLocSavedAchievements filters on
-// `.collapsed`) — before this call was added here, a Display Name/Earned
+// achievement (_masAchLocSavedAchievements filters on the persistent
+// `.saved` flag set below — NOT `.collapsed`, which just tracks whether
+// the row's UI is currently expanded and gets set back to false the
+// moment a saved achievement is reopened for editing) — before this call was added here, a Display Name/Earned
 // Description/Pre-Earned Description typed on the achievement's own
 // expanded card (setMacGameCenterAchievementField, directly above) never
 // triggered auto-translate at all, so every supporting language stayed
@@ -1246,6 +1249,7 @@ function saveMacGcAchievement(id) {
   const a = state.macGameCenterAchievements.find(a => a.id === id);
   if (!a || !a.refName.trim()) return;
   a.collapsed = true;
+  a.saved = true;
   _masAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
   _masAchLocTriggerAutoTranslate(id, 'earnedDescription', a.earnedDescription);
   _masAchLocTriggerAutoTranslate(id, 'preEarnedDescription', a.preEarnedDescription);
@@ -1338,6 +1342,7 @@ function addIosGameCenterAchievement() {
     hidden: false,
     achievableMultipleTimes: false,
     collapsed: false,
+    saved: false,
     displayName: '',
     earnedDescription: '',
     preEarnedDescription: '',
@@ -1370,6 +1375,7 @@ function saveIosGcAchievement(id) {
   const a = state.iosGameCenterAchievements.find(a => a.id === id);
   if (!a || !a.refName.trim()) return;
   a.collapsed = true;
+  a.saved = true;
   _iasAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
   _iasAchLocTriggerAutoTranslate(id, 'earnedDescription', a.earnedDescription);
   _iasAchLocTriggerAutoTranslate(id, 'preEarnedDescription', a.preEarnedDescription);
@@ -5218,6 +5224,7 @@ async function _applySteamAchievements(appId, expectedTitle) {
     hidden: !p.description,
     achievableMultipleTimes: false,
     collapsed: true,
+    saved: true,
     fromSteam: true,
     // Position in Steam's own achievement listing at import time — stable
     // even after the developer drags achievements into a different order
@@ -5244,6 +5251,7 @@ async function _applySteamAchievements(appId, expectedTitle) {
     hidden: !p.description,
     achievableMultipleTimes: false,
     collapsed: true,
+    saved: true,
     fromSteam: true,
     steamIndex: idx,
     displayName: p.name,
@@ -10679,8 +10687,14 @@ function _achLocBlankLocalizedText() {
   return { displayName: '', earnedDescription: '', preEarnedDescription: '' };
 }
 
+// Filters on the persistent `.saved` flag (set once in saveMacGcAchievement
+// and never reset), NOT `.collapsed` — `.collapsed` only tracks whether the
+// row's UI is currently expanded for editing and flips back to false the
+// moment a previously-saved achievement is reopened, which would otherwise
+// make it vanish from here (and from the achievement picker dropdown that
+// reads this list) while the developer is mid-edit.
 function _masAchLocSavedAchievements() {
-  return (state.macGameCenterAchievements || []).filter(a => a.collapsed);
+  return (state.macGameCenterAchievements || []).filter(a => a.saved);
 }
 
 function _masAchLocEffectiveAchId() {
@@ -11282,8 +11296,10 @@ async function _checkSteamLocalizedAchievements(lang) {
    "masAchLoc" cluster's own header comment above for the complete rationale
    behind every piece here — it isn't re-explained a second time. */
 
+// Filters on the persistent `.saved` flag — see _masAchLocSavedAchievements'
+// own comment above for why this can't just be `.collapsed`.
 function _iasAchLocSavedAchievements() {
-  return (state.iosGameCenterAchievements || []).filter(a => a.collapsed);
+  return (state.iosGameCenterAchievements || []).filter(a => a.saved);
 }
 
 function _iasAchLocEffectiveAchId() {
