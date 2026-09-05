@@ -9,6 +9,9 @@ package.json
 package-lock.json
 .staging/
 _to_delete/
+# Half a megabyte of an old app.js copy. Not ignored before, which meant
+# ship.sh's `git add -A` would have committed it.
+.v486_stage/
 
 # Real game art used to test the Web/Pages mockup locally. Ignored on purpose:
 # this repo is published via GitHub Pages, and third-party key art shouldn't

@@ -6988,6 +6988,29 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   display: flex; align-items: center; gap: 14px;
 }
 
+/* BACK, not close — shown only while a panel is flipped open over the Store
+   Preview. Left of the platform icon, which is where back navigation lives
+   everywhere and is what makes it read as a step out rather than a dismissal.
+
+   Deliberately quieter than the × it replaces: circled and bordered, that
+   corner competed with the title for the first thing you see, and going back
+   is a routine move rather than a decision. The gap is smaller than the row's
+   own 14px so the arrow reads as attached to the icon it precedes, not as a
+   third item in a list of three. */
+.submit-modal-back {
+  width: 30px; height: 30px;
+  margin-right: -6px;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.submit-modal-back:hover { background: var(--panel-2); color: var(--text); }
+.submit-modal-back svg { width: 19px; height: 19px; display: block; }
+
 .submit-modal-hicon {
   width: 42px; height: 42px;
   border-radius: 10px;
@@ -11887,6 +11910,8 @@ body.viewing-splash #app-guide { display: none; }
 
 /* Website embed (reuses the Web store-page preview) */
 .mkt-web-note { font-size: 13px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.5; max-width: 620px; }
+/* Note: web-page.css cancels this box when the NEW preview design is inside,
+   which arrives already wearing a browser frame of its own. */
 .mkt-web-embed { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
 
 /* Influencer / creator pairing (modeled on Amplifier's Creators screen) */
@@ -12952,3 +12977,359 @@ body.viewing-splash #app-guide { display: none; }
   .steam-spp-media-block { grid-template-columns: 1fr; }
   .steam-spp-columns { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE ASSET LIBRARY
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The picker ───────────────────────────────────────────────────────────
+   Opened by every uploader that used to open a file dialog. "Upload new…" is
+   the FIRST tile, so the old gesture is never slower than it was — the
+   library is an addition, not a toll. */
+#sm-picker {
+  position: fixed; inset: 0; z-index: 10000;
+  display: grid; place-items: center; padding: 24px;
+  background: rgba(0,0,0,.55);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+body.sm-picker-open { overflow: hidden; }
+.sm-picker-box {
+  width: min(760px, 100%); max-height: min(76vh, 640px);
+  display: flex; flex-direction: column;
+  background: var(--panel, #17181c); border-radius: 16px;
+  border: 1px solid var(--border, rgba(255,255,255,.12));
+  box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  overflow: hidden;
+}
+.sm-picker-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 15px 18px; border-bottom: 1px solid var(--border, rgba(255,255,255,.1));
+  flex-shrink: 0;
+}
+.sm-picker-head b { font-size: 14px; color: var(--text, #E8EAEE); }
+.sm-picker-sub {
+  font-size: 11px; color: var(--text-dim, #8A8F98);
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(255,255,255,.06);
+}
+.sm-picker-x {
+  margin-left: auto; width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--border, rgba(255,255,255,.14)); background: transparent;
+  color: var(--text-dim, #8A8F98); font-size: 16px; cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+}
+.sm-picker-x:hover { background: var(--panel-2, rgba(255,255,255,.07)); color: var(--text, #fff); }
+.sm-picker-grid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 16px;
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.sm-tile {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px; border-radius: 11px;
+  background: rgba(255,255,255,.04);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  transition: background .13s, box-shadow .13s;
+}
+.sm-tile:hover { background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+.sm-tile:focus-visible { box-shadow: 0 0 0 2px var(--magenta, #52BAFF); }
+/* The checkerboard is doing work: it is how you see at a glance that a
+   logotype really is transparent, which is the single fact the classifier
+   leaned on hardest. */
+.sm-tile-img, .sm-lib-img {
+  display: grid; place-items: center; aspect-ratio: 16/10; border-radius: 7px; overflow: hidden;
+  background-color: #0d0d0f;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.045) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.045) 75%),
+    linear-gradient(45deg, rgba(255,255,255,.045) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.045) 75%);
+  background-size: 14px 14px; background-position: 0 0, 7px 7px;
+}
+/* FILL THE BOX AND LET object-fit DO THE LETTERBOXING — not max-width/
+   max-height, which is what this was and which cropped every portrait file in
+   half. The box gets its height from `aspect-ratio`, and a percentage
+   max-height resolved against a height that is itself derived rather than
+   stated is treated as indefinite: max-height:100% computed to `none`, the
+   image drew at its full intrinsic height, and `overflow:hidden` sliced out
+   the middle band. A 264×352 cover showed as a wide strip of its own centre
+   and looked, convincingly, like a landscape image filed under the wrong
+   dimensions. Stating both axes removes the percentage from the argument. */
+.sm-tile-img img, .sm-lib-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.sm-tile-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sm-tile-name {
+  font-size: 12px; color: var(--text, #E8EAEE);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sm-tile-dim {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+  color: var(--text-dim, #8A8F98);
+}
+.sm-tile-new {
+  align-items: center; justify-content: center; gap: 4px;
+  min-height: 120px; color: var(--text-dim, #8A8F98); font-size: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+}
+.sm-tile-new:hover { color: var(--text, #fff); }
+.sm-tile-plus { font-size: 22px; line-height: 1; opacity: .8; }
+.sm-picker-empty, .sm-lib-empty {
+  padding: 18px; margin: 0; font-size: 13px; line-height: 1.55;
+  color: var(--text-dim, #8A8F98);
+}
+.sm-picker-more {
+  flex-shrink: 0; padding: 11px; border: 0; border-top: 1px solid var(--border, rgba(255,255,255,.1));
+  background: transparent; color: var(--text-dim, #8A8F98);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.sm-picker-more:hover { background: rgba(255,255,255,.05); color: var(--text, #fff); }
+
+/* ── What landed in the well ──────────────────────────────────────────────
+   Groups flow inline and thumbnails keep their own proportions, matched on
+   HEIGHT. The shape is the evidence: a row where the screenshots are wide,
+   the icon is square and the logotype is a long thin sliver shows what the
+   classifier saw, so a file in the wrong group reads as a wrong shape before
+   anybody gets to the label. */
+.sm-wells { display: flex; flex-wrap: wrap; gap: 26px 30px; margin-top: 18px; }
+.sm-well { display: flex; flex-direction: column; gap: 9px; }
+.sm-well-h {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-dim, #8A8F98);
+}
+.sm-well-h span { opacity: .6; }
+.sm-well-row { display: flex; align-items: flex-end; gap: 9px; flex-wrap: wrap; }
+.sm-thumb {
+  position: relative; height: 90px; border-radius: 9px; overflow: hidden;
+  flex: 0 0 auto; max-width: 260px;
+  /* The checkerboard earns its place: it is how a transparent logotype is
+     visibly transparent, which is the single fact the classifier leaned on
+     hardest. On an opaque file it is invisible behind the image. */
+  background-color: #0d0d0f;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%),
+    linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%);
+  background-size: 14px 14px; background-position: 0 0, 7px 7px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.09);
+}
+.sm-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* A guess and a decision look different — but only just. Once somebody has
+   corrected a label the tool stops presenting an opinion, and a hairline is
+   enough to say so without turning the row into a status board. */
+.sm-thumb.is-user { box-shadow: inset 0 0 0 1px rgba(82,186,255,.45); }
+.sm-thumb { cursor: zoom-in; }
+.sm-thumb:focus-visible { outline: 2px solid var(--accent, #52BAFF); outline-offset: 2px; }
+/* The × hides until the pointer is on the file. Seven correct guesses should
+   not look like seven questions. */
+.sm-thumb-x {
+  position: absolute; top: 5px; right: 5px; z-index: 2;
+  width: 20px; height: 20px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.65); color: #fff; font-size: 13px; line-height: 1;
+  cursor: pointer; opacity: 0; transition: opacity .13s; font-family: inherit;
+  /* Without this a press-and-hold on a touch screen scrolls the panel instead
+     of arming the bar — the gesture never reaches pointerup and the delete
+     could never be completed on a tablet. */
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.sm-thumb:hover .sm-thumb-x, .sm-thumb-x:focus-visible { opacity: 1; }
+.sm-thumb-x:hover { background: rgba(220,60,60,.9); }
+.sm-thumb.is-arming .sm-thumb-x { opacity: 1; background: rgba(220,60,60,.95); }
+
+/* THE HOLD. Filling left to right over the file itself, not in a bar
+   somewhere else, because the thing being destroyed is the thing that should
+   be visibly counting down. scaleX rather than width so it runs on the
+   compositor and cannot stutter under a busy main thread.
+
+   The transition is declared on the ARMED state only. Declaring it on the
+   base rule would make releasing early animate back to zero over another 1.5
+   seconds — a cancelled gesture that keeps going is a cancelled gesture that
+   looks like it worked. Letting go snaps it back instantly, which is the
+   honest reading: nothing happened. */
+.sm-thumb-burn {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  border-radius: inherit; background: rgba(214,54,54,.55);
+  transform: scaleX(0); transform-origin: left center;
+}
+.sm-thumb.is-arming .sm-thumb-burn {
+  transform: scaleX(1); transition: transform 1.5s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The bar is not decoration — it is the only signal that a hold is counting
+     down — so it still runs. It just stops being the thing that moves. */
+  .sm-thumb-burn { transition: none; }
+  .sm-thumb.is-arming .sm-thumb-burn { transform: scaleX(1); opacity: .75; }
+}
+
+/* ── Full-size preview ────────────────────────────────────────────────────
+   Above everything, including the step modal it is opened from (9999) and the
+   asset picker (10000), which can itself be the surface a thumbnail was
+   clicked on. Anything lower and the picture opens BEHIND the panel that
+   asked for it. */
+#sm-lightbox {
+  position: fixed; inset: 0; z-index: 10001;
+  display: grid; place-items: center; padding: 44px;
+  background: rgba(0,0,0,.86); backdrop-filter: blur(6px);
+  cursor: zoom-out; animation: sm-lb-in .14s ease-out;
+}
+@keyframes sm-lb-in { from { opacity: 0 } to { opacity: 1 } }
+#sm-lightbox figure {
+  margin: 0; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  max-width: 100%; max-height: 100%;
+}
+#sm-lightbox img {
+  max-width: 100%; max-height: calc(100vh - 130px);
+  /* object-fit does nothing here — the image is not in a sized box — so the
+     max-* pair above is what constrains it, and width:auto keeps the aspect. */
+  width: auto; height: auto; display: block; border-radius: 10px; cursor: default;
+  /* Same checkerboard as the thumbnail, for the same reason: at full size a
+     transparent logotype and a logotype on a black plate are otherwise
+     identical, and which one it is decides whether Xbox will take it. */
+  background-color: #0d0d0f;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.06) 75%),
+    linear-gradient(45deg, rgba(255,255,255,.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.06) 75%);
+  background-size: 18px 18px; background-position: 0 0, 9px 9px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.6);
+}
+#sm-lightbox figcaption {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+  letter-spacing: .04em; color: rgba(255,255,255,.72); text-align: center;
+}
+
+/* ── Coverage ─────────────────────────────────────────────────────────── */
+.sm-cov-set {
+  padding: 16px 18px; border-radius: 12px; margin-bottom: 18px;
+  background: var(--panel-2, rgba(255,255,255,.04));
+  border: 1px solid var(--border, rgba(255,255,255,.09));
+}
+.sm-cov-h { font-size: 14px; font-weight: 700; color: var(--text, #E8EAEE); margin-bottom: 5px; }
+.sm-cov-p { margin: 0 0 13px; font-size: 12.5px; line-height: 1.55; color: var(--text-dim, #8A8F98); }
+.sm-cov-masters { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.sm-master {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 9px 12px; border-radius: 9px;
+  background: rgba(255,255,255,.04);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
+}
+.sm-master.has { box-shadow: inset 0 0 0 1px rgba(74,222,128,.35); background: rgba(74,222,128,.07); }
+.sm-master-k { font-size: 12.5px; font-weight: 600; color: var(--text, #E8EAEE); }
+.sm-master-d {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+  color: var(--text-dim, #8A8F98);
+}
+.sm-master-s { margin-left: auto; font-size: 11px; color: var(--text-dim, #8A8F98); }
+.sm-master.has .sm-master-s { color: #7BD9A0; }
+.sm-cov-todo { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text, #E8EAEE); }
+
+.sm-cov-stores { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+.sm-cov-store {
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--panel-2, rgba(255,255,255,.03));
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+}
+.sm-cov-store-h {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-size: 13px; font-weight: 700; color: var(--text, #E8EAEE);
+}
+.sm-cov-score {
+  margin-left: auto; padding: 2px 9px; border-radius: 999px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+  background: rgba(255,255,255,.07); color: var(--text-dim, #8A8F98);
+}
+.sm-cov-score.full { background: rgba(74,222,128,.16); color: #7BD9A0; }
+.sm-cov-rows { display: flex; flex-direction: column; }
+.sm-cov-row {
+  display: flex; align-items: baseline; gap: 8px; padding: 5px 0;
+  font-size: 12px; color: var(--text-dim, #8A8F98);
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.sm-cov-row.opt { opacity: .6; }
+.sm-cov-n { flex: 1; min-width: 0; color: var(--text, #E8EAEE); }
+.sm-cov-row:not(.ok) .sm-cov-n { color: var(--text-dim, #8A8F98); }
+.sm-cov-n i { font-style: normal; font-size: 10px; opacity: .6; }
+.sm-cov-d { font-family: 'IBM Plex Mono', monospace; font-size: 10px; opacity: .8; }
+.sm-cov-g { flex-shrink: 0; font-size: 11px; }
+.sm-cov-row.ok .sm-cov-g { color: #7BD9A0; }
+.sm-cov-g em { font-style: normal; opacity: .75; }
+.sm-cov-note {
+  padding: 0 0 6px; font-size: 10.5px; line-height: 1.5;
+  color: var(--text-faint, #6E747E);
+}
+/* WHERE THE NUMBER CAME FROM. A spec measured off a live storefront is a
+   different kind of fact from one a store published, and flattening the two
+   is the dishonest part — on a platform with no public doc a developer has no
+   way to check us. */
+.sm-cov-conf {
+  margin: 10px 0 0; font-size: 10.5px; line-height: 1.5;
+  color: var(--text-faint, #6E747E); font-style: italic;
+}
+.sm-cov-nospec {
+  margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-dim, #8A8F98);
+}
+.sm-cov-shots { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--border, rgba(255,255,255,.09)); }
+.sm-cov-h2 { font-size: 13px; font-weight: 700; color: var(--text, #E8EAEE); margin-bottom: 4px; }
+
+
+/* Coverage, folded. Built and useful, but an answer to a question asked later
+   than "did my files land" — closed it is one line, opened it is everything. */
+.sm-cov-fold { margin-top: 4px; }
+.sm-cov-sum {
+  cursor: pointer; padding: 11px 14px; border-radius: 10px;
+  font-size: 13px; font-weight: 600; color: var(--text, #E8EAEE);
+  background: var(--panel-2, rgba(255,255,255,.04));
+  border: 1px solid var(--border, rgba(255,255,255,.09));
+  list-style: none;
+}
+.sm-cov-sum::-webkit-details-marker { display: none; }
+.sm-cov-sum::before { content: '▸ '; opacity: .5; }
+.sm-cov-fold[open] .sm-cov-sum::before { content: '▾ '; }
+.sm-cov-sum:hover { background: var(--panel-3, rgba(255,255,255,.08)); }
+.sm-cov-fold[open] .sm-cov-sum { margin-bottom: 14px; }
+
+/* ── SOCIAL LINK ROWS (the Links sub-section of Web's factsheet) ───────────
+   The mark the row will draw, sat next to the picker that chooses it. Fixed
+   box, but the SVG inside is sized by HEIGHT and left to find its own width:
+   the set is mixed — Discord, Reddit and the email mark are the real brand
+   shapes on a 127×96 box, the rest are drawn on a 24×24 one — and stretching
+   both to fill a square squashes the wide ones. Same reasoning, and roughly
+   the same numbers, as the hero's own social row over in web-page.css; they
+   are written out separately because one is a form control and the other is
+   the page, and the page's stylesheet is not allowed to leak in here. */
+/* ONE HEIGHT FOR THE WHOLE ROW, stated once. A <select> and an <input> with
+   identical padding are NOT the same height — the select's content box comes
+   from the option list's own font metrics, and it lands a couple of pixels
+   short of the input beside it. Matching them by nudging padding is a fight
+   that has to be refought per browser, so the height is declared outright and
+   the padding gives way. */
+.pk-link-edit-row { --pk-row-h: 36px; }
+.pk-link-edit-row .qs-input { height: var(--pk-row-h); }
+.pk-link-mark {
+  flex: none; width: var(--pk-row-h); height: var(--pk-row-h);
+  display: grid; place-items: center;
+  border-radius: 9px; color: var(--text-secondary, #b9bcc4);
+  background: var(--panel-2, rgba(255,255,255,.05));
+  border: 1px solid var(--border, rgba(255,255,255,.10));
+}
+/* Sized by HEIGHT, width left to follow: the set is mixed — Discord, Reddit
+   and the email mark are the real brand shapes on a 127×96 box, the rest are
+   drawn on a 24×24 one — and forcing both into the same square squashes the
+   wide ones. Same reasoning as the hero's own social row in web-page.css. */
+.pk-link-mark svg { display: block; height: 17px; width: auto; max-width: 22px; }
+.pk-link-mark svg.brand { height: 15px; }
+
+/* The native control is dropped entirely rather than padded around it. Two
+   reasons, and the height above is only the first: macOS draws a stacked
+   double chevron that matches nothing else in this panel, and the native
+   widget's metrics are what made the select short in the first place. With
+   appearance:none the box is ours, so the arrow is drawn as a background and
+   the text gets padding to clear it. */
+.pk-link-pick {
+  appearance: none; -webkit-appearance: none;
+  padding: 0 26px 0 12px; line-height: calc(var(--pk-row-h) - 2px);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%238A8F98' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 2 6 6.4 10.5 2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 11px 7px;
+}
+/* The menu itself is still the OS's, and on a dark page it inherits the
+   page's colours only if the options are told to. */
+.pk-link-pick option { background: var(--bg, #0d0d0f); color: var(--text, #E8EAEE); }

@@ -148,6 +148,21 @@ const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broad
 const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance', calendar: 'nav-calendar' };
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
+  /* LEAVING THE TAB LEAVES WHAT WAS OPEN ON IT.
+
+     A step modal belongs to the tab it was opened from — it is editing that
+     platform's submission — but it is drawn OVER everything, so switching
+     tabs underneath left it floating above a page it has nothing to do with,
+     with a close button that returns you to a tab you already left.
+
+     Here rather than in the tab buttons: every route into a view goes through
+     setView, so this is the one place that cannot be forgotten by whatever
+     adds the next way of navigating. Guarded on an actual change of view, so
+     clicking the tab you are already on — which the nav uses to toggle its
+     drawer — does not shut the modal you are working in. */
+  if (state.activeView !== view && state.stepModal && typeof closeStepModal === 'function') {
+    closeStepModal();
+  }
   state.activeView = view;
   document.getElementById('splashview')?.classList.add('hidden');   // leave the splash
   document.body.classList.remove('viewing-splash');
@@ -4324,10 +4339,16 @@ function selectPicklistItem(igdbId) {
   // old game anyway, but clearing here means the user never sees the old
   // game's auto-filled art flash on screen in the meantime either.
   state.uploads = state.uploads || {};
-  if (!state.uploads.steamCapsuleImage?.dataUrl)   state.uploads.steamCapsuleImage   = null;
-  if (!state.uploads.steamHeaderImage?.dataUrl)    state.uploads.steamHeaderImage    = null;
-  if (!state.uploads.steamKeyArtCapsule?.dataUrl)  state.uploads.steamKeyArtCapsule  = null;
-  if (!state.uploads.steamKeyArtHero?.dataUrl)     state.uploads.steamKeyArtHero     = null;
+  /* "DID THE DEVELOPER CHOOSE THIS?" used to be asked as "does it have a
+     dataUrl?", which worked only because auto-filled art happens to arrive as
+     a remote URL. That is a coincidence about provenance, not a fact about
+     the file, and it breaks the moment an upload is stored as a reference —
+     which is exactly what the asset library does. smIsOwn asks the real
+     question, of a ref or of a legacy record. */
+  if (!smIsOwn(state.uploads.steamCapsuleImage))   state.uploads.steamCapsuleImage   = null;
+  if (!smIsOwn(state.uploads.steamHeaderImage))    state.uploads.steamHeaderImage    = null;
+  if (!smIsOwn(state.uploads.steamKeyArtCapsule))  state.uploads.steamKeyArtCapsule  = null;
+  if (!smIsOwn(state.uploads.steamKeyArtHero))     state.uploads.steamKeyArtHero     = null;
   // Trailer preview has no manual-upload variant at all (unlike the four Key
   // Art slots above, which keep a manual dataUrl upload if the developer set
   // one) — it's purely derived from whichever title is currently selected,
@@ -4538,7 +4559,7 @@ function _applySteamHeroBanner(appId, expectedTitle) {
   img.onload = () => {
     if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
     state.uploads = state.uploads || {};
-    state.uploads.steamKeyArtHero = { name: 'library_hero.jpg', url };
+    state.uploads.steamKeyArtHero = smRef(smAdopt({ name:'library_hero.jpg', url }, 'steam'));
     reRenderStepModal();
   };
   img.onerror = () => {
@@ -4564,7 +4585,7 @@ function _applySteamCapsuleFromCover(url, expectedTitle) {
   img.onload = () => {
     if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
     state.uploads = state.uploads || {};
-    state.uploads.steamKeyArtCapsule = { name: 'cover.jpg', url };
+    state.uploads.steamKeyArtCapsule = smRef(smAdopt({ name:'cover.jpg', url }, 'igdb'));
     reRenderStepModal();
   };
   img.onerror = () => {
@@ -4593,6 +4614,9 @@ function _fillDescriptionField(text) {
 function _refreshScreenshotGrid() {
   const grid = document.getElementById('ob-screenshot-grid');
   if (grid) renderScreenshotGridInto(grid);
+  // The well is what shows an imported batch now, so a Steam or IGDB fetch
+  // has to redraw it or the files arrive invisibly.
+  if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
   updateObSectionStates();
 }
 
@@ -4622,10 +4646,13 @@ function _wsSyncAutoScreenshots(entries) {
 function _fillScreenshotGridFromIgdb(urls) {
   const entries = (urls || []).map((url, i) => ({
     id:   'igdb-' + i + '-' + Date.now(),
-    name: `screenshot-${i + 1}.jpg`,
-    url,  // stored as URL; rendering proxies through wsrv.nl
+    // Adopted on arrival, so a fetched screenshot is classified and pickable
+    // straight away rather than at the next project load. The wsrv.nl proxy
+    // still happens at render time, inside _screenshotSrc.
+    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url }, 'igdb'),
   }));
-  state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
+  // Manual uploads survive a change of linked title; fetched ones do not.
+  state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
   _refreshScreenshotGrid();
@@ -4640,10 +4667,12 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
   const ts = Date.now();
   const entries = (steamScreenshots || []).slice(0, 10).filter(s => s && s.path_full).map((s, i) => ({
     id:   'steam-' + i + '-' + ts,
-    name: `screenshot-${i + 1}.jpg`,
-    url:  s.path_full,
+    // Adopted on arrival: a fetched screenshot is as much a project asset as
+    // an uploaded one, and the library is where anything pickable lives.
+    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url: s.path_full }, 'steam'),
   }));
-  state.uploads.screenshots = state.uploads.screenshots.filter(s => s.dataUrl);
+  // Manual uploads survive a change of linked title; fetched ones do not.
+  state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
   _refreshScreenshotGrid();
@@ -5260,8 +5289,10 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // capsule_image (231×87)/header_image (460×215), no CDN URL guessing
     // needed since appdetails hands back the exact, already-hash-resolved
     // path directly (see this project's appdetails field enumeration).
-    if (data.capsule_image) state.uploads.steamCapsuleImage = { name: 'capsule.jpg', url: data.capsule_image };
-    if (data.header_image)  state.uploads.steamHeaderImage  = { name: 'header.jpg',  url: data.header_image };
+    // Fetched art joins the library too, so it is classified and pickable
+    // from the moment it arrives rather than at the next project load.
+    if (data.capsule_image) state.uploads.steamCapsuleImage = smRef(smAdopt({ name:'capsule.jpg', url: data.capsule_image }, 'steam'));
+    if (data.header_image)  state.uploads.steamHeaderImage  = smRef(smAdopt({ name:'header.jpg', url: data.header_image }, 'steam'));
     // Assets "Trailer" section thumbnail — Steam's own first listed trailer
     // (appdetails' movies[0]), rather than anything IGDB provides.
     const trailer = _steamTrailerFromMovies(data.movies);
@@ -5590,21 +5621,19 @@ function handleIconDrop(e) {
 }
 
 function handleIconFiles(files) {
-  const file = files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    state.uploads.appIcon = { name: file.name, dataUrl: ev.target.result };
+  smAddFile(files[0], id => {
+    if (!id) return;
+    state.uploads.appIcon = smRef(id);
+    const src = smSrc(state.uploads.appIcon);
     const preview = document.getElementById('ob-icon-preview');
     if (preview) {
-      preview.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" alt="App Icon">`;
+      preview.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" alt="App Icon">`;
     }
     // Two things read this icon and neither knew it had changed: Shippy's
     // checklist, and the cover art on the nav pill's project chip.
     updateObSectionStates();
     renderProjectBar();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function removeIcon() {
@@ -5629,10 +5658,36 @@ function handleScreenshotDrop(e) {
 function handleScreenshotFiles(files) {
   Array.from(files).forEach(file => {
     if (!file.type.startsWith('image/')) return;
-    const id = 'ss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const entry = { id, name: file.name, dataUrl: ev.target.result };
+    smAddFile(file, assetId => {
+      if (!assetId) return;
+      const a = smGet(assetId);
+
+      /* THE WELL TAKES EVERYTHING; THE SCREENSHOT LIST DOES NOT.
+
+         This zone used to accept screenshots only, so pushing whatever landed
+         into state.uploads.screenshots was harmless. Now a developer drops
+         their whole assets folder in, and doing the same thing files the
+         logotype and the app icon as screenshots — which is not a cosmetic
+         mistake, because that array is what feeds the stores' screenshot
+         slots and what platformScreenshots[pid].selected picks from. A
+         logotype would have been submitted to Steam as gameplay.
+
+         So the library takes the file either way, and only something the
+         classifier calls a screenshot joins the list of screenshots. Correct
+         a label later and it moves, because the list is rebuilt from the pool
+         rather than appended to once and forgotten. */
+      if (!a || a.kind !== 'screenshot') {
+        if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+        updateObSectionStates();
+        return;
+      }
+
+      /* The `id` is NOT the library's id, and both are kept. Screenshots are
+         referenced by this id from platformScreenshots[pid].selected, which is
+         a selection the developer made and must survive; the library id says
+         which file it is. Two identities, two jobs. */
+      const id = 'ss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      const entry = { id, ref: assetId };
       state.uploads.screenshots.push(entry);
       const grid = document.getElementById('ob-screenshot-grid');
       if (grid) renderScreenshotGridInto(grid);
@@ -5650,10 +5705,11 @@ function handleScreenshotFiles(files) {
       // its dropzone calls this same function on the master array).
       const steamAssetsGrid = document.getElementById('steam-assets-screenshot-grid');
       if (steamAssetsGrid) steamAssetsGrid.innerHTML = _steamAssetsScreenshotGridHTML();
-    };
-    reader.readAsDataURL(file);
+      if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+    });
   });
 }
+
 
 /* ── Improve Your Submission — AI visual analysis ───────────── */
 
@@ -9712,6 +9768,15 @@ function _nextImprovementItem(section) {
 }
 
 function _screenshotSrc(s) {
+  if (!s) return '';
+  /* A screenshot entry may be a reference into the asset library rather than a
+     copy of the bytes. Resolve it here, once, so every caller keeps passing the
+     same entry shape it always did. */
+  if (s.ref && typeof smGet === 'function') {
+    const a = smGet(s.ref);
+    if (a) s = { name: a.name, [a.origin === 'upload' ? 'dataUrl' : 'url']: a.src };
+    else return '';
+  }
   if (s.dataUrl) return s.dataUrl;
   if (!s.url) return '';
   // IGDB CDN images: route through wsrv.nl (images.weserv.nl) which is a dedicated
@@ -9976,13 +10041,13 @@ function handleWebScreenshotFiles(files) {
   Array.from(files).forEach(file => {
     if (!file.type.startsWith('image/')) return;
     const id = 'wsss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      state.webSite.screenshots.push({ id, name: file.name, dataUrl: ev.target.result });
+    smAddFile(file, assetId => {
+      if (!assetId) return;
+      state.webSite.screenshots.push({ id, ref: assetId });
       const grid = document.getElementById('ws-screenshot-grid');
       if (grid) renderWebScreenshotGridInto(grid);
-    };
-    reader.readAsDataURL(file);
+      if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+    });
   });
 }
 
@@ -10019,23 +10084,22 @@ function handleFeatureDrop(e) {
 }
 
 function handleFeatureFiles(files) {
-  const file = files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    state.uploads.featureGraphic = { name: file.name, dataUrl: ev.target.result };
+  smAddFile(files[0], id => {
+    if (!id) return;
+    state.uploads.featureGraphic = smRef(id);
+    const ev = { target: { result: smSrc(state.uploads.featureGraphic) } };
+    const nm = (smGet(id) || {}).name || 'image';
     const wrap = document.getElementById('ob-feature-preview');
     if (wrap) {
       wrap.style.display = 'block';
       wrap.innerHTML = `
-        <img class="feature-img" src="${ev.target.result}" alt="${file.name}">
+        <img class="feature-img" src="${ev.target.result}" alt="${nm}">
         <div class="feature-preview-meta">
-          <span class="feature-preview-name">${file.name}</span>
+          <span class="feature-preview-name">${nm}</span>
           <button class="btn btn-ghost btn-sm" onclick="removeFeatureGraphic()">Remove</button>
         </div>`;
     }
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function removeFeatureGraphic() {
@@ -15103,7 +15167,25 @@ function setWebAccent(color) {
    bootApp, state.webPageNew, and the branch at the top of
    buildWebSitePreviewSection. */
 function initWebPagePreviewToggle() {
-  state.webPageNew = false;
+  /* THE NEW DESIGN IS THE DESIGN NOW. It booted OFF while it was an
+     experiment nobody had agreed to, so a stray Ctrl+Shift+W could never
+     surprise anyone and everyone saw Adam's page by default. That is the
+     wrong way round once the new one is what the work is happening in —
+     having to press a shortcut to reach the current design makes the current
+     design the hidden one.
+     The toggle stays, still session-only, still both ways: it is how Adam's
+     page is compared against, and it is the way back if something here turns
+     out to be broken in front of somebody. */
+  state.webPageNew = true;
+  // Which width the preview is being shown at. Session-only and deliberately
+  // NOT in webSite.page: that object holds decisions about the page itself,
+  // things a visitor will see. This is a decision about the window you are
+  // looking through, which belongs to nobody but this sitting.
+  state.webPageDevice = 'desktop';
+  // Full-size preview, likewise session-only: it is a way of looking at the
+  // page for a minute, not a setting. Booting into it would leave a developer
+  // staring at a full-screen page with no modal in sight.
+  state.webPageFull = false;
   document.addEventListener('keydown', e => {
     if (!e.ctrlKey || !e.shiftKey || e.metaKey || e.altKey) return;
     if ((e.key || '').toLowerCase() !== 'w') return;
@@ -15116,6 +15198,34 @@ function initWebPagePreviewToggle() {
     // Only redraws if a step modal is actually open, which is the only place
     // either design is visible.
     if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  });
+}
+
+/* CHANGE THE WIDTH THE PAGE IS PREVIEWED AT — without redrawing it.
+
+   A redraw here would be the easy version and the wrong one, for the same two
+   reasons that made webPageSelect stop redrawing: rebuilding the page decodes
+   the key art again, which visibly nudges the crop, and it drops whatever the
+   developer had selected along with the dock over it. Neither has anything to
+   do with the width.
+
+   So this writes one custom property on one node. Everything that has to
+   change downstream already knows how: the container queries re-evaluate
+   themselves, and the hero's ResizeObserver re-measures the title and the
+   button against the stage they now have. The CSS transition means that
+   happens across the animation rather than only at the end of it. */
+function setWebPageDevice(key) {
+  if (!WP_DEVICES[key]) return;
+  state.webPageDevice = key;
+  const frame = document.querySelector('[data-wp-frame]');
+  if (!frame) return;
+  frame.style.setProperty('--wp-device-w', WP_DEVICES[key].w);
+  /* The buttons are NOT inside the frame any more — they moved to the toolbar
+     above it when the controls came out of the browser chrome — and the frame
+     itself moves into the full-size overlay, so neither is a reliable parent
+     to search from. The document is: there is one preview at a time. */
+  document.querySelectorAll('[data-wp-device]').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.wpDevice === key));
   });
 }
 
@@ -15191,6 +15301,43 @@ function setWebLinkField(id, key, value) {
   if (link) link[key] = value;
 }
 
+/* The channel picker (_wsLinkRowHTML, render.js). '' means Auto — deduce it
+   from the URL — and it is stored as an empty name rather than as the string
+   'auto', so the field keeps meaning exactly what it always meant and every
+   row written before the picker existed still reads correctly.
+
+   A picker is not typing, so unlike setWebLinkField this one CAN redraw: there
+   is no caret to lose. Only the mark and the Auto label need to change, though,
+   and reRenderStepModal would rebuild the whole panel — including the URL field
+   the developer may be halfway through — so it patches the one row instead. */
+function setWebLinkChannel(id, value) {
+  setWebLinkField(id, 'name', value || '');
+  refreshWebLinkRow(id);
+}
+
+/* Keeps the row's own mark and its "Auto · X" label honest while the URL is
+   still being typed, without a render. Deliberately does NOT touch the <select>
+   value: the developer's choice is theirs, and re-deducing it under their
+   fingers as they paste would silently overwrite a channel they picked by hand.
+   Only the Auto option's TEXT is rewritten, because that text is a statement
+   about the URL and the URL just changed. */
+function refreshWebLinkRow(id) {
+  const row = document.querySelector(`[data-link-row="${id}"]`);
+  if (!row || !state.webSite || !state.webSite.links) return;
+  const link = state.webSite.links.find(l => l.id === id);
+  if (!link) return;
+
+  const mark = row.querySelector('[data-link-mark]');
+  if (mark) mark.innerHTML = _wsLinkMarkHTML(link);
+
+  const auto = row.querySelector('option[value=""]');
+  if (auto) {
+    const key = (typeof _wpChannelOf === 'function' && _wpChannelOf(link.url, '')) || '';
+    const label = (CONTACT_ICONS[key] || {}).label || key;
+    auto.textContent = key ? `Auto · ${label}` : 'Auto — from the link';
+  }
+}
+
 /* Selector in Web's "Key Art" section (buildWebKeyArtEditSection) choosing
    which Steam Key Art asset backs the preview website's capsule box —
    'capsuleImage' (state.uploads.steamCapsuleImage), 'headerImage'
@@ -15231,14 +15378,14 @@ function handleSteamKeyArtCapsuleDrop(e) {
   handleSteamKeyArtCapsuleFiles(e.dataTransfer.files);
 }
 function handleSteamKeyArtCapsuleFiles(files) {
-  const file = files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    state.uploads.steamKeyArtCapsule = { name: file.name, dataUrl: ev.target.result };
+  // Into the library, then referenced. smAddFile measures and classifies
+  // before the record exists, so nothing is ever in the pool without knowing
+  // its own shape.
+  smAddFile(files[0], id => {
+    if (!id) return;
+    state.uploads.steamKeyArtCapsule = smRef(id);
     reRenderStepModal();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 function removeSteamKeyArtCapsule() {
   state.uploads.steamKeyArtCapsule = null;
@@ -15251,14 +15398,14 @@ function handleSteamKeyArtHeroDrop(e) {
   handleSteamKeyArtHeroFiles(e.dataTransfer.files);
 }
 function handleSteamKeyArtHeroFiles(files) {
-  const file = files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    state.uploads.steamKeyArtHero = { name: file.name, dataUrl: ev.target.result };
+  // Into the library, then referenced. smAddFile measures and classifies
+  // before the record exists, so nothing is ever in the pool without knowing
+  // its own shape.
+  smAddFile(files[0], id => {
+    if (!id) return;
+    state.uploads.steamKeyArtHero = smRef(id);
     reRenderStepModal();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 function removeSteamKeyArtHero() {
   state.uploads.steamKeyArtHero = null;
@@ -15271,14 +15418,14 @@ function handleSteamKeyArtCapsuleImageDrop(e) {
   handleSteamKeyArtCapsuleImageFiles(e.dataTransfer.files);
 }
 function handleSteamKeyArtCapsuleImageFiles(files) {
-  const file = files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    state.uploads.steamCapsuleImage = { name: file.name, dataUrl: ev.target.result };
+  // Into the library, then referenced. smAddFile measures and classifies
+  // before the record exists, so nothing is ever in the pool without knowing
+  // its own shape.
+  smAddFile(files[0], id => {
+    if (!id) return;
+    state.uploads.steamCapsuleImage = smRef(id);
     reRenderStepModal();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 function removeSteamKeyArtCapsuleImage() {
   state.uploads.steamCapsuleImage = null;
@@ -15291,14 +15438,14 @@ function handleSteamKeyArtHeaderImageDrop(e) {
   handleSteamKeyArtHeaderImageFiles(e.dataTransfer.files);
 }
 function handleSteamKeyArtHeaderImageFiles(files) {
-  const file = files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    state.uploads.steamHeaderImage = { name: file.name, dataUrl: ev.target.result };
+  // Into the library, then referenced. smAddFile measures and classifies
+  // before the record exists, so nothing is ever in the pool without knowing
+  // its own shape.
+  smAddFile(files[0], id => {
+    if (!id) return;
+    state.uploads.steamHeaderImage = smRef(id);
     reRenderStepModal();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 function removeSteamKeyArtHeaderImage() {
   state.uploads.steamHeaderImage = null;
@@ -15362,4 +15509,348 @@ function removePlatformScreenshot(pid, shotId) {
     const inner = body.querySelector('.ios-step-body-content');
     if (inner) inner.innerHTML = buildScreenshotsSection(pid);
   }
+}
+
+/* ============================================================================
+   THE ASSET LIBRARY — Shipmate's side
+   ============================================================================
+   assets.js holds the pool, the classifier and the store table. This is the
+   part that has to know about Shipmate: the picker grid, the Assets tab
+   panel, and the coverage read-out.
+   ========================================================================== */
+
+/* ── THE PICKER ────────────────────────────────────────────────────────────
+   Opened by any uploader that used to open a file dialog. `kinds` is what
+   belongs in this slot — the header wants landscape art, the corner wants a
+   mark — and everything else is behind "Show all" rather than hidden,
+   because a logotype the classifier called art-port must still be findable.
+
+   Returns a REF, so choosing an image the project already has costs nothing
+   and creates no second copy. */
+let _smPick = null;
+
+function smPickAsset(kinds, done) {
+  _smPick = { kinds: kinds && kinds.length ? kinds : null, done, all: false };
+  _smRenderPicker();
+}
+
+function smPickerClose() {
+  _smPick = null;
+  const el = document.getElementById('sm-picker');
+  if (el) el.remove();
+  document.body.classList.remove('sm-picker-open');
+}
+
+function smPickerAll() { if (_smPick) { _smPick.all = true; _smRenderPicker(); } }
+
+/* Upload from inside the picker: the file joins the library and is chosen in
+   one gesture, which is what "Upload new…" has to mean or it is just a file
+   dialog with extra steps. */
+function smPickerUpload() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0';
+  document.body.appendChild(inp);
+  const cleanup = () => { if (inp.parentNode) inp.parentNode.removeChild(inp); };
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0];
+    cleanup();
+    if (!f) return;
+    smAddFile(f, id => { if (id) smPickerChoose(id); });
+  });
+  inp.addEventListener('cancel', cleanup);
+  setTimeout(cleanup, 5 * 60 * 1000);
+  inp.click();
+}
+
+function smPickerChoose(id) {
+  const cb = _smPick && _smPick.done;
+  smPickerClose();
+  if (cb) cb(smRef(id));
+}
+
+function _smRenderPicker() {
+  if (!_smPick) return;
+  let host = document.getElementById('sm-picker');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sm-picker';
+    document.body.appendChild(host);
+    document.body.classList.add('sm-picker-open');
+    // Clicking the backdrop is the same as pressing Escape: a picker you
+    // cannot dismiss without choosing something is a trap.
+    host.addEventListener('click', e => { if (e.target === host) smPickerClose(); });
+  }
+  const pool = (state.assets || []).filter(a => a.kind !== 'video');
+  const want = _smPick.kinds;
+  const shown = (_smPick.all || !want) ? pool : pool.filter(a => want.includes(a.kind));
+  const hidden = pool.length - shown.length;
+
+  host.innerHTML = `
+    <div class="sm-picker-box" role="dialog" aria-label="Choose an image">
+      <div class="sm-picker-head">
+        <b>Choose an image</b>
+        ${want ? `<span class="sm-picker-sub">${want.map(k => escHtml(SM_KIND_SHORT[k] || k)).join(' · ')}</span>` : ''}
+        <button class="sm-picker-x" onclick="smPickerClose()" aria-label="Close">×</button>
+      </div>
+      <div class="sm-picker-grid">
+        <button class="sm-tile sm-tile-new" onclick="smPickerUpload()">
+          <span class="sm-tile-plus">+</span><span>Upload new…</span>
+        </button>
+        ${shown.map(a => `
+          <button class="sm-tile" onclick="smPickerChoose('${a.id}')" title="${escHtml(a.name)}">
+            <span class="sm-tile-img"><img src="${escHtml(a.src)}" alt=""></span>
+            <span class="sm-tile-meta">
+              <span class="sm-tile-name">${escHtml(a.name)}</span>
+              <span class="sm-tile-dim">${a.w || '?'}×${a.h || '?'}</span>
+            </span>
+          </button>`).join('')}
+      </div>
+      ${!shown.length ? `<p class="sm-picker-empty">Nothing here yet — upload one.</p>` : ''}
+      ${hidden > 0 ? `<button class="sm-picker-more" onclick="smPickerAll()">
+          Show ${hidden} other asset${hidden === 1 ? '' : 's'}</button>` : ''}
+    </div>`;
+}
+
+if (typeof document !== 'undefined' && !smPickAsset._esc) {
+  smPickAsset._esc = true;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _smPick) { e.preventDefault(); e.stopPropagation(); smPickerClose(); }
+  }, true);
+}
+
+/* ── THE LIBRARY PANEL, on the Assets tab ─────────────────────────────────
+   Everything the project has, grouped by what it is, with the label editable
+   in place. Plus the two things the classification is FOR: what each store
+   still needs, and the smallest set of masters that would cover it. */
+function renderAssetLibrary() {
+  const el = document.getElementById('sm-library');
+  if (el) el.innerHTML = _smLibraryHTML();
+  const cov = document.getElementById('sm-coverage');
+  if (cov) cov.innerHTML = _smCoverageHTML();
+}
+
+/* THE WELL'S CONTENTS, IN THE SHAPE OF THE NAV PROTOTYPE.
+
+   Two things that version got right and a card grid does not.
+
+   THUMBNAILS KEEP THEIR OWN PROPORTIONS, matched on HEIGHT rather than boxed
+   into a uniform tile. That is not only prettier: the shape IS the evidence.
+   A row where the screenshots are wide, the icon is square and the logotype
+   is a long thin sliver shows the developer what the classifier saw, so a
+   file in the wrong group is visible as a wrong shape before anybody reads a
+   label.
+
+   AND THE GROUPS FLOW INLINE rather than stacking. Five screenshots, an icon
+   and two pieces of key art fit on one line, so the whole folder is one
+   glance instead of a scroll — which is the entire promise of dropping a
+   folder in and being told what is in it. */
+function _smLibraryHTML() {
+  const pool = state.assets || [];
+  /* Nothing at all draws nothing. The dropzone directly above already says
+     what to do, and a paragraph under it repeating that is the interface
+     talking to itself. */
+  if (!pool.length) return '';
+  const groups = SM_KINDS.map(k => [k, pool.filter(a => a.kind === k)]).filter(([, l]) => l.length);
+  return `<div class="sm-wells">${groups.map(([k, list]) => `
+    <div class="sm-well">
+      <div class="sm-well-h">${escHtml(SM_KIND_SHORT[k] || k)}${
+        list.length > 1 ? ` <span>· ${list.length}</span>` : ''}</div>
+      <div class="sm-well-row">
+        ${list.map(a => `
+          ${/* A THUMBNAIL AT 90px CANNOT BE JUDGED, which is the whole reason
+               it opens. The grid answers "did my files land and does the tool
+               know what they are"; whether the logotype has the halo baked in
+               is a question you can only answer at full size. */''}
+          <div class="sm-thumb${a.kindBy === 'user' ? ' is-user' : ''}"
+               style="aspect-ratio:${a.w || 16}/${a.h || 9}"
+               onclick="smZoom('${a.id}')" role="button" tabindex="0"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();smZoom('${a.id}')}"
+               title="${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${a.alpha ? ' · transparent' : ''}">
+            <img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">
+            ${/* HOLD, DON'T CLICK. These are the developer's own files, often
+                 the only copy to hand, and a 20px × in the corner of a
+                 thumbnail is exactly the target a stray click finds. There is
+                 no undo behind it — smRemove drops the record and every slot
+                 referencing it — so the gesture is made deliberately hard to
+                 do by accident instead. The bar IS the confirmation dialogue,
+                 and it costs a second and a half rather than a round trip. */''}
+            <button class="sm-thumb-x" aria-label="Hold to remove ${escHtml(a.name)}"
+                    title="Hold to remove"
+                    onclick="event.stopPropagation()"
+                    onpointerdown="smHoldStart(event, '${a.id}')"
+                    onpointerup="smHoldCancel()" onpointerleave="smHoldCancel()"
+                    onpointercancel="smHoldCancel()" onblur="smHoldCancel()">×</button>
+            <span class="sm-thumb-burn" aria-hidden="true"></span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+/* ── HOLD TO REMOVE ───────────────────────────────────────────────────────
+   The bar is CSS — a transform the browser runs on the compositor — and the
+   deletion is one timer. No rAF loop, because a progress bar that a script
+   redraws every frame is a script that can stutter; this one cannot, and it
+   also cannot drift out of step with the timer, since both are started by the
+   same event and cancelled by the same call.
+
+   ARMED STATE LIVES IN A CLASS, NOT IN STATE. A gesture in progress is not
+   data — abandon it and there is nothing to clean up, and no render can
+   catch it half-finished. Same reasoning as the drag handlers above. */
+let _smHold = null;
+
+function smHoldStart(ev, id) {
+  ev.preventDefault();          // no text selection, no drag ghost
+  ev.stopPropagation();         // and no zoom: the × is not the picture
+  const thumb = ev.currentTarget.closest('.sm-thumb');
+  if (!thumb) return;
+  smHoldCancel();
+  thumb.classList.add('is-arming');
+  _smHold = { thumb, t: setTimeout(() => {
+    _smHold = null;
+    thumb.classList.remove('is-arming');
+    smRemove(id);
+    renderAssetLibrary();
+  }, 1500) };
+}
+
+/* Called from pointerup, pointerleave, pointercancel AND blur — letting go,
+   sliding off, the browser taking the pointer away, or the window losing
+   focus mid-press all mean the same thing: they did not go through with it. */
+function smHoldCancel() {
+  if (!_smHold) return;
+  clearTimeout(_smHold.t);
+  _smHold.thumb.classList.remove('is-arming');
+  _smHold = null;
+}
+
+/* ── FULL-SIZE PREVIEW ────────────────────────────────────────────────────
+   Built and thrown away rather than kept hidden in the markup, because the
+   asset library is rebuilt wholesale by renderAssetLibrary and a node parked
+   inside it would go with it. On <body>, so no ancestor's overflow or stacking
+   context can clip it — the library lives several nested panels deep. */
+function smZoom(id) {
+  const a = (typeof smGet === 'function') && smGet(id);
+  if (!a) return;
+  smZoomClose();
+  const box = document.createElement('div');
+  box.id = 'sm-lightbox';
+  box.innerHTML =
+    `<figure>
+       <img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">
+       <figcaption>${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${
+         a.alpha ? ' · transparent' : ''} · ${escHtml(SM_KIND_SHORT[a.kind] || a.kind)}</figcaption>
+     </figure>`;
+  /* Anywhere but the picture itself closes it. Testing for the IMG rather than
+     for the backdrop means the caption and the margin around the image close
+     it too, which is what "click outside" means to the hand. */
+  box.addEventListener('click', e => { if (e.target.tagName !== 'IMG') smZoomClose(); });
+  document.body.appendChild(box);
+  /* CAPTURE PHASE, and it stops the event dead. Escape is spoken for twice
+     over on this screen — the step modal closes on it, and so does the
+     full-page website preview — and closing the modal behind the lightbox
+     when someone meant to dismiss the lightbox would throw away the panel
+     they were working in. The topmost thing gets the key. */
+  document.addEventListener('keydown', _smZoomKey, true);
+}
+
+function _smZoomKey(e) {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  smZoomClose();
+}
+
+function smZoomClose() {
+  document.removeEventListener('keydown', _smZoomKey, true);
+  const box = document.getElementById('sm-lightbox');
+  if (box) box.remove();
+}
+
+const _SM_GRADE = { exact:'Exact', square:'Square', crop:'Crop', ratio:'Ratio' };
+
+function _smCoverageHTML() {
+  const pids = [...(state.activePlatforms || [])];
+  if (!pids.length) return `<p class="sm-lib-empty">Pick your platforms to see what each store needs.</p>`;
+
+  /* THE ANSWER TO "WHAT DO I ACTUALLY NEED TO MAKE". Every requirement in
+     the table reduces to one of five source kinds, so the answer is five
+     files — each at the largest size any store asks of it, because a master
+     can be cropped down and must never be scaled up. */
+  const set  = smSourceSet(pids);
+  const miss = smMissingSources(pids);
+  const cov  = smCoverage(pids);
+
+  const masters = `
+    <div class="sm-cov-set">
+      <div class="sm-cov-h">The smallest set that covers everything</div>
+      <p class="sm-cov-p">${set.length} master${set.length === 1 ? '' : 's'} at these sizes
+         cover every slot across your platforms. Anything larger crops down; nothing is ever scaled up.</p>
+      <div class="sm-cov-masters">
+        ${set.map(sv => {
+          const have = (state.assets || []).some(a => a.kind === sv.kind);
+          return `<div class="sm-master${have ? ' has' : ''}">
+            <span class="sm-master-k">${escHtml(SM_KIND_SHORT[sv.kind] || sv.kind)}</span>
+            <span class="sm-master-d">${sv.w}×${sv.h}${sv.alpha ? ' · transparent PNG' : ''}</span>
+            <span class="sm-master-s">${have ? '✓ have it' : 'missing'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      ${miss.length ? `<p class="sm-cov-todo">Still to make:
+        ${miss.map(m => `<b>${escHtml(SM_KIND_SHORT[m.kind])} ${m.w}×${m.h}</b>`).join(', ')}.</p>` : ''}
+      ${/* SCREENSHOTS ARE NOT IN THAT SET, and saying so is more useful than
+           quietly leaving them out. Every other slot is artwork that crops
+           down from one master; a screenshot is a capture of the game at a
+           device's resolution, and cropping an iPhone capture into an iPad
+           one throws away the interface an iPad would have shown. The stores
+           know it — that is why they mark these must-upload. */''}
+      ${(() => {
+        const shots = smShotNeeds(pids);
+        if (!shots.length) return '';
+        return `<div class="sm-cov-shots">
+          <div class="sm-cov-h2">Plus screenshots, captured from the game</div>
+          <p class="sm-cov-p">These cannot come from your key art — each is a capture at
+             that device's own resolution.</p>
+          <div class="sm-cov-masters">
+            ${shots.map(sv => `<div class="sm-master">
+              <span class="sm-master-k">${sv.count > 1 ? sv.count + '×' : ''} ${sv.w > sv.h ? 'Landscape' : 'Portrait'}</span>
+              <span class="sm-master-d">${sv.w}×${sv.h}${sv.min ? ' or larger' : ''}</span>
+              <span class="sm-master-s">${sv.pids.map(p =>
+                escHtml((typeof PLATFORMS !== 'undefined' && PLATFORMS[p] && PLATFORMS[p].label) || p)).join(', ')}</span>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      })()}
+    </div>`;
+
+  const perStore = cov.map(c => {
+    const label = (typeof PLATFORMS !== 'undefined' && PLATFORMS[c.pid] && PLATFORMS[c.pid].label) || c.pid;
+    /* Nintendo is deliberately absent from the table rather than guessed at:
+       it is the one platform where a developer has no public doc to check us
+       against, so a wrong number there is the most expensive thing this panel
+       could print. */
+    if (c.noSpec) return `<div class="sm-cov-store">
+      <div class="sm-cov-store-h">${escHtml(label)}</div>
+      <p class="sm-cov-nospec">${escHtml(c.noSpec)}</p></div>`;
+    return `<div class="sm-cov-store">
+      <div class="sm-cov-store-h">${escHtml(label)}
+        <span class="sm-cov-score${c.done === c.total ? ' full' : ''}">${c.done}/${c.total}</span></div>
+      <div class="sm-cov-rows">
+        ${c.rows.map(x => `
+          <div class="sm-cov-row${x.grade ? ' ok' : ''}${x.r.opt ? ' opt' : ''}">
+            <span class="sm-cov-n">${escHtml(x.r.n)}${x.r.opt ? ' <i>optional</i>' : ''}</span>
+            <span class="sm-cov-d">${x.r.w}×${x.r.h}${x.r.min ? '+' : ''}</span>
+            <span class="sm-cov-g">${x.grade ? escHtml(_SM_GRADE[x.grade] || x.grade)
+              : '<em>' + escHtml(SM_KIND_SHORT[x.need] || x.need) + ' needed</em>'}</span>
+          </div>${x.r.note ? `<div class="sm-cov-note">${escHtml(x.r.note)}</div>` : ''}`).join('')}
+      </div>
+      ${/* Where the numbers came from. A spec measured off a live storefront
+           is a different kind of fact from one a store published, and
+           flattening the two would be the dishonest part. */''}
+      <p class="sm-cov-conf">${escHtml(SM_CONF_LABEL[(c.rows[0] || {}).r
+        ? c.rows[0].r.conf : 'official'] || '')}</p>
+    </div>`;
+  }).join('');
+
+  return masters + `<div class="sm-cov-stores">${perStore}</div>`;
 }

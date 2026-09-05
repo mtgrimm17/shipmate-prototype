@@ -2548,6 +2548,9 @@ function saveCurrentToProject() {
   proj.name             = state.formData.title || proj.name;
   proj.formData         = JSON.parse(JSON.stringify(state.formData));
   proj.uploads          = JSON.parse(JSON.stringify(state.uploads));
+  // The pool travels with the slots that reference it. Saving one without the
+  // other would leave every ref pointing at nothing.
+  proj.assets           = JSON.parse(JSON.stringify(state.assets || []));
   proj.questionAnswers  = JSON.parse(JSON.stringify(state.questionAnswers));
   proj.questionInferred = JSON.parse(JSON.stringify(state.questionInferred));
   const ver = proj.versions.find(v => v.id === state.activeVersionId);
@@ -2564,6 +2567,10 @@ function loadProjectAndVersion(projectId, versionId) {
   state.activeProjectId   = projectId;
   state.formData          = JSON.parse(JSON.stringify(proj.formData));
   state.uploads           = JSON.parse(JSON.stringify(proj.uploads));
+  // A project saved before the library existed has no pool; smMigrate below
+  // builds one from its uploads. Idempotent, so this is safe every time.
+  state.assets            = JSON.parse(JSON.stringify(proj.assets || []));
+  if (typeof smMigrate === 'function') smMigrate();
   state.questionAnswers   = JSON.parse(JSON.stringify(proj.questionAnswers));
   state.questionInferred  = JSON.parse(JSON.stringify(proj.questionInferred));
   const ver = versionId
@@ -2711,6 +2718,17 @@ const state = {
   formData: makeBlankFormData(),
 
   uploads: makeBlankUploads(),
+
+  /* THE ASSET LIBRARY — one pool of images per project, classified on
+     arrival, referenced from everywhere. See assets.js for the record shape
+     and for why `origin` exists.
+
+     `uploads` above keeps its nine named slots because they mean something
+     and the whole app reads them; what changed is that a slot now holds
+     `{ ref: 'as_…' }` instead of a copy of the file. One file, one copy, many
+     uses — which is also what makes "this master already covers 3 of Steam's
+     9 requirements" answerable at all. */
+  assets: [],
 
   questionAnswers: makeBlankAnswers(),
 

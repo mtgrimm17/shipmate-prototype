@@ -37,7 +37,13 @@
    the browser window would keep reporting "desktop" while the page was being
    squeezed to 420px, and nothing would reflow. Container queries ask the only
    question that matters — how much room did the panel actually give me. */
-#site{--a:#52BAFF; --cta:#FF4D8D; --sc:.85; position:relative; min-height:100%;
+/* --tsc / --tsc-h: the corner band's own scrim (see .hero::after). --tsc-h is
+   where the social row ENDS — the browser chrome the page sits under, plus
+   .hero-head's 24px offset, plus the 32px the marks are tall. Change the
+   offset there and this follows, because it is written from the same parts. */
+#site{--a:#52BAFF; --cta:#FF4D8D; --sc:.85;
+      --tsc:.30; --tsc-h:calc(var(--chrome-h,0px) + 56px);
+      position:relative; min-height:100%;
       container-type:inline-size; container-name:page;
       /* THE MEASURE. One centred column governs every section — and, via
          .hero-stage below, the logo and button too. --pad is each skin's own
@@ -51,7 +57,18 @@
                    of the band overhanging the text it sits above.
          Each skin declares its own --measure to match wherever its description
          actually lands. */
-      --page:1200px; --measure:800px; --pad:clamp(20px,5vw,60px);
+      /* cqw, not vw — and the distinction is what makes the device preview
+         honest rather than decorative. In vw this padding asks the WINDOW how
+         wide it is, so squeezing the frame down to a phone left 60px gutters
+         and desktop-sized type inside a 390px page: a picture of a phone, not
+         a phone.
+         The subtlety: #site IS the `page` container, and a container cannot
+         query itself — cqw here resolves against the nearest container ABOVE,
+         which is why .wp-frame declares one. On the real page at
+         [game].shipmate.games there is no ancestor container, and the spec
+         then falls back to the small viewport: exactly the old behaviour, so
+         the deployed page is unchanged by this. */
+      --page:1200px; --measure:800px; --pad:clamp(20px,5cqw,60px);
       /* What the hero's stage must inset itself by. Equals --pad when the
          hero runs full bleed, and 0 when the skin already gives the hero a
          margin of its own — see .hero-stage. */
@@ -94,6 +111,13 @@
 
 @container page (max-width:820px){ #site .hero{--hero-cut:50px} }
 
+/* AND A THIRD STEP FOR A PHONE. At 390px wide the 820px cut still left a hero
+   about as tall as the page is wide — a square of key art, which is not what
+   a hero is. The reasoning is the same one scaled down: the narrower the
+   page, the less of the crop is actually being shown, so the less of the fold
+   it has earned. */
+@container page (max-width:520px){ #site .hero{--hero-cut:110px} }
+
 #site *{box-sizing:border-box}
 
 /* Kill the browser's native image drag. Without this, pressing on the key art
@@ -108,6 +132,59 @@
 #site .hero{user-select:none;-webkit-user-select:none}
 
 #site .kart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+/* ── THE HEADER WITH NO PICTURE IN IT YET ─────────────────────────────────
+   Sized and positioned exactly like .kart, so the hero keeps the height it
+   will have — the page below does not shift when a file finally arrives.
+
+   The ground is flat and dark rather than a generated landscape. A landscape
+   reads as a decision somebody made; a flat panel reads as a space waiting,
+   which is the true statement. Dark enough that the white title and the
+   accent button sitting over it are still legible, because they stay put:
+   this is a header missing its picture, not a header replaced by a form.
+
+   The prompt clears the bottom third, which is where the title and the
+   button live. */
+/* CENTRED IN THE SURFACE YOU CAN ACTUALLY SEE, which is not the same as
+   centred in the element. The browser chrome floats over the top 54px of the
+   hero, so an honest `inset:0` box centres itself partly underneath it and the
+   words get clipped by the address bar. Padding the top by --chrome-h hands
+   the flex centring only the visible remainder.
+   Nothing is reserved at the bottom: the title and the button live down there,
+   but the middle of the hero clears them at every height the header takes. */
+#site .kart-empty{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  padding:var(--chrome-h,0px) 24px 0;
+  background:
+    radial-gradient(120% 100% at 50% 0%, #23252B 0%, #17181C 60%, #131417 100%);
+}
+/* NO PANEL AROUND IT. A box here is a second rectangle inside the rectangle
+   the artwork is about to fill, and it makes the prompt look like a component
+   that belongs on the page rather than a note about a page that is not
+   finished. On the flat ground the words are simply the only thing there,
+   which is both quieter and easier to read. The hero's own hover wash is the
+   affordance; the text lifts with it. */
+#site .kart-empty .ke-box{
+  display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;
+  max-width:min(430px, 100%);
+  transition:opacity .16s ease;
+}
+#site .hero:hover .kart-empty .ke-box{opacity:1}
+#site .kart-empty .ke-box{opacity:.88}
+#site .kart-empty .ke-icon{width:24px;height:24px;color:#6E747E;margin-bottom:3px}
+#site .kart-empty .ke-t{font-size:15px;font-weight:600;color:#E8EAEE;letter-spacing:.01em}
+#site .kart-empty .ke-s{font-size:13px;color:#A8AEB8}
+/* The specification is set in mono and small: it is reference material, to be
+   found when wanted rather than read as part of the sentence above it. */
+#site .kart-empty .ke-d{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.55;
+  color:#71767F;margin-top:5px;text-wrap:balance;
+}
+/* A phone has no room for the spec line, and the header is 110px shorter
+   there besides. */
+@container page (max-width:520px){
+  #site .kart-empty .ke-d{display:none}
+}
 
 /* THE KEY ART ITSELF is placeable — pan and zoom, on the hero's direct child
    only (screenshots and the video poster reuse .kart and must not inherit the
@@ -317,8 +394,61 @@
   top:calc(var(--chrome-h, 0px) + 24px);
 }
 
+/* ── THE SOCIAL ROW, OPPOSITE THE CORNER LOGOTYPE ─────────────────────────
+   Same top, other end: the shape every game site already has, a mark on the
+   left and the ways to reach the studio on the right. Inside .hero-stage like
+   the logotype, so both sit on the CONTENT column's edges and line up with
+   the metadata band below rather than with the full-bleed artwork.
+
+   The same `top` expression as .hero-head, written out rather than shared,
+   because the two are equals — the day one of them moves, the other should
+   not follow silently. */
+#site .hero-links{
+  position:absolute;right:0;z-index:7;
+  top:calc(var(--chrome-h, 0px) + 24px);
+  display:flex;align-items:center;gap:4px;
+}
+#site .hero-links .hl{
+  display:grid;place-items:center;width:32px;height:32px;
+  border-radius:9px;color:#fff;text-decoration:none;
+  /* No filled ground. Over key art, eight rounded plates read as a toolbar
+     bolted onto the picture; the marks alone read as part of the design.
+
+     THE SHADOW IS DOING REAL WORK, not decoration: these are 18px marks in a
+     single flat colour, sitting on whatever the game's sky happens to be, and
+     a white Discord logo on a pale cloud is simply gone. Two layers, because
+     one cannot do both jobs — a tight, dark one right behind the shape to
+     separate it from a light ground, and a wider soft one to seat it in the
+     picture. The single 8px blur it replaced was the second half only, which
+     is why it read as almost nothing on the brand marks. */
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.55)) drop-shadow(0 3px 12px rgba(0,0,0,.5));
+  opacity:.92;transition:opacity .14s, background .14s, transform .14s;
+}
+#site .hero-links .hl:hover{opacity:1;background:rgba(255,255,255,.14);transform:translateY(-1px)}
+/* HEIGHT, NOT A SQUARE. The set is mixed now: the Discord, Reddit and email
+   marks are the real brand shapes on a 127×96 box, the rest are drawn on a
+   24×24 one. Forcing both into the same square would squash the wide ones.
+   Matching their HEIGHT and letting the width follow is how a row of logos is
+   optically evened out anywhere — the marks are different widths in life too. */
+#site .hero-links .hl svg{display:block;height:18px;width:auto;max-width:26px}
+/* The brand marks are solid where the drawn ones are strokes, so they read a
+   touch heavier at the same height. A hair smaller evens them out. */
+#site .hero-links .hl svg.brand{height:16px}
+/* A phone has no room for both corners at full size. */
+@container page (max-width:520px){
+  #site .hero-links .hl{width:26px;height:26px}
+  #site .hero-links .hl svg{width:16px;height:16px}
+}
+
 #site .hero-head .hh-word{font-weight:800;font-size:19px;letter-spacing:-.01em;color:#fff;
   text-shadow:0 3px 14px rgba(0,0,0,.6)}
+
+/* The corner's OWN image, when it is not borrowing the hero's logotype.
+   Height is the only number that matters at this size — a corner mark is
+   judged by how tall it sits against the chrome — so the width follows and
+   the file's own proportions survive. */
+#site .hero-head .hh-img{display:block;width:auto;max-width:220px;
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.45))}
 
 #site .hero-head img{filter:drop-shadow(0 2px 8px rgba(0,0,0,.4))}
 
@@ -369,6 +499,27 @@
    Shown whenever something in the hero is selected, so the reference is there
    while you judge the framing, not only during the drag itself. */
 #site .guides{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .15s}
+
+/* ── AND THE RULE THAT TURNS THEM ON, WHICH THE EXTRACTION ATE ────────────
+   The third time this filter has cost something. It dropped every rule whose
+   selector mentioned `.sel`, and the mockup's version read
+
+     #site.dragging .guides,
+     #site .hero:has(.el.sel) .guides,
+     #site .hero.sel .guides{opacity:1}
+
+   so all three went, and with them the entire composing grid: the markup was
+   still rendered on every page, the thirds were still positioned, and the
+   whole thing sat at opacity 0 forever. Nothing looked broken, which is why
+   it survived a fortnight.
+
+   ONLY WHILE DRAGGING, which is a deliberate narrowing of the mockup's
+   version. There, guides also appeared on selection — but selection there did
+   not open anything, and here it opens a panel anchored to the element. A
+   grid plus a popup plus the artwork is three things competing over the same
+   200 pixels, and the grid is the one you only need while your hand is
+   moving. */
+#site.wp-dragging .guides{opacity:1}
 
 #site .guides span{position:absolute;background:rgba(255,255,255,.22);transition:background .12s,box-shadow .12s}
 
@@ -421,9 +572,60 @@
    cell, so a 28px row gap rendered as 60 and the two rows drifted apart. The
    grid's gap should be the only thing setting this rhythm. */
 
-@container page (max-width:900px){ #site .strip-in{grid-template-columns:repeat(2,minmax(0,1fr))} }
+/* WHERE THE THREE COLUMNS FOLD, and 900px was far too early.
 
-@container page (max-width:400px){ #site .strip-in{grid-template-columns:minmax(0,1fr)} }
+   The band is already three columns by default — six fields, two rows — so on
+   a desktop this was never a layout question. It was a breakpoint question:
+   Shipmate's modal gives the frame a little under 900px, so the fold fired
+   permanently and the preview showed two columns of three at EVERY width,
+   including the one labelled Desktop.
+
+   The number this should have been keyed to is when three columns stop
+   fitting, which is arithmetic rather than taste. The band is capped at
+   --measure (800px) and sits inside the page's gutters, so at a page width W
+   the columns are (min(800, W - 2·pad) - 80) / 3. At 680 that is 170px —
+   enough for DEVELOPED BY (79px of 11px mono, and it is set nowrap) and for
+   a date like "18 February 2026" (~115px) on one line. Below it the values
+   start breaking mid-phrase, which is the real failure and the real place to
+   fold. */
+@container page (max-width:680px){ #site .strip-in{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* One step before the fold: buy the three columns another ~50px each by
+   giving back gutter they do not need at this width. It is what postpones the
+   fold from 760 to 680. */
+@container page (max-width:820px){ #site .strip-in{gap:26px 26px} }
+
+/* TWO COLUMNS OF THREE ON A PHONE, not one column of six.
+
+   The old rule dropped to a single column at 400px, which was inherited from
+   a layout with much wider gutters and never re-checked against a real phone.
+   The measurement it should have been: at 390px the page keeps 350px inside
+   its gutters, and the widest label — DEVELOPED BY, twelve characters of
+   11px mono — is about 79px. Two columns give each tile ~155px. It was never
+   close.
+
+   And one column of six is a genuinely worse band: it triples the height of
+   a section that is meant to be scanned, pushing the trailer off the fold on
+   the device with the least fold to spare. The pairs also stop reading as
+   pairs — developer beside publisher, release date beside platforms — which
+   is half of what the grid was for.
+
+   What actually needs to give at this width is the SPACING, not the column
+   count: 40px of gutter between two 155px tiles is a tenth of the screen
+   spent on nothing. */
+@container page (max-width:520px){
+  #site .strip-in{gap:22px 18px}
+  #site .sf dt{font-size:10px;margin-bottom:6px}
+  #site .sf dd{font-size:13.5px}
+  /* The store marks are the one tile whose content has a fixed size; at 24px
+     three of them plus gaps came within a few pixels of the column. */
+  #site .strip .stores{--store-h:20px;--store-gap:12px}
+}
+
+/* The floor, and it is a real one rather than a guess: below this the two
+   labels plus a gutter genuinely stop fitting, and a clipped field name is
+   worse than a tall band. No phone in use is this narrow. */
+@container page (max-width:300px){ #site .strip-in{grid-template-columns:minmax(0,1fr)} }
 
 /* TYPOGRAPHY RULE for the whole generated page: labels in IBM Plex Mono with
    NO tracking, content in Inter. Mono is doing a job here — it says "this is a
@@ -433,7 +635,31 @@
 #site .sf dt{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0;
   text-transform:uppercase;margin-bottom:9px;white-space:nowrap}
 
-#site .sf dd{margin:0;font-size:14.5px;line-height:1.5}
+/* A VALUE MAY NOT BREAK THE GRID, and there are two separate ways it could.
+
+   OVERFLOW: an unbroken token longer than its column — a long support address,
+   a URL, a compound studio name — has no break opportunity, so it runs past
+   the column's edge and out of the band. minmax(0,1fr) keeps the GRID honest,
+   but nothing stops the text itself painting outside it. `anywhere` gives the
+   browser permission to break mid-word, which is ugly exactly once and in a
+   place nobody was going to read closely anyway.
+
+   HEIGHT: grid rows are as tall as their tallest cell, so one long genre list
+   makes every tile beside it tall and the whole band grows a hole. Two lines
+   is the cap because it is what the longest REAL values need — "Sound Games,
+   Lightfox Games", "Action, Casual, Indie, Simulation" — so the clamp almost
+   never bites, and when it does, the row stays the height of every other row.
+
+   Clamped rather than truncated with an ellipsis on one line: two lines hold
+   nearly every value whole, and `title` carries the rest for a hover. */
+#site .sf dd{margin:0;font-size:14.5px;line-height:1.5;
+  overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  overflow:hidden}
+/* The store marks are a flex row of links inside a dd, and -webkit-box would
+   make them a block box that lays them out vertically. They are also the one
+   value that cannot be too long. */
+#site .sf dd:has(.stores){display:block;overflow:visible}
 
 #site .stores{display:flex;align-items:center;gap:var(--store-gap,16px);flex-wrap:wrap}
 
@@ -540,7 +766,10 @@
   background:rgba(255,255,255,.05);transition:background .14s,transform .14s;
 }
 
-#site .cc svg{width:19px;height:19px;display:block;opacity:.9}
+/* Same treatment as the hero's corner row: match heights, let widths follow,
+   and give the solid brand marks a hair less than the stroked ones. */
+#site .cc svg{height:19px;width:auto;max-width:26px;display:block;opacity:.9}
+#site .cc svg.brand{height:17px}
 
 #site .cc:hover{background:rgba(255,255,255,.11)}
 
@@ -557,14 +786,36 @@
 
 #site[data-tpl=classic] .hero{position:relative;height:calc(var(--hero-h) - var(--hero-cut,0px));overflow:hidden}
 
-/* Two layers, deliberately. The lower one is this skin's IDENTITY — art
+/* Three layers, deliberately. The lowest is this skin's IDENTITY — art
    dissolving into the page — and never varies, or the hero would end on a
-   visible seam. The upper one is the adjustable scrim, which is what has to
+   visible seam. The middle one is the adjustable scrim, which is what has to
    change between dark sci-fi art and Spilled!'s bright cosy art. Tuning them
-   as one gradient made every scrim below ~80% show that seam. */
+   as one gradient made every scrim below ~80% show that seam.
+
+   THE TOP ONE IS NOT ABOUT THE ART AT ALL, which is why it is a third layer
+   and not a stop added to the second. The corner logotype and the social row
+   sit in the first ~110px of the hero on whatever the game's sky happens to
+   be, and a white mark on a bright cloud is gone. --sc cannot do this job,
+   because --sc is turned DOWN for bright art — exactly the art where those
+   marks need the most help. Folding them together would make the control
+   work backwards. So the corner band gets its own scrim, independent of the
+   art's, and turning one does not move the other.
+
+   Measured in PIXELS, not percent, for the same reason .hero-head is: the
+   band it has to cover is a fixed distance from the top of the hero, and a
+   percentage ramp would slide off it the moment the hero got taller. It
+   holds through the icons, then eases out over roughly that distance again —
+   in four stops rather than one, because a single linear run to transparent
+   leaves a visible knee where the ramp ends. */
 #site[data-tpl=classic] .hero::after{
   content:'';position:absolute;inset:0;z-index:2;pointer-events:none;
   background:
+    linear-gradient(to bottom,
+      rgba(12,12,15,var(--tsc))                0,
+      rgba(12,12,15,calc(var(--tsc)*.78))      var(--tsc-h),
+      rgba(12,12,15,calc(var(--tsc)*.40))      calc(var(--tsc-h)*1.45),
+      rgba(12,12,15,calc(var(--tsc)*.13))      calc(var(--tsc-h)*1.8),
+      transparent                              calc(var(--tsc-h)*2.2)),
     linear-gradient(to bottom,rgba(12,12,15,calc(var(--sc)*.45)) 0%,transparent 32%,transparent 52%,rgba(12,12,15,calc(var(--sc)*.7)) 100%),
     linear-gradient(to bottom,transparent 62%,#0C0C0F 100%);
 }
@@ -573,13 +824,23 @@
 
 #site[data-tpl=classic] .buy{border-radius:999px}
 
-#site[data-tpl=classic] .strip{padding:6px clamp(20px,5vw,60px) 46px}
+/* 16px of air at the top, not 6. The band sits directly under the hero, whose
+   scrim spends its last pixels dissolving the key art into the page — and the
+   first row of labels was landing inside the tail of that fade, so the band
+   read as attached to the artwork rather than as the first section under it. */
+/* And 31 below, not 46. The band's bottom padding is the ONLY thing between
+   the last row of tiles and the hook — .band gives the lead no top padding of
+   its own — so this number alone sets that gap. 46 was inherited from a band
+   that used to have a section heading under it; with the hook following
+   directly, it read as a break between two documents rather than as two parts
+   of one page. */
+#site[data-tpl=classic] .strip{padding:16px clamp(20px,5cqw,60px) 31px}
 
 #site[data-tpl=classic] .sf dt{color:#8A8F98}
 
 #site[data-tpl=classic] .sf dd{color:#EDEFF2}
 
-#site[data-tpl=classic] .band{padding:0 clamp(20px,5vw,60px) clamp(48px,6vw,76px)}
+#site[data-tpl=classic] .band{padding:0 clamp(20px,5cqw,60px) clamp(48px,6cqw,76px)}
 
 /* The one wrapper that is deliberately NARROWER than --page: running body text
    across a 1200px line is unreadable, so prose gets its own measure and only
@@ -596,13 +857,17 @@
 #site[data-tpl=classic] .h2{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0;
   text-transform:uppercase;color:var(--a);margin:0 0 16px}
 
-#site[data-tpl=classic] .lead p{font-size:clamp(18px,2.1vw,23px);line-height:1.55;margin:0;color:#DDE0E5}
+#site[data-tpl=classic] .lead p{font-size:clamp(18px,2.1cqw,23px);line-height:1.55;margin:0;color:#DDE0E5}
 
 #site[data-tpl=classic] .video{border-radius:10px}
 
 #site[data-tpl=classic] .shots{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory}
 
-#site[data-tpl=classic] .shots > *{flex:0 0 clamp(280px,42vw,540px);scroll-snap-align:start;
+/* At a phone's width 280px is wider than the page's own gutters allow, and a
+   fixed flex-basis does not care: the strip would overflow its own container.
+   min() caps it at whatever room the page actually has, which is the one
+   number that is always right. */
+#site[data-tpl=classic] .shots > *{flex:0 0 min(100%, clamp(280px,42cqw,540px));scroll-snap-align:start;
   border-radius:10px;overflow:hidden;aspect-ratio:16/9;position:relative}
 
 /* ── RULES THE EXTRACTION SHOULD NOT HAVE TAKEN ───────────────────────────
@@ -680,7 +945,14 @@
 
    Excluding .el is the fix. Never grant `position` to something that already
    has one. */
-#site [data-edit]:not(.el){position:relative}
+/* AND THE TWO CORNERS ARE EXCLUDED TOO, for the same reason .el is: they are
+   already absolutely positioned, and this rule OUT-SPECIFIES the rules that
+   position them — `#site [data-edit]:not(.el)` is (1,2,0) against
+   `#site .hero-head`'s (1,1,0), so it wins outright rather than on source
+   order. Left in, it drops both corners into normal flow at the top of the
+   stage, which is the same bug that once put the buy button under the browser
+   chrome. Never grant `position` to something that already has one. */
+#site [data-edit]:not(.el):not(.hero-head):not(.hero-links){position:relative}
 
 /* IF IT CAN BE EDITED, THE CURSOR SAYS SO. The wash appears on hover, but a
    wash is a hint you notice after you have already moved the pointer there;
@@ -718,7 +990,23 @@
    turned a transition into a visible seam between the art and the metadata
    band. The wash now ends where the art ends, so hovering lights the zone
    without redrawing its edge. */
-#site .hero:hover:not(:has([data-edit]:hover))::before,
+/* ONLY WHILE NOTHING IS OPEN, and that :not() is a bug fix rather than a
+   refinement.
+
+   Every press in a popup calls webPageRedraw, which replaces the modal's
+   contents wholesale — the panel under your pointer included. The browser
+   then recomputes :hover against the last known pointer position, and for the
+   frame before the new panel is measured and moved back under your hand,
+   what is under that position is the HERO. So the hero hovered, this wash
+   faded in over its 120ms, and faded out again: a white flash across the key
+   art on every single click in the menu.
+
+   Suppressing it while a panel is open is also just correct on its own terms.
+   A hover wash means "you can click this". Once you have clicked it and are
+   working in its panel, the invitation has been accepted, and repeating it
+   over the artwork you are trying to judge is noise. The selected state below
+   is a different rule and still shows. */
+#site:not([data-sel]) .hero:hover:not(:has([data-edit]:hover))::before,
 #site[data-sel="art"] .hero::before{
   background:linear-gradient(to bottom,
     rgba(255,255,255,.05) 0%, rgba(255,255,255,.05) 68%, rgba(255,255,255,0) 100%);
@@ -742,12 +1030,241 @@
 #site .strip:hover::before{background:rgba(255,255,255,.05)}
 #site .strip > *{position:relative;z-index:2}
 
+/* ══════════════════════════════════════════════════════════════════════════
+   THE SECTION HANDLES
+   ══════════════════════════════════════════════════════════════════════════
+   In the corner, out of the reading column, and invisible until the pointer
+   is in the section. A page that permanently wore a row of controls on every
+   band would be the tool talking over the thing it is previewing — and the
+   whole promise here is that what you see is the page.
+
+   It names its section, because five bands of dark type look alike from the
+   corner of your eye and "which one am I about to move" is the question the
+   handle has to answer before its arrows mean anything. */
+#site .wp-grip{
+  position:absolute; z-index:9; top:10px; right:14px;
+  display:flex; align-items:center; gap:2px;
+  padding:4px 4px 4px 10px; border-radius:9px;
+  background:rgba(16,16,19,.82);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+  -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+  opacity:0; pointer-events:none; transition:opacity .13s;
+}
+/* pointer-events come back with the opacity: an invisible bar of buttons
+   floating over a band would swallow clicks meant for the band. */
+#site [data-sect]:hover > .wp-grip,
+#site .wp-grip:focus-within{opacity:1;pointer-events:auto}
+#site .wp-grip-name{
+  font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.04em;
+  text-transform:uppercase; color:#8A8F98; margin-right:6px;
+}
+#site .wp-grip button{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  width:24px; height:22px; border-radius:6px; color:#C9CDD4;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .13s, color .13s;
+}
+#site .wp-grip button:hover:not(:disabled){background:rgba(255,255,255,.12);color:#fff}
+#site .wp-grip button:disabled{opacity:.28;cursor:default}
+#site .wp-grip svg{width:13px;height:13px;display:block}
+/* The sections are in normal flow, so each needs to be its own containing
+   block for the handle sitting in its corner. .strip already had one. */
+#site .band{position:relative}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TOOLBAR ABOVE THE PAGE
+   ══════════════════════════════════════════════════════════════════════════
+   Outside the frame on purpose. Everything in it is a control for the page
+   rather than a part of it, and the frame is meant to read as a browser
+   showing a website — furniture inside it borrows the page's authority for
+   things that are only ours. */
+.wp-toolbar{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin:0 0 14px;
+
+  /* PINNED. The page is several screens tall and every one of these controls
+     is about the page as a whole — which section is on, how wide it is —  so
+     scrolling to the About block and finding you have to scroll back up to
+     switch the trailer off is the tool making you leave the thing you were
+     looking at in order to change it.
+
+     sticky rather than fixed, and the difference matters: sticky scrolls away
+     with .web-preview-wrap when the preview itself leaves, so the bar belongs
+     to the preview rather than hanging over whatever else the modal shows. It
+     also needs no measurement and no scroll listener.
+
+     A rounded frosted bar rather than a full-bleed strip: the scroll
+     container has its own padding, so an edge-to-edge background would leave
+     two thin gaps at the sides that read as a mistake. Floating, it reads as
+     pinned on purpose.
+
+     z-index 70 clears the frame beneath it. The frame is a container-type
+     element, which makes it a stacking context of its own, so its dock at 60
+     is sealed inside it and cannot rise through this. */
+  padding:8px 12px; border-radius:12px;
+  background:rgba(18,18,21,.88);
+  -webkit-backdrop-filter:blur(18px) saturate(1.2);
+          backdrop-filter:blur(18px) saturate(1.2);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.09), 0 6px 22px rgba(0,0,0,.35);
+}
+
+/* AND IT STICKS, BUT ONLY INSIDE THE MODAL.
+
+   The modal's scroll container is .submit-modal-scroll, so that is what the
+   bar pins itself to. In Marketing the scroller is the PAGE, and a bar
+   sticking to the top of the window there would float over Shipmate's own
+   header — furniture from one card hanging over the whole app. That preview
+   is a small embedded card anyway, so it simply scrolls with its section.
+
+   This is also the second reason .mkt-web-embed's overflow had to go: an
+   ancestor with overflow:hidden clips a sticky element rather than letting it
+   stick, so the rule that removed the double frame is load-bearing here too. */
+.submit-modal-scroll .wp-toolbar{position:sticky; top:4px; z-index:70}
+
+/* ── TWO FRAMES AROUND ONE PAGE ───────────────────────────────────────────
+   Marketing/Website wraps the preview in .mkt-web-embed, which draws its own
+   bordered, rounded box — correct for the PREVIOUS design, which had no frame
+   of its own. Ours arrives already wearing a browser: chrome, hairline, drop
+   shadow. Nested, they read as a pill inside a pill with a strip of card
+   background trapped between them.
+
+   The rule lives HERE rather than in style.css even though it targets Adam's
+   class, because it is a consequence of our design existing: `:has(.wp-frame)`
+   means it can only ever fire where our frame is, and deleting this design
+   deletes the override with it. The alternative — editing his rule — would
+   leave his page unframed the day ours goes away.
+
+   overflow goes with the border: with no box to clip to, clipping does
+   nothing except endanger the panels anchored near the edges. */
+.mkt-web-embed:has(.wp-frame){border:0;border-radius:0;overflow:visible}
+.wp-toolbar .wp-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1 1 auto}
+.wp-toolbar .wp-tools{display:flex;align-items:center;gap:8px;margin-left:auto}
+
+/* ON AND OFF IN ONE SHAPE. A lit pill is a section that is on the page; an
+   unlit one is a section that is not. The alternative — a list of only what
+   is hidden — could answer half the question at a time, and made switching
+   something off a matter of finding it on the page first. */
+.wp-toolbar .wp-pill{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  padding:5px 12px; border-radius:999px; font-size:12px; line-height:1.4;
+  color:#7B818B;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
+  transition:background .13s, color .13s, box-shadow .13s;
+}
+.wp-toolbar .wp-pill:hover{color:#C9CDD4;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+.wp-toolbar .wp-pill.on{
+  color:#EDEFF2; background:rgba(255,255,255,.11);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);
+}
+.wp-toolbar .wp-pill.on:hover{background:rgba(255,255,255,.17)}
+.wp-toolbar .wp-pill:focus-visible{box-shadow:0 0 0 2px #52BAFF}
+
+/* The device switcher, unchanged in behaviour, restyled for a light-on-dark
+   toolbar instead of a frosted browser bar. */
+.wp-toolbar .wp-dev{display:flex;gap:2px;padding:2px;border-radius:9px;
+  background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.wp-toolbar .wp-dev button,
+.wp-toolbar .wp-expand{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  width:26px; height:22px; border-radius:7px; color:#8A8F98;
+  transition:background .15s ease, color .15s ease;
+}
+.wp-toolbar .wp-dev button:hover,
+.wp-toolbar .wp-expand:hover{color:#C9CDD4;background:rgba(255,255,255,.07)}
+.wp-toolbar .wp-dev button[aria-pressed=true]{color:#EDEFF2;background:rgba(255,255,255,.13)}
+.wp-toolbar .wp-dev svg,
+.wp-toolbar .wp-expand svg{display:block;width:15px;height:15px}
+.wp-toolbar .wp-expand{width:28px;height:26px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.10)}
+.wp-toolbar .wp-dev button:focus-visible,
+.wp-toolbar .wp-expand:focus-visible{box-shadow:0 0 0 2px #52BAFF}
+
+/* ── THE PAGE AT ITS REAL SIZE ────────────────────────────────────────────
+   The frame is MOVED in here rather than copied: two live copies would both
+   answer to the same `site` global and fight over every measurement. */
+#wp-full{
+  position:fixed; inset:0; z-index:9999;
+  display:flex; flex-direction:column;
+  background:#0B0B0D;
+}
+body.wp-full-open{overflow:hidden}
+#wp-full .wp-full-bar{
+  flex:0 0 auto; display:flex; align-items:center; justify-content:flex-end; gap:14px;
+  padding:10px 18px; background:#141417;
+  box-shadow:inset 0 -1px 0 rgba(255,255,255,.08);
+}
+#wp-full .wp-full-note{font-size:12px;color:#8A8F98}
+#wp-full .wp-full-note b{color:#E8EAEE;font-weight:500}
+#wp-full .wp-btn{
+  padding:6px 14px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#E8EAEE;
+}
+#wp-full .wp-btn:hover{background:rgba(255,255,255,.15)}
+/* The stage scrolls, not the frame: the page is taller than any screen and
+   this is the one place it should be read the way a visitor would. */
+#wp-full .wp-full-stage{flex:1 1 auto;min-height:0;overflow:auto;padding:24px}
+/* AND THE HERO GETS ITS REAL HEIGHT BACK. The 42vh clamp exists because the
+   MODAL is short — see the note on .wp-frame #site. In here there is no modal,
+   so the compromise is not only unnecessary, it would make this preview a
+   different page from the one it is previewing. */
+#wp-full .wp-frame #site{--hero-h:625px}
+@media (max-height:860px){ #wp-full .wp-frame #site{--hero-h:575px} }
+
+/* ── WHERE A HIDDEN SECTION WAITS ─────────────────────────────────────────
+   Hiding worked and restoring did not: the chips that brought a section back
+   lived in the development band, which went at port time. The feature had an
+   entrance and no exit, so anything switched off was off for good.
+   Drawn only when something is actually hidden, and at the very bottom —
+   below the footer, where it reads as a note about the page rather than as
+   part of it. */
+#site .wp-hidden{
+  display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+  padding:16px clamp(20px,5cqw,60px) 26px;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+#site .wp-hidden-lbl{
+  font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.04em;
+  text-transform:uppercase; color:#6E747E; margin-right:2px;
+}
+#site .wp-chip{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 11px; border-radius:999px; font-size:12px; color:#A8AEB8;
+  background:rgba(255,255,255,.05);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.09);
+  transition:background .13s, color .13s;
+}
+#site .wp-chip:hover{background:rgba(255,255,255,.11);color:#E8EAEE}
+#site .wp-chip-plus{font-size:14px;line-height:1;opacity:.7}
+
 /* THE SELECTED ZONE, and everything else stepping back. Opacity on the
    siblings, never a covering layer: a layer eats every click on the page
    underneath, so you could not go straight from one area to another without
    dismissing something first. */
 #site[data-sel] > *{transition:opacity .18s}
 #site[data-sel="art"] > *:not(.hero){opacity:.35}
+/* The pieces that float on the header step the page back the same way the
+   header does. What you are judging while you resize a name or tint a
+   logotype is how it sits ON THE ARTWORK, and the sections underneath are
+   only competition for that. */
+#site[data-sel="title"]  > *:not(.hero),
+#site[data-sel="logo"]   > *:not(.hero),
+#site[data-sel="header"] > *:not(.hero),
+#site[data-sel="buy"]    > *:not(.hero){opacity:.35}
+
+/* AND THE SELECTED PIECE STAYS LIT once the pointer has left it for the
+   panel. The hover wash disappears the moment you move to the controls, which
+   is exactly when you most need to know which of the three you are editing —
+   the panel names it, but the eye is on the artwork. Slightly stronger than
+   hover, and a hairline with it: hover is a suggestion, selection is a
+   state. */
+#site[data-sel="title"]  .el[data-edit=title]::after,
+#site[data-sel="logo"]   .el[data-edit=logo]::after,
+#site[data-sel="buy"]    .el[data-edit=buy]::after,
+#site[data-sel="header"] .hero-head::after{
+  background:rgba(255,255,255,.07);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+}
 
 /* Reframing is a MODE, not a hair-trigger: the grab cursor appears once the
    art is selected, so an ordinary click on the page never feels like it might
@@ -780,22 +1297,68 @@
    webSite.page — so it is rebuilt with the page on every render and there is
    nothing in it that a redraw could lose. */
 .wp-dock{
-  position:absolute; left:50%; top:calc(var(--chrome-h,54px) + 12px); z-index:60;
-  transform:translateX(-50%);
+  /* WHY THIS IS NOT `left:50%` + translateX(-50%).
+
+     That is the usual way to centre an absolutely positioned box, and here it
+     silently capped the dock at half the frame. An abspos element with a left
+     offset and no right offset is shrink-to-fit, and the "available width" it
+     fits into is what remains from its left edge — from 50%, that is half the
+     frame and nothing more. The dock's preferred width was far greater, so it
+     took the available 50%, and min-width lifted it to exactly 520px. Every
+     row after the first was wrapping into space that was there all along.
+
+     Pinning BOTH edges hands it the whole frame; fit-content keeps it only as
+     wide as it needs; auto margins centre what is left. Three rows become
+     one or two without touching a single control. */
+  position:absolute; left:14px; right:14px; top:calc(var(--chrome-h,54px) + 12px); z-index:60;
+  width:fit-content; margin-inline:auto;
   /* Roomier than it was. The first version was sized like a toolbar and read
      as cramped: a panel that floats over the thing it edits is competing with
      that thing for attention, and winning that competition by being tight and
      busy is the wrong way to win it. More air between the controls, a wider
      zoom track, and a floor under the whole thing so it does not shrink to
      the width of whatever the shortest panel happens to hold. */
-  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-  padding:11px 16px; border-radius:14px;
-  min-width:min(520px, calc(100% - 28px)); max-width:calc(100% - 28px);
+  /* A COLUMN OF ROWS, not one wrapping row. Wrapping put the break wherever
+     the width happened to run out, which is never where the meaning breaks:
+     the framing controls and the element switches would interleave across the
+     seam and the panel read as eight unrelated buttons. Explicit rows put the
+     break where the subject changes, so each line answers one question. */
+  display:flex; flex-direction:column; align-items:stretch; gap:9px;
+  padding:12px 16px; border-radius:14px;
+  /* A floor so the shortest panel does not read as a tooltip, and a ceiling so
+     a wide monitor does not stretch one row of buttons across 1400px. */
+  min-width:min(520px, 100%); max-width:100%;
   background:rgba(16,16,19,.9); box-shadow:inset 0 0 0 1px rgba(255,255,255,.13), 0 12px 40px rgba(0,0,0,.5);
   -webkit-backdrop-filter:blur(20px) saturate(1.2);
           backdrop-filter:blur(20px) saturate(1.2);
   font:500 11.5px/1 Inter,system-ui,sans-serif; color:#E8EAEE;
 }
+/* ── ANCHORED TO ITS ELEMENT ──────────────────────────────────────────────
+   The header keeps the fixed place under the chrome; the pieces that float on
+   it get panels that float with them. Everything above sizes the header's
+   panel — pinned edges, auto margins, a 520px floor — and all three are wrong
+   for a popup: it must sit where JS puts it, and be exactly as wide as its
+   own contents rather than padded out to a width that suits a different
+   panel.
+
+   left/top come from wpDockPlace; the ceiling and the clamping are its
+   business, not the stylesheet's. */
+.wp-dock[data-wp-anchor=el]{
+  right:auto; margin:0; min-width:0; width:max-content;
+  max-width:calc(100% - 20px);
+  /* No transition on position: the panel is re-placed after every layout
+     pass, and a panel that slid to its new home each time the hero re-measured
+     would look like it was drifting on its own. */
+}
+
+/* Still allowed to wrap: a phone preview is 390px wide and a row that would
+   overflow has to go somewhere. The rows just decide where the FIRST break
+   goes, and the rest is the browser's problem. */
+.wp-dock .wp-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+/* Done sits at the far end of the last row rather than in the flow of the
+   switches, because it is not one of them: everything else in that row
+   changes the page, and this one leaves. */
+.wp-dock .wp-done{margin-left:auto}
 .wp-dock .wp-title{font-weight:600;letter-spacing:.01em}
 .wp-dock .wp-lbl{color:#8A8F98}
 .wp-dock .wp-val{color:#8A8F98;min-width:34px;text-align:right;
@@ -818,6 +1381,16 @@
 .wp-dock .wp-done{color:#BFF0CE;background:rgba(74,222,128,.16);border-color:rgba(74,222,128,.4)}
 .wp-dock .wp-done:hover{background:rgba(74,222,128,.28);border-color:rgba(74,222,128,.6)}
 .wp-dock .wp-range{width:150px;accent-color:#52BAFF}
+/* The one text field in any of these panels. Typed here rather than on the
+   page for the reason the whole editing model is split: a contentEditable
+   node is one the rebuild can replace mid-sentence. */
+.wp-dock .wp-text{
+  width:150px;padding:5px 9px;border-radius:7px;font:inherit;font-size:12px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);
+  color:#E8EAEE;
+}
+.wp-dock .wp-text::placeholder{color:#6E747E}
+.wp-dock .wp-text:focus{outline:none;border-color:rgba(82,186,255,.6);background:rgba(255,255,255,.1)}
 /* The thumbnail is the one thing here worth looking at rather than reading,
    so it gets the height to be legible as a picture. */
 .wp-dock .wp-thumb{height:36px}
@@ -888,7 +1461,26 @@
   box-shadow:0 24px 70px rgba(0,0,0,.55);
   background:transparent;
   position:relative;
+  /* THE FRAME IS A CONTAINER, so that #site's own --pad has something to
+     measure against. #site cannot serve: it is the `page` container, and a
+     container cannot query itself. Both boxes are the same width — .wp-frame
+     gives the page no padding of its own — so the two container scopes report
+     the same number and nothing is measured twice. */
+  container-type:inline-size; container-name:frame;
+  /* Set by the device switcher in the chrome. `none` is the desktop case,
+     where the page takes whatever the modal gives it. */
+  max-width:var(--wp-device-w, none);
+  margin-inline:auto;
+  /* Slow enough to read as the page narrowing, fast enough not to be a wait.
+     The reflow rides along: container queries re-evaluate every frame, and
+     the ResizeObserver on the hero re-places the title and the button as the
+     stage changes under them. */
+  transition:max-width .3s cubic-bezier(.4,0,.2,1);
 }
+/* Phones do not have traffic lights, and at 390px the dots, the address and
+   the switcher cannot all fit anyway. Dropping them is both true to the
+   device and the thing that makes the row fit. */
+@container frame (max-width:520px){ .wp-frame .wp-dots{display:none} }
 /* HOW TALL THE BROWSER CHROME IS, so the things that live at the top of the
    page can start below it. The chrome floats OVER the art — that is the
    effect — which means anything positioned from the hero's top edge is
@@ -941,14 +1533,47 @@
    sits — was not the middle of the frame. */
 .wp-frame .wp-dots{display:flex;gap:8px}
 .wp-frame .wp-dots i{width:12px;height:12px;border-radius:50%;display:block}
-/* The third column exists only to balance the first, which is what makes the
-   centre column actually central. */
-.wp-frame .wp-chrome-pad{display:block}
+/* The third column used to exist only to balance the first, which is what
+   makes the centre column actually central. It now earns its keep: the device
+   switcher lives here.
+   Right-aligned, so the balance still holds — the grid is 1fr auto 1fr, and
+   both flanking columns take the same width whatever is inside them, which is
+   what keeps the address capsule centred on the FRAME rather than on the
+   leftovers. */
+.wp-frame .wp-chrome-pad{display:flex;justify-content:flex-end;align-items:center}
+
+/* ── WHAT THIS WILL LOOK LIKE ON A PHONE ──────────────────────────────────
+   In the browser chrome rather than above it, for two reasons. The modal is
+   short — the hero is already cut twice over to leave room for the page under
+   it — so a control bar of its own would cost 40px that the preview cannot
+   spare. And a device switcher IS browser furniture: this is the row where a
+   real browser keeps its buttons, so nobody has to be told what it is.
+
+   Buttons, not a segmented pill: three targets in 90px, and a pill's sliding
+   indicator would be a second thing to keep in sync with the state for no
+   information gained. The lit one is the current device. */
+.wp-frame .wp-dev{display:flex;gap:2px;padding:2px;border-radius:9px;
+  background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.wp-frame .wp-dev button{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  width:26px; height:22px; border-radius:7px; color:#8A8F98;
+  transition:background .15s ease, color .15s ease;
+}
+.wp-frame .wp-dev button:hover{color:#C9CDD4;background:rgba(255,255,255,.07)}
+.wp-frame .wp-dev button[aria-pressed=true]{color:#EDEFF2;background:rgba(255,255,255,.13)}
+.wp-frame .wp-dev button:focus-visible{box-shadow:0 0 0 2px var(--a,#52BAFF)}
+.wp-frame .wp-dev svg{display:block;width:15px;height:15px}
 
 .wp-frame .pk-browser-url{
   flex:none; margin:0;
   display:flex; align-items:center; justify-content:center;
-  min-width:min(340px,46vw); padding:7px 16px; border-radius:999px;
+  /* cqw so the capsule shrinks with the FRAME rather than with the window —
+     in vw it kept a desktop capsule inside a phone and pushed the switcher
+     off the end of the bar. min-width, not width, so it still cannot get so
+     small that the address becomes a scrap. */
+  min-width:min(340px,46cqw); max-width:100%; padding:7px 16px; border-radius:999px;
+  overflow:hidden; white-space:nowrap;
   background:#161618; font-size:12px; color:#8A8F98; letter-spacing:.01em;
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
 }

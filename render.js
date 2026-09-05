@@ -1040,6 +1040,10 @@ function buildAssetsTab() {
       <div class="ob-section" id="ob-sec-screenshots">
         <div class="ob-section-hdr">${t('ob.section.screenshots') || 'Screenshots'}</div>
         <div class="asset-guidance">${t('ob.screenshots.guidance')}</div>
+        ${/* The well takes anything now — key art, logotypes, icons, captures —
+              and sorts what it is given by reading each file's dimensions and
+              transparency. Said once, here, rather than repeated under every
+              group below. */''}
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
           <div id="ob-screenshot-req-wrap" class="ob-req-group ${state.uploads.screenshots.length === 0 ? 'is-req-empty' : ''}">
             <div class="asset-dropzone" id="ob-screenshot-dropzone"
@@ -1054,7 +1058,24 @@ function buildAssetsTab() {
                      onchange="handleScreenshotFiles(this.files); this.value=''">
             </div>
           </div>
-          <div class="asset-grid" id="ob-screenshot-grid"></div>
+          ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS.
+
+                This used to be a screenshots-only grid, which meant a
+                developer who dropped their whole assets folder here saw their
+                screenshots and had to take it on faith that the key art and
+                the logotype had gone anywhere at all. Now the well shows
+                everything it swallowed, each with the label the classifier
+                gave it — which is also the moment a wrong guess is cheapest to
+                correct, because the file is right there under the pointer. */''}
+          ${/* THE OLD SCREENSHOT GRID IS GONE, not hidden — and the attempt to
+                hide it is worth recording, because it could not have worked:
+                `[hidden]{display:none}` lives in the BROWSER's stylesheet, and
+                any author rule beats it regardless of specificity. So
+                `.asset-grid{display:grid}` kept drawing it, and the same files
+                appeared twice: once as uniform cards up here, once sorted into
+                groups below. The same trap the screenshot lightbox fell into,
+                which is why it is written down twice now. */''}
+          <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
         </div><!-- /ob-q-screenshots -->
       </div>
 
@@ -1083,6 +1104,29 @@ function buildAssetsTab() {
                  oninput="syncField('trailerUrl', this.value)">
         </div>
       </div>
+
+      ${/* ── THE LIBRARY ──────────────────────────────────────────────────
+            Everything the project has, sorted by what Shipmate worked out it
+            is. Below the dropzones rather than instead of them: the zones are
+            where files come IN, this is what happens to them afterwards.
+
+            It also takes over the two zones that were removed but whose
+            handlers survived — the app icon and the feature graphic had
+            hydration code and no dropzone left (buildAssetsTab still computed
+            `hasAndroid` and never used it). One well, everything in it. */''}
+      ${/* STORE COVERAGE IS BUILT AND NOT SHOWN. smCoverage, smSourceSet and
+            smShotNeeds all work and are tested — _smCoverageHTML renders the
+            whole panel — but it answers a question asked later than "did my
+            files land", and a first look at a drop well should be the drop
+            well. Re-enable by putting this back:
+
+              <details class="sm-cov-fold" id="ob-sec-coverage">
+                <summary class="sm-cov-sum">What each store needs</summary>
+                <div id="sm-coverage">${'$'}{_smCoverageHTML()}</div>
+              </details>
+
+            Left as a comment rather than deleted because the work is done and
+            the day it is wanted, it is one paste. */''}
 
     </div>`;
 }
@@ -1115,11 +1159,16 @@ function hydrateGameDetailsTab() {
 }
 
 function hydrateUploadAssetsTab() {
-  // App icon
+  /* Everything the project already has, redrawn with the tab. The library and
+     the coverage read-out are both derived — from the pool and from the
+     platform selection — so they cannot be baked into the markup once and
+     left; a platform ticked elsewhere changes what this panel says. */
+  if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+  // App icon. Through the resolver now, because the slot holds a reference.
   if (state.uploads.appIcon) {
     const preview = document.getElementById('ob-icon-preview');
     if (preview) {
-      preview.innerHTML = `<img src="${state.uploads.appIcon.dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" alt="App Icon">`;
+      preview.innerHTML = `<img src="${_screenshotSrc(state.uploads.appIcon)}" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" alt="App Icon">`;
     }
   }
   const el = document.getElementById('ob-trailer-url');
@@ -1147,12 +1196,16 @@ function hydrateComplianceTab() {
 }
 
 function renderOnboardingScreenshotGrid() {
-  const grid = document.getElementById('ob-screenshot-grid');
-  if (!grid) return;
-  // Sync required-empty indicator on wrapper, and section rail
+  /* THE GRID IS GONE AND THE AMBER STATE IS NOT. The early return used to sit
+     above these three lines, which was harmless while the grid always existed
+     — now that the library replaced it, bailing here would leave the "still
+     needed" marker frozen on a section that has been filled. */
   const reqWrap = document.getElementById('ob-screenshot-req-wrap');
   if (reqWrap) reqWrap.classList.toggle('is-req-empty', !state.uploads.screenshots.length);
   updateObSectionStates();
+  if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+  const grid = document.getElementById('ob-screenshot-grid');
+  if (!grid) return;
   if (!state.uploads.screenshots.length) { grid.innerHTML = ''; return; }
   // Clicking a thumbnail enlarges it via the same openScreenshotLightbox
   // (app.js) the preview website's own screenshot grid uses — same overlay,
@@ -1181,7 +1234,7 @@ function renderOnboardingFeaturePreview() {
   const fg = state.uploads.featureGraphic;
   preview.innerHTML = `
     <div class="feature-preview-wrap">
-      <img src="${fg.dataUrl}" alt="${fg.name}" class="feature-img">
+      <img src="${_screenshotSrc(fg)}" alt="${fg.name}" class="feature-img">
       <div class="feature-preview-meta">
         <span class="feature-preview-name">${fg.name}</span>
         <button class="btn btn-ghost btn-sm" onclick="removeFeatureGraphic()">Replace</button>
@@ -1238,7 +1291,7 @@ function renderProjectBar() {
     const icon = state.uploads?.appIcon;
     selIcon.classList.toggle('empty', !icon);
     selIcon.innerHTML = icon
-      ? `<img src="${icon.dataUrl}" alt="">`
+      ? `<img src="${_screenshotSrc(icon)}" alt="">`
       : '';
   }
 
@@ -4395,16 +4448,46 @@ function renderStepModal() {
                : platformId === 'macos_full'   ? isMacFullSectionComplete(stepId)
                : isIOSSectionComplete(stepId);
 
+  /* GOING BACK IS NOT CLOSING, and the header used to offer only the second.
+     A flipped panel is one level INSIDE the Store Preview — you got here by
+     clicking something on the page, and the way out is back to that page.
+     The × did something else entirely: it dismissed the whole modal from two
+     levels down, so the most obvious control in the corner was the one that
+     threw away the context you were working in.
+
+     So while a panel is flipped the × is replaced by a back arrow, and it is
+     placed BEFORE the platform icon — the position back navigation has
+     everywhere, and the one that reads as "out of here" rather than "away".
+     It does exactly what Save & Return does; the footer button stays for the
+     people who look for a button rather than an arrow.
+
+     Un-flipped, the × is right and stays: there is no level to go back to,
+     and closing IS the way out. */
+  const returnAction = flipTarget === 'iapLocalizations'
+    // IAP Locs is reached FROM Business Questions rather than from the Store
+    // Preview itself, so back means Business Questions — see the note on the
+    // footer button below.
+    ? `openStorePreviewSection('${platformId}','business')`
+    : `closeStorePreviewSection('${platformId}')`;
+
   modal.innerHTML = `
     <div class="submit-modal-header" style="border-top-color:${p.color};">
       <div class="submit-modal-title-row">
+        ${isFlipped ? `
+        <button class="submit-modal-back" onclick="${returnAction}"
+                title="Back" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>` : ''}
         <div class="submit-modal-hicon">${platformIcon(platformId, 30, 'white')}</div>
         <div>
           <div class="submit-modal-title">${displayStepLabel || ''}</div>
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
-      <button class="task-modal-close" onclick="closeStepModal()">×</button>
+      ${isFlipped ? '' : `<button class="task-modal-close" onclick="closeStepModal()">×</button>`}
     </div>
     <div class="submit-modal-scroll" id="step-modal-body">
       ${inferenceBanner}
@@ -4422,10 +4505,9 @@ function renderStepModal() {
         // back to 'business' specifically — closeStorePreviewSection's
         // default (flip to null) would instead dump the user out to the
         // Store Preview, skipping right over the Business Questions they
-        // actually came from.
-        ? flipTarget === 'iapLocalizations'
-          ? `<button class="btn btn-primary" onclick="openStorePreviewSection('${platformId}','business')">Save &amp; Return</button>`
-          : `<button class="btn btn-primary" onclick="closeStorePreviewSection('${platformId}')">Save &amp; Return</button>`
+        // actually came from. Both this and the header's back arrow read the
+        // same `returnAction`, so the two ways out can never disagree.
+        ? `<button class="btn btn-primary" onclick="${returnAction}">Save &amp; Return</button>`
         : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
@@ -5219,6 +5301,68 @@ function buildWebSitePreviewSection() {
 
    webPageMount() is scheduled rather than called: the markup returned here is
    not in the document yet, and the hero cannot be laid out until it is. */
+/* ── WHAT THE PAGE LOOKS LIKE ON SOMETHING THAT IS NOT THIS ──────────────
+   The three widths the preview can be squeezed to. They are logical CSS
+   pixels, which is the number the page's own rules are written against, not
+   the device's physical resolution — an iPhone 15 is 1179px of hardware and
+   393 of layout, and 393 is the one that decides whether the metadata band
+   goes to one column.
+
+   1440 rather than "as wide as the modal": the desktop case was previously
+   whatever room Shipmate happened to leave, which is around 900px — a narrow
+   desktop, and never the same twice. A named width makes the three states
+   comparable, and it is the width the page is actually designed for
+   (--page caps the content at 1200). Capped by the modal via max-width:100%,
+   so on a small display it simply fills what there is.
+
+   No 'auto' among them on purpose. A preview whose widest state depends on
+   the window is not a preview of anything. */
+const WP_DEVICES = {
+  desktop: { w: '1440px', label: 'Desktop' },
+  tablet:  { w: '834px',  label: 'Tablet'  },
+  mobile:  { w: '390px',  label: 'Phone'   },
+};
+
+/* Written as an inline custom property rather than a class per device, so
+   changing device is one style write on one node — no rebuild, which is what
+   keeps the selection alive and stops the key art being decoded again. See
+   setWebPageDevice. */
+function _wpDeviceStyle() {
+  const d = WP_DEVICES[state.webPageDevice] || WP_DEVICES.desktop;
+  return `--wp-device-w:${d.w}`;
+}
+
+const _WP_DEVICE_ICONS = {
+  desktop: '<rect x="1.5" y="2.5" width="15" height="10" rx="1.5"/><path d="M6 15.5h6M9 12.5v3"/>',
+  tablet:  '<rect x="3.5" y="1.5" width="11" height="15" rx="1.8"/><path d="M7.6 14h2.8"/>',
+  mobile:  '<rect x="5" y="1.5" width="8" height="15" rx="2"/><path d="M8 14.2h2"/>',
+};
+
+function _wpDeviceSwitcherHTML() {
+  const cur = WP_DEVICES[state.webPageDevice] ? state.webPageDevice : 'desktop';
+  // data-wp="device" as well as data-wp-device: the toolbar's delegated
+  // listener reads the first, and setWebPageDevice reads the second when it
+  // moves the lit state. One button, two labels, no onclick attribute.
+  return `<span class="wp-dev" role="group" aria-label="Preview width">` +
+    Object.keys(WP_DEVICES).map(k => `
+      <button type="button" data-wp="device" data-k="${k}"
+              data-wp-device="${k}" aria-pressed="${k === cur}"
+              title="${WP_DEVICES[k].label} — ${WP_DEVICES[k].w}"
+              aria-label="${WP_DEVICES[k].label}">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+             >${_WP_DEVICE_ICONS[k]}</svg>
+      </button>`).join('') + `</span>`;
+}
+
+/* The section pills need M, which webPageHTML builds — so this is only ever
+   called after it, from _buildWebPageNew. Guarded anyway: a toolbar that
+   throws would take the whole modal down with it. */
+function _wpSectionPillsHTML() {
+  try { return typeof wpSectionPillsHTML === 'function' ? wpSectionPillsHTML() : ''; }
+  catch (e) { console.error('web page: section pills', e); return ''; }
+}
+
 function _buildWebPageNew() {
   if (typeof webPageHTML !== 'function') {
     return `<div class="web-preview-wrap" style="padding:12px 2px;">
@@ -5240,11 +5384,15 @@ function _buildWebPageNew() {
   if (typeof webPageMount === 'function') requestAnimationFrame(() => webPageMount());
 
   return `
+    ${/* NO EXPLANATORY PARAGRAPH. It described the design while the design was
+          new — "click any part of it to edit the fields behind it", plus the
+          Ctrl+Shift+W escape hatch — and a preview that has to explain itself
+          in a paragraph above it is a preview that is not working. The
+          shortcut still works; it is a temporary toggle and does not need
+          documenting on the page it toggles.
+          It also cost this view its top margin twice over in Marketing, where
+          the card already carries its own heading and note. */''}
     <div class="web-preview-wrap" style="padding:4px 2px 8px;">
-      <p style="margin:0 0 12px;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.5;">
-        Your game's own page, built from your submission. Click any part of it to edit the fields behind it.
-        <strong style="opacity:.7;">Ctrl+Shift+W</strong> switches back to the previous design.
-      </p>
 
       <!-- Adam's browser frame, with our chrome's look layered on by wp-frame:
            the URL sits in a centred capsule with a hairline rather than a
@@ -5256,7 +5404,37 @@ function _buildWebPageNew() {
            1fr auto 1fr grid, so the address capsule is centred on the FRAME
            rather than on whatever space the dots left over. Left loose, the
            dots each took a column and the capsule sat visibly off-centre. -->
-      <div class="pk-browser-frame wp-frame">
+      ${/* THE CONTROL PANEL, ABOVE THE PAGE AND OUTSIDE THE FRAME.
+
+            Both halves moved here from somewhere worse. The device widths
+            were in the browser chrome, which made a browser's own furniture
+            out of a thing that is not part of the page at all. The sections
+            were a bar at the very BOTTOM of the page that only appeared once
+            something was hidden — so switching one back on meant scrolling
+            the whole page to reach a control that listed only what was off.
+
+            Together they answer the two questions you ask while looking at a
+            preview: what is on this page, and how wide is it. */''}
+      <div class="wp-toolbar" data-wp-toolbar>
+        ${_wpSectionPillsHTML()}
+        <div class="wp-tools">
+          ${_wpDeviceSwitcherHTML()}
+          ${/* Real size, over everything. The modal gives the frame about
+                900px and the page is designed for 1440, so every preview in
+                here is a scaled-down argument about a layout nobody has
+                actually seen. */''}
+          <button type="button" class="wp-expand" data-wp="expand" aria-pressed="false"
+                  title="See it at full size" aria-label="See it at full size">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M11 2.5h4.5V7M7 15.5H2.5V11M15.5 2.5l-5.5 5.5M2.5 15.5l5.5-5.5"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="pk-browser-frame wp-frame" data-wp-frame
+           style="${_wpDeviceStyle()}">
         <div class="pk-browser-chrome">
           <span class="wp-dots">
             <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
@@ -5316,14 +5494,52 @@ function _wsField(ws, labelText, key, placeholder, opts) {
    below without escaping. */
 function _wsLinkRowHTML(link) {
   return `
-    <div class="pk-link-edit-row" style="display:flex;gap:8px;margin-bottom:8px;">
-      <input type="text" class="qs-input" style="flex:1;" value="${escHtml(link.name || '')}"
-             placeholder="Social media name" oninput="setWebLinkField('${link.id}', 'name', this.value)">
-      <input type="text" class="qs-input" style="flex:2;" value="${escHtml(link.url || '')}"
-             placeholder="https://..." oninput="setWebLinkField('${link.id}', 'url', this.value)">
+    <div class="pk-link-edit-row" data-link-row="${link.id}"
+         style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+      <span class="pk-link-mark" data-link-mark>${_wsLinkMarkHTML(link)}</span>
+      <select class="qs-input pk-link-pick" style="flex:1;min-width:0;"
+              onchange="setWebLinkChannel('${link.id}', this.value)">
+        ${_wsLinkOptionsHTML(link)}
+      </select>
+      <input type="text" class="qs-input" style="flex:2;min-width:0;" value="${escHtml(link.url || '')}"
+             placeholder="https://..."
+             oninput="setWebLinkField('${link.id}', 'url', this.value); refreshWebLinkRow('${link.id}')">
       <button class="btn btn-ghost btn-sm" type="button" style="flex:none;"
               onclick="removeWebLink('${link.id}')" title="Remove" aria-label="Remove link">✕</button>
     </div>`;
+}
+
+/* THE MARK THE ROW WILL ACTUALLY DRAW, shown next to the picker. Without it
+   the picker is a promise — you choose "Discord" and then have to flip back to
+   the page to find out what that got you. With it the row shows its own
+   result, which is the whole point of picking instead of typing.
+
+   Falls back to the globe rather than to nothing, because an empty box would
+   read as "this row is broken" when it only means "no link yet". */
+function _wsLinkMarkHTML(link) {
+  const icons = (typeof CONTACT_ICONS === 'object' && CONTACT_ICONS) || {};
+  const key = (typeof _wpStatedChannel === 'function' && _wpStatedChannel(link.name))
+           || (typeof _wpChannelOf === 'function' && _wpChannelOf(link.url, ''))
+           || 'web';
+  return (icons[key] || icons.web || {}).svg || '';
+}
+
+/* Auto first, and it is the DEFAULT rather than a last resort: the sniffer is
+   right about a pasted discord.gg link every time, and a developer who pastes
+   one should not also have to say what it was. The option names what it
+   deduced — "Auto · Discord" — so choosing it is an informed choice and not a
+   shrug. Picking a channel by hand is for the links the sniffer cannot name. */
+function _wsLinkOptionsHTML(link) {
+  const icons  = (typeof CONTACT_ICONS === 'object' && CONTACT_ICONS) || {};
+  const order  = (typeof _WP_CHANNEL_ORDER !== 'undefined' && _WP_CHANNEL_ORDER) || ['web'];
+  const stated = (typeof _wpStatedChannel === 'function' && _wpStatedChannel(link.name)) || '';
+  const auto   = (typeof _wpChannelOf === 'function' && _wpChannelOf(link.url, '')) || '';
+  const name   = k => escHtml((icons[k] || {}).label || k);
+  const autoLabel = auto ? `Auto · ${name(auto)}` : 'Auto — from the link';
+  return [`<option value=""${stated ? '' : ' selected'}>${autoLabel}</option>`]
+    .concat(order.map(k =>
+      `<option value="${k}"${stated === k ? ' selected' : ''}>${name(k)}</option>`))
+    .join('');
 }
 
 /* Factsheet fields (shown under the preview website's "About" heading —
@@ -6373,7 +6589,7 @@ function buildStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${icon.dataUrl}" class="ias-icon" alt="App icon">`
+    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -6959,7 +7175,7 @@ function buildMacStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${icon.dataUrl}" class="ias-icon" alt="App icon">`
+    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -7303,7 +7519,7 @@ function _macGcAchievementCollapsedRow(a) {
          ondragend="macGcAchievementDragEnd()">
       <span style="cursor:grab;color:var(--text-faint);font-size:14px;line-height:1;" title="Drag to reorder">⠿</span>
       <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
-      ${a.image ? `<img src="${a.image.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+      ${a.image ? `<img src="${_screenshotSrc(a.image)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
       <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
     </div>`;
 }
@@ -7321,7 +7537,7 @@ function _macGcAchievementExpandedRow(a) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveMacGcAchievement('${a.id}')" title="Click to collapse">
         <span class="iap-product-name-collapsed">${escHtml(headerLabel)}</span>
         <div style="display:flex;align-items:center;gap:10px;">
-          ${img ? `<img src="${img.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+          ${img ? `<img src="${_screenshotSrc(img)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
           <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeMacGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
         </div>
       </div>
@@ -7369,7 +7585,7 @@ function _macGcAchievementExpandedRow(a) {
         <label class="form-label">Image</label>
         ${img
           ? `<div style="display:flex;align-items:center;gap:10px;">
-               <img src="${img.dataUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
+               <img src="${_screenshotSrc(img)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
                <button class="btn btn-ghost btn-sm" type="button" onclick="removeMacGcAchievementImage('${a.id}')">Remove</button>
              </div>`
           : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload Image<input type="file" accept="image/*" hidden onchange="handleMacGcAchievementImage(event,'${a.id}')"></label>`}
@@ -7442,7 +7658,7 @@ function _iosGcAchievementCollapsedRow(a) {
          ondragend="iosGcAchievementDragEnd()">
       <span style="cursor:grab;color:var(--text-faint);font-size:14px;line-height:1;" title="Drag to reorder">⠿</span>
       <span class="iap-product-name-collapsed" style="flex:1;">${escHtml(displayName)}${badges ? ` <span style="color:var(--text-faint);font-weight:400;">· ${badges}</span>` : ''}</span>
-      ${a.image ? `<img src="${a.image.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+      ${a.image ? `<img src="${_screenshotSrc(a.image)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
       <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeIosGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
     </div>`;
 }
@@ -7455,7 +7671,7 @@ function _iosGcAchievementExpandedRow(a) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveIosGcAchievement('${a.id}')" title="Click to collapse">
         <span class="iap-product-name-collapsed">${escHtml(headerLabel)}</span>
         <div style="display:flex;align-items:center;gap:10px;">
-          ${img ? `<img src="${img.dataUrl}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
+          ${img ? `<img src="${_screenshotSrc(img)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" alt="">` : ''}
           <button class="iap-product-remove" type="button" onclick="event.stopPropagation(); removeIosGameCenterAchievement('${a.id}')" title="Remove achievement" aria-label="Remove achievement">✕</button>
         </div>
       </div>
@@ -7503,7 +7719,7 @@ function _iosGcAchievementExpandedRow(a) {
         <label class="form-label">Image</label>
         ${img
           ? `<div style="display:flex;align-items:center;gap:10px;">
-               <img src="${img.dataUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
+               <img src="${_screenshotSrc(img)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="">
                <button class="btn btn-ghost btn-sm" type="button" onclick="removeIosGcAchievementImage('${a.id}')">Remove</button>
              </div>`
           : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload Image<input type="file" accept="image/*" hidden onchange="handleIosGcAchievementImage(event,'${a.id}')"></label>`}
@@ -11017,7 +11233,7 @@ function buildMacFullStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${icon.dataUrl}" class="ias-icon" alt="App icon">`
+    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -12111,7 +12327,7 @@ function buildAndroidStorePreviewSection() {
   const descShort = escHtml(descRaw.slice(0, 120) + (descRaw.length > 120 ? '…' : ''));
 
   const iconHtml = icon
-    ? `<img src="${icon.dataUrl}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
+    ? `<img src="${_screenshotSrc(icon)}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
     : `<div style="width:60px;height:60px;border-radius:14px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px;">Icon</div>`;
 
   // Mark as seen
@@ -13054,7 +13270,7 @@ function buildSteamStorePreviewSection() {
   const topGenres = state.steamSubmitAnswers.topGenres.slice(0, 2).join(', ') || 'Game';
 
   const iconHtml = icon
-    ? `<img src="${icon.dataUrl}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
+    ? `<img src="${_screenshotSrc(icon)}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
     : `<div style="width:108px;height:50px;border-radius:4px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:9px;">Capsule</div>`;
 
   state.steamSubmitAnswers.storePreviewSeen = true;
@@ -13110,7 +13326,7 @@ function buildSteamStorePreviewSection() {
     </div>`;
 
   const screenshotsArea = screenshotsDone
-    ? `<div style="display:flex;gap:4px;overflow-x:auto;margin-top:10px;">${shots.slice(0,5).map(s => `<img src="${s.url || s.dataUrl}" style="height:90px;border-radius:4px;flex-shrink:0;">`).join('')}</div>
+    ? `<div style="display:flex;gap:4px;overflow-x:auto;margin-top:10px;">${shots.slice(0,5).map(s => `<img src="${_screenshotSrc(s)}" style="height:90px;border-radius:4px;flex-shrink:0;">`).join('')}</div>
        <button class="spp-edit-link" style="margin-top:6px;color:#8f98a0;" onclick="openStorePreviewSection('${pid}','screenshots')">Edit Screenshots</button>`
     : `<div style="margin-top:10px;">${_sppBtn('screenshots','Select Screenshots','Add screenshots for your Steam store page', false)}</div>`;
 
@@ -13346,7 +13562,7 @@ function buildSteamStorePreviewPrototypeSection() {
   // Header Image key art (460×215) — the asset Steam itself uses at the top
   // of a real store page's media block.
   const headerImgObj = ups.steamHeaderImage;
-  const headerImgSrc = headerImgObj ? (headerImgObj.dataUrl || headerImgObj.url || '') : '';
+  const headerImgSrc = headerImgObj ? (_screenshotSrc(headerImgObj) || '') : '';
 
   // Purchase area — Free vs. paid, same "Free"/formatted-price text
   // state.webSite.price already stores (see its comment in state.js).
@@ -14152,7 +14368,7 @@ function buildScreenshotsSection(pid) {
       <div class="shot-grid">
         ${ps.custom.map(s => `
           <div class="shot-thumb is-selected is-custom" title="${escHtml(s.name)}">
-            <img src="${s.dataUrl}" alt="${escHtml(s.name)}">
+            <img src="${_screenshotSrc(s)}" alt="${escHtml(s.name)}">
             ${checkMark}
             <button class="shot-remove" onclick="removePlatformScreenshot('${pid}','${s.id}')" title="Remove">×</button>
           </div>`).join('')}

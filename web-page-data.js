@@ -67,6 +67,12 @@ function _wpSrc(entry) {
   if (!entry) return null;
   if (typeof entry === 'string') return entry;
   if (typeof _screenshotSrc === 'function') return _screenshotSrc(entry) || null;
+  // Standalone fallback (the mockup harness loads this file alone): follow a
+  // library reference the same way _screenshotSrc does.
+  if (entry.ref && typeof smGet === 'function') {
+    const a = smGet(entry.ref);
+    return a ? a.src : null;
+  }
   if (entry.dataUrl) return entry.dataUrl;
   if (!entry.url) return null;
   if (entry.url.includes('images.igdb.com')) {
@@ -95,6 +101,10 @@ const _wpTrim = v => (typeof v === 'string' ? v.trim() : '');
    federation, so the test is the @user@host shape rather than a hostname. */
 const _WP_CHANNELS = [
   ['discord',   /(^|\.)discord\.(gg|com)/i],
+  // YouTube was falling through to 'web' — a real channel drawn as a generic
+  // link, which is the one case where "we could not name it" is wrong: a game
+  // studio's YouTube is one of the four links this row exists for.
+  ['youtube',   /(^|\.)(youtube\.com|youtu\.be)/i],
   ['instagram', /(^|\.)instagram\.com/i],
   ['bluesky',   /(^|\.)bsky\.(app|social)/i],
   ['x',         /(^|\.)(twitter\.com|x\.com)/i],
@@ -102,9 +112,50 @@ const _WP_CHANNELS = [
   ['mastodon',  /(^|\.)(mastodon|mstdn|mas)\.[a-z]/i],
 ];
 
+/* THE CHANNELS THAT CAN BE STATED RATHER THAN SNIFFED, in the order the
+   picker offers them — the four a game studio reaches for first, then the
+   rest. Email is last because it has its own field on the factsheet; it is
+   here only so a row that was already labelled that way still resolves. */
+const _WP_CHANNEL_ORDER = ['web', 'x', 'discord', 'reddit',
+                           'youtube', 'instagram', 'bluesky', 'mastodon', 'email'];
+
+/* A link's URL usually says what it is, and for a long time that was the only
+   thing asked — a dropdown would have been the developer repeating themselves.
+   What that missed is the case the sniffer cannot win: a Linktree, a Ko-fi, a
+   forum, a self-hosted Mastodon on the studio's own domain, a shortened URL.
+   All of those fall through to 'web' and get drawn as a generic globe, and
+   before this there was no way to say otherwise.
+
+   So the label is now allowed to STATE the channel, and sniffing becomes the
+   fallback rather than the only answer. Aliases are here because the rows that
+   already exist were free text — Steam's store page gave us "Discord Server",
+   a developer typed "Twitter" — and those should land on the right mark
+   instead of resetting to Auto the first time the picker is opened. */
+function _wpStatedChannel(label) {
+  const l = _wpTrim(label).toLowerCase();
+  if (!l) return null;
+  if (_WP_CHANNEL_ORDER.includes(l)) return l;
+  const alias = {
+    website:'web', site:'web', 'official website':'web', homepage:'web', 'web site':'web',
+    twitter:'x', 'x (twitter)':'x', 'twitter/x':'x',
+    'discord server':'discord', 'discord invite':'discord',
+    subreddit:'reddit', 'reddit community':'reddit',
+    yt:'youtube', 'youtube channel':'youtube',
+    bsky:'bluesky', insta:'instagram', ig:'instagram',
+    mail:'email', 'e-mail':'email', 'contact':'email',
+  };
+  return alias[l] || null;
+}
+
 function _wpChannelOf(url, label) {
   const u = _wpTrim(url);
+  /* NO URL, NO ROW — checked before the stated channel, not after. Picking
+     "Discord" from the list is a statement about a link that does not exist
+     yet; drawing a mark for it would put an icon in the header that goes
+     nowhere. _wpContact makes the same call about an empty handle. */
   if (!u) return null;
+  const stated = _wpStatedChannel(label);
+  if (stated) return stated;
   if (/^mailto:/i.test(u) || (!/^https?:/i.test(u) && u.includes('@') && u.includes('.'))) return 'email';
   let host = u;
   try { host = new URL(/^https?:/i.test(u) ? u : 'https://' + u).hostname; } catch (e) { /* keep the raw string */ }
@@ -135,6 +186,12 @@ function _wpHandle(url, channel) {
   const at = seg => (seg.startsWith('@') ? seg : '@' + seg);
   if (channel === 'bluesky') return segs.length ? at(segs[segs.length - 1]) : host;
   if (channel === 'web')     return host;
+  /* YOUTUBE'S PATH IS NOT ALWAYS A NAME. A channel is /@studio and reads as a
+     handle; a youtu.be link is /dQw4w9WgXcQ and reads as nothing at all. The
+     generic rule below would turn that video id into "@dQw4w9WgXcQ" — a
+     handle that does not exist, shown in a tooltip as though it did. Only
+     take it when the path says it is one. */
+  if (channel === 'youtube') return segs.length && segs[0].startsWith('@') ? segs[0] : host;
   if (segs.length === 1 && !parsed.search) return at(segs[0]);
   return host;
 }
@@ -401,5 +458,6 @@ function webPageData(state) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { webPageData, _wpAboutParts,
-                     _wpChannelOf, _wpHandle, _wpContact, _wpStores, _wpSrc };
+                     _wpChannelOf, _wpStatedChannel, _WP_CHANNEL_ORDER,
+                     _wpHandle, _wpContact, _wpStores, _wpSrc };
 }
