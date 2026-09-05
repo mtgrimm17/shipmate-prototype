@@ -2201,12 +2201,54 @@ function _flushPendingStepModalRerender() {
   }
 }
 
+// _deferredRerenderStepModal()'s "not mid-gesture" branch used to call
+// reRenderStepModal() directly, synchronously, every single time it was
+// invoked. That's fine for a single call, but toggleObLang/addLangFromSearch
+// (adding a language) walks straight into
+// _propagateAllLocalizationFeatures(), which — for a Steam-linked title with
+// many achievements, e.g. Hades' 49 — calls _masAchLocTriggerAutoTranslate/
+// _iasAchLocTriggerAutoTranslate/_macFullAchLocTriggerAutoTranslate once per
+// achievement per translatable field per platform (up to 49 x 3 x 3 = 441
+// calls), all in one synchronous pass, before any of their network requests
+// even go out. Every one of those calls sets a loading flag and then called
+// this function to show it, so all 441+ used to trigger their own immediate,
+// full reRenderStepModal() — a full rebuild of #step-modal-body's HTML —
+// back to back in a single tick. That synchronous render storm, not the
+// (now-throttled, see TRANSLATE_CONCURRENCY) network calls themselves, is
+// what actually froze the tab for several seconds immediately after clicking
+// to add a language.
+//
+// The fix: coalesce same-tick calls into a single render. Instead of
+// rendering immediately, schedule one microtask-deferred render (if one
+// isn't already pending) and return. Every call made during the same
+// synchronous burst sees a render already scheduled and just returns
+// instantly, so the whole burst still ends in exactly one reRenderStepModal()
+// call, fired as a microtask right after the burst's call stack unwinds —
+// imperceptibly delayed, but no longer proportional to achievement count.
+let _stepModalCoalescedRerenderScheduled = false;
+
+function _scheduleCoalescedStepModalRerender() {
+  if (_stepModalCoalescedRerenderScheduled) return;
+  _stepModalCoalescedRerenderScheduled = true;
+  Promise.resolve().then(() => {
+    _stepModalCoalescedRerenderScheduled = false;
+    // A gesture could have started during the microtask wait (vanishingly
+    // unlikely, but cheap to guard) — defer to the normal pending-flag path
+    // if so, same as _deferredRerenderStepModal itself does.
+    if (_stepModalInteractionActive()) {
+      _stepModalRerenderPending = true;
+      return;
+    }
+    reRenderStepModal();
+  });
+}
+
 function _deferredRerenderStepModal() {
   if (_stepModalInteractionActive()) {
     _stepModalRerenderPending = true;
     return;
   }
-  reRenderStepModal();
+  _scheduleCoalescedStepModalRerender();
 }
 
 (function initStepModalInteractionTracking() {
