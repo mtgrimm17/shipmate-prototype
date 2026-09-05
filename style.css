@@ -5074,7 +5074,12 @@ textarea.loc-review-field.ias-inline-input {
 
 /* Achievements (Game Center widget preview, Mac App Store's own Product
    Page Preview — buildMacStorePreviewSection, render.js) */
-.ias-achv-section { cursor: pointer; }
+/* Achievements card had no hover affordance at all -- add the same
+   visible panel-3 treatment as the other selectable sections on this
+   preview (.ias-editable / .ias-meta-cell--action above), since it sits
+   directly on .ias-page's panel-2 the same way they do. */
+.ias-achv-section { cursor: pointer; border-radius: 12px; transition: background 0.12s; }
+.ias-achv-section:hover { background: var(--panel-3); }
 .ias-achv-kicker {
   display: flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 700; color: #0a84ff;
@@ -5250,7 +5255,11 @@ textarea.loc-review-field.ias-inline-input {
   transition: background 0.12s;
   animation: ias-meta-pulse 2s ease-in-out infinite;
 }
-.ias-meta-cell--action:hover { background: var(--panel-2); }
+/* Same invisible-hover bug .ias-editable had (see its own comment above):
+   .ias-meta-strip sets no background of its own, so this cell sits
+   directly on .ias-page's panel-2 -- panel-2 on hover here would be a
+   no-op. panel-3 is visible against it, same fix as .ias-editable. */
+.ias-meta-cell--action:hover { background: var(--panel-3); }
 /* Visited/done — still clickable but no pulse, green hover */
 .ias-meta-cell--seen {
   animation: none;
@@ -5306,7 +5315,15 @@ textarea.loc-review-field.ias-inline-input {
 .spp-section-btn {
   display: flex; align-items: center; gap: 10px;
   width: 100%; padding: 12px 14px;
-  background: var(--accent); color: #fff;
+  /* --accent is never defined anywhere in this modal's ancestor chain (no
+     wrapper here sets it inline, unlike e.g. .tab-hero elsewhere) -- with
+     no fallback this resolved to a fully transparent background (verified:
+     getComputedStyle -> rgba(0,0,0,0)), so the button had no visible fill
+     at rest and its hover below (opacity/lift) had nothing to fade. Adding
+     the same #0a84ff fallback this stylesheet already uses elsewhere for
+     --accent in other App-Store-shaped UI (see .cq-banner-bar-fill) gives
+     it a real resting color, which is what actually makes the hover show. */
+  background: var(--accent, #0a84ff); color: #fff;
   border: none; border-radius: 10px; cursor: pointer;
   font-size: 13px; text-align: left;
   margin-bottom: 8px;
