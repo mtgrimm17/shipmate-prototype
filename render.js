@@ -10528,19 +10528,21 @@ function buildMacFullAppInformationSection() {
 }
 
 
-/* ── Mac App Store Full — Version Information ─────────────────────────────
-   Screenshots/Title/Subtitle are edited from the Product Page Preview step
-   further below (buildMacFullStorePreviewSection), same as every other
-   App-Store-shaped platform — this step covers the rest of what ASC's
-   Version Information page asks for, plus an "App Review" section below
-   (same divider + label header pattern buildIapSection uses for its own
-   section) carrying everything from the former standalone App Review
-   Information step, since that step was folded in here and removed.
-   Promotional Text/Keywords/Support URL/Marketing URL/Copyright used to
-   live here too — moved to the new App Information section
-   (buildMacFullAppInformationSection, above) reached from Product Page
-   Preview's Information card, and removed from here entirely; this step no
-   longer touches state.macFullAppStoreListing at all. */
+/* ── Mac App Store Full — App Review (step id stays 'versionInfo': its
+   content used to cover ASC's whole Version Information page, before
+   Screenshots/Title/Subtitle/Description/What's New moved out to the
+   Product Page Preview step and Promotional Text/Keywords/Support URL/
+   Marketing URL/Copyright moved out to the new App Information section
+   (buildMacFullAppInformationSection, above) — what's left, and all this
+   step covers now, is entirely Review Contact/Demo Account/Notes/
+   Attachment, i.e. the former standalone App Review Information step
+   folded in here when it was removed — so the step itself is labeled "App
+   Review" (PLATFORMS.macos_full.steps, state.js) rather than keep a name
+   describing content that's no longer here. No inner section-label divider
+   for that content (unlike buildIapSection's own sub-sections) since the
+   whole step IS that section now — the modal's own title already says
+   "App Review". This step no longer touches state.macFullAppStoreListing
+   at all. */
 function buildMacFullVersionInfoSection() {
   const ps = state.platformScreenshots?.macos_full;
   const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
@@ -10563,7 +10565,6 @@ function buildMacFullVersionInfoSection() {
       <div class="form-hint">Screenshots, Title, Subtitle, Description, and What's New are managed in the Product Page Preview step below${hasShots ? '' : ' — no screenshots are available yet'}.</div>
     </div>
 
-    <div class="ios-content-step-label">App Review</div>
     ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
     ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
     ${_mfTextField('Phone', 'reviewContact.phone', rc.phone)}

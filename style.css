@@ -4475,6 +4475,13 @@ body.viewing-splash .app-subnav { display: none; }
   cursor: pointer; border-radius: 4px; margin: -2px -4px; padding: 2px 4px;
   box-sizing: border-box; border: 1px solid transparent;
 }
+/* Hover affordance for the shared click-to-edit fields above (Title/Subtitle/
+   Description/Release Notes on iOS, Mac App Store, and Mac App Store Full's
+   Product Page Previews, plus Localization Review/IAP Loc fields that reuse
+   this same class) -- mirrors Steam Store Page Preview's own inline-field
+   hover treatment. Matches this file's existing "tint on hover" idiom
+   (.ias-meta-cell--action:hover / .ias-info-section--action:hover below). */
+.ias-editable:hover { background: var(--panel-2); }
 .ias-placeholder { animation: ias-meta-pulse 2s ease-in-out infinite; }
 /* "What's New" is optional for a first submission (only required for updates),
    so it should not pulse/glow as a mandatory empty field. Still click-to-edit. */
@@ -5251,7 +5258,23 @@ textarea.loc-review-field.ias-inline-input {
    the new App Information section, buildMacFullAppInformationSection,
    render.js). Reuses the exact same @keyframes ias-meta-pulse ring every
    other "needs attention" glow on this preview uses, just scaled to a full
-   section block instead of a small meta-strip cell. */
+   section block instead of a small meta-strip cell.
+
+   Unlike every other glowing element on this preview, this section is both
+   the last thing inside .ias-page and spans its full width — so with zero
+   gap of its own, the pulse's outward box-shadow ring (5px spread, no
+   blur) had nowhere to go before hitting .ias-page's own overflow:hidden
+   edge, clipping the ring flush on the left/right/bottom instead of
+   showing a full outline. Giving the section its own small margin on
+   those three sides opens up exactly that clearance; shaving the same
+   6px back off its own left/right padding keeps its actual content
+   (Information's rows/links) flush with every section above it rather
+   than shifting it inward relative to them. Applies regardless of
+   --action/--seen state, so nothing shifts when infoDone flips. */
+.ias-info-section {
+  margin: 0 6px 6px;
+  padding: 14px 10px;
+}
 .ias-info-section--action {
   cursor: pointer; border-radius: 10px;
   transition: background 0.12s;
@@ -8220,7 +8243,16 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   cursor: pointer;
   transition: transform 0.12s;
 }
-.pk-mainsection:hover { transform: translateY(-1px); }
+/* Background tint on hover, matching Steam Store Page Preview's own
+   inline-field/block hover highlight (see .steam-spp-content-block etc.
+   and their shared rgba(103,193,245,.12)-equivalent tint) -- alongside
+   (not replacing) the existing lift transform above. Safe as a plain
+   background-color here (unlike .pk-hero/.pk-capsule below) because
+   .pk-mainsection is a plain card, not an image-covered box. */
+.pk-mainsection:hover {
+  transform: translateY(-1px);
+  background-color: color-mix(in srgb, var(--pk-accent, #0EA5A4) 12%, transparent);
+}
 
 /* Same glow-box treatment for the placeholder/uploaded hero banner and
    vertical capsule (clicking either opens the "Key Art" flip modal — see
@@ -8249,6 +8281,26 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .pk-capsule.pk-glowbox:hover { transform: translateY(calc(50% - 1px)); }
 .pk-hero.pk-glowbox { animation: pk-glow-pulse 2.4s ease-in-out infinite; }
 .pk-capsule.pk-glowbox { animation: pk-glow-pulse-capsule 2.4s ease-in-out infinite; }
+
+/* Hover tint for the hero/capsule glow-boxes above, matching Steam Store
+   Page Preview's own hover highlight. Can't use a plain background-color
+   the way .pk-mainsection does just above: once a real image is uploaded
+   (.pk-hero-img / .pk-capsule-img, both object-fit absolute-inset-0), it
+   opaquely covers the box's own background, so a background-color behind
+   it would never show through -- the exact same problem .steam-spp-
+   capsule-wrap::after already solves on Steam's own preview, via a
+   pointer-events:none overlay painted on top of the image instead. Both
+   .pk-hero and .pk-capsule are already `position` (relative / absolute
+   respectively), so this ::after's inset:0 sizes to each box itself. */
+.pk-hero.pk-glowbox::after,
+.pk-capsule.pk-glowbox::after {
+  content: ''; position: absolute; inset: 0;
+  background: color-mix(in srgb, var(--pk-accent, #0EA5A4) 12%, transparent);
+  opacity: 0; transition: opacity 0.12s; pointer-events: none;
+}
+.pk-capsule.pk-glowbox::after { border-radius: 8px; }
+.pk-hero.pk-glowbox:hover::after,
+.pk-capsule.pk-glowbox:hover::after { opacity: 1; }
 
 @keyframes pk-glow-pulse-capsule {
   0%, 100% { box-shadow: 0 10px 24px rgba(0,0,0,0.25), 0 0 0 0 color-mix(in srgb, var(--pk-accent, #0EA5A4) 35%, transparent); }

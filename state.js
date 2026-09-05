@@ -810,7 +810,7 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
       { id: 'appInfo',         label: 'App Information Full'                         },
-      { id: 'versionInfo',     label: 'Version Information'                           },
+      { id: 'versionInfo',     label: 'App Review'                                    },
       { id: 'contentRating',   label: 'Age Rating',                hasInference: true },
       { id: 'privacy',         label: 'App Privacy'                                   },
       { id: 'versionRelease',  label: 'Version Release'                               },
