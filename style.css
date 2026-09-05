@@ -5299,13 +5299,22 @@ textarea.loc-review-field.ias-inline-input {
   transition: background 0.12s;
   animation: ias-meta-pulse 2s ease-in-out infinite;
 }
-.ias-info-section--action:hover { background: var(--panel-2); }
-/* Visited/done — still clickable but no pulse, green hover */
+/* --panel-3, not --panel-2: same invisible-hover bug as .ias-editable/
+   .ias-meta-cell--action (this section sits directly on .ias-page's own
+   panel-2, so panel-2 on hover here is a no-op) -- same fix. */
+.ias-info-section--action:hover { background: var(--panel-3); }
+/* Visited/done — still clickable but no pulse. Grey hover (--panel-3),
+   matching every other field/section on this preview, rather than the
+   green tint (.ias-meta-cell--seen/.spp-section-btn--done use elsewhere
+   for their own *completed-state fill*, not a hover) this section had
+   before -- Information doesn't have a distinct "done" fill the way those
+   do, so its hover should read the same as its own --action state above,
+   not borrow their done-state color. */
 .ias-info-section--seen {
   cursor: pointer; border-radius: 10px;
   animation: none;
 }
-.ias-info-section--seen:hover { background: rgba(52,199,89,0.08); }
+.ias-info-section--seen:hover { background: var(--panel-3); }
 
 /* ── DocuSign-style section action buttons ── */
 @keyframes spp-pulse {
@@ -5315,22 +5324,26 @@ textarea.loc-review-field.ias-inline-input {
 .spp-section-btn {
   display: flex; align-items: center; gap: 10px;
   width: 100%; padding: 12px 14px;
-  /* --accent is never defined anywhere in this modal's ancestor chain (no
-     wrapper here sets it inline, unlike e.g. .tab-hero elsewhere) -- with
-     no fallback this resolved to a fully transparent background (verified:
-     getComputedStyle -> rgba(0,0,0,0)), so the button had no visible fill
-     at rest and its hover below (opacity/lift) had nothing to fade. Adding
-     the same #0a84ff fallback this stylesheet already uses elsewhere for
-     --accent in other App-Store-shaped UI (see .cq-banner-bar-fill) gives
-     it a real resting color, which is what actually makes the hover show. */
-  background: var(--accent, #0a84ff); color: #fff;
+  /* No background of its own at rest -- same as the other not-yet-answered
+     selectable sections on this preview (.ias-meta-cell--action's Content/
+     Business cells, .ias-achv-section's Achievements card), which are just
+     text + icon over .ias-page with the orange ias-meta-pulse/spp-pulse
+     ring as their sole "needs attention" cue. (A previous pass here gave
+     this button a solid #0a84ff fill to work around --accent being
+     undefined in this modal, but that made it look/behave differently
+     from every other section instead of matching them — reverted.) */
+  background: transparent; color: var(--text);
   border: none; border-radius: 10px; cursor: pointer;
   font-size: 13px; text-align: left;
   margin-bottom: 8px;
   animation: spp-pulse 2s ease-in-out infinite;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: background 0.12s, transform 0.1s;
 }
-.spp-section-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+/* Same --panel-3 highlight as Content/Business (.ias-meta-cell--action)
+   and Achievements (.ias-achv-section) above, for the same reason: this
+   button sits directly on .ias-page's panel-2, so a visible highlight
+   needs a genuinely lighter fill, not a match, not just an opacity fade. */
+.spp-section-btn:hover { background: var(--panel-3); transform: translateY(-1px); }
 .spp-section-btn:active { transform: translateY(0); }
 .spp-section-btn-title { font-weight: 600; font-size: 13px; line-height: 1.2; }
 .spp-section-btn-sub   { font-size: 11px; opacity: 0.8; margin-top: 2px; }
