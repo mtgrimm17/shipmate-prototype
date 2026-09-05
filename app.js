@@ -6454,11 +6454,26 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // Marks a language as "already has an in-flight request translating this
+  // exact source text" — set right before that request goes out, cleared
+  // (success or failure) once it resolves. Without this, adding a second
+  // language while the first is still queued/in flight (see
+  // _enqueueTranslateTask — this is one of potentially hundreds of calls a
+  // single language-add fans out to background of) re-evaluates every
+  // already-supported language too, and since none of them have finished
+  // (so `sourceKey` isn't written yet), they'd all look eligible again and
+  // fire a second, redundant translate request. Keyed per-language on the
+  // entry itself (not shared per-field state) so overlapping calls for
+  // different languages never clobber each other's bookkeeping.
+  const inFlightKey = sourceKey + 'Pending';
 
   const eligible = supportedLangs.filter(lang => {
     const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -6498,6 +6513,15 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
   state.iasTranslatePendingLangs = state.iasTranslatePendingLangs || {};
   state.iasTranslatePendingLangs[field] = eligible.slice();
   _deferredRerenderStepModal();
+
+  // Mark every language this request is about to translate as in flight
+  // for `text`, so a call triggered again before this one resolves (e.g.
+  // adding another language) skips these instead of re-requesting them.
+  if (!fd.localizedStoreText) fd.localizedStoreText = {};
+  eligible.forEach(lang => {
+    if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
+    fd.localizedStoreText[lang][inFlightKey] = text;
+  });
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -6555,9 +6579,10 @@ Rules:
     if (!fd.localizedStoreText) fd.localizedStoreText = {};
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
       const entry = fd.localizedStoreText[lang];
+      delete entry[inFlightKey]; // this attempt is done, whether or not Claude returned a usable value
+      if (typeof translated !== 'string' || !translated.trim()) return;
       // Re-check authority at write time, not just when this batch was
       // kicked off, and re-check it against the CURRENT entry (which may
       // have changed during this API round trip), not a value captured
@@ -6612,6 +6637,13 @@ Rules:
   } catch (e) {
     console.warn('[Store Preview Translate]', field, e.message);
     state.iasTranslateStatus[field] = 'error';
+    // Whole batch failed together — free every language it claimed so a
+    // future call (retry, or another edit landing on the same text) isn't
+    // permanently blocked from ever re-attempting them.
+    eligible.forEach(lang => {
+      const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   // This batch is done (either way) — nothing left pending for it. Any
   // per-language back-translation refresh the success branch just kicked
@@ -6807,11 +6839,18 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here so a second language add doesn't
+  // re-request a language this function is already mid-translating.
+  const inFlightKey = sourceKey + 'Pending';
 
   const eligible = supportedLangs.filter(lang => {
     const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -6834,6 +6873,11 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
   state.masTranslateStatus[field] = 'loading';
   state.masTranslatePendingLangs = state.masTranslatePendingLangs || {};
   state.masTranslatePendingLangs[field] = eligible.slice();
+  if (!ml.localizedStoreText) ml.localizedStoreText = {};
+  eligible.forEach(lang => {
+    if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
+    ml.localizedStoreText[lang][inFlightKey] = text;
+  });
   if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -6889,9 +6933,10 @@ Rules:
     if (!ml.localizedStoreText) ml.localizedStoreText = {};
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
       const entry = ml.localizedStoreText[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       const backEntry = _masLocReviewBackTranslationEntry(field, lang);
@@ -6903,6 +6948,10 @@ Rules:
   } catch (e) {
     console.warn('[Mac App Store Preview Translate]', field, e.message);
     state.masTranslateStatus[field] = 'error';
+    eligible.forEach(lang => {
+      const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.masTranslatePendingLangs[field] = [];
 
@@ -7655,11 +7704,17 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   const eligible = supportedLangs.filter(lang => {
     const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -7683,6 +7738,11 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
   state.steamTranslateStatus[field] = 'loading';
   state.steamTranslatePendingLangs = state.steamTranslatePendingLangs || {};
   state.steamTranslatePendingLangs[field] = eligible.slice();
+  if (!ws.localizedStoreText) ws.localizedStoreText = {};
+  eligible.forEach(lang => {
+    if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
+    ws.localizedStoreText[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -7738,9 +7798,10 @@ Rules:
     if (!ws.localizedStoreText) ws.localizedStoreText = {};
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
       const entry = ws.localizedStoreText[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       // Re-check Steam authority at write time, not just when this batch
       // was kicked off — mirrors _iasTriggerAutoTranslate's own guard (see
       // its comment) for the same race: _checkSteamLocalizedListing's Steam
@@ -7767,6 +7828,10 @@ Rules:
   } catch (e) {
     console.warn('[Steam Store Preview Translate]', field, e.message);
     state.steamTranslateStatus[field] = 'error';
+    eligible.forEach(lang => {
+      const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.steamTranslatePendingLangs[field] = [];
 
@@ -8922,12 +8987,18 @@ async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   if (!p.locs) p.locs = {};
   const eligible = supportedLangs.filter(lang => {
     const entry = p.locs[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -8953,6 +9024,10 @@ async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
   state.iapLocTranslatePendingLangs = state.iapLocTranslatePendingLangs || {};
   state.iapLocTranslatePendingLangs[iapId] = state.iapLocTranslatePendingLangs[iapId] || {};
   state.iapLocTranslatePendingLangs[iapId][field] = eligible.slice();
+  eligible.forEach(lang => {
+    if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+    p.locs[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -9010,9 +9085,10 @@ Rules:
 
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
       const entry = p.locs[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
@@ -9024,6 +9100,10 @@ Rules:
   } catch (e) {
     console.warn('[IAP Localizations Translate]', iapId, field, e.message);
     state.iapLocTranslateStatus[iapId][field] = 'error';
+    eligible.forEach(lang => {
+      const entry = p.locs[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.iapLocTranslatePendingLangs[iapId][field] = [];
   _deferredRerenderStepModal();
@@ -9460,12 +9540,18 @@ async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   if (!p.locs) p.locs = {};
   const eligible = supportedLangs.filter(lang => {
     const entry = p.locs[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -9489,6 +9575,10 @@ async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
   state.masIapLocTranslatePendingLangs = state.masIapLocTranslatePendingLangs || {};
   state.masIapLocTranslatePendingLangs[iapId] = state.masIapLocTranslatePendingLangs[iapId] || {};
   state.masIapLocTranslatePendingLangs[iapId][field] = eligible.slice();
+  eligible.forEach(lang => {
+    if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+    p.locs[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -9543,9 +9633,10 @@ Rules:
 
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
       const entry = p.locs[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
@@ -9557,6 +9648,10 @@ Rules:
   } catch (e) {
     console.warn('[Mac App Store IAP Localizations Translate]', iapId, field, e.message);
     state.masIapLocTranslateStatus[iapId][field] = 'error';
+    eligible.forEach(lang => {
+      const entry = p.locs[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.masIapLocTranslatePendingLangs[iapId][field] = [];
   _deferredRerenderStepModal();
@@ -11272,12 +11367,20 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here. Achievements are the dominant
+  // term in the fan-out that comment describes, so this is where a
+  // redundant re-translate is most costly to skip on.
+  const inFlightKey = sourceKey + 'Pending';
 
   if (!a.locs) a.locs = {};
   const eligible = supportedLangs.filter(lang => {
     const entry = a.locs[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -11302,6 +11405,10 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
   state.masAchLocTranslatePendingLangs = state.masAchLocTranslatePendingLangs || {};
   state.masAchLocTranslatePendingLangs[achId] = state.masAchLocTranslatePendingLangs[achId] || {};
   state.masAchLocTranslatePendingLangs[achId][field] = eligible.slice();
+  eligible.forEach(lang => {
+    if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+    a.locs[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -11359,9 +11466,10 @@ Rules:
 
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
       const entry = a.locs[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       // Same Steam-authority write-time guard as _iasTriggerAutoTranslate's
       // own descriptionFromSteam check (see that function's comment for the
       // full race explanation) — only fires when Steam's cached source text
@@ -11383,6 +11491,10 @@ Rules:
   } catch (e) {
     console.warn('[Mac App Store Achievement Localizations Translate]', achId, field, e.message);
     state.masAchLocTranslateStatus[achId][field] = 'error';
+    eligible.forEach(lang => {
+      const entry = a.locs[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.masAchLocTranslatePendingLangs[achId][field] = [];
   _deferredRerenderStepModal();
@@ -11863,12 +11975,18 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   if (!a.locs) a.locs = {};
   const eligible = supportedLangs.filter(lang => {
     const entry = a.locs[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -11893,6 +12011,10 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
   state.iasAchLocTranslatePendingLangs = state.iasAchLocTranslatePendingLangs || {};
   state.iasAchLocTranslatePendingLangs[achId] = state.iasAchLocTranslatePendingLangs[achId] || {};
   state.iasAchLocTranslatePendingLangs[achId][field] = eligible.slice();
+  eligible.forEach(lang => {
+    if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+    a.locs[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -11947,9 +12069,10 @@ Rules:
 
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
       const entry = a.locs[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       if (entry[field + 'FromSteam'] && entry[sourceKey] === text) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
@@ -11963,6 +12086,10 @@ Rules:
   } catch (e) {
     console.warn('[App Store Achievement Localizations Translate]', achId, field, e.message);
     state.iasAchLocTranslateStatus[achId][field] = 'error';
+    eligible.forEach(lang => {
+      const entry = a.locs[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.iasAchLocTranslatePendingLangs[achId][field] = [];
   _deferredRerenderStepModal();
@@ -12443,12 +12570,18 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   if (!a.locs) a.locs = {};
   const eligible = supportedLangs.filter(lang => {
     const entry = a.locs[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -12473,6 +12606,10 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
   state.macFullAchLocTranslatePendingLangs = state.macFullAchLocTranslatePendingLangs || {};
   state.macFullAchLocTranslatePendingLangs[achId] = state.macFullAchLocTranslatePendingLangs[achId] || {};
   state.macFullAchLocTranslatePendingLangs[achId][field] = eligible.slice();
+  eligible.forEach(lang => {
+    if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+    a.locs[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -12527,9 +12664,10 @@ Rules:
 
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
       const entry = a.locs[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       // Same Steam-authority write-time guard as _iasTriggerAutoTranslate's
       // own descriptionFromSteam check (see that function's comment for the
       // full race explanation) — only fires when Steam's cached source text
@@ -12551,6 +12689,10 @@ Rules:
   } catch (e) {
     console.warn('[Mac App Store Full Achievement Localizations Translate]', achId, field, e.message);
     state.macFullAchLocTranslateStatus[achId][field] = 'error';
+    eligible.forEach(lang => {
+      const entry = a.locs[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.macFullAchLocTranslatePendingLangs[achId][field] = [];
   _deferredRerenderStepModal();
@@ -13072,11 +13214,17 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   const eligible = supportedLangs.filter(lang => {
     const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -13099,6 +13247,11 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
   state.macFullTranslateStatus[field] = 'loading';
   state.macFullTranslatePendingLangs = state.macFullTranslatePendingLangs || {};
   state.macFullTranslatePendingLangs[field] = eligible.slice();
+  if (!ml.localizedStoreText) ml.localizedStoreText = {};
+  eligible.forEach(lang => {
+    if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
+    ml.localizedStoreText[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -13154,9 +13307,10 @@ Rules:
     if (!ml.localizedStoreText) ml.localizedStoreText = {};
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
       const entry = ml.localizedStoreText[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
@@ -13168,6 +13322,10 @@ Rules:
   } catch (e) {
     console.warn('[Mac App Store Full Preview Translate]', field, e.message);
     state.macFullTranslateStatus[field] = 'error';
+    eligible.forEach(lang => {
+      const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.macFullTranslatePendingLangs[field] = [];
 
@@ -13561,12 +13719,18 @@ async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
 
   const text      = (primaryValue || '').trim();
   const sourceKey = field + 'SourceText';
+  // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+  // file) — same mechanism, applied here.
+  const inFlightKey = sourceKey + 'Pending';
 
   if (!p.locs) p.locs = {};
   const eligible = supportedLangs.filter(lang => {
     const entry = p.locs[lang];
-    const cachedSource = entry ? entry[sourceKey] : undefined;
-    return cachedSource !== text;
+    const cachedSource  = entry ? entry[sourceKey]   : undefined;
+    const pendingSource = entry ? entry[inFlightKey] : undefined;
+    if (cachedSource === text) return false;
+    if (pendingSource === text) return false;
+    return true;
   });
   if (!eligible.length) return;
 
@@ -13590,6 +13754,10 @@ async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
   state.macFullIapLocTranslatePendingLangs = state.macFullIapLocTranslatePendingLangs || {};
   state.macFullIapLocTranslatePendingLangs[iapId] = state.macFullIapLocTranslatePendingLangs[iapId] || {};
   state.macFullIapLocTranslatePendingLangs[iapId][field] = eligible.slice();
+  eligible.forEach(lang => {
+    if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
+    p.locs[lang][inFlightKey] = text;
+  });
   _deferredRerenderStepModal();
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
@@ -13644,9 +13812,10 @@ Rules:
 
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (typeof translated !== 'string' || !translated.trim()) return;
       if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
       const entry = p.locs[lang];
+      delete entry[inFlightKey];
+      if (typeof translated !== 'string' || !translated.trim()) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
@@ -13658,6 +13827,10 @@ Rules:
   } catch (e) {
     console.warn('[Mac App Store Full IAP Localizations Translate]', iapId, field, e.message);
     state.macFullIapLocTranslateStatus[iapId][field] = 'error';
+    eligible.forEach(lang => {
+      const entry = p.locs[lang];
+      if (entry) delete entry[inFlightKey];
+    });
   }
   state.macFullIapLocTranslatePendingLangs[iapId][field] = [];
   _deferredRerenderStepModal();
