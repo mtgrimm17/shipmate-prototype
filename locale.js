@@ -55,10 +55,25 @@ async function loadLocale(lang) {
   // Restrict further to locales that are actually deployed
   if (!AVAILABLE_LANGUAGES.includes(lang)) lang = 'en';
 
-  // Always load English as fallback layer first
+  // Always load English as fallback layer first.
+  // cache: 'no-store' is deliberate and load-bearing here, unlike every
+  // other asset in this app: index.html's script/style tags all carry a
+  // "?v=X.XX" cache-busting param bumped every release (see the versioning
+  // convention this project follows), so a browser's HTTP cache always sees
+  // a new URL after a deploy -- but these locale JSON files are fetched by
+  // a bare relative path with no such param, so without forcing the cache
+  // to be bypassed, a browser (or an intermediary cache) that already has
+  // an older locales/en.json cached can keep serving it indefinitely, even
+  // after this exact file changes on disk and a new version ships. That
+  // silently reintroduces whatever stale copy/labels shipped in a previous
+  // release (e.g. a step label override added here in one version not
+  // showing up until a hard-refresh) with no visible error, since the fetch
+  // itself still succeeds. Confirmed cause of a real regression: a step
+  // label fixed in en.json in v5.28 kept reading as its old value for
+  // exactly this reason.
   if (!Object.keys(_fallback).length) {
     try {
-      const r = await fetch('locales/en.json');
+      const r = await fetch('locales/en.json', { cache: 'no-store' });
       if (r.ok) _fallback = await r.json();
     } catch (e) {
       console.warn('[i18n] Could not load en.json fallback:', e.message);
@@ -74,7 +89,9 @@ async function loadLocale(lang) {
   }
 
   try {
-    const r = await fetch(`locales/${lang}.json`);
+    // Same cache: 'no-store' reasoning as the en.json fetch above -- this
+    // bare relative path has no cache-busting param either.
+    const r = await fetch(`locales/${lang}.json`, { cache: 'no-store' });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     _locale = await r.json();
     _activeLang = lang;

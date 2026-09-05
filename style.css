@@ -4479,9 +4479,19 @@ body.viewing-splash .app-subnav { display: none; }
    Description/Release Notes on iOS, Mac App Store, and Mac App Store Full's
    Product Page Previews, plus Localization Review/IAP Loc fields that reuse
    this same class) -- mirrors Steam Store Page Preview's own inline-field
-   hover treatment. Matches this file's existing "tint on hover" idiom
-   (.ias-meta-cell--action:hover / .ias-info-section--action:hover below). */
-.ias-editable:hover { background: var(--panel-2); }
+   hover treatment. Uses --panel-3 rather than this file's more common
+   --panel-2 "tint on hover" idiom (.ias-meta-cell--action:hover /
+   .ias-info-section--action:hover below): those two sit on a meta-strip/
+   section with no background of their own, so panel-2 reads as a visible
+   fill there, but .ias-editable's own fields (Title/Subtitle/Description/
+   Release Notes) sit directly on .ias-page's background, which IS
+   panel-2 -- and loc-review-field/iap-loc-field sit directly on
+   .loc-review-card/.iap-loc-card, which are ALSO panel-2 -- so panel-2
+   here would be the exact same color already behind every one of these
+   fields, an invisible no-op hover. panel-3 is the established "one step
+   lighter than panel-2" tone this file already uses for exactly that
+   scenario (see .ias-icon-empty, also placed directly on .ias-page). */
+.ias-editable:hover { background: var(--panel-3); }
 .ias-placeholder { animation: ias-meta-pulse 2s ease-in-out infinite; }
 /* "What's New" is optional for a first submission (only required for updates),
    so it should not pulse/glow as a mandatory empty field. Still click-to-edit. */
