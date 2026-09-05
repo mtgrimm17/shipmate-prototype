@@ -4894,7 +4894,20 @@ async function _checkSteamLocalizedDescription(lang) {
     // nothing stale here even before the flag check is consulted.
     entry.descriptionSourceText = state.formData.description || '';
   }
-  reRenderStepModal();
+  // Deferred, not direct — this resolves on its own independently-timed
+  // network fetch, often seconds after the language-add that kicked it off,
+  // by which point the user may well be clicking or scrolling around
+  // whichever step modal happens to be open. Same guard every
+  // *TriggerAutoTranslate function uses (_deferredRerenderStepModal's own
+  // comment, above) — this function and its four siblings below
+  // (_checkSteamLocalizedListing/_checkSteamLocalizedAchievements/
+  // _checkIosLocalizedAchievements/_checkMacFullLocalizedAchievements) were
+  // the gap v5.25's fix missed: all five are fired from the exact same
+  // language-add call sites (toggleObLang, addLangFromSearch,
+  // _checkSteamLocalizedDescriptionForNewLangs) as the ten *TriggerAutoTranslate
+  // functions that fix covered, but weren't themselves *TriggerAutoTranslate
+  // functions, so they kept calling reRenderStepModal() directly.
+  _deferredRerenderStepModal();
 }
 
 // Sibling to _checkSteamLocalizedDescription above — same "genuine Steam
@@ -5055,7 +5068,9 @@ async function _checkSteamLocalizedListing(lang) {
     wsEntry.aboutGameSourceText = ws.aboutGame || '';
   }
 
-  reRenderStepModal();
+  // Deferred — see _checkSteamLocalizedDescription's own comment above for
+  // why this can't be a direct reRenderStepModal() call.
+  _deferredRerenderStepModal();
 }
 
 // Defense-in-depth backstop for every "*FromSteam" authority flag this
@@ -11627,7 +11642,9 @@ async function _checkSteamLocalizedAchievements(lang) {
       if (backEntry.syncedTopText !== localizedDesc) _masAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
     }
   });
-  if (changed) reRenderStepModal();
+  // Deferred — see _checkSteamLocalizedDescription's own comment (above,
+  // this file) for why this can't be a direct reRenderStepModal() call.
+  if (changed) _deferredRerenderStepModal();
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -12167,7 +12184,9 @@ async function _checkIosLocalizedAchievements(lang) {
       if (backEntry.syncedTopText !== localizedDesc) _iasAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
     }
   });
-  if (changed) reRenderStepModal();
+  // Deferred — see _checkSteamLocalizedDescription's own comment (above,
+  // this file) for why this can't be a direct reRenderStepModal() call.
+  if (changed) _deferredRerenderStepModal();
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -12785,7 +12804,9 @@ async function _checkMacFullLocalizedAchievements(lang) {
       if (backEntry.syncedTopText !== localizedDesc) _macFullAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
     }
   });
-  if (changed) reRenderStepModal();
+  // Deferred — see _checkSteamLocalizedDescription's own comment (above,
+  // this file) for why this can't be a direct reRenderStepModal() call.
+  if (changed) _deferredRerenderStepModal();
 }
 
 /* ══════════════════════════════════════════════════════════════════════
