@@ -2233,6 +2233,65 @@ function _deferredRerenderStepModal() {
   }, true);
 })();
 
+// ── Shared throttle for background auto-translate network calls ────────
+// Adding a language (or a Steam scrape's initial import) can fan out into a
+// LOT of translate calls at once: _propagateAllLocalizationFeatures runs
+// every *TriggerAutoTranslate function below across every platform, and the
+// achievement/IAP ones loop over every SAVED achievement/product times every
+// translatable field. A Steam-linked title with a big achievement list makes
+// this concrete — Hades has 49 achievements, imported into all three of Mac
+// App Store/App Store/Mac App Store Full's own Game Center lists
+// (_applySteamAchievements), so adding ONE supporting language fires
+// 49 achievements x 3 fields x 3 platforms = 441 separate Claude API calls,
+// all started in the same synchronous pass (each *TriggerAutoTranslate call
+// is fire-and-forget, not awaited by its caller). Firing all 441 at once
+// isn't just wasteful — real-world network/API concurrency limits mean a
+// large fraction end up genuinely in flight together, and when a cluster of
+// them resolves at close to the same moment, draining hundreds of Promise
+// continuations back to back (JSON.parse of each response, the per-language
+// forEach, back-translation refresh, a status write) is enough continuous
+// synchronous work to make the tab visibly unresponsive for as long as that
+// backlog keeps arriving — reported as Shipmate "freezing up" after a
+// Steam scrape + adding languages, for exactly this reason.
+//
+// _enqueueTranslateTask queues the actual network call (NOT the cheap
+// eligibility-check/loading-state part every *TriggerAutoTranslate function
+// still does immediately, synchronously, before enqueueing — so every
+// field's status flips to "loading" right away with no visible delay) and
+// only ever runs TRANSLATE_CONCURRENCY of them at a time, across every
+// platform's translate functions combined (one shared queue, not one per
+// platform — the 441-call fan-out above is the sum across all three, so
+// throttling each platform independently would still let 3x
+// TRANSLATE_CONCURRENCY run at once). Queued-but-not-yet-running tasks are
+// just plain closures sitting in an array — cheap to hold thousands of, so
+// nothing here caps how many languages/achievements can be queued, only how
+// many are ever actually in flight to Claude at once. This keeps the
+// completions trickling in a few at a time instead of arriving in one huge
+// burst, so the main thread is never asked to drain hundreds of them back to
+// back — background translation keeps making progress exactly as before,
+// it's just spread out over time instead of piled up in one moment.
+const TRANSLATE_CONCURRENCY = 4;
+const _translateQueue = [];
+let _translateActiveCount = 0;
+
+function _pumpTranslateQueue() {
+  while (_translateActiveCount < TRANSLATE_CONCURRENCY && _translateQueue.length) {
+    const { taskFn, resolve, reject } = _translateQueue.shift();
+    _translateActiveCount++;
+    Promise.resolve().then(taskFn).then(
+      result => { _translateActiveCount--; resolve(result); _pumpTranslateQueue(); },
+      err     => { _translateActiveCount--; reject(err);    _pumpTranslateQueue(); }
+    );
+  }
+}
+
+function _enqueueTranslateTask(taskFn) {
+  return new Promise((resolve, reject) => {
+    _translateQueue.push({ taskFn, resolve, reject });
+    _pumpTranslateQueue();
+  });
+}
+
 /* ── Global fixed-position tooltip ───────────────────── */
 // Single delegated handler on document — avoids overflow/z-index clipping
 // from scrolling containers. Tooltip text lives in data-tip on the anchor.
@@ -6424,6 +6483,11 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued, not called directly — see _enqueueTranslateTask's own comment
+    // (above, this file) for why: this call is one of potentially hundreds
+    // fired at once by a single language-add, and only a handful are ever
+    // allowed to actually be in flight to Claude at a time.
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -6502,6 +6566,7 @@ Rules:
     });
 
     state.iasTranslateStatus[field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Store Preview Translate]', field, e.message);
     state.iasTranslateStatus[field] = 'error';
@@ -6755,6 +6820,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -6790,6 +6857,7 @@ Rules:
     });
 
     state.masTranslateStatus[field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Mac App Store Preview Translate]', field, e.message);
     state.masTranslateStatus[field] = 'error';
@@ -7601,6 +7669,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -7651,6 +7721,7 @@ Rules:
     });
 
     state.steamTranslateStatus[field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Steam Store Preview Translate]', field, e.message);
     state.steamTranslateStatus[field] = 'error';
@@ -8871,6 +8942,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -8905,6 +8978,7 @@ Rules:
     });
 
     state.iapLocTranslateStatus[iapId][field] = 'complete';
+    });
   } catch (e) {
     console.warn('[IAP Localizations Translate]', iapId, field, e.message);
     state.iapLocTranslateStatus[iapId][field] = 'error';
@@ -9401,6 +9475,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -9435,6 +9511,7 @@ Rules:
     });
 
     state.masIapLocTranslateStatus[iapId][field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Mac App Store IAP Localizations Translate]', iapId, field, e.message);
     state.masIapLocTranslateStatus[iapId][field] = 'error';
@@ -11211,6 +11288,11 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    // Achievements are the dominant term in the fan-out that comment
+    // describes: every saved achievement times every translatable field,
+    // for this platform alone.
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -11255,6 +11337,7 @@ Rules:
     });
 
     state.masAchLocTranslateStatus[achId][field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Mac App Store Achievement Localizations Translate]', achId, field, e.message);
     state.masAchLocTranslateStatus[achId][field] = 'error';
@@ -11796,6 +11879,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -11832,6 +11917,7 @@ Rules:
     });
 
     state.iasAchLocTranslateStatus[achId][field] = 'complete';
+    });
   } catch (e) {
     console.warn('[App Store Achievement Localizations Translate]', achId, field, e.message);
     state.iasAchLocTranslateStatus[achId][field] = 'error';
@@ -12373,6 +12459,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -12417,6 +12505,7 @@ Rules:
     });
 
     state.macFullAchLocTranslateStatus[achId][field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Mac App Store Full Achievement Localizations Translate]', achId, field, e.message);
     state.macFullAchLocTranslateStatus[achId][field] = 'error';
@@ -12996,6 +13085,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -13031,6 +13122,7 @@ Rules:
     });
 
     state.macFullTranslateStatus[field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Mac App Store Full Preview Translate]', field, e.message);
     state.macFullTranslateStatus[field] = 'error';
@@ -13484,6 +13576,8 @@ Rules:
 - Include every requested language code as a key.`;
 
   try {
+    // Queued — see _enqueueTranslateTask's own comment (above, this file).
+    await _enqueueTranslateTask(async () => {
     const res = await fetch(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -13518,6 +13612,7 @@ Rules:
     });
 
     state.macFullIapLocTranslateStatus[iapId][field] = 'complete';
+    });
   } catch (e) {
     console.warn('[Mac App Store Full IAP Localizations Translate]', iapId, field, e.message);
     state.macFullIapLocTranslateStatus[iapId][field] = 'error';
