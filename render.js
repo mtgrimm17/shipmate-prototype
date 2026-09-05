@@ -823,18 +823,17 @@ function buildObPlatTilesHTML() {
      brand-coloured artwork that ignores the tile's state.
 
      Grid class: the prototype renders `cols===3 ? 'pg-6' : 'pg-3'`, and cols
-     is 3, so what it actually draws is (this repo's own) pg-7 now that Mac
-     App Store's tile makes it seven, not six — one row, one column wider
-     than the prototype's own layout ever needed (see style.css's .pg-7,
-     added alongside .pg-6/.pg-3/.pg-2). The bare .platform-grid's
-     repeat(4,1fr) is only the fallback.
+     is 3, so what it actually draws is (this repo's own) pg-8 now that Mac
+     App Store's and Mac App Store Full's own tiles make it eight, not six —
+     one row, two columns wider than the prototype's own layout ever needed
+     (see style.css's .pg-8, added alongside .pg-6/.pg-7/.pg-3/.pg-2). The
+     bare .platform-grid's repeat(4,1fr) is only the fallback.
 
-     Mac App Store Full's own tile (id: 'macos_full' above) is filtered out
-     here while it's hidden again (HIDDEN_PLATFORMS, further up this file) —
-     bringing it back later is deleting 'macos_full' from that Set, not
-     re-adding the tile (it's still right here in PLATFORMS_OB, untouched).
-     Leaves exactly 7 tiles again, so the grid below is back to pg-7 (it was
-     briefly pg-8 while all 8 tiles showed). */
+     HIDDEN_PLATFORMS (further up this file) is currently empty, so nothing
+     is filtered out of PLATFORMS_OB below — all 8 tiles show, hence pg-8.
+     Hiding one again later drops the grid back to pg-7 (see the git
+     history around "hide"/"un-hide Mac App Store Full platform" for the
+     exact precedent). */
   const tiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id)).map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -849,7 +848,7 @@ function buildObPlatTilesHTML() {
                     onclick="toggleOnboardingPlatform('${id}')"
                     data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="platform-grid pg-7">${tiles}</div>`;
+  return `<div class="platform-grid pg-8">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -1780,15 +1779,13 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // is walked (e.g. the Analysis folder's "Add Permissions" list,
 // buildPerfPermissions) — this only controls whether a hidden platform can
 // be newly selected/activated, not every place its id could ever appear.
-// Mac App Store Full is hidden again while more work continues on it (it
-// was briefly un-hidden — see the git history around "un-hide Mac App
-// Store Full platform" for that reversal, which is exactly what this one
-// reverses). Nothing about the platform itself was touched: every step,
-// its own independent answers/listing state, the new App Information
-// section, Game Center Achievements/Leaderboards — all of it stays fully
-// intact in PLATFORMS (state.js) and is one line (removing 'macos_full'
-// from this Set) away from being selectable again.
-const HIDDEN_PLATFORMS = new Set(['macos_full']);
+// Platforms temporarily hidden from Game Details' "Select platforms" tile
+// grid and Submission's "+ Add platform" picker, without touching anything
+// about the platform itself (PLATFORMS in state.js, every step, its own
+// independent answers/listing state, stays fully intact) — see the git
+// history around "hide"/"un-hide Mac App Store Full platform" for the
+// precedent this mechanism follows. Empty for now — nothing hidden.
+const HIDDEN_PLATFORMS = new Set([]);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
