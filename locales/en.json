@@ -69,6 +69,8 @@
   "step.business": "Business",
   "step.storePreview": "Store Page Preview",
   "step.ios.storePreview": "Product Page Preview",
+  "step.macos.storePreview": "Product Page Preview",
+  "step.macos_full.storePreview": "Product Page Preview",
   "step.android.storePreview": "Store Listing Preview",
   "step.dataSafety": "Data Safety",
   "step.storeTags": "Store Tags",
