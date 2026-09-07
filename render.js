@@ -5714,38 +5714,54 @@ function _wsMediaFieldsHTML(ws) {
   const trailerFile = ws.trailerFile || null;
   const steamTrailerHTML = _steamTrailerPreviewHTML(state.uploads?.steamTrailer);
   return `
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots</label>
+    ${/* ONE WELL HERE TOO. This panel still had the pair — a screenshots
+          dropzone and a trailer dropzone with the icon field between them —
+          while the Assets tab had already been merged into a single well.
+          Same reasoning as there: a file's MIME type already says what it is,
+          so one target can read it and route it, and two targets only ask the
+          developer to sort their own files.
+
+          It routes to this surface's OWN handlers, which is why it cannot
+          just call handleMediaFiles: screenshots dropped here go to
+          state.webSite.screenshots, the Web platform's separate copy, not to
+          the master list the Assets tab feeds. */''}
+    <label class="task-content-label" style="display:block;margin-bottom:6px;">Screenshots &amp; trailer</label>
     <div class="asset-dropzone" id="ws-screenshot-dropzone"
          onclick="document.getElementById('ws-screenshot-input').click()"
          ondragover="event.preventDefault(); this.classList.add('is-over')"
          ondragleave="this.classList.remove('is-over')"
-         ondrop="handleWebScreenshotDrop(event); this.classList.remove('is-over')">
+         ondrop="handleWebMediaDrop(event); this.classList.remove('is-over')">
       <div class="asset-dropzone-icon">↑</div>
-      <div class="asset-dropzone-label">Drop screenshots here, or click to browse</div>
-      <div class="asset-dropzone-hint">PNG or JPG, any size</div>
-      <input type="file" id="ws-screenshot-input" multiple accept="image/*" style="display:none"
-             onchange="handleWebScreenshotFiles(this.files); this.value=''">
+      <div class="asset-dropzone-label">Drop screenshots, key art or your trailer here</div>
+      <div class="asset-dropzone-hint">PNG, JPG or MP4 · Multiple files accepted</div>
+      <input type="file" id="ws-screenshot-input" multiple accept="image/*,video/*" style="display:none"
+             onchange="handleWebMediaFiles(this.files); this.value=''">
     </div>
     ${/* THE POOL, INSIDE THE WELL, same as the Assets tab does it. Dropping a
-          file here already filed it in the library (handleWebScreenshotFiles
-          goes through smAddFile), but there was no way to draw FROM the
-          library — so a screenshot uploaded on the Assets tab was invisible
-          here and had to be uploaded a second time. One pool, two doors. */''}
-    <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
-    <div class="asset-grid" id="ws-screenshot-grid" style="margin-bottom:16px;">${_wsScreenshotGridHTML(shots)}</div>
+          file here already filed it in the library (the handlers go through
+          smAddFile), but there was no way to draw FROM the library — so a
+          screenshot uploaded on the Assets tab was invisible here and had to
+          be uploaded a second time. One pool, two doors. */''}
+    ${/* THE LIBRARY IS THE ONLY GRID HERE NOW. A second one — .asset-grid#
+          ws-screenshot-grid — used to sit under it showing the same
+          screenshots again as uniform cards, so every capture appeared twice:
+          once sorted into its group above, once in a flat row below. The
+          Assets tab lost its duplicate for the same reason; this panel kept
+          its own until now.
 
-    <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailer</label>
-    <div class="asset-dropzone asset-dropzone-sm" id="ws-trailer-dropzone"
-         onclick="document.getElementById('ws-trailer-input').click()"
-         ondragover="event.preventDefault(); this.classList.add('is-over')"
-         ondragleave="this.classList.remove('is-over')"
-         ondrop="handleWebTrailerDrop(event); this.classList.remove('is-over')">
-      <div class="asset-dropzone-icon">↑</div>
-      <div class="asset-dropzone-label">Drop a trailer file here, or click to browse</div>
-      <div class="asset-dropzone-hint">MP4 or MOV, any size</div>
-      <input type="file" id="ws-trailer-input" accept="video/*" style="display:none"
-             onchange="handleWebTrailerFiles(this.files); this.value=''">
-    </div>
+          The pieces that fed it (renderWebScreenshotGridInto, removeWebScreen-
+          shot, _wsScreenshotGridHTML) are left in place: the element simply
+          is not rendered here, and those functions all no-op on a missing
+          #ws-screenshot-grid. Deleting them would also delete the Steam
+          Assets section's use of the same code.
+
+          ONE CONSEQUENCE, worth naming: removing a screenshot is now the
+          library's hold-to-delete, which drops the asset from the pool and
+          from every list at once. There is no longer a way to keep a file but
+          exclude it from the website specifically — that distinction existed
+          only in this grid, and nothing in the app asked for it. */''}
+    <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
+
     ${steamTrailerHTML}
     <div id="ws-trailer-file-info" style="margin-bottom:8px;${trailerFile ? '' : 'display:none;'}">${trailerFile ? trailerFileRowHTML(trailerFile.name, (trailerFile.size / 1024 / 1024).toFixed(1), 'ws-') : ''}</div>
     <div class="asset-url-row" style="margin-bottom:16px;">

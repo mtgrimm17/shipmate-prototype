@@ -10326,6 +10326,23 @@ function handleWebScreenshotFiles(files) {
     const id = 'wsss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
     smAddFile(file, assetId => {
       if (!assetId) return;
+      const a = typeof smGet === 'function' ? smGet(assetId) : null;
+
+      /* THE WELL TAKES EVERYTHING; THIS LIST DOES NOT — the same rule
+         handleScreenshotFiles follows, which this handler never received.
+
+         The library was classifying correctly all along and this list ignored
+         it: every image went in, so the logotype, the key art and the app icon
+         were all filed as screenshots of the game. That is not cosmetic.
+         webSite.screenshots is what draws the page's screenshot strip, so a
+         logotype in it gets published as a screenshot of the game.
+
+         Correct a label later and the file moves, because the list is rebuilt
+         from the pool rather than appended to once and forgotten. */
+      if (!a || a.kind !== 'screenshot') {
+        if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+        return;
+      }
       state.webSite.screenshots.push({ id, ref: assetId });
       const grid = document.getElementById('ws-screenshot-grid');
       if (grid) renderWebScreenshotGridInto(grid);
@@ -10345,6 +10362,25 @@ function handleWebTrailerDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('is-over');
   handleWebTrailerFiles(e.dataTransfer.files);
+}
+
+/* The Media panel's own router, mirroring handleMediaFiles for the Assets
+   tab. It cannot BE that function: screenshots dropped on this surface go to
+   state.webSite.screenshots — the Web platform's own copy, see the note above
+   webSite.screenshots in state.js — rather than to the master list. Only the
+   first video is taken, because webSite.trailerFile is a single slot. */
+function handleWebMediaFiles(files) {
+  const list = Array.from(files || []);
+  const vids = list.filter(f => f.type && f.type.startsWith('video/'));
+  const imgs = list.filter(f => !f.type || !f.type.startsWith('video/'));
+  if (imgs.length) handleWebScreenshotFiles(imgs);
+  if (vids.length) handleWebTrailerFiles([vids[0]]);
+}
+
+function handleWebMediaDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleWebMediaFiles(e.dataTransfer.files);
 }
 
 function handleWebTrailerFiles(files) {

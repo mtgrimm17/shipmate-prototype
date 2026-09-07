@@ -157,6 +157,27 @@ const SM_SHOT_SIZES = (() => {
 })();
 const smIsShot = a => SM_SHOT_SIZES.some(([w, h]) => a.w === w && a.h === h);
 
+/* AND A CAPTURE THAT MATCHES NO STORE'S SIZE IS STILL A CAPTURE.
+
+   The exact-match list above is the strong signal, but it only knows sizes
+   stores ASK for, and developers capture at their monitor's. 2560x1440 is in
+   no store's table, so a 1440p screenshot fell through to the ratio test and
+   came out 'art-land' — key art. Harmless while the lists took everything;
+   not harmless now that the page's screenshot strip only accepts things
+   labelled 'screenshot', because that capture would never reach the page.
+
+   LANDSCAPE ONLY, and that limit is deliberate rather than lazy. Portrait
+   phone captures are 2:3 and 9:16 — and so is portrait key art: 1440x2160 is
+   exactly 2:3. There is no ratio that separates them, so widening that side
+   would trade one misclassification for another. Landscape has room: screens
+   are 1.3 to 1.85, and key art in this app is 3840x1240, which is 3.1.
+
+   The width floor keeps decorative artwork out. A real capture comes off a
+   real display; nothing 1024px wide or less is one. */
+const smLooksLikeShot = a =>
+  !a.alpha && a.w >= 1024 && a.w > a.h &&
+  (a.w / a.h) >= 1.3 && (a.w / a.h) <= 1.85;
+
 /* THE ORDER IS THE DESIGN.
 
    Alpha is tested first because it is the strongest single bit in the file:
@@ -177,6 +198,7 @@ function smAssetKind(a) {
   if (a.alpha)            return a.w === a.h ? 'icon' : 'logo';
   if (a.w === a.h)        return 'icon';
   if (smIsShot(a))        return 'screenshot';
+  if (smLooksLikeShot(a)) return 'screenshot';
   if (a.w / a.h >= 1.6)   return 'art-land';
   if (a.w / a.h <= 0.85)  return 'art-port';
   return 'other';
@@ -605,6 +627,6 @@ function smIsOwn(v) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SM_REQS, SM_NO_SPEC, SM_KINDS, SM_KIND_LABEL, SM_KIND_SHORT,
-                     SM_SHOT_SIZES, smAssetKind, smIsShot, smFits, smCovers, smCoverage,
+                     SM_SHOT_SIZES, smAssetKind, smIsShot, smLooksLikeShot, smFits, smCovers, smCoverage,
                      smSourceSet, smShotNeeds, SM_SOURCE_FOR };
 }

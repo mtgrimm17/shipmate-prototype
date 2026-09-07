@@ -1606,3 +1606,17 @@ body.wp-full-open{overflow:hidden}
    own .lightbox rules collided with it by name. The page's screenshots call
    his, which is the right answer twice over: one viewer to maintain, and it
    already behaves the way the rest of the app does. */
+
+
+/* ── THE HERO'S ITEMS WAIT UNTIL THEY ARE PLACED ──────────────────────────
+   See webPageMount in web-page.js. .is-placing is on #site from the moment
+   the page is mounted until the measuring pass has actually run, which on a
+   card flip is not until the rotation has finished — the pass will not
+   measure a transformed ancestor.
+
+   OPACITY, not visibility or display: the pass measures these elements, so
+   they have to keep their layout. And the transition is on the base rule
+   rather than on .is-placing, so it fades them IN and does not animate them
+   out on the next mount. */
+#site .hero-stage .el { transition: opacity .18s ease-out; }
+#site.is-placing .hero-stage .el { opacity: 0; }

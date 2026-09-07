@@ -1342,6 +1342,21 @@ if (typeof document !== 'undefined' && !webPageSelect._esc) {
 function webPageMount() {
   site = document.getElementById('site');
   if (!site || !M) return;
+  /* HOLD THE FLOATING ITEMS BACK UNTIL THEY HAVE BEEN PLACED.
+
+     The hero's title, logo, hook and button are positioned by the measuring
+     pass below, and that pass refuses to run while an ancestor is mid-
+     transform — rightly, since a rotated rect gives false numbers. The
+     consequence was visible on every card flip: the panel rotated in with all
+     four sitting at their CSS default near the top of the stage, and the
+     instant the animation ended they jumped into place. Measured on the
+     Website step: the title sat at y=263 for the whole 280ms turn and landed
+     at 623. A 360px lurch, and what reads as a flash.
+
+     They are hidden rather than left where they are not meant to be, and
+     revealed once placed. Opacity, not display or visibility: the pass has to
+     be able to MEASURE them, and only opacity leaves layout untouched. */
+  site.classList.add('is-placing');
   webPageBindPanels();
   webPageBindArtGestures();
   webPageBindDrag();
@@ -1389,9 +1404,15 @@ function webPageMount() {
        transformed ancestor cannot spin here forever. */
     if (distorted()) {
       if (stalled++ < 20) setTimeout(pass, 60);
+      /* GIVING UP MUST NOT LEAVE THEM INVISIBLE. A permanently transformed
+         ancestor is a bug, but a hero with no title is a worse one. */
+      else site.classList.remove('is-placing');
       return;
     }
     stalled = 0;
+    /* Placed — so they can be seen. From here the CSS transition fades them
+       in over 180ms rather than popping. */
+    site.classList.remove('is-placing');
     const hero = site.querySelector('[data-edit="art"]');
     if (hero) applyArtPan(hero);
     ensureInk();
@@ -3019,12 +3040,19 @@ function _wpEditSurface() {
      that only appeared after you had visited a Submission step, which is why
      it survived a test on a freshly loaded page.
 
-     offsetParent is null for anything with display:none in its ancestry, so
-     it answers the question actually being asked: is that modal rendered
-     right now? A state field that means "the last step I opened" is not the
-     same fact and should never have been used as one. */
+     getClientRects() answers the question actually being asked: is that modal
+     rendered right now? An element with display:none anywhere in its ancestry
+     has none; a visible one has at least one.
+
+     NOT offsetParent, which was the first attempt at this and was wrong in a
+     way worth recording: offsetParent is null for ANY position:fixed element,
+     open or closed, and #submit-overlay is fixed. Measured — null in both
+     states. So the test never distinguished anything, and every flip inside
+     the step modal was routed to Marketing instead. Two wrong tests in a row
+     for the same question, which is why this one is stated with the numbers
+     that prove it: clientRects 1 when open, 0 when closed. */
   const overlay = document.getElementById('submit-overlay');
-  if (overlay && overlay.offsetParent !== null) return 'modal';
+  if (overlay && overlay.getClientRects().length) return 'modal';
   return document.querySelector('.mkt-web-embed') ? 'marketing' : 'modal';
 }
 

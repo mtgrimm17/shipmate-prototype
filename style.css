@@ -7026,25 +7026,42 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   align-self: center;
 }
 
+/* THE SAME PILL AS GAME DETAILS. Yes/No and the intensity row are answers to
+   a question, which is the same act as picking a platform or a market — so
+   they read from the same tokens rather than keeping their own greys. See
+   --pill-off-* and --pill-on-* at the top of this file.
+
+   --pill-bw is 1px here as it is everywhere else in the family, and it is what
+   places the selected ring against the border box.
+
+   The type stays as it was: 10px, 700, tracked and (for intensity) uppercase.
+   These sit in a dense question list rather than in a form, and shrinking or
+   unbolding them would cost more than the consistency is worth. */
 .yn-btn {
+  --pill-bw: 1px;
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
   position: relative;
   padding: 5px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--panel-3);
+  border-radius: var(--field-radius);
+  border: 1px solid var(--pill-off-border);
+  background: var(--pill-off-bg);
   font-size: 10px; font-weight: 700;
   letter-spacing: 0.8px;
   cursor: pointer; transition: all 0.15s;
-  font-family: inherit; color: var(--text-faint);
+  font-family: inherit; color: var(--pill-off-color);
   text-align: center;
   min-width: 52px;
 }
 .yn-btn:hover { border-color: var(--border-hover); color: var(--text-dim); }
 
-.yn-btn.yn-yes.is-selected { background: var(--sel-bg); border-color: var(--sel-color); color: var(--sel-color); }
-.yn-btn.yn-yes.is-selected:hover { background: var(--sel-bg-strong); }
-.yn-btn.yn-no.is-selected  { background: var(--sel-bg); border-color: var(--sel-color); color: var(--sel-color); }
-.yn-btn.yn-no.is-selected:hover { background: var(--sel-bg-strong); }
+/* Yes and No were two rules saying the same thing; the answer is selected or
+   it is not, and which of the two it was never changed the look. */
+.yn-btn.is-selected {
+  background: var(--pill-on-bg);
+  border-color: transparent;
+  color: var(--pill-on-color);
+}
+.yn-btn.is-selected:hover { background: var(--pill-on-bg-hover); color: var(--pill-on-color-hover); }
 
 /* ── Completion-state borders on choice controls ─────────
    Unanswered group → amber border on all options.
@@ -7876,7 +7893,15 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 /* Per-question rails now active inside ob-section (section rail is disabled) */
 .ios-q-row:last-child { margin-bottom: 0; }
-.ios-q-row-intensity { align-items: center; margin-bottom: 4px; }
+/* NO MARGIN OF ITS OWN. This carried margin-bottom:4px against .ios-q-row's
+   6px, and that two-pixel disagreement is what made the gap between questions
+   read as 13px in one place and 15px in another depending on which kinds of
+   row happened to be adjacent. Both row types are a question with its answer;
+   there was never a reason for them to space differently.
+
+   align-items:center stays — that is about where the pills sit inside the
+   row, which genuinely differs from the yes/no layout. */
+.ios-q-row-intensity { align-items: center; }
 
 .ios-q-left { flex: 1; min-width: 0; }
 
@@ -7886,27 +7911,47 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 
 /* ── Intensity buttons (None / Infrequent / Frequent) ── */
 
-.ios-intensity-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+/* .ios-intensity-list and .ios-q-block lived here and are gone. Both were
+   containers no markup ever used — and .ios-q-block was, by its own comment,
+   an attempt at exactly the fix above ("normalises spacing when mixing
+   intensity + YN rows in one section") that was written and never applied.
+   A dead rule describing a solution is worse than no rule: the next person
+   reads it and believes the problem is handled. The rows now agree without a
+   wrapper, so neither is needed. */
 
-/* Unified block — normalises spacing when mixing intensity + YN rows in one section */
-.ios-q-block { display: flex; flex-direction: column; gap: 6px; }
-.ios-q-block .ios-q-row,
-.ios-q-block .ios-q-row-intensity { margin-bottom: 0; }
-
-.intensity-group { display: flex; gap: 2px; flex-shrink: 0; }
+/* 4px, the same as .question-yn's. The two rows answer the same kind of
+   question one under the other, and they were at 2 and 4 — close enough to
+   look like a mistake rather than a distinction. */
+.intensity-group { display: flex; gap: 4px; flex-shrink: 0; }
 
 .intensity-btn {
+  --pill-bw: 1px;
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
   position: relative;
-  padding: 5px 10px; border-radius: 5px;
-  border: 1px solid var(--border); background: var(--panel-3);
+  /* NONE COMES OUT EXACTLY THE WIDTH OF NO — 52px, measured, not assumed.
+
+     min-width alone did not do it: NONE is uppercase with 0.4px of tracking,
+     so at .yn-btn's 14px padding its natural width is 56 and the floor never
+     applies. 12px is the value where it lands on 52, and it is the LARGEST
+     one that does — below it the min-width takes over and the long labels
+     (INFREQUENT, FREQUENT) would just lose air for nothing. */
+  padding: 5px 12px; min-width: 52px; border-radius: var(--field-radius);
+  border: 1px solid var(--pill-off-border); background: var(--pill-off-bg);
   font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
-  cursor: pointer; font-family: inherit; color: var(--text-faint);
+  cursor: pointer; font-family: inherit; color: var(--pill-off-color);
   transition: all 0.12s; white-space: nowrap; text-align: center;
 }
 .intensity-btn:hover { border-color: var(--border-hover); color: var(--text-dim); }
-.intensity-btn.is-sel-none       { background: var(--sel-bg); border-color: var(--sel-color); color: var(--sel-color); }
-.intensity-btn.is-sel-infrequent { background: var(--sel-bg); border-color: var(--sel-color); color: var(--sel-color); }
-.intensity-btn.is-sel-frequent   { background: var(--sel-bg); border-color: var(--sel-color); color: var(--sel-color); }
+/* Three classes, one appearance — the intensity chosen has never changed how
+   the pill looks, only which one carries it. Kept as three selectors because
+   the markup names them individually. */
+.intensity-btn.is-sel-none,
+.intensity-btn.is-sel-infrequent,
+.intensity-btn.is-sel-frequent {
+  background: var(--pill-on-bg);
+  border-color: transparent;
+  color: var(--pill-on-color);
+}
 
 /* intensity-btn — amber outline in unanswered row; blue border when selected (matches standard selection) */
 .is-validating .ios-q-row[data-answered="0"] .intensity-btn:not(.is-sel-none):not(.is-sel-infrequent):not(.is-sel-frequent) {
@@ -8694,6 +8739,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 /* ── Divider ─────────────────────────────────────────── */
 
 .ios-q-divider { height: 1px; background: var(--border); margin: 14px 0; }
+/* TWO RULES AROUND ONE HEADING IS ONE TOO MANY. .ios-content-step-label
+   carries its own border-bottom, and the markup also puts a divider directly
+   above it — so a section title arrived underlined AND ruled off from what
+   came before.
+
+   The heading's own line is the one that stays: it belongs to the heading and
+   binds it to the questions it heads, and its 20px of top margin already
+   opens the gap that the divider was drawing. The loose divider is dropped
+   only in that position — the eleven other places it appears separate groups
+   of questions with no title between them, and those still need it. */
+.ios-q-divider:has(+ .ios-content-step-label) { display: none; }
 
 /* ── Content Rating "Unanswered / All" toggle ───────── */
 .cr-toggle-bar {
@@ -12641,6 +12697,10 @@ body.viewing-splash #app-guide { display: none; }
 .loc-chip.is-on::after,
 .bar-nav .bar-nav-btn.is-active::after,
 .app-subtab.is-on::after,
+.yn-btn.is-selected::after,
+.intensity-btn.is-sel-none::after,
+.intensity-btn.is-sel-infrequent::after,
+.intensity-btn.is-sel-frequent::after,
 .project-selector-wrap #projectSelector::after,
 .bar-nav-btn .ic.cover::after {
   /* AGAINST THE BORDER BOX, NOT THE PADDING BOX — which is the whole of what
