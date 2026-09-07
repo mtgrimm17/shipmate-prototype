@@ -2974,7 +2974,14 @@ function artMetrics(hero){
    over the Marketing view, so if one is open it is the copy the developer can
    actually see and touch. */
 function webPageRedraw() {
-  if (state.stepModal && state.stepModal.stepId && typeof reRenderStepModal === 'function') {
+  /* THE SAME QUESTION AS wpOpenPanel'S, so it gets the same answer from the
+     same place. This carried its own copy of the state.stepModal test and
+     therefore its own copy of that test's bug: after visiting any Submission
+     step, a redraw in Marketing rebuilt the closed modal instead of the embed
+     in front of you. Two functions asking "which surface owns this?" must not
+     each decide for themselves. */
+  if (typeof _wpEditSurface === 'function' && _wpEditSurface() === 'modal'
+      && typeof reRenderStepModal === 'function') {
     return reRenderStepModal();
   }
   /* Marketing → Pages. Replacing just the embed's innerHTML rather than
@@ -3001,11 +3008,41 @@ function webPageRedraw() {
    The modal wins whenever it is open, and that is not arbitrary: it is drawn
    over the Marketing view, so it is the copy the developer can actually see. */
 function _wpEditSurface() {
-  if (state.stepModal && state.stepModal.stepId) return 'modal';
+  /* ASK THE DOM WHETHER THE MODAL IS ON SCREEN, not state.stepModal.
+
+     This used to test `state.stepModal.stepId`, and that field is never
+     cleared: closeStepModal records what was open and leaves it there. So
+     after opening any Submission step once, this answered 'modal' for the
+     rest of the session — and in Marketing every click then delegated to
+     openStorePreviewSection, which turns over #submit-modal. The modal was
+     closed, so nothing turned over and nothing opened. A dead click, and one
+     that only appeared after you had visited a Submission step, which is why
+     it survived a test on a freshly loaded page.
+
+     offsetParent is null for anything with display:none in its ancestry, so
+     it answers the question actually being asked: is that modal rendered
+     right now? A state field that means "the last step I opened" is not the
+     same fact and should never have been used as one. */
+  const overlay = document.getElementById('submit-overlay');
+  if (overlay && overlay.offsetParent !== null) return 'modal';
   return document.querySelector('.mkt-web-embed') ? 'marketing' : 'modal';
 }
 
 function wpOpenPanel(target) {
+  /* LEAVE THE FULL PREVIEW FIRST, and this is the fix for a real bug rather
+     than tidiness.
+
+     In full preview the page is moved into #wp-full, a fixed overlay covering
+     the screen — but the step modal is still open underneath it, so
+     _wpEditSurface() correctly answers 'modal' and the panel opened THERE,
+     behind an opaque overlay. Nothing appeared to happen. Then Escape closed
+     the overlay and revealed a modal already flipped to an edit panel the
+     developer never saw themselves ask for, with the page gone.
+
+     Clicking a field at full size is a reasonable thing to do — you read the
+     page big, you spot the wrong tagline, you go to fix it. So the gesture is
+     kept and made visible: come out of full preview, then open the panel. */
+  if (state.webPageFull) setWebPageFull(false);
   if (_wpEditSurface() === 'modal') return openStorePreviewSection('web', target);
   state.mktWebFlipTarget = target;
   return _wpFlipMarketing();
@@ -3023,6 +3060,7 @@ function wpClosePanel() {
    .is-flip-enter — and repeating them here is what the modal already does. */
 async function _wpFlipMarketing() {
   const card = document.querySelector('[data-wp-card]');
+  if (typeof scrollContentToTop === 'function') scrollContentToTop();
   if (!card) return webPageRedraw();
   card.classList.add('is-flip-exit');
   await new Promise(r => setTimeout(r, 160));

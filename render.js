@@ -1043,73 +1043,70 @@ function buildAssetsTab() {
   return `
     <div class="ob-form">
 
-      <!-- ── Screenshots ── -->
+      ${/* ── ONE WELL FOR EVERY PIECE OF MEDIA ────────────────────────────
+            Screenshots and the trailer had a dropzone each, stacked with a
+            divider between them, and a developer with a folder of captures
+            and an mp4 had to aim at the right one. There is no reason for two
+            targets: a file already says what it is in its MIME type, so the
+            well reads that and routes it. Asking someone to sort their own
+            files into the correct box is asking them to do the computer's job.
+
+            The two SECTIONS are merged too, because a Trailer section whose
+            only content was a dropzone would be left with nothing in it — its
+            YouTube field and its Steam preview now live under this same
+            heading. The id stays ob-sec-screenshots: the tab's rail keys off
+            it, and both ids were referenced exactly once each (their own
+            declaration), so nothing else had to move. */''}
       <div class="ob-section" id="ob-sec-screenshots">
-        <div class="ob-section-hdr">${t('ob.section.screenshots') || 'Screenshots'}</div>
-        <div class="asset-guidance">${t('ob.screenshots.guidance')}</div>
-        ${/* The well takes anything now — key art, logotypes, icons, captures —
-              and sorts what it is given by reading each file's dimensions and
-              transparency. Said once, here, rather than repeated under every
-              group below. */''}
+        ${/* "ASSETS", not "Screenshots & trailer". The well stopped being a
+              screenshots box the day it started classifying whatever it was
+              given, and a heading that lists two of the five things it takes
+              is a heading that tells you not to drop the other three. The old
+              guidance had the same problem: it described reformatting
+              screenshots for each store and said nothing about the sorting,
+              which is the part that does the work. */''}
+        <div class="ob-section-hdr">${t('ob.section.assets') || 'Assets'}</div>
+        <div class="asset-guidance">${t('ob.assets.guidance')}</div>
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
+          ${/* The amber "still needed" state keys off SCREENSHOTS only, not on
+                anything the well swallowed: a trailer is optional and always
+                was, so dropping one must not tick this off. */''}
           <div id="ob-screenshot-req-wrap" class="ob-req-group ${state.uploads.screenshots.length === 0 ? 'is-req-empty' : ''}">
             <div class="asset-dropzone" id="ob-screenshot-dropzone"
                  onclick="document.getElementById('ob-screenshot-input').click()"
                  ondragover="event.preventDefault(); this.classList.add('is-over')"
                  ondragleave="this.classList.remove('is-over')"
-                 ondrop="handleScreenshotDrop(event); this.classList.remove('is-over')">
+                 ondrop="handleMediaDrop(event); this.classList.remove('is-over')">
               <div class="asset-dropzone-icon">↑</div>
-              <div class="asset-dropzone-label">${t('ob.screenshots.drop_label')}</div>
-              <div class="asset-dropzone-hint">${t('ob.screenshots.drop_hint')}</div>
-              <input type="file" id="ob-screenshot-input" multiple accept="image/*" style="display:none"
-                     onchange="handleScreenshotFiles(this.files); this.value=''">
+              <div class="asset-dropzone-label">${t('ob.media.drop_label') || 'Drop screenshots, key art or your trailer here'}</div>
+              <div class="asset-dropzone-hint">${t('ob.media.drop_hint') || 'PNG, JPG or MP4 · Multiple files accepted'}</div>
+              <input type="file" id="ob-screenshot-input" multiple accept="image/*,video/*" style="display:none"
+                     onchange="handleMediaFiles(this.files); this.value=''">
             </div>
           </div>
-          ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS.
-
-                This used to be a screenshots-only grid, which meant a
-                developer who dropped their whole assets folder here saw their
-                screenshots and had to take it on faith that the key art and
-                the logotype had gone anywhere at all. Now the well shows
-                everything it swallowed, each with the label the classifier
-                gave it — which is also the moment a wrong guess is cheapest to
-                correct, because the file is right there under the pointer. */''}
-          ${/* THE OLD SCREENSHOT GRID IS GONE, not hidden — and the attempt to
-                hide it is worth recording, because it could not have worked:
-                `[hidden]{display:none}` lives in the BROWSER's stylesheet, and
-                any author rule beats it regardless of specificity. So
-                `.asset-grid{display:grid}` kept drawing it, and the same files
-                appeared twice: once as uniform cards up here, once sorted into
-                groups below. The same trap the screenshot lightbox fell into,
-                which is why it is written down twice now. */''}
+          ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS. The
+                classifier reads each file's dimensions and transparency, so a
+                wrong guess is cheapest to correct right here, with the file
+                under the pointer. Video is the one thing it cannot label yet —
+                see handleMediaFiles in app.js. */''}
           <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
+          ${/* NO SEPARATE ROW FOR THE TRAILER. It used to get a full-width
+                "🎬 name — 12.3 MB — Remove" bar of its own, which is what a
+                dropped video looked like: a horizontal slab rather than a
+                thumbnail like everything else. Now that the library shows
+                video as an ordinary asset — its own Video group, its own
+                thumbnail, its own hold-to-delete — that row was the same
+                information twice. handleTrailerFiles still fills it wherever
+                it does exist (the Steam Assets section has its own), it just
+                is not here any more. */''}
+          ${steamTrailerHTML}
+          <div class="asset-url-row">
+            <label class="form-label" style="margin-bottom:6px;">${t('ob.field.trailer_url.label') || 'Or paste a YouTube URL'}</label>
+            <input class="form-input" id="ob-trailer-url" type="url" placeholder="${t('ob.field.trailer_url.placeholder') || 'https://youtube.com/watch?v=...'}"
+                   value="${escHtml(state.formData.trailerUrl || '')}"
+                   oninput="syncField('trailerUrl', this.value)">
+          </div>
         </div><!-- /ob-q-screenshots -->
-      </div>
-
-      <div class="ob-sec-divider"></div>
-
-      <!-- ── Trailer (optional) ── -->
-      <div class="ob-section" id="ob-sec-trailer">
-        <div class="ob-section-hdr">${t('ob.section.trailer') || 'Trailer'} <span class="form-optional-tag">${t('ob.field.optional_tag') || 'Optional'}</span></div>
-        <div class="asset-guidance">${t('ob.trailer.guidance')}</div>
-        <div class="asset-dropzone asset-dropzone-sm" id="ob-trailer-dropzone"
-             onclick="document.getElementById('ob-trailer-input').click()"
-             ondragover="event.preventDefault(); this.classList.add('is-over')"
-             ondragleave="this.classList.remove('is-over')"
-             ondrop="handleTrailerDrop(event); this.classList.remove('is-over')">
-          <div class="asset-dropzone-icon">↑</div>
-          <div class="asset-dropzone-label">${t('ob.trailer.drop_label')}</div>
-          <div class="asset-dropzone-hint">${t('ob.trailer.drop_hint')}</div>
-          <input type="file" id="ob-trailer-input" accept="video/*" style="display:none"
-                 onchange="handleTrailerFiles(this.files); this.value=''">
-        </div>
-        ${steamTrailerHTML}
-        <div id="ob-trailer-file-info" style="display:none;"></div>
-        <div class="asset-url-row">
-          <label class="form-label" style="margin-bottom:6px;">${t('ob.field.trailer_url.label') || 'Or paste a YouTube URL'}</label>
-          <input class="form-input" id="ob-trailer-url" type="url" placeholder="${t('ob.field.trailer_url.placeholder') || 'https://youtube.com/watch?v=…'}"
-                 oninput="syncField('trailerUrl', this.value)">
-        </div>
       </div>
 
       ${/* ── THE LIBRARY ──────────────────────────────────────────────────

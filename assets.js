@@ -278,8 +278,48 @@ function smAdd(rec) {
 
 /* Intake from a File. Measures BEFORE the record exists, so no asset is ever
    in the pool without knowing its own shape. */
+/* VIDEO GOES IN THE POOL LIKE EVERYTHING ELSE, by a different door.
+
+   Two reasons it could not use the path below. First, that path reads the
+   whole file into a data URL, and base64 costs a third more than the bytes it
+   encodes — a 500MB trailer would sit in memory as ~670MB of string. Second,
+   it measures with `new Image()`, which never fires a load event for a video
+   and so would leave the asset at 0x0 forever.
+
+   So: a blob URL, which is a handle to the file rather than a copy of it, and
+   a <video> element's loadedmetadata for the real dimensions. Blob URLs die
+   with the document, which is fine here and worth stating — state is not
+   persisted (only the language preference is), so every asset in this pool
+   already lives and dies with the session.
+
+   kind is set to 'video' and stays: smAdd re-runs the classifier, and
+   smAssetKind returns 'video' unchanged for anything already labelled that
+   way rather than trying to read its pixels. */
+function smAddVideoFile(file, done) {
+  const src = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.preload = 'metadata';
+  v.muted = true;
+  let settled = false;
+  const finish = (w, h) => {
+    if (settled) return; settled = true;
+    done && done(smAdd({
+      name: file.name, src, origin: 'upload', kind: 'video',
+      w: w || 0, h: h || 0, mime: file.type, size: file.size,
+    }));
+  };
+  v.onloadedmetadata = () => finish(v.videoWidth, v.videoHeight);
+  /* A codec the browser cannot decode still belongs in the library — it is a
+     file the developer uploaded and has to be able to see and remove. It just
+     goes in without dimensions. */
+  v.onerror = () => finish(0, 0);
+  v.src = src;
+}
+
 function smAddFile(file, done) {
-  if (!file || !file.type || !file.type.startsWith('image/')) return done && done(null);
+  if (!file || !file.type) return done && done(null);
+  if (file.type.startsWith('video/')) return smAddVideoFile(file, done);
+  if (!file.type.startsWith('image/')) return done && done(null);
   const r = new FileReader();
   r.onerror = () => done && done(null);
   r.onload = () => {
@@ -326,9 +366,29 @@ function smSetKind(id, kind) {
   a.kindBy = 'user';
 }
 
+/* REMOVING AN ASSET ALSO FORGETS EVERY SLOT THAT POINTED AT IT.
+
+   The slots in state.uploads hold {ref: 'as_…'} into this pool, so deleting
+   the record on its own left them pointing at nothing. smSrc answers '' for a
+   dead ref, which is why it never threw — the slot simply looked FILLED while
+   drawing nothing, and a submission would have reported an icon or a key art
+   it no longer had. The trailer is the case that made this visible: pressing
+   the thumbnail's × dropped it from the library while state.uploads.trailer
+   still named the file.
+
+   Screenshots are a list rather than a slot, so they are filtered instead. */
 function smRemove(id) {
   const i = smPool().findIndex(a => a.id === id);
   if (i >= 0) smPool().splice(i, 1);
+  if (typeof state === 'undefined' || !state.uploads) return;
+  const u = state.uploads;
+  for (const k of Object.keys(u)) {
+    const v = u[k];
+    if (v && typeof v === 'object' && !Array.isArray(v) && v.ref === id) u[k] = null;
+  }
+  if (Array.isArray(u.screenshots)) u.screenshots = u.screenshots.filter(x => !x || x.ref !== id);
+  const ws = state.webSite;
+  if (ws && Array.isArray(ws.screenshots)) ws.screenshots = ws.screenshots.filter(x => !x || x.ref !== id);
 }
 
 /* Resolve anything to a drawable src: a ref, a pool record, or one of the

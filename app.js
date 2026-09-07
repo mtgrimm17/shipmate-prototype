@@ -163,6 +163,8 @@ function setView(view) {
   if (state.activeView !== view && state.stepModal && typeof closeStepModal === 'function') {
     closeStepModal();
   }
+
+  if (state.activeView !== view) scrollContentToTop();
   state.activeView = view;
   document.getElementById('splashview')?.classList.add('hidden');   // leave the splash
   document.body.classList.remove('viewing-splash');
@@ -287,8 +289,27 @@ function perfOpen(portal) { bcToast(`${portal} — connect the account to pull l
 function perfJump(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
 /* ── Marketing subsections ────────────────────────────── */
+/* ── BACK TO THE TOP WHEN THE CONTENT CHANGES ─────────────────────────────
+   Switching tab or sub-tab, or flipping a card to an edit panel, replaces what
+   is on screen but not where you are looking: the scroller kept its offset, so
+   a new panel opened halfway down itself, and coming back from a 1500px-tall
+   page left you in the middle of a form you had just arrived at.
+
+   .main is the app's scroller and #step-modal-body is the modal's — measured,
+   not guessed: they are the only two elements in the document whose overflow-y
+   scrolls. The window is reset too, harmlessly, so a future layout that
+   scrolls the document itself does not quietly reintroduce this.
+
+   INSTANT, not smooth. This is a navigation, not a gesture — animating 1500px
+   makes arriving somewhere feel like waiting for it. */
+function scrollContentToTop() {
+  document.querySelectorAll('main.main, #step-modal-body').forEach(n => { n.scrollTop = 0; });
+  try { window.scrollTo(0, 0); } catch (_) {}
+}
+
 function mktSetSection(id) {
   state.marketing.section = id;
+  scrollContentToTop();
   renderBroadcast();
   renderSubnav();
   if (typeof renderGuide === 'function') renderGuide();
@@ -297,6 +318,7 @@ function mktSetSection(id) {
 /* ── Game Details sub-tabs (Game Details / Distribution / Localization / Content / Assets) ── */
 function gdSetSection(id) {
   state.details.section = id;
+  scrollContentToTop();
   if (id === 'localization') state.localizationSeen = true;   // visiting completes it
   renderDetails(); renderSubnav();
   if (typeof renderGuide === 'function') renderGuide();
@@ -5765,6 +5787,38 @@ function removeIcon() {
   renderProjectBar();
 }
 
+/* ── ONE WELL, TWO DESTINATIONS ───────────────────────────────────────────
+   The Assets tab used to have a dropzone for screenshots and another for the
+   trailer. A file already declares what it is in its MIME type, so one well
+   can read that and route it — asking a developer to aim at the right box is
+   asking them to sort their own files on the computer's behalf.
+
+   Images go where screenshots went and are classified by the asset library.
+   Video goes to the trailer handler, and does NOT enter the library: smAddFile
+   rejects anything that is not image/*, and lifting that is not a one-liner —
+   it reads files as data URLs (a 500MB mp4 would become a ~670MB base64
+   string in memory) and measures them with `new Image()`, which never fires
+   for a video. Doing it properly means a blob URL and a <video> element's
+   loadedmetadata. Until then the trailer confirms itself through
+   #ob-trailer-file-info, which is why that row now sits beside this well
+   rather than in a section further down.
+
+   Only the FIRST video is taken, because state.uploads.trailer is a single
+   slot; the rest are ignored rather than silently overwriting each other. */
+function handleMediaFiles(files) {
+  const list = Array.from(files || []);
+  const vids = list.filter(f => f.type && f.type.startsWith('video/'));
+  const imgs = list.filter(f => !f.type || !f.type.startsWith('video/'));
+  if (imgs.length) handleScreenshotFiles(imgs);
+  if (vids.length) handleTrailerFiles([vids[0]]);
+}
+
+function handleMediaDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('is-over');
+  handleMediaFiles(e.dataTransfer.files);
+}
+
 function handleScreenshotDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('is-over');
@@ -10347,6 +10401,20 @@ function handleTrailerFiles(files) {
   const file = files[0];
   if (!file) return;
   state.uploads.trailer = { name: file.name, size: file.size };
+  /* AND INTO THE LIBRARY, so a trailer is classified and shown like every
+     other asset instead of following its own philosophy. Done here rather
+     than in the caller because this is the one function both the Assets well
+     and the website's Media panel go through — putting it in the callers
+     would be two copies waiting to disagree.
+
+     The ref is added to the slot rather than replacing name/size, which
+     several places already read. */
+  if (typeof smAddFile === 'function') {
+    smAddFile(file, id => {
+      if (id && state.uploads.trailer) state.uploads.trailer.ref = id;
+      if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+    });
+  }
   const info = document.getElementById('ob-trailer-file-info');
   if (info) {
     const mb = (file.size / 1024 / 1024).toFixed(1);
@@ -15356,6 +15424,9 @@ async function openStorePreviewSection(pid, target) {
 
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
   state.storePreviewFlipTarget[pid] = target;
+  /* The panel that is about to appear starts at ITS top, not at the offset the
+     page you were reading happened to be scrolled to. */
+  if (typeof scrollContentToTop === 'function') scrollContentToTop();
 
   const modal = document.getElementById('submit-modal');
   // Business Questions never actually shows AI-inferred answers today (no
@@ -15424,6 +15495,7 @@ async function openSteamHeaderCapsuleSection() {
 
 function closeStorePreviewSection(pid) {
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
+  if (typeof scrollContentToTop === 'function') scrollContentToTop();
 
   const modal = document.getElementById('submit-modal');
   if (modal) {
@@ -15925,12 +15997,26 @@ function _smRenderPicker() {
         <button class="sm-picker-x" onclick="smPickerClose()" aria-label="Close">×</button>
       </div>
       <div class="sm-picker-grid">
+        ${/* NO FAKE THUMBNAIL HERE. Giving this a .sm-tile-img of its own was
+              the wrong idea and it showed: that box is 84px tall while the row
+              is 141, so the upload tile ended up with a rounded rectangle
+              inside it that lined up with nothing. It is not an asset, so it
+              does not get an asset's anatomy — it is one square the height of
+              the row, with the + and its label centred in it. */''}
         <button class="sm-tile sm-tile-new" onclick="smPickerUpload()">
-          <span class="sm-tile-plus">+</span><span>Upload new…</span>
+          <span class="sm-tile-plus">+</span>
+          <span class="sm-tile-name">Upload new…</span>
         </button>
         ${shown.map(a => `
           <button class="sm-tile" onclick="smPickerChoose('${a.id}')" title="${escHtml(a.name)}">
-            <span class="sm-tile-img"><img src="${escHtml(a.src)}" alt=""></span>
+            ${/* Video is in the pool now, so it can reach this grid — and a
+                  <img> pointed at a video blob draws nothing at all. */''}
+            ${/* --ar as a NUMBER as well as the ratio, because the width has
+                  to be clamped against the tile and CSS cannot divide two
+                  numbers out of an aspect-ratio. See .sm-tile-img. */''}
+            <span class="sm-tile-img" style="--ar:${(a.w || 16) / (a.h || 9)}">${a.kind === 'video'
+              ? `<video src="${escHtml(a.src)}#t=0.1" muted playsinline preload="metadata"></video>`
+              : `<img src="${escHtml(a.src)}" alt="">`}</span>
             <span class="sm-tile-meta">
               <span class="sm-tile-name">${escHtml(a.name)}</span>
               <span class="sm-tile-dim">${a.w || '?'}×${a.h || '?'}</span>
@@ -16001,7 +16087,14 @@ function _smLibraryHTML() {
                onclick="smZoom('${a.id}')" role="button" tabindex="0"
                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();smZoom('${a.id}')}"
                title="${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${a.alpha ? ' · transparent' : ''}">
-            <img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">
+            ${/* A VIDEO CANNOT BE AN <img>. preload="metadata" is what gets a
+                  first frame without pulling the whole file, and #t=0.1 asks
+                  for a frame a tenth of a second in — the frame at exactly 0
+                  is black in a great many trailers. muted + playsinline so no
+                  browser decides to autoplay it with sound on a phone. */''}
+            ${a.kind === 'video'
+              ? `<video src="${escHtml(a.src)}#t=0.1" muted playsinline preload="metadata"></video>`
+              : `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">`}
             ${/* HOLD, DON'T CLICK. These are the developer's own files, often
                  the only copy to hand, and a 20px × in the corner of a
                  thumbnail is exactly the target a stray click finds. There is
@@ -16071,14 +16164,20 @@ function smZoom(id) {
   box.id = 'sm-lightbox';
   box.innerHTML =
     `<figure>
-       <img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">
+       ${a.kind === 'video'
+         ? `<video src="${escHtml(a.src)}" controls autoplay muted playsinline></video>`
+         : `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">`}
        <figcaption>${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${
          a.alpha ? ' · transparent' : ''} · ${escHtml(SM_KIND_SHORT[a.kind] || a.kind)}</figcaption>
      </figure>`;
   /* Anywhere but the picture itself closes it. Testing for the IMG rather than
      for the backdrop means the caption and the margin around the image close
      it too, which is what "click outside" means to the hand. */
-  box.addEventListener('click', e => { if (e.target.tagName !== 'IMG') smZoomClose(); });
+  box.addEventListener('click', e => {
+    /* VIDEO counts as the picture too, or the play button would dismiss the
+       thing you just opened. */
+    if (e.target.tagName !== 'IMG' && e.target.tagName !== 'VIDEO') smZoomClose();
+  });
   document.body.appendChild(box);
   /* CAPTURE PHASE, and it stops the event dead. Escape is spoken for twice
      over on this screen — the step modal closes on it, and so does the
