@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.32**
+Current version: **v5.48**
 
 ---
 
@@ -68,14 +68,14 @@ Pan position is preserved between device preset changes. Reset pan when a new sc
 
 ### Versioning — required on every change
 
-Every set of changes must increment the version number. Current version: **v5.32** → next is **v5.33**, then **v5.34**, etc.
+Every set of changes must increment the version number. Current version: **v5.48** → next is **v5.49**, then **v5.50**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags
 2. `index.html` — the build badge div: `<div class="build-badge">vX.XX</div>`
 3. `splash.html` — the version badge text and the iframe `src="splash.html?v=X.XX"`
 
-Always include the new version number in the git commit message, e.g. `"v5.32 — add tooltip to age rating cell"`.
+Always include the new version number in the git commit message, e.g. `"v5.48 — add tooltip to age rating cell"`.
 
 ---
 
@@ -129,7 +129,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.32 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.48 — description of change"`.
 
 ---
 
@@ -149,7 +149,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.32, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.48, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and

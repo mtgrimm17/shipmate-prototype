@@ -10,12 +10,12 @@
        inside .ias-page, the App Store mockup that mimics SF Pro. JetBrains Mono
        is gone: nothing references it since the type unified on Plex. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5.35">
-  <link rel="stylesheet" href="splash.css?v=5.35">
+  <link rel="stylesheet" href="style.css?v=5.48">
+  <link rel="stylesheet" href="splash.css?v=5.48">
   <!-- The marketing page's own stylesheet. Every rule is scoped under #site,
        a name that appears nowhere in style.css, so the two cannot reach each
        other. Loaded after style.css for the same reason. -->
-  <link rel="stylesheet" href="web-page.css?v=5.35">
+  <link rel="stylesheet" href="web-page.css?v=5.48">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
   <!-- Plays the Assets tab's auto-filled Steam trailer thumbnail inline
@@ -108,7 +108,20 @@
     <!-- Left region: logo + tabs, spanning the main pane's width. -->
     <div class="tb-left">
       <div class="logo" onclick="showSplashView()" title="Home" role="button" tabindex="0">
-        <img src="Assets/Shipmate_Logo_v2.png" class="topbar-logo" alt="Shipmate">
+        <!-- THE WORDMARK, INLINE AND OUTLINED.
+             Inline rather than an <img> so the colour is CSS's (the paths carry
+             fill:currentColor, set on .topbar-logo) and so it costs no extra
+             request. Outlined rather than live <text>: the first export of this
+             was a <text> element in F37 Ginger Soft Trial, a font that exists
+             nowhere in this repo — it rendered correctly only on a machine with
+             the trial font installed, and in a fallback grotesque everywhere
+             else, GitHub Pages included.
+             The viewBox is tight to the paths (measured: 109.84 x 26.64 inside
+             110 x 27), which is what lets the flex centring above actually
+             centre it. The old PNG could not be centred that way: the octopus
+             sat in transparent padding above the word, so the word's optical
+             centre was always below the box's. -->
+        <svg class="topbar-logo" viewBox="0 0 110 27" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shipmate" focusable="false"><g transform="matrix(0.536058,0,0,0.683972,-1682.04,-281.612)"> <path d="M3146.77,441.162C3152.52,441.162 3155.56,438.801 3155.56,435.603C3155.56,428.864 3143.37,430.653 3143.37,427.074C3143.37,426.065 3144.31,425.19 3146.98,425.19C3149.1,425.19 3150.85,425.608 3152.55,426.503C3152.86,426.617 3153.25,426.617 3153.45,426.389L3155.22,424.466C3155.41,424.238 3155.32,423.952 3154.95,423.743C3152.96,422.486 3150.26,421.839 3147.11,421.839C3141.66,421.839 3138.75,424.238 3138.75,427.36C3138.75,434.099 3151.02,431.967 3151.02,435.717C3151.02,436.802 3149.88,437.792 3147.06,437.792C3145.04,437.792 3142.81,437.183 3140.6,435.984C3140.33,435.85 3139.92,435.869 3139.72,436.098L3137.92,438.116C3137.68,438.344 3137.78,438.668 3138.19,438.858C3140.45,440.191 3143,441.162 3146.77,441.162Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3171.98,425.38C3175.72,425.38 3177.86,427.093 3177.86,430.615L3177.86,440.267C3177.86,440.591 3178.15,440.819 3178.56,440.819L3181.89,440.819C3182.28,440.819 3182.59,440.591 3182.59,440.267L3182.59,430.292C3182.59,424.104 3178.1,421.839 3173,421.839C3169.53,421.839 3167.14,422.924 3165.71,424.485L3165.71,412.282C3165.71,411.959 3165.4,411.73 3165.01,411.73L3161.68,411.73C3161.29,411.73 3160.97,411.959 3160.97,412.282L3160.97,440.267C3160.97,440.591 3161.29,440.819 3161.68,440.819L3165.01,440.819C3165.4,440.819 3165.71,440.591 3165.71,440.267L3165.71,431.053C3165.71,427.15 3167.97,425.38 3171.98,425.38Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3189.88,440.819L3193.21,440.819C3193.6,440.819 3193.91,440.591 3193.91,440.267L3193.91,422.62C3193.91,422.296 3193.6,422.067 3193.21,422.067L3189.88,422.067C3189.49,422.067 3189.18,422.296 3189.18,422.62L3189.18,440.267C3189.18,440.591 3189.49,440.819 3189.88,440.819ZM3188.42,415.652C3188.42,417.08 3189.81,418.108 3191.56,418.108C3193.31,418.108 3194.69,417.08 3194.69,415.652C3194.69,414.281 3193.31,413.234 3191.56,413.234C3189.81,413.234 3188.42,414.281 3188.42,415.652Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3225.73,431.434C3225.73,426.008 3220.12,421.839 3213.61,421.839C3210.38,421.839 3207.56,422.848 3205.6,424.485L3205.6,422.62C3205.6,422.296 3205.28,422.067 3204.89,422.067L3201.56,422.067C3201.18,422.067 3200.86,422.296 3200.86,422.62L3200.86,450.128C3200.86,450.452 3201.18,450.68 3201.56,450.68L3204.89,450.68C3205.28,450.68 3205.6,450.452 3205.6,450.128L3205.6,438.173C3207.44,439.943 3210.31,441.047 3213.61,441.047C3220.12,441.047 3225.73,436.84 3225.73,431.434ZM3205.6,431.434C3205.6,428.045 3208.97,425.323 3213.32,425.323C3217.5,425.323 3220.95,428.064 3220.95,431.434C3220.95,434.822 3217.5,437.564 3213.32,437.564C3208.97,437.564 3205.6,434.841 3205.6,431.434Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3258.16,421.839C3254.01,421.839 3251.36,423.629 3249.97,425.342C3248.47,422.772 3245.58,421.839 3242.57,421.839C3239.43,421.839 3237.15,422.924 3235.74,424.409L3235.74,422.62C3235.74,422.296 3235.42,422.067 3235.03,422.067L3231.71,422.067C3231.32,422.067 3231,422.296 3231,422.62L3231,440.267C3231,440.591 3231.32,440.819 3231.71,440.819L3235.03,440.819C3235.42,440.819 3235.74,440.591 3235.74,440.267L3235.74,431.053C3235.74,427.15 3238.02,425.38 3241.57,425.38C3244.75,425.38 3246.62,426.789 3246.62,430.482L3246.62,440.267C3246.62,440.591 3246.91,440.819 3247.33,440.819L3250.65,440.819C3251.04,440.819 3251.33,440.591 3251.33,440.267L3251.33,431.053C3251.33,427.15 3253.62,425.38 3257.19,425.38C3260.35,425.38 3262.24,426.789 3262.24,430.482L3262.24,440.267C3262.24,440.591 3262.53,440.819 3262.95,440.819L3266.25,440.819C3266.66,440.819 3266.95,440.591 3266.95,440.267L3266.95,430.044C3266.95,423.838 3262.63,421.839 3258.16,421.839Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3271.86,431.434C3271.86,436.84 3277.49,441.047 3284,441.047C3287.24,441.047 3290.05,440.019 3292.02,438.306L3292.02,440.267C3292.02,440.591 3292.31,440.819 3292.72,440.819L3296.03,440.819C3296.44,440.819 3296.73,440.591 3296.73,440.267L3296.73,422.62C3296.73,422.296 3296.44,422.067 3296.03,422.067L3292.72,422.067C3292.31,422.067 3292.02,422.296 3292.02,422.62L3292.02,424.58C3290.05,422.867 3287.24,421.839 3284,421.839C3277.49,421.839 3271.86,426.008 3271.86,431.434ZM3276.64,431.434C3276.64,428.064 3280.12,425.323 3284.3,425.323C3288.62,425.323 3292.02,428.045 3292.02,431.434C3292.02,434.841 3288.62,437.564 3284.3,437.564C3280.12,437.564 3276.64,434.822 3276.64,431.434Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3304.99,416.49L3304.99,422.182L3301.81,422.182C3301.42,422.182 3301.13,422.41 3301.13,422.715L3301.13,425.19C3301.13,425.494 3301.42,425.723 3301.81,425.723L3304.99,425.723L3304.99,435.146C3304.99,438.858 3307.22,440.952 3311.74,440.952C3313.35,440.952 3314.39,440.762 3315.51,440.476C3315.73,440.438 3316.14,440.343 3316.14,439.981L3316.14,437.621C3316.14,437.278 3315.8,437.126 3315.46,437.164C3315.17,437.24 3314.1,437.373 3312.89,437.373C3310.53,437.373 3309.7,436.46 3309.7,434.518L3309.7,425.723L3315.85,425.723C3316.24,425.723 3316.53,425.494 3316.53,425.19L3316.53,422.715C3316.53,422.41 3316.24,422.182 3315.85,422.182L3309.7,422.182L3309.7,416.49C3309.7,416.166 3309.41,415.938 3309,415.938L3305.67,415.938C3305.28,415.938 3304.99,416.166 3304.99,416.49Z" style="fill:currentColor;fill-rule:nonzero;"/> <path d="M3331.18,441.162C3335.52,441.162 3338.56,439.715 3340.72,437.64C3340.94,437.468 3340.91,437.164 3340.6,436.993L3338.27,435.565C3338,435.393 3337.64,435.47 3337.42,435.622C3335.72,437.05 3333.9,437.83 3331.05,437.83C3326.78,437.83 3323.89,435.66 3323.26,432.671L3342.06,432.671C3342.4,432.671 3342.52,432.538 3342.54,432.309C3342.57,432.005 3342.59,431.662 3342.59,431.434C3342.59,426.027 3337.83,421.839 3330.57,421.839C3323.64,421.839 3318.59,426.294 3318.59,431.434C3318.59,436.555 3323.28,441.162 3331.18,441.162ZM3323.35,429.873C3324.13,427.017 3327.07,425.209 3330.66,425.209C3334.7,425.209 3337.35,427.055 3337.83,429.873L3323.35,429.873Z" style="fill:currentColor;fill-rule:nonzero;"/> </g></svg>
       </div>
       <div class="tb-left-spacer"></div>
       <!-- Top-level tabs. Labels come from locale.js via renderProjectBar(). -->
@@ -823,11 +836,11 @@ Confidence</h3>
       </svg>
       Built by indie devs and platform veterans to empower the indie game community.
     </span>
-    <span class="app-footer-version" id="app-footer-version">v5.35</span>
+    <span class="app-footer-version" id="app-footer-version">v5.48</span>
   </footer>
 
-  <script src="locale.js?v=5.35"></script>
-  <script src="state.js?v=5.35"></script>
+  <script src="locale.js?v=5.48"></script>
+  <script src="state.js?v=5.48"></script>
   <script>
     const CONFIG = {
       CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
@@ -835,20 +848,20 @@ Confidence</h3>
       IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
     };
   </script>
-  <script src="claude.js?v=5.35"></script>
+  <script src="claude.js?v=5.48"></script>
   <!-- The prototype's platform icon set, and Shippy's mascot and bubbles.
        Both before render.js, which reads them. -->
-  <script src="platform-icons.js?v=5.35"></script>
-  <script src="assets.js?v=5.35"></script>
+  <script src="platform-icons.js?v=5.48"></script>
+  <script src="assets.js?v=5.48"></script>
   <!-- Shippy's mascot and bubbles. Before render.js, which mounts them. -->
-  <script src="shippy.js?v=5.35"></script>
+  <script src="shippy.js?v=5.48"></script>
   <!-- The marketing page: the adapter that reads a submission, then the
        renderer that draws it. Both before render.js, which calls them. -->
-  <script src="web-page-data.js?v=5.35"></script>
-  <script src="web-page.js?v=5.35"></script>
-  <script src="render.js?v=5.35"></script>
-  <script src="app.js?v=5.35"></script>
-  <script src="splash.js?v=5.35"></script>
+  <script src="web-page-data.js?v=5.48"></script>
+  <script src="web-page.js?v=5.48"></script>
+  <script src="render.js?v=5.48"></script>
+  <script src="app.js?v=5.48"></script>
+  <script src="splash.js?v=5.48"></script>
 
 </body>
 </html>

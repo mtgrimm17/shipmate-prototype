@@ -937,29 +937,36 @@ function buildObLangList() {
   const chevSvg = `<svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 
   return `
+    ${/* THE SAME SHAPE AS EVERY OTHER FIELD IN THIS FORM — .ob-q wrapping a
+          .gi-head label with the control beneath it. It used to be a
+          two-column table: a fixed 120px label column on the left, the
+          control on the right, and a rule drawn between the two rows. That
+          made these two the only fields in the onboarding form you read
+          left-to-right instead of top-to-bottom, and the divider gave a plain
+          pair of inputs the weight of a settings table.
+
+          Reusing .gi-head/.form-label rather than dressing .loc-label to
+          match is the point: the label is now literally the same element as
+          "GAME TITLE", so it cannot drift from it. */''}
     <div class="loc-picker">
-      <div class="loc-row">
-        <div class="loc-label-col">
-          <div class="loc-label">${t('ob.loc.primary')}</div>
+      <div class="ob-q">
+        <div class="gi-head">
+          <span class="form-label">${t('ob.loc.primary')}</span>
         </div>
-        <div class="loc-control-col">
-          <div class="loc-primary-wrap" id="loc-primary-wrap">
-            <button class="loc-primary-pill" onclick="toggleLocPrimaryDropdown(event)">
-              <span class="loc-primary-name">${primaryName}</span>
-              ${chevSvg}
-            </button>
-            <div class="loc-dropdown" id="loc-dropdown">${ddItems}</div>
-          </div>
+        <div class="loc-primary-wrap" id="loc-primary-wrap">
+          <button class="loc-primary-pill" onclick="toggleLocPrimaryDropdown(event)">
+            <span class="loc-primary-name">${primaryName}</span>
+            ${chevSvg}
+          </button>
+          <div class="loc-dropdown" id="loc-dropdown">${ddItems}</div>
         </div>
       </div>
 
-      <div class="loc-divider"></div>
-
-      <div class="loc-row">
-        <div class="loc-label-col">
-          <div class="loc-label">${t('ob.loc.supported')}</div>
+      <div class="ob-q">
+        <div class="gi-head">
+          <span class="form-label">${t('ob.loc.supported')}</span>
         </div>
-        <div class="loc-control-col">
+        <div>
           <div class="loc-chips" id="loc-chips">
             ${featuredChips}
             ${extraChips}
@@ -1288,11 +1295,21 @@ function renderProjectBar() {
   // the .empty hole rather than a placeholder graphic.
   const selIcon = document.getElementById('projectSelectorIcon');
   if (selIcon) {
-    const icon = state.uploads?.appIcon;
-    selIcon.classList.toggle('empty', !icon);
-    selIcon.innerHTML = icon
-      ? `<img src="${_screenshotSrc(icon)}" alt="">`
-      : '';
+    /* THE SLOT FIRST, THEN THE POOL — because there are two ways an icon gets
+       into Shipmate and only one of them used to reach this chip.
+
+       state.uploads.appIcon is set by the dedicated icon uploader. But the
+       asset library's drop well takes ANY file and classifies it, so a
+       developer who drops their icon in there has unmistakably "added an icon
+       in Assets" — the tool even labels it Icon — while appIcon stays empty
+       and the chip kept showing its hole. Falling back to the pool's own icon
+       makes the two doors lead to the same place. The slot still wins when it
+       is set: that one was chosen for this job deliberately. */
+    const icon = state.uploads?.appIcon
+      || (typeof smPool === 'function' && smPool().find(a => a.kind === 'icon')) || null;
+    const src = icon ? (icon.src || _screenshotSrc(icon)) : '';
+    selIcon.classList.toggle('empty', !src);
+    selIcon.innerHTML = src ? `<img src="${src}" alt="">` : '';
   }
 
   // Tab labels come from the locale, not the static markup.
@@ -2295,12 +2312,41 @@ function buildMktAnnounce() {
     </div>`;
 }
 
+/* WHAT GOES INSIDE MARKETING'S EMBED: the page, or one of its edit panels.
+
+   The same choice renderStepModal makes for the step modal, and it lives in
+   its own function because TWO paths need it — the initial render below, and
+   webPageRedraw (web-page.js) when a gesture repaints the embed in place. When
+   only the first one knew about panels, opening one worked and every later
+   redraw silently threw it away.
+
+   Before this existed the panels were unreachable from Marketing at all:
+   clicking a field set a flip target and then looked for #submit-modal to turn
+   over, which is closed when you are in Marketing, so the click did nothing. */
+function _mktWebInnerHTML() {
+  if (typeof buildWebSitePreviewSection !== 'function') return '';
+  const target = state.mktWebFlipTarget;
+  if (!target) return buildWebSitePreviewSection();
+  return `<div class="mkt-web-panel">
+      ${/* THE WAY BACK. In the modal this is the header's back arrow, which
+           belongs to the modal chrome and does not exist here — without it the
+           panel would be a room with no door. */''}
+      <button class="mkt-web-back" onclick="wpClosePanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back to the page
+      </button>
+      ${buildStorePreviewFlipSection('web', target)}
+    </div>`;
+}
+
 function buildMktWebsite() {
   const slug = (state.formData.title || 'your-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return `
     <div class="mkt-card-head"><h3>Shipmate Pages</h3><span class="mkt-url">${slug}.shipmate.page</span></div>
     <p class="mkt-web-note">A ready-made landing page, built from the title, description, capsule art, screenshots, and store links you've already given Shipmate.</p>
-    <div class="mkt-web-embed">${(typeof buildWebSitePreviewSection === 'function') ? buildWebSitePreviewSection() : ''}</div>
+    <div class="mkt-web-embed" data-wp-card>${_mktWebInnerHTML()}</div>
     <div class="mkt-card-actions">
       <button class="btn btn-ghost" onclick="mktToast('Website editor')">Edit page</button>
       <button class="btn btn-primary" onclick="mktToast('Publish website')">Publish</button>
@@ -4915,11 +4961,11 @@ function buildWebSitePreviewSection() {
   // manage it.
   const heroUpload = ups.steamKeyArtHero;
   const heroHTML = heroUpload ? `
-    <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
+    <div class="pk-hero pk-glowbox" id="pk-hero" onclick="wpOpenPanel('webKeyArt')">
       <img src="${_screenshotSrc(heroUpload)}" alt="Hero banner" class="pk-hero-img">
       <div class="pk-hero-scrim"></div>
     </div>` : `
-    <div class="pk-hero pk-glowbox" id="pk-hero" onclick="openStorePreviewSection('web','webKeyArt')">
+    <div class="pk-hero pk-glowbox" id="pk-hero" onclick="wpOpenPanel('webKeyArt')">
       <span class="pk-hero-badge">Placeholder</span>
       <div class="pk-hero-icon-wrap">
         <svg class="pk-hero-icon" width="42" height="42" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -4986,10 +5032,10 @@ function buildWebSitePreviewSection() {
   const capsuleUpload = ups[_webCapsuleSourceField(ws.capsuleSource)];
   const capsuleAspect = _webCapsuleAspectRatio(ws.capsuleSource);
   const capsuleHTML = capsuleUpload ? `
-    <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="openStorePreviewSection('web','webKeyArt')">
+    <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="wpOpenPanel('webKeyArt')">
       <img src="${_screenshotSrc(capsuleUpload)}" alt="Vertical capsule" class="pk-capsule-img" onload="_pkSyncCapsuleAspect(this)">
     </div>` : `
-    <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="openStorePreviewSection('web','webKeyArt')">
+    <div class="pk-capsule pk-glowbox" id="pk-capsule" style="aspect-ratio:${capsuleAspect};" onclick="wpOpenPanel('webKeyArt')">
       <span class="pk-capsule-badge">Placeholder</span>
       <svg class="pk-capsule-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="2.5" y="4.5" width="19" height="15" rx="2" stroke="currentColor" stroke-width="1.5"/>
@@ -5137,7 +5183,7 @@ function buildWebSitePreviewSection() {
   // (capsule-height margin recompute, _pkSyncCapsuleAspect) that would need
   // a coordinated rename otherwise, for a change that's purely cosmetic.
   const factsheetHTML = `
-    <div class="pk-factsheet pk-mainsection" id="pk-factsheet" style="margin-top:${factsheetMarginTop}px;" onclick="openStorePreviewSection('web','webFactsheet')">
+    <div class="pk-factsheet pk-mainsection" id="pk-factsheet" style="margin-top:${factsheetMarginTop}px;" onclick="wpOpenPanel('webFactsheet')">
       <h2 class="pk-h2">About</h2>
       ${pkSub('Developer', devNameValue)}
       ${pkSub('Links', linksValue)}
@@ -5185,7 +5231,7 @@ function buildWebSitePreviewSection() {
     : '';
 
   const descriptionHTML = `
-    <div class="pk-description pk-mainsection" id="pk-description" onclick="openStorePreviewSection('web','webDescription')">
+    <div class="pk-description pk-mainsection" id="pk-description" onclick="wpOpenPanel('webDescription')">
       <h2 class="pk-h2">Description</h2>
       ${pkSub('Hook', hookValue)}
       ${pkSub('About This Game', aboutGameValue)}
@@ -5239,7 +5285,7 @@ function buildWebSitePreviewSection() {
     </div>` : '';
 
   const mediaHTML = `
-    <section class="pk-section pk-mainsection" id="pk-media" onclick="openStorePreviewSection('web','webMedia')">
+    <section class="pk-section pk-mainsection" id="pk-media" onclick="wpOpenPanel('webMedia')">
       <h2 class="pk-h2">Media</h2>
       ${pkSub('Screenshots', screenshotsValue)}
       ${pkSub('Trailers', trailersValue)}
@@ -5276,7 +5322,7 @@ function buildWebSitePreviewSection() {
         </div>
       </div>
 
-      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="openStorePreviewSection('web','siteInfo')">
+      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="wpOpenPanel('siteInfo')">
         Edit site details ›
       </button>
     </div>`;
@@ -5445,7 +5491,7 @@ function _buildWebPageNew() {
         ${markup}
       </div>
 
-      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="openStorePreviewSection('web','siteInfo')">
+      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="wpOpenPanel('siteInfo')">
         Edit site details ›
       </button>
     </div>`;
@@ -5683,6 +5729,12 @@ function _wsMediaFieldsHTML(ws) {
       <input type="file" id="ws-screenshot-input" multiple accept="image/*" style="display:none"
              onchange="handleWebScreenshotFiles(this.files); this.value=''">
     </div>
+    ${/* THE POOL, INSIDE THE WELL, same as the Assets tab does it. Dropping a
+          file here already filed it in the library (handleWebScreenshotFiles
+          goes through smAddFile), but there was no way to draw FROM the
+          library — so a screenshot uploaded on the Assets tab was invisible
+          here and had to be uploaded a second time. One pool, two doors. */''}
+    <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
     <div class="asset-grid" id="ws-screenshot-grid" style="margin-bottom:16px;">${_wsScreenshotGridHTML(shots)}</div>
 
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Trailer</label>

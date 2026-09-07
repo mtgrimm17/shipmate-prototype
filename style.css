@@ -50,6 +50,67 @@
   --sel-border:    #60a5fa;
   --sel-shadow:    rgba(96, 165, 250, 0.25);
 
+  /* ── THE SELECTED PILL ────────────────────────────────────────────────
+     Basic Info's "Select Platforms" tiles set the house look for "I picked
+     this": a solid blue wash, no visible stroke, and a brighter blue label.
+     It is a heavier treatment than --sel-* above, which is the quieter
+     selection used for rows, tabs and dropdown items — the two are NOT the
+     same thing and should not be collapsed into one.
+
+     These live as tokens, and the platform tile itself now reads them, so
+     the tile and the Distribution/Localization pills cannot drift apart:
+     there is one place to change and no numbers to copy. */
+  --pill-on-bg:          rgba(0, 154, 255, .35);
+  --pill-on-color:       #52BAFF;
+  --pill-on-bg-hover:    rgba(0, 154, 255, .42);
+  --pill-on-color-hover: #6FC4FF;
+  /* ── SUB-SECTION LABEL ────────────────────────────────────────────────
+     Basic Info's "GAME TITLE" / "DESCRIPTION" / "SELECT PLATFORMS" set the
+     house look for a label, and the rest of the onboarding form now reads it
+     from here (see the shared rule near the bottom of this file).
+
+     THE 72% LIVES IN THE COLOUR, not in an `opacity` — which is what the
+     original rule used. opacity applies to the whole subtree, so a label with
+     a child (the asset well's "· 3" count, which carries its own .6) would
+     have compounded the two into .43. Alpha in the colour looks identical and
+     leaves children alone. */
+  --ob-label-font:  var(--mono);
+  --ob-label-size:  11px;
+  --ob-label-color: rgba(225, 228, 231, .72);
+
+  /* ── THE CHIP LOOK ────────────────────────────────────────────────────
+     A white wash with a stroke that fades down its height. Used by the
+     project chip in the header and by the selected header tab, which is why
+     it lives here instead of being typed twice — the two are meant to read as
+     the same object, and the day one of them is retuned the other should
+     follow rather than quietly diverge.
+
+     White rather than a panel token on purpose: these sit on the top bar, not
+     on the page, so they take whatever is behind them. */
+  /* TWO RADII, because these are two families and not one.
+
+     --pill-radius is for the chips that live on the TOP BAR: the header tabs
+     and the project chip. They are surfaces floating on the bar, and 13px
+     reads as the soft, self-contained shape that suits them.
+
+     --field-radius is for everything inside a FORM — the onboarding platform
+     tiles, the preset pills, the market and language chips. Those sit among
+     text inputs, and a pill that is rounder than the field above it reads as
+     belonging to a different design. So it is not a number chosen here: it is
+     the input's own radius, stated once, and the pills follow it. Change the
+     inputs and the pills come along. */
+  --pill-radius:       13px;
+  --field-radius:      8px;
+  --chip-fill:         rgba(255, 255, 255, .15);
+  --chip-fill-hover:   rgba(255, 255, 255, .20);
+  --chip-stroke-top:   rgba(255, 255, 255, .20);
+  --chip-stroke-bottom:rgba(255, 255, 255, .05);
+
+  /* The lit-from-above ring — see the shared ::after rule further down. Not a
+     border: the whole point is that it fades down the height. */
+  --pill-on-stroke-top:    rgba(82, 186, 255, .75);
+  --pill-on-stroke-bottom: rgba(82, 186, 255, .25);
+
   /* ── Shipmate tip tokens ── */
   --sw-tip-color:  #fb923c;
   --sw-tip-bg:     rgba(251, 146, 60, 0.06);
@@ -368,10 +429,12 @@ body {
   gap: 6px;
 }
 .ob-preset-pill {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1px;   /* the ring below is placed against the border box */
   font-size: 12px;
   font-weight: 500;
   padding: 7px 13px;
-  border-radius: 6px;
+  border-radius: var(--field-radius);
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--text-dim);
@@ -383,10 +446,18 @@ body {
 .ob-preset-pill:hover:not(.is-active) {
   color: var(--text);
 }
+/* Same treatment as Basic Info's platform tiles — see --pill-on-* at the top.
+   border-COLOUR only, never the width: these pills sit in a wrapping flex row,
+   and losing a pixel of border on select would re-wrap the row under the
+   pointer. */
 .ob-preset-pill.is-active {
-  border-color: var(--sel-border);
-  background: var(--sel-bg);
-  color: var(--sel-color);
+  border-color: transparent;
+  background: var(--pill-on-bg);
+  color: var(--pill-on-color);
+}
+.ob-preset-pill.is-active:hover {
+  background: var(--pill-on-bg-hover);
+  color: var(--pill-on-color-hover);
 }
 
 /* Completion-state borders: preset pills in an empty group get amber outline;
@@ -873,45 +944,17 @@ body {
   flex-direction: column;
 }
 
-.loc-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 16px 0;
-}
-
-.loc-label-col {
-  width: 120px;
-  flex-shrink: 0;
-  padding-top: 2px;
-}
-
-.loc-label {
-  display: flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #a0a0a0;
-  margin-bottom: 4px;
-}
+/* .loc-row / .loc-label-col / .loc-label / .loc-control-col / .loc-divider
+   all lived here and are gone: the Primary and Supported fields were a
+   two-column table with a rule between the rows, and they are now ordinary
+   .ob-q fields like every other input in the form. Deleted rather than left
+   behind — a dead rule that still describes a look is exactly what let these
+   labels drift from Basic Info's in the first place. */
 
 .loc-helper {
   font-size: 10px;
   color: #555;
   line-height: 1.5;
-}
-
-.loc-control-col {
-  flex: 1;
-  min-width: 0;
-}
-
-.loc-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0 0 0 140px; /* align under control column */
 }
 
 /* Primary pill */
@@ -1077,11 +1120,13 @@ body {
 }
 
 .loc-chip {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1.5px;   /* the ring below is placed against the border box */
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 7px 13px;
-  border-radius: 6px;
+  border-radius: var(--field-radius);
   border: 1.5px solid var(--border);
   background: var(--panel-2);
   cursor: pointer;
@@ -1094,9 +1139,20 @@ body {
 }
 
 .loc-chip.is-on {
-  border-color: var(--sel-border);
-  background: var(--sel-bg);
-  color: var(--sel-color);
+  border-color: transparent;
+  background: var(--pill-on-bg);
+  color: var(--pill-on-color);
+  /* The other three all carry 500 when picked — the preset pill and the market
+     chip have it in their base rule, the platform tile switches to it on
+     select. This chip was the only one left at 400, which read as a lighter
+     kind of "on" next to them. It does mean the chip widens slightly on
+     select, exactly as the platform tile already does. */
+  font-weight: 500;
+}
+
+.loc-chip.is-on:hover {
+  background: var(--pill-on-bg-hover);
+  color: var(--pill-on-color-hover);
 }
 
 .loc-chip:hover:not(.is-on) {
@@ -1122,7 +1178,11 @@ body {
   width: 11px;
   text-align: center;
   flex-shrink: 0;
-  color: var(--sel-color);
+  /* INHERIT, not its own blue. This carried --sel-color (#60a5fa) while the
+     label is now --pill-on-color (#52BAFF) — two blues a pixel apart inside
+     the same chip, which is the kind of thing you see without being able to
+     name it. The :not(.is-on) rule below still dims it when unpicked. */
+  color: inherit;
 }
 
 .loc-chip:not(.is-on) .loc-chip-icon {
@@ -1329,12 +1389,10 @@ body {
 .ob-q .form-group { position: relative; }
 
 /* Section header — uppercase label */
+/* Font, size and colour come from the shared label rule at the end of this
+   file. What stays here is the layout: it is a flex row because one of these
+   headers carries an "Optional" tag beside the word. */
 .ob-section-hdr {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-faint);
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -1520,11 +1578,6 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 5px 10px 4px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
   border-bottom: 1px solid var(--border);
 }
 
@@ -1556,9 +1609,11 @@ body {
 .ob-dist-row:hover { opacity: 1 !important; }
 
 .ob-dist-row-chip {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1.5px;   /* the ring below is placed against the border box */
   flex: 0 0 172px;
   padding: 5px 10px;
-  border-radius: 7px;
+  border-radius: var(--field-radius);
   border: 1.5px solid var(--border);
   background: var(--panel-2);
   font-size: 12px;
@@ -1567,15 +1622,24 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  transition: color 0.12s, border-color 0.12s;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .ob-dist-row:hover .ob-dist-row-chip:not(.is-on) {
   color: var(--text);
 }
 
+/* This one gained a FILL it did not have before: it used to mark selection
+   with a blue stroke and blue text only, which is why a picked market read as
+   a different kind of "on" from a picked platform. Same tokens now. */
 .ob-dist-row-chip.is-on {
-  border-color: var(--sel-border);
-  color: var(--sel-color);
+  border-color: transparent;
+  background: var(--pill-on-bg);
+  color: var(--pill-on-color);
+}
+/* Hover comes from the ROW, not the chip — the whole row is the target here. */
+.ob-dist-row:hover .ob-dist-row-chip.is-on {
+  background: var(--pill-on-bg-hover);
+  color: var(--pill-on-color-hover);
 }
 
 .ob-dist-row-bar-wrap {
@@ -1841,7 +1905,15 @@ body {
 .app-subnav > .app-subtab:first-child { margin-left: 0; }
 body.viewing-splash .app-subnav { display: none; }
 .app-subtab {
-  padding: 10px 18px; border-radius: 10px;
+  /* THE SAME SELECTION LANGUAGE AS THE HEADER TABS, read from the same tokens:
+     a white wash at 15% with a stroke that fades down its height, a fully
+     white label when picked and white at 50% when not. See --chip-* and
+     --pill-radius at the top of this file. The row above the content column
+     and the row in the top bar are the same kind of thing — a nav — so they
+     should not be two dialects. */
+  --pill-bw: 1px;   /* the border below; the ring is placed against it */
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
+  padding: 10px 18px; border-radius: var(--pill-radius);
   border: 1px solid transparent; background: transparent; cursor: pointer;
   /* Matched to .bar-subtab, the same list inside the header's dropdown. The
      weight applies to every item, selected or not, so nothing changes width
@@ -1851,7 +1923,7 @@ body.viewing-splash .app-subnav { display: none; }
      rating" — sentence case, one capital. `capitalize` would put one on every
      word ("Basic Info"). */
   text-transform: none; letter-spacing: 0;
-  color: var(--text-dim); white-space: nowrap;
+  color: rgba(255, 255, 255, .5); white-space: nowrap;
   transition: color .12s, border-color .12s, background .12s;
 }
 /* Hover = the selected pill's fill and nothing else. No stroke: the border is
@@ -1861,17 +1933,18 @@ body.viewing-splash .app-subnav { display: none; }
 /* Selected: the label takes the brand purple, the box stays the quiet dark pill.
    Weight is left alone on purpose — a heavier face is a wider face, and the row
    must not move when you pick a tab. */
-/* Neutral variant: white wash, pure white label. Weight is left to the row —
-   going heavier on selection would widen the pill and shove the rest sideways. */
+/* Weight is left to the row — going heavier on selection would widen the pill
+   and shove the rest sideways. The fill drops from 20% to the shared 15%: it
+   used to carry the whole job alone, and now the stroke does half of it. */
 .app-subtab.is-on {
   color: #fff;
-  background: rgba(255, 255, 255, .20);
+  background: var(--chip-fill);
   border-color: transparent;
 }
 /* The selected pill answers to hover too — same lift the others get, just from
    a higher floor. Needs its own rule (rather than riding .app-subtab:hover,
    which is weaker and would be overridden by .is-on above). */
-.app-subtab.is-on:hover { background: rgba(255, 255, 255, .28); }
+.app-subtab.is-on:hover { background: var(--chip-fill-hover); }
 /* The separator's own glyph is the gap between two pills — no margin needed, and
    it's enough that a selected pill and a hovered neighbour never meet. What made
    them meet before was dropping the bar from the DOM next to a selection; it is
@@ -2546,6 +2619,23 @@ body.viewing-splash .app-subnav { display: none; }
 .gd-sub[data-gd="localization"] #ob-sec-distribution,
 .gd-sub[data-gd="localization"] .ob-sec-divider { display: none; }
 
+/* AND WHICHEVER OF THE TWO IS SHOWING HAS TO LOSE THE TOP PADDING.
+
+   Distribution and Localization share one pane and take turns being hidden
+   above. The 20px of breathing room between stacked sections is cancelled by
+   `.ob-section:first-child { padding-top: 0 }` — but :first-child counts DOM
+   position, not visibility, so hiding Distribution with display:none does NOT
+   promote Localization to first child. It kept its 20px and its header sat
+   20px lower than DISTRIBUTION, SCREENSHOTS and GAME TITLE, which all start
+   at the top of their pane.
+
+   Stated per tab rather than solved with a combinator on purpose: `+` and
+   `:first-child` both read the DOM and would both be fooled the same way. The
+   only thing that knows which section is actually on screen is the attribute
+   that hid the other one, so the fix is keyed to the same attribute. */
+.gd-sub[data-gd="localization"] #ob-sec-localization,
+.gd-sub[data-gd="distribution"] #ob-sec-distribution { padding-top: 0; }
+
 /* Shippy guide = current tab's banner + task checklist */
 /* §4 — the guide reads as an inset card that belongs to the page, not a floating
    aside. Purple-bordered (Shippy's colour), one step darker than the panel. */
@@ -2850,11 +2940,39 @@ body.viewing-splash .app-subnav { display: none; }
    panel underneath it. */
 .topbar-inner { gap: var(--split-gap); }
 
+/* THE WORDMARK, SIZED AGAINST THE NAV LABELS NEXT TO IT.
+
+   THE RULE IS X-HEIGHT, and it is worth stating because it is a choice and
+   not the only defensible one: the letters with neither an ascender nor a
+   descender — the s, m, a, e of "shipmate" — are the ones set to the same
+   height as a header tab's word. Those are what the eye reads as the size of
+   a lowercase word, so matching them is what makes the two look level.
+
+   The arithmetic. The logotype's metrics in its 27-unit viewBox: baseline
+   20.13, x-height 13.22, ascender 20.13, descender 6.51. The header labels
+   are IBM Plex Mono 500 at 15px, whose uppercase ink measures 11.42px. So
+   27 x 11.42 / 13.22 = 23.3px, at which the x-height lands on 11.41px.
+
+   The consequence, on purpose: the ascenders of the h and the t then reach
+   17.4px, half again the height of the caps beside them, and the mark sits a
+   little taller than the nav. The alternative — matching the ASCENDER to the
+   cap height — gives 15.3px and squeezes those round letters down to 7.6px,
+   which reads as a smaller logo rather than a level one.
+
+   NO VERTICAL NUDGE, and that is a measurement too. The box spans ascender to
+   descender, so a word with a single descender could easily need an offset to
+   look centred — but the ink band here (x-height top 6.91 to baseline 20.13)
+   centres at 13.52 against the box's own centre at 13.32. Two tenths of a
+   unit. The flex centring on .tb-left and .logo is honest, so it does the
+   work; the PNG this replaced never could be centred that way, because the
+   octopus sat in transparent padding above the word. */
 .topbar-logo {
-  height: 46px;
+  height: 23.3px;
   width: auto;
   display: block;
-  object-fit: contain;
+  /* The paths carry fill:currentColor so the mark is themeable rather than a
+     baked-in white, which the PNG it replaced could never be. */
+  color: #FFFFFF;
 }
 
 /* Dropdown chevron shared by the project chip + account block (SVG for exact centering) */
@@ -11199,6 +11317,8 @@ body.is-splash .ai-disclaimer { display: none; }
    Equal min-width + centered content → every tab occupies the same span,
    regardless of label length. */
 .bar-nav .bar-nav-btn {
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
+  --pill-bw: 1px;   /* the ring below is placed against the border box */
   position: relative;
   display: flex;
   align-items: center;
@@ -11215,8 +11335,7 @@ body.is-splash .ai-disclaimer { display: none; }
      42px pill leaves (42-26)/2 = 8px above and below, so it gets 8px to its
      left too and sits in a true corner square. */
   padding: 0 14px 0 8px;
-  border: none;
-  border-radius: 8px;                /* rows nest inside the 12px group */
+  border-radius: var(--pill-radius);                /* rows nest inside the 12px group */
   background: transparent;
   font-family: var(--mono);
   /* One step above the sub-tab row (13px): the header is the higher level and
@@ -11229,23 +11348,72 @@ body.is-splash .ai-disclaimer { display: none; }
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  color: var(--text-dim);            /* #a0a0a0 */
+  /* WHITE AT 50%, not a grey token. The selected tab is fully white, so the
+     rest being a tinted grey made the two look like different inks at
+     different brightnesses rather than one ink at two strengths. */
+  color: rgba(255, 255, 255, .5);
+  /* THE BORDER LIVES ON EVERY TAB, transparent until selected. It is 1px and
+     box-sizing is border-box, so declaring it only on .is-active would shrink
+     that tab's content box by 2px and nudge its label as you clicked. Same
+     rule as the font weight: the tabs must not move on select. */
+  border: 1px solid transparent;
   transition: background .15s var(--ease), color .15s var(--ease);
 }
+/* SENTENCE CASE, AND IT TAKES TWO RULES BECAUSE THE SOURCE IS TITLE CASE.
+   The label arrives from locale.js already capitalised — "Game Details" — so
+   simply dropping the uppercase above would leave two capitals. Lowercasing
+   the lot and lifting the first letter back is what gets "Game details" from
+   either "GAME DETAILS" or "Game Details", without touching the locale files
+   or asking every translator to re-case their strings.
+
+   ::first-letter needs a block container, and it has one for free: .lbl is a
+   flex item of the button, and flex items are blockified. */
+.bar-nav .bar-nav-btn .lbl { text-transform: lowercase; }
+.bar-nav .bar-nav-btn .lbl::first-letter { text-transform: uppercase; }
+
 /* Icon-only tab (Calendar). The 132px min-width exists so the labelled tabs all
    occupy the same span; a tab with no label must opt out of it or it sits there
    as a wide empty box. 8px each side of the 26px icon box makes it 42px — the
    same as the row's height, so it reads as a square. */
 .bar-nav .bar-nav-btn--icon { min-width: 0; padding: 0 8px; gap: 0; }
 .bar-nav .bar-nav-btn:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
-.bar-nav .bar-nav-btn.is-active,
-.bar-nav .bar-nav-btn.is-active:hover {
-  /* Selected main tab: solid brand-purple, dark text. Weight stays at the row's
-     500 — a heavier face is a wider one, and the tabs must not move on select. */
-  background: var(--purple);
-  color: #0a0a0a;
+/* SELECTED MAIN TAB: THE INK GOES PURPLE, NOT THE GROUND.
+
+   This was a solid purple pill with dark text on it. The pill is gone and only
+   the label and the glyph carry the colour, which works here for one specific
+   reason worth writing down: the four nav glyphs are drawn with
+   fill="currentColor", so setting `color` on the button paints the icon and the
+   word in one move. Nothing had to be restated per icon.
+
+   Weight stays at the row's 500 — a heavier face is a wider one, and the tabs
+   must not move on select. And selection is still announced properly to
+   assistive tech: aria-selected is on the buttons in index.html, so this does
+   not become a colour-only signal for a screen reader. */
+.bar-nav .bar-nav-btn.is-active {
+  /* THE SAME OBJECT AS THE PROJECT CHIP — same tokens, same two-layer
+     construction, stroke inside the fill and the radii agreeing by
+     construction. See --chip-* at the top of this file. */
+  background: var(--chip-fill);
+  border-color: transparent;
+  /* Fully white, against the 50% the unselected tabs carry. One ink, two
+     strengths — and the glyphs come along for free, since all four are drawn
+     with fill="currentColor". */
+  color: #FFFFFF;
 }
-.bar-nav .bar-nav-btn.is-active::after { display: none; }   /* kill the leftover ring */
+
+/* AND IT ANSWERS TO HOVER. The active tab used to share its rule with :hover,
+   which meant the one tab you were pointing at was the only one that did not
+   react to being pointed at. Same lift the project chip gets, from the same
+   token — the fill goes 15% to 20%, the label stays white. Four classes deep,
+   so it outranks the generic .bar-nav-btn:hover above rather than tying with
+   it and depending on source order. */
+.bar-nav .bar-nav-btn.is-active:hover {
+  background: var(--chip-fill-hover);
+  color: #FFFFFF;
+}
+/* No plate behind the glyph either — it existed to sit on the pill. */
+.bar-nav .bar-nav-btn.is-active .ic,
+.bar-nav .bar-nav-btn.is-active:hover .ic { background: transparent; }
 
 /* ── Squared nav + vertical sub-menu dropdown ──
    The tab group is squared (8px); rows are 5px. When a tab with sub-sections is
@@ -11347,14 +11515,32 @@ body.viewing-splash #app-guide { display: none; }
    top and bottom, so the 30px cover sits in a square of air: 6 + 30 + 6 = 42.
    The 30px it leaves is also exactly the two 15px text lines. */
 .project-selector-wrap #projectSelector {
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
   display: flex; align-items: center;
   height: 42px; padding: 6px 12px 6px 6px; gap: 11px;
-  border-radius: 8px; white-space: nowrap;
-  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--pill-radius); white-space: nowrap;
+  /* A FLAT 15% WHITE FILL, and the stroke as a ring INSIDE the same box.
+
+     THIS IS NOT THE background-clip TRICK, and the reason is worth keeping:
+     that construction (fill clipped to padding-box, gradient to border-box)
+     only works when the fill is OPAQUE. Background layers paint back to
+     front, so a fill at 15% is translucent and the border gradient shows
+     straight through it across the whole pill — which read as a vertical grey
+     wash from light to dark, not as a fill with an edge. It looked like the
+     fill was a gradient. It wasn't; it was the stroke underneath it.
+
+     A `border` cannot do this either, because a border takes one flat colour
+     and this edge has to fade down the height. So the ring is a masked
+     gradient — but at inset:0, INSIDE the element and on the same box, which
+     is what makes its corner radius identical to the fill's rather than the
+     offset curve an inset:-1px ring produced. */
+  background: var(--chip-fill);
+  border: 0;
+  position: relative;
   color: var(--text); text-transform: none;
   font-family: var(--mono); font-size: 13px; font-weight: 500;
 }
-.project-selector-wrap #projectSelector:hover { border-color: var(--border-hover); background: var(--panel); }
+.project-selector-wrap #projectSelector:hover { background: var(--chip-fill-hover); }
 
 /* Tab glyphs sit in an invisible 26x26 box. The four SVGs are different sizes
    (13, 14, 14 and 18px wide), so hanging the gap off the glyph itself gave each
@@ -11370,7 +11556,6 @@ body.viewing-splash #app-guide { display: none; }
    left to each viewBox's own ratio — the bar chart is genuinely wider than it is
    tall (30x25) and forcing it square would squash it against the others. */
 .bar-nav .bar-nav-btn .ic svg { opacity: 1; height: 18px; width: auto; }
-.bar-nav .bar-nav-btn.is-active::after { display: none; }   /* kill the white gradient stroke */
 .bar-nav.has-sel .bar-nav-btn:not(.is-active) .ic { background: transparent !important; }
 
 /* Project chip cover art: 22px / radius 6, panel-3 until the icon lands. */
@@ -11434,19 +11619,27 @@ body.viewing-splash #app-guide { display: none; }
 .project-selector-wrap .bar-nav-btn .ic svg { color: #fff; opacity: 1; }
 
 /* Cover art, masked to the same radius as every other square. */
-.bar-nav-btn .ic.cover { background: none; position: relative; }
+.bar-nav-btn .ic.cover {
+  background: none; position: relative;
+  /* Its own box has no border, so the ring's inset is 0 — see --pill-bw. */
+  --pill-bw: 0px;
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
+}
 .bar-nav-btn .ic.cover.empty { background: rgba(255, 255, 255, .07); }  /* until the icon lands */
 .bar-nav-btn .ic.cover img {
   width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit;
 }
-/* Outline behind and in front, so the cover lifts off the fill. */
+/* THE COVER'S EDGE, INSIDE IT. This carried two box-shadows: an inset white
+   ring at a flat 28%, and — the one that showed — `0 0 0 1px rgba(0,0,0,.22)`
+   with no `inset`, which is an OUTER ring, drawn outside the square. Now it is
+   the same internal fading stroke the pill around it uses, from the same
+   tokens, so the icon and its container are visibly the same object. */
 .bar-nav-btn .ic.cover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28), 0 0 0 1px rgba(0, 0, 0, .22);
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: linear-gradient(180deg, var(--chip-stroke-top) 0%, var(--chip-stroke-bottom) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
 }
 
 /* The project name prints exactly as typed — no uppercasing. */
@@ -12260,11 +12453,10 @@ body.viewing-splash #app-guide { display: none; }
 
 /* Label and character counter share one 18px row, counter pushed right. */
 .ob-form .gi-head { display: flex; align-items: center; height: 18px; margin-bottom: 8px; }
-.ob-form .gi-head .form-label {
-  font-family: var(--mono); font-weight: 400; font-size: 11px;
-  text-transform: uppercase; letter-spacing: .05em; line-height: 18px;
-  color: #E1E4E7; opacity: .72; margin-bottom: 0; display: block;
-}
+/* Only what is specific to this one: the 18px row it shares with the
+   character counter. Everything about how a LABEL looks now comes from the
+   shared rule at the end of this block. */
+.ob-form .gi-head .form-label { line-height: 18px; margin-bottom: 0; display: block; }
 .ob-form .gi-head .char-count {
   display: block; margin-left: auto;
   font-family: var(--mono); font-weight: 400;
@@ -12273,7 +12465,7 @@ body.viewing-splash #app-guide { display: none; }
 
 /* ── Typable fields ──────────────────────────────────── */
 .ob-form .form-input {
-  width: 100%; border: 1px solid #23272A; border-radius: 8px; background: var(--inp-bg);
+  width: 100%; border: 1px solid #23272A; border-radius: var(--field-radius); background: var(--inp-bg);
   padding: 0 16px; font-family: var(--mono); font-weight: 400; font-size: 13px;
   color: #E8EDE9; caret-color: #E1E4E7; outline: none; cursor: text;
   transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
@@ -12334,9 +12526,11 @@ body.viewing-splash #app-guide { display: none; }
 .ob-form .platform-grid.pg-7 { grid-template-columns: repeat(7, 1fr); }
 .ob-form .platform-grid.pg-8 { grid-template-columns: repeat(8, 1fr); }
 .ob-form .platform-tile {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1px;   /* the ring below is placed against the border box */
   position: relative; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  gap: 8px; padding: 16px 10px 12px; text-align: center; border-radius: 8px;
+  gap: 8px; padding: 16px 10px 12px; text-align: center; border-radius: var(--field-radius);
   background: var(--pill-bg); border: 1px solid rgba(207, 210, 213, .15);
   color: #B8BFBA; font-family: var(--mono); font-weight: 400; cursor: pointer;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease;
@@ -12344,11 +12538,19 @@ body.viewing-splash #app-guide { display: none; }
 .ob-form .platform-tile:not(.selected):hover {
   background: var(--pill-bg-hover); border-color: rgba(255, 255, 255, .14); color: #E1E4E7;
 }
+/* The house look for "I picked this" — now stated as tokens (see --pill-on-*
+   at the top of this file) so the Distribution and Localization pills can be
+   the same thing rather than a copy of it. Only the border-COLOUR goes
+   transparent; the width stays, or the tile would shrink by a pixel on select
+   and nudge the whole grid. */
 .ob-form .platform-tile.selected {
-  background: rgba(0, 154, 255, .35); border: 1px solid transparent;
-  color: #52BAFF; font-weight: 500;
+  background: var(--pill-on-bg);
+  border-color: transparent;
+  color: var(--pill-on-color); font-weight: 500;
 }
-.ob-form .platform-tile.selected:hover { background: rgba(0, 154, 255, .42); color: #6FC4FF; }
+.ob-form .platform-tile.selected:hover {
+  background: var(--pill-on-bg-hover); color: var(--pill-on-color-hover);
+}
 .ob-form .platform-tile-icon {
   width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
   color: currentColor;
@@ -12378,13 +12580,56 @@ body.viewing-splash #app-guide { display: none; }
 
 /* The gradient stroke on a selected pill or tile: blue 75% down to 25%. */
 .ob-form .selectable.selected::after,
-.ob-form .platform-tile.selected::after {
-  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
-  background: linear-gradient(180deg, rgba(82, 186, 255, .75) 0%, rgba(82, 186, 255, .25) 100%);
+/* ── THE SELECTED PILL'S STROKE, DRAWN INSIDE IT ──────────────────────────
+   A masked gradient at inset:0 — the same construction the project chip and
+   the selected header tab use, for the same reason: these fills are
+   translucent (--pill-on-bg is blue at 35%), so the background-clip approach
+   cannot be used here. Layers paint back to front, so clipping a gradient to
+   the border-box behind a see-through fill lets it bleed across the whole
+   pill: what should be an edge became a wash over the entire face. That
+   mistake shipped in v5.42 and this is the correction.
+
+   inset:0 rather than -1px, which is the other half of it: on the same box the
+   ring's corner radius is the fill's radius, instead of the offset curve you
+   get from a rounded rectangle grown by a pixel.
+
+   All four families share this one rule rather than each carrying a copy —
+   with no preprocessor here, a shared selector list is the only way "the same
+   stroke" stays true after the next change. Each keeps its own border WIDTH,
+   so no pill changes size on select. */
+.ob-form .platform-tile.selected::after,
+.ob-preset-pill.is-active::after,
+.ob-dist-row-chip.is-on::after,
+.loc-chip.is-on::after,
+.bar-nav .bar-nav-btn.is-active::after,
+.app-subtab.is-on::after,
+.project-selector-wrap #projectSelector::after,
+.bar-nav-btn .ic.cover::after {
+  /* AGAINST THE BORDER BOX, NOT THE PADDING BOX — which is the whole of what
+     was wrong. An absolutely positioned box resolves `inset` against its
+     containing block's PADDING box, so inset:0 on a pill that still carries a
+     1px border landed the ring a pixel inside the fill's outer edge. The fill
+     paints out to the border box, so there was fill on BOTH sides of the ring
+     and it read as sitting halfway through the outline.
+
+     Pulling it out by the border's own width puts its outer edge exactly on
+     the pill's, so the 1px it draws is entirely inside the fill. And the radii
+     still agree: `border-radius: inherit` is the element's outer radius, which
+     is precisely the border box's. The project chip looked right all along
+     because it has border:0 — there its padding box IS its border box, so
+     inset:0 was already the border box. This makes every family behave the way
+     that one already did. */
+  content: ''; position: absolute; border-radius: inherit; padding: 1px;
+  inset: calc(0px - var(--pill-bw, 0px));
+  /* The colours come from the family, not from here: the onboarding pills ring
+     in blue (they are a SELECTION), the header tab, the project chip and its
+     cover ring in white (they are a SURFACE). One geometry, two palettes. */
+  background: linear-gradient(180deg, var(--ring-top) 0%, var(--ring-bottom) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
           mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
 }
+.ob-preset-pill, .ob-dist-row-chip, .app-subtab { position: relative; }
 
 /* ── Continue ────────────────────────────────────────── */
 .btn-continue {
@@ -13090,11 +13335,9 @@ body.sm-picker-open { overflow: hidden; }
    anybody gets to the label. */
 .sm-wells { display: flex; flex-wrap: wrap; gap: 26px 30px; margin-top: 18px; }
 .sm-well { display: flex; flex-direction: column; gap: 9px; }
-.sm-well-h {
-  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
-  letter-spacing: .06em; text-transform: uppercase;
-  color: var(--text-dim, #8A8F98);
-}
+/* Font, size and colour come from the shared label rule; this keeps only what
+   is its own. The count inside it stays a touch quieter than the word. */
+.sm-well-h { margin: 0; }
 .sm-well-h span { opacity: .6; }
 .sm-well-row { display: flex; align-items: flex-end; gap: 9px; flex-wrap: wrap; }
 .sm-thumb {
@@ -13333,3 +13576,64 @@ body.sm-picker-open { overflow: hidden; }
 /* The menu itself is still the OS's, and on a dark page it inherits the
    page's colours only if the options are told to. */
 .pk-link-pick option { background: var(--bg, #0d0d0f); color: var(--text, #E8EAEE); }
+
+/* ── ONE LABEL, STATED ONCE ───────────────────────────────────────────────
+   Basic Info's field labels were the look worth keeping; Distribution,
+   Localization and Assets had each invented their own — the section headers
+   at the top of each tab included, which sat two steps quieter again at
+   --text-faint. Five near-misses:
+   10px vs 11px, weight 700 vs 400, letter-spacing from .06em to .2em, and
+   #a0a0a0 vs #E1E4E7 — close enough that no single one looked wrong, and far
+   enough apart that moving between tabs felt like moving between designs.
+
+   A shared selector list rather than four copies, for the same reason the
+   selected-pill ring is shared: with no preprocessor here, this is the only
+   way "the same label" stays true after the next change.
+
+   Appended at the end of the file ON PURPOSE. These selectors each have to
+   out-rank a rule declared earlier — .ob-form .ob-section-hdr is (0,2,0)
+   against .ob-section-hdr's (0,1,0), but .sm-well-h ties at (0,1,0) — and for
+   a tie the later rule wins. Moving this block up would silently give the old values
+   back to the asset wells. */
+.ob-form .gi-head .form-label,
+.ob-form .form-label,
+.ob-form .ob-dist-table-header,
+.ob-form .ob-section-hdr,
+.ob-form .sm-well-h,
+.sm-well-h {
+  font-family: var(--ob-label-font);
+  font-size: var(--ob-label-size);
+  font-weight: 400;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ob-label-color);
+  opacity: 1;                 /* the alpha is in the colour now */
+  /* THE LINE BOX, TOO — not only the glyphs. The field labels sit in an 18px
+     row (.gi-head) while the section headers were inheriting 1.4, giving a
+     15.4px box: same font, same size, but the text landed 1.3px higher and
+     the gap below it was 2.6px shorter. That is the sort of difference you
+     see between two tabs without being able to name it. */
+  line-height: 18px;
+}
+/* The asset well's "· 3" — quieter than the word it follows, without the
+   compounding an opacity on the parent would have caused. */
+.sm-well-h span { opacity: 1; color: rgba(225, 228, 231, .45); }
+
+/* ── MARKETING'S EDIT PANEL ───────────────────────────────────────────────
+   The page and its edit panels take turns inside the same embed, flipped with
+   the same .is-flip-exit / .is-flip-enter animations the step modal uses (see
+   _wpFlipMarketing in web-page.js). Nothing new to declare for the turn
+   itself — those classes are already global. */
+.mkt-web-panel { padding: 4px 2px 8px; }
+/* The way back. The modal has a back arrow in its header; this embed has no
+   header of its own, so the panel carries its own door. */
+.mkt-web-back {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin: 0 0 16px; padding: 6px 12px 6px 9px;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--text-dim);
+  font-family: var(--mono); font-size: 12px; cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.mkt-web-back:hover { color: var(--text); border-color: var(--text-faint); }
+.mkt-web-back svg { display: block; }

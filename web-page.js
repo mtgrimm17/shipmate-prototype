@@ -364,7 +364,7 @@ function webPageBindPanels() {
     if (!target || typeof openStorePreviewSection !== 'function') return;
     e.preventDefault();
     e.stopPropagation();
-    openStorePreviewSection('web', target);
+    wpOpenPanel(target);
   });
 }
 
@@ -1167,7 +1167,7 @@ function webPageBindDock() {
       // a lit zone with a popup over it, minutes later, is a state nobody
       // asked for.
       state.webPageSel = null;
-      return openStorePreviewSection('web', b.dataset.k);
+      return wpOpenPanel(b.dataset.k);
     }
     if (a === 'accent') {
       // The page's one colour, written where the page's one colour lives —
@@ -1791,9 +1791,21 @@ const artRatio = () => (M.up.art ? M.up.artRatio : WPG.artRatio)
   // guess is corrected by artLoaded a frame later — which is fine ONCE.
   || 16/9;
 
+/* DRAW A SCREENSHOT WHEN THERE IS A SCREENSHOT — which is not what this asked.
+
+   It gated on `g.real`, and `real` is `!!title`: whether the game has a NAME.
+   So a developer who uploaded screenshots before typing a title kept seeing
+   the generated placeholders and had no way to tell the upload had worked, and
+   the same condition failed the other way round too — a title with no shots
+   yet computed `i % 0`, which is NaN, so `g.shots[NaN]` came out undefined and
+   the strip rendered src="undefined".
+
+   Two different facts had been collapsed into one flag. This asks the only
+   question that matters here: do I have a picture to show? */
 function shotArt(i){
   const g = WPG;
-  if(g.real) return `<img class="kart" src="${g.shots[i % g.shots.length]}" alt="Screenshot ${i+1}" draggable="false" loading="lazy">`;
+  const shots = g.shots || [];
+  if(shots.length) return `<img class="kart" src="${shots[i % shots.length]}" alt="Screenshot ${i+1}" draggable="false" loading="lazy">`;
   return svgArt('classic', artSeed + 30 + i*7);
 }
 
@@ -2947,6 +2959,75 @@ function artMetrics(hero){
    the art pan being clamped — ask the app to redraw instead. Defined as a
    lookup rather than a direct call so this file stays loadable on its own and
    so a missing modal is a no-op rather than a crash. */
+/* REDRAW WHICHEVER SURFACE THE PAGE IS ACTUALLY IN.
+
+   This used to be `reRenderStepModal()` and nothing else, which was true when
+   the page only ever existed inside a Submission step. It now also lives in
+   Marketing → Pages, where there is no step modal — so every one of the ~20
+   calls to this function was a silent no-op there. Not just uploads: section
+   reordering, hide/show, the CTA mode, the title weight, the logo tint,
+   picking an asset. The whole editor was inert on that surface, and inert in
+   the quietest possible way, because a redraw that does nothing looks exactly
+   like a change that did not register.
+
+   The step modal wins when it is open, and that is not arbitrary: it is drawn
+   over the Marketing view, so if one is open it is the copy the developer can
+   actually see and touch. */
 function webPageRedraw() {
+  if (state.stepModal && state.stepModal.stepId && typeof reRenderStepModal === 'function') {
+    return reRenderStepModal();
+  }
+  /* Marketing → Pages. Replacing just the embed's innerHTML rather than
+     calling renderBroadcast() for the same reason reRenderStepModal exists:
+     rebuilding the whole view would throw away the scroll position, and the
+     page is usually taller than the panel. buildWebSitePreviewSection
+     schedules its own webPageMount() (see render.js), so the gestures rebind
+     themselves — no second call needed here. */
+  const embed = document.querySelector('.mkt-web-embed');
+  if (embed && typeof _mktWebInnerHTML === 'function') {
+    embed.innerHTML = _mktWebInnerHTML();
+    return;
+  }
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+
+/* ── WHICH SURFACE OWNS THIS EDIT? ────────────────────────────────────────
+   The page is editable from two places: the Submission step modal and
+   Marketing > Pages. openStorePreviewSection drives the flip by turning over
+   #submit-modal and calling reRenderStepModal, which is right in the modal and
+   a no-op in Marketing — the click set a flip target and nothing turned over.
+
+   The modal wins whenever it is open, and that is not arbitrary: it is drawn
+   over the Marketing view, so it is the copy the developer can actually see. */
+function _wpEditSurface() {
+  if (state.stepModal && state.stepModal.stepId) return 'modal';
+  return document.querySelector('.mkt-web-embed') ? 'marketing' : 'modal';
+}
+
+function wpOpenPanel(target) {
+  if (_wpEditSurface() === 'modal') return openStorePreviewSection('web', target);
+  state.mktWebFlipTarget = target;
+  return _wpFlipMarketing();
+}
+
+function wpClosePanel() {
+  if (_wpEditSurface() === 'modal') return closeStorePreviewSection('web');
+  state.mktWebFlipTarget = null;
+  return _wpFlipMarketing();
+}
+
+/* The same three-phase turn openStorePreviewSection does, on Marketing's card
+   instead of the modal's: rotate out (160ms), swap the contents, rotate in
+   (300ms). The durations are the CSS animations' own — see .is-flip-exit and
+   .is-flip-enter — and repeating them here is what the modal already does. */
+async function _wpFlipMarketing() {
+  const card = document.querySelector('[data-wp-card]');
+  if (!card) return webPageRedraw();
+  card.classList.add('is-flip-exit');
+  await new Promise(r => setTimeout(r, 160));
+  card.classList.remove('is-flip-exit');
+  webPageRedraw();
+  card.classList.add('is-flip-enter');
+  setTimeout(() => card.classList.remove('is-flip-enter'), 300);
 }

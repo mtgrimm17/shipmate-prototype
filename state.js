@@ -2766,6 +2766,16 @@ const state = {
   // Which store preview sub-section is currently open in the flip animation
   // null = showing preview; 'content'|'business'|'data'|'screenshots' = flipped to sub-section
   storePreviewFlipTarget:   { ios: null, macos: null, macos_full: null, android: null, steam: null, web: null },
+
+  /* MARKETING'S OWN FLIP TARGET, deliberately not sharing the one above.
+
+     The page is editable from two places now — the Submission step modal and
+     Marketing > Pages — and they are two independent editing sessions. Sharing
+     storePreviewFlipTarget.web meant opening a panel in one surface left the
+     other one primed to open flipped too: click a field in Marketing, then
+     open the Submission step, and it came up on "Edit site details" instead of
+     on the page. Two surfaces, two targets, no cross-talk. */
+  mktWebFlipTarget:         null,
   // Tracks which sub-sections the user has actually visited (gates "done" state)
   storePreviewSectionSeen:  { ios: {}, macos: {}, macos_full: {}, android: {}, steam: {}, web: {} },
 

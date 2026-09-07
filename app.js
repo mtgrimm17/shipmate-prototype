@@ -15955,6 +15955,9 @@ if (typeof document !== 'undefined' && !smPickAsset._esc) {
    in place. Plus the two things the classification is FOR: what each store
    still needs, and the smallest set of masters that would cover it. */
 function renderAssetLibrary() {
+  /* The project chip in the header can be showing an icon that came from this
+     pool (see renderProjectBar), so a change here can change it too. */
+  if (typeof renderProjectBar === 'function') renderProjectBar();
   const el = document.getElementById('sm-library');
   if (el) el.innerHTML = _smLibraryHTML();
   const cov = document.getElementById('sm-coverage');
