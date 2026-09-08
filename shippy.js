@@ -157,7 +157,12 @@ const OCTO=(()=>{
     svg=svgEl('svg',{viewBox:VB,'aria-hidden':'true',preserveAspectRatio:'xMidYMid meet'});
     const defs=svgEl('defs',{});
     const figure=svgEl('g',{id:'octo-figure',opacity:P.opacity});
-    const armsL=svgEl('g',{}), headL=svgEl('g',{});
+    /* Both layers carry an id so a second, cropped copy can reference them
+       with <use> and stay in sync with this one — the arms are procedural, so
+       a duplicated renderer would need its own rAF loop and would drift.
+       Ids are safe here despite the note at the top of this file: OCTO owns a
+       single node and re-parents it, so there is only ever one of each. */
+    const armsL=svgEl('g',{id:'octo-arms'}), headL=svgEl('g',{id:'octo-head'});
     figure.appendChild(armsL); figure.appendChild(headL);
 
     armNodes=arms.map(()=>{

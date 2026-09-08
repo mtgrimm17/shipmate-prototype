@@ -4142,12 +4142,22 @@ function _drawMap(container, W, activeCodes, primaryCodes) {
   // Natural Earth projection fits ~2:1 width-to-height; use 0.50 for full uncropped world
   const H = Math.round(W * 0.50);
 
-  // Colors (dark-theme palette)
-  const C_OCEAN    = '#0d1117';
-  const C_INACTIVE = '#1e2230';
-  const C_ACTIVE   = '#2563d4';
-  const C_BORDER   = '#0d1117';
-  const C_PRIMARY  = '#3b82f6';
+  /* Colours come from the stylesheet (the --map-* block next to
+     .world-map-container), not from hexes here. The container's background and
+     this ocean must be the same value — the container is what the user sees
+     while the topology is still downloading — and two copies of a colour is
+     two chances to change only one of them.
+     C_BORDER is the ocean on purpose: the country outlines are drawn as gaps,
+     not as lines, so they read as water between the landmasses. */
+  const _mapVar = (n, fallback) => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    return v || fallback;
+  };
+  const C_OCEAN    = _mapVar('--map-ocean',   '#0a0a0a');
+  const C_INACTIVE = _mapVar('--map-land',    '#1e2230');
+  const C_ACTIVE   = _mapVar('--map-active',  '#009AFF');
+  const C_PRIMARY  = _mapVar('--map-primary', '#52BAFF');
+  const C_BORDER   = C_OCEAN;
 
   const projection = d3.geoNaturalEarth1()
     .scale(W / 5.5)

@@ -259,7 +259,28 @@ function buildDistributionTab() {
 
       <!-- ── Distribution ── -->
       <div class="ob-section" id="ob-sec-distribution">
+        ${/* THE HEADER REPEATS THE SUB-TAB, AND STAYS ANYWAY — a decision, not
+              an oversight, so please don't "tidy" it away.
+              It is genuinely redundant: the tab above says Distribution, and
+              Basic info has no .ob-section-hdr at all (its fields label
+              themselves). These three are left over from when this was one
+              long scrolling form, where they were the only way to tell the
+              sections apart. We removed all three, looked at it, and put them
+              back: the panel opening straight onto a line of grey prose gives
+              it no anchor, and the repetition costs less than that.
+              "Compliance Questions" keeps its own header for a different
+              reason — no tab names it at all. */''}
         <div class="ob-section-hdr">${t('ob.section.distribution') || 'Distribution'}</div>
+
+        ${/* PROSE, NOT A BOX — the same .asset-guidance the Assets section
+              uses. Distribution, Localization and Assets all open the same
+              way now: a heading, a line of explanation, then the controls.
+              The box is what made this read as an alert and then as something
+              clickable; an outlined box with an icon was still a box. It also
+              goes FIRST here, as it already did in Localization — it used to
+              sit between the preset pills and the country list, which put the
+              advice after the control it advises about. */''}
+        <div class="asset-guidance">${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</div>
 
         <div id="ob-dist-map-container" class="world-map-container" style="margin-bottom:14px;"></div>
 
@@ -276,11 +297,6 @@ function buildDistributionTab() {
           </div>
         </div>
 
-        <div class="sw-tip-box" style="margin-bottom:10px;">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
-          <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</span>
-        </div>
-
         <div id="ob-country-list-wrap">${buildObCountryChips()}</div>
       </div>
 
@@ -288,12 +304,10 @@ function buildDistributionTab() {
 
       <!-- ── Localization ── -->
       <div class="ob-section" id="ob-sec-localization">
+        ${/* Repeats the sub-tab on purpose — see the note in Distribution. */''}
         <div class="ob-section-hdr">${t('ob.section.localization') || 'Localization'}</div>
 
-        <div class="sw-tip-box" style="margin-bottom:12px;">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
-          <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.distribution.languages') || 'On average, games see 30–50% more revenue in markets where they support the local language vs. English-only releases. The highest-impact localization for your selected markets is highlighted below.'}</span>
-        </div>
+        <div class="asset-guidance">${t('tip.distribution.languages') || 'On average, games see 30–50% more revenue in markets where they support the local language vs. English-only releases. The highest-impact localization for your selected markets is highlighted below.'}</div>
 
         <div id="ob-lang-list-wrap">${buildObLangList()}</div>
       </div>
@@ -672,9 +686,9 @@ function _legacyScenarioWidget_unused() {
     } else if (ls.status === 'done' && ls.found) {
       resultHtml = `
         <div class="sw-tip-box" style="margin-bottom:0;">
-          <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+          ${SM_INFO_ICON}
           <div class="sw-tip-text">
-            <div><strong class="sw-tip-bold">Shipmate Tip:</strong> We found this on ${escHtml(ls.source || 'the store')}.</div>
+            <div>We found this on ${escHtml(ls.source || 'the store')}.</div>
             <div class="ob-live-found-desc" style="margin-top:6px;">${escHtml(ls.description || '')}</div>
             <div class="ob-live-found-actions" style="margin-top:8px;">
               <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;" onclick="confirmGameImport()">That&rsquo;s mine!</button>
@@ -943,7 +957,7 @@ function buildObLangList() {
     const isOn = selected.has(lang);
     const isTipVisible = lang === tipLang && !isOn && tipTotal > 0;
     const tipBadge = isTipVisible
-      ? `<span class="sw-tip-chip-badge tooltip-anchor" data-tip="${t('tip.lang.reach', { lang: OB_LANG_NAMES[lang], total: tipTotal }) || ('Shipmate Tip: adding ' + OB_LANG_NAMES[lang] + ' support could reach ~' + tipTotal + 'M gamers in their native language across your selected countries.')}" onclick="event.stopPropagation()">!</span>`
+      ? `<span class="sw-tip-chip-badge tooltip-anchor" data-tip="${t('tip.lang.reach', { lang: OB_LANG_NAMES[lang], total: tipTotal }) || ('Adding ' + OB_LANG_NAMES[lang] + ' support could reach ~' + tipTotal + 'M gamers in their native language across your selected countries.')}" onclick="event.stopPropagation()">!</span>`
       : '';
     return `
       <button class="loc-chip${isOn ? ' is-on' : ''}${isTipVisible ? ' has-sw-tip' : ''}"
@@ -1087,6 +1101,7 @@ function buildAssetsTab() {
               guidance had the same problem: it described reformatting
               screenshots for each store and said nothing about the sorting,
               which is the part that does the work. */''}
+        ${/* Repeats the sub-tab on purpose — see the note in Distribution. */''}
         <div class="ob-section-hdr">${t('ob.section.assets') || 'Assets'}</div>
         <div class="asset-guidance">${t('ob.assets.guidance')}</div>
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
@@ -3249,8 +3264,8 @@ function renderGuide() {
      off the top so the column doesn't change character. */
   if (view === 'calendar' && !state.guideCollapsed) {
     el.classList.remove('is-collapsed');
-    el.innerHTML = `<div class="guide-mascot"></div>${buildCalChecklist()}`;
-    if (typeof OCTO !== 'undefined') OCTO.mount(el.querySelector('.guide-mascot'));
+    el.innerHTML = `${shippyLayersHTML()}${buildCalChecklist()}`;
+    mountShippy(el);
     return;
   }
 
@@ -3286,7 +3301,7 @@ function renderGuide() {
   const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
   const tabName = TAB_NAME[view] || '';
   el.innerHTML = `
-    <div class="guide-mascot"></div>
+    ${shippyLayersHTML()}
     <div class="guide-card">
       <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
       <div class="guide-eyebrow">Shippy Guide</div>
@@ -3294,9 +3309,93 @@ function renderGuide() {
       <div class="guide-sub">${hero.sub || ''}</div>
       ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}
     </div>`;
-  /* OCTO owns a single SVG node and re-parents it, so re-rendering the guide
-     moves the octopus into the fresh host without restarting its animation.
-     Collapsed the card is 48px wide, so the mascot is left out of that branch. */
+  mountShippy(el);
+}
+
+/* ── SHIPPY, IN TWO LAYERS ───────────────────────────────────────────────────
+   The guide card is opaque and sits at z-index 1, so it crops whatever is
+   behind it at its own top edge — no clip-path needed, unlike the retired
+   glass `.sm-panel`.
+
+     BACK  (.guide-mascot, z-index 0)  head and body. Only the 73px above the
+           card's edge is ever seen; the card covers the rest.
+     FRONT (.guide-tentacles, z-index 2, above the card) the two tentacles
+           lying ON the card.
+
+   THE CROP IS THE WHOLE TRICK. The front layer's box starts exactly at the
+   card's top edge and hides its overflow, so a tentacle slid upwards is cut
+   off precisely along that edge. A straight cut on an arbitrary line reads as
+   a clipping bug; a straight cut that lands on the card's own border reads as
+   the tentacle passing behind it. That is why one drawing serves for both
+   halves of the illusion, and why `--shippy-tent-rise` can be tuned without
+   asking for new art.
+
+   Two call sites render this column (the Calendar branch above and the main
+   one), which is exactly the split that let the Web platform card drift onto
+   old markup — so both go through here. */
+const SHIPPY_PNG = true;   // prototype: PNG art rather than the procedural SVG
+
+function shippyLayersHTML() {
+  return `<div class="guide-mascot${SHIPPY_PNG ? ' is-png' : ''}"></div>`
+       + `<div class="guide-tentacles" aria-hidden="true">`
+       +   `<span class="guide-tent guide-tent--l"></span>`
+       +   `<span class="guide-tent guide-tent--r"></span>`
+       + `</div>`;
+}
+
+/* THE BREATH DOES NOT RESTART ON EVERY TAB CHANGE.
+
+   renderGuide() rebuilds this column with innerHTML, which throws away the
+   mascot's DOM node and builds a new one — and an animation on a brand-new
+   element starts at its beginning, so Shippy jerked back to the bottom of his
+   breath every time you switched tabs.
+
+   The answer is the DOCUMENT TIMELINE. An animation created through
+   element.animate() can have its startTime set, and document.timeline is one
+   shared monotonic clock for the whole page. Anchoring every new node's
+   animation to startTime 0 puts them all at the same phase by definition:
+   whatever the old node was doing, the new one is doing the same thing at the
+   same instant. There is no seam to hide.
+
+   I tried the negative-animation-delay trick first — delay -1.4s starts a
+   2.8s cycle halfway in — computing the phase from a clock captured at load.
+   Measured, it still jumped about 2px per tab change; the arithmetic and the
+   element's real phase disagreed. The timeline needs no arithmetic, which is
+   why it is right: nothing to get wrong.
+
+   Keeping the node alive would be the other answer, and it is the one OCTO
+   uses, but it does not survive innerHTML — a node removed from the document
+   and re-inserted has its animations reset too. */
+function shippyBreathe(node) {
+  if (!node || typeof node.animate !== 'function') return;
+  // Someone who has asked their system for less movement gets none.
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const cs   = getComputedStyle(node);
+  const rise = parseFloat(cs.getPropertyValue('--shippy-bob')) || 0;
+  const secs = parseFloat(cs.getPropertyValue('--shippy-bob-t')) || 0;
+  if (!rise || !secs) return;
+
+  node.getAnimations().forEach(a => a.cancel());
+  const anim = node.animate(
+    [{ transform: 'translateY(0)' },
+     { transform: `translateY(${-rise}px)` },
+     { transform: 'translateY(0)' }],
+    { duration: secs * 1000, iterations: Infinity, easing: 'ease-in-out' },
+  );
+  /* The whole point: phase comes from the shared clock, not from when this
+     node happened to be born. */
+  try { anim.startTime = 0; } catch (e) { /* not yet on a timeline; harmless */ }
+}
+window.shippyBreathe = shippyBreathe;   // the editor re-applies after a change
+
+/* OCTO owns a single SVG node and re-parents it, so re-rendering the guide
+   moves the octopus into the fresh host without restarting its animation.
+   Collapsed the card is 48px wide, so the mascot is left out of that branch.
+   In PNG mode the SVG is not mounted at all — mounting it and hiding it in CSS
+   would leave its requestAnimationFrame loop redrawing an invisible octopus. */
+function mountShippy(el) {
+  if (SHIPPY_PNG) { shippyBreathe(el.querySelector('.guide-mascot')); return; }
   if (typeof OCTO !== 'undefined') OCTO.mount(el.querySelector('.guide-mascot'));
 }
 
@@ -3549,7 +3648,19 @@ function renderDashboard() {
       ${inactive.length
         ? `<div class="add-plat-list">${inactive.map(pid => {
             const label = (PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
-            const icon  = (typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '';
+            /* THE MEASURED MARKS, like everywhere else. This picker was still
+               on platformIcon(), which returns the brand PNGs from
+               Assets/Platform_Icons — a .webp for Google Play, a .png for
+               Steam — whitened by a CSS filter. Those are the files the tiles
+               and the card headers stopped using when the marks were reframed
+               onto one 39×37 canvas, so this list was the last place showing
+               the old artwork: different sizes, different optical weights, and
+               Epic's export dragging its invisible artboard rect along.
+               smMarkFor handles the id aliases (egs→epic, macos→ios) and
+               returns null for the two platforms with no measured art yet
+               (Xbox, Nintendo), which fall through to the PNG. */
+            const icon  = smMarkFor(pid, 18)
+              || ((typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '');
             if (COMING_SOON_PLATFORMS.has(pid)) {
               return `<button type="button" class="add-plat-item is-coming-soon" disabled title="Coming soon">
                 ${icon}
@@ -4009,9 +4120,13 @@ function buildActiveCard(pid, force) {
    • locked=false → row is active with inline track dropdown + Submit button
    ─────────────────────────────────────────────────────────────────────────── */
 function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
-  /* The prototype's check, path and stroke and all — kept on its own 24 viewBox
-     so the proportions are its rather than a re-drawing of them at 12. */
-  const checkSVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.4 12.3l3 3 6.2-6.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  /* Two ticks at two sizes, both from smCheckSVG (state.js). The disc one had
+     been left at 12px on a 20px disc while every other row draws it at the
+     disc's full width — so the last row's tick was two thirds the size of the
+     ones above it. The pill's stays small, with its stroke lifted to hold its
+     weight there. */
+  const checkSVG     = smCheckSVG(20);
+  const pillCheckSVG = smCheckSVG(12, 2.6);
   const num = stepCount + 1;
   const numClass = 'ios-step-num' + (submitDone ? ' is-done' : '');
 
@@ -4030,7 +4145,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
     <div class="submit-track-pill ${!selTrack ? 'no-track' : 'has-track'}"
          onclick="event.stopPropagation();_openTrackMenu('${pid}')" title="${selTrack ? 'Change track' : 'Choose a release track'}">
       ${selTrack
-        ? `${checkSVG}<span class="submit-track-label">${escHtml(tracks.find(t => t.id === selTrack)?.label || selTrack)}</span>`
+        ? `${pillCheckSVG}<span class="submit-track-label">${escHtml(tracks.find(t => t.id === selTrack)?.label || selTrack)}</span>`
         : `<svg width="9" height="9" viewBox="0 0 12 12" fill="none" style="opacity:0.5"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
            <span class="submit-track-label">Choose Track</span>`
       }
@@ -4047,9 +4162,22 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
   const stepLocked = locked || !connected;
 
-  // Trailing control: not connected → a "Connect to submit" prompt; else the track pill.
+  /* Trailing control: not connected → a "Connect to submit" prompt; else the
+     track pill.
+
+     IT WEARS THE BINARY PILL'S OWN CLASSES rather than a copy of its
+     measurements. Both are the same thing in the same slot — an action the
+     row offers on its right-hand end — and step 1's "Upload Build" is the one
+     that got the layout right: a fixed-width 30px pill, radius 8, centred
+     content, 12.5px at a normal weight. This was a 20px-radius capsule at
+     11px/650 sized to its own text, in alarm red. Sharing `.build-pill
+     .no-build` means the geometry has one definition and cannot drift again;
+     .submit-connect-req is left holding nothing but the title. */
   const trailing = !connected
-    ? `<span class="submit-connect-req" onclick="event.stopPropagation();platformGearFromSteps('${pid}')" title="Connect ${escHtml(platLabel(pid))} to submit">Connect to submit</span>`
+    ? `<span class="build-pill no-build submit-connect-req"
+             onclick="event.stopPropagation();platformGearFromSteps('${pid}')"
+             title="Connect ${escHtml(platLabel(pid))} to submit"><span
+             class="build-pill-label">Connect to submit</span></span>`
     : (isWeb ? '' : trackPill);
 
   return `
@@ -12413,7 +12541,7 @@ function buildAndroidStubSection(title, note) {
     <div class="ios-section-head">${title}</div>
     <div class="sw-tip-box" style="margin-bottom:16px;">
       <div class="sw-tip-box-row">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
+        ${SM_INFO_ICON}
         <span class="sw-tip-text">${note}</span>
       </div>
     </div>`;
@@ -12631,8 +12759,8 @@ function buildAndroidDataSafetySection() {
       'Select Yes ONLY if children under 13 are the primary intended audience of your app — not merely because children might also play it. This is a meaningful legal and policy distinction.')}
     <div class="sw-tip-box" style="margin-top:6px;margin-bottom:4px;">
       <div class="sw-tip-box-row">
-        <img src="Assets/SubwooferIcon_Orange.png" class="sw-tip-logo" alt="">
-        <span class="sw-tip-text"><strong class="sw-tip-bold">Shipmate Tip:</strong> ${t('tip.ios.kids_audience') || 'Many developers select this by mistake — choose Yes only if children under 13 are your primary intended audience.'}</span>
+        ${SM_INFO_ICON}
+        <span class="sw-tip-text">${t('tip.ios.kids_audience') || 'Many developers select this by mistake — choose Yes only if children under 13 are your primary intended audience.'}</span>
       </div>
     </div>
     ${familiesWarning}

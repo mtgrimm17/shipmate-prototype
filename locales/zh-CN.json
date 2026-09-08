@@ -120,7 +120,7 @@
   "ob.scenario.not_found": "未能在商店中找到您的游戏——请在下方填写描述。",
   "tip.distribution.regions": "玩家行为因地区而异。成功的发行需要在每个地区仔细考虑本地化、文化适配、购买行为和市场契合度。",
   "tip.distribution.languages": "提供母语支持是在次要市场提升知名度和转化率的好方法。",
-  "tip.lang.reach": "Shipmate 提示：添加{lang}支持可覆盖您所选国家/地区约 {total}M 名使用母语的玩家。",
+  "tip.lang.reach": "添加{lang}支持可覆盖您所选国家/地区约 {total}M 名使用母语的玩家。",
   "tip.ios.prepopulated": "Shipmate 已根据您的游戏信息及其他平台的回答预填了答案。",
   "tip.ios.kids_audience": "许多开发者会误选此项——仅当 13 岁以下儿童是您的主要目标受众时才选择“是”。",
   "tip.store.found_on": "我们在 {source} 上找到了此内容。请检查预填描述，并更正任何不准确之处。",
@@ -470,5 +470,5 @@
   "ob.media.drop_label": "将截图、主视觉图或预告片拖到此处",
   "ob.media.drop_hint": "PNG、JPG 或 MP4 · 可多选",
   "ob.section.assets": "素材",
-  "ob.assets.guidance": "把所有素材都拖到这里——截图、应用图标、主视觉图、标识和视频。Shipmate 会读取每个文件的尺寸和透明度来判断它是什么，然后统一存入素材库供每次提交调用，上传一次即可用于所有需要它的商店。"
+  "ob.assets.guidance": "把所有素材都拖到这里——截图、应用图标、主视觉图、标识和视频。Shipmate 会判断每个文件是什么并统一存入素材库，上传一次即可用于所有需要它的商店。"
 }

@@ -124,7 +124,7 @@
   "ob.scenario.not_found": "Couldn't find your game in stores — fill in the description below.",
   "tip.distribution.regions": "Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.",
   "tip.distribution.languages": "Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.",
-  "tip.lang.reach": "Shipmate Tip: adding {lang} support could reach ~{total}M gamers in their native language across your selected countries.",
+  "tip.lang.reach": "Adding {lang} support could reach ~{total}M gamers in their native language across your selected countries.",
   "tip.ios.prepopulated": "Pre-populated answers based on your game info and answers from other platforms.",
   "tip.ios.kids_audience": "Many developers select this by mistake — choose Yes only if children under 13 are your primary intended audience.",
   "tip.store.found_on": "We found this on {source}. Review the pre-populated description and correct anything that's inaccurate.",
@@ -475,5 +475,5 @@
   "ob.media.drop_label": "Drop screenshots, key art or your trailer here",
   "ob.media.drop_hint": "PNG, JPG or MP4 · Multiple files accepted",
   "ob.section.assets": "Assets",
-  "ob.assets.guidance": "Drop everything here — screenshots, app icons, key art, logos and video. Shipmate reads each file's dimensions and transparency to work out what it is, then keeps them in one library that every submission draws from, so a file you upload once can be used across each store that needs it."
+  "ob.assets.guidance": "Drop everything here — screenshots, app icons, key art, logos and video. Shipmate works out what each file is and keeps it in one library, so anything you upload once is ready for every store that needs it."
 }

@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.51**
+Current version: **v5.52**
 
 ---
 
@@ -96,6 +96,49 @@ The discs differ (20px on a card and in the guide, 16px in the collapsed
 rail), so a fixed size lands at a different fraction of each; at 100% the ink
 is 38.3% of the disc everywhere and the stroke scales with it.
 
+### Shippy is two layers
+
+`.guide-mascot` (z-index 0) sits behind the opaque `.guide-card` and is
+cropped by it; `.guide-tentacles` (z-index 2) sits in front. The tentacles are
+static PNGs and the illusion rests on one number: **tent.png's only pure
+horizontal edge is at 57.57% of its height** (y=700 of 1216, measured with an
+alpha scan), and that line must land on the card's top border. So the offset is
+derived — `top = -(height × --shippy-tent-flat)` with the height derived from
+the width — and no size change can knock it off. Don't expose it as a control.
+
+The breath is built by `shippyBreathe()` (render.js), not in CSS, with
+`startTime = 0` on the document timeline. `renderGuide()` rebuilds this column
+with innerHTML, so a CSS animation restarts from 0% on every tab change; one
+shared clock puts every new node at the same phase by definition. A negative
+`animation-delay` computed from a captured clock was tried and measurably
+drifted ~2px per tab change.
+
+**`.app-guide` must stay positioned.** Below 1100px a media query used to set
+`position: static`, which took it out of the positioning chain and left the
+mascot, the tentacles and the `::after` bloom resolving against `<body>` —
+hundreds of pixels from their card. It is `relative` there now.
+
+### Colour has meanings
+
+Three, and only three: **green done** (#31DC80), **amber attention**
+(rgba(255,184,107,…)), **red wrong** (--alert-*). Anything informational wears
+text colours.
+
+The old Subwoofer orange `#fb923c` is retired from the tip vocabulary — the
+three `--sw-tip-*` tokens are deleted, not repointed, because that one colour
+had come to mean a tip, a warning, a clickable badge AND a hover state at once.
+
+A round `!` or `?` is never coloured: it is a tooltip handle, not an alert. And
+inside a chip the badge takes `currentColor` with no fill, because
+`.tooltip-icon`'s own fill is an opaque grey that punches a hole through a
+selected chip.
+
+Two duplications survive and are worth resolving together some day: **two
+ambers** (`#fb923c` in --orange/--orange-soft vs `#FFB86B` everywhere newer)
+and **two selection blues** (`--sel-*` #60a5fa, ~14 consumers in Marketing and
+content rating, vs `--pill-on-*` #52BAFF). Neither is a bug; both mean a
+"selected" or an "attention" looks different depending on the tab.
+
 ### Two card builders, one row
 
 `buildActiveCard()` serves Web, PlayStation, Xbox, Nintendo and Epic;
@@ -120,7 +163,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.51** → next is **v5.52**, then **v5.53**, etc.
+Current version: **v5.52** → next is **v5.53**, then **v5.54**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -132,7 +175,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.51 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v5.52 — add tooltip to age rating cell"`.
 
 ---
 
@@ -186,7 +229,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.51 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.52 — description of change"`.
 
 ---
 
@@ -206,7 +249,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.51, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.52, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and
@@ -234,6 +277,20 @@ See GitHub Issues for the current backlog. As of v5.51, the following items are 
 - Steam's tile mark measures 98.96% of the shared canvas against 90.84% for
   every other logo — its own export, left as authored. One line to bring it
   in line if wanted.
+- **Xbox and Nintendo have no measured tile mark**, so the platform picker and
+  the card headers still fall back to their brand PNGs (visibly the only two
+  colour icons in the list). `smMarkFor()` already prefers a measured mark, so
+  dropping art on the shared 39×37 canvas into `SM_TILE_MARKS` is the whole
+  job — no code change.
+- The two colour duplications above (two ambers, two selection blues).
+- `.ob-sec-divider` between Distribution and Localization is dead markup —
+  measured `getClientRects().length === 0`, because the sub-tabs never show
+  the two sections together. Those two also still share one `.ob-form`, which
+  is why leftovers like this exist: structurally it is still the old long
+  scrolling form with tabs revealing one slice at a time.
+- The repeated section headers in Distribution / Localization / Assets are
+  **deliberate** — we removed all three, looked at it and put them back. There
+  is a note in render.js; please don't tidy them away.
 - T4: Sync data type selections from natural language description (state.js task #4)
 
 ---

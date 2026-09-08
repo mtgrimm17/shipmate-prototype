@@ -154,10 +154,20 @@
   --pill-on-stroke-top:    rgba(82, 186, 255, .75);
   --pill-on-stroke-bottom: rgba(82, 186, 255, .25);
 
-  /* ── Shipmate tip tokens ── */
-  --sw-tip-color:  #fb923c;
-  --sw-tip-bg:     rgba(251, 146, 60, 0.06);
-  --sw-tip-border: rgba(251, 146, 60, 0.20);
+  /* ── Shipmate tip tokens: GONE, and deliberately not replaced ──
+     There were three (--sw-tip-color / -bg / -border), all pointing at
+     #fb923c, the old Shipmate/Subwoofer logo orange. That one colour had come
+     to mean four different things at once: an informational tip, a regulatory
+     warning, a clickable "!" badge, and the hover state of an actionable row.
+     A tip is prose, so it now wears text colours and needs no token of its
+     own; the rules that used these read --text-dim, --text-faint and
+     --field-stroke directly, which is legible at the point of use.
+     Two things worth knowing if this ever comes back: the fallbacks beside
+     these tokens were still GREEN (rgba(74,222,128,…)) and the component
+     legend further down still called it "a green informational box" — the
+     tokens had been repointed to orange without either being updated, so the
+     file disagreed with itself in three places. --orange / --orange-soft are
+     untouched and still the app's attention colour elsewhere. */
 
   /* ── Alert tokens (rejection-risk warnings) ── */
   --alert-color:   #FF3B76;
@@ -911,11 +921,14 @@ body {
   color: var(--text-dim);
 }
 
-/* Regulatory tooltip icon — warned state turns orange */
+/* The regulatory tooltip's "warned" state no longer recolours the icon.
+   Amber on a round "!" beside a label is indistinguishable from a control,
+   and the tooltip itself carries the warning in words. */
 .tooltip-icon.is-warned {
-  border-color: var(--orange);
-  color: var(--orange);
+  border-color: var(--border-hover);
+  color: var(--text-faint);
 }
+
 .ob-reg-tip { margin-left: 4px; }
 
 /* Country summary row (count + expand chevron) — styled as a panel header */
@@ -1008,28 +1021,49 @@ body {
   max-width: 340px;
 }
 
+/* THE HALO IS GONE, and with it three other things this pill was doing alone.
+   It had `box-shadow: 0 0 0 3px` growing to 5px on hover — the only glow of
+   its kind in the app and the loudest thing in Localization — over a 1.5px
+   border where everything else is 1px, in #60a5fa where the app's selection
+   blue is #52BAFF, at radius 6 where the fields are 8.
+
+   It now wears exactly what .loc-chip.is-on wears, which is the control
+   standing right beside it doing the same job: these are the primary and the
+   supported languages, both selections. Same fill, same gradient ring (the
+   shared masked ::after at the end of this file), same radius, same height.
+   Nothing here needed a treatment of its own. */
 .loc-primary-pill {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1px;   /* the ring is placed against the border box */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   height: var(--field-h); padding: 0 13px;
-  border-radius: 6px;
-  border: 1.5px solid var(--sel-border);
-  background: var(--sel-bg);
-  box-shadow: 0 0 0 3px var(--sel-shadow);
+  border-radius: var(--field-radius);
+  /* The border's WIDTH stays and only its colour goes transparent, so the
+     pill cannot change size between states — the same reason the platform
+     tiles keep theirs. */
+  border: 1px solid transparent;
+  background: var(--pill-on-bg);
+  /* Declared once, here, and inherited by the label and the chevron. A
+     <button> resets `color` to the UA's black, which is why the chevron had a
+     grey hard-coded into it — it had nothing sensible to inherit. */
+  color: var(--pill-on-color);
   cursor: pointer;
   font-family: inherit;
   width: 100%;
   text-align: left;
-  transition: box-shadow 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .loc-primary-pill:hover {
-  box-shadow: 0 0 0 5px var(--sel-shadow);
+  background: var(--pill-on-bg-hover);
+  color: var(--pill-on-color-hover);
 }
 
 .loc-star {
-  color: var(--sel-color);
+  color: var(--pill-on-color);
   font-size: 14px;
   flex-shrink: 0;
 }
@@ -1037,12 +1071,24 @@ body {
 .loc-primary-name {
   font-size: 12px;
   font-weight: 500;
-  color: var(--sel-color);
+  /* Inherited from .loc-primary-pill, which declares --pill-on-color once for
+     the whole control — so the label and the chevron brighten together on
+     hover instead of only one of them moving. It used to be --sel-color, the
+     older selection blue, set here.
+     `.is-placeholder` further down still overrides this for the "nothing
+     chosen yet" state, which is grey on purpose. */
+  color: inherit;
   flex: 1;
 }
 
+/* currentColor, so it takes the pill's blue instead of a grey of its own.
+   `color: #666` was a hard-coded grey that survived every recolouring this
+   control has had — the label went blue and the chevron stayed behind, which
+   read as two controls sharing a box. Inheriting means the next change to the
+   pill's colour reaches it without anyone having to remember this line. */
 .loc-chevron {
-  color: #666;
+  color: currentColor;
+  opacity: .75;
   flex-shrink: 0;
   transition: transform 0.15s;
 }
@@ -1354,11 +1400,20 @@ body {
    CANONICAL UI COMPONENTS — reuse these everywhere
    ═══════════════════════════════════════════════════════
 
-   sw-tip-box              Green informational box (Shipmate Tips & AI pre-pop banner)
-   ├── sw-tip-icon-circle  17px green circle with icon text (use "!" or "✦")
+   sw-tip-box              Informational box: neutral stroke, NO fill, no
+                           colour. A tip is prose — the moment it has both a
+                           stroke and a tint it looks like a button, and it
+                           also becomes indistinguishable from .alert-box
+                           below, which is a real warning.
+   ├── SM_INFO_ICON        the ⓘ glyph (state.js), not a "!" disc
    ├── sw-tip-text         Body text (color: text-dim)
-   ├── sw-tip-bold         Bold label inside tip text (color: sw-tip-color)
-   └── ai-see-prompt-btn   Subtle green button inside AI tip box (no underline)
+   ├── sw-tip-bold         Bold label inside tip text
+   └── ai-see-prompt-btn   Text button inside the AI tip box (--blue, like its
+                           sibling .ai-autofill-btn)
+
+   (This legend used to say "green" throughout and the fallbacks in the rules
+   still did too, long after the tokens had been repointed to the old
+   Subwoofer orange. If you change the colour, change this.)
 
    alert-box               Red/magenta rejection-risk warning (same structure as sw-tip-box)
    ├── alert-icon-circle   17px red circle with "!" icon
@@ -1457,9 +1512,12 @@ body {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: var(--sw-tip-bg, rgba(74,222,128,0.08));
-  border: 1px solid var(--sw-tip-color, #4ade80);
-  color: var(--sw-tip-color, #4ade80);
+  /* Neutral, and the green fallbacks are gone: --sw-tip-bg and
+     --sw-tip-border no longer exist, so a fallback here was the only thing
+     still painting this green in some states. */
+  background: transparent;
+  border: 1px solid var(--border-hover);
+  color: var(--text-faint);
   font-size: 9px;
   display: inline-flex;
   align-items: center;
@@ -1479,8 +1537,10 @@ body {
   height: 13px;
   border-radius: 50%;
   background: transparent;
-  border: 1px solid var(--sw-tip-color);
-  color: var(--sw-tip-color);
+  /* Neutral: a round "!" must never be the thing that says something is
+     wrong, and this one is only a tooltip handle on a language chip. */
+  border: 1px solid var(--border-hover);
+  color: var(--text-faint);
   font-size: 8px;
   font-weight: 700;
   cursor: default;
@@ -1488,19 +1548,39 @@ body {
   flex-shrink: 0;
 }
 
-/* Always-visible Shipmate tip box */
+/* AN OUTLINE, NOT A HIGHLIGHT.
+   This box used to have a tinted fill AND a coloured stroke — the exact
+   recipe every button in this app uses (the binary pill, .add-plat-item, the
+   selection pills), which is why a paragraph of advice read as something you
+   could press. The fill goes; the stroke stays and turns neutral, so the box
+   still marks the prose off from the prose around it without pretending to be
+   a control.
+   It was also indistinguishable in structure from .alert-box, which is the
+   real rejection-risk warning: same flex, same gap, same radius, same
+   padding, same type, both with a coloured "!" disc — only the tokens
+   differed. A tip and a warning should not be the same object in two tints. */
 .sw-tip-box {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  background: var(--sw-tip-bg, rgba(74,222,128,0.06));
-  border: 1px solid var(--sw-tip-border, rgba(74,222,128,0.18));
+  background: transparent;
+  border: 1px solid var(--field-stroke);
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 12px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-dim);
+}
+/* The ⓘ (SM_INFO_ICON, state.js). Sized to the old logo's 17px box so nothing
+   below it shifts, and 1px down because a ring's optical centre sits a touch
+   high against a cap-height line of text. */
+.sm-info-icon {
+  flex-shrink: 0;
+  width: 15px; height: 15px;
+  margin-top: 1px;
+  color: var(--text-faint);
+  display: block;
 }
 
 /* Two-line inference banner variant */
@@ -1532,9 +1612,9 @@ body {
   width: 17px;
   height: 17px;
   border-radius: 50%;
-  background: rgba(251, 146, 60, 0.12);
-  border: 1px solid var(--sw-tip-color);
-  color: var(--sw-tip-color);
+  background: transparent;
+  border: 1px solid var(--text-faint);
+  color: var(--text-faint);
   font-size: 10px;
   font-weight: 700;
   display: flex;
@@ -1545,8 +1625,12 @@ body {
 
 .sw-tip-text { flex: 1; }
 
+/* The last consumer of --sw-tip-color, so that token is gone too and this
+   says what it means: a bold label inside dim prose, one step brighter than
+   the text around it. That is all the emphasis a label needs — the colour it
+   used to have was the "Shipmate Tip:" tag, which no longer exists. */
 .sw-tip-bold {
-  color: var(--sw-tip-color);
+  color: var(--text);
   font-weight: 700;
 }
 
@@ -2711,22 +2795,145 @@ body.viewing-splash .app-subnav { display: none; }
 /* Shippy hangs off the top-right corner, behind the card. The card is opaque,
    so everything below its top edge is simply covered — no clipping needed.
    Sizing and offsets are shippy.js's mascot{} values, kept in sync by eye. */
+/* width comes from --shippy-w, whose default IS the historical 83px — the
+   literal was here before the variable existed, and leaving it meant the
+   body-width control moved the box's height (which the PNG rule derives from
+   the variable) while its width stayed put, so the art squashed instead of
+   scaling. One source for the number. */
 .guide-mascot {
   position: absolute; z-index: 0; pointer-events: none;
-  right: 26px; top: -73px; width: 83px;
+  left: var(--shippy-inset); top: -73px; width: var(--shippy-w);
 }
 .guide-mascot svg { width: 100%; height: auto; display: block; }
+
+/* ── Shippy's two layers ──────────────────────────────────────────────────
+   Every number below is measured off the supplied art rather than chosen,
+   so re-exporting the art means re-measuring rather than nudging:
+
+     body.png  512 × 783. The silhouette splits into arms at y=619 (79.1%
+               down); above that is head and body. Aspect 0.654.
+     tent.png  1280 × 1216, aspect 1.053. Its ink fills the canvas — both
+               files are already trimmed, so no padding to compensate for.
+
+   THE FOUR PLACEMENT VALUES ARE JACO'S, set by eye in the shippy-editor
+   panel (shippy-editor.js, `?shippy=1` or Ctrl+Alt+S) and pasted here. They
+   are a design decision, so they are not re-derived: earlier passes tried to
+   compute the tentacle's size from body.png's own arms (42.6% of the body)
+   and its spread from the eyes' outer edge (45.1px), and both were wrong for
+   this art — tent.png is not a copy of those arms, it is chunkier and
+   proportionally taller (aspect 1.05 against the arm's 1.33). Measurement
+   settles where the flat edge lands; taste settles how big and how far out.
+
+   --shippy-tent-flat is the exception and stays measured — see its note.  */
+:root {
+  /* Scaled to 0.85 of the 63px pass, so the four placement values keep the
+     proportions that were settled by eye rather than being re-judged one at
+     a time: 63→54, 65→55, 17→14.5, 38→32. */
+  --shippy-w:           54px;                       /* the mascot box */
+  --shippy-body-top:    -55px;                      /* how far the head rises */
+  --shippy-tent-w:      14.5px;                     /* 26.9% of the body */
+  --shippy-tent-spread: 32px;                       /* centre → each tentacle */
+  /* LEFT, NOT RIGHT. The inset is measured from the panel's left edge now, so
+     --shippy-cx is a left offset and the tentacles are placed with `left`.
+     The collapse chevron lives at the card's top-right, which the right-hand
+     tentacle used to sit under; on this side nothing shares the space. */
+  --shippy-inset:       26px;                       /* panel's left edge → box */
+  --shippy-cx:          calc(var(--shippy-inset) + var(--shippy-w) / 2);
+
+  /* THE BREATH. Amplitude and period come from the procedural octopus this
+     replaces (shippy.js, D.P): bob 9 units on a 659-unit viewBox at
+     bobFreq 0.24Hz. At the old render size those 9 units were ±1.45px over a
+     4.17s cycle, so 2px/4.2s here is the same movement a touch more present —
+     which is what "subtle but there" asked for.
+     Only the BODY breathes. The tentacles are resting on the panel, so they
+     hold still: a tentacle that rose and fell with the body would read as
+     sliding on the surface, and it would also drag the flat edge off the
+     border, which is the one thing that must not move. */
+  --shippy-bob:         2px;
+  --shippy-bob-t:       2.8s;
+
+  /* DERIVED — do not hand-edit these two, and do not expose them as controls.
+     THE ART'S OWN FLAT EDGE IS THE REGISTRATION LINE: tent.png has exactly one
+     pure horizontal run, 360px long at x 920→1279, at y=700 of 1216 — 57.57%
+     down the canvas. Landing that line on the card's top border is what makes
+     the tentacle read as resting on the panel rather than cut out of it.
+     Because the offset is a fraction of the height and the height is a
+     fraction of the width, the anchor survives any change to the size above:
+     there is no combination of values that can knock it off the border.
+     (Measured with an alpha scan for the longest run of columns sharing a
+     bottom edge. Re-export the art and re-run it.) */
+  --shippy-tent-flat:   0.5757;
+  --shippy-tent-h:      calc(var(--shippy-tent-w) * 1216 / 1280);
+}
+
+/* PNG mode: the body as a background image in the --shippy-w box. `bottom`
+   anchoring is deliberate — the art's own bottom is where the arms are, and
+   that is the end whose distance to the card's edge has to stay fixed while
+   the box's height follows the art's aspect. */
+.guide-mascot.is-png {
+  top: var(--shippy-body-top);
+  height: calc(var(--shippy-w) * 783 / 512);        /* the art's own aspect */
+  background: url('Assets/Shippy/shippy-body.png') center bottom / 100% auto no-repeat;
+  /* The breath is NOT declared here. It is built by shippyBreathe() in
+     render.js so its phase can be pinned to the document timeline — a CSS
+     animation on a node that innerHTML has just recreated always starts at
+     0%, which made Shippy snap back to the bottom of his breath on every tab
+     change. --shippy-bob and --shippy-bob-t above are still where the values
+     live; that function reads them off this element. */
+}
+.guide-mascot.is-png svg { display: none; }
+
+/* The front layer: a zero-height line at the card's own top edge — .guide-card
+   is the first in-flow child of .app-guide, so the two coincide.
+
+   NO CROP HERE, deliberately. The first attempt clipped this layer's overflow
+   to hide whatever rose above the card's edge, which put the tentacles inside
+   the panel looking like they had been cut out of it. They are not inside it,
+   they rest ON it: the art already carries its own flat edge, and the whole
+   job is to land that edge on the border. Clipping anything would cut the part
+   that is supposed to show above the line. */
+.guide-tentacles {
+  position: absolute; z-index: 2; pointer-events: none;
+  left: 0; right: 0; top: 0; height: 0;
+}
+.guide-tent {
+  position: absolute;
+  /* the flat edge, on the border */
+  top: calc(-1 * var(--shippy-tent-h) * var(--shippy-tent-flat));
+  width: var(--shippy-tent-w); height: var(--shippy-tent-h);
+  background: url('Assets/Shippy/shippy-tentacle.png') center / contain no-repeat;
+}
+/* Symmetric for now, as agreed: one drawing, mirrored. The art's own flat cut
+   is on its right, so the unmirrored copy goes on the head's left. */
+.guide-tent--l {
+  left: calc(var(--shippy-cx) - var(--shippy-tent-spread) - var(--shippy-tent-w) / 2);
+}
+.guide-tent--r {
+  left: calc(var(--shippy-cx) + var(--shippy-tent-spread) - var(--shippy-tent-w) / 2);
+  transform: scaleX(-1);
+}
+/* ONLY THE HEAD CLEARS THE EDGE.
+   The card is opaque and sits at z-index 1, so it already crops this layer at
+   its own top edge — and what used to show above that line was not just the
+   head but the tips of the procedural arms, cut off flat. Those flat nubs are
+   what the front tentacle layer replaces, so they come off here. The arms
+   still exist and still animate; they are simply not drawn in the layer that
+   peeks. Drop this rule to get them back. */
+.guide-mascot #octo-arms { display: none; }
 
 /* The tell that the card is glass and Shippy is behind it: a soft purple bloom
    where his body meets the top edge. Painted OVER the card (z-index 2, above
    the card's 1 and the mascot's 0) rather than inside it — the card is opaque,
    so a glow underneath would simply never be seen, and one inside it would
    scroll away with the content and be clipped by the card's overflow.
-   Anchored to .app-guide, which is the sticky positioning context, roughly
-   under the mascot's own centre (right: 26px + half of its 83px width). */
+   Anchored to .app-guide, which is the positioning context, and centred on
+   the mascot rather than on a hard-coded corner — it moved to the left with
+   him, and a bloom left behind on the right would have been a glow with
+   nothing glowing. Centred by construction: --shippy-cx is the body's centre
+   line, minus half this box's own width. */
 .app-guide::after {
   content: ''; position: absolute; z-index: 2; pointer-events: none;
-  right: 18px; top: -20px; width: 96px; aspect-ratio: 1;
+  left: calc(var(--shippy-cx) - 48px); top: -20px; width: 96px; aspect-ratio: 1;
   border-radius: 50%; background: var(--sm-blob); opacity: .18; filter: blur(28px);
 }
 /* Collapsed the card is 52px wide — a bloom that size would swamp it. */
@@ -2842,8 +3049,16 @@ body.viewing-splash .app-subnav { display: none; }
 /* Below ~1100px the guide drops beneath the content column. */
 @media (max-width: 1100px) {
   .app-split { flex-wrap: wrap; }
-  /* Stacked under the content now, so there is nothing to stick alongside. */
-  .app-guide { width: 100%; position: static; }
+  /* Stacked under the content now, so there is nothing to stick alongside.
+     `relative`, NOT `static`, and the difference is not cosmetic: three things
+     hang off this box by absolute offsets — Shippy's body at
+     --shippy-body-top, the tentacle layer at top:0, and the ::after bloom at
+     -20px — and `static` takes the box out of the positioning chain, so all
+     three resolve against <body> instead. Below 1100px that put the mascot at
+     -65px from the top of the PAGE and the tentacles at y 0, hundreds of
+     pixels away from the card they belong to. `relative` stops it sticking
+     just the same and keeps them anchored. */
+  .app-guide { width: 100%; position: relative; }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -3064,14 +3279,46 @@ body.viewing-splash .app-subnav { display: none; }
   padding: 0; background: transparent; border: none; cursor: pointer;
   font-family: var(--mono);
 }
+/* TINTED, NOT FILLED. A 40px disc in solid --purple with the letter punched
+   out in near-black was the brightest object in the header — louder than the
+   project chip beside it and louder than the selected tab, for something that
+   only says whose account this is.
+   The recipe is the header's own: a fill of the hue at 18% with the glyph in
+   the hue itself, which is what .active-card-settings--active and the project
+   chip already do. It keeps the purple identity and stops shouting, and the
+   weight comes down from 800 — at 15px inside a small circle 800 was doing as
+   much of the shouting as the fill was. The ring gives it an edge so it still
+   reads as an object rather than a smudge. */
 .profile-avatar {
+  /* THE PROJECT CHIP'S STROKE, in purple. The ring is the shared masked
+     ::after at the end of this file (search mask-composite) — the same rule
+     the chip, the header tabs and the selection pills go through — because a
+     `border` takes one flat colour and this one has to fade from top to
+     bottom. --pill-bw stays 0: with no border the padding box already IS the
+     border box, so inset:0 puts the ring's outer edge exactly on the disc's.
+     Ratio copied from the chip, which is white 20% down to 5% — four to one.
+     Here it is purple 44% down to 11%, higher in absolute terms because the
+     stroke sits on its own purple tint rather than on the bare bar, and 20%
+     purple over an 18% purple fill is very nearly nothing. */
+  --ring-top:    color-mix(in srgb, var(--purple) 44%, transparent);
+  --ring-bottom: color-mix(in srgb, var(--purple) 11%, transparent);
+  --pill-bw: 0px;
+  position: relative;
   width: 40px; height: 40px; border-radius: 999px;
-  background: var(--purple);
+  background: color-mix(in srgb, var(--purple) 18%, transparent);
   display: flex; align-items: center; justify-content: center;
-  color: #0a0a0a; font-family: var(--mono); font-weight: 800; font-size: 15px;
-  transition: filter .15s;
+  color: var(--purple); font-family: var(--mono); font-weight: 600; font-size: 15px;
+  transition: background .15s, color .15s;
 }
-.profile-block:hover .profile-avatar { filter: brightness(1.12); }
+/* Hover lifts the fill and both ends of the stroke rather than the brightness:
+   `filter: brightness()` on a translucent fill barely moves it, since most of
+   what you see through it is the bar behind. */
+.profile-block:hover .profile-avatar {
+  --ring-top:    color-mix(in srgb, var(--purple) 62%, transparent);
+  --ring-bottom: color-mix(in srgb, var(--purple) 18%, transparent);
+  background: color-mix(in srgb, var(--purple) 26%, transparent);
+  color: color-mix(in srgb, var(--purple) 78%, #fff);
+}
 
 .profile-name {
   font-size: 12px;
@@ -3573,7 +3820,18 @@ body.viewing-splash .app-subnav { display: none; }
 .active-card-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  /* THE GAP DOES THE SEPARATING, NOT A MARGIN ON THE PACK.
+     A margin-right here moved both buttons inward, and the power button is the
+     one that must not move: its hover square is right-aligned with the Upload
+     Build pill below it, and that alignment is what makes the card's right
+     edge read as a single column. Measured from the card's right edge, the
+     pill's own right edge lands at 21px (the card's 20px padding, plus the
+     step row's -12px pull and its 12px padding, plus a pixel), and with no
+     margin here the pack ends at 21px too.
+     The gap then pushes only the gear leftwards. 2 → 6 moves it 4px away from
+     the power button and leaves it exactly where the margin had put it: its
+     right edge was 25 + 30 + 2 = 57 before, and it is 21 + 30 + 6 = 57 now. */
+  gap: 6px;
   flex-shrink: 0;
 }
 .active-card-power,
@@ -3591,10 +3849,25 @@ body.viewing-splash .app-subnav { display: none; }
   cursor: pointer;
   transition: color 0.15s, background 0.15s, transform 0.2s;
 }
+/* A QUARTER TURN, because that is the gear's own symmetry.
+   It was 30deg, which is why the hover read as "almost 45 but not": at 30 the
+   lobes land between their neighbours' positions and the silhouette is simply
+   wrong. Measured by rasterising this exact icon and comparing it with itself
+   at each angle, as a percentage of inked pixels that disagree:
+
+       22.5° → 68%     30° → 71%     60° → 71%
+       45°   → 9.7%    90° → 3%      180° → 6%
+
+   So 90 is the real symmetry and the 3% is antialiasing. 45 is the angle the
+   eye expects from an eight-lobed gear, and it is close — but this one
+   alternates four round knobs on the diagonals with four flat tabs on the
+   axes, so 45 swaps the two kinds and leaves that 9.7%. 90 lands the gear
+   exactly on itself, which is what makes the turn read as deliberate.
+   Change this one number to 45deg if you prefer the smaller movement. */
 .active-card-settings:hover {
   color: var(--text);
   background: var(--surface-hover, rgba(255,255,255,0.06));
-  transform: rotate(30deg);
+  transform: rotate(90deg);
 }
 /* Highlighted while in the signed-in settings view — signals a temporary,
    reversible state (flip the cog again to return to the steps). */
@@ -3845,10 +4118,22 @@ body.viewing-splash .app-subnav { display: none; }
 .cw-check{width:46px;height:46px;border-radius:50%;background:rgba(47,220,128,.16);color:#33d68a;display:flex;align-items:center;justify-content:center}
 
 /* ── Connect refinement: red cog, on-card connect face, browser-framed sign-in ── */
+/* SOMETHING IS PENDING, NOT BROKEN.
+   This was red — #ff6b6b on a red fill, with a red halo pulsing every 2.4s —
+   which is the loudest thing on the card for a state that only means "there
+   is a setting still to fill in". Red is this app's colour for wrong
+   (.ios-step-risk-high, the power button's hover); amber is its colour for
+   needs-attention, and it already says so in three other places:
+   .ios-step-num.is-risk-warn, the prototype's .bd-warn and the binary pill's
+   is-processing all use this same rgba(255,184,107,…) family. Now so does
+   this, which means the card has one vocabulary instead of two.
+   The pulse is gone with it: a halo that breathes forever draws the eye back
+   again and again, and the tint alone is enough to find. */
 .active-card-settings--alert,
-.active-card-settings--alert:hover{color:#ff6b6b;background:rgba(255,90,90,.16)}
-.active-card-settings--alert{animation:cog-alert 2.4s ease-in-out infinite}
-@keyframes cog-alert{0%,100%{box-shadow:0 0 0 0 rgba(255,90,90,0)}50%{box-shadow:0 0 0 3px rgba(255,90,90,.20)}}
+.active-card-settings--alert:hover {
+  color: rgba(255, 184, 107, .95);
+  background: rgba(255, 184, 107, .14);
+}
 
 .connect-face{display:flex;flex-direction:column;gap:10px;padding:2px 16px 16px}
 .connect-face-lead{font-size:12px;color:var(--text-dim,#b7b7bc);line-height:1.5}
@@ -3863,8 +4148,15 @@ body.viewing-splash .app-subnav { display: none; }
 .cf-bot-role{font-size:11px;color:var(--text-muted,#8f98a0)}
 .connect-face .platform-login-btn{margin-top:2px}
 
-.submit-connect-req{margin-left:auto;font-size:11px;font-weight:650;color:#ff8a8a;border:1px solid rgba(255,90,90,.4);background:rgba(255,90,90,.1);border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap}
-.submit-connect-req:hover{background:rgba(255,90,90,.2)}
+/* NOTHING LEFT TO SAY. Everything this used to declare — width, height,
+   padding, radius, type size and weight, the fill and the hover — now comes
+   from `.build-pill.no-build`, which the element wears (see
+   buildSubmitStepCard). The red is gone with it: connecting an account is an
+   action the row offers, exactly like uploading a build, not a failure, and
+   alarm red on a step you have not reached yet reads as something being
+   wrong. `margin-left: auto` went too — .ios-step-info already takes flex: 1
+   and pushes this to the row's right-hand end, so the margin was doing
+   nothing that the row was not already doing. */
 
 .submit-modal-footer{display:flex;align-items:center;gap:12px}
 .local-save-note{display:inline-flex;align-items:center;gap:7px;margin-right:auto;font-size:11.5px;color:#f0a63a}
@@ -6197,6 +6489,46 @@ textarea.loc-review-field.ias-inline-input {
 
 .tooltip-anchor:hover .tooltip-icon { border-color: var(--text-faint); color: var(--text-dim); }
 
+/* ── The same badge INSIDE A CHIP ────────────────────────────────────────
+   These live here, right after the generic rules, and not up beside
+   .tooltip-icon.is-warned where they started — because they have the same
+   specificity as the hover rule above (0,3,0) and source order is what
+   decides. Declared earlier in the file, the generic hover won and a badge
+   on a blue chip snapped to grey the moment you pointed at it.
+
+   .tooltip-icon's own fill is --panel-3, an OPAQUE dark grey. That is right
+   when the badge sits on the panel, and wrong on a selected chip, where it
+   punches a grey hole through the blue with a "?" you can barely read — and
+   on the market rows every badge is inside a chip, so that was all of them.
+   currentColor and no fill instead: on a selected chip the badge comes out in
+   the chip's blue, on an unselected one in its dim grey, and it follows any
+   future recolouring of those chips without a rule of its own.
+   The compound selectors outrank .tooltip-icon.is-warned. */
+.ob-dist-row-chip .tooltip-icon,
+.ob-dist-row-chip .tooltip-icon.is-warned,
+.loc-chip .tooltip-icon,
+.loc-chip .tooltip-icon.is-warned,
+.loc-chip .sw-tip-chip-badge,
+.ob-dist-row-chip .sw-tip-chip-badge {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+  opacity: .55;
+  transition: opacity .15s, background-color .15s;
+}
+/* Hover fills the ring faintly with its own colour rather than recolouring
+   it: the badge stays part of the chip, and what changes is only that it
+   comes forward. color-mix because currentColor cannot carry an alpha. */
+.ob-dist-row-chip .tooltip-anchor:hover .tooltip-icon,
+.ob-dist-row-chip .tooltip-anchor:hover .tooltip-icon.is-warned,
+.loc-chip .tooltip-anchor:hover .tooltip-icon,
+.loc-chip .tooltip-anchor:hover .tooltip-icon.is-warned {
+  border-color: currentColor;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  opacity: .95;
+}
+
 /* tooltip-body is now a hidden data container only — #g-tip renders the actual tooltip */
 .tooltip-body {
   display: none;
@@ -6215,7 +6547,14 @@ textarea.loc-review-field.ias-inline-input {
   border-radius: 10px;
   padding: 24px 20px;
   text-align: center;
-  background: var(--panel-2);
+  /* The same fill as a Game Info field (.form-input). It was --panel-2, an
+     opaque #1c1c1c, against the fields' --inp-bg, a translucent lilac at 16%
+     — so the well read as a different material from everything it sits with.
+     Worth noting because the token is translucent: it only matches where
+     what shows through matches too, and both do sit on .sec-panel's
+     rgb(20,20,20) (measured), so the composite is identical rather than
+     merely nominally the same. */
+  background: var(--inp-bg);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -6346,11 +6685,45 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .lang-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 
 /* ── World map ───────────────────────────────────────── */
+/* THE MAP'S PALETTE, in one place. _drawMap() in app.js reads these off the
+   root rather than carrying its own hexes, because the container's background
+   and the ocean it draws have to be the same colour — the container is what
+   shows while the topology is still coming down from the CDN, and any drift
+   between the two reads as the map sitting in a slightly wrong hole.
+
+   --map-ocean is --bg, the app's own darkest surface. It was #0d1117, a
+   blue-tinted near-black that sat *lighter* than the card behind it (#141414
+   is the card, and #0d1117 only just clears it), so the map read as a panel
+   floating on the panel rather than as a window cut into it.
+
+   --map-active and --map-primary are the selected pills' own blue. The pill
+   token is rgba(0, 154, 255, .35) with #52BAFF for its text, so the map now
+   uses that base hue at full strength for a selected country and the lighter
+   one for a primary — the same two-tone relationship the pill has between its
+   fill and its label. The old #2563d4 was a violet-leaning blue at hue 220°
+   against the pill's azure 204°: close enough to look like a mistake rather
+   than a second colour. */
+:root {
+  --map-ocean:   var(--bg, #0a0a0a);
+  --map-land:    #1e2230;
+  --map-active:  #009AFF;
+  --map-primary: #52BAFF;
+  /* The Game Info fields' own stroke, promoted out of a literal so the map can
+     wear the same one and the two cannot drift. It is NOT --border (#2a2a2a,
+     neutral): the fields use #23272A, a shade cooler, and matching the fields
+     is the point here. */
+  --field-stroke: #23272A;
+}
 .world-map-container {
   width: 100%;
   border-radius: 10px;
+  /* The same hairline the fields below it carry. With border-box the stroke
+     sits inside, so the reserved aspect-ratio box does not change size, and
+     `overflow: hidden` clips the map to the padding box — the inner corner
+     radius follows the border's, so the map's edges stay tucked under it. */
+  border: 1px solid var(--field-stroke);
   overflow: hidden;
-  background: #0d1117;
+  background: var(--map-ocean);
   margin-top: 12px;
   margin-bottom: 4px;
   /* _drawMap() draws at H = W * 0.50, but the topology is fetched from a CDN, so
@@ -9563,7 +9936,9 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   flex-shrink: 0;
   background: none;
   border: none;
-  color: var(--sw-tip-color);
+  /* --blue, the same colour .ai-autofill-btn just above uses: in this banner
+     blue is what "you can press this" looks like. */
+  color: var(--blue);
   font-family: inherit;
   font-size: 11px;
   font-weight: 500;
@@ -10305,9 +10680,12 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
 }
 
 /* Incomplete swSelect — orange border when nothing selected */
+/* "You haven't filled this in", in the app's amber rather than the retired
+   Subwoofer orange — same amber as .ios-step-num.is-risk-warn and the pending
+   cog, so "needs attention" speaks with one colour. */
 .is-validating .sw-select-incomplete .loc-primary-pill {
-  border-color: rgba(251, 146, 60, 0.5);
-  background: rgba(251, 146, 60, 0.03);
+  border-color: rgba(255, 184, 107, .5);
+  background: rgba(255, 184, 107, .05);
 }
 
 /* Tab icon images (replaces dot-grid SVGs) */
@@ -10343,9 +10721,11 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   border-radius: 10px;
   font-size: 10px;
   font-weight: 700;
-  background: rgba(251, 146, 60, 0.15);
-  color: var(--sw-tip-color);
-  border: 1px solid rgba(251, 146, 60, 0.3);
+  /* It counts selected countries, and selection is blue everywhere else in
+     this section — the pills, the map. */
+  background: var(--pill-on-bg);
+  color: var(--pill-on-color);
+  border: 1px solid var(--pill-on-stroke-bottom);
   vertical-align: middle;
 }
 
@@ -11051,9 +11431,12 @@ body.is-splash .ai-disclaimer { display: none; }
   user-select: none;
 }
 .iys-choice-current { background: var(--panel); }
-.iys-choice-fix     { background: rgba(251,146,60,0.04); }
+/* The one survivor of the old orange's jobs, in the app's amber: this row is
+   a fix you can apply, and amber is what "needs your attention" looks like
+   here (.ios-step-num.is-risk-warn, the pending cog, the processing pill). */
+.iys-choice-fix     { background: rgba(255, 184, 107, .05); }
 .iys-choice-box:hover { border-color: var(--text-faint); background: var(--panel-2); }
-.iys-choice-fix:hover { border-color: var(--sw-tip-color,#fb923c); background: rgba(251,146,60,0.10); }
+.iys-choice-fix:hover { border-color: rgba(255, 184, 107, .45); background: rgba(255, 184, 107, .12); }
 .iys-choice-label {
   font-size: 10px;
   font-weight: 600;
@@ -11062,7 +11445,7 @@ body.is-splash .ai-disclaimer { display: none; }
   color: var(--text-faint);
   display: block;
 }
-.iys-choice-fix .iys-choice-label { color: var(--sw-tip-color,#fb923c); }
+.iys-choice-fix .iys-choice-label { color: rgba(255, 184, 107, .95); }
 .iys-choice-value {
   font-size: 11px;
   color: var(--text-dim);
@@ -11122,7 +11505,7 @@ body.is-splash .ai-disclaimer { display: none; }
   font-size: 11.5px;
   color: var(--text);
   background: var(--panel);
-  border: 1px solid var(--sw-tip-color);
+  border: 1px solid var(--field-stroke);
   border-radius: 6px;
   padding: 7px 9px;
   resize: vertical;
@@ -11132,10 +11515,12 @@ body.is-splash .ai-disclaimer { display: none; }
   width: 100%;
   box-sizing: border-box;
 }
+/* Focus like every other field in the app (.ob-form .form-input:focus): the
+   stroke brightens, no coloured glow. */
 .iys-cn-textarea:focus {
   outline: none;
-  border-color: var(--sw-tip-color);
-  box-shadow: 0 0 0 2px rgba(251,146,60,0.18);
+  border-color: rgba(255, 255, 255, .55);
+  box-shadow: none;
 }
 
 /* Applied state tag */
@@ -12715,7 +13100,7 @@ body.viewing-splash #app-guide { display: none; }
 
 /* ── Typable fields ──────────────────────────────────── */
 .ob-form .form-input {
-  width: 100%; border: 1px solid #23272A; border-radius: var(--field-radius); background: var(--inp-bg);
+  width: 100%; border: 1px solid var(--field-stroke); border-radius: var(--field-radius); background: var(--inp-bg);
   padding: 0 16px; font-family: var(--mono); font-weight: 400; font-size: 13px;
   color: #E8EDE9; caret-color: #E1E4E7; outline: none; cursor: text;
   transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
@@ -12879,7 +13264,9 @@ body.viewing-splash #app-guide { display: none; }
 .intensity-btn.is-sel-infrequent::after,
 .intensity-btn.is-sel-frequent::after,
 .project-selector-wrap #projectSelector::after,
-.bar-nav-btn .ic.cover::after {
+.bar-nav-btn .ic.cover::after,
+.profile-avatar::after,
+.loc-primary-pill::after {
   /* AGAINST THE BORDER BOX, NOT THE PADDING BOX — which is the whole of what
      was wrong. An absolutely positioned box resolves `inset` against its
      containing block's PADDING box, so inset:0 on a pill that still carries a

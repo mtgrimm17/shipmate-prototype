@@ -732,6 +732,19 @@ const SM_STEP_CHEVRON =
   + ` stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
   + `<polyline points="6 9 12 15 18 9"/></svg></span>`;
 
+/* THE INFO GLYPH — an outlined ⓘ, the shape Apple uses for info.circle: a
+   ring, a dot, and a stem. It replaces the filled "!" disc the tip boxes used
+   to carry, and the difference is the point: a filled disc with an exclamation
+   mark is the universal shape for "something is wrong", and these boxes are
+   just prose. Neutral by default; it inherits currentColor, so a caller that
+   really is warning about something can still colour it. */
+const SM_INFO_ICON =
+  `<svg class="sm-info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">`
+  + `<circle cx="12" cy="12" r="9.1" stroke="currentColor" stroke-width="1.5"/>`
+  + `<circle cx="12" cy="7.7" r="1.1" fill="currentColor"/>`
+  + `<path d="M12 11.2v5.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`
+  + `</svg>`;
+
 /* ── Platform Icons (SVG paths, viewBox="0 0 24 24") ─── */
 
 const PLATFORM_ICONS = {
