@@ -1012,17 +1012,43 @@ function taskOverlayClick(e) {
   }
 }
 
+/* Repaint one step row in place, without rebuilding the card — so only this
+   disc animates rather than every completed one.
+
+   IT SPEAKS THE NEW ROW'S VOCABULARY, and that is the whole point of the
+   helper. The two card systems used inverted names: the old markup put
+   `is-complete` on the dot and `is-done` on the row, the prototype's row does
+   exactly the reverse — `is-done` on the disc, `is-complete` on the row. So
+   when buildActiveCard moved to `.ios-step-card`, these two updaters kept
+   setting classes that no longer meant anything: a step marked done stayed
+   looking undone until something forced a full re-render.
+
+   The disc's content has to change too. It holds the step number when
+   pending, so completing it swaps the digit for the tick — which the old code
+   never did, because the old `.task-dot` was empty and drew its check in CSS. */
+function _paintStepRow(platformId, stepId, done) {
+  const disc = document.getElementById(`dot-${platformId}-${stepId}`);
+  if (!disc) return;
+  const row = disc.closest('.ios-step-card');
+  disc.classList.toggle('is-done', done);
+  // The row's number is its position among the non-submit steps, 1-based —
+  // the same expression buildActiveCard numbers them with.
+  const n = (PLATFORMS[platformId]?.steps || [])
+    .filter(s => !s.isSubmit).findIndex(s => s.id === stepId) + 1;
+  disc.innerHTML = done ? smCheckSVG(20) : String(n || '');
+  if (row) row.classList.toggle('is-complete', done);
+  if (done) {
+    disc.classList.add('just-completed');
+    disc.addEventListener('animationend', () => disc.classList.remove('just-completed'), { once: true });
+  } else {
+    disc.classList.remove('just-completed');
+  }
+}
+
 function markTaskDone(platformId, stepId) {
   state.platformStepStatus[platformId][stepId] = 'complete';
 
-  // Targeted DOM update — animate only this dot, not all completed dots
-  const dot = document.getElementById(`dot-${platformId}-${stepId}`);
-  if (dot) {
-    dot.classList.add('is-complete', 'just-completed');
-    dot.addEventListener('animationend', () => dot.classList.remove('just-completed'), { once: true });
-    const taskRow = dot.closest('.card-task');
-    if (taskRow) taskRow.classList.add('is-done');
-  }
+  _paintStepRow(platformId, stepId, true);
 
   // Recalculate progress and update bar + step count
   const counts = platformStepCount(platformId);
@@ -1049,13 +1075,7 @@ function markTaskDone(platformId, stepId) {
 function markTaskUndone(platformId, stepId) {
   state.platformStepStatus[platformId][stepId] = 'not_started';
 
-  // Targeted DOM update — remove complete state from this dot only
-  const dot = document.getElementById(`dot-${platformId}-${stepId}`);
-  if (dot) {
-    dot.classList.remove('is-complete', 'just-completed');
-    const taskRow = dot.closest('.card-task');
-    if (taskRow) taskRow.classList.remove('is-done');
-  }
+  _paintStepRow(platformId, stepId, false);
 
   // Recalculate progress
   const counts = platformStepCount(platformId);
@@ -2093,7 +2113,8 @@ function submitOverlayClick(e) {
 function updateIOSCard(pid) {
   pid = pid || 'ios';
   if (!state.activePlatforms.has(pid)) return;
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // Same tick the first render drew (render.js) — smCheckSVG, state.js.
+  const checkSVG = smCheckSVG(20);
 
   PLATFORMS[pid].steps.forEach((step, i) => {
     const card = document.getElementById(`${pid}-step-card-${step.id}`);
@@ -14910,7 +14931,8 @@ function seedOnboardingToAndroid() {
 /* Update the Android card in the dashboard after changes */
 function updateAndroidCard() {
   if (!state.activePlatforms.has('android')) return;
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // Same tick the first render drew (render.js) — smCheckSVG, state.js.
+  const checkSVG = smCheckSVG(20);
 
   PLATFORMS.android.steps.forEach((step, i) => {
     const card = document.getElementById(`android-step-card-${step.id}`);
@@ -15137,7 +15159,8 @@ function reRenderSteamStepModal() {
 
 function updateSteamCard() {
   if (!state.activePlatforms.has('steam')) return;
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // Same tick the first render drew (render.js) — smCheckSVG, state.js.
+  const checkSVG = smCheckSVG(20);
 
   PLATFORMS.steam.steps.forEach((step, i) => {
     const card = document.getElementById(`steam-step-card-${step.id}`);

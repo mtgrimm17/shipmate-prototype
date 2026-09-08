@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.50**
+Current version: **v5.51**
 
 ---
 
@@ -66,16 +66,73 @@ Pan position is preserved between device preset changes. Reset pan when a new sc
 ### Store preview section tracking
 `state.storePreviewSectionSeen[pid][target]` tracks whether a user has visited a section. Required for gating "done" state — a section isn't complete until both visited AND data is filled.
 
+### Platform marks share one canvas
+
+`SM_TILE_MARKS` in `platform-icons.js` is the set actually drawn in SELECT
+PLATFORMS and in the platform-card headers. Every mark sits on the **same
+39×37 viewBox**, reframed so its ink is 90.84% of the canvas height and
+centred on (19.03, 18.305) — those numbers are measured, not chosen. That is
+what lets identical CSS give identical results; marks on their own exported
+canvases bobbed and changed size from tile to tile.
+
+Adding art: drop it in, run `smTileMarkBBoxes()` in the console, and write the
+transform from what it reports. Two traps it avoids — `getBBox()` on a
+transformed `<g>` reports pre-transform units, and a non-square viewBox
+letterboxes (one uniform scale, not one per axis).
+
+Watch for an invisible `<rect style="fill:none">` in Serif exports: a bounding
+box counts it, so the mark gets scaled as though its ink filled the artboard.
+`_smMarkBody()` strips it.
+
+### One definition per symbol
+
+`smCheckSVG()` and `SM_STEP_CHEVRON` live in `state.js`, which loads before
+everything that uses them. Both used to be pasted into each card builder, and
+in both cases the copies drifted — six of seven ticks were still an older
+glyph, and the chevron was missing from the fourth builder entirely.
+
+Ticks are sized to **the full width of their disc**, not a fixed pixel size.
+The discs differ (20px on a card and in the guide, 16px in the collapsed
+rail), so a fixed size lands at a different fraction of each; at 100% the ink
+is 38.3% of the disc everywhere and the stroke scales with it.
+
+### Two card builders, one row
+
+`buildActiveCard()` serves Web, PlayStation, Xbox, Nintendo and Epic;
+`buildIOSActiveCard()` / `buildAndroidActiveCard()` / `buildSteamActiveCard()`
+serve the rest. **A change to the step row has to land in both.** The rows are
+`.ios-step-card`; `.card-task` / `.task-dot` are retired.
+
+The two systems used inverted class names — old: `is-complete` on the dot and
+`is-done` on the row; new: `is-done` on the disc, `is-complete` on the row. Go
+through `_paintStepRow()` (app.js) rather than setting them by hand.
+
+Steps and the submit row must share one `.ios-step-cards` parent: the divider
+is an adjacent-sibling rule, so splitting them leaves no line between them.
+
+A completed step is **promoted, not dimmed** — the name goes white, as the nav
+prototype's `.step.done` does. An `opacity` on the row also paints its green
+disc through gauze, which reads as the wrong green rather than as a dim row.
+
 ### Versioning — required on every change
 
-Every set of changes must increment the version number. Current version: **v5.50** → next is **v5.51**, then **v5.52**, etc.
+Bump **once per publish**, not once per edit — a batch of changes that ships
+together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
+tweak; the cost is only cosmetic, but it makes the history unreadable.)
+
+Current version: **v5.51** → next is **v5.52**, then **v5.53**, etc.
 
 Update the version in **three places**:
-1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags
-2. `index.html` — the build badge div: `<div class="build-badge">vX.XX</div>`
-3. `splash.html` — the version badge text and the iframe `src="splash.html?v=X.XX"`
+1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
+2. `index.html` — the footer badge: `<span class="app-footer-version" id="app-footer-version">vX.XX</span>`
+3. `splash.html` — the version badge text (around line 1366)
 
-Always include the new version number in the git commit message, e.g. `"v5.50 — add tooltip to age rating cell"`.
+Note on splash.html: the iframe that used to load it was ported into `splash.js`
+back in v2.34, so nothing references `splash.html` any more. Its badge is
+updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
+despite what earlier versions of this file said.
+
+Always include the new version number in the ship note, e.g. `"v5.51 — add tooltip to age rating cell"`.
 
 ---
 
@@ -129,7 +186,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.50 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.51 — description of change"`.
 
 ---
 
@@ -149,7 +206,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.50, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.51, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and
@@ -162,6 +219,21 @@ See GitHub Issues for the current backlog. As of v5.50, the following items are 
 - Press kit — Adam wants a downloadable one with asset links. Blocked on a real
   question rather than a design one: there is no publish path at all, and the
   assets are data URLs or Steam CDN links.
+- **One live page** — Marketing's embed and the step modal both render
+  `id="site"`, and `#wp-full` appends to `<body>`, changing document order
+  mid-gesture. `getElementById` returns the first in document order, which is
+  the root cause of both flip bugs fixed defensively in v5.4x
+  (`_wpEditSurface`). The agreed fix is that the surface which draws keeps the
+  page and the other unmounts. Not started.
+- **The modal flip "blink"** — the whole modal appears to flash on flip.
+  Measured: not an opacity issue (no frame at opacity 1 unrotated) and not
+  jank (0 dropped frames on repeat flips). Three suspects left, each a
+  one-line console test: `backdrop-filter: none` on `#submit-overlay`,
+  promoting the modal to its own layer, and removing the 90px `box-shadow`.
+  Awaiting a verdict on which kills it.
+- Steam's tile mark measures 98.96% of the shared canvas against 90.84% for
+  every other logo — its own export, left as authored. One line to bring it
+  in line if wanted.
 - T4: Sync data type selections from natural language description (state.js task #4)
 
 ---

@@ -703,6 +703,35 @@ function cqProgress() {
   return { total: visible.length, answered: answered.length };
 }
 
+/* ── THE CHECK MARK, one definition ──────────────────────────
+   This path is the nav prototype's (shipmate-nav-prototype-v2.html, STEP_DONE):
+   `M7.4 12.3l3 3 6.2-6.6` on a 24 viewBox at stroke 2.2, round caps and joins.
+   It lived as a local `const checkSVG` in seven different functions across
+   render.js and app.js, and six of those seven still held an older, unrelated
+   glyph (`M2 6l3 3 5-5` on a 12 viewBox at 1.8) — which is why the platform
+   cards and the Shippy guide never quite agreed on what a tick looks like.
+   One function, called from all of them, so the next change lands everywhere.
+
+   `px` is the box the mark fills, and the stroke scales with it: the prototype
+   draws into a 22px disc for an effective 2.02px stroke, so any other size has
+   to keep that ratio or the tick reads thinner as the disc shrinks. */
+function smCheckSVG(px, sw) {
+  const s = px || 20;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" aria-hidden="true">`
+       + `<path d="M7.4 12.3l3 3 6.2-6.6" stroke="currentColor" stroke-width="${sw || 2.2}"`
+       + ` stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/* THE STEP ROW'S CHEVRON, one definition, for the same reason as the check
+   above: it was pasted into three card builders and left out of the fourth,
+   which is how the Web card ended up with a text '›' while every other card
+   had the prototype's glyph. Rotated -90° by CSS (.ios-step-arrow svg), so
+   the path here points down. */
+const SM_STEP_CHEVRON =
+  `<span class="ios-step-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"`
+  + ` stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
+  + `<polyline points="6 9 12 15 18 9"/></svg></span>`;
+
 /* ── Platform Icons (SVG paths, viewBox="0 0 24 24") ─── */
 
 const PLATFORM_ICONS = {

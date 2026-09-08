@@ -119,6 +119,14 @@
      The 42px chips on the top bar and the 120px platform tiles are NOT in this
      family: one is a nav, the other a two-line tile with an icon. */
   --field-h:           34px;
+  /* The binary pill's fixed width — see .build-pill. */
+  --bd-pill-w:         184px;
+  /* THE RADIUS OF A PANEL. The platform cards, the Game Details / Marketing
+     panels and the Analysis panels are all the same kind of object — a card
+     holding a section of the app — and were at 20, 12 and 14px. One token so
+     they cannot drift again. The small KPI tiles keep their own 12px: those
+     are contents of a panel, not panels. */
+  --panel-radius:      20px;
 
   /* ── THE UNSELECTED PILL ──────────────────────────────────────────────
      The resting state of every Game Details pill, taken from the preset pills
@@ -2679,7 +2687,7 @@ body.viewing-splash .app-subnav { display: none; }
   z-index: 1;                /* over .guide-mascot, which peeks out above it */
   background: var(--guide-bg);
   border: 1px solid var(--guide-stroke);
-  border-radius: 12px;
+  border-radius: var(--panel-radius);
   /* Measured off the mockup at 290px card width. Every offset below is an
      explicit margin rather than a flex gap, because the gaps are all different. */
   padding: 14px 18px 15px;
@@ -2805,6 +2813,26 @@ body.viewing-splash .app-subnav { display: none; }
    same weight and the row never shifts. */
 /* The tick is punched out of the disc rather than drawn on it: it takes the
    card's own background colour, so it reads as a hole. */
+/* The check inside the disc is an SVG now, not a '✓' glyph — the same path the
+   platform cards use, so the two say "done" with one symbol. The disc stays
+   purple: it is the guide's colour and marks whose progress this is. */
+/* THE TICK FILLS ITS DISC, which is what makes the proportion match the
+   platform cards rather than merely sharing their path.
+
+   The discs are not the same size and never were — 20px here, 16px in the
+   collapsed rail, 20px on a platform card — so a tick given a fixed pixel
+   size lands at a different fraction of each one. At 12px in a 20px disc the
+   ink spanned 4.6px, 23% of the disc, against the platform card's 7.67px and
+   38%: two thirds the relative size, which is exactly the mismatch. (The ink
+   is 38.3% of the box because the path runs x 7.4→16.6 of a 24 viewBox.)
+
+   100% instead, so the fraction is fixed and the stroke scales with the box:
+   2.2 viewBox units render 1.83px in a 20px disc and 1.47px in a 16px one —
+   the same weight relative to the mark, which is what keeps a 16px dot from
+   looking like a different symbol. */
+.gd-task-box svg,
+.guide-mini-dot svg,
+.mcal-task-box svg { width: 100%; height: 100%; display: block; }
 .gd-task-box { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--guide-mark-dim); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: var(--guide-bg); }
 .gd-task.is-current .gd-task-box { box-shadow: 0 0 0 1.5px var(--guide-mark); }
 .gd-task.is-done .gd-task-box { background: var(--guide-mark); }
@@ -2826,7 +2854,7 @@ body.viewing-splash .app-subnav { display: none; }
 .sec-panel {
   width: 100%; min-width: 0;
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; padding: 22px 24px 26px;
+  border-radius: var(--panel-radius); padding: 22px 24px 26px;
 }
 /* the inline content already sits in the panel now — drop its own frame so we
    don't get a box-in-a-box */
@@ -3449,32 +3477,50 @@ body.viewing-splash .app-subnav { display: none; }
   margin-bottom: 32px;
 }
 
+/* ── PLATFORM CARD ────────────────────────────────────────────────────────
+   From the nav prototype: 20px of padding, the panel radius, and 16px between
+   the head and the rows. The ground is --panel, the same as the Game Details
+   panel — a platform card and that panel are the same kind of surface and
+   should not be two different greys.
+
+   THE STROKE IS A PLAIN BORDER, one opacity, no gradient. The prototype draws
+   a diagonal that catches light at two corners, which needs a masked
+   pseudo-element because a border takes a single flat colour — that version
+   was built and then dropped in favour of this. Worth keeping the note: the
+   moment it stops being a gradient, a border does the job, and hover and
+   submit-ready can go back to saying what they mean with border-color instead
+   of recolouring four gradient stops.
+
+   `overflow: hidden` stays gone: the card has padding now, so nothing reaches
+   its edges and there is nothing to clip. */
 .active-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 20px;
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: border-color 0.15s;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: var(--panel-radius);
+  transition: border-color .15s, background .15s;
 }
 
-.active-card:hover { border-color: var(--border-hover); }
+.active-card:hover { border-color: rgba(255, 255, 255, .18); }
 
 /* Ready-to-submit state: green card border signals all steps are done */
+/* Ready to submit: the same ring, in green. Every stop is lifted, not just the
+   first — lift one and the diagonal fades back to white halfway round. */
 .active-card.submit-ready {
   border-color: rgba(47, 220, 128, 0.55);
   box-shadow: 0 0 0 1px rgba(47, 220, 128, 0.12);
 }
-.active-card.submit-ready:hover {
-  border-color: rgba(47, 220, 128, 0.75);
-}
+.active-card.submit-ready:hover { border-color: rgba(47, 220, 128, 0.75); }
 
+/* No padding and no corner radius of its own any more: the card's own 20px
+   does the insetting, and nothing here reaches an edge that needs rounding. */
 .active-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 18px 12px;
   gap: 12px;
-  border-radius: 14px 14px 0 0;
   transition: background 0.15s;
 }
 .active-card-head:hover {
@@ -3488,8 +3534,8 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 .active-card-icon {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 10px;
   background: var(--panel-3);
   display: flex;
@@ -3512,7 +3558,8 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 .active-card-name {
-  font-size: 14px;
+  /* 15px, from the prototype — one step up from the 14 it was. */
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
   line-height: 1.2;
@@ -3908,16 +3955,31 @@ body.viewing-splash .app-subnav { display: none; }
   gap: 8px;
 }
 
+/* THE BINARY PILL — its three faces share one width.
+
+   That fixed width is the whole point of --bd-pill-w and the prototype says so
+   in a comment: upload, analysing and the filename are the same control in
+   three states, and if each sized to its own text the right-hand end of every
+   step row would jump as a build moved through them. 184px holds the longest
+   of the three.
+
+   The name is truncated by the pill rather than allowed to widen it: a build
+   called something long is still recognisable from its first characters, and
+   the row staying still matters more. */
 .build-pill {
+  flex: none;
+  width: var(--bd-pill-w, 184px);
+  height: 30px;
+  padding: 0 13px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 400;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   user-select: none;
   flex-shrink: 0;
   max-width: 160px;
@@ -3928,26 +3990,29 @@ body.viewing-splash .app-subnav { display: none; }
   white-space: nowrap;
 }
 .build-pill.no-build {
-  border: 1.5px solid rgba(255, 255, 255, 0.3);
-  color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .62);
   background: transparent;
 }
 .build-pill.no-build:hover {
-  border-color: rgba(255, 255, 255, 0.55);
-  color: var(--text);
+  border-color: rgba(255, 255, 255, .34);
+  color: #fff;
+  background: rgba(255, 255, 255, .06);
 }
 .build-pill.has-build {
-  border: 1.5px solid rgba(47, 220, 128, 0.5);
-  color: rgba(47, 220, 128, 0.9);
-  background: rgba(47, 220, 128, 0.08);
+  border: 1px solid rgba(52, 209, 122, .32);
+  color: #4FE39A;
+  background: rgba(52, 209, 122, .10);
 }
 .build-pill.has-build:hover {
-  background: rgba(47, 220, 128, 0.15);
+  border-color: rgba(52, 209, 122, .55);
+  color: #7BEFB4;
+  background: rgba(52, 209, 122, .18);
 }
 .build-pill.is-processing {
-  border: 1.5px solid rgba(255, 200, 80, 0.45);
-  color: rgba(255, 200, 80, 0.85);
-  background: rgba(255, 200, 80, 0.07);
+  border: 1px solid rgba(255, 184, 107, .30);
+  color: rgba(255, 184, 107, .95);
+  background: rgba(255, 184, 107, .14);
   cursor: default;
   pointer-events: none;
 }
@@ -3959,8 +4024,8 @@ body.viewing-splash .app-subnav { display: none; }
   display: inline-block;
   width: 11px;
   height: 11px;
-  border: 1.8px solid rgba(255, 200, 80, 0.25);
-  border-top-color: rgba(255, 200, 80, 0.85);
+  border: 1.8px solid rgba(255, 184, 107, .28);
+  border-top-color: rgba(255, 184, 107, .95);
   border-radius: 50%;
   animation: build-proc-rotate 0.7s linear infinite;
   flex-shrink: 0;
@@ -4326,24 +4391,72 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 /* Task list inside active card */
-.card-tasks { border-top: 1px solid var(--border); }
+/* THE ROWS OVERHANG THE CARD'S PADDING BY 12px — the prototype's own trick,
+   and worth writing down because the numbers look arbitrary otherwise. The
+   hover pill needs air around its text, so the row carries 12px of padding;
+   pulling the block out by that same 12 puts the text back at the card's 20px,
+   in line with the platform icon above it. Remove the negative margin and
+   every step label shifts right by 12px.
+
+   The border-top is gone with it: separation is drawn per row now (see
+   .card-task + .card-task) so it can be hidden underneath the hover pill,
+   which a border on the container cannot do. */
+.card-tasks { margin: 0 -12px -12px; }
 
 /* ── iOS per-step cards (replaces .card-tasks for iOS) ── */
-.ios-step-cards { border-top: 1px solid var(--border); }
+.ios-step-cards { margin: 0 -12px -12px; }
 
+/* The prototype's step row: 12px between the indicator and the label, 8/12 of
+   padding inside a 50px floor, and 15px type. min-height rather than height,
+   so a long label grows the row instead of spilling out of it.
+
+   THIS IS THE ROW THAT IS ACTUALLY RENDERED. .card-task/.card-tasks read like
+   the same thing in render.js and are the old markup — measured in the browser,
+   the dashboard has zero .card-task elements and its rows are these. Styling
+   the other pair changes nothing you can see. */
 .ios-step-card {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 16px;
+  gap: 12px;
+  min-height: 50px;
+  padding: 8px 12px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.12s;
-  border-bottom: 1px solid var(--border);
+  transition: background 0.12s, color 0.15s;
 }
-.ios-step-card:last-child { border-bottom: none; }
-.ios-step-card:hover { background: var(--panel-2); }
-.ios-step-card.is-complete { opacity: 0.6; }
-.ios-step-card.is-complete:hover { opacity: 0.8; }
+/* A pseudo-element, not a border-bottom: over a box with a radius a border
+   curves at the ends and follows the corner — and it can be hidden under the
+   hover pill, which a border on the row cannot be. Inset by the row's own 12px
+   so it lines up with the text rather than the pill's edge. */
+.ios-step-card + .ios-step-card::before {
+  content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px;
+  background: rgba(255, 255, 255, .07); transition: opacity .15s ease;
+}
+/* White at 7%, no stroke. The radius lives on .ios-step-card and not here:
+   declared only on :hover it would snap back to zero on the way out and the
+   fill would fade with hard corners. */
+.ios-step-card:hover { background: rgba(255, 255, 255, .07); }
+
+/* A LIT ROW HIDES THE DIVIDERS IT TOUCHES — except the first row's lower one.
+
+   For a row in the middle both lines go, and the pill reads as lifted out of
+   the stack. The first row has no line above it, so hiding the one below left
+   a single line missing on one side only, which reads as a glitch rather than
+   as a lift. Geometry is not the reason and it is worth saying so: the rows
+   are contiguous, so the first pill's bottom edge lands exactly on that
+   divider and does cover it. The problem is the asymmetry, not the reach. */
+.ios-step-card:hover::before { opacity: 0; }
+.ios-step-card:not(:first-child):hover + .ios-step-card::before { opacity: 0; }
+/* DONE IS NOT DIMMED — and this is where the green was going.
+   The rows used to carry `opacity: .6` when complete, which is a filter on the
+   whole row, disc included: #31DC80 at 60% over a #141414 card composites to
+   roughly #23884F. That is the "green that doesn't vibrate" — the colour was
+   already the prototype's, the row was just painting it through gauze.
+   The prototype says the opposite: `.step.done { color: #fff }`. Finishing a
+   step promotes the row, it doesn't retire it. The check alone carries the
+   state, so nothing else needs to change. */
+.ios-step-card.is-complete .ios-step-name { color: #fff; }
 
 /* ── Submit step card ───────────────────────────────────────── */
 .submit-step-card { cursor: default; }
@@ -4413,10 +4526,27 @@ body.viewing-splash .app-subnav { display: none; }
   font-size: 10px; font-weight: 700; color: var(--text-faint);
   flex-shrink: 0; transition: all 0.15s;
 }
+/* THE DONE MARK, copied exactly: a filled disc in #31DC80 with the check cut
+   into it in a dark green rather than white. #0F2A1A is the prototype's, and
+   it is not a detail — a white check on that green is lower contrast than it
+   looks, and reads as washed out at 20px. The green itself was
+   var(--green,#4ade80), a mint a good deal lighter and bluer than this. */
 .ios-step-num.is-done {
-  background: var(--green, #4ade80);
-  border-color: var(--green, #4ade80);
-  color: #fff;
+  background: #31DC80;
+  /* No border when done. The disc is 20px box-sizing: border-box, so a 1.5px
+     border leaves a 17px content box — and the tick, which is sized to the
+     disc so it keeps the prototype's proportions, needs the whole 20. The
+     border was only ever the empty ring's outline; a filled disc has no use
+     for one, and dropping it doesn't change the disc's size by a pixel. */
+  border: 0;
+  color: #0F2A1A;
+}
+/* The pop, on the disc that was just ticked and no other. Moved here from
+   `.task-dot.just-completed` when buildActiveCard's rows became these ones —
+   the keyframes (checkPop, further down with the old .task-dot rules) are
+   shared, only the selector had been left behind. */
+.ios-step-num.just-completed {
+  animation: checkPop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 /* Needs attention — unanswered questions */
 .ios-step-num.is-risk-warn {
@@ -4431,7 +4561,9 @@ body.viewing-splash .app-subnav { display: none; }
 
 .ios-step-info { flex: 1; min-width: 0; }
 .ios-step-name {
-  font-size: 13px; font-weight: 600; color: var(--text);
+  /* 15px like the prototype's rows, and back to a normal weight: at 15 the
+     size carries the row on its own and 600 read as shouting. */
+  font-size: 15px; font-weight: 500; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -4446,7 +4578,17 @@ body.viewing-splash .app-subnav { display: none; }
 .ios-step-risk-low    { background: var(--green, #4ade80); }
 .ios-step-risk-none   { background: var(--text-faint, #555); opacity: 0.5; }
 
-.ios-step-arrow { font-size: 16px; color: var(--text-faint); flex-shrink: 0; }
+/* THE CHEVRON, from the prototype: a 13px glyph rotated -90deg, at 26% white
+   and lifting to 62% when the row is lit. It was a text '›' at 16px, whose
+   weight and vertical centring came from the font rather than from us — which
+   is why it never quite sat on the row's optical centre. */
+.ios-step-arrow {
+  flex: none; display: grid; place-items: center;
+  color: rgba(255, 255, 255, .26);
+  transition: color .15s;
+}
+.ios-step-arrow svg { width: 13px; height: 13px; transform: rotate(-90deg); display: block; }
+.ios-step-card:hover .ios-step-arrow { color: rgba(255, 255, 255, .62); }
 
 /* Step modal body content wrapper */
 .ios-step-body-content { padding-bottom: 8px; }
@@ -5626,9 +5768,23 @@ textarea.loc-review-field.ias-inline-input {
   color: var(--text-dim);
 }
 
-.card-task:hover { background: var(--panel-2); color: var(--text); }
+/* A pseudo-element, not a border-top: over a box with a radius a border curves
+   at the ends and follows the corner. Inset by the row's own 12px so it lines
+   up with the text and not with the pill's edge. */
+.card-task + .card-task::before {
+  content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px;
+  background: rgba(255, 255, 255, .07); transition: opacity .15s ease;
+}
+/* White at 10%, no stroke — the nav rows' pill. The radius lives on .card-task
+   rather than here: declared only on :hover it would snap back to zero on the
+   way out and the fill would fade away with hard corners. */
+.card-task:hover { background: rgba(255, 255, 255, .10); color: var(--text); }
+/* With a row lit, neither divider touching it draws: not its own, which would
+   cut across the pill's top edge, nor the following row's. */
+.card-task:hover::before,
+.card-task:hover + .card-task::before { opacity: 0; }
 .card-task.is-done { opacity: 0.55; }
-.card-task.is-done:hover { opacity: 0.75; background: var(--panel-2); }
+.card-task.is-done:hover { opacity: 0.75; background: rgba(255, 255, 255, .10); }
 
 /* Step dot (checkmark circle) */
 .task-dot {
@@ -12076,7 +12232,7 @@ body.viewing-splash #app-guide { display: none; }
 .perf-delta.is-down { color: var(--magenta); }
 
 /* Panels */
-.perf-panel { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); padding: 16px 18px; margin-bottom: 16px; }
+.perf-panel { border: 1px solid var(--border); border-radius: var(--panel-radius); background: var(--panel); padding: 16px 18px; margin-bottom: 16px; }
 .perf-panel--wide { padding: 18px 20px; }
 .perf-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .perf-panel-head h3 { font-size: 14.5px; font-weight: 700; color: var(--text); margin: 0; }
@@ -12622,8 +12778,16 @@ body.viewing-splash #app-guide { display: none; }
 .ob-form .platform-tile {
   --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
   --pill-bw: 1px;   /* the ring below is placed against the border box */
+  /* ANCHORED TO THE TOP, NOT CENTRED. This is the whole alignment fix.
+     With `justify-content: center` the column's contents were centred inside
+     a tile whose height comes from the tallest tile in the row — so "Mac App
+     Store", whose label wraps to two lines, pushed its own icon UP by half a
+     line relative to every one-line tile, and its first label line down. The
+     icons bobbed and the labels never shared a baseline.
+     Anchored to the top, the icon box sits at the same y in every tile no
+     matter what the label does, and the label's first line follows it. */
   position: relative; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
+  align-items: center; justify-content: flex-start;
   gap: 8px; padding: 16px 10px 12px; text-align: center; border-radius: var(--field-radius);
   background: var(--pill-off-bg); border: 1px solid var(--pill-off-border);
   color: var(--pill-off-color); font-family: var(--mono); font-weight: 400; cursor: pointer;
@@ -12646,7 +12810,10 @@ body.viewing-splash #app-guide { display: none; }
   background: var(--pill-on-bg-hover); color: var(--pill-on-color-hover);
 }
 .ob-form .platform-tile-icon {
-  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  /* flex: none so the box can't be squeezed by a two-line label, which is the
+     other half of the bobbing: a shrunk icon box re-centres its own mark. */
+  width: 34px; height: 34px; flex: none;
+  display: flex; align-items: center; justify-content: center;
   color: currentColor;
 }
 .ob-form .platform-tile-icon svg,
@@ -12659,7 +12826,17 @@ body.viewing-splash #app-guide { display: none; }
    wraps to two lines at 12px and even at 10.5px; 10px is the first size
    where it renders on one row. Measured against the actual rendered grid at
    a range of realistic desktop widths, not eyeballed. */
-.ob-form .platform-tile-label { font-family: var(--mono); font-size: 10px; line-height: 1.2; }
+.ob-form .platform-tile-label {
+  font-family: var(--mono); font-size: 10px; line-height: 1.2;
+  /* TWO LINES ALWAYS RESERVED. 2.4em is exactly two lines at line-height 1.2,
+     so a one-word label leaves the second line empty instead of making its
+     tile shorter than the wrapping ones. Every tile's content column is then
+     the same height, which is what stops the grid's own stretch from handing
+     the short tiles surplus space and re-centring their icons. It also means
+     "Mac App Store" puts its first line on the same baseline as "Steam" and
+     its second below, rather than straddling it. */
+  min-height: 2.4em;
+}
 
 /* Coming soon: the prototype has no locked state, so this is the repo's,
    restated on the prototype's tile. Dimmed and inert, lock top-right. */

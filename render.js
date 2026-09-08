@@ -767,7 +767,29 @@ function buildObCountryList() { return buildObCountryChips(); }
    Note the viewBoxes differ: the prototype's marks are drawn on 64, this
    repo's on 24, so the fallbacks read a little heavier. If you have the real
    Web mark, drop it into platform-icons.js as `web` and this stops firing. */
+/* Key aliases into the measured mark set (SM_TILE_MARKS, platform-icons.js).
+   Two callers with two vocabularies: PLATFORMS_OB names PlayStation's mark
+   'playstation' and Epic's 'epic', while the platform cards ask by platform id
+   ('psn', 'egs'). Both Mac App Store tiles and cards deliberately wear the
+   App Store's mark — same glyph, different label, which is the spec. */
+const SM_TILE_MARK_ALIAS = {
+  playstation: 'psn',
+  egs:         'epic',
+  macos:       'ios',
+  macos_full:  'ios',
+};
+const smMarkFor = (key, px) =>
+  (typeof smTileMark === 'function')
+    ? smTileMark(SM_TILE_MARK_ALIAS[key] || key, px)
+    : null;
+
 function protoTileIcon(iconKey, repoId) {
+  /* The measured set first — see SM_TILE_MARKS in platform-icons.js. Those
+     four marks share one framing, so they line up with each other; the older
+     PROTO_PLATFORM_ICONS marks below don't, and are only still reached by the
+     two tiles (web, epic) that have no measured art yet. */
+  const measured = smMarkFor(iconKey);
+  if (measured) return measured;
   const own = PROTO_PLATFORM_ICONS[iconKey];
   if (own) return own;
   const d = (typeof PLATFORM_ICONS !== 'undefined') ? PLATFORM_ICONS[repoId] : '';
@@ -3210,6 +3232,13 @@ function renderChecklist() {
    panel for the active tab (falls back to a minimal placeholder). */
 // The Shippy guide is now the CURRENT tab's helper: the tab's banner text on
 // top, then that tab's task checklist (each task deep-links into the tab).
+/* ONE CHECK MARK FOR THE WHOLE APP. The same path the platform cards' done
+   discs draw — see the checkSVG in buildActiveCard's steps — so the guide and
+   the cards do not say "done" with two different glyphs. It was a '✓'
+   character here, whose weight and centring came from the font rather than
+   from us. currentColor, so each disc keeps its own ink. */
+const GUIDE_CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.4 12.3l3 3 6.2-6.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 function renderGuide() {
   const el = document.getElementById('app-guide');
   if (!el) return;
@@ -3235,7 +3264,7 @@ function renderGuide() {
   // Collapsed: a one-icon-wide progress rail — a vertical run of status dots.
   if (collapsed) {
     const dots = items.map(i =>
-      `<button class="guide-mini-dot${i.done ? ' is-done' : ''}" title="${i.label}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">${i.done ? '✓' : ''}</button>`).join('');
+      `<button class="guide-mini-dot${i.done ? ' is-done' : ''}" title="${i.label}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">${i.done ? GUIDE_CHECK_SVG : ''}</button>`).join('');
     el.innerHTML = `
       <div class="guide-card guide-card--mini">
         <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Expand guide" title="Expand guide">‹</button>
@@ -3250,7 +3279,7 @@ function renderGuide() {
     const cls = i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : '');
     return `
     <button class="gd-task${cls}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">
-      <span class="gd-task-box">${i.done ? '✓' : ''}</span>
+      <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
       <span class="gd-task-label">${i.label}</span>
     </button>`;
   }).join('');
@@ -3656,7 +3685,14 @@ function platformCardHead(pid, face) {
   return `
     <div class="active-card-head active-card-head--static">
       <div class="active-card-platform">
-        <div class="active-card-icon">${platformIcon(pid, 28, 'white')}</div>
+        <!-- The measured marks first, at the prototype's 30px in its 42px well
+             (shipmate-nav-prototype-v2.html, .platform-icon svg). They take
+             currentColor, so a card's mark is white here and the very same
+             file goes blue on a selected tile in SELECT PLATFORMS — one mark,
+             one framing, both places. platformIcon() stays as the fallback
+             for the platforms with no measured art (Xbox, Nintendo), which is
+             brand-coloured PNG whitened by a filter. -->
+        <div class="active-card-icon">${smMarkFor(pid, 30) || platformIcon(pid, 28, 'white')}</div>
         <div class="active-card-name-row">
           <div class="active-card-name">${platLabel(pid)}</div>
         </div>
@@ -3859,7 +3895,8 @@ function _linkedApps(pid) {
 
 /* STATE 2 — Signed in: account settings (linked app, etc.). Faked for now. */
 function _accountSettingsHTML(pid, cfg, savedUser) {
-  const checkSVG = `<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // 14px badge, so the stroke is lifted to 2.6 to hold its weight at that size.
+  const checkSVG = smCheckSVG(14, 2.6);
   const caretSVG = `<svg class="platform-select-caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const apps = _linkedApps(pid);
   const sel  = state.platformLinkedApp?.[pid] || apps[0].id;
@@ -3919,29 +3956,50 @@ function buildActiveCard(pid, force) {
   const locked = !counts.allRequired;
   const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
 
-  const steps = p.steps.filter(s => !s.isSubmit).map(step => {
+  /* THE SAME ROW EVERY OTHER CARD DRAWS.
+     This builder is the one Web, PlayStation, Xbox, Nintendo and Epic go
+     through, and it had been left on the old markup — `.card-task` with a
+     `.task-dot` and a text '›' — while App Store, Google Play and Steam moved
+     to the prototype's `.ios-step-card` with its numbered disc, its tick and
+     its chevron. On the Web card the seam was visible in one screenful: an
+     empty ring and a text arrow on "Preview Website", then the new numbered
+     disc immediately below it on "Deploy", because the submit row alone had
+     already been converted.
+
+     No risk dots here: those come from the App Store questionnaire's own risk
+     scoring (_appStoreSectionRisk), which these platforms have no equivalent
+     of, so a row with nothing to say says nothing. */
+  const checkSVG = smCheckSVG(20);
+  const nonSubmit = p.steps.filter(s => !s.isSubmit);
+  const steps = nonSubmit.map((step, i) => {
     const done = state.platformStepStatus[pid][step.id] === 'complete';
     // Web's "Preview Website" uses the rich step-modal + flip preview (like App Store/Steam);
     // other generic-platform steps use the plain task modal.
     const openFn = (pid === 'web' && step.id === 'storePreview') ? 'openStepModal' : 'openTaskModal';
     return `
-      <div class="card-task ${done ? 'is-done' : ''}" onclick="${openFn}('${pid}','${step.id}')">
-        <div class="task-dot ${done ? 'is-complete' : ''}" id="dot-${pid}-${step.id}"></div>
-        <span class="task-label">${stepLabel(pid, step)}</span>
-        <span class="task-arrow">›</span>
+      <div class="ios-step-card ${done ? 'is-complete' : ''}" id="${pid}-step-card-${step.id}"
+           onclick="${openFn}('${pid}','${step.id}')">
+        <div class="ios-step-num${done ? ' is-done' : ''}" id="dot-${pid}-${step.id}">${done ? checkSVG : i + 1}</div>
+        <div class="ios-step-info">
+          <div class="ios-step-name">${stepLabel(pid, step)}</div>
+        </div>
+        ${SM_STEP_CHEVRON}
       </div>`;
   }).join('');
 
   // Deploy/Submit badge number = count of non-submit steps + 1 (this platform's
   // steps array includes the submit step, so exclude it from the count).
-  const nonSubmitCount = p.steps.filter(s => !s.isSubmit).length;
-  const submitStepCard = buildSubmitStepCard(pid, nonSubmitCount, locked, submitDone);
+  const submitStepCard = buildSubmitStepCard(pid, nonSubmit.length, locked, submitDone);
 
+  /* ONE container, not two. The divider between rows is drawn by
+     `.ios-step-card + .ios-step-card::before`, an adjacent-sibling rule — so
+     splitting the steps and the submit row across `.card-tasks` and
+     `.ios-step-cards` left no line between the last step and Deploy, which is
+     the gap visible in the Web card. They are siblings now. */
   return `
     <div class="active-card" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
-      <div class="card-tasks">${steps}</div>
-      <div class="ios-step-cards">${submitStepCard}</div>
+      <div class="ios-step-cards">${steps}${submitStepCard}</div>
     </div>`;
 }
 
@@ -3951,7 +4009,9 @@ function buildActiveCard(pid, force) {
    • locked=false → row is active with inline track dropdown + Submit button
    ─────────────────────────────────────────────────────────────────────────── */
 function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  /* The prototype's check, path and stroke and all — kept on its own 24 viewBox
+     so the proportions are its rather than a re-drawing of them at 12. */
+  const checkSVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.4 12.3l3 3 6.2-6.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const num = stepCount + 1;
   const numClass = 'ios-step-num' + (submitDone ? ' is-done' : '');
 
@@ -4039,7 +4099,9 @@ function buildIOSActiveCard(pid, force) {
   const locked = !counts.allRequired;
   const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
 
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // The prototype's tick, at the full width of the 20px disc — see smCheckSVG
+  // in state.js for why the size is the disc's and not 10px.
+  const checkSVG = smCheckSVG(20);
 
   const binProc = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
@@ -4066,7 +4128,7 @@ function buildIOSActiveCard(pid, force) {
     // Binary processing indicator on the Improve Your Submission step row
     const trailingEl = (step.id === 'improveSubmission' && binProc)
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
-      : `<span class="ios-step-arrow">›</span>`;
+      : SM_STEP_CHEVRON;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="${pid}-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -4097,7 +4159,9 @@ function buildAndroidActiveCard(pid, force) {
   const locked = !counts.allRequired;
   const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
 
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // The prototype's tick, at the full width of the 20px disc — see smCheckSVG
+  // in state.js for why the size is the disc's and not 10px.
+  const checkSVG = smCheckSVG(20);
 
   const binProcAndroid = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
@@ -4121,7 +4185,7 @@ function buildAndroidActiveCard(pid, force) {
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     const trailingEl = (step.id === 'improveSubmission' && binProcAndroid)
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
-      : `<span class="ios-step-arrow">›</span>`;
+      : SM_STEP_CHEVRON;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="android-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -12709,7 +12773,9 @@ function buildSteamActiveCard(pid, force) {
   const counts = platformStepCount(pid);
   const locked = !counts.allRequired;
   const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
-  const checkSVG = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // The prototype's tick, at the full width of the 20px disc — see smCheckSVG
+  // in state.js for why the size is the disc's and not 10px.
+  const checkSVG = smCheckSVG(20);
 
   const binProcSteam = !!(state.platformBuildProcessing?.[pid]);
   const stepCards = p.steps.map((step, i) => {
@@ -12733,7 +12799,7 @@ function buildSteamActiveCard(pid, force) {
       ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     const trailingEl = (step.id === 'improveSubmission' && binProcSteam)
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
-      : `<span class="ios-step-arrow">›</span>`;
+      : SM_STEP_CHEVRON;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="steam-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
@@ -14372,8 +14438,10 @@ function buildBuildDropdown(pid, inModal) {
                    :                        '.exe,.zip';
   // Unique file input id — avoid clash between card header and modal instances
   const inputId    = inModal ? `build-file-modal-${pid}` : `build-file-${pid}`;
-  const uploadSVG  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;opacity:0.6"><path d="M8 11V2M4 5l4-4 4 4M2 13v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const checkSVG   = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="flex-shrink:0;color:var(--accent-green,#2FDC80)"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const uploadSVG  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  /* The prototype's OK_SVG: its own path and 2.4 stroke, and currentColor so it
+     takes the pill's green (#4FE39A) instead of carrying a second one. */
+  const checkSVG   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M4 12.5l5.5 5.5L20 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const spinHTML   = `<span class="build-proc-spin" style="flex-shrink:0;"></span>`;
 
   if (processing) {
