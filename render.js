@@ -4799,7 +4799,7 @@ function renderStepModal() {
     else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
     else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
     else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
-    else if (stepId === 'gameCenter')         body = buildMacFullGameCenterSection();
+    else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
     else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -7892,6 +7892,42 @@ function buildMacStorePreviewSection() {
    filled in, same as the Save button's own disabled state).
    ═══════════════════════════════════════════════════ */
 
+// Character limits for Mac App Store's and Mac App Store Full's Game Center
+// achievement fields — Reference Name mirrors Apple's own 255-character
+// internal-name limit; Display Name/Earned Description/Pre-Earned
+// Description mirror Apple's Game Center character limits for those same
+// fields. Same soft-limit-while-typing, hard-block-on-Save treatment as
+// IAP_PRODUCT_FIELD_LIMITS/_iapCounterField below (Business — IAP Products).
+const GC_ACHIEVEMENT_FIELD_LIMITS = { refName: 255, displayName: 30, earnedDescription: 120, preEarnedDescription: 120 };
+
+// Shared by Mac App Store's and Mac App Store Full's Game Center achievement
+// fields (otherwise identical twins) — builds the .form-input plus its
+// .ias-char-counter-row the same way _iapCounterField does further below,
+// and reuses that same file's updateIapCharCounter (app.js) for the live
+// count/Save-button-disable behavior on input, since that function only
+// depends on the shared .iap-product-row/.iap-product-field/
+// .iap-product-actions classes both achievement rows already borrow for
+// visual consistency (see this cluster's own header comment) — nothing
+// about it is actually IAP-specific. `setterFnName` is the platform-specific
+// field setter to call (setMacGameCenterAchievementField /
+// setMacFullGameCenterAchievementField).
+function _gcCounterField(setterFnName, id, field, label, value, placeholder) {
+  const limit = GC_ACHIEVEMENT_FIELD_LIMITS[field];
+  const v = value || '';
+  const overLimit = v.length > limit;
+  const remaining = limit - v.length;
+  return `
+    <div class="iap-product-field">
+      <label class="form-label">${label}</label>
+      <input class="form-input${overLimit ? ' is-over-limit' : ''}" type="text" value="${escHtml(v)}" placeholder="${placeholder}"
+             oninput="${setterFnName}('${id}','${field}',this.value); updateIapCharCounter(this, ${limit})">
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+        <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+      </div>
+    </div>`;
+}
+
 // Collapsed summary row — click anywhere on the row to re-expand
 // (expandMacGcAchievement), mirroring buildIapProductRow's own collapsed
 // state. Draggable for reordering (macGcAchievementDragStart/Over/Drop/
@@ -7928,6 +7964,8 @@ function _macGcAchievementCollapsedRow(a) {
 function _macGcAchievementExpandedRow(a) {
   const headerLabel = (a.displayName || '').trim() || a.refName.trim() || 'New Achievement';
   const img = a.image;
+  const overAnyLimit = Object.keys(GC_ACHIEVEMENT_FIELD_LIMITS)
+    .some(field => (a[field] || '').length > GC_ACHIEVEMENT_FIELD_LIMITS[field]);
   return `
     <div class="iap-product-row mac-gc-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveMacGcAchievement('${a.id}')" title="Click to collapse">
@@ -7938,11 +7976,7 @@ function _macGcAchievementExpandedRow(a) {
         </div>
       </div>
 
-      <div class="iap-product-field">
-        <label class="form-label">Reference Name</label>
-        <input class="form-input" type="text" value="${escHtml(a.refName)}" placeholder="Internal name, not shown to players"
-               oninput="setMacGameCenterAchievementField('${a.id}','refName',this.value)">
-      </div>
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'refName', 'Reference Name', a.refName, 'Internal name, not shown to players')}
       <div class="iap-product-field">
         <label class="form-label">Point Value <span class="form-hint-inline">(optional)</span></label>
         <input class="form-input" type="number" min="0" max="100" value="${escHtml(String(a.pointValue ?? ''))}" placeholder="0–100"
@@ -7962,21 +7996,9 @@ function _macGcAchievementExpandedRow(a) {
           <button class="yn-btn yn-no ${!a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacGameCenterAchievementField('${a.id}','achievableMultipleTimes',false)">NO</button>
         </div>
       </div>
-      <div class="iap-product-field">
-        <label class="form-label">Display Name</label>
-        <input class="form-input" type="text" value="${escHtml(a.displayName)}" placeholder="Shown to players, e.g. Speed Runner"
-               oninput="setMacGameCenterAchievementField('${a.id}','displayName',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Earned Description</label>
-        <input class="form-input" type="text" value="${escHtml(a.earnedDescription)}" placeholder="Shown after the player earns it"
-               oninput="setMacGameCenterAchievementField('${a.id}','earnedDescription',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Pre-Earned Description</label>
-        <input class="form-input" type="text" value="${escHtml(a.preEarnedDescription)}" placeholder="Shown before the player earns it"
-               oninput="setMacGameCenterAchievementField('${a.id}','preEarnedDescription',this.value)">
-      </div>
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'displayName', 'Display Name', a.displayName, 'Shown to players, e.g. Speed Runner')}
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'earnedDescription', 'Earned Description', a.earnedDescription, 'Shown after the player earns it')}
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'preEarnedDescription', 'Pre-Earned Description', a.preEarnedDescription, 'Shown before the player earns it')}
       <div class="form-group" style="margin-top:8px;margin-bottom:0;">
         <label class="form-label">Image</label>
         ${img
@@ -7988,7 +8010,7 @@ function _macGcAchievementExpandedRow(a) {
       </div>
 
       <div class="iap-product-actions" style="margin-top:14px;">
-        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacGcAchievement('${a.id}')" ${!a.refName.trim() ? 'disabled' : ''}>Save</button>
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacGcAchievement('${a.id}')" ${(!a.refName.trim() || overAnyLimit) ? 'disabled' : ''}>Save</button>
       </div>
     </div>`;
 }
@@ -8186,6 +8208,8 @@ function _macFullGcAchievementCollapsedRow(a) {
 function _macFullGcAchievementExpandedRow(a) {
   const headerLabel = (a.displayName || '').trim() || a.refName.trim() || 'New Achievement';
   const img = a.image;
+  const overAnyLimit = Object.keys(GC_ACHIEVEMENT_FIELD_LIMITS)
+    .some(field => (a[field] || '').length > GC_ACHIEVEMENT_FIELD_LIMITS[field]);
   return `
     <div class="iap-product-row macfull-gc-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveMacFullGcAchievement('${a.id}')" title="Click to collapse">
@@ -8196,11 +8220,7 @@ function _macFullGcAchievementExpandedRow(a) {
         </div>
       </div>
 
-      <div class="iap-product-field">
-        <label class="form-label">Reference Name</label>
-        <input class="form-input" type="text" value="${escHtml(a.refName)}" placeholder="Internal name, not shown to players"
-               oninput="setMacFullGameCenterAchievementField('${a.id}','refName',this.value)">
-      </div>
+      ${_gcCounterField('setMacFullGameCenterAchievementField', a.id, 'refName', 'Reference Name', a.refName, 'Internal name, not shown to players')}
       <div class="iap-product-field">
         <label class="form-label">Point Value <span class="form-hint-inline">(optional)</span></label>
         <input class="form-input" type="number" min="0" max="100" value="${escHtml(String(a.pointValue ?? ''))}" placeholder="0–100"
@@ -8220,21 +8240,9 @@ function _macFullGcAchievementExpandedRow(a) {
           <button class="yn-btn yn-no ${!a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacFullGameCenterAchievementField('${a.id}','achievableMultipleTimes',false)">NO</button>
         </div>
       </div>
-      <div class="iap-product-field">
-        <label class="form-label">Display Name</label>
-        <input class="form-input" type="text" value="${escHtml(a.displayName)}" placeholder="Shown to players, e.g. Speed Runner"
-               oninput="setMacFullGameCenterAchievementField('${a.id}','displayName',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Earned Description</label>
-        <input class="form-input" type="text" value="${escHtml(a.earnedDescription)}" placeholder="Shown after the player earns it"
-               oninput="setMacFullGameCenterAchievementField('${a.id}','earnedDescription',this.value)">
-      </div>
-      <div class="iap-product-field">
-        <label class="form-label">Pre-Earned Description</label>
-        <input class="form-input" type="text" value="${escHtml(a.preEarnedDescription)}" placeholder="Shown before the player earns it"
-               oninput="setMacFullGameCenterAchievementField('${a.id}','preEarnedDescription',this.value)">
-      </div>
+      ${_gcCounterField('setMacFullGameCenterAchievementField', a.id, 'displayName', 'Display Name', a.displayName, 'Shown to players, e.g. Speed Runner')}
+      ${_gcCounterField('setMacFullGameCenterAchievementField', a.id, 'earnedDescription', 'Earned Description', a.earnedDescription, 'Shown after the player earns it')}
+      ${_gcCounterField('setMacFullGameCenterAchievementField', a.id, 'preEarnedDescription', 'Pre-Earned Description', a.preEarnedDescription, 'Shown before the player earns it')}
       <div class="form-group" style="margin-top:8px;margin-bottom:0;">
         <label class="form-label">Image</label>
         ${img
@@ -8246,7 +8254,7 @@ function _macFullGcAchievementExpandedRow(a) {
       </div>
 
       <div class="iap-product-actions" style="margin-top:14px;">
-        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacFullGcAchievement('${a.id}')" ${!a.refName.trim() ? 'disabled' : ''}>Save</button>
+        <button class="btn btn-primary btn-sm" type="button" onclick="saveMacFullGcAchievement('${a.id}')" ${(!a.refName.trim() || overAnyLimit) ? 'disabled' : ''}>Save</button>
       </div>
     </div>`;
 }

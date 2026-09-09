@@ -656,6 +656,47 @@ async function _igdbFetchSteamAppId(igdbId) {
   return m ? m[1] : null;
 }
 
+/* Resolves a single title's screenshots by IGDB id — a small, targeted
+   follow-up query used once a title is picked (selectPicklistItem, app.js)
+   whenever Steam scraping doesn't produce screenshots for that title: no
+   Steam link at all, the Steam app-ID/appdetails lookup itself failed, or
+   Steam succeeded but simply has none listed for this game. Same reasoning
+   as _igdbFetchSteamAppId just above: IGDB_SEARCH_ENDPOINT's results never
+   carry screenshots (see _igdbSearchRaw), so this goes straight to IGDB
+   itself via IGDB_ENDPOINT/_cors() for just this one game. Returns [] for
+   "no screenshots" (not an error); only throws for a real fetch/auth
+   failure, which every caller already treats as non-fatal. */
+async function _igdbFetchScreenshots(igdbId) {
+  const token = await _getIgdbToken();
+  const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Client-ID':     IGDB_CLIENT_ID,
+      'Authorization': 'Bearer ' + token,
+      'Content-Type':  'text/plain',
+    },
+    body: `fields screenshots.url; where id = ${Number(igdbId)};`,
+  });
+
+  if (res.status === 401) {
+    _igdbAccessToken = null;               // invalidate and let caller retry
+    throw new Error('IGDB auth expired — please retry');
+  }
+  if (!res.ok) throw new Error('IGDB screenshots lookup failed (' + res.status + ')');
+
+  const games = await res.json();
+  const game  = games[0];
+  if (!game || !Array.isArray(game.screenshots)) return [];
+
+  // Same protocol-relative-URL and size-upgrade treatment _igdbSearchRaw
+  // applies to cover art — IGDB hands back a tiny t_thumb URL by default;
+  // upgraded here to t_screenshot_huge (1920×1080) for actual screenshot use.
+  return game.screenshots
+    .map(s => s && s.url)
+    .filter(Boolean)
+    .map(url => ((url.startsWith('//') ? 'https:' : '') + url).replace('t_thumb', 't_screenshot_huge'));
+}
+
 /* ── Steam library_hero direct CDN URL ────────────────────────────────
    Steam's library_hero.jpg is served from a stable, hash-free path keyed
    only by the app ID — no steamdb.info lookup, no proxy, no CORS concern

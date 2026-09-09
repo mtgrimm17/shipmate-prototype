@@ -1325,6 +1325,12 @@ function expandMacGcAchievement(id) {
 function saveMacGcAchievement(id) {
   const a = state.macGameCenterAchievements.find(a => a.id === id);
   if (!a || !a.refName.trim()) return;
+  // Same "hard block on Save, soft while typing" limit treatment as
+  // saveIapProduct (GC_ACHIEVEMENT_FIELD_LIMITS, render.js) — the Save
+  // button is already disabled in the DOM for this case (see
+  // _macGcAchievementExpandedRow's overAnyLimit), but this guard is the
+  // actual source of truth.
+  if (Object.keys(GC_ACHIEVEMENT_FIELD_LIMITS).some(f => (a[f] || '').length > GC_ACHIEVEMENT_FIELD_LIMITS[f])) return;
   a.collapsed = true;
   a.saved = true;
   _masAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
@@ -1568,6 +1574,12 @@ function expandMacFullGcAchievement(id) {
 function saveMacFullGcAchievement(id) {
   const a = state.macFullGameCenterAchievements.find(a => a.id === id);
   if (!a || !a.refName.trim()) return;
+  // Same "hard block on Save, soft while typing" limit treatment as
+  // saveIapProduct (GC_ACHIEVEMENT_FIELD_LIMITS, render.js) — the Save
+  // button is already disabled in the DOM for this case (see
+  // _macFullGcAchievementExpandedRow's overAnyLimit), but this guard is the
+  // actual source of truth.
+  if (Object.keys(GC_ACHIEVEMENT_FIELD_LIMITS).some(f => (a[f] || '').length > GC_ACHIEVEMENT_FIELD_LIMITS[f])) return;
   a.collapsed = true;
   a.saved = true;
   _macFullAchLocTriggerAutoTranslate(id, 'displayName', a.displayName);
@@ -2912,12 +2924,26 @@ function saveIapProduct(id) {
   if (!p) return;
   if (p.name.length > IAP_PRODUCT_FIELD_LIMITS.name || p.desc.length > IAP_PRODUCT_FIELD_LIMITS.desc) return;
   p.collapsed = true;
-  // IAP Localizations (_iapLocPropagateName/_iapLocTriggerAutoTranslate) is
-  // currently only wired to iOS's own iapProducts array — for a Mac App
-  // Store product these look up `id` there, find nothing, and no-op
-  // harmlessly rather than cross-contaminating iOS's data.
-  _iapLocPropagateName(id, p.name);
-  _iapLocTriggerAutoTranslate(id, 'desc', p.desc);
+  // IAP Localizations propagation is platform-specific — each platform keeps
+  // its own fully independent iapProducts array AND its own IAP
+  // Localizations cluster (_iapLoc* for iOS/Android, _masIapLoc* for Mac App
+  // Store, _macFullIapLoc* for Mac App Store Full — see each cluster's own
+  // header comment). Route to the one matching THIS product's platform, or
+  // Mac App Store's and Mac App Store Full's own saves never populate their
+  // own IAP Localizations at all (previously this always called the iOS
+  // cluster, which simply looks up `id` in the wrong array, finds nothing,
+  // and no-ops — silently, so Mac App Store/Mac App Store Full's
+  // localizations never got auto-generated on save).
+  if (pid === 'macos') {
+    _masIapLocPropagateName(id, p.name);
+    _masIapLocTriggerAutoTranslate(id, 'desc', p.desc);
+  } else if (pid === 'macos_full') {
+    _macFullIapLocPropagateName(id, p.name);
+    _macFullIapLocTriggerAutoTranslate(id, 'desc', p.desc);
+  } else {
+    _iapLocPropagateName(id, p.name);
+    _iapLocTriggerAutoTranslate(id, 'desc', p.desc);
+  }
   reRenderStepModal();
 }
 function expandIapProduct(id) {
@@ -3986,6 +4012,7 @@ function _propagateAllLocalizationFeatures() {
   _steamPropagateAllFields();
   _iapLocPropagateAllFields();
   _masIapLocPropagateAllFields(); // no-op until Mac App Store has saved IAP products
+  _macFullIapLocPropagateAllFields(); // no-op until Mac App Store Full has saved IAP products
   _masAchLocPropagateAllFields(); // no-op until Mac App Store has saved achievements
   _iasAchLocPropagateAllFields(); // no-op until the App Store has saved achievements
   _macFullAchLocPropagateAllFields(); // no-op until Mac App Store Full has saved achievements
@@ -4592,6 +4619,10 @@ function selectPicklistItem(igdbId) {
   const steamLinkPending = (item.platforms || []).includes('steam') && typeof _igdbFetchSteamAppId === 'function';
   if (!steamLinkPending && item.summary) _fillDescriptionField(item.summary);
   _fillScreenshotGridFromIgdb(item.screenshots || []);
+  // No Steam page to scrape at all — go straight to IGDB's own screenshots
+  // for this title rather than leaving the grid empty (item.screenshots
+  // above is always [] now; see _igdbSearchRaw in claude.js).
+  if (!steamLinkPending) _applyIgdbScreenshotFallback(item.id, item.name);
   // Clear any Steam localization cache/content left over from a
   // previously-selected game: state.steamLocInfo (the comparison baseline)
   // so a later language-add on THIS title can't be checked against the
@@ -4659,6 +4690,9 @@ function selectPicklistItem(igdbId) {
         // unfilled above in anticipation of Steam's data, so fall back to
         // IGDB's summary now instead of leaving it blank.
         if (item.summary) _fillDescriptionField(item.summary);
+        // Same reasoning — no Steam app id after all, so fall back to
+        // IGDB's own screenshots for this title instead of an empty grid.
+        _applyIgdbScreenshotFallback(item.id, item.name);
         // No Steam data is coming after all — this is the fallback path's
         // own chance to bring supporting-language Localization Review cards
         // up to date (see _refreshLocalizationForNewGame's comment).
@@ -4681,8 +4715,11 @@ function selectPicklistItem(igdbId) {
       // Same fallback reasoning as the !steamAppId branch above — the
       // lookup itself failed, so Description was deferred for nothing;
       // fill from IGDB's summary rather than leaving it blank.
-      if ((state.formData.title || '').trim() === (item.name || '').trim() && item.summary) {
-        _fillDescriptionField(item.summary);
+      if ((state.formData.title || '').trim() === (item.name || '').trim()) {
+        if (item.summary) _fillDescriptionField(item.summary);
+        // Same reasoning as the !steamAppId branch above — Steam screenshots
+        // aren't coming either, so fall back to IGDB's own.
+        _applyIgdbScreenshotFallback(item.id, item.name);
         // Same reasoning as the !steamAppId branch above — bring supporting
         // languages up to date now that no Steam data is coming.
         _refreshLocalizationForNewGame();
@@ -4872,6 +4909,27 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
   _refreshScreenshotGrid();
+}
+
+// Fallback used whenever Steam scraping doesn't produce screenshots for the
+// currently-selected title — no Steam link at all, the Steam lookup/fetch
+// itself failed, or Steam succeeded but simply has none listed for this
+// game (see call sites in selectPicklistItem and _applySteamAboutData
+// below). Fetches this one title's screenshots from IGDB directly
+// (_igdbFetchScreenshots, claude.js — a separate, single-item query, since
+// IGDB_SEARCH_ENDPOINT's own results never carry screenshots; see
+// _igdbSearchRaw) and fills the grid with them. Fire-and-forget and
+// non-fatal: a failure here just leaves the grid as it already is, same as
+// every other Steam/IGDB enrichment call. Guards against a stale/superseded
+// title the same way _igdbFetchSteamAppId's caller does.
+function _applyIgdbScreenshotFallback(igdbId, expectedTitle) {
+  if (!igdbId || typeof _igdbFetchScreenshots !== 'function') return;
+  _igdbFetchScreenshots(igdbId).then(urls => {
+    if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+    if (urls && urls.length) _fillScreenshotGridFromIgdb(urls);
+  }).catch(err => {
+    console.warn('[Picklist] IGDB screenshot fallback failed:', err.message);
+  });
 }
 
 /* Runs after selectPicklistItem when the picked title has a linked Steam
@@ -5496,6 +5554,12 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
       state.webSite.releaseDate = rd || 'Coming soon';
     }
     _fillScreenshotGridFromSteam(data.screenshots || []);
+    // Steam returned appdetails but simply has no screenshots listed for
+    // this title — fall back to IGDB's own rather than leaving the grid
+    // empty, same fallback used when Steam scraping fails outright below.
+    if (!(data.screenshots && data.screenshots.length) && fallbackItem) {
+      _applyIgdbScreenshotFallback(fallbackItem.id, expectedTitle);
+    }
     // Steam Key Art "Capsule Image"/"Header Image" — appdetails' own
     // capsule_image (231×87)/header_image (460×215), no CDN URL guessing
     // needed since appdetails hands back the exact, already-hash-resolved
@@ -5559,7 +5623,11 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     });
   } else {
     if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
-    _fillScreenshotGridFromIgdb((fallbackItem && fallbackItem.screenshots) || []);
+    // Steam scraping failed for this title — fall back to IGDB's own
+    // screenshots (fallbackItem.screenshots is always [] now — the picklist
+    // search backend doesn't return screenshots; see _igdbSearchRaw,
+    // claude.js — so a real single-item IGDB lookup is needed here instead).
+    if (fallbackItem) _applyIgdbScreenshotFallback(fallbackItem.id, expectedTitle);
     // No usable Steam data for this title (fetch failed) — clear any stale
     // cache from a previous game so a later language-add doesn't wrongly
     // check this new (non-Steam-backed) title against the OLD game's Steam
@@ -13893,6 +13961,20 @@ function _macFullIapLocPropagateName(iapId, primaryValue) {
   supportedLangs.forEach(lang => {
     if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
     p.locs[lang].name = primaryValue || '';
+  });
+}
+
+// Mac App Store Full's own version of _iapLocPropagateAllFields/
+// _masIapLocPropagateAllFields above — same "retroactively populate a
+// newly-added language for every already-saved product" job. This one was
+// missing entirely from _propagateAllLocalizationFeatures (the bundled
+// "a new supporting language now exists" helper further up this file) even
+// though its sibling clusters were both wired in — the same
+// forgot-a-call-site bug that helper's own comment describes.
+function _macFullIapLocPropagateAllFields() {
+  _macFullIapLocSavedProducts().forEach(p => {
+    _macFullIapLocPropagateName(p.id, p.name);
+    _macFullIapLocTriggerAutoTranslate(p.id, 'desc', p.desc);
   });
 }
 function _macFullIapLocFieldAutoTranslateEnabled(field) {
