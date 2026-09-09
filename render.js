@@ -4362,6 +4362,7 @@ function buildIOSActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
   const p      = PLATFORMS[pid];
+  const steps  = _visiblePlatformSteps(pid);
   const counts = platformStepCount(pid);
   const locked = !counts.allRequired;
   const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
@@ -4371,7 +4372,7 @@ function buildIOSActiveCard(pid, force) {
   const checkSVG = smCheckSVG(20);
 
   const binProc = !!(state.platformBuildProcessing?.[pid]);
-  const stepCards = p.steps.map((step, i) => {
+  const stepCards = steps.map((step, i) => {
     const done      = _appStoreSectionComplete(pid, step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
 
@@ -4408,7 +4409,7 @@ function buildIOSActiveCard(pid, force) {
       </div>`;
   }).join('');
 
-  const submitStepCard = buildSubmitStepCard(pid, p.steps.length, locked, submitDone);
+  const submitStepCard = buildSubmitStepCard(pid, steps.length, locked, submitDone);
 
   return `
     <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
@@ -4802,9 +4803,12 @@ function renderStepModal() {
     else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
     else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
+    else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
   } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
   else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
+  else if (stepId === 'localizations' && platformId === 'macos') body = buildMacLocalizationsSection();
+  else if (stepId === 'localizations' && platformId === 'ios') body = buildIosLocalizationsSection();
   else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
   else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
   else if (stepId === 'distribution')         body = buildDistributionSection();
@@ -12231,6 +12235,508 @@ function buildMacFullIapLocalizationsSection() {
       </div>
       <div class="iap-loc-cards">${cards}</div>
     </div>`;
+}
+
+/* ── Unified "Localizations" step (App Store / Mac App Store / Mac App
+   Store Full) ────────────────────────────────────────────────────────────
+   A NEW combined-view step (state.js PLATFORMS.{ios,macos,macos_full}.steps,
+   id 'localizations') that sits right after Product Page Preview and is
+   only shown once state.formData.localizations (the languages selected in
+   Game Details - Localization) is non-empty (see _visiblePlatformSteps,
+   state.js). Opening it takes the user to one of three per-platform
+   sections below — buildIosLocalizationsSection / buildMacLocalizationsSection
+   / buildMacFullLocalizationsSection — reached via renderStepModal's
+   'localizations' dispatch branches, further below in this file.
+
+   This is NOT a new, separate localization feature or data store. It's a
+   single page that lets the developer switch (via the leftmost of three
+   dropdowns) between the same three localization surfaces that already
+   exist standalone on each platform — Store Page (= that platform's own
+   Localization Review), IAPs (= that platform's own IAP Localizations),
+   Achievements (= that platform's own Achievement Localizations) — reusing
+   every one of their existing getters/setters/undo-history/state fields
+   directly. An edit made here is the SAME edit as one made from the
+   standalone entry point (Product Page Preview's "All Locs" button, the IAP
+   Products row's "IAP Locs" button, Game Center's "Localizations" button)
+   because both read and write the exact same state; there is nothing new to
+   keep in sync. The middle dropdown (which item — an IAP or an Achievement)
+   and the right dropdown (which field) are likewise literally the same
+   state.<x>IapLocField/state.<x>AchLocField/state.<x>LocReviewField the
+   standalone sections already use — switching between the standalone
+   section and this unified page for the same view always shows the same
+   selection.
+
+   Two small shared helpers below (_locsCardsHtml, _locsSettingsMenu) factor
+   out the ~80 lines of per-language-card markup and the settings-menu
+   shell that would otherwise need retyping 9 times (3 platforms × 3 views)
+   with only function/state names differing — each of the 9 existing
+   standalone builders above keeps its own independent, fully-duplicated
+   copy of this same markup (this codebase's usual convention), but
+   tripling ~150 lines 3 more times here for a page that ALREADY delegates
+   every read/write to those 9 builders' own state would be pure risk with
+   no benefit, so this one page-family instead follows the same
+   "parameterized shared helper" precedent already set by swSelect itself. */
+
+const LOC_VIEW_OPTIONS = [
+  { value: 'storePage',    label: 'Store Page' },
+  { value: 'iaps',         label: 'IAPs' },
+  { value: 'achievements', label: 'Achievements' },
+];
+
+// Renders one view's language cards. cfg fields:
+//   langCodes, primary, primaryName, limit, reviewMode, cardClass ('loc-review'|'iap-loc')
+//   fieldValue(lang) -> string
+//   backValue(lang) -> { text, status, forwardStatus }
+//   translatePending(lang) -> bool
+//   sourceBadge(lang) -> 'steam' | 'ai' | null
+//   undoState(kind, lang) -> { canUndo, canRedo }
+//   undoOnclick(kind, lang) / redoOnclick(kind, lang) -> onclick JS string (no leading "event.stopPropagation(); ")
+//   inlineOnclick(lang) / backOnclick(lang) -> onclick JS string
+function _locsCardsHtml(cfg) {
+  const { langCodes, primary, primaryName, limit, reviewMode, cardClass } = cfg;
+  const sideClass  = cardClass === 'loc-review' ? 'loc-review-side' : 'iap-loc-side';
+  const halfClass  = cardClass === 'loc-review' ? 'loc-review-half' : 'iap-loc-half';
+  const fieldClass = cardClass === 'loc-review' ? 'loc-review-field' : 'iap-loc-field';
+  const cardCls    = cardClass === 'loc-review' ? 'loc-review-card' : 'iap-loc-card';
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, lang) => {
+    const st = cfg.undoState(kind, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); ${cfg.undoOnclick(kind, lang)}"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); ${cfg.redoOnclick(kind, lang)}"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const locReviewLoadingSpinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const locReviewErrorStatusHtml = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="${fieldClass} ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="${fieldClass} ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  return langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw = cfg.fieldValue(lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = cfg.backValue(lang);
+      const topStatusHtml = cfg.translatePending(lang)
+        ? locReviewLoadingSpinnerHtml
+        : locReviewStatusHtml(back.forwardStatus);
+      const bottomStatusHtml = locReviewStatusHtml(back.status);
+
+      return `
+      <div class="${cardCls}">
+        <div class="${sideClass}">
+          <div class="${halfClass} ${halfClass}--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, cfg.inlineOnclick(lang), undoRedoGroup('real', lang))}
+          </div>
+          <div class="${halfClass} ${halfClass}--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${bottomStatusHtml}</div>
+            ${fieldBlockNoLimit(back.text, cfg.backOnclick(lang), undoRedoGroup('draft', lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const isPending = !isPrimary && cfg.translatePending(lang);
+    const srcBadge = cfg.sourceBadge(lang);
+    const badgeHtml = isPending
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
+    return `
+      <div class="${cardCls}${isPrimary ? ` ${cardCls}--primary` : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, cfg.inlineOnclick(lang), undoRedoGroup('real', lang))}
+      </div>`;
+  }).join('');
+}
+
+// Renders the settings gear + "Automatically translated fields" dropdown.
+// cfg: { wrapId, isOpen, toggleMenuOnclick, toggleFieldOnclick(key), autoCfg, rows: [[key,label],...] }
+function _locsSettingsMenu(cfg) {
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${cfg.autoCfg[key] ? 'checked' : ''} onchange="${cfg.toggleFieldOnclick(key)}">
+          <span>${label}</span>
+        </label>`;
+  return `
+      <div class="loc-review-settings-wrap sw-select-wrap${cfg.isOpen ? ' is-open' : ''}" id="${cfg.wrapId}">
+        <button class="loc-review-settings-btn" type="button" onclick="${cfg.toggleMenuOnclick}" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          ${cfg.rows.map(([k, l]) => settingsRow(k, l)).join('')}
+        </div>
+      </div>`;
+}
+
+// Builds one platform's unified Localizations section. `p` carries every
+// platform-specific name this needs — see the three thin wrappers below
+// (buildIosLocalizationsSection/buildMacLocalizationsSection/
+// buildMacFullLocalizationsSection) for exactly what each platform passes.
+function _buildUnifiedLocalizationsSection(p) {
+  const view = state[p.viewStateKey] || 'storePage';
+  const langCodes = _iasAllPreviewLangCodes();
+  const primary = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+
+  let field, fieldOptions, itemId, itemOptions, itemSetterName, reviewMode,
+      toggleReviewFnName, cardsCfg, settingsHtml, emptyState, cardClass;
+
+  if (view === 'storePage') {
+    field = state[p.storePage.fieldKey] || 'title';
+    const limit = IAS_FIELD_CHAR_LIMITS[field];
+    reviewMode = state[p.storePage.modeKey] === 'review';
+    fieldOptions = LOC_REVIEW_FIELDS.map(f => ({
+      value: f.value,
+      label: f.label,
+      warning: p.storePage.fieldHasOverLimitLang(f.value, langCodes),
+    }));
+    itemOptions = [];
+    itemId = '';
+    itemSetterName = null;
+    cardClass = 'loc-review';
+    settingsHtml = _locsSettingsMenu({
+      wrapId: `${p.idPrefix}-locs-storepage-settings-wrap`,
+      isOpen: !!state[p.storePage.settingsOpenKey],
+      toggleMenuOnclick: `${p.storePage.toggleSettingsMenuFn}(event)`,
+      toggleFieldOnclick: (key) => `${p.storePage.toggleAutoTranslateFieldFn}('${key}')`,
+      autoCfg: state[p.storePage.autoCfgKey] || p.storePage.autoCfgDefault,
+      rows: p.storePage.settingsRows,
+    });
+    toggleReviewFnName = p.storePage.toggleReviewModeFn;
+    cardsCfg = {
+      langCodes, primary, primaryName, limit, reviewMode, cardClass,
+      fieldValue: (lang) => p.storePage.fieldValue(field, lang),
+      backValue: (lang) => p.storePage.backTranslationValue(field, lang),
+      translatePending: (lang) => p.storePage.fieldTranslatePending(field, lang),
+      sourceBadge: (lang) => p.storePage.sourceBadge(field, lang),
+      undoState: (kind, lang) => p.storePage.undoState(kind, field, lang),
+      undoOnclick: (kind, lang) => `${p.storePage.undoFn}('${kind}','${field}','${lang}')`,
+      redoOnclick: (kind, lang) => `${p.storePage.redoFn}('${kind}','${field}','${lang}')`,
+      inlineOnclick: (lang) => `${p.storePage.inlineEditFn}('${field}','${lang}',this,event)`,
+      backOnclick: (lang) => `${p.storePage.backEditFn}('${field}','${lang}',this,event)`,
+    };
+  } else if (view === 'iaps') {
+    const savedProducts = (state[p.iaps.answersKey].iapProducts || []).filter(x => x.collapsed);
+    if (!savedProducts.length) {
+      emptyState = '<div class="cq-inline-empty">No saved in-app purchases yet — add one from Business Questions.</div>';
+    }
+    itemId = p.iaps.effectiveItemId();
+    const item = savedProducts.find(x => x.id === itemId);
+    if (!emptyState && !item) emptyState = '<div class="cq-inline-empty">No saved in-app purchases yet — add one from Business Questions.</div>';
+    field = state[p.iaps.fieldKey] || 'name';
+    const limit = IAP_PRODUCT_FIELD_LIMITS[field];
+    reviewMode = state[p.iaps.modeKey] === 'review';
+    fieldOptions = IAP_LOC_FIELDS.map(f => ({
+      value: f.value,
+      label: f.label,
+      warning: emptyState ? false : p.iaps.fieldHasOverLimitLang(itemId, f.value, langCodes),
+    }));
+    itemOptions = savedProducts.map(x => ({ value: x.id, label: escHtml(x.name) || 'Untitled IAP' }));
+    itemSetterName = p.iaps.itemSetterFn;
+    cardClass = 'iap-loc';
+    settingsHtml = _locsSettingsMenu({
+      wrapId: `${p.idPrefix}-locs-iaps-settings-wrap`,
+      isOpen: !!state[p.iaps.settingsOpenKey],
+      toggleMenuOnclick: `${p.iaps.toggleSettingsMenuFn}(event)`,
+      toggleFieldOnclick: (key) => `${p.iaps.toggleAutoTranslateFieldFn}('${key}')`,
+      autoCfg: state[p.iaps.autoCfgKey] || { name: true, desc: true },
+      rows: [['name', 'Name'], ['desc', 'Description']],
+    });
+    toggleReviewFnName = p.iaps.toggleReviewModeFn;
+    if (!emptyState) {
+      cardsCfg = {
+        langCodes, primary, primaryName, limit, reviewMode, cardClass,
+        fieldValue: (lang) => p.iaps.fieldValue(itemId, field, lang),
+        backValue: (lang) => p.iaps.backTranslationValue(itemId, field, lang),
+        translatePending: (lang) => p.iaps.fieldTranslatePending(itemId, field, lang),
+        sourceBadge: (lang) => p.iaps.sourceBadge(itemId, field, lang),
+        undoState: (kind, lang) => p.iaps.undoState(kind, itemId, field, lang),
+        undoOnclick: (kind, lang) => `${p.iaps.undoFn}('${kind}','${itemId}','${field}','${lang}')`,
+        redoOnclick: (kind, lang) => `${p.iaps.redoFn}('${kind}','${itemId}','${field}','${lang}')`,
+        inlineOnclick: (lang) => `${p.iaps.inlineEditFn}('${itemId}','${field}','${lang}',this,event)`,
+        backOnclick: (lang) => `${p.iaps.backEditFn}('${itemId}','${field}','${lang}',this,event)`,
+      };
+    }
+  } else {
+    // achievements
+    const savedAchievements = (state[p.achievements.savedKey] || []).filter(x => x.saved);
+    if (!savedAchievements.length) {
+      emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
+    }
+    itemId = p.achievements.effectiveItemId();
+    const item = savedAchievements.find(x => x.id === itemId);
+    if (!emptyState && !item) emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
+    field = state[p.achievements.fieldKey] || 'displayName';
+    const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+    reviewMode = state[p.achievements.modeKey] === 'review';
+    fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
+      value: f.value,
+      label: f.label,
+      warning: emptyState ? false : p.achievements.fieldHasOverLimitLang(itemId, f.value, langCodes),
+    }));
+    itemOptions = savedAchievements.map(x => ({ value: x.id, label: escHtml(x.displayName || x.refName) || 'Untitled Achievement' }));
+    itemSetterName = p.achievements.itemSetterFn;
+    cardClass = 'iap-loc';
+    settingsHtml = _locsSettingsMenu({
+      wrapId: `${p.idPrefix}-locs-achievements-settings-wrap`,
+      isOpen: !!state[p.achievements.settingsOpenKey],
+      toggleMenuOnclick: `${p.achievements.toggleSettingsMenuFn}(event)`,
+      toggleFieldOnclick: (key) => `${p.achievements.toggleAutoTranslateFieldFn}('${key}')`,
+      autoCfg: state[p.achievements.autoCfgKey] || { displayName: true, earnedDescription: true, preEarnedDescription: true },
+      rows: [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
+    });
+    toggleReviewFnName = p.achievements.toggleReviewModeFn;
+    if (!emptyState) {
+      cardsCfg = {
+        langCodes, primary, primaryName, limit, reviewMode, cardClass,
+        fieldValue: (lang) => p.achievements.fieldValue(itemId, field, lang),
+        backValue: (lang) => p.achievements.backTranslationValue(itemId, field, lang),
+        translatePending: (lang) => p.achievements.fieldTranslatePending(itemId, field, lang),
+        sourceBadge: (lang) => p.achievements.sourceBadge(itemId, field, lang),
+        undoState: (kind, lang) => p.achievements.undoState(kind, itemId, field, lang),
+        undoOnclick: (kind, lang) => `${p.achievements.undoFn}('${kind}','${itemId}','${field}','${lang}')`,
+        redoOnclick: (kind, lang) => `${p.achievements.redoFn}('${kind}','${itemId}','${field}','${lang}')`,
+        inlineOnclick: (lang) => `${p.achievements.inlineEditFn}('${itemId}','${field}','${lang}',this,event)`,
+        backOnclick: (lang) => `${p.achievements.backEditFn}('${itemId}','${field}','${lang}',this,event)`,
+      };
+    }
+  }
+
+  const cardsHtml = cardsCfg ? _locsCardsHtml(cardsCfg) : '';
+  const wrapperClass = view === 'storePage' ? 'loc-review-cards' : 'iap-loc-cards';
+  const isLongField = view === 'storePage' && (field === 'description' || field === 'releaseNotes');
+  const wrapperModifiers = view === 'storePage'
+    ? `${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}`
+    : '';
+
+  const itemDropdown = view === 'storePage'
+    ? swSelect(`${p.idPrefix}-locs-item`, '', [], '_locsNoop', 'auto', 'right', '—')
+    : swSelect(`${p.idPrefix}-locs-item`, itemId, itemOptions, itemSetterName, 'auto', 'right');
+  const fieldDropdown = swSelect(`${p.idPrefix}-locs-field`, field, fieldOptions, view === 'storePage' ? p.storePage.fieldSetterFn : (view === 'iaps' ? p.iaps.fieldSetterFn : p.achievements.fieldSetterFn), 'auto', 'right');
+
+  return `
+    <div class="form-group iap-loc-section">
+      <div class="loc-review-header">
+        <div class="loc-review-title-group">
+          <div class="loc-review-title">Localizations</div>
+          ${settingsHtml}
+        </div>
+        <div class="loc-review-header-controls">
+          <button class="loc-review-toggle-btn" onclick="${toggleReviewFnName}()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        </div>
+      </div>
+      <div class="iap-loc-selectors-row">
+        ${swSelect(`${p.idPrefix}-locs-view`, view, LOC_VIEW_OPTIONS, p.viewSetterFn, 'auto', 'right')}
+        ${itemDropdown}
+        ${fieldDropdown}
+      </div>
+      ${emptyState || `<div class="${wrapperClass}${wrapperModifiers}">${cardsHtml}</div>`}
+    </div>`;
+}
+
+function buildIosLocalizationsSection() {
+  return _buildUnifiedLocalizationsSection({
+    idPrefix: 'ias',
+    viewStateKey: 'iosLocsView',
+    viewSetterFn: 'setIosLocsView',
+    storePage: {
+      fieldKey: 'locReviewField', modeKey: 'locReviewMode', settingsOpenKey: 'iasReviewSettingsOpen',
+      autoCfgKey: 'iasAutoTranslateFields',
+      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
+      settingsRows: [['title', 'Title'], ['subtitle', 'Subtitle'], ['description', 'Description'], ['releaseNotes', "What's New"]],
+      fieldHasOverLimitLang: _iasFieldHasOverLimitLang,
+      fieldValue: _iasFieldValue,
+      backTranslationValue: _locReviewBackTranslationValue,
+      fieldTranslatePending: _iasFieldTranslatePending,
+      sourceBadge: _locReviewSourceBadge,
+      undoState: _locReviewUndoState,
+      undoFn: 'locReviewUndo', redoFn: 'locReviewRedo',
+      inlineEditFn: 'startLocReviewInlineEdit', backEditFn: 'startLocReviewBackTranslationEdit',
+      toggleReviewModeFn: 'toggleLocReviewMode', fieldSetterFn: 'setLocReviewField',
+      toggleSettingsMenuFn: '_iasToggleReviewSettingsMenu', toggleAutoTranslateFieldFn: '_iasToggleAutoTranslateField',
+    },
+    iaps: {
+      answersKey: 'iosSubmitAnswers', fieldKey: 'iapLocField', modeKey: 'iapLocMode',
+      settingsOpenKey: 'iapLocSettingsOpen', autoCfgKey: 'iapLocAutoTranslateFields',
+      effectiveItemId: _iapLocEffectiveIapId,
+      fieldHasOverLimitLang: _iapLocFieldHasOverLimitLang,
+      fieldValue: _iapLocFieldValue,
+      backTranslationValue: _iapLocBackTranslationValue,
+      fieldTranslatePending: _iapLocFieldTranslatePending,
+      sourceBadge: _iapLocSourceBadge,
+      undoState: _iapLocUndoState,
+      undoFn: 'iapLocUndo', redoFn: 'iapLocRedo',
+      inlineEditFn: 'startIapLocInlineEdit', backEditFn: 'startIapLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleIapLocReviewMode', itemSetterFn: 'setIapLocReviewIapId', fieldSetterFn: 'setIapLocField',
+      toggleSettingsMenuFn: '_iapLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_iapLocToggleAutoTranslateField',
+    },
+    achievements: {
+      savedKey: 'iosGameCenterAchievements', fieldKey: 'iasAchLocField', modeKey: 'iasAchLocMode',
+      settingsOpenKey: 'iasAchLocSettingsOpen', autoCfgKey: 'iasAchLocAutoTranslateFields',
+      effectiveItemId: _iasAchLocEffectiveAchId,
+      fieldHasOverLimitLang: _iasAchLocFieldHasOverLimitLang,
+      fieldValue: _iasAchLocFieldValue,
+      backTranslationValue: _iasAchLocBackTranslationValue,
+      fieldTranslatePending: _iasAchLocFieldTranslatePending,
+      sourceBadge: _iasAchLocSourceBadge,
+      undoState: _iasAchLocUndoState,
+      undoFn: 'iasAchLocUndo', redoFn: 'iasAchLocRedo',
+      inlineEditFn: 'startIasAchLocInlineEdit', backEditFn: 'startIasAchLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleIasAchLocReviewMode', itemSetterFn: 'setIasAchLocReviewAchId', fieldSetterFn: 'setIasAchLocField',
+      toggleSettingsMenuFn: '_iasAchLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_iasAchLocToggleAutoTranslateField',
+    },
+  });
+}
+
+function buildMacLocalizationsSection() {
+  return _buildUnifiedLocalizationsSection({
+    idPrefix: 'mas',
+    viewStateKey: 'macLocsView',
+    viewSetterFn: 'setMacLocsView',
+    storePage: {
+      fieldKey: 'masLocReviewField', modeKey: 'masLocReviewMode', settingsOpenKey: 'masReviewSettingsOpen',
+      autoCfgKey: 'masAutoTranslateFields',
+      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
+      settingsRows: [['description', 'Description'], ['releaseNotes', "What's New"]],
+      fieldHasOverLimitLang: _masFieldHasOverLimitLang,
+      fieldValue: _masFieldValue,
+      backTranslationValue: _masLocReviewBackTranslationValue,
+      fieldTranslatePending: _masFieldTranslatePending,
+      sourceBadge: _masLocReviewSourceBadge,
+      undoState: _masLocReviewUndoState,
+      undoFn: 'masLocReviewUndo', redoFn: 'masLocReviewRedo',
+      inlineEditFn: 'startMasLocReviewInlineEdit', backEditFn: 'startMasLocReviewBackTranslationEdit',
+      toggleReviewModeFn: 'toggleMasLocReviewMode', fieldSetterFn: 'setMasLocReviewField',
+      toggleSettingsMenuFn: '_masToggleReviewSettingsMenu', toggleAutoTranslateFieldFn: '_masToggleAutoTranslateField',
+    },
+    iaps: {
+      answersKey: 'macSubmitAnswers', fieldKey: 'masIapLocField', modeKey: 'masIapLocMode',
+      settingsOpenKey: 'masIapLocSettingsOpen', autoCfgKey: 'masIapLocAutoTranslateFields',
+      effectiveItemId: _masIapLocEffectiveIapId,
+      fieldHasOverLimitLang: _masIapLocFieldHasOverLimitLang,
+      fieldValue: _masIapLocFieldValue,
+      backTranslationValue: _masIapLocBackTranslationValue,
+      fieldTranslatePending: _masIapLocFieldTranslatePending,
+      sourceBadge: _masIapLocSourceBadge,
+      undoState: _masIapLocUndoState,
+      undoFn: 'masIapLocUndo', redoFn: 'masIapLocRedo',
+      inlineEditFn: 'startMasIapLocInlineEdit', backEditFn: 'startMasIapLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleMasIapLocReviewMode', itemSetterFn: 'setMasIapLocReviewIapId', fieldSetterFn: 'setMasIapLocField',
+      toggleSettingsMenuFn: '_masIapLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_masIapLocToggleAutoTranslateField',
+    },
+    achievements: {
+      savedKey: 'macGameCenterAchievements', fieldKey: 'masAchLocField', modeKey: 'masAchLocMode',
+      settingsOpenKey: 'masAchLocSettingsOpen', autoCfgKey: 'masAchLocAutoTranslateFields',
+      effectiveItemId: _masAchLocEffectiveAchId,
+      fieldHasOverLimitLang: _masAchLocFieldHasOverLimitLang,
+      fieldValue: _masAchLocFieldValue,
+      backTranslationValue: _masAchLocBackTranslationValue,
+      fieldTranslatePending: _masAchLocFieldTranslatePending,
+      sourceBadge: _masAchLocSourceBadge,
+      undoState: _masAchLocUndoState,
+      undoFn: 'masAchLocUndo', redoFn: 'masAchLocRedo',
+      inlineEditFn: 'startMasAchLocInlineEdit', backEditFn: 'startMasAchLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleMasAchLocReviewMode', itemSetterFn: 'setMasAchLocReviewAchId', fieldSetterFn: 'setMasAchLocField',
+      toggleSettingsMenuFn: '_masAchLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_masAchLocToggleAutoTranslateField',
+    },
+  });
+}
+
+function buildMacFullLocalizationsSection() {
+  return _buildUnifiedLocalizationsSection({
+    idPrefix: 'macfull',
+    viewStateKey: 'macFullLocsView',
+    viewSetterFn: 'setMacFullLocsView',
+    storePage: {
+      fieldKey: 'macFullLocReviewField', modeKey: 'macFullLocReviewMode', settingsOpenKey: 'macFullReviewSettingsOpen',
+      autoCfgKey: 'macFullAutoTranslateFields',
+      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
+      settingsRows: [['description', 'Description'], ['releaseNotes', "What's New"]],
+      fieldHasOverLimitLang: _macFullFieldHasOverLimitLang,
+      fieldValue: _macFullFieldValue,
+      backTranslationValue: _macFullLocReviewBackTranslationValue,
+      fieldTranslatePending: _macFullFieldTranslatePending,
+      sourceBadge: _macFullLocReviewSourceBadge,
+      undoState: _macFullLocReviewUndoState,
+      undoFn: 'macFullLocReviewUndo', redoFn: 'macFullLocReviewRedo',
+      inlineEditFn: 'startMacFullLocReviewInlineEdit', backEditFn: 'startMacFullLocReviewBackTranslationEdit',
+      toggleReviewModeFn: 'toggleMacFullLocReviewMode', fieldSetterFn: 'setMacFullLocReviewField',
+      toggleSettingsMenuFn: '_macFullToggleReviewSettingsMenu', toggleAutoTranslateFieldFn: '_macFullToggleAutoTranslateField',
+    },
+    iaps: {
+      answersKey: 'macFullSubmitAnswers', fieldKey: 'macFullIapLocField', modeKey: 'macFullIapLocMode',
+      settingsOpenKey: 'macFullIapLocSettingsOpen', autoCfgKey: 'macFullIapLocAutoTranslateFields',
+      effectiveItemId: _macFullIapLocEffectiveIapId,
+      fieldHasOverLimitLang: _macFullIapLocFieldHasOverLimitLang,
+      fieldValue: _macFullIapLocFieldValue,
+      backTranslationValue: _macFullIapLocBackTranslationValue,
+      fieldTranslatePending: _macFullIapLocFieldTranslatePending,
+      sourceBadge: _macFullIapLocSourceBadge,
+      undoState: _macFullIapLocUndoState,
+      undoFn: 'macFullIapLocUndo', redoFn: 'macFullIapLocRedo',
+      inlineEditFn: 'startMacFullIapLocInlineEdit', backEditFn: 'startMacFullIapLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleMacFullIapLocReviewMode', itemSetterFn: 'setMacFullIapLocReviewIapId', fieldSetterFn: 'setMacFullIapLocField',
+      toggleSettingsMenuFn: '_macFullIapLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_macFullIapLocToggleAutoTranslateField',
+    },
+    achievements: {
+      savedKey: 'macFullGameCenterAchievements', fieldKey: 'macFullAchLocField', modeKey: 'macFullAchLocMode',
+      settingsOpenKey: 'macFullAchLocSettingsOpen', autoCfgKey: 'macFullAchLocAutoTranslateFields',
+      effectiveItemId: _macFullAchLocEffectiveAchId,
+      fieldHasOverLimitLang: _macFullAchLocFieldHasOverLimitLang,
+      fieldValue: _macFullAchLocFieldValue,
+      backTranslationValue: _macFullAchLocBackTranslationValue,
+      fieldTranslatePending: _macFullAchLocFieldTranslatePending,
+      sourceBadge: _macFullAchLocSourceBadge,
+      undoState: _macFullAchLocUndoState,
+      undoFn: 'macFullAchLocUndo', redoFn: 'macFullAchLocRedo',
+      inlineEditFn: 'startMacFullAchLocInlineEdit', backEditFn: 'startMacFullAchLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleMacFullAchLocReviewMode', itemSetterFn: 'setMacFullAchLocReviewAchId', fieldSetterFn: 'setMacFullAchLocField',
+      toggleSettingsMenuFn: '_macFullAchLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_macFullAchLocToggleAutoTranslateField',
+    },
+  });
 }
 
 /* ── Distribution ────────────────────────────────────── */

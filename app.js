@@ -1051,8 +1051,11 @@ function _paintStepRow(platformId, stepId, done) {
   const row = disc.closest('.ios-step-card');
   disc.classList.toggle('is-done', done);
   // The row's number is its position among the non-submit steps, 1-based —
-  // the same expression buildActiveCard numbers them with.
-  const n = (PLATFORMS[platformId]?.steps || [])
+  // the same expression buildActiveCard numbers them with. Uses
+  // _visiblePlatformSteps (state.js) rather than the raw steps array so a
+  // currently-hidden conditional step (e.g. 'localizations' before any
+  // language is added) never throws off the numbering of the steps after it.
+  const n = _visiblePlatformSteps(platformId)
     .filter(s => !s.isSubmit).findIndex(s => s.id === stepId) + 1;
   disc.innerHTML = done ? smCheckSVG(20) : String(n || '');
   if (row) row.classList.toggle('is-complete', done);
@@ -2147,7 +2150,10 @@ function updateIOSCard(pid) {
   // Same tick the first render drew (render.js) — smCheckSVG, state.js.
   const checkSVG = smCheckSVG(20);
 
-  PLATFORMS[pid].steps.forEach((step, i) => {
+  // _visiblePlatformSteps (state.js), not the raw steps array — keeps this
+  // in sync with buildIOSActiveCard's own numbering (render.js) when a
+  // conditional step like 'localizations' is currently hidden.
+  _visiblePlatformSteps(pid).forEach((step, i) => {
     const card = document.getElementById(`${pid}-step-card-${step.id}`);
     if (!card) return;
     const done = _appStoreSectionComplete(pid, step.id);
@@ -8990,6 +8996,22 @@ function setLocReviewField(field) {
   // own independent cache (state.locReviewBackTranslation[field]).
   if (state.locReviewMode === 'review') _locReviewSyncBackTranslations();
 }
+
+/* ── Unified "Localizations" step — leftmost view dropdown setters ───────
+   See buildIosLocalizationsSection/buildMacLocalizationsSection/
+   buildMacFullLocalizationsSection (render.js) for what these drive: which
+   of Store Page/IAPs/Achievements the unified Localizations step currently
+   shows. Each setter only records the chosen view (state.iosLocsView/
+   macLocsView/macFullLocsView) — the item/field selections underneath are
+   the SAME state the standalone Localization Review/IAP Localizations/
+   Achievement Localizations sections already own, so nothing else needs
+   resetting here. _locsNoop backs the item dropdown's onChangeFn when Store
+   Page is selected (that dropdown has no items and is never clickable to a
+   real choice — see swSelect's empty-options handling, render.js). */
+function _locsNoop() {}
+function setIosLocsView(view) { state.iosLocsView = view; reRenderStepModal(); }
+function setMacLocsView(view) { state.macLocsView = view; reRenderStepModal(); }
+function setMacFullLocsView(view) { state.macFullLocsView = view; reRenderStepModal(); }
 
 /* ── Business — "IAP Localizations" ──────────────────────────────────────
    A full parallel of the App Store Product Page Preview's own Localization

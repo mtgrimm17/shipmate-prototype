@@ -797,6 +797,7 @@ const PLATFORMS = {
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
+      { id: 'localizations',    label: 'Localizations'                                },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
@@ -826,6 +827,7 @@ const PLATFORMS = {
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
+      { id: 'localizations',    label: 'Localizations'                                },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
@@ -862,6 +864,7 @@ const PLATFORMS = {
       { id: 'privacy',         label: 'App Privacy'                                   },
       { id: 'versionRelease',  label: 'Version Release'                               },
       { id: 'storePreview',    label: 'Product Page Preview'                          },
+      { id: 'localizations',   label: 'Localizations'                                 },
       { id: 'improveSubmission', label: 'Improve Your Submission'                     },
     ],
   },
@@ -1034,15 +1037,34 @@ function makeEmptyPlatformSteps() {
   return out;
 }
 
+// Returns a platform's steps array, filtering out steps that are
+// conditionally hidden right now. Currently only 'localizations' is
+// conditional — it's an App Store/Mac App Store/Mac App Store Full-only
+// step that only shows once one or more supported languages have been
+// added in Game Details - Localization (state.formData.localizations).
+// Every render/count/numbering call site that walks a platform's steps
+// list (buildIOSActiveCard, platformStepCount, _paintStepRow,
+// updateIOSCard) must use this instead of the raw PLATFORMS[pid].steps so
+// the step disappears/reappears and renumbers consistently everywhere.
+function _visiblePlatformSteps(pid) {
+  const p = PLATFORMS[pid];
+  if (!p) return [];
+  if ((pid === 'ios' || pid === 'macos' || pid === 'macos_full') && !(state.formData.localizations || []).length) {
+    return p.steps.filter(s => s.id !== 'localizations');
+  }
+  return p.steps;
+}
+
 function platformStepCount(platformId) {
   const p = PLATFORMS[platformId];
   // Binary build upload is required for submit unlock on iOS/Android/Steam
   const hasBuild = !!(state.platformBuilds?.[platformId]);
   // iOS: completion is computed from submission answers, not manual task status
   if (platformId === 'ios') {
-    const complete = p.steps.filter(s => isIOSSectionComplete(s.id)).length;
+    const steps = _visiblePlatformSteps(platformId);
+    const complete = steps.filter(s => isIOSSectionComplete(s.id)).length;
     // uploadBuild step completion already requires hasBuild, so no separate hasBuild check needed
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
   }
   // Mac App Store: completion is computed from its own macSubmitAnswers,
   // exactly like iOS above — without this branch it would silently fall
@@ -1050,8 +1072,9 @@ function platformStepCount(platformId) {
   // nothing ever actually sets for Mac App Store's steps, permanently
   // showing 0 of N complete on its dashboard card.
   if (platformId === 'macos') {
-    const complete = p.steps.filter(s => isMacSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    const steps = _visiblePlatformSteps(platformId);
+    const complete = steps.filter(s => isMacSectionComplete(s.id)).length;
+    return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
   }
   // Mac App Store Full: completion is computed from its own
   // macFullSubmitAnswers, same reasoning as the 'macos' branch above —
@@ -1059,8 +1082,9 @@ function platformStepCount(platformId) {
   // platformStepStatus-based default below, which nothing ever sets for
   // this platform's steps either.
   if (platformId === 'macos_full') {
-    const complete = p.steps.filter(s => isMacFullSectionComplete(s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    const steps = _visiblePlatformSteps(platformId);
+    const complete = steps.filter(s => isMacFullSectionComplete(s.id)).length;
+    return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
   }
   // Android: completion is computed from androidSubmitAnswers
   if (platformId === 'android') {
@@ -1539,6 +1563,11 @@ function isIOSSectionComplete(sectionId) {
   // so it needs an answer.
   if (sectionId === 'gameCenter') return true;
 
+  // Localizations is purely a unified editing surface over Store
+  // Page/IAPs/Achievements' own already-tracked localization data — it
+  // never gates submission on its own, same convention as gameCenter above.
+  if (sectionId === 'localizations') return true;
+
   // storePreview is complete when all 4 sub-sections are done
   if (sectionId === 'storePreview') {
     return isIOSSectionComplete('contentRating') &&
@@ -1684,6 +1713,11 @@ function isMacSectionComplete(sectionId) {
   // no achievements simply leaves the list empty, so an empty list never
   // blocks submission.
   if (sectionId === 'gameCenter') return true;
+
+  // Localizations is purely a unified editing surface over Store
+  // Page/IAPs/Achievements' own already-tracked localization data — it
+  // never gates submission on its own, same convention as gameCenter above.
+  if (sectionId === 'localizations') return true;
 
   // Content Rating and Data Privacy are answered ONCE, shared with the App
   // Store (state.iosSubmitAnswers — see IOS_MAC_SHARED_ANSWER_FIELDS and
@@ -1854,6 +1888,11 @@ function isMacFullSectionComplete(sectionId) {
   // makeBlankIOSAnswers's comment) — a developer with none simply leaves
   // the list(s) empty, so an empty list never blocks completion.
   if (sectionId === 'gameCenter')    return true;
+
+  // Localizations is purely a unified editing surface over Store
+  // Page/IAPs/Achievements' own already-tracked localization data — it
+  // never gates submission on its own, same convention as gameCenter above.
+  if (sectionId === 'localizations') return true;
 
   // App Information (the new, non-"Full" section reached from Product
   // Page Preview's own Information card — see buildMacFullStorePreviewSection's
@@ -3450,6 +3489,15 @@ const state = {
   macFullLocReviewBackTranslation: {},
   macFullLocReviewUndoHistory: { real: {}, draft: {} },
 
+  // Which section ('storePage' | 'iaps' | 'achievements') Mac App Store
+  // Full's unified Localizations step (buildMacFullLocalizationsSection,
+  // render.js) is currently showing in its leftmost dropdown. null means
+  // "show Store Page" (the default). This unified view reuses Store
+  // Page/IAPs/Achievements' own existing getters/setters/state directly —
+  // it has no separate data store of its own, only this one field
+  // recording which of the three sub-views is selected.
+  macFullLocsView: null,
+
   // Mac App Store Full's OWN IAP Localizations — full twins of the nine
   // masIapLocIapId/masIapLocField/masIapLocMode/masIapLocBackTranslation/
   // masIapLocUndoHistory/masIapLocTranslateStatus/masIapLocTranslatePendingLangs/
@@ -3497,6 +3545,12 @@ const state = {
   masLocReviewMode: 'locs',
   masLocReviewBackTranslation: {},
   masLocReviewUndoHistory: { real: {}, draft: {} },
+
+  // Which section ('storePage' | 'iaps' | 'achievements') Mac App Store's
+  // unified Localizations step (buildMacLocalizationsSection, render.js) is
+  // currently showing in its leftmost dropdown. null means "show Store
+  // Page" (the default). See macFullLocsView above for the shared design.
+  macLocsView: null,
 
   // Which language the App Store Product Page Preview's top-right language
   // dropdown is currently showing (a language code, e.g. 'en'). null means
@@ -3549,6 +3603,12 @@ const state = {
   // app.js) — never by a cascading auto-translate/mirror from elsewhere.
   // See _locReviewPushUndo/locReviewUndo/locReviewRedo, app.js.
   locReviewUndoHistory: { real: {}, draft: {} },
+
+  // Which section ('storePage' | 'iaps' | 'achievements') App Store's
+  // unified Localizations step (buildIosLocalizationsSection, render.js) is
+  // currently showing in its leftmost dropdown. null means "show Store
+  // Page" (the default). See macFullLocsView above for the shared design.
+  iosLocsView: null,
 
   // Auto-translation status per field ('subtitle' | 'description' |
   // 'releaseNotes') for the App Store Product Page Preview's Subtitle/
