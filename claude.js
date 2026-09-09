@@ -461,8 +461,24 @@ let _igdbAccessToken = null;
 async function _getIgdbToken() {
   if (_igdbAccessToken) return _igdbAccessToken;
   if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) throw new Error('NO_IGDB_KEY');
+  // Routed through _cors() (proxy.cors.sh) — id.twitch.tv/oauth2/token is a
+  // server-to-server OAuth endpoint and does not send an
+  // Access-Control-Allow-Origin header on its response, so a browser fetch()
+  // straight to it is blocked by CORS: the request itself goes out (it's a
+  // "simple" POST — no custom headers here, so no preflight), but the
+  // browser refuses to hand the response back to this code, and fetch()
+  // rejects with a generic "Failed to fetch"/TypeError. That's the actual
+  // bug behind "IGDB screenshot fallback silently does nothing" — every
+  // caller (_igdbFetchSteamAppId AND _igdbFetchScreenshots) starts by
+  // awaiting this function, so a broken token fetch here breaks BOTH: Steam
+  // App ID resolution never succeeds either, meaning `_applyIgdbScreenshotFallback`
+  // itself was ALSO already failing for its own IGDB API call — see
+  // IGDB_ENDPOINT's own comment above for why that call already goes
+  // through this same proxy. Wrapping the token request the identical way
+  // fixes it — proxy.cors.sh already forwards POST intact (see IGDB_ENDPOINT's
+  // comment), which is all this request needs (no custom headers).
   const res = await _fetchWithTimeout(
-    `${TWITCH_TOKEN_URL}?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_CLIENT_SECRET}&grant_type=client_credentials`,
+    _cors(`${TWITCH_TOKEN_URL}?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_CLIENT_SECRET}&grant_type=client_credentials`),
     { method: 'POST' }
   );
   if (!res.ok) throw new Error('IGDB auth failed (' + res.status + ')');
