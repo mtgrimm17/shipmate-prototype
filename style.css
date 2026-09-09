@@ -3794,19 +3794,20 @@ body.viewing-splash .app-subnav { display: none; }
   background: var(--surface-hover, rgba(255,255,255,0.04));
 }
 
-/* THE HEADER SITS ON THE STEP ROWS' TWO COLUMNS. The mark starts on the same
-   vertical edge as every checkmark and the platform's name on the same edge as
-   every step's title, so the card has two columns from top to bottom instead
-   of a header with a geometry of its own.
-   THE GAP IS DERIVED, which is what lets the logo be bigger than a disc: the
-   step rows spend --pico + 12 before their title, so this gap is whatever is
-   left of that after --plogo. At 26 and 22 it computes to 8. Change either
-   token and the name stays on the step titles' column with nothing to
-   remember. */
+/* THE HEADER SITS ON THE STEP ROWS' TWO COLUMNS — the very same slot and gap,
+   --pico then 12px, so the platform's name lands on the step titles' column
+   with no arithmetic. The logo is bigger than that slot and overflows it (see
+   .active-card-icon svg), which is what lets the two be tuned apart.
+   This replaced a derived gap, `calc(--pico + 12px - --plogo)`, which kept the
+   NAME on its column by shrinking the gap as the logo grew. It aligned the
+   left edges and left the centres 3px apart: a column of circles centred at 31
+   with a 26px logo centred at 34. For a column that is otherwise all circles
+   the centre is what the eye reads, so the slot went back to --pico and the
+   logo now hangs out of it evenly. */
 .active-card-platform {
   display: flex;
   align-items: center;
-  gap: calc(var(--pico) + 12px - var(--plogo));
+  gap: 12px;
 }
 
 /* NO WELL. It was a 42px rounded square in --panel-3 with the mark centred at
@@ -3816,8 +3817,11 @@ body.viewing-splash .app-subnav { display: none; }
    Without it the box IS the mark, and the marks are already built to be swapped
    this way — they share one 39×37 canvas with their ink centred and normalised
    to 90.84% of its height, so no platform bobs when the frame around it goes. */
+/* THE SLOT IS THE DISCS' SLOT — --pico wide, so its centre is their centre
+   (31 from the card box) and the header does not kink the column. Its height
+   is the logo's, since nothing below it constrains that. */
 .active-card-icon {
-  width: var(--plogo);
+  width: var(--pico);
   height: var(--plogo);
   display: flex;
   align-items: center;
@@ -3826,22 +3830,30 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text); /* currentColor → white fill for inline SVGs */
 }
 .active-card-icon .plat-img {
-  /* plogo − 2, the same inset the mark gets: with no well to sit inside, a PNG
-     larger than its slot is just an overflow. */
-  width: calc(var(--plogo) - 2px);
-  height: calc(var(--plogo) - 2px);
+  /* The same overflow the marks get, so Xbox and Nintendo's PNGs sit on the
+     discs' centre too rather than being the only two that don't. */
+  width: var(--plogo);
+  height: var(--plogo);
+  margin: 0 calc((var(--pico) - var(--plogo)) / 2);
   object-fit: contain;
   display: block;
   filter: brightness(0) invert(1); /* whitens transparent-bg PNGs (Xbox, Nintendo) */
 }
-/* plogo − 2, and in CSS rather than as the size argument passed to
-   smMarkFor(): that argument is a literal, so the first time the token moved
-   the mark stayed behind. Sized here, the mark is a function of its slot. */
+/* THE MARK OVERFLOWS ITS SLOT, EVENLY. --plogo wide in a --pico slot, with the
+   difference split as a negative margin on each side, so the glyph grows out
+   of the column in both directions and its centre stays the discs' centre.
+   The margin is computed rather than typed: half of (pico − plogo) is −3px at
+   20 and 26, and it stays correct if either moves. Relying on
+   `justify-content: center` to overflow symmetrically is not safe — an item
+   wider than its flex container is not guaranteed to spill both ways.
+   In CSS rather than as the size argument passed to smMarkFor(): that argument
+   is a literal, so the first time the token moved the mark stayed behind. */
 .active-card-icon svg {
   display: block;
   flex-shrink: 0;
-  width: calc(var(--plogo) - 2px);
-  height: calc(var(--plogo) - 2px);
+  width: var(--plogo);
+  height: var(--plogo);
+  margin: 0 calc((var(--pico) - var(--plogo)) / 2);
 }
 
 .active-card-name {
@@ -5139,17 +5151,34 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text-faint);
 }
 
-/* --pico, so the disc is tuned on its own and never moves when the platform
+/* A SOFT FILLED DISC, not a ring. The number now sits on a wash of white
+   instead of inside a 1.5px outline of it.
+   Two things the ring was doing badly. It was the only stroked circle in a
+   card that had just had every other stroke taken off it (the logo's well, the
+   track pill's ring), so it read as the one leftover. And it fought its own
+   done state: an empty ring becoming a solid green disc is a change of KIND,
+   which is why the tick had to be sized to the whole 22px to look like it
+   belonged. A soft disc becoming a green disc is the same object changing
+   colour, which is what completing a step actually is.
+   7% white, the card's own resting wash — the step-row hover, the dividers and
+   the track pill's hover box are all on it. The disc stays legible when the
+   row lights up because it paints over the row's fill rather than being it.
+
+   --pico, so the disc is tuned on its own and never moves when the platform
    logo does. Both still start at 21, which is the column that matters; see
    --pico and .active-card-platform's derived gap.
    11px/500 for the numeral, not 10/700: at 700 the digit read as a badge
-   rather than as a step number, and it was the only bold weight in the card. */
+   rather than as a step number, and it was the only bold weight in the card.
+   The colour goes up from --text-faint (#555) because the ring is no longer
+   there to help it read — on a wash this faint, #555 was the dimmest thing in
+   the card by some distance. */
 .ios-step-num {
   width: var(--pico); height: var(--pico);
   border-radius: 50%;
-  border: 1.5px solid var(--text-faint);
+  border: 0;
+  background: rgba(255, 255, 255, .07);
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 500; color: var(--text-faint);
+  font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, .42);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0; transition: all 0.15s;
 }
@@ -5168,12 +5197,6 @@ body.viewing-splash .app-subnav { display: none; }
    var(--green,#4ade80), a mint a good deal lighter and bluer than this. */
 .ios-step-num.is-done {
   background: #31DC80;
-  /* No border when done. The disc is 20px box-sizing: border-box, so a 1.5px
-     border leaves a 17px content box — and the tick, which is sized to the
-     disc so it keeps the prototype's proportions, needs the whole 20. The
-     border was only ever the empty ring's outline; a filled disc has no use
-     for one, and dropping it doesn't change the disc's size by a pixel. */
-  border: 0;
   color: #0F2A1A;
 }
 /* The pop, on the disc that was just ticked and no other. Moved here from
@@ -5183,14 +5206,18 @@ body.viewing-splash .app-subnav { display: none; }
 .ios-step-num.just-completed {
   animation: checkPop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+/* THE TWO RISK STATES TINT THE FILL NOW, because they used to tint the border
+   and there is no border any more — they were silently reduced to a coloured
+   digit on a neutral disc the moment the ring came off. A wash of their own
+   colour keeps them reading as a state of the disc, the way is-done does. */
 /* Needs attention — unanswered questions */
 .ios-step-num.is-risk-warn {
-  border-color: var(--orange, #f5a623);
-  color: var(--orange, #f5a623);
+  background: rgba(255, 184, 107, .16);
+  color: #FFB86B;
 }
 /* Red flag — HIGH risk answer detected */
 .ios-step-num.is-risk-high {
-  border-color: var(--magenta, #ff3b78);
+  background: rgba(255, 59, 120, .16);
   color: var(--magenta, #ff3b78);
 }
 

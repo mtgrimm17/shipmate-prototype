@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.53**
+Current version: **v5.54**
 
 ---
 
@@ -165,31 +165,52 @@ sits in. Owned by the container it is not a hover target at all.
 
 ### The card is two columns, top to bottom
 
-Everything in a platform card starts on one of two x values, measured from the
-card box: **21** (its 1px border + 20px padding) and **21 + 34**. The platform
-logo, the step discs and the release block's labels take the first; the
-platform's name, the step titles and the release values take the second.
+Everything in a platform card lands on one of two x values, measured from the
+card box: **21** (its 1px border + 20px padding) and **55** (21 + `--pico` +
+12). The platform logo's slot, the step discs and the release block's labels
+take the first; the platform's name, the step titles and the release values
+take the second. The logo and the discs also share a **centre**, 32.
 
-Four tokens carry it, and the important part is which of them is derived:
+Both of those follow from `--pico`, so tuning the disc moves the text column
+with it — that is the design, not a side effect, and it is why there is no
+number to keep in sync anywhere else.
 
 ```css
---pico:  22px;  /* the step discs */
---plogo: 26px;  /* the platform logo — bigger, same left edge */
+--pico:  22px;  /* the step discs — and the logo's SLOT */
+--plogo: 26px;  /* the platform logo's glyph, which overflows that slot */
 --pname: 19px;  /* the platform's name */
 --pstep: 15px;  /* the step titles */
-.active-card-platform { gap: calc(var(--pico) + 12px - var(--plogo)) }
+.active-card-platform  { gap: 12px }
+.active-card-icon      { width: var(--pico) }
+.active-card-icon svg  { width: var(--plogo);
+                         margin: 0 calc((var(--pico) - var(--plogo)) / 2) }
 ```
 
 The reference spec says the logo and the discs are one element at two heights
-and must grow together, under one variable. That was tried: asking for a bigger
-logo grew every checkmark with it, which nobody wanted. **What has to be
-conserved is the column, not the two sizes** — logo + its gap = disc + 12 — so
-the gap is computed and the two can be tuned apart without drifting. The
-failure that rule warns about is a column derived from one of two sizes.
+and must grow together under one variable. That was tried and asking for a
+bigger logo grew every checkmark with it, which nobody wanted. The second
+attempt gave the logo its own slot and **derived the header's gap**
+(`calc(--pico + 12px - --plogo)`) so the name stayed on its column — that
+aligned the left edges and left the centres 3px apart, a column of circles
+against a bigger logo sitting 3px to their right.
+
+**So the slot is `--pico` and only the glyph is bigger**, overflowing evenly by
+a computed negative margin. Centres agree, the column needs no arithmetic, and
+either token can move. The cost, on purpose: the glyph's ink starts 2px inside
+the card's padding, left of the 21 everything else keeps. For a column that is
+otherwise all circles the centre is what the eye reads.
+
+Don't rely on `justify-content: center` to spill an oversized flex item both
+ways — it isn't guaranteed. Use the margin.
 
 The logo wears **no well**. It was a 42px rounded square in `--panel-3`, which
 made the header the heaviest thing on a card whose every other control is an
 outline, and put the mark's ink 6px off the card's only vertical edge.
+
+A `--pcol` token that moved the text column independently of `--pico` was tried
+and reverted — the column following the disc is what is wanted. If it ever comes
+back, note that the step row's 12px flex gap is the wrong lever: it also spaces
+the risk dot from the chevron at the far end of the row.
 
 **Size the glyphs in CSS, never with the size argument.** `smCheckSVG(20)`
 appears at nine call sites and `smMarkFor(pid, 20)` at one; all of those
@@ -197,6 +218,19 @@ literals were the disc's old fixed size, so the first time `--pico` moved the
 ticks silently stopped filling their discs and lost the 38.3% ink ratio the
 guide's ticks are matched to. `.ios-step-num svg` and `.active-card-icon svg`
 now set the size, so a glyph is a function of its slot.
+
+The step disc is a **soft filled circle**, `rgba(255,255,255,.07)` with the
+number at white 42% — no border. The ring it replaced was the last stroked
+thing in a card that had had every other stroke removed, and it fought its own
+done state: an empty ring turning into a solid green disc is a change of *kind*,
+where a soft disc turning green is the same object changing colour. Both risk
+states (`is-risk-warn`, `is-risk-high`) therefore tint the **fill**; they used
+to tint the border and would otherwise have been silently reduced to a coloured
+digit on a neutral disc.
+
+Still open: the guide's pending discs are still rings, so the *pending* state
+diverges between the card and the Shippy panel (the tick proportion still
+matches).
 
 ### The release block (VERSION / BUILD / TRACK)
 
@@ -250,7 +284,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.53** → next is **v5.54**, then **v5.55**, etc.
+Current version: **v5.54** → next is **v5.55**, then **v5.56**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -262,7 +296,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.53 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v5.54 — add tooltip to age rating cell"`.
 
 ---
 
@@ -316,7 +350,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.53 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.54 — description of change"`.
 
 ---
 
@@ -336,7 +370,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.53, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.54, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and

@@ -2331,8 +2331,8 @@ function generateId(prefix) {
 // the data shape (platformReleases) already supports them.
 const PLATFORM_TRACKS = {
   ios: [
-    { id: 'testflight_internal', label: 'TestFlight · internal' },
-    { id: 'testflight_external', label: 'TestFlight · external' },
+    { id: 'testflight_internal', label: 'TestFlight / internal' },
+    { id: 'testflight_external', label: 'TestFlight / external' },
     { id: 'production',          label: 'App Store' },
   ],
   /* THE TWO MAC ENTRIES WERE MISSING, and that is why the Mac App Store card
@@ -2343,13 +2343,13 @@ const PLATFORM_TRACKS = {
      as iOS — only the last label differs, because the destination is the Mac
      App Store and calling it "App Store" on a Mac card would be wrong. */
   macos: [
-    { id: 'testflight_internal', label: 'TestFlight · internal' },
-    { id: 'testflight_external', label: 'TestFlight · external' },
+    { id: 'testflight_internal', label: 'TestFlight / internal' },
+    { id: 'testflight_external', label: 'TestFlight / external' },
     { id: 'production',          label: 'Mac App Store' },
   ],
   macos_full: [
-    { id: 'testflight_internal', label: 'TestFlight · internal' },
-    { id: 'testflight_external', label: 'TestFlight · external' },
+    { id: 'testflight_internal', label: 'TestFlight / internal' },
+    { id: 'testflight_external', label: 'TestFlight / external' },
     { id: 'production',          label: 'Mac App Store' },
   ],
   android: [
