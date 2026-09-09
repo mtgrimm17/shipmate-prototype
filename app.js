@@ -165,6 +165,22 @@ function setView(view) {
   }
 
   if (state.activeView !== view) scrollContentToTop();
+
+  /* DEMO BUILDS, TOPPED UP HERE, and the location is the point.
+     seedDemoBuilds started life at project creation and then also in
+     activatePlatform(), and it still missed: a platform can become active
+     without going through either (the onboarding tiles are a third path), so
+     its card opened with no release line and no track picker at all — which is
+     exactly the bug you hit. Rather than chase a fourth entry point, this is
+     the same argument the comment above makes about closeStepModal: every
+     route into a view goes through setView, so a top-up here cannot be
+     forgotten by whatever adds the next way of activating a platform.
+     seedDemoBuilds refuses to overwrite a build that already exists, so this
+     is idempotent and never touches a binary you actually dropped in. */
+  if (typeof seedDemoBuilds === 'function') {
+    const proj = state.projects.find(p => p.id === state.activeProjectId);
+    if (proj) seedDemoBuilds(proj, [...state.activePlatforms]);
+  }
   state.activeView = view;
   document.getElementById('splashview')?.classList.add('hidden');   // leave the splash
   document.body.classList.remove('viewing-splash');
@@ -978,6 +994,9 @@ function completeOnboarding() {
     state.activeVersionId = ver.id;
     // Keep state.activePlatforms — already populated by platform-select tab in onboarding
     state.platformStepStatus = makeEmptyPlatformSteps();
+    // Demo only, and only on the first project: gives the cards a build to
+    // talk about so the release line isn't empty on open. See seedDemoBuilds.
+    seedDemoBuilds(proj, [...state.activePlatforms]);
   }
 
   state.onboardingComplete = true;
@@ -3053,6 +3072,21 @@ function confirmAndSubmit(platformId) {
 function selectTrack(pid, trackId) {
   if (!state.selectedTracks) state.selectedTracks = {};
   state.selectedTracks[pid] = trackId;
+
+  /* REPAINT THE PICKER'S OWN BLOCK TOO.
+     This function only ever refreshed the submit step card, because that is
+     where the track pill used to live. The pill moved up into the release
+     block under the card header, and nothing was repainting that — so
+     choosing "Default branch" changed the state and the label kept saying
+     "Beta branch" until something else happened to re-render the card. The
+     control has to show its own new value; that is the whole contract of a
+     picker. */
+  const card = document.getElementById('active-card-' + pid);
+  const block = card?.querySelector('.card-release-block');
+  if (block && typeof buildReleaseBlock === 'function') {
+    block.outerHTML = buildReleaseBlock(pid);
+  }
+
   // Re-render just the submit step card so the "Submit →" button appears now that a track is chosen
   const cardEl = document.getElementById(pid + '-step-card-submit');
   if (cardEl && typeof buildSubmitStepCard === 'function') {
@@ -3262,6 +3296,14 @@ function activatePlatform(platformId) {
   // "add a platform" entry point needs the same one-time seed.
   if (platformId === 'macos') seedMacAppStoreListing();
   if (platformId === 'macos_full') seedMacFullAppStoreListing();
+  /* And the same for the demo build, on the same reasoning: a platform added
+     here never went through onboarding, so nothing had seeded it and its card
+     opened with no release line at all. seedDemoBuilds refuses to overwrite a
+     real build, so calling it per activation is safe. */
+  {
+    const proj = state.projects.find(p => p.id === state.activeProjectId);
+    if (proj && typeof seedDemoBuilds === 'function') seedDemoBuilds(proj, [platformId]);
+  }
   renderDashboard();
   // Shippy's platform item lives in the Details view, which renderDashboard()
   // never touches. Without this the checklist stays stale until something
@@ -11272,6 +11314,20 @@ function toggleSwSelect(event, id) {
   if (!isOpen) wrap.classList.add('is-open');
 }
 
+/* PER-PLATFORM TRACK CALLBACKS.
+   swSelectChoose resolves its callback by name off window and hands it only
+   the chosen value, so a callback that also needs to know WHICH platform has
+   to carry that in its name. Registered once here rather than inline in the
+   markup, so the release block can ask for 'selectTrack__' + pid and get a
+   real function every time — including for platforms added later, as long as
+   they are in PLATFORM_TRACKS. */
+function _registerTrackCallbacks() {
+  for (const pid of Object.keys(PLATFORM_TRACKS || {})) {
+    window['selectTrack__' + pid] = (value) => selectTrack(pid, value);
+  }
+}
+_registerTrackCallbacks();
+
 function swSelectChoose(id, value, callbackFn) {
   closeAllDropdowns();
   if (typeof window[callbackFn] === 'function') window[callbackFn](value);
@@ -15427,7 +15483,22 @@ function handleBuildUpload(pid, files) {
   const file = files?.[0];
   if (!file) return;
   state.platformBuilds = state.platformBuilds || { ios: null, android: null, steam: null };
-  state.platformBuilds[pid] = { name: file.name, size: file.size };
+  /* UPLOADING IS NOW RECORDED, not just staged.
+     The card's release line reads "v1.0.4 (42) · 2 days ago" — the version,
+     how many builds have been uploaded for this platform, and when the last
+     one landed. None of that was being kept: this used to store a filename
+     and a size, and the only thing that ever minted a build number was the
+     final submit (_doFinalSubmit → makeReleaseRecord), which is a different
+     event and also flips the card away to the submitted face.
+     So the counter is minted here, on upload, which is what it counts.
+     mintBuildNumber is the project-lifetime monotonic counter that already
+     existed for exactly this — it just had one caller too few. */
+  const proj = state.projects.find(p => p.id === state.activeProjectId);
+  const buildNumber = proj ? mintBuildNumber(proj, pid) : null;
+  state.platformBuilds[pid] = {
+    name: file.name, size: file.size,
+    buildNumber, uploadedAt: Date.now(),
+  };
 
   // Start 10-second fake binary analysis
   if (!state.platformBuildProcessing) state.platformBuildProcessing = { ios: false, android: false, steam: false };

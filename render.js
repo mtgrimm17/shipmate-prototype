@@ -3689,28 +3689,165 @@ function renderDashboard() {
     </div>`;
 }
 
-// Track selector + drift-visibility status pills for platforms that support
-// pre-release tracks (iOS/Android/Steam — the platforms actually submittable
-// today). The dropdown defaults to whatever track this platform last shipped
-// to; nothing here is required input, just a visible, overridable default.
-// Console platforms don't have an entry in PLATFORM_TRACKS yet, so this
-// returns '' for them — the data model already supports it when they're ready.
-// Drift pills shown on the platform card — most recent production build + most recent
-// pre-release build (if it's ahead of production). Capped at two pills.
-// The track selector itself lives in the submit modal, not on the card.
-function buildReleasePills(pid) {
-  const proj = state.projects.find(p => p.id === state.activeProjectId);
-  if (!proj) return '';
-  const summary = getPlatformReleaseSummary(proj, pid);
-  const pills = [];
-  if (summary.production) {
-    pills.push(`<span class="release-pill is-prod">${t('pill.prod')} v${escHtml(summary.production.versionNumber)}</span>`);
+/* THE RELEASE BLOCK — two lines under the platform card's header.
+
+     v1.0.4 (42) · 2 days ago
+     ● TestFlight — Internal ⌄
+
+   Line one is the uploaded build: the project's version, the number of builds
+   uploaded for this platform, and when the last one landed. Line two is the
+   track it is going to, as a picker.
+
+   What this replaces, and why it is not the same thing: the old
+   buildReleasePills showed "drift" pills built from getPlatformReleaseSummary
+   — PROD v1.0.4 / TestFlight: v1.0.5 — which read RELEASE records. Those are
+   only minted by the final submit, and submitting flips this card away to the
+   submitted face, so on the card you are actually looking at they were almost
+   always empty. This reads the UPLOAD instead (state.platformBuilds, now
+   stamped with a build number and a timestamp in handleBuildUpload), which is
+   the thing that has just happened when you are looking at these steps.
+
+   Nothing shows until a build exists — an empty card would otherwise claim a
+   version it has never uploaded. Platforms with no PLATFORM_TRACKS entry (Web,
+   the consoles) get the version line without the picker rather than a picker
+   with one meaningless option. */
+function buildReleaseBlock(pid) {
+  const build = state.platformBuilds?.[pid];
+  if (!build) return '';
+
+  const proj    = state.projects.find(p => p.id === state.activeProjectId);
+  const ver     = proj?.versions.find(v => v.id === state.activeVersionId);
+  const version = ver?.versionNumber || proj?.versions?.[proj.versions.length - 1]?.versionNumber;
+
+  /* THE LINE IS BUILT FROM THE STORE'S OWN VOCABULARY, not from one template
+     with swapped labels — see PLATFORM_BUILD_SHAPE in state.js for why the
+     three concepts don't map across stores. iOS reads "v1.0 (42)", Steam
+     reads "Build 42" because it has no version at all, and Web reads only a
+     date because a deploy has neither. The `title` on each part carries that
+     store's word for it, so hovering (42) on Android says versionCode. */
+  const shape = buildShapeFor(pid);
+
+  /* TWO ROWS: what was uploaded, then where it goes. The upload takes ONE row
+     even when it is two facts, and each fact carries its own name inline —
+     "VERSION v1.0   BUILD 42   2 days ago".
+     Three rows (a labelled row each for version, build and track) was the
+     round before this one and it was correct but tall: it made a checklist
+     card open with a three-line specification. And "v1.0 (42)", the round
+     before THAT, was too compressed the other way — the brackets make the
+     build a footnote to the version, when the build is the thing this card is
+     actually about (it is what was uploaded, what the analysis ran on, and
+     what a channel points at; a TestFlight group and a Steam branch both hold
+     a build and neither knows its version).
+     Naming both on one line is the middle: the 42 stays out of brackets and
+     out of a footnote, and the block stays two rows tall.
+     ONLY THE SECOND FACT IS NAMED INLINE. The label column already names the
+     row — VERSION — so printing "VERSION" inside the value too is the same
+     stutter, one level up. The column names the row, the inline name
+     distinguishes the datum that arrived after it. That inline name is the very
+     same .rel-label, one definition, so "BUILD" here and "TRACK" below are one
+     voice.
+     `si existen` is load-bearing: Steam has no version so its row starts at
+     BUILD, and Web has neither so the date is the whole value. */
+  const parts = [];
+  if (shape.versionLabel && version) {
+    parts.push(`<b class="rel-version" title="${escHtml(shape.versionLabel)}">v${escHtml(version)}</b>`);
   }
-  if (summary.latest && summary.latest.track !== 'production') {
-    pills.push(`<span class="release-pill is-pre">${escHtml(tTrack(pid, summary.latest.track))}: v${escHtml(summary.latest.versionNumber)}</span>`);
+  if (shape.buildLabel && build.buildNumber) {
+    const n = build.buildNumber;
+    /* No buildPrefix. Steam's shape carried one ("Build 42") from when the
+       line had no name in front of it; with the name printed the value
+       repeated the word — "BUILD  Build 7" — the stutter labels remove.
+       The name is only printed when a version shares the row: alone, the row's
+       own label column already says BUILD, and printing it twice is that same
+       stutter one level up. */
+    const inner = `<span class="rel-build" title="${escHtml(shape.buildLabel + ' ' + n)}">${escHtml(String(n))}</span>`;
+    parts.push(parts.length
+      ? `<span class="rel-pair"><span class="rel-label">Build</span>${inner}</span>`
+      : inner);
   }
-  return pills.length ? `<div class="card-release-status">${pills.join('')}</div>` : '';
+
+  /* NO DATE. "2 days ago" rode along on this row through three shapes and it
+     never earned it: the header answers what is uploaded and where it goes,
+     and how stale it is answers neither. It is also the only value here that
+     nobody can act on. If it comes back it belongs on a build in a list of
+     builds, where the point is telling them apart. `uploadedAt` is still
+     stamped in handleBuildUpload, so nothing has to be re-modelled for that.
+     Note this leaves Web with no header at all — no version, no build number,
+     and now no date — which is honest: buildReleaseBlock has always shown
+     nothing rather than claim a fact it doesn't have. */
+  if (!parts.length) return '';
+
+  /* The row's own label is the first fact it holds — VERSION normally, BUILD on
+     a store with no version. */
+  const rowLabel = (shape.versionLabel && version) ? 'Version' : 'Build';
+  const rows = [[rowLabel, parts.join('')]];
+
+  /* THE DROPDOWN IS swSelect(), the component the app already had.
+     This first shipped as a pill of its own that opened the hidden native
+     <select> via _openTrackMenu() — so it looked like nothing else in the app
+     and behaved like the OS, which is why it misbehaved. swSelect draws the
+     pill AND its own styled panel (.loc-dropdown), the same one the primary
+     language picker opens, and handles opening, closing and choosing.
+
+     `align: 'right'` because this pill sits under the card's header with the
+     card's right edge close by; a left-anchored panel wide enough for
+     "TestFlight — External" would grow past it. That parameter exists for
+     exactly this case — see swSelect's own doc comment. */
+  const tracks = shape.trackNoun ? (PLATFORM_TRACKS[pid] || []) : [];
+  let picker = '';
+  if (tracks.length) {
+    /* NOTHING IS PRESELECTED. This used to fall back to getLastUsedTrack(),
+       which meant the pill always showed a track the user had never picked —
+       and, worse, `readyToSubmit` in buildSubmitStepCard gates on a chosen
+       track, so a silent default was quietly unlocking Submit on their
+       behalf. Null until they choose, and the placeholder says what to
+       choose. */
+    const sel = (state.selectedTracks || {})[pid] ?? null;
+    picker = `<div class="rel-track">${swSelect(
+      'track-' + pid,
+      sel,
+      tracks.map(tr => ({ value: tr.id, label: tr.label })),
+      /* swSelectChoose calls window[name](value) — a plain global name, one
+         argument. So the platform can't ride along in the string; it is baked
+         into a per-platform callback registered once at load
+         (_registerTrackCallbacks, app.js). */
+      'selectTrack__' + pid,
+      'auto',
+      'left',
+      'Select ' + shape.trackNoun,
+    )}</div>`;
+  }
+
+  /* LABELLED ROWS, two columns: the store's own noun in mono caps on the left,
+     the value on the right. Which rows exist comes off the shape table rather
+     than a template with swapped labels — Steam has no version, so it gets
+     BUILD and BRANCH; Web has neither, so it gets one DEPLOYED row.
+     `.rel-line` stays as the wrapper inside every value cell: it carries the
+     line's type and the gap between the number and the date. Dropping it when
+     this became a grid took its gap with it and the two ran together. */
+  /* The picker's cell takes no .rel-line: that wrapper carries the 14px indent
+     which puts a TEXT value on the same column as the pill's LABEL, and
+     wrapping the pill in it too would just push the pill 14px further right
+     and undo the alignment. `raw` is what says "this value is a control, not a
+     line of text". */
+  const row = (label, value, raw) => `
+    <div class="rel-label">${escHtml(label)}</div>
+    <div class="rel-value">${raw ? value : `<div class="rel-line">${value}</div>`}</div>`;
+
+  return `
+    <div class="card-release-block">
+      ${rows.map(r => row(r[0], r[1])).join('')}
+      ${picker ? row(shape.trackNoun, picker, true) : ''}
+    </div>`;
 }
+
+/* Kept as an alias so the four card builders keep one call site each — the
+   block replaced the pills, not the hook. */
+function buildReleasePills(pid) { return buildReleaseBlock(pid); }
+
+/* _relTime ("2 days ago") is gone with the value it formatted — see the note in
+   buildReleaseBlock. Its input, build.uploadedAt, is still stamped on every
+   upload, so a build list can format it again when there is one. */
 
 /* ── Platform auth (prototype credentials face) ───────────────────────────────
    Each active platform card has two faces sharing one .active-card /
@@ -3796,14 +3933,18 @@ function platformCardHead(pid, face) {
   return `
     <div class="active-card-head active-card-head--static">
       <div class="active-card-platform">
-        <!-- The measured marks first, at the prototype's 30px in its 42px well
-             (shipmate-nav-prototype-v2.html, .platform-icon svg). They take
-             currentColor, so a card's mark is white here and the very same
-             file goes blue on a selected tile in SELECT PLATFORMS — one mark,
-             one framing, both places. platformIcon() stays as the fallback
-             for the platforms with no measured art (Xbox, Nintendo), which is
-             brand-coloured PNG whitened by a filter. -->
-        <div class="active-card-icon">${smMarkFor(pid, 30) || platformIcon(pid, 28, 'white')}</div>
+        <!-- 20px = --pico − 2, the same inset a step disc's tick gets, and the
+             well is gone. --pico (style.css) is the shared number: the logo
+             slot and the step discs are one column, so the mark and the
+             platform's name land on the step rows' own two columns. It was
+             30px inside a 42px well, copied from the nav prototype's
+             .platform-icon, which centred the ink 6px off the card's own
+             vertical edge.
+             The size stays a literal here, but .active-card-icon svg overrides
+             it in CSS so the mark tracks --pico. That is deliberate: the
+             literal is what went stale the first time --pico moved, and the
+             same lesson is written on .ios-step-num svg. -->
+        <div class="active-card-icon">${smMarkFor(pid, 20) || platformIcon(pid, 20, 'white')}</div>
         <div class="active-card-name-row">
           <div class="active-card-name">${platLabel(pid)}</div>
         </div>
@@ -4107,9 +4248,15 @@ function buildActiveCard(pid, force) {
      splitting the steps and the submit row across `.card-tasks` and
      `.ios-step-cards` left no line between the last step and Deploy, which is
      the gap visible in the Web card. They are siblings now. */
+  /* The release block lands here too — this is the builder Web, PlayStation,
+     Xbox, Nintendo and Epic go through, and a change to the card has to reach
+     both families or the cards drift apart again (it is how the step rows got
+     out of sync). Platforms with no PLATFORM_TRACKS entry get the version
+     line without a picker; see buildReleaseBlock. */
   return `
     <div class="active-card" id="active-card-${pid}">
       ${platformCardHead(pid, 'steps')}
+      ${buildReleaseBlock(pid)}
       <div class="ios-step-cards">${steps}${submitStepCard}</div>
     </div>`;
 }
@@ -4125,12 +4272,12 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      disc's full width — so the last row's tick was two thirds the size of the
      ones above it. The pill's stays small, with its stroke lifted to hold its
      weight there. */
-  const checkSVG     = smCheckSVG(20);
-  const pillCheckSVG = smCheckSVG(12, 2.6);
+  /* The disc's tick, at the disc's full width — every other row draws it that
+     way. The 12px one that used to live here went with the track pill. */
+  const checkSVG = smCheckSVG(20);
   const num = stepCount + 1;
   const numClass = 'ios-step-num' + (submitDone ? ' is-done' : '');
 
-  const tracks   = PLATFORM_TRACKS[pid] || [{ id: 'production', label: 'Production' }];
   const selTrack = (state.selectedTracks || {})[pid] ?? null;
 
   // Web deploys with a single action (no release track); other platforms require a chosen track.
@@ -4139,36 +4286,28 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   const connected = isWeb ? true : isPlatformConnected(pid);
   const readyToSubmit = connected && (isWeb ? (!locked && !submitDone) : (!locked && !!selTrack && !submitDone));
 
-  // Track picker pill — mirrors buildBuildDropdown style
-  // Gray when no track; green check when track selected; whole card clicks submit when ready
-  const trackPill = `
-    <div class="submit-track-pill ${!selTrack ? 'no-track' : 'has-track'}"
-         onclick="event.stopPropagation();_openTrackMenu('${pid}')" title="${selTrack ? 'Change track' : 'Choose a release track'}">
-      ${selTrack
-        ? `${pillCheckSVG}<span class="submit-track-label">${escHtml(tracks.find(t => t.id === selTrack)?.label || selTrack)}</span>`
-        : `<svg width="9" height="9" viewBox="0 0 12 12" fill="none" style="opacity:0.5"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-           <span class="submit-track-label">Choose Track</span>`
-      }
-      <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style="margin-left:2px;opacity:0.5"><path d="M1 1l2.5 2.5L6 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      <select id="track-sel-${pid}" class="submit-track-select-hidden"
-              onchange="selectTrack('${pid}', this.value);this.value=''">
-        <option value="" disabled selected></option>
-        ${tracks.map(tr => `<option value="${tr.id}">${escHtml(tr.label)}</option>`).join('')}
-      </select>
-    </div>`;
+  /* ONE TRACK PICKER PER CARD, and it is not this one.
+     This row used to carry its own "Choose Track" pill — a second control for
+     the same value as the release block's pill under the header, in a
+     different shape (20px capsule, 11px/500) and with the hidden native
+     <select> that _openTrackMenu() drives. Both are gone from here; the block
+     owns the control and the <select> travelled with it.
+     `selTrack` stays because it still gates readyToSubmit: you cannot submit
+     without a track, whichever control set it. */
 
   // Whole card is clickable to submit when ready
   const cardClick = readyToSubmit ? `onclick="confirmSubmit('${pid}')"` : '';
   const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
   const stepLocked = locked || !connected;
 
-  /* Trailing control: not connected → a "Connect to submit" prompt; else the
-     track pill.
+  /* Trailing control: not connected → a "Connect to submit" prompt. Connected
+     → nothing, now that the track picker lives in the release block. The row
+     is the action itself: the whole card submits when readyToSubmit.
 
-     IT WEARS THE BINARY PILL'S OWN CLASSES rather than a copy of its
-     measurements. Both are the same thing in the same slot — an action the
-     row offers on its right-hand end — and step 1's "Upload Build" is the one
-     that got the layout right: a fixed-width 30px pill, radius 8, centred
+     "Connect to submit" WEARS THE BINARY PILL'S OWN CLASSES rather than a copy
+     of its measurements. Both are the same thing in the same slot — an action
+     the row offers on its right-hand end — and step 1's "Upload Build" is the
+     one that got the layout right: a fixed-width 30px pill, radius 8, centred
      content, 12.5px at a normal weight. This was a 20px-radius capsule at
      11px/650 sized to its own text, in alarm red. Sharing `.build-pill
      .no-build` means the geometry has one definition and cannot drift again;
@@ -4178,7 +4317,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
              onclick="event.stopPropagation();platformGearFromSteps('${pid}')"
              title="Connect ${escHtml(platLabel(pid))} to submit"><span
              class="build-pill-label">Connect to submit</span></span>`
-    : (isWeb ? '' : trackPill);
+    : '';
 
   return `
     <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
@@ -4198,12 +4337,12 @@ function _localSaveNote(pid) {
   return `<span class="local-save-note"><span class="lsn-dot"></span>Saved locally — connect ${escHtml(platLabel(pid))} in settings to publish</span>`;
 }
 
-function _openTrackMenu(pid) {
-  const sel = document.getElementById('track-sel-' + pid);
-  if (sel) sel.focus();
-  // Trigger a real click on the native select to open the picker
-  try { sel.size = 1; sel.click(); } catch(e) {}
-}
+/* RETIRED. This poked a hidden native <select> to make the OS draw the
+   picker, which is why the track control never looked or behaved like the
+   rest of the app. Both callers are gone — the submit row's pill and the
+   release block's — and the block now uses swSelect(), which draws its own
+   styled panel. Kept as a note rather than a function so nothing calls it
+   back into life by accident. */
 
 // Shared by both App Store-shaped platforms (ios, macos) — dispatches to
 // each platform's own dedicated isXxxSectionComplete/computeXxxSectionRisk
@@ -12381,13 +12520,19 @@ function trailerFileRowHTML(name, mb, prefix = '') {
  *                                otherwise grow past that container's right edge and get
  *                                silently clipped instead of just wrapping to a new line.
  */
-function swSelect(id, currentValue, options, onChangeFn, width = '100%', align = 'left') {
+function swSelect(id, currentValue, options, onChangeFn, width = '100%', align = 'left',
+                  placeholder = 'Select\u2026') {
   const chevSvg = `<svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
   const warnSvg = `<svg class="loc-dd-warn" width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="var(--magenta)" stroke-width="1.5"/><rect x="7.25" y="4" width="1.5" height="5" rx="0.75" fill="var(--magenta)"/><rect x="7.25" y="10.5" width="1.5" height="1.5" rx="0.75" fill="var(--magenta)"/></svg>`;
   const warnIcon = `<span class="tooltip-anchor" data-tip="One or more fields are over the character limit for this language">${warnSvg}</span>`;
   const isNull  = currentValue === null || currentValue === undefined || currentValue === '';
   const currentOption = options.find(o => o.value === currentValue);
-  const currentLabel = isNull ? 'Select…' : (currentOption?.label || 'Select…');
+  /* The placeholder is a parameter now, defaulting to the generic 'Select…'
+     every existing caller was getting. The release block passes the store's
+     own noun — "Select branch" on Steam, "Select track" on the App Store —
+     because a picker that says only "Select…" makes you open it to find out
+     what it is even asking. */
+  const currentLabel = isNull ? placeholder : (currentOption?.label || placeholder);
 
   const ddItems = options.map(o => `
     <button class="loc-dd-item${o.value === currentValue ? ' is-current' : ''}"

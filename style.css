@@ -78,6 +78,26 @@
   --ob-label-size:  11px;
   --ob-label-color: rgba(225, 228, 231, .72);
 
+  /* ── ONE COLUMN FOR THE PLATFORM CARD ─────────────────────────────────
+     The platform logo and the step circles share a COLUMN, which is what has
+     to hold. From it follows:
+       · both start at 21px — the card's 1px border plus its 20px padding
+       · the platform's name and every step's title start at 21 + 34
+     The spec this came from says the logo and the discs are the same element
+     at two heights and must grow together. That is one way to keep the column
+     and it was the first one tried, with a single --pico driving both; growing
+     the logo grew every checkmark with it, which is not what was wanted.
+     So the two sizes are separate and the COLUMN is what is conserved:
+     logo + its gap = disc + 12. --plogo can move and the gap absorbs it, so
+     the two columns cannot drift apart by construction — the failure the spec
+     warns about was a column derived from one of two sizes, not two sizes.
+     Practical ceiling 34px on either: past that the row exceeds its 50px
+     min-height and the card starts to stretch. */
+  --pico:  22px;  /* the step discs */
+  --plogo: 26px;  /* the platform logo — bigger than a disc, same left edge */
+  --pname: 19px;  /* the platform's name */
+  --pstep: 15px;  /* the step titles */
+
   /* ── THE CHIP LOOK ────────────────────────────────────────────────────
      A white wash with a stroke that fades down its height. Used by the
      project chip in the header and by the selected header tab, which is why
@@ -3774,39 +3794,62 @@ body.viewing-splash .app-subnav { display: none; }
   background: var(--surface-hover, rgba(255,255,255,0.04));
 }
 
+/* THE HEADER SITS ON THE STEP ROWS' TWO COLUMNS. The mark starts on the same
+   vertical edge as every checkmark and the platform's name on the same edge as
+   every step's title, so the card has two columns from top to bottom instead
+   of a header with a geometry of its own.
+   THE GAP IS DERIVED, which is what lets the logo be bigger than a disc: the
+   step rows spend --pico + 12 before their title, so this gap is whatever is
+   left of that after --plogo. At 26 and 22 it computes to 8. Change either
+   token and the name stays on the step titles' column with nothing to
+   remember. */
 .active-card-platform {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(var(--pico) + 12px - var(--plogo));
 }
 
+/* NO WELL. It was a 42px rounded square in --panel-3 with the mark centred at
+   30px inside it — a tile, which made the header the heaviest object on a card
+   whose every other control is an outline, and put the mark's ink 6px in from
+   the card's one vertical edge so it lined up with nothing.
+   Without it the box IS the mark, and the marks are already built to be swapped
+   this way — they share one 39×37 canvas with their ink centred and normalised
+   to 90.84% of its height, so no platform bobs when the frame around it goes. */
 .active-card-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: var(--panel-3);
+  width: var(--plogo);
+  height: var(--plogo);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   color: var(--text); /* currentColor → white fill for inline SVGs */
-  overflow: hidden;
 }
 .active-card-icon .plat-img {
-  width: 28px;
-  height: 28px;
+  /* plogo − 2, the same inset the mark gets: with no well to sit inside, a PNG
+     larger than its slot is just an overflow. */
+  width: calc(var(--plogo) - 2px);
+  height: calc(var(--plogo) - 2px);
   object-fit: contain;
   display: block;
   filter: brightness(0) invert(1); /* whitens transparent-bg PNGs (Xbox, Nintendo) */
 }
+/* plogo − 2, and in CSS rather than as the size argument passed to
+   smMarkFor(): that argument is a literal, so the first time the token moved
+   the mark stayed behind. Sized here, the mark is a function of its slot. */
 .active-card-icon svg {
   display: block;
   flex-shrink: 0;
+  width: calc(var(--plogo) - 2px);
+  height: calc(var(--plogo) - 2px);
 }
 
 .active-card-name {
-  /* 15px, from the prototype — one step up from the 14 it was. */
-  font-size: 15px;
+  /* --pname against the step titles' --pstep. The header used to be 15/600 and
+     the rows 15/500 — the same size, told apart by weight alone, which is not
+     enough when they now share a left edge: the platform's name has to
+     out-rank the list beneath it, not merely differ from it. */
+  font-size: var(--pname);
   font-weight: 600;
   color: var(--text);
   line-height: 1.2;
@@ -4447,6 +4490,272 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 /* Release status pills — drift visibility, production vs. pre-release track */
+/* THE RELEASE BLOCK — the two lines under the card header (buildReleaseBlock,
+   render.js). No horizontal padding of its own: the card carries 20px and this
+   sits in the same column as the header and the step rows, so the version
+   lines up under the platform name rather than under an inset of its own.
+   The old .card-release-status had 0 16px, which put it 4px off the card's
+   own 20px and read as a misalignment nobody could name. */
+.card-release-block {
+  /* TWO COLUMNS: the store's noun in mono caps, then the value. The label
+     column is a FIXED 62px + a 14px gap, so every value in every card starts
+     at 97 from the card box whatever word the label happens to be. It was
+     `auto`, which measures the longest label present — reasonable in one card
+     and wrong across a grid of them, because "VERSION", "BUILD" and
+     "DEPLOYED" are different widths and the values then started at a
+     different x on each platform's card. 62 fits DEPLOYED, the longest. */
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 8px;
+  /* +4 on the card's own 16px gap, so 20px under the header. It was -4px
+     (a 12px gap), on the idea that this pair was the header's tail — but it
+     isn't: it is its own statement about the build, and at 12px it crowded
+     the platform name above it. 20 to the header, 16 down to the step rows,
+     12 between its own two lines: the block reads as one group with more air
+     above it than inside it, which is what makes it a group. */
+  margin-top: 4px;
+  /* THE LABELS START ON THE CARD'S ONE VERTICAL EDGE — measured at 21 from the
+     card box (1px border + 20px padding), which is where the platform icon's
+     well, every step disc and every hover box also begin. So "VERSION" lines
+     up with the ticks, not with the words beside them.
+     Three indents were tried and it is worth recording why each lost: 32 put
+     the labels on the step TITLES' column, which reads as a step row whose
+     disc is missing; 54 hung them off the platform NAME, which pairs the block
+     with the header but leaves it floating away from everything below it. The
+     edge wins because it is the only line the whole card already shares —
+     icon, labels, discs, hover boxes — and one straight edge is worth more
+     than a local pairing. No indent at all, therefore, and no number to keep
+     in sync with the header's geometry. */
+}
+
+/* The label column: the same mono caps the Game Details section headers use
+   (--ob-label-*), so "VERSION" here and "GAME TITLE" there are one voice. */
+.rel-label {
+  font-family: var(--ob-label-font);
+  font-size: var(--ob-label-size);
+  font-weight: 500;
+  /* WHITE AT 34%, not --ob-label-color's 72%. These are not section headers:
+     VERSION / BUILD / TRACK name the values beside them and then get out of
+     the way, so they sit well below the value they introduce. At 72% the label
+     was as loud as its own answer, and in a card where the platform's name is
+     the only thing meant to carry weight, three bright words under it read as
+     four headings.
+     Scoped here and NOT by repointing --ob-label-color: that token is the Game
+     Details form's section headers, where 72% is right because there the label
+     IS the heading of a field the user has to fill. */
+  color: rgba(255, 255, 255, .34);
+  text-transform: uppercase;
+  /* NO LETTER-SPACING. It had .02em, which is the one thing this card's type
+     rules forbid outright — mono caps at 11px are already spaced by the face
+     and tracking them again makes a label look like a heading. */
+  line-height: 1;
+  white-space: nowrap;
+}
+.rel-value { min-width: 0; }
+.rel-line {
+  display: flex;
+  align-items: baseline;
+  /* 14px, the grid's own column-gap: the space between two facts on this row
+     matches the space between a label and its value, so the row is measured by
+     the same ruler as the block. It was 18. */
+  gap: 14px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  /* NO INDENT — the PILL moves instead, see .rel-track. The version line spent
+     a round pushed 14px right so its text sat on the track pill's label; that
+     put every value 14px off the block's own value column to accommodate one
+     control's padding. Pulling the pill left instead leaves the column where
+     it is and lets the pill's box hang into the gap, which is what a control
+     with padding should do. */
+  font-family: var(--mono);
+  /* 12px. It was 12.5 — half a pixel nobody can see, on a scale where every
+     other value is a whole number. */
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-dim);
+}
+/* THE BUILD IS A FACT NOW, not a footnote. It was --text-faint while it lived
+   inside "v1.0 (42)", where dim was right: it was a parenthetical hanging off
+   the version. On its own labelled row that reading is gone, and a dim value
+   under a label reads as absent rather than as secondary — so it takes the
+   version's colour and weight. Only the date stays dim: it is the one thing
+   here that is context rather than identity.
+   .rel-id and .rel-sep are both gone — the bracketed pair they built no longer
+   exists, and the middot that separated it from the date went a round earlier. */
+.rel-version,
+.rel-build { color: var(--text); font-weight: 500; }
+/* .rel-when is gone with the "2 days ago" it coloured. */
+
+/* THE VERSION HOLDS A COLUMN OF ITS OWN, so "BUILD" starts at the same x on
+   every card whether the version reads v1.0 or v1.0.4. Without it the build's
+   position was a function of how long the version string happened to be, and a
+   grid of cards showed it: the second fact wandered card to card.
+
+   THE WIDTH IS DERIVED FROM A CAP, not chosen: the gap from the END of the
+   version text to the "B" of BUILD must never exceed 55px. That gap is
+   (column − text) + 30, the 30 being .rel-line's 14px gap plus .rel-pair's
+   16px margin. It is widest when the text is narrowest, which is a four-
+   character "v1.0" — so 55 = (column − 4ch) + 30, column = 4ch + 25.
+   In `ch` rather than the 53.8px it computes to, because this is monospace:
+   1ch IS the character advance (7.2px at 12px, measured), so the cap survives
+   a change of type size. Longer versions overflow the column and the gap
+   closes toward 30, which is the "máxima" doing its job.
+   It was a flat 66px, which put that gap at 67.2. */
+.rel-version { min-width: calc(4ch + 25px); }
+
+/* A NAMED FACT INSIDE THE ROW — "BUILD 42". The 14px row gap plus this 16px
+   margin puts 30px before the name, against the 14px binding the name to its
+   number: the pair reads as one object and the row as a list of them. The
+   .rel-label inside it is the same class the column uses, so it needs no font
+   rules of its own; it only has to stop being a grid item and sit on the
+   baseline of the number beside it. */
+.rel-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-left: 16px;
+}
+
+/* The track control is swSelect() now — .loc-primary-pill draws it and
+   .loc-dropdown is its panel, so it inherits the picker's look for free and
+   there is nothing to style here. What was here was a pill of my own
+   invention (its own height, its own neutral fill, then a blue one, then a
+   white one) wrapping a hidden native <select>; all of it is gone.
+   The wrapper below only constrains the width. */
+/* THE BOX ALIGNS, NOT THE LABEL — and this went the other way first, so the
+   reasoning is worth keeping.
+   The trigger's 13px padding plus 1px border sets its label 14px in from its
+   own left edge. Two ways to reconcile that with the version line above:
+   pull the whole control left by 14px so the LABEL lands on the grid (which
+   is what the step rows do with `margin: 0 -12px`), or leave it flush so the
+   BOX does.
+   The label-aligned version was tried and looks wrong the moment you hover:
+   the card has exactly one vertical edge — the platform icon, the version
+   line and the step numbers all start at the same x — and a hover box
+   bleeding 14px past it is the only thing in the card that breaks it. A label
+   sitting inside its own padding is what every button does and reads as
+   nothing at all; a box crossing the card's only straight line reads as a
+   mistake. So the box gets the grid. */
+/* THE BOX KEEPS THE CONTENT EDGE, THE LABEL KEEPS THE TEXT COLUMN — and the
+   two are reconciled without a single negative offset on the visible box.
+   Pulled back out of the block's 32px indent so the pill's own left edge sits
+   flush on the card's one vertical edge (icon, discs, hover boxes), then its
+   padding is set below so its LABEL lands on the 32px text column anyway. The
+   label was already at 104 by accident, 3px short of the step titles; this
+   makes it exact rather than nearly. */
+/* THE PILL MOVES SO ITS TEXT IS PLUMB WITH THE VERSION. −14px, which is
+   exactly what the trigger holds its label in by (13px padding + 1px border),
+   so the name inside it lands on the block's value column and reads directly
+   under "v1.0" — while its box hangs 14px left into the label gap, which is
+   what a padded control should do.
+   This replaced the opposite fix: the version line was indented +14 to meet
+   the pill where it sat. Same alignment on screen, but that version moved
+   every value in the block to accommodate one control, and left the value
+   column at 14px from nothing. Moving the control is the smaller lie. */
+.rel-track {
+  display: inline-block;
+  max-width: 100%;
+  margin-left: -14px;
+}
+/* The card is not a form, so the picker doesn't stretch: it shrink-wraps to
+   the track's name the way the same component does in the Localization row. */
+.rel-track .sw-select-wrap { width: auto; }
+
+/* A GHOST TRIGGER — no fill and no ring at rest, both arriving on hover. The
+   model-picker pattern he described: a name, a box when you go near it, a
+   panel when you click.
+   It went the other way for a round, and what changed is the row around it
+   rather than anyone's mind. When the block was one unlabelled line, a bare
+   name had nothing to mark it as a control and nothing to say what it was
+   about, so it needed a fill to read as a fact. Now TRACK is printed beside
+   it: the row is named, and the value can be as quiet as the version above it.
+   Which is the real gain — the version line and the track line are two answers
+   to two labels, and a permanent box around one of them made it the loudest
+   thing in a card whose every other control is an outline.
+
+   White and never blue, per the rule: blue belongs to selected pills and
+   selected pickers in the onboarding form; this is a setting a card carries.
+   In Localization the very same .loc-primary-pill stays blue — it holds a
+   chosen value inside a form, a different job. Two palettes, one component,
+   scoped by .rel-track.
+
+   The label does NOT move between states, which is what makes a ghost trigger
+   safe here: the pill keeps its 13px padding and its 1px transparent border at
+   rest, so the box appears around the name rather than shoving it. That same
+   14px is what puts the name on the version's column — see .rel-line.
+
+   THE HOVER BOX IS THE HEADER BUTTONS' HOVER BOX — 30px tall, 8px radius, a
+   flat grey fill and no stroke, the same three values .active-card-settings
+   and .active-card-power hover with. They are the same kind of object: a
+   control that shows nothing until you go near it, sitting in the card's
+   chrome rather than in a form. Two of them inventing their own box was the
+   only reason they looked like two different things.
+   So the pill drops --field-h (34px, the form's field height) and the fading
+   ring, which was the one thing here wearing a stroke. Grey only — the power
+   button's red is its own meaning, not part of the shape. */
+.rel-track .loc-primary-pill {
+  height: 30px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  transition: background .15s;
+}
+/* NO RING, EVER. It is the shared masked ::after, and switching it off here
+   rather than deleting it keeps the component intact for Localization, where
+   the very same pill does wear one. */
+.rel-track .loc-primary-pill::after { display: none; }
+/* One fill for hover and open: the buttons have no open state to borrow a
+   second value from, and the panel appearing is feedback enough. */
+.rel-track .loc-primary-pill:hover,
+.rel-track .loc-primary-wrap.is-open .loc-primary-pill {
+  background: var(--surface-hover, rgba(255, 255, 255, .06));
+}
+/* The rule that faded the ring in on hover is gone with the ring — see the
+   `display: none` above. */
+
+/* NO STATUS DOT IN THE PILL. It came and went twice, so the reasoning is
+   worth keeping: the dot reported whether the binary had passed analysis,
+   which is what the Upload Build row already says in words. It earned its
+   place for one round while the row had no label — the dot was the only thing
+   telling you what the pill was about. With BRANCH / TRACK now printed beside
+   it, the row is named and the dot is back to being a second indicator for a
+   fact stated elsewhere. Its amber processing variant and the pulse keyframes
+   went with it. */
+/* ONE VOICE FOR THE TWO LINES. The trigger inherited .loc-primary-name's
+   12px/500 — the weight a picker uses for a chosen value inside a form —
+   against the version line's 12.5px/400. Half a pixel apart is invisible; the
+   weight is not, and a 500 at 12px reads heavier and larger than a 400 at
+   12.5, which is why the two looked like different sizes. Matched to the line
+   above, since the pair is one statement: what is uploaded, and where it goes.
+   The pill itself gets a size too: it sets none of its own, so it was sitting
+   on the browser's 13.33px default for a <button> — harmless while every
+   child declares one, and a trap for the first child that forgets. */
+/* 16px, not the picker's 13. The label's distance from the pill's left edge
+   has to come to the card's 32px text column, and it is the sum of four
+   things: this padding, the 1px border, the 7px status dot and the 8px gap
+   after it. 16 + 1 + 7 + 8 = 32. Change the dot's size or the gap and this
+   number moves with them. */
+.rel-track .loc-primary-pill { font-size: 11.5px; }
+.rel-track .loc-primary-name { font-size: 11.5px; font-weight: 400; }
+
+/* The chevron is the only standing hint that this opens something, so it is
+   dimmer at rest and comes up with the box. */
+.rel-track .loc-chevron { opacity: .45; transition: opacity .15s; }
+.rel-track .loc-primary-pill:hover .loc-chevron,
+.rel-track .loc-primary-wrap.is-open .loc-chevron { opacity: .9; }
+/* AND THE OPEN PANEL TOO. `.loc-dd-item.is-current` marks the current option
+   in --sel-color, so the picker was still blue in the one state where you are
+   actually reading it. "Whitish" has to mean the whole control, not just its
+   closed face — white at full weight marks the current row here, doing the
+   same job without borrowing the selection colour. */
+.rel-track .loc-dd-item.is-current { color: var(--text); }
+/* No status dot on the pill — see buildReleaseBlock. The keyframes that
+   pulsed it went too: nothing else in this file used them. */
+
+/* Retired with the drift pills it styled — kept as a note because the class
+   name still appears in older screenshots and notes. */
 .card-release-status {
   padding: 0 16px 10px;
   display: flex;
@@ -4721,6 +5030,25 @@ body.viewing-splash .app-subnav { display: none; }
    curves at the ends and follows the corner — and it can be hidden under the
    hover pill, which a border on the row cannot be. Inset by the row's own 12px
    so it lines up with the text rather than the pill's edge. */
+/* THE TOP LINE BELONGS TO THE LIST, NOT TO ITS FIRST ROW — and that is the
+   whole point of putting it here.
+   The stack used to open with no top edge, so Upload Build ran straight on
+   from the release block above it; one line there closes the list and
+   separates the two facts the card carries (what the build IS, and what is
+   left to DO with it). The obvious way to draw it was to give every row its
+   own ::before instead of only the adjacent ones — but then the line was a
+   ROW's line, and every row's line is hidden while that row is lit. The top
+   of the list would blink away whenever the pointer was anywhere in Upload
+   Build's 45px band, including the 12px of padding the line itself sits in,
+   which looks like the line vanishing for no reason.
+   Owned by the container it is not a hover target at all: it is the edge of
+   the list and it never moves. Same colour and the same 12px insets as the
+   dividers below, because it is the same line, not a section rule. */
+.ios-step-cards { position: relative; }
+.ios-step-cards::before {
+  content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px;
+  background: rgba(255, 255, 255, .07);
+}
 .ios-step-card + .ios-step-card::before {
   content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px;
   background: rgba(255, 255, 255, .07); transition: opacity .15s ease;
@@ -4730,14 +5058,15 @@ body.viewing-splash .app-subnav { display: none; }
    fill would fade with hard corners. */
 .ios-step-card:hover { background: rgba(255, 255, 255, .07); }
 
-/* A LIT ROW HIDES THE DIVIDERS IT TOUCHES — except the first row's lower one.
+/* A LIT ROW HIDES THE DIVIDERS IT TOUCHES — the ones BETWEEN rows, only.
 
-   For a row in the middle both lines go, and the pill reads as lifted out of
-   the stack. The first row has no line above it, so hiding the one below left
-   a single line missing on one side only, which reads as a glitch rather than
-   as a lift. Geometry is not the reason and it is worth saying so: the rows
-   are contiguous, so the first pill's bottom edge lands exactly on that
-   divider and does cover it. The problem is the asymmetry, not the reach. */
+   For a row in the middle both lines go and the pill reads as lifted out of
+   the stack. Upload Build hides nothing: the line above it is the list's, not
+   its own, and hiding the one below it alone would leave a line missing on one
+   side of a lit row, which reads as a glitch rather than as a lift — the same
+   asymmetry this exception has always been about. Geometry is not the reason
+   and it is worth saying so: the rows are contiguous, so the first pill's
+   bottom edge does land exactly on that divider and does cover it. */
 .ios-step-card:hover::before { opacity: 0; }
 .ios-step-card:not(:first-child):hover + .ios-step-card::before { opacity: 0; }
 /* DONE IS NOT DIMMED — and this is where the green was going.
@@ -4810,14 +5139,28 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text-faint);
 }
 
+/* --pico, so the disc is tuned on its own and never moves when the platform
+   logo does. Both still start at 21, which is the column that matters; see
+   --pico and .active-card-platform's derived gap.
+   11px/500 for the numeral, not 10/700: at 700 the digit read as a badge
+   rather than as a step number, and it was the only bold weight in the card. */
 .ios-step-num {
-  width: 20px; height: 20px;
+  width: var(--pico); height: var(--pico);
   border-radius: 50%;
   border: 1.5px solid var(--text-faint);
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; color: var(--text-faint);
+  font-size: 11px; font-weight: 500; color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0; transition: all 0.15s;
 }
+/* THE TICK FILLS ITS DISC, and it has to be CSS rather than the size argument
+   smCheckSVG() writes into the SVG's width/height. That argument is a literal
+   at nine call sites, all of them 20 — the disc's old fixed size — so the first
+   time --pico moved the tick silently stopped filling its disc and no longer
+   held the 38.3% ink ratio the guide's ticks were matched to. One rule here
+   makes the glyph a function of the disc for good: 100% of a 24-unit viewBox
+   scales the stroke with it, so the proportion survives any --pico. */
+.ios-step-num svg { width: 100%; height: 100%; }
 /* THE DONE MARK, copied exactly: a filled disc in #31DC80 with the check cut
    into it in a dark green rather than white. #0F2A1A is the prototype's, and
    it is not a detail — a white check on that green is lower contrast than it
@@ -4853,9 +5196,9 @@ body.viewing-splash .app-subnav { display: none; }
 
 .ios-step-info { flex: 1; min-width: 0; }
 .ios-step-name {
-  /* 15px like the prototype's rows, and back to a normal weight: at 15 the
-     size carries the row on its own and 600 read as shouting. */
-  font-size: 15px; font-weight: 500; color: var(--text);
+  /* --pstep, and a normal weight: at 15 the size carries the row on its own
+     and 600 read as shouting. */
+  font-size: var(--pstep); font-weight: 500; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 

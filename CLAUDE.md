@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.52**
+Current version: **v5.53**
 
 ---
 
@@ -157,13 +157,100 @@ A completed step is **promoted, not dimmed** — the name goes white, as the nav
 prototype's `.step.done` does. An `opacity` on the row also paints its green
 disc through gauze, which reads as the wrong green rather than as a dim row.
 
+The line above the FIRST row belongs to `.ios-step-cards`, not to the row. It
+was the row's own `::before` for a round, and a row's line is hidden while that
+row is lit — so the top of the list blinked away whenever the pointer was
+anywhere in Upload Build's 45px band, including the 12px of padding the line
+sits in. Owned by the container it is not a hover target at all.
+
+### The card is two columns, top to bottom
+
+Everything in a platform card starts on one of two x values, measured from the
+card box: **21** (its 1px border + 20px padding) and **21 + 34**. The platform
+logo, the step discs and the release block's labels take the first; the
+platform's name, the step titles and the release values take the second.
+
+Four tokens carry it, and the important part is which of them is derived:
+
+```css
+--pico:  22px;  /* the step discs */
+--plogo: 26px;  /* the platform logo — bigger, same left edge */
+--pname: 19px;  /* the platform's name */
+--pstep: 15px;  /* the step titles */
+.active-card-platform { gap: calc(var(--pico) + 12px - var(--plogo)) }
+```
+
+The reference spec says the logo and the discs are one element at two heights
+and must grow together, under one variable. That was tried: asking for a bigger
+logo grew every checkmark with it, which nobody wanted. **What has to be
+conserved is the column, not the two sizes** — logo + its gap = disc + 12 — so
+the gap is computed and the two can be tuned apart without drifting. The
+failure that rule warns about is a column derived from one of two sizes.
+
+The logo wears **no well**. It was a 42px rounded square in `--panel-3`, which
+made the header the heaviest thing on a card whose every other control is an
+outline, and put the mark's ink 6px off the card's only vertical edge.
+
+**Size the glyphs in CSS, never with the size argument.** `smCheckSVG(20)`
+appears at nine call sites and `smMarkFor(pid, 20)` at one; all of those
+literals were the disc's old fixed size, so the first time `--pico` moved the
+ticks silently stopped filling their discs and lost the 38.3% ink ratio the
+guide's ticks are matched to. `.ios-step-num svg` and `.active-card-icon svg`
+now set the size, so a glyph is a function of its slot.
+
+### The release block (VERSION / BUILD / TRACK)
+
+`buildReleaseBlock()` in render.js. Two rows: what was uploaded, then where it
+goes. Every number in it is derived from a constraint rather than picked —
+
+- The label column is a **fixed 62px** + a 14px gap, so values start at 97 on
+  every card. `auto` measures the longest label present, which is fine in one
+  card and wrong across a grid: VERSION, BUILD and DEPLOYED are different
+  widths, so the values started at a different x per platform.
+- `.rel-version { min-width: calc(4ch + 25px) }` caps the gap from the end of
+  the version text to the "B" of BUILD at **55px**. That gap is
+  `(column − text) + 30` (14px row gap + 16px pair margin) and is widest when
+  the text is narrowest, a four-character `v1.0`. In `ch` because the face is
+  monospace — 1ch *is* the character advance — so the cap survives a size
+  change.
+- The track pill is pulled **−14px** so its *text* lands on the value column
+  while its box hangs into the label gap. The opposite fix (indenting the text
+  +14 to meet the pill) moved every value in the block to accommodate one
+  control's padding.
+- Labels are **white at 34%**, not `--ob-label-color`'s 72%. They name a value
+  and get out of the way. Scoped to `.rel-label`, not by repointing the token —
+  that token is Game Details' section headers, where the label *is* the
+  heading of a field.
+- **No middot and no date.** "v1.0 · 2 days ago" reads as machine-assembled
+  metadata; the gap separates the facts instead. The date answered neither
+  question the header asks and is the only value nobody can act on. It belongs
+  on a build inside a list of builds. `uploadedAt` is still stamped on every
+  upload, so nothing needs re-modelling for that.
+- The pill is a **ghost trigger** whose hover box is the header buttons' hover
+  box — 30px, 8px radius, `var(--surface-hover, rgba(255,255,255,.06))`, no
+  stroke. Same kind of object: a control that shows nothing until you go near
+  it, living in the card's chrome rather than in a form. The masked `::after`
+  ring is switched off with `display: none` scoped to `.rel-track`, so
+  Localization's copy of the same pill keeps its ring.
+
+**Stores model this channel → build, not build → channel**, and that is
+verified against vendor docs, not remembered. Apple: groups hold their own
+build lists, added one at a time ("You can add only one build at a time"), and
+internal groups do not auto-receive builds unless automatic distribution is on
+— so build 41 on external while 42 is on internal is normal. Builds expire at
+90 days. Google: tracks run concurrently, but a lower versionCode on a test
+track is *inert*, because a device gets "the highest version code published
+across those tracks" and the Console flags it Shadowed. Steam: any of the last
+50 builds can be set live on any branch. The current block still shows one
+build → one destination; the parallel state needs the build list.
+
 ### Versioning — required on every change
 
 Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.52** → next is **v5.53**, then **v5.54**, etc.
+Current version: **v5.53** → next is **v5.54**, then **v5.55**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -175,7 +262,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.52 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v5.53 — add tooltip to age rating cell"`.
 
 ---
 
@@ -229,7 +316,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.52 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.53 — description of change"`.
 
 ---
 
@@ -249,7 +336,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.52, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.53, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and

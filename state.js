@@ -727,10 +727,15 @@ function smCheckSVG(px, sw) {
    which is how the Web card ended up with a text '›' while every other card
    had the prototype's glyph. Rotated -90° by CSS (.ios-step-arrow svg), so
    the path here points down. */
-const SM_STEP_CHEVRON =
-  `<span class="ios-step-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"`
+/* The glyph on its own, for callers that need their own wrapper (the release
+   block's track pill). SM_STEP_CHEVRON below is this plus the step row's span,
+   so there is still one path in one place. */
+const SM_CHEVRON_DOWN =
+  `<svg class="sm-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"`
   + ` stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
-  + `<polyline points="6 9 12 15 18 9"/></svg></span>`;
+  + `<polyline points="6 9 12 15 18 9"/></svg>`;
+
+const SM_STEP_CHEVRON = `<span class="ios-step-arrow">${SM_CHEVRON_DOWN}</span>`;
 
 /* THE INFO GLYPH — an outlined ⓘ, the shape Apple uses for info.circle: a
    ring, a dot, and a stem. It replaces the filled "!" disc the tip boxes used
@@ -2326,19 +2331,36 @@ function generateId(prefix) {
 // the data shape (platformReleases) already supports them.
 const PLATFORM_TRACKS = {
   ios: [
-    { id: 'testflight_internal', label: 'TestFlight — Internal' },
-    { id: 'testflight_external', label: 'TestFlight — External' },
+    { id: 'testflight_internal', label: 'TestFlight · internal' },
+    { id: 'testflight_external', label: 'TestFlight · external' },
     { id: 'production',          label: 'App Store' },
   ],
+  /* THE TWO MAC ENTRIES WERE MISSING, and that is why the Mac App Store card
+     showed its version line with no track picker while Steam showed its
+     branch: buildReleaseBlock only draws the picker when PLATFORM_TRACKS has
+     options for that platform, and only ios/android/steam were listed.
+     TestFlight does distribute macOS builds, so the tracks are the same three
+     as iOS — only the last label differs, because the destination is the Mac
+     App Store and calling it "App Store" on a Mac card would be wrong. */
+  macos: [
+    { id: 'testflight_internal', label: 'TestFlight · internal' },
+    { id: 'testflight_external', label: 'TestFlight · external' },
+    { id: 'production',          label: 'Mac App Store' },
+  ],
+  macos_full: [
+    { id: 'testflight_internal', label: 'TestFlight · internal' },
+    { id: 'testflight_external', label: 'TestFlight · external' },
+    { id: 'production',          label: 'Mac App Store' },
+  ],
   android: [
-    { id: 'internal',   label: 'Internal testing' },
-    { id: 'closed',     label: 'Closed testing' },
-    { id: 'open',       label: 'Open testing' },
-    { id: 'production', label: 'Production' },
+    { id: 'internal',   label: 'internal testing' },
+    { id: 'closed',     label: 'closed testing' },
+    { id: 'open',       label: 'open testing' },
+    { id: 'production', label: 'production' },
   ],
   steam: [
-    { id: 'beta',       label: 'Beta branch' },
-    { id: 'production', label: 'Default branch' },
+    { id: 'beta',       label: 'beta branch' },
+    { id: 'production', label: 'default branch' },
   ],
 };
 
@@ -2347,8 +2369,100 @@ function platformTrackLabel(platformId, trackId) {
   return t ? t.label : (trackId === 'production' ? 'Production' : trackId);
 }
 
+/* WHAT A BUILD IS CALLED, PER STORE.
+   The card's release line is not one shape with different labels — the three
+   concepts genuinely do not exist the same way, and a dev reads their own
+   store's words:
+
+     Apple      CFBundleShortVersionString + CFBundleVersion, shown as
+                "1.0.4 (42)". The build number must be unique within a
+                version, so the pair is the identity. Tracks: TestFlight
+                internal/external, then the App Store.
+     Google     versionName + versionCode, also shown as "1.0.4 (42)", but
+                versionCode is an integer that must increase across the WHOLE
+                app, not per version. Tracks: internal/closed/open/production.
+     Steam      no version number at all. Valve's docs are explicit: you
+                upload a build, it gets a BuildID, and you "set build live for
+                branch" — default, or a named branch. So there is nothing to
+                put before the parenthesis, and "track" is the wrong word.
+     Web        neither. It is a deploy; the only fact is when.
+
+   `versionLabel: null` means the line omits the version. `buildPrefix` writes
+   the number Steam's way ("Build 42") instead of Apple's ("(42)"). `trackNoun`
+   is what the second line is called, and null hides it.
+
+   THE CONSOLES ARE DELIBERATELY GENERIC. Sony's, Microsoft's and Nintendo's
+   partner portals are behind NDA and not publicly documented, so filling this
+   in from memory would be inventing vocabulary and putting it in front of a
+   dev who knows better. All three are in COMING_SOON_PLATFORMS anyway; when
+   one goes live, take the words from its actual dashboard. */
+const PLATFORM_BUILD_SHAPE = {
+  ios:        { versionLabel: 'version',     buildLabel: 'build',       trackNoun: 'track'  },
+  macos:      { versionLabel: 'version',     buildLabel: 'build',       trackNoun: 'track'  },
+  macos_full: { versionLabel: 'version',     buildLabel: 'build',       trackNoun: 'track'  },
+  android:    { versionLabel: 'versionName', buildLabel: 'versionCode', trackNoun: 'track'  },
+  steam:      { versionLabel: null,          buildLabel: 'BuildID',     trackNoun: 'branch',
+                buildPrefix: 'Build' },
+  web:        { versionLabel: null,          buildLabel: null,          trackNoun: null     },
+};
+/* Anything not listed: show the version and a plain build number, no picker —
+   the honest default until that store's words are known. */
+const PLATFORM_BUILD_SHAPE_FALLBACK =
+  { versionLabel: 'version', buildLabel: 'build', trackNoun: null };
+
+const buildShapeFor = pid => PLATFORM_BUILD_SHAPE[pid] || PLATFORM_BUILD_SHAPE_FALLBACK;
+
 function makeBuildCounters() {
   return { ios: 0, android: 0, xbox: 0, psn: 0, nintendo: 0 };
+}
+
+/* DEMO SEED — gives a brand-new project a binary already uploaded, so the
+   card's release line has something to show on open and in a demo. Without it
+   the block is invisible until you drag a file in, because it only renders
+   when a build exists (see buildReleaseBlock).
+
+   What it fakes and what it doesn't, deliberately:
+     • The COUNTER is seeded high (42 on iOS). Forty-two builds of the same
+       version is ordinary iOS life, so this is the one number that can be
+       generous without lying.
+     • The VERSION is not touched. It stays whatever the project actually is —
+       v1.0 for a game you just onboarded. Seeding "v1.0.4" onto a project
+       created thirty seconds ago would read as history that never happened.
+     • The DATE is two days back, which is what makes the line worth having:
+       a build that landed just now needs no reminding.
+   Called once, at first-project creation. */
+function seedDemoBuilds(proj, platformIds) {
+  const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+  const SEED = {
+    ios:        { count: 42, track: 'testflight_internal', file: 'GoApeShip-1.0.ipa'  },
+    macos:      { count: 12, track: 'testflight_internal', file: 'GoApeShip-1.0.pkg'  },
+    macos_full: { count: 12, track: 'testflight_internal', file: 'GoApeShip-1.0.pkg'  },
+    android:    { count: 18, track: 'internal',            file: 'goapeship-1.0.aab'  },
+    steam:      { count:  7, track: 'beta',                file: 'GoApeShip_win64.zip' },
+  };
+  state.platformBuilds  = state.platformBuilds  || {};
+  state.selectedTracks  = state.selectedTracks  || {};
+  proj.buildCounters    = proj.buildCounters    || makeBuildCounters();
+
+  for (const pid of platformIds) {
+    const seed = SEED[pid];
+    if (!seed) continue;                       // consoles and Web: nothing to fake
+    /* NEVER OVERWRITE A REAL BUILD. This is called from two places now — at
+       first-project creation for the platforms picked during onboarding, and
+       from activatePlatform() for anything added later — so it has to be safe
+       to call twice. Without this guard, activating a platform would stamp a
+       fake build over a binary the user had actually dropped in. */
+    if (state.platformBuilds[pid]) continue;
+    proj.buildCounters[pid] = seed.count;
+    state.platformBuilds[pid] = {
+      name: seed.file, size: 48 * 1024 * 1024,
+      buildNumber: seed.count,
+      uploadedAt: Date.now() - TWO_DAYS,
+    };
+    /* Deliberately NOT seeding a track. The build is fake history; the track
+       is a decision, and choosing it for you both hides the placeholder and
+       unlocks Submit without you having said where to send it. */
+  }
 }
 
 // Build numbers / versionCodes are global, monotonic, project-lifetime counters —
@@ -2409,7 +2523,16 @@ function getPlatformReleaseSummary(proj, platformId) {
   for (const ver of proj.versions) {
     const releases = ver.platformReleases?.[platformId] || [];
     for (const rel of releases) {
-      const entry = { versionNumber: ver.versionNumber, track: rel.track, status: rel.status, submittedAt: rel.submittedAt };
+      /* platformBuildNumber and platformVersionString were already being
+         WRITTEN by makeReleaseRecord and simply never read back out — the card
+         wanted "v1.0.4 (42)" and this returned only the version. They matter
+         separately: a version repeats across builds (1.0.4 can be uploaded
+         five times) and the build number is what actually identifies one, so
+         it is the pair a dev reads in App Store Connect or Play Console.
+         platformVersionString differs from versionNumber only on Xbox, which
+         needs a 4-part string — see derivePlatformVersionString. */
+      const entry = { versionNumber: ver.versionNumber, track: rel.track, status: rel.status, submittedAt: rel.submittedAt,
+                      buildNumber: rel.platformBuildNumber, versionString: rel.platformVersionString };
       if (!latest || rel.submittedAt >= latest.submittedAt) latest = entry;
       if (rel.track === 'production' && (!production || rel.submittedAt >= production.submittedAt)) production = entry;
     }
