@@ -413,15 +413,30 @@ const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
 const _cors = (u) => 'https://proxy.cors.sh/' + u;
 const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
-// Our own backend (Sound Games infra) — looks up IGDB on the server side and
+// Our own backend (Shipmate infra) — looks up IGDB on the server side and
 // hands back a small, pre-shaped JSON result, so the browser never needs an
-// IGDB/Twitch key or a third-party CORS proxy for search. Contract (verified
-// live): GET ?query=<text> → { query, results: [{ igdb_id, name, summary,
-// coverUrl, platforms }] }, platforms being website-derived slugs like
-// "steam"/"app-store"/"google-play"/"epic" — see IGDB_SEARCH_PLATFORM_SLUGS.
-// Notably absent vs. the old direct-IGDB response: a Steam app ID and
-// screenshots — see _igdbSearchRaw below for how that's handled.
-const IGDB_SEARCH_ENDPOINT = 'https://app.sbwfr.dev.sound.games/search';
+// IGDB/Twitch key or a third-party CORS proxy for search. Also supports
+// looking a single game up directly by Steam or IGDB id (?steamId=<id> /
+// ?igdbId=<id>) instead of a text query — not currently used by any caller
+// here, but confirmed live to return the same result shape as ?query=.
+// Contract (verified live): GET ?query=<text> → { query, results: [{
+// igdb_id, steam_id, name, summary, coverUrl, platforms }] }, platforms
+// being website-derived slugs like "steam"/"app-store"/"google-play"/"epic"
+// — see IGDB_SEARCH_PLATFORM_SLUGS. igdb_id/steam_id come back as numeric
+// strings. coverUrl is already an absolute https://images.igdb.com/... URL
+// pre-sized at t_cover_small (unlike the old endpoint, which returned a
+// protocol-relative t_thumb URL) — see _igdbSearchRaw's size-upgrade regex
+// below, which no longer assumes a specific incoming size token. summary
+// has come back empty ("") in live testing so far; treated the same as
+// "absent" by the `|| ''` fallback below either way. Notably still absent
+// vs. the old direct-IGDB response: screenshots — see _igdbSearchRaw below
+// for how that's handled. steam_id IS new here (the old endpoint never
+// returned one) but isn't wired into `steamAppId` yet — it isn't reliably
+// correlated with `platforms` including "steam" (seen present with
+// platforms: [] in live testing), so selectPicklistItem's existing
+// _igdbFetchSteamAppId follow-up lookup (below) is left as the sole source
+// of steamAppId for now rather than changing that gating logic here.
+const IGDB_SEARCH_ENDPOINT = 'https://search.dev.shipmate.gg/search';
 // This endpoint's platform slugs → our platform IDs. Derived from IGDB
 // website links only (same idea as IGDB_WEBSITE_URL_PATTERNS above), so —
 // like that table — it only ever yields storefront platforms, never
@@ -590,19 +605,24 @@ async function _igdbSearchRaw(title) {
   const data  = await res.json();
   const games = data.results || [];
   return games.map(g => {
-    // Endpoint hands back IGDB's raw t_thumb (32px) cover URL, protocol-
-    // relative, unproxied — same upgrade-then-proxy treatment the old
-    // direct-IGDB path applied to `cover.url`.
+    // Endpoint hands back a cover URL that's already absolute (unlike the
+    // old endpoint's protocol-relative URL) but its size token isn't
+    // guaranteed — it's currently t_cover_small, was t_thumb on the old
+    // endpoint, and could change again. Rather than assume a specific
+    // incoming token, match whichever IGDB size segment is actually present
+    // (e.g. "t_cover_small/") and swap just that, same upgrade-then-proxy
+    // treatment the old direct-IGDB path applied to `cover.url`.
+    const IGDB_SIZE_RE = /t_[a-z0-9_]+\//;
     const rawCover = g.coverUrl
       ? (g.coverUrl.startsWith('//') ? 'https:' : '') + g.coverUrl
       : null;
     const coverUrl = rawCover
-      ? 'https://wsrv.nl/?url=' + encodeURIComponent(rawCover.replace('t_thumb', 't_cover_small').replace(/^https?:\/\//, '')) + '&output=jpg'
+      ? 'https://wsrv.nl/?url=' + encodeURIComponent(rawCover.replace(IGDB_SIZE_RE, 't_cover_small/').replace(/^https?:\/\//, '')) + '&output=jpg'
       : null;
     // t_cover_big (264×374) for _applySteamCapsuleFromCover (app.js) — same
     // reasoning as the old coverBigUrl: kept as a raw images.igdb.com URL,
     // not pre-proxied, since _screenshotSrc proxies it at render time.
-    const coverBigUrl = rawCover ? rawCover.replace('t_thumb', 't_cover_big') : null;
+    const coverBigUrl = rawCover ? rawCover.replace(IGDB_SIZE_RE, 't_cover_big/') : null;
     // Website-derived storefronts only (steam/ios/android/egs) — this
     // endpoint doesn't expose IGDB's platform-ID/release-date fields, so
     // there's no console (psn/xbox/nintendo) detection here. Same list
@@ -618,8 +638,12 @@ async function _igdbSearchRaw(title) {
       coverBigUrl,
       platforms,
       activationPlatforms: platforms,
-      // Not returned by this endpoint (no Steam app-page lookup on the
-      // backend yet) — selectPicklistItem (app.js) already guards every
+      // The endpoint does return a `steam_id` now, but it isn't reliably
+      // correlated with a "steam" entry in `platforms` (seen present with
+      // platforms: [] in live testing) — see IGDB_SEARCH_ENDPOINT's comment
+      // above. Left null here rather than wiring it in, so the existing
+      // _igdbFetchSteamAppId follow-up lookup (below) stays the sole
+      // source of truth; selectPicklistItem (app.js) already guards every
       // Steam-enrichment call on `item.steamAppId` being truthy, so this
       // just makes those steps no-op rather than error.
       steamAppId: null,
