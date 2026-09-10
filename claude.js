@@ -431,11 +431,14 @@ const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
 // "absent" by the `|| ''` fallback below either way. Notably still absent
 // vs. the old direct-IGDB response: screenshots — see _igdbSearchRaw below
 // for how that's handled. steam_id IS new here (the old endpoint never
-// returned one) but isn't wired into `steamAppId` yet — it isn't reliably
-// correlated with `platforms` including "steam" (seen present with
-// platforms: [] in live testing), so selectPicklistItem's existing
-// _igdbFetchSteamAppId follow-up lookup (below) is left as the sole source
-// of steamAppId for now rather than changing that gating logic here.
+// returned one) and is wired straight into each result's `steamAppId` (see
+// _igdbSearchRaw below) — but note it isn't reliably correlated with
+// `platforms` including "steam" (seen present with platforms: [] in live
+// testing), and selectPicklistItem (app.js) doesn't consume this field yet:
+// it still derives whether to look up a Steam app id purely from
+// `item.platforms` and always goes through the _igdbFetchSteamAppId
+// follow-up lookup (below) for the answer, rather than checking this
+// pre-supplied value first.
 const IGDB_SEARCH_ENDPOINT = 'https://search.dev.shipmate.gg/search';
 // This endpoint's platform slugs → our platform IDs. Derived from IGDB
 // website links only (same idea as IGDB_WEBSITE_URL_PATTERNS above), so —
@@ -638,15 +641,21 @@ async function _igdbSearchRaw(title) {
       coverBigUrl,
       platforms,
       activationPlatforms: platforms,
-      // The endpoint does return a `steam_id` now, but it isn't reliably
-      // correlated with a "steam" entry in `platforms` (seen present with
-      // platforms: [] in live testing) — see IGDB_SEARCH_ENDPOINT's comment
-      // above. Left null here rather than wiring it in, so the existing
-      // _igdbFetchSteamAppId follow-up lookup (below) stays the sole
-      // source of truth; selectPicklistItem (app.js) already guards every
-      // Steam-enrichment call on `item.steamAppId` being truthy, so this
-      // just makes those steps no-op rather than error.
-      steamAppId: null,
+      // The endpoint returns a `steam_id` when it has one — wired straight
+      // through here. Note it isn't reliably correlated with a "steam"
+      // entry in `platforms` (seen present with platforms: [] in live
+      // testing — e.g. "Hade: Forbidden Levels", igdb_id 172092, steam_id
+      // "875410"), so a title can have a truthy steamAppId here even when
+      // `platforms` doesn't list "steam". Kept as a string, matching the
+      // type `_igdbFetchSteamAppId` below already returns (both ultimately
+      // trace back to a Steam app id parsed out of a URL). NOTE:
+      // selectPicklistItem (app.js) doesn't read this field yet — it still
+      // derives whether to look up a Steam app id purely from
+      // `item.platforms` and, if so, always calls _igdbFetchSteamAppId
+      // (below) for the answer rather than checking this pre-supplied
+      // value first. So today this is populated but inert; consuming it
+      // there would let a title skip that follow-up call.
+      steamAppId: g.steam_id ? String(g.steam_id) : null,
       summary:     g.summary || '',
       // Not returned by this endpoint — _fillScreenshotGridFromIgdb (app.js)
       // gets an empty array and simply has nothing to add.
