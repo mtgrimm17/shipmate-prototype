@@ -4514,6 +4514,45 @@ async function _runTitlePicklist(title) {
   }
 }
 
+// Clears an auto-scraped Key Art slot (state.uploads.<fieldName>) when a
+// new title is picked — used instead of a bare `state.uploads.x = null`
+// because these slots don't hold the image itself, just a { ref: id }
+// pointer into the shared asset pool (state.assets — see assets.js). The
+// Assets tab's unified library (_smLibraryHTML, further below) renders
+// every record IN THAT POOL, regardless of whether any state.uploads.*
+// slot still points at it — so nulling the pointer alone only hides the
+// previous game's art from this one slot, it doesn't stop the actual
+// image from still showing up in the library grid, permanently, as an
+// orphaned leftover nothing ever removes. smRemove (assets.js) deletes the
+// pool record itself and, as a side effect, also nulls every state.uploads
+// slot (and filters every screenshots array) that still referenced it — so
+// calling it here does the whole job in one step. Only ever removes what
+// the developer didn't choose themselves (smIsOwn) — a manual upload for
+// this slot is never deleted just because a different title was picked.
+// Falls back to a bare null for the rare legacy shape that predates the
+// asset pool (no .ref at all, so there's no pool record to remove).
+function _smClearAutoField(fieldName) {
+  const v = state.uploads[fieldName];
+  if (!v || smIsOwn(v)) return;
+  if (v.ref) smRemove(v.ref);
+  else state.uploads[fieldName] = null;
+}
+
+// Same reasoning as _smClearAutoField above, applied to the screenshot grid:
+// removes the underlying pool record for every currently-auto-imported
+// screenshot (not just its entry in state.uploads.screenshots) before a new
+// batch replaces them, so a previous game's screenshots stop showing up in
+// the Assets library once a different title is picked. smRemove's own
+// filtering of state.uploads.screenshots/state.webSite.screenshots means
+// the .filter(smIsOwn) each caller already does afterward becomes a no-op
+// safety net for any legacy (pre-pool) entry with no .ref, rather than the
+// only thing standing between a stale asset and the pool.
+function _smClearAutoScreenshots() {
+  (state.uploads.screenshots || []).forEach(s => {
+    if (s && s.ref && !smIsOwn(s)) smRemove(s.ref);
+  });
+}
+
 function selectPicklistItem(igdbId) {
   const item = (state.titlePicklist || []).find(x => x.id === igdbId);
   if (!item) return;
@@ -4554,11 +4593,15 @@ function selectPicklistItem(igdbId) {
 
   // Clear whatever's already in Steam's "Select Key Art" section — Capsule
   // Image, Header Image, IGDB Cover Art, Library Hero — before this new
-  // selection's own auto-fill (below) has a chance to run. Only clears
-  // auto-filled art (a { name, url } shape); a manual upload (a
-  // { name, dataUrl } shape) is preserved, same convention the screenshot
-  // grid uses (_fillScreenshotGridFromIgdb/FromSteam filter on `s.dataUrl`)
-  // — a developer who's deliberately uploaded their own art for this slot
+  // selection's own auto-fill (below) has a chance to run, AND remove the
+  // previous game's own copies from the shared asset pool itself (see
+  // _smClearAutoField above), not just from these four slots — otherwise
+  // they'd go on sitting in the Assets tab's library grid forever, orphaned
+  // but still visible, even after this function moves on to a different
+  // game entirely. Only clears/removes auto-filled art; a manual upload for
+  // one of these slots is preserved, same convention the screenshot grid
+  // uses below (_fillScreenshotGridFromIgdb/FromSteam via smIsOwn) — a
+  // developer who's deliberately uploaded their own art for this slot
   // shouldn't have it silently wiped just because they picked a different
   // title in the picklist. Doing this eagerly (not inside the async
   // appliers below) also means a fast re-pick can't race a slow-resolving
@@ -4568,20 +4611,18 @@ function selectPicklistItem(igdbId) {
   // old game anyway, but clearing here means the user never sees the old
   // game's auto-filled art flash on screen in the meantime either.
   state.uploads = state.uploads || {};
-  /* "DID THE DEVELOPER CHOOSE THIS?" used to be asked as "does it have a
-     dataUrl?", which worked only because auto-filled art happens to arrive as
-     a remote URL. That is a coincidence about provenance, not a fact about
-     the file, and it breaks the moment an upload is stored as a reference —
-     which is exactly what the asset library does. smIsOwn asks the real
-     question, of a ref or of a legacy record. */
-  if (!smIsOwn(state.uploads.steamCapsuleImage))   state.uploads.steamCapsuleImage   = null;
-  if (!smIsOwn(state.uploads.steamHeaderImage))    state.uploads.steamHeaderImage    = null;
-  if (!smIsOwn(state.uploads.steamKeyArtCapsule))  state.uploads.steamKeyArtCapsule  = null;
-  if (!smIsOwn(state.uploads.steamKeyArtHero))     state.uploads.steamKeyArtHero     = null;
+  _smClearAutoField('steamCapsuleImage');
+  _smClearAutoField('steamHeaderImage');
+  _smClearAutoField('steamKeyArtCapsule');
+  _smClearAutoField('steamKeyArtHero');
   // Trailer preview has no manual-upload variant at all (unlike the four Key
   // Art slots above, which keep a manual dataUrl upload if the developer set
   // one) — it's purely derived from whichever title is currently selected,
-  // so it's always safe to clear unconditionally here.
+  // so it's always safe to clear unconditionally here. Also unlike those
+  // four, it's never adopted into the shared asset pool at all (it's a
+  // plain { name, thumbnail, hlsUrl } preview object — see its own comment,
+  // state.js), so there's no orphaned pool record to worry about here; a
+  // bare null is already the complete fix.
   state.uploads.steamTrailer = null;
   // Per product decision: picking a new title always resets Mac App Store's
   // Game Center Achievements — unlike the Key Art slots above, a manually
@@ -4864,7 +4905,11 @@ function _fillScreenshotGridFromIgdb(urls) {
     // still happens at render time, inside _screenshotSrc.
     ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url }, 'igdb'),
   }));
-  // Manual uploads survive a change of linked title; fetched ones do not.
+  // Manual uploads survive a change of linked title; fetched ones do not —
+  // and "do not" means removed from the shared asset pool itself, not just
+  // unlinked from this array, or they'd linger in the Assets tab's library
+  // grid forever (see _smClearAutoScreenshots).
+  _smClearAutoScreenshots();
   state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
@@ -4884,7 +4929,11 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
     // an uploaded one, and the library is where anything pickable lives.
     ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url: s.path_full }, 'steam'),
   }));
-  // Manual uploads survive a change of linked title; fetched ones do not.
+  // Manual uploads survive a change of linked title; fetched ones do not —
+  // and "do not" means removed from the shared asset pool itself, not just
+  // unlinked from this array, or they'd linger in the Assets tab's library
+  // grid forever (see _smClearAutoScreenshots).
+  _smClearAutoScreenshots();
   state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
