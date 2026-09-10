@@ -4594,41 +4594,42 @@ function selectPicklistItem(igdbId) {
   // repopulates the list; if not (or the lookup fails), it's left empty.
   state.macGameCenterAchievements = [];
 
-  // Where the rest of this game's data comes from depends on whether IGDB
-  // links to a Steam store page for it. If it does, Steam is treated as the
+  // Where the rest of this game's data comes from depends on whether the
+  // IGDB search backend gave us a Steam app id for this title (item.
+  // steamAppId, sourced straight from that endpoint's own steam_id field —
+  // see _igdbSearchRaw, claude.js). If it did, Steam is treated as the
   // source of truth for Description / Web Factsheet Developer / Web
   // Factsheet Publisher / Web Factsheet Links "Official Website" / Web
   // "About This Game" / screenshots — Steam's own store-page copy and full
   // screenshot set is generally more complete and current than IGDB's
   // community-submitted summary/screenshots for a title
   // that's actually live on Steam. That fetch (fetchSteamAppDetails in claude.js, via
-  // corsproxy.io — verified live and already working for IGDB itself, see
-  // this project's appdetails reliability testing) is async, so
-  // _applySteamAboutData fills these fields in shortly after this function
-  // returns, not immediately; if the fetch fails, it falls back to filling
-  // from IGDB's own summary/screenshots (via the same helpers used in the
-  // no-Steam-link branch below) rather than leaving the About section and
-  // screenshot grid empty.
-  // IGDB_SEARCH_ENDPOINT's results never carry a Steam app ID (see
-  // claude.js) — fill the screenshot grid baseline from IGDB immediately so
-  // it isn't left blank, then resolve the real Steam link asynchronously
-  // below and let it upgrade these once it resolves.
+  // _cors()/proxy.cors.sh) is async, so _applySteamAboutData fills these
+  // fields in shortly after this function returns, not immediately; if the
+  // fetch fails, it falls back to filling from IGDB's own summary/
+  // screenshots (via the same helpers used in the no-Steam-app-id branch
+  // below) rather than leaving the About section and screenshot grid empty.
+  // Having item.steamAppId in hand up front doesn't mean Steam data has
+  // arrived yet, since fetchSteamAppDetails itself is still async — fill
+  // the screenshot grid baseline from IGDB immediately so it isn't left
+  // blank, then let Steam's own screenshots upgrade it once that resolves.
   //
-  // Description is handled differently: when this title might actually have
-  // a linked Steam page (item.platforms includes 'steam'), Steam's own
-  // "About This Game" text is the eventual source of truth for it (see
-  // _applySteamAboutData below) — filling Description from IGDB's summary
-  // here first would just flash that shorter/different text on screen for
-  // the moment before the async Steam lookup overwrites it. So that fill is
-  // deferred until the lookup below settles one way or the other, and IGDB's
-  // summary is used immediately only when no Steam lookup is coming at all.
-  const steamLinkPending = (item.platforms || []).includes('steam') && typeof _igdbFetchSteamAppId === 'function';
-  if (!steamLinkPending && item.summary) _fillDescriptionField(item.summary);
+  // Description is handled differently: when this title has a Steam app id,
+  // Steam's own "About This Game" text is the eventual source of truth for
+  // it (see _applySteamAboutData below) — filling Description from IGDB's
+  // summary here first would just flash that shorter/different text on
+  // screen for the moment before the Steam fetch overwrites it. So that
+  // fill is deferred until _applySteamAboutData settles one way or the
+  // other (it has its own IGDB-summary fallback if the fetch fails — see
+  // its own comment), and IGDB's summary is used immediately only when
+  // there's no Steam app id for this title at all.
+  const hasSteamAppId = !!item.steamAppId;
+  if (!hasSteamAppId && item.summary) _fillDescriptionField(item.summary);
   _fillScreenshotGridFromIgdb(item.screenshots || []);
-  // No Steam page to scrape at all — go straight to IGDB's own screenshots
-  // for this title rather than leaving the grid empty (item.screenshots
-  // above is always [] now; see _igdbSearchRaw in claude.js).
-  if (!steamLinkPending) _applyIgdbScreenshotFallback(item.id, item.name);
+  // No Steam app id for this title — go straight to IGDB's own screenshots
+  // rather than leaving the grid empty (item.screenshots above is always []
+  // now; see _igdbSearchRaw in claude.js).
+  if (!hasSteamAppId) _applyIgdbScreenshotFallback(item.id, item.name);
   // Clear any Steam localization cache/content left over from a
   // previously-selected game: state.steamLocInfo (the comparison baseline)
   // so a later language-add on THIS title can't be checked against the
@@ -4669,68 +4670,41 @@ function selectPicklistItem(igdbId) {
   state.masLocReviewUndoHistory = { real: {}, draft: {} };
   state.masTranslateStatus = {};
   state.masTranslatePendingLangs = {};
-  // No Steam lookup is coming for this title (see steamLinkPending above) —
+  // No Steam app id for this title (see hasSteamAppId above) —
   // Description/webSite fields already have their final value from the
   // IGDB-only fill just above, so this is the only chance to bring already-
   // selected supporting languages' Steam/Mac App Store Localization Review
   // cards up to date for this game (see _refreshLocalizationForNewGame's own
-  // comment for why nothing else does this on a game switch). When a Steam
-  // lookup IS pending, _applySteamAboutData/its own fallback branches below
-  // call this once Steam's data (or the lack of it) is known instead.
-  if (!steamLinkPending) _refreshLocalizationForNewGame();
+  // comment for why nothing else does this on a game switch). When there IS
+  // a Steam app id, _applySteamAboutData calls this itself once Steam's
+  // data (or the lack of it) is known instead — see its own comment.
+  if (!hasSteamAppId) _refreshLocalizationForNewGame();
 
-  // Resolve this title's Steam app ID with a small, targeted follow-up
-  // query (_igdbFetchSteamAppId, claude.js) — only attempted when IGDB
-  // itself already told us (via platforms, from the search results) that
-  // this title has a Steam listing, so titles with none skip the extra
-  // request entirely. Fire-and-forget: the synchronous IGDB-sourced fill
-  // above already leaves the app fully usable while this resolves.
-  if (steamLinkPending) {
-    _igdbFetchSteamAppId(item.id).then(steamAppId => {
-      // Stale-title guard — the user may have picked a different title
-      // (or edited it away) before this resolves.
-      if ((state.formData.title || '').trim() !== (item.name || '').trim()) return;
-      if (!steamAppId) {
-        // IGDB's platform list said "steam" but the follow-up lookup found
-        // no linked app id after all — Description was deliberately left
-        // unfilled above in anticipation of Steam's data, so fall back to
-        // IGDB's summary now instead of leaving it blank.
-        if (item.summary) _fillDescriptionField(item.summary);
-        // Same reasoning — no Steam app id after all, so fall back to
-        // IGDB's own screenshots for this title instead of an empty grid.
-        _applyIgdbScreenshotFallback(item.id, item.name);
-        // No Steam data is coming after all — this is the fallback path's
-        // own chance to bring supporting-language Localization Review cards
-        // up to date (see _refreshLocalizationForNewGame's comment).
-        _refreshLocalizationForNewGame();
-        return;
-      }
-      // Steam is now treated as the source of truth for Description / Web
-      // Factsheet Developer / Publisher / Links "Official Website" / Web
-      // "About This Game" / screenshots / Capsule Image / Header Image /
-      // Library Hero / social links — each of these calls only overwrites
-      // a field once it actually has Steam content for it (see
-      // _applySteamAboutData), so this safely upgrades the IGDB-sourced
-      // baseline filled in above rather than fighting with it.
-      _applySteamAboutData(steamAppId, item.name, item);
-      _applySteamHeroBanner(steamAppId, item.name);
-      _applySteamSocialLinks(steamAppId, item.name);
-      _applySteamAchievements(steamAppId, item.name);
-    }).catch(err => {
-      console.warn('[Picklist] Steam app ID lookup failed:', err.message);
-      // Same fallback reasoning as the !steamAppId branch above — the
-      // lookup itself failed, so Description was deferred for nothing;
-      // fill from IGDB's summary rather than leaving it blank.
-      if ((state.formData.title || '').trim() === (item.name || '').trim()) {
-        if (item.summary) _fillDescriptionField(item.summary);
-        // Same reasoning as the !steamAppId branch above — Steam screenshots
-        // aren't coming either, so fall back to IGDB's own.
-        _applyIgdbScreenshotFallback(item.id, item.name);
-        // Same reasoning as the !steamAppId branch above — bring supporting
-        // languages up to date now that no Steam data is coming.
-        _refreshLocalizationForNewGame();
-      }
-    });
+  // Drive Steam enrichment straight off item.steamAppId — sourced directly
+  // from IGDB_SEARCH_ENDPOINT's own steam_id field (see _igdbSearchRaw,
+  // claude.js), so there's no separate app-id lookup to make anymore. This
+  // used to resolve the app id with a follow-up query (_igdbFetchSteamAppId,
+  // claude.js) straight to IGDB itself via IGDB_ENDPOINT/_cors() — that
+  // function still exists (kept as a documented fallback should this
+  // endpoint's steam_id ever prove unreliable) but is no longer called from
+  // here, which removes both the extra network round-trip and this call's
+  // dependency on the same _cors()/proxy.cors.sh path the Steam appdetails/
+  // store-page fetches below still separately rely on.
+  //
+  // Each of these calls only overwrites a field once it actually has Steam
+  // content for it (see _applySteamAboutData), so this safely upgrades the
+  // IGDB-sourced baseline filled in above rather than fighting with it.
+  // _applySteamAboutData in particular already has its own complete
+  // fallback for when the Steam fetch itself fails — fill Description/
+  // screenshots from IGDB, clear steamLocInfo, refresh localization (see
+  // its own comment) — so, unlike the old lookup-based version, no separate
+  // failure handling is needed here; each function also has its own
+  // stale-title guard, so no wrapping guard is needed here either.
+  if (hasSteamAppId) {
+    _applySteamAboutData(item.steamAppId, item.name, item);
+    _applySteamHeroBanner(item.steamAppId, item.name);
+    _applySteamSocialLinks(item.steamAppId, item.name);
+    _applySteamAchievements(item.steamAppId, item.name);
   }
 
   // Auto-activate platforms — use strict activationPlatforms (no unconfirmed console ports)
@@ -4768,8 +4742,8 @@ function selectPicklistItem(igdbId) {
   if (qTitle) qTitle.dataset.answered = '1';
 
   // (Library Hero and social links are fired together with the About Data
-  // call above, once the async Steam app ID lookup resolves — see the
-  // _igdbFetchSteamAppId block earlier in this function.)
+  // call above, right after item.steamAppId is checked — see the Steam
+  // enrichment block earlier in this function.)
 
   // Populate "IGDB Cover Art" from IGDB's own cover art. Runs independent
   // of item.steamAppId — it only depends on IGDB's own cover field, which
@@ -4927,7 +4901,7 @@ function _fillScreenshotGridFromSteam(steamScreenshots) {
 // _igdbSearchRaw) and fills the grid with them. Fire-and-forget and
 // non-fatal: a failure here just leaves the grid as it already is, same as
 // every other Steam/IGDB enrichment call. Guards against a stale/superseded
-// title the same way _igdbFetchSteamAppId's caller does.
+// title the same way selectPicklistItem's own Steam enrichment calls do.
 function _applyIgdbScreenshotFallback(igdbId, expectedTitle) {
   if (!igdbId || typeof _igdbFetchScreenshots !== 'function') return;
   _igdbFetchScreenshots(igdbId).then(urls => {
@@ -5488,7 +5462,7 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // rare page missing one of these fields. Since selectPicklistItem now
     // defers filling Description from IGDB until this function settles (to
     // avoid flashing IGDB's text before Steam's arrives — see
-    // steamLinkPending there), a successful Steam fetch that happens to have
+    // hasSteamAppId there), a successful Steam fetch that happens to have
     // no about_the_game text needs its own IGDB fallback here too, or the
     // field would be left blank instead of getting IGDB's summary the way
     // it always did before that deferral.

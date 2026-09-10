@@ -432,13 +432,14 @@ const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
 // vs. the old direct-IGDB response: screenshots — see _igdbSearchRaw below
 // for how that's handled. steam_id IS new here (the old endpoint never
 // returned one) and is wired straight into each result's `steamAppId` (see
-// _igdbSearchRaw below) — but note it isn't reliably correlated with
+// _igdbSearchRaw below) — note it isn't reliably correlated with
 // `platforms` including "steam" (seen present with platforms: [] in live
-// testing), and selectPicklistItem (app.js) doesn't consume this field yet:
-// it still derives whether to look up a Steam app id purely from
-// `item.platforms` and always goes through the _igdbFetchSteamAppId
-// follow-up lookup (below) for the answer, rather than checking this
-// pre-supplied value first.
+// testing), so a title can carry a usable steamAppId even when `platforms`
+// doesn't list "steam". selectPicklistItem (app.js) now drives all Steam
+// enrichment straight off this field instead of the old _igdbFetchSteamAppId
+// follow-up lookup (below) — that function still exists (kept as a
+// documented fallback should this endpoint's steam_id ever prove
+// unreliable) but is no longer called from there.
 const IGDB_SEARCH_ENDPOINT = 'https://search.dev.shipmate.gg/search';
 // This endpoint's platform slugs → our platform IDs. Derived from IGDB
 // website links only (same idea as IGDB_WEBSITE_URL_PATTERNS above), so —
@@ -648,13 +649,11 @@ async function _igdbSearchRaw(title) {
       // "875410"), so a title can have a truthy steamAppId here even when
       // `platforms` doesn't list "steam". Kept as a string, matching the
       // type `_igdbFetchSteamAppId` below already returns (both ultimately
-      // trace back to a Steam app id parsed out of a URL). NOTE:
-      // selectPicklistItem (app.js) doesn't read this field yet — it still
-      // derives whether to look up a Steam app id purely from
-      // `item.platforms` and, if so, always calls _igdbFetchSteamAppId
-      // (below) for the answer rather than checking this pre-supplied
-      // value first. So today this is populated but inert; consuming it
-      // there would let a title skip that follow-up call.
+      // trace back to a Steam app id parsed out of a URL). This is now the
+      // sole source of a title's Steam app id for the picklist flow —
+      // selectPicklistItem (app.js) drives Steam enrichment straight off
+      // this field and no longer makes the separate _igdbFetchSteamAppId
+      // follow-up query (below) to resolve it.
       steamAppId: g.steam_id ? String(g.steam_id) : null,
       summary:     g.summary || '',
       // Not returned by this endpoint — _fillScreenshotGridFromIgdb (app.js)
@@ -664,18 +663,22 @@ async function _igdbSearchRaw(title) {
   }).filter(g => g.id && Number.isFinite(g.id));
 }
 
-/* Resolves a single title's Steam app ID by IGDB id — a small, targeted
-   follow-up query used once a title is picked (selectPicklistItem, app.js),
-   since IGDB_SEARCH_ENDPOINT's results don't include one (see above). Goes
-   straight to IGDB itself via IGDB_ENDPOINT/_cors() — viable again now that
-   _cors() points at proxy.cors.sh instead of the dead corsproxy.io — rather
-   than the search backend, and only ever asks for one game's websites, so
-   it's much lighter than the old full-text search this replaced. Reuses
-   IGDB_WEBSITE_URL_PATTERNS, the same URL-matching table _igdbSearchRaw's
-   predecessor used, to pull the appid out of the website URL itself (IGDB's
-   website `category` field has been unreliable — see that table's comment).
+/* Resolves a single title's Steam app ID by IGDB id — goes straight to IGDB
+   itself via IGDB_ENDPOINT/_cors(), asking for just one game's websites, and
+   pulls the appid out of the Steam website URL via IGDB_WEBSITE_URL_PATTERNS
+   (the same table _igdbSearchRaw's predecessor used — IGDB's website
+   `category` field has been unreliable, see that table's comment).
+   NOT currently called anywhere — selectPicklistItem (app.js) used to call
+   this as a follow-up once a title was picked, back when IGDB_SEARCH_ENDPOINT's
+   results didn't carry a Steam app id at all. Now that endpoint returns one
+   directly (steam_id, wired into item.steamAppId — see _igdbSearchRaw
+   above), selectPicklistItem drives Steam enrichment off that instead,
+   which also avoids this function's own dependency on _cors()/proxy.cors.sh
+   (the same dead-proxy path documented above). Left in place, still
+   working as designed, as a fallback this codebase can call again if
+   IGDB_SEARCH_ENDPOINT's steam_id ever proves unreliable.
    Returns null for "no linked Steam page" (not an error); only throws for a
-   real fetch/auth failure, which the caller already treats as non-fatal. */
+   real fetch/auth failure. */
 async function _igdbFetchSteamAppId(igdbId) {
   const token = await _getIgdbToken();
   const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
