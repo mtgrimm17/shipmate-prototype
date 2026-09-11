@@ -3496,15 +3496,15 @@ function renderSplashView() {
   const el = document.getElementById('splashview');
   if (!el) return;
   const pillars = [
-    { tag: 'Submission', title: 'Submit to every platform', body: 'One streamlined flow, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
-    { tag: 'Marketing',  title: 'Market like a studio',  body: 'All the marketing tools you need in one place. Push posts and media specced for every channel, connect with press and content creators, and build a press kit in seconds.' },
-    { tag: 'Analysis',   title: 'Analyze performance', body: 'Track your game\'s performance with a unified dashboard. Monitor revenue, wishlists, reviews, and engagement across every platform, all in one place.' },
+    { tag: t('splash.pillar.submission.tag') || 'Submission', title: t('splash.pillar.submission.title') || 'Submit to every platform', body: t('splash.pillar.submission.body') || 'One streamlined flow, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
+    { tag: t('splash.pillar.marketing.tag') || 'Marketing',   title: t('splash.pillar.marketing.title') || 'Market like a studio',      body: t('splash.pillar.marketing.body') || 'All the marketing tools you need in one place. Push posts and media specced for every channel, connect with press and content creators, and build a press kit in seconds.' },
+    { tag: t('splash.pillar.analysis.tag') || 'Analysis',     title: t('splash.pillar.analysis.title') || 'Analyze performance',        body: t('splash.pillar.analysis.body') || "Track your game's performance with a unified dashboard. Monitor revenue, wishlists, reviews, and engagement across every platform, all in one place." },
   ];
   el.innerHTML = `
     <div class="splash2">
       <section class="splash2-hero">
-        <h1 class="splash2-title">Publish your game yourself.</h1>
-        <p class="splash2-sub">Everything you need to submit, distribute, and market your game — in one intelligent tool.</p>
+        <h1 class="splash2-title">${t('splash.title') || 'Publish your game yourself.'}</h1>
+        <p class="splash2-sub">${t('splash.sub') || 'Everything you need to submit, distribute, and market your game — in one intelligent tool.'}</p>
       </section>
       <section class="splash2-pillars">
         ${pillars.map(p => `
@@ -3515,8 +3515,8 @@ function renderSplashView() {
           </div>`).join('')}
       </section>
       <section class="splash2-foot">
-        <div class="splash2-foot-line">Easy to do yourself. Easy to get right.</div>
-        <button class="splash2-btn splash2-btn-primary" onclick="setView('details')">Get started →</button>
+        <div class="splash2-foot-line">${t('splash.foot') || 'Easy to do yourself. Easy to get right.'}</div>
+        <button class="splash2-btn splash2-btn-primary" onclick="setView('details')">${t('splash.cta') || 'Get started →'}</button>
       </section>
     </div>`;
 }
@@ -9331,6 +9331,8 @@ function buildPrivacySection(pid = 'ios') {
   }
 
   return `
+    ${iosYNRow(t('ios.privacy.collects.label') || 'Does your app collect any data from users?', 'collectsData',
+      t('ios.privacy.collects.tooltip') || 'Includes analytics SDKs, crash reporters, accounts, device IDs, or any third-party SDK that collects data.', null, false, pid)}
     <div class="form-group">
       <label class="form-label">${t('ios.privacy.url.label') || 'Privacy Policy URL'}
         <span class="tooltip-anchor">
@@ -9345,8 +9347,6 @@ function buildPrivacySection(pid = 'ios') {
       ${(noUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
-    ${a.collectsData === null ? iosYNRow(t('ios.privacy.collects.label') || 'Does your app collect any data from users?', 'collectsData',
-      t('ios.privacy.collects.tooltip') || 'Includes analytics SDKs, crash reporters, accounts, device IDs, or any third-party SDK that collects data.', null, false, pid) : ''}
     ${collectBlock}`;
 }
 
