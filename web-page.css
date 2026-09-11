@@ -384,6 +384,18 @@
   box-shadow:0 calc(var(--bs) * 12px) calc(var(--bs) * 30px) rgba(0,0,0,calc(var(--bs) * .8));
 }
 
+/* The Stash badge to the button's left — an inline sibling of .buy (not a
+   flex wrapper on .buy-el) so alignment/anchoring math on .el above still
+   applies unchanged. Scales on the button's own --bz lever, drop-shadowed
+   rather than boxed like the button's own box-shadow, since it's a mark on
+   the hero, not a second slab next to the first. */
+#site .buy-el .buy-brand-logo{
+  display:inline-block; vertical-align:middle;
+  height:calc(26px * var(--bz)); width:auto;
+  margin-right:calc(12px * var(--bz));
+  filter:drop-shadow(0 calc(var(--bs) * 4px) calc(var(--bs) * 10px) rgba(0,0,0,calc(var(--bs) * .8)));
+}
+
 /* THE PAGE HEADER — just the logotype, small, in the corner. No frosted bar of
    its own: the browser chrome above it is already the glass, and stacking a
    second translucent bar directly under the first only muddies both.

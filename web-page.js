@@ -2048,6 +2048,16 @@ function hookElHTML(){
           </div>`;
 }
 
+// Stash's own wordmark, background removed (was a solid-black square) and
+// trimmed to its ink, so it drops onto the hero — over whatever key art is
+// there — the same way the white title/tagline/button text already does.
+// Inlined as a data URI rather than a file reference: everything else this
+// page draws is either markup this file builds or an upload already living
+// in state, and a one-off brand mark has no home in either — the splash
+// screen's own mockup screenshots (index.html) are embedded the same way,
+// for the same reason.
+const WP_STASH_LOGO_SRC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAN0AAAA+CAYAAACvFB42AAAFQ0lEQVR4nO2da5KjOgyFT0/dfY16ZVFWFvXKmB+BCu1rwPJDNqCvinICxhKOjw1+kK9pmuA4jh1/ejvgOHfDRec4xrjoHMeYq4qOAUyKjXo46VSBcbLf+qqic5xhcdE5jjEuOscxxkXnOMa46BzHGBed4xjjonMcY1x0jmOMi85xjHHROY4xLjrHMcZF5zjG/NfbAScJ2vi8hQShUx+aQ9GeWCI6CsJWCH5fGCec81dpg9DmOgR5BZ/m7S/y/HoEPvwU+rMHBWFL2MDGHoR33lLkmOCdz3yYyjRNmo2maXpNtnDgw5kIfR8lfznDt97l4LXhCyvToY109jatjd28TW3pGL9rT6cuhO0atAWPVficP3PCeQRbP3tDAF4Z5y35y7GDKR0pL7jgWsJ45zF1sv+Yt6MFnoy+flrDyBPcwmbldCS6O2VyDxhjVWi0sZ8xlp8tIdRraKJp7ImO4YJrCeMcBZlxDj9rwKjb0FAsrS3RMe6T0T1gnCd/z+JnKa0eoyjc4YPjzh7c2wEDCG0fo/43fLXVe3mX2q0HDM/fUWB0+C1iLR1ZO+EMy0iVA1VOj2FzfRTu8Glg9uT+0ILPmJpEjtMqzJ3JcgcInccaa4hO8C4MUiGtFL4S4hB0YyzfsPGfM84RpOWvBOFiz7K1ssrHEjT5Ifhd0bHy/Cg1OlJ+MH5Gn5mSgpx7Xg6WFa8FT3zyXuZ9PO8roobouEIad0E7Eft5HGUYpLcDlRC8hcU7x6XEQEx02gSpxAFnF+5sXxRxR+p0yWXduu3xc3B8l62W7sjomhd89koqpIgrjXzQoGlpCe9ywC0cMeAJI9+3OlKe0BWQZdJsiKw+x2oHwRiFy4kjyviPINxKJywLkmGrJqYdQFuik3mjwvRp4/PC1mJLLrTbElbEFeT/mEW3MBV5ovzWkQ6+9yoHgg4dQHtDBt+wXWVAgS3BmK2gtgBKCycSoQpp8BxaPbMRPn4v6/14I24Jggo9kTkc9V5+o08P2gOfZ0UnD0I9oTD69aQ+UL/PYOkw6ULKkAGj3xjMkuGODkbZAsytNHtWwrUqELMOky1Sx+kYnwy3FqALTwej3a2gzOl/wb4cEOpUJFIhjSK008A4+E5BuCYcCI7FSeWBcZ/xRoFgO6eQI/ZjtmuWA8K5hyUAlM+9lCBMhedQUyNThp27QKh/O6lFkDexgqArB9pZPcPRa5UBz6FmNvwImU29HYjAOO9sEFltqZUGtXHFjt4rx0eZW0i9HYiQUskwziu4NaKMTw18MONM6+moYdqprWhLHzS2CPd6/+Sl6NnSEdr2smkgHBdggv3AOEd8eCF90kKpfStYGZ8a+GDGXkvX+sGcGqev5YVPN7is9hPaVhB7lIxPCfRzaGMw2j5PU8Y5UtkHU/ZER1ZONEKgv4aag7CLDz1YBoCpQlr+6ofK9O5I0aDtdOk9YTjmrxjY3VuAeRWktwMlnEl0WqS3A8YIzvGOklJG6fHO5kyiY2V8Qd8CyJF9rVpfwT0EdwnOIrrc2q1XrbhlVxrZ6jZj3pjuk5VrcAbRlWS0wF54e/4K6grvDs9vC4KLXOvooqtRszFsb7v44HiNSkBwr9tJwYVa85FFV/NWwmIdmCDtRbiCMl9S31h1FS53+zzaNDBBu3VaPIe1B7kFqX/wXuaL4HovdN1DcNHr3ROdGPnws7LV2iavNqBMgIKyQrH2Zc+PUju55y1YjncudwCiOEdgvwKlyObXNE31XDkvHHwPM3QpeBKENSF8Zn60tON0xkXnOMaM3JHiOJfERec4xrjoHMeYf4p6UH4ejsKfAAAAAElFTkSuQmCC';
+
 function buyElHTML(){
   if(M.buy.mode === 'none') return '';
   // The availability marks, promoted out of the metadata band and into the
@@ -2058,8 +2068,14 @@ function buyElHTML(){
                  style="left:${M.buy.x}%;--bz:${(M.buy.size/100).toFixed(2)};--bfg:${M.buy.fg};--bs:${(M.buy.shadow/100).toFixed(2)}">
               ${storesHTML()}
             </div>`;
+  // The Stash mark sits immediately to the left of the button, inside the
+  // same fixed .buy-el box, so it moves/aligns/scales with the button rather
+  // than needing its own position — it is a badge on the CTA, not a second
+  // hero element in its own right. pointer-events:none (inherited from the
+  // global `#site .el img` rule) keeps it from stealing the button's click.
   return `<div class="el buy-el fixed" data-edit="buy" data-align="${M.buy.align}"
                style="left:${M.buy.x}%;--bz:${(M.buy.size/100).toFixed(2)};--bs:${(M.buy.shadow/100).toFixed(2)};--bfg:${M.buy.fg}">
+            <img class="buy-brand-logo" src="${WP_STASH_LOGO_SRC}" alt="">
             <span class="buy" data-buytext="1">${esc(M.buy.label)}</span>
           </div>`;
 }
