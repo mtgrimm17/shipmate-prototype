@@ -12478,12 +12478,17 @@ function _locsSettingsMenu(cfg) {
 // .cr-toggle-bar already dials it down for Content Rating's Unanswered/All
 // filter (buildCRTogglePill, above) — a secondary in-modal nav, not the
 // app's primary one.
-function _locsViewTabsHtml(current, setterFn) {
+// `options` is LOC_VIEW_OPTIONS filtered down by the caller (by request, the
+// IAPs/Achievements tabs only show once at least one IAP/Achievement is
+// saved — see hasIaps/hasAchievements, _buildUnifiedLocalizationsSection
+// below) — never LOC_VIEW_OPTIONS itself, so a hidden tab can't be clicked
+// back into existence from stale markup.
+function _locsViewTabsHtml(current, setterFn, options) {
   return `
     <div class="loc-view-tabs">
-      ${LOC_VIEW_OPTIONS.map((opt, i) => {
+      ${options.map((opt, i) => {
         const on = opt.value === current;
-        const prevOn = i > 0 && LOC_VIEW_OPTIONS[i - 1].value === current;
+        const prevOn = i > 0 && options[i - 1].value === current;
         const sep = i > 0 ? `<span class="app-subtab-sep${(on || prevOn) ? ' is-off' : ''}">|</span>` : '';
         return `${sep}<button class="app-subtab${on ? ' is-on' : ''}" onclick="${setterFn}('${opt.value}')">${opt.label}</button>`;
       }).join('')}
@@ -12495,10 +12500,29 @@ function _locsViewTabsHtml(current, setterFn) {
 // (buildIosLocalizationsSection/buildMacLocalizationsSection/
 // buildMacFullLocalizationsSection) for exactly what each platform passes.
 function _buildUnifiedLocalizationsSection(p) {
-  const view = state[p.viewStateKey] || 'storePage';
   const langCodes = _iasAllPreviewLangCodes();
   const primary = state.formData.primaryLanguage || 'en';
   const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+
+  // Saved IAPs/Achievements decide whether their tabs show at all (by
+  // request) — computed once, up front, so the tab row's own filter below
+  // and the iaps/achievements branches further down (which need these exact
+  // same lists anyway) can't disagree with each other.
+  const savedProducts = (state[p.iaps.answersKey].iapProducts || []).filter(x => x.collapsed);
+  const savedAchievements = (state[p.achievements.savedKey] || []).filter(x => x.saved);
+  const hasIaps = savedProducts.length > 0;
+  const hasAchievements = savedAchievements.length > 0;
+  const visibleViewOptions = LOC_VIEW_OPTIONS.filter(opt =>
+    (opt.value !== 'iaps' || hasIaps) && (opt.value !== 'achievements' || hasAchievements));
+
+  // A view whose tab just disappeared (its last IAP/Achievement was deleted
+  // from Business Questions/Game Center elsewhere) falls back to Store Page
+  // for THIS render rather than showing a view with no tab left to reselect
+  // it from. Deliberately not written back to state — render functions don't
+  // mutate state in this codebase — so it's recomputed the same way, safely,
+  // on every render until the user (or setIosLocsView etc.) picks a real tab.
+  let view = state[p.viewStateKey] || 'storePage';
+  if ((view === 'iaps' && !hasIaps) || (view === 'achievements' && !hasAchievements)) view = 'storePage';
 
   let field, fieldOptions, itemId, itemOptions, itemSetterName, reviewMode,
       toggleReviewFnName, cardsCfg, settingsHtml, emptyState, cardClass;
@@ -12545,7 +12569,10 @@ function _buildUnifiedLocalizationsSection(p) {
       backOnclick: (lang) => `${p.storePage.backEditFn}('${field}','${lang}',this,event)`,
     };
   } else if (view === 'iaps') {
-    const savedProducts = (state[p.iaps.answersKey].iapProducts || []).filter(x => x.collapsed);
+    // savedProducts computed above, alongside hasIaps — this branch only
+    // ever runs when hasIaps is true (the tab is hidden otherwise), so
+    // emptyState below is unreachable in practice; left in place as a
+    // harmless defensive fallback rather than an invariant to rely on.
     if (!savedProducts.length) {
       emptyState = '<div class="cq-inline-empty">No saved in-app purchases yet — add one from Business Questions.</div>';
     }
@@ -12588,8 +12615,10 @@ function _buildUnifiedLocalizationsSection(p) {
       };
     }
   } else {
-    // achievements
-    const savedAchievements = (state[p.achievements.savedKey] || []).filter(x => x.saved);
+    // achievements — savedAchievements computed above, alongside
+    // hasAchievements. Same note as the iaps branch's own emptyState: this
+    // branch only runs when hasAchievements is true, so it's unreachable in
+    // practice, left as a harmless defensive fallback.
     if (!savedAchievements.length) {
       emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
     }
@@ -12640,8 +12669,11 @@ function _buildUnifiedLocalizationsSection(p) {
     ? `${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}`
     : '';
 
+  // Store Page has no item to pick (only IAPs/Achievements do) — by request
+  // this no longer shows an always-empty "—" placeholder dropdown at all,
+  // rather than rendering one that can never hold a real value.
   const itemDropdown = view === 'storePage'
-    ? swSelect(`${p.idPrefix}-locs-item`, '', [], '_locsNoop', 'auto', 'right', '—')
+    ? ''
     : swSelect(`${p.idPrefix}-locs-item`, itemId, itemOptions, itemSetterName, 'auto', 'right');
   const fieldDropdown = swSelect(`${p.idPrefix}-locs-field`, field, fieldOptions, view === 'storePage' ? p.storePage.fieldSetterFn : (view === 'iaps' ? p.iaps.fieldSetterFn : p.achievements.fieldSetterFn), 'auto', 'right');
 
@@ -12662,7 +12694,7 @@ function _buildUnifiedLocalizationsSection(p) {
 
   return `
     <div class="form-group iap-loc-section">
-      ${_locsViewTabsHtml(view, p.viewSetterFn)}
+      ${_locsViewTabsHtml(view, p.viewSetterFn, visibleViewOptions)}
       <div class="loc-review-header loc-unified-header">
         <div class="loc-review-title-group loc-unified-title-group">
           ${reviewBtnHtml}
