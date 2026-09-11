@@ -8341,6 +8341,14 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   display: flex; align-items: center; gap: 14px;
 }
 
+/* Wraps the × and, on the Mac App Store Product Page Preview only, its
+   language switcher — kept as one flex item so the header's own
+   space-between still puts the pair flush right as a unit, with the
+   dropdown to the ×'s left rather than fighting it for the same corner. */
+.submit-modal-header-actions {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+
 /* BACK, not close — shown only while a panel is flipped open over the Store
    Preview. Left of the platform icon, which is where back navigation lives
    everywhere and is what makes it read as a step out rather than a dismissal.

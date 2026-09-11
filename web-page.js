@@ -2733,7 +2733,27 @@ function edges(key){
   const node = site.querySelector(`.el[data-edit="${key}"]`);
   if(!node) return null;
   const box = node.getBoundingClientRect();
-  const vis = (node.firstElementChild || node).getBoundingClientRect();
+  /* USUALLY one child, and then its box IS the ink. The buy button is the
+     exception since the Stash mark: two siblings, the badge then the label,
+     and the ink runs from the first one's left edge to the second one's
+     right — using just firstElementChild measured the badge alone, which
+     read as a much narrower box than what is actually on screen and threw
+     every aligner that reads `vis` off by the width of the label it dropped.
+     Unioning every child (not just two) keeps this correct however many
+     pieces a box ends up with, and costs nothing when there is only one. */
+  const kids = node.children;
+  let vis;
+  if(kids.length > 1){
+    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+    for(const k of kids){
+      const r0 = k.getBoundingClientRect();
+      l = Math.min(l, r0.left); t = Math.min(t, r0.top);
+      r = Math.max(r, r0.right); b = Math.max(b, r0.bottom);
+    }
+    vis = { left:l, top:t, right:r, bottom:b, width:r-l, height:b-t };
+  } else {
+    vis = (kids[0] || node).getBoundingClientRect();
+  }
   return { key, st:{ title:M.title, logo:M.logo, hook:M.hook, buy:M.buy }[key], node, box, vis };
 }
 // x is the element's centre, so each of these works back from where the ink

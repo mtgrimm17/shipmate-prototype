@@ -4942,7 +4942,14 @@ function renderStepModal() {
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
-      ${isFlipped ? '' : `<button class="task-modal-close" onclick="closeStepModal()">×</button>`}
+      ${isFlipped ? '' : `
+      <div class="submit-modal-header-actions">
+        <!-- The Mac App Store Product Page Preview's language switcher only
+             — its own request, see _macSppLangDropdownHTML. iOS and Mac Full
+             keep theirs in the scrollable body, unchanged. -->
+        ${(platformId === 'macos' && stepId === 'storePreview') ? _macSppLangDropdownHTML() : ''}
+        <button class="task-modal-close" onclick="closeStepModal()">×</button>
+      </div>`}
     </div>
     <div class="submit-modal-scroll" id="step-modal-body">
       ${inferenceBanner}
@@ -7451,6 +7458,33 @@ const LOC_REVIEW_FIELDS = [
    display, App Privacy nutrition labels, the DocuSign-style next-required
    nav bar — works exactly like the App Store's own preview, just against
    Mac App Store's own (or shared, where noted) answers. */
+/* The Mac App Store Store Preview's language switcher lives in the modal's
+   OWN header now (see renderStepModal), to the left of its ×, rather than
+   at the top of the scrollable body the way the iOS/Mac Full previews still
+   show theirs — the header is visible without scrolling, and a preview is
+   read in one language at a time, so the switch belongs beside the controls
+   that are already there rather than buried in the content it changes.
+   Split out to its own function so renderStepModal can reach it without
+   duplicating buildMacStorePreviewSection's option-list logic, since the
+   header is built before (and independently of) the body. */
+function _macSppLangDropdownHTML() {
+  const fd = state.formData;
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
+  const previewLangOptions = previewLangCodes.map(l => ({
+    value: l,
+    label: OB_LANG_NAMES[l] || l,
+    warning: _masLangHasOverLimitField(l),
+  }));
+  const previewLang = _masEffectivePreviewLang();
+  return `<div class="ias-locs-lang-group">
+            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
+          </div>`;
+}
+
 function buildMacStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
@@ -7480,20 +7514,13 @@ function buildMacStorePreviewSection() {
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
   const version    = escHtml(activeVer?.versionNumber || fd.appVersion || '1.0');
 
-  // Language dropdown — same shared primary/supported language list as the
-  // App Store's own preview (see buildStorePreviewSection's own comment);
-  // only the currently-PREVIEWED language (masPreviewLang) and the TEXT
-  // shown for it (state.macAppStoreListing) are independent.
+  // previewLang/previewPrimaryLang — same shared primary/supported language
+  // list as the App Store's own preview (see buildStorePreviewSection's own
+  // comment); only the currently-PREVIEWED language (masPreviewLang) and the
+  // TEXT shown for it (state.macAppStoreListing) are independent. The
+  // dropdown itself now renders in the modal header — see
+  // _macSppLangDropdownHTML, which builds the same option list — not here.
   const previewPrimaryLang = fd.primaryLanguage || 'en';
-  const previewSupportedLangs = (fd.localizations || [])
-    .slice()
-    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
-  const previewLangCodes = [previewPrimaryLang, ...previewSupportedLangs];
-  const previewLangOptions = previewLangCodes.map(l => ({
-    value: l,
-    label: OB_LANG_NAMES[l] || l,
-    warning: _masLangHasOverLimitField(l),
-  }));
   const previewLang = _masEffectivePreviewLang();
   const previewLangName = OB_LANG_NAMES[previewLang] || previewLang;
 
@@ -7870,15 +7897,10 @@ function buildMacStorePreviewSection() {
       <div class="ias-device-wrap">
       <!-- "Mac App Store Preview" badge, "Reflects your submission data" note,
            and the "Localizations" button are all hidden here by request —
-           see the ios buildStorePreviewSection's matching note above. -->
-      <div class="ias-label-row" style="justify-content:flex-end;">
-        <div class="ias-label-right">
-          <div class="ias-locs-lang-group">
-            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
-          </div>
-        </div>
-      </div>
-
+           see the ios buildStorePreviewSection's matching note above. The
+           language dropdown that used to sit here too has moved up into the
+           modal's own header, left of its × — see _macSppLangDropdownHTML
+           and renderStepModal. -->
       <div class="ias-page mac-spp-page">
 
         <!-- ── Header ── -->
