@@ -3251,11 +3251,22 @@ const state = {
     },
   },
 
-  // Binary finding navigation — which finding is currently shown (0-indexed per platform)
+  // Binary finding navigation — which finding is SELECTED (0-indexed per platform).
+  // It used to mean "how many have been got through", which is why nothing could
+  // go back; acknowledgeBinFinding (app.js) has the full note.
   binFindingIdx: { ios: 0, android: 0, steam: 0 },
+
+  // Which findings have been resolved — a Set of indices per platform, so
+  // resolving one no longer implies everything before it is resolved too.
+  binFindingDone: {},
 
   // Whether the "View Fix" panel is currently expanded for the active finding
   binFindingFixExpanded: { ios: false, android: false, steam: false },
+
+  // Improve Your Submission — which suggestion each batch's carousel points at.
+  // Only Store Page carries one here; Binary keeps its own in binFindingIdx
+  // because that index predates this and other code reads it.
+  improveIdx: { storePage: 0 },
 
   // Per-platform screenshot selections: which onboarding shots are selected,
   // plus any platform-specific uploads

@@ -4988,6 +4988,14 @@ function renderStepModal() {
     });
   }
 
+  /* Improve Your Submission's three animations run AFTER the paint, because
+     all three act on elements this render just created — the circle that was
+     clicked, and the grade tab whose letter may have changed. See
+     _impPostRender (app.js) for how a grade RISE is told from a redraw. */
+  if (stepId === 'improveSubmission' && typeof _impPostRender === 'function') {
+    requestAnimationFrame(_impPostRender);
+  }
+
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
 }
@@ -6487,19 +6495,88 @@ function buildImproveSubmissionSection(platformId) {
 
   const spi = state.storePageInsights;
   const ana = state.improveSubmissionAnalysis;
-  const idx = state.improveSubmissionIdx || { storePage: 0 };
 
-  // ── Shared helpers ───────────────────────────────────
-  function _gradeBadge(grade) {
-    const cls = grade && /^[A-D]$/.test(grade)
-      ? `iys-grade-badge iys-grade-badge-${grade}`
-      : 'iys-grade-badge iys-grade-badge-na';
-    return `<span class="${cls}">${escHtml(grade || 'N/A')}</span>`;
+  /* ── BATCH VOCABULARY ────────────────────────────────────────────────────
+     Three batches, each a card with its school-grade tab sticking out from
+     BEHIND it on the right, and a numbered carousel in the header for paging
+     between the suggestions it holds.
+     What replaced what: `_section()` drew a card with the grade as a badge in
+     a right-hand column INSIDE it, and showed one suggestion with answering as
+     the only way to advance. The tab is now a sibling the card sits on top of,
+     and the carousel is how you move — see _mergedStoreItems (app.js) for why
+     the list had to stop shrinking for that to be possible. */
+
+  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+  /* One glyph per batch type, in the header beside the label. They were
+     `display: none` in the first port because the reference hid them there;
+     the compact revision turns them back on, and a 15px mark at 50% opacity is
+     what lets the three headers be told apart at a glance once the cards are
+     tight enough to sit almost on top of each other. */
+  const IV_ICONS = {
+    store: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>',
+    loc:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>',
+    bin:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+  };
+  const _ivIcon = k => `<span class="iv-icon">${IV_ICONS[k] || ''}</span>`;
+
+  /* A LIGHTER CHECK FOR THE CIRCLES. The same glyph serves three places at
+     three sizes — 22px circle, 18px box corner, 14px save button — and one
+     stroke weight cannot suit all of them: 2.6 reads as emphasis on the save
+     button and as a blunt slab inside a 22px circle. The circle gets 1.9. */
+  /* A CHECK CENTRED ON ITS OWN VIEWBOX. The shared glyph's path runs x 4→20 and
+     y 6→17, so its ink centres on (12, 11.5) in a 24-unit box — half a unit
+     high, and 16 units wide out of 24. Dropped into a 22px circle it read as
+     big and sitting slightly high, which is exactly what it was.
+     This one spans x 5→19 and y 6.75→17.25: dead centre on (12, 12) both ways,
+     and narrower, so the circle has room around it. */
+  const TAB_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.25L10 17.25L19 6.75"/></svg>';
+
+  /* THE COPY GLYPH IS THE DESIGN SYSTEM'S, not a new one. CodeBlock.jsx
+     (design-system/_ds_bundle.js) already draws this exact mark beside "Copy
+     Code" — two offset rounded squares, 1.4 stroke on a 16-unit viewBox — so
+     the binary fix panel borrows it rather than inventing a second icon for
+     the same act. Its own weight, not the header icons' 15px/1.9: it sits on a
+     dark code block, alone. */
+  const COPY_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">'
+    + '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/>'
+    + '<path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h1"/></svg>';
+  const COPY_OK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+  /* THE REVERT ARROW IS A FILLED PATH, not a stroked one. It is drawn at 13px,
+     and a 2px stroke on a 24-unit viewBox scales down to barely over one
+     device pixel — the icon was technically present and visually absent, which
+     is exactly how it was reported. This is the reference's own glyph. */
+  const UNDO_SVG = '<svg viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(0.609524,0,0,0.609524,-2.02381,0.380952)"><path d="M6.821,7.091L9.87,6.953L18.62,6.953C20.599,6.953 22.283,7.309 23.672,8.021C25.061,8.733 26.118,9.72 26.842,10.983C27.567,12.246 27.93,13.707 27.93,15.365C27.93,17.031 27.576,18.487 26.868,19.733C26.161,20.979 25.13,21.947 23.776,22.637C22.422,23.327 20.773,23.672 18.828,23.672L15.82,23.672C15.464,23.672 15.178,23.559 14.961,23.333C14.744,23.108 14.635,22.834 14.635,22.513C14.635,22.192 14.744,21.918 14.961,21.693C15.178,21.467 15.464,21.354 15.82,21.354L18.815,21.354C20.299,21.354 21.545,21.087 22.552,20.553C23.559,20.02 24.319,19.293 24.831,18.372C25.343,17.452 25.599,16.406 25.599,15.234C25.599,14.071 25.343,13.04 24.831,12.142C24.319,11.243 23.559,10.543 22.552,10.039C21.545,9.536 20.299,9.284 18.815,9.284L9.87,9.284L6.817,9.146L9.284,11.263L13.047,14.922C13.142,15.026 13.218,15.143 13.275,15.273C13.331,15.404 13.359,15.551 13.359,15.716C13.359,16.055 13.253,16.33 13.04,16.543C12.828,16.756 12.548,16.862 12.201,16.862C11.879,16.862 11.602,16.74 11.367,16.497L3.711,8.984C3.581,8.863 3.483,8.728 3.418,8.581C3.353,8.433 3.32,8.281 3.32,8.125C3.32,7.96 3.353,7.804 3.418,7.656C3.483,7.509 3.581,7.374 3.711,7.253L11.367,-0.26C11.602,-0.503 11.879,-0.625 12.201,-0.625C12.548,-0.625 12.828,-0.519 13.04,-0.306C13.253,-0.093 13.359,0.182 13.359,0.521C13.359,0.686 13.331,0.833 13.275,0.964C13.218,1.094 13.142,1.211 13.047,1.315L9.284,4.987L6.821,7.091Z" fill="currentColor"/></g></svg>';
+  const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+  /* The tab, behind the card. `grade` null means not analysed yet — the tab
+     still renders, because its absence would change the card's geometry (the
+     card is offset 52px to sit in front of it) and a card that jumps sideways
+     when an analysis lands is worse than a grey dash. */
+  function _gradeTab(grade) {
+    const g = (grade || '').toLowerCase();
+    const cls = /^[a-df]$/.test(g) ? ` iv-grade-${g}` : '';
+    return `<div class="iv-grade-tab${cls}"><span class="iv-grade-letter">${escHtml(grade || '–')}</span></div>`;
   }
 
-  function _filterItems(items, ...keys) {
-    const lc = keys.map(k => k.toLowerCase());
-    return (items || []).filter(t => lc.some(k => (t.area || '').toLowerCase().includes(k)));
+  /* One circle per suggestion. `states[i]` is 'open' | 'reviewed' | 'pend', and
+     a reviewed circle shows a check instead of its number — the number is only
+     useful while it is still a destination. */
+  /* `sel = -1` means NOTHING IS SELECTED, which is the collapsed state. A
+     selected circle is a claim that the card below is showing that suggestion;
+     collapsed there is no card below, so the claim is false and the highlight
+     is the only thing still making it. */
+  function _carousel(states, sel, onClickFor) {
+    if (states.length < 2) return '';
+    return `<span class="iv-carousel">${states.map((st, i) => {
+      const cls = 'iv-tab'
+        + (i === sel ? ' sel' : '')
+        + (st === 'reviewed' ? ' reviewed' : '')
+        + (st === 'pend' ? ' pend' : '');
+      return `<button type="button" class="${cls}" onclick="${onClickFor(i)}">`
+           + (st === 'reviewed' ? TAB_CHECK_SVG : (i + 1)) + '</button>';
+    }).join('')}</span>`;
   }
 
   function _allGood(msg) {
@@ -6509,28 +6586,26 @@ function buildImproveSubmissionSection(platformId) {
     </div>`;
   }
 
-  function _loadingBody() {
-    return `<div class="iys-issue-content iys-section-loading">Analyzing…</div>`;
-  }
-
-  // Section card: fixed-height card with content area + footer pinned to bottom
-  function _section(title, grade, contentHTML, footerHTML) {
+  /* The batch shell: tab behind, card in front. `headRight` is the carousel (or
+     nothing), `bodyHTML` everything under the divider. */
+  function _batch(batchCls, grade, iconKey, typeLabel, headExtra, headRight, bodyHTML, cardCls, toggle) {
+    /* The header is the collapse toggle (reference: "batch headers act as a
+       collapse toggle"). `toggle` is the key + whether everything is answered,
+       so the handler knows what the default was before flipping it. */
+    const headClick = toggle
+      ? ` onclick="if(!event.target.closest('.iv-carousel,.iv-binfile'))toggleImproveBatch('${toggle.key}',${!!toggle.allAnswered})"`
+      : '';
     return `
-      <div class="iys-section">
-        <div class="iys-section-body">
-          <div class="iys-section-title">${title}</div>
-          ${contentHTML}
-          ${footerHTML ? `<div class="iys-section-footer">${footerHTML}</div>` : ''}
+      <div class="${batchCls}">
+        ${_gradeTab(grade)}
+        <div class="iv-card${cardCls ? ' ' + cardCls : ''}">
+          <div class="iv-head"${headClick}>
+            <span class="iv-head-left">${_ivIcon(iconKey)}<span class="iv-type">${escHtml(typeLabel)}</span>${headExtra || ''}</span>
+            ${headRight || ''}
+          </div>
+          ${bodyHTML ? `${String(cardCls || '').includes('iv-card-collapsed') ? '' : '<div class="iv-divider"></div>'}${bodyHTML}` : ''}
         </div>
-        <div class="iys-section-grade">${_gradeBadge(grade)}</div>
       </div>`;
-  }
-
-  // ── Grade ordering helper ─────────────────────────────
-  function _worseGrade(a, b) {
-    const ORD = { D:3, C:2, B:1, A:0 };
-    if (!a) return b; if (!b) return a;
-    return (ORD[a] ?? -1) >= (ORD[b] ?? -1) ? a : b;
   }
 
   // ── MERGED STORE PAGE SECTION ─────────────────────────
@@ -6597,81 +6672,195 @@ function buildImproveSubmissionSection(platformId) {
   // Simple truncate for short fields (title, subtitle)
   function _trunc(s, max) { return s.length > max ? s.slice(0, max) + '…' : s; }
 
-  let spPageContent = '', spPageFooter = '';
+  /* THE FULL LIST, not just what is unanswered — the carousel needs a tab per
+     suggestion whether or not it has been dealt with. `_getCurrentMergedStoreItems`
+     above still returns only the open ones, because the grade and the counter
+     ask a different question. */
+  const spAll = (typeof _mergedStoreItems === 'function') ? _mergedStoreItems() : [];
+  const spSel = Math.min(state.improveIdx?.storePage || 0, Math.max(0, spAll.length - 1));
+
+  let spBody = '', spHeadRight = '', spCardCls = '', spAllAnswered = false;
   if (loading) {
-    spPageContent = _loadingBody();
+    spBody = `<div class="iys-issue-content iys-section-loading">Analyzing…</div>`;
   } else if (hasError) {
-    spPageContent = `<div class="iys-issue-content"><div class="iys-issue-title">Analysis failed</div><div class="iys-issue-body">${escHtml(spi?.error || ana?.error)}</div></div>`;
-    spPageFooter  = `<button class="iys-fix-btn" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')"><img src="Assets/SubwooferIcon_Orange.png" onerror="this.style.display='none'">Retry</button>`;
+    spBody = `<div class="iys-issue-content">
+        <div class="iys-issue-title">Analysis failed</div>
+        <div class="iys-issue-body">${escHtml(spi?.error || ana?.error)}</div>
+        <div class="iv-bin-actions">
+          <button type="button" class="imp-cta" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">Retry</button>
+        </div>
+      </div>`;
+  } else if (!spAll.length) {
+    spBody = _allGood('Store page, assets & metadata all look strong');
   } else {
-    const n = mergedItems.length;
-    if (!n) {
-      spPageContent = _allGood('Store page, assets & metadata all look strong');
+    const cur      = spAll[spSel];
+    const answered = cur.status !== 'open';
+    spHeadRight = _carousel(spAll.map(it => it.status === 'open' ? 'open' : 'reviewed'), spSel, i => `selectStoreFix(${i})`);
+
+    const fieldCurrentValue = cur.field === 'description' ? (state.formData.description || '')
+      : cur.field === 'subtitle' ? (state.formData.subtitle || state.formData.description?.slice(0, 80) || '')
+      : cur.field === 'title'    ? (state.formData.title || '')
+      : '';
+    let currentDisplay, fixDisplay;
+    if (cur.field === 'description' && fieldCurrentValue && cur.fixedValue) {
+      const ex = _relevantExcerpt(fieldCurrentValue, cur.fixedValue, 180);
+      currentDisplay = escHtml(ex.current);
+      fixDisplay     = escHtml(ex.fix);
     } else {
-      const cur = mergedItems[0];
-      const hasFix = cur.type === 'sp' && !!cur.fixedValue;
-      const counterHtml = `<span class="iys-section-counter">${currentNum} of ${totalItems}</span>`;
+      currentDisplay = escHtml(_trunc(fieldCurrentValue || '(empty)', 180));
+      fixDisplay     = escHtml(_trunc(cur.fixedValue, 180));
+    }
 
-      if (hasFix) {
-        // Get current stored value for this field
-        const fieldCurrentValue = cur.field === 'description' ? (state.formData.description || '')
-          : cur.field === 'subtitle' ? (state.formData.subtitle || state.formData.description?.slice(0,80) || '')
-          : cur.field === 'title'    ? (state.formData.title || '')
-          : '';
-        // For long description fields, show the excerpt around where the change is
-        let currentDisplay, fixDisplay;
-        if (cur.field === 'description' && fieldCurrentValue && cur.fixedValue) {
-          const ex = _relevantExcerpt(fieldCurrentValue, cur.fixedValue, 180);
-          currentDisplay = escHtml(ex.current);
-          fixDisplay     = escHtml(ex.fix);
-        } else {
-          currentDisplay = escHtml(_trunc(fieldCurrentValue || '(empty)', 180));
-          fixDisplay     = escHtml(_trunc(cur.fixedValue, 180));
-        }
+    /* ONCE ACCEPTED, THE BOX SHOWS WHAT IS ACTUALLY IN THE FIELD — not the
+       suggestion that got it there. They are the same string until you edit
+       it, and then they are not: the pencil writes through to
+       state.acceptedFixes, and drawing cur.fixedValue afterwards made the card
+       show the AI's wording back to a user who had just rewritten it. */
+    if (cur.status === 'applied' && cur.field && state.acceptedFixes?.[cur.field]) {
+      fixDisplay = escHtml(_trunc(state.acceptedFixes[cur.field], 180));
+    }
 
-        // Side-by-side choice boxes — clicking selects that option and advances
-        spPageContent = `
-          <div class="iys-issue-content">
-            ${cur.tag ? `<div class="iys-issue-field-tag">${escHtml(cur.tag)}</div>` : ''}
-            <div class="iys-issue-body">${escHtml(cur.body)}</div>
-            <div class="iys-choice-row">
-              <div class="iys-choice-box iys-choice-current" onclick="keepExistingFix()">
-                <span class="iys-choice-label">Current</span>
-                <div class="iys-choice-value">${currentDisplay}</div>
-              </div>
-              <div class="iys-choice-box iys-choice-fix" onclick="applyStorePageFix()">
-                <span class="iys-choice-label">Shipmate Fix</span>
-                <div class="iys-choice-value">${fixDisplay}</div>
-              </div>
-            </div>
-          </div>`;
-        spPageFooter = counterHtml; // no buttons needed — boxes ARE the action
-      } else {
-        // Informational item — no side-by-side fix to offer, just acknowledge
-        spPageContent = `
-          <div class="iys-issue-content">
-            ${cur.tag ? `<div class="iys-issue-field-tag">${escHtml(cur.tag)}</div>` : ''}
-            <div class="iys-issue-title">${escHtml(cur.title)}</div>
-            <div class="iys-issue-body">${escHtml(cur.body)}</div>
-          </div>`;
-        spPageFooter = `${counterHtml}<button class="btn btn-ghost btn-sm" onclick="keepExistingFix()">Got it</button>`;
-      }
+    /* The chosen box wears .imp-chosen and the other .imp-discarded; the card
+       wears .applied, which is what stops either from reacting to hover. An
+       answered card is a record, not a control. */
+    const curChosen = cur.status === 'kept';
+    const fixChosen = cur.status === 'applied';
+    const check = `<span class="imp-split-check">${CHECK_SVG}</span>`;
+    const tag   = cur.tag || 'store page';
+
+    const undoBtn = answered
+      ? `<button type="button" class="iv-undo" title="Mark unresolved" onclick="resetStoreFix(${spSel})">${UNDO_SVG}</button>`
+      : '';
+
+    /* THE PROBLEM LINE KEEPS ITS HEIGHT WHEN IT IS ANSWERED, which is what the
+       ghost copy is for. Resolved, the line becomes one short sentence; the
+       original problem stays in the DOM at visibility:hidden, stacked in the
+       same grid cell, so the card does not shrink by two lines the instant you
+       choose. Without it, answering a suggestion makes every card below it jump
+       up the page — the worst possible moment for the layout to move, because
+       you are about to read the next one. */
+    const problemText = escHtml([cur.title, cur.body].filter(Boolean).join(' '));
+    const problemHTML = answered
+      ? `<div class="imp-problem imp-problem-resolved">
+           <span class="imp-note-real">Your ${escHtml(String(tag).toLowerCase())} ${fixChosen ? 'looks much stronger now.' : 'is staying as it was.'}</span>
+           <span class="imp-note-ghost" aria-hidden="true">${problemText}</span>
+         </div>`
+      : `<div class="imp-problem">${problemText}</div>`;
+
+    /* THE FIX IS EDITABLE ONCE IT IS CHOSEN. The pencil focuses the value, the
+       check commits it — both are CSS-swapped on :focus-within, so the only
+       thing needed here is the pair of buttons and a contenteditable span.
+       Editable only when chosen: an unanswered suggestion is a proposal to
+       accept or refuse, and letting it be rewritten before it is accepted makes
+       "Shipmate fix" a label for something Shipmate did not write. */
+    const editCtrl = fixChosen
+      ? `<span class="imp-edit-ctrl">
+           <button type="button" class="imp-edit-btn imp-edit-pencil" data-fix-editstart aria-label="Edit">${PENCIL_SVG}</button>
+           <button type="button" class="imp-edit-btn imp-edit-save" data-fix-save aria-label="Save">${CHECK_SVG}</button>
+         </span>`
+      : '';
+
+    /* A BOX IS A <button> WHILE IT IS A CHOICE AND A <div> ONCE IT IS AN
+       ANSWER, and this is not tidiness — it is what makes the pencil work.
+       A `contenteditable` inside a <button> cannot take focus: the button owns
+       the click and its descendants are not focusable, so clicking the pencil
+       focused nothing and the edit could never be committed. Once answered
+       there is nothing left to press anyway; the box is a record, and the only
+       interactive things in it are the edit control and the value itself.
+       The reference does exactly this and it reads as a styling detail until
+       you try to type in one. */
+    const boxTag = answered ? 'div' : 'button';
+    const boxAttrs = answered ? '' : ' type="button"';
+
+    spBody = `
+      <div class="iv-titlerow"><div class="iv-title">${answered ? (fixChosen ? 'Fixed' : 'Kept') : 'Improve'} ${escHtml(tag)}</div>${undoBtn}</div>
+      ${problemHTML}
+      <div class="imp-split">
+        <${boxTag}${boxAttrs} class="imp-split-box imp-split-current${curChosen ? ' imp-chosen' : answered ? ' imp-discarded' : ''}"
+                ${answered ? '' : `onclick="keepExistingFix()"`}>
+          ${curChosen ? check : ''}
+          <span class="imp-split-label">${fixChosen ? 'Previous ' + escHtml(tag) : 'Keep current'}</span>
+          <span class="imp-split-val">${currentDisplay}</span>
+        </${boxTag}>
+        <${boxTag}${boxAttrs} class="imp-split-box imp-split-fix${fixChosen ? ' imp-chosen' : answered ? ' imp-discarded' : ''}"
+                ${answered ? '' : `onclick="applyStorePageFix()"`}>
+          <span class="imp-fix-bubbles"></span>
+          ${editCtrl}
+          <span class="imp-split-label">Shipmate fix</span>
+          <span class="imp-split-val${fixChosen ? ' imp-fix-edit" contenteditable="true" spellcheck="false" data-fix-field="' + escHtml(cur.field || '') + '"' : '"'}>${fixDisplay}</span>
+        </${boxTag}>
+      </div>`;
+    if (answered) spCardCls = 'applied';
+
+    /* EVERY SUGGESTION ANSWERED → the batch collapses to its header plus one
+       line. Collapsed by DEFAULT, not by force: _improveCollapsed (app.js)
+       treats it as an override, so the header toggles it back open and picking
+       a circle opens it too. Derived-only was the first attempt and it locked
+       the batch shut — the condition that collapsed it never stops being true. */
+    spAllAnswered = spAll.every(it => it.status !== 'open');
+    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', spAllAnswered)) {
+      spCardCls = 'iv-card-collapsed';
+      /* THE LINE IS EARNED, NOT A CONSEQUENCE OF BEING SHUT. Collapsing happens
+         for two different reasons — the work finished, or you parked it — and
+         only the first is something the card may claim. Folded away with
+         suggestions still open, it said everything was fine about work nobody
+         had done. Parked, it shows its header and nothing else, which is the
+         honest shape for "not now". */
+      spBody = spAllAnswered ? `<div class="iv-strong-line">Your store page is looking good</div>` : '';
+      spHeadRight = _carousel(spAll.map(it => it.status === 'open' ? 'open' : 'reviewed'), -1, i => `selectStoreFix(${i})`);
     }
   }
-  const spPageSection = _section('Store Page', spGrade, spPageContent, spPageFooter);
+  const spPageSection = _batch('imp-split-batch', spGrade, 'store', 'Store page', '', spHeadRight, spBody, spCardCls,
+                               { key: 'storePage', allAnswered: spAllAnswered });
 
   // ── LOCALIZATION SECTION ──────────────────────────────
   const langRec  = _highestImpactUnselectedLang();
   const langName = langRec.lang ? (OB_LANG_NAMES[langRec.lang] || langRec.lang) : null;
   const locGrade = langRec.lang ? (langRec.total > 50_000_000 ? 'C' : 'B') : 'A';
-  const locContent = langName
-    ? `<div class="iys-issue-content">
-         <div class="iys-issue-field-tag">${escHtml(langName)}</div>
-         <div class="iys-issue-title">Localize into ${escHtml(langName)}</div>
-         <div class="iys-issue-body">~${_obFmtGamers(langRec.total)} potential players in your selected markets speak ${escHtml(langName)} as their primary language. Games localized into the local language see 30–50% more revenue on average vs. English-only releases.</div>
-       </div>`
-    : _allGood('Localization looks strong for your target markets');
-  const locSection = _section('Localization', locGrade, locContent, '');
+  /* A PLAIN PROPOSAL — no carousel and no choice boxes, because there is only
+     ever one language recommendation and its two answers are not two versions
+     of the same field. Accept / Not now, as buttons. */
+  /* ONE PROPOSAL, AND IT COLLAPSES TOO — the question was whether a batch with
+     a single item should. It should, because collapsing does not mean "hide",
+     it means "this is no longer asking anything", and an answered proposal is
+     not asking anything.
+     What it needed was the way back. It had none: no carousel to click and a
+     header that was not a toggle, so answering it was a one-way door — you
+     could see that localization had been dealt with and never see which way
+     you had gone. Its header toggles now like the other two, and reopening
+     shows the proposal again with the answer marked and an undo. */
+  const locDone     = !!state.improveLocAnswered;
+  const locAccepted = state.improveLocAnswered === 'accepted';
+  const locOpen     = langName && !(typeof _improveCollapsed === 'function' && _improveCollapsed('loc', locDone));
+
+  let locBody = '', locCardCls = '';
+  if (!langName) {
+    locBody = _allGood('Localization looks strong for your target markets');
+  } else if (!locOpen) {
+    locCardCls = 'iv-card-collapsed';
+      /* THE LINE IS EARNED, NOT A CONSEQUENCE OF BEING SHUT. Collapsing happens
+         for two different reasons — the work finished, or you parked it — and
+         only the first is something the card may claim. Folded away with
+         suggestions still open, it said everything was fine about work nobody
+         had done. Parked, it shows its header and nothing else, which is the
+         honest shape for "not now". */
+    locBody = locDone
+      ? `<div class="iv-strong-line">${locAccepted ? escHtml(langName) + ' added' : 'Localization handled'}</div>`
+      : '';
+  } else {
+    const undoLoc = locDone
+      ? `<button type="button" class="iv-undo" title="Mark unresolved" onclick="resetLocalizationRec()">${UNDO_SVG}</button>`
+      : '';
+    locBody = `
+      <div class="iv-titlerow"><div class="iv-title">${locDone ? (locAccepted ? 'Adding' : 'Skipped') : 'Localize into'} ${escHtml(langName)}</div>${undoLoc}</div>
+      <div class="imp-problem">~${_obFmtGamers(langRec.total)} potential players in your selected markets speak ${escHtml(langName)} as their primary language. Games localized into the local language see 30–50% more revenue on average vs. English-only releases.</div>
+      ${locDone ? '' : `<div class="iv-bin-actions">
+           <button type="button" class="imp-cta" onclick="answerLocalizationRec(false)">Not now</button>
+           <button type="button" class="imp-cta" data-imp-act="apply" onclick="answerLocalizationRec(true)">Add language</button>
+         </div>`}`;
+  }
+  const locSection = _batch('imp-loc-batch', locDone ? 'A' : locGrade, 'loc', 'Localization', '', '', locBody, locCardCls,
+                            langName ? { key: 'loc', allAnswered: locDone } : null);
 
   // ── BINARY SECTION ────────────────────────────────────
   const binBuild      = state.platformBuilds?.[platformId] || null;
@@ -6686,66 +6875,94 @@ function buildImproveSubmissionSection(platformId) {
   // Build the binary upload pill (same control as card header, using modal variant)
   const binUploadPill = buildBuildDropdown(platformId, true);
 
-  let binContent, binFooter = '';
-  if (!binBuild && !binProcessing) {
-    // No binary yet — show upload control + description
-    binContent = `
-      <div class="iys-bin-row">
-        ${binUploadPill}
-        <div class="iys-issue-body" style="margin-top:8px;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>
-      </div>`;
-  } else if (binProcessing) {
-    // Currently analyzing
-    binContent = `
-      <div class="iys-bin-row">
-        ${binUploadPill}
-        <div class="iys-bin-analyzing">
-          <span class="build-proc-spin"></span>
-          <span>Analyzing binary… this takes about 10 seconds.</span>
-        </div>
-      </div>`;
-  } else if (binRemaining === 0) {
-    // All findings acknowledged
-    binContent = `
-      <div class="iys-bin-row" style="margin-bottom:8px;">${binUploadPill}</div>
-      ${_allGood('No binary issues detected')}`;
-  } else {
-    // Show one finding at a time
-    const cur       = findings[binIdx];
-    const total     = findings.length;
-    const numShown  = binIdx + 1; // 1-indexed
-    const counterHtml = `<span class="iys-section-counter">${numShown} of ${total}</span>`;
+  /* THE FILE CHIP LIVES IN THE HEADER NOW, next to the "Binary" label, instead
+     of a pill row above the content. No caret: the reference draws one because
+     it assumes a list of builds to switch between, and this prototype keeps
+     exactly one build per platform (state.platformBuilds[pid] is a single
+     object). A caret that opens nothing is a promise the card cannot keep — it
+     goes in when the build list does. */
+  const binDone = (typeof _binDone === 'function') ? _binDone(platformId) : new Set();
+  /* THE CHIP IS THE UPLOADER. It showed the build's name and did nothing when
+     pressed, which is the wrong half of a control: the one thing in the header
+     that names the binary was also the obvious place to swap it, and it was
+     inert. It now opens the same file picker the pill below does — the input
+     is its own (a second id would clash with the pill's) and lands in the same
+     handleBuildUpload, so there is one upload path however you reach it. */
+  const binAccept = platformId === 'ios' ? '.ipa'
+                  : (platformId === 'macos' || platformId === 'macos_full') ? '.pkg,.zip'
+                  : platformId === 'android' ? '.apk,.aab'
+                  : '.exe,.zip';
+  const binChipInput = `iv-binfile-input-${platformId}`;
+  const binHeadExtra = binBuild
+    ? `<span class="iv-binfile" title="Change build"
+             onclick="event.stopPropagation();document.getElementById('${binChipInput}').click()">
+         <input type="file" id="${binChipInput}" accept="${binAccept}" hidden
+                onchange="handleBuildUpload('${platformId}', this.files)">
+         <span class="iv-binfile-name">${escHtml(binBuild.name || 'build')}</span>
+       </span>`
+    : binProcessing ? `<span class="iv-binfile-pending">analyzing…</span>` : '';
 
-    // Fix panel (toggled by "View Fix" button)
+  let binBody = '', binHeadRight = '', binCardCls = 'iv-card-binary';
+  const binAllDone = binAnalyzed && findings.every((_, i) => binDone.has(i));
+
+  if (!binBuild && !binProcessing) {
+    binBody = `<div class="iys-bin-row">${binUploadPill}</div>
+      <div class="imp-problem" style="margin-top:12px;margin-bottom:0;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
+  } else if (binProcessing) {
+    binBody = `<div class="iys-bin-analyzing"><span class="build-proc-spin"></span><span>Analyzing binary… this takes about 10 seconds.</span></div>`;
+  } else {
+    const cur = findings[binIdx] || findings[0];
+    const resolved = binDone.has(binIdx);
+    binHeadRight = _carousel(findings.map((_, i) => binDone.has(i) ? 'reviewed' : 'open'), binIdx,
+                             i => `selectBinFinding('${platformId}',${i})`);
+
     const fixPanel = binFixOpen ? `
       <div class="iys-bin-fix-panel">
         <div class="iys-bin-fix-label">${escHtml(cur.fixLabel)}</div>
         ${cur.fixIsCode
-          ? `<pre class="iys-bin-fix-code">${escHtml(cur.fix)}</pre>`
-          : `<div class="iys-bin-fix-desc">${escHtml(cur.fix).replace(/\n/g, '<br>')}</div>`
-        }
+          ? `<div class="iv-code-wrap">
+               <button type="button" class="iv-code-copy" title="Copy" aria-label="Copy"
+                       onclick="impCopyCode(this)">${COPY_SVG}</button>
+               <pre class="iv-code-pre">${escHtml(cur.fix)}</pre>
+             </div>`
+          : `<div class="iys-bin-fix-desc">${escHtml(cur.fix).replace(/\n/g, '<br>')}</div>`}
       </div>` : '';
 
-    binContent = `
-      <div class="iys-bin-row" style="margin-bottom:10px;">${binUploadPill}</div>
-      <div class="iys-issue-content">
-        <div class="iys-issue-title">${escHtml(cur.title)}</div>
-        <div class="iys-issue-body">${escHtml(cur.body)}</div>
-        ${fixPanel}
-      </div>`;
-    binFooter = `
-      ${counterHtml}
-      <div class="iys-section-actions">
-        <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
-                onclick="toggleBinFindingFix('${platformId}')">
-          ${binFixOpen ? 'Hide Fix' : 'View Fix'}
-        </button>
-        <button class="btn btn-ghost btn-sm" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>
-      </div>`;
+    /* Resolved shows the same row with one button on the right, where the
+       second action used to sit — the row keeps its height, so acknowledging a
+       finding doesn't make the card jump. */
+    const actions = resolved
+      ? `<div class="iv-bin-actions iv-bin-actions--end">
+           <button type="button" class="imp-cta" data-imp-act="reset" onclick="unresolveBinFinding('${platformId}',${binIdx})">Mark unresolved</button>
+         </div>`
+      : `<div class="iv-bin-actions">
+           <button type="button" class="imp-cta" onclick="toggleBinFindingFix('${platformId}')">${binFixOpen ? 'Hide fix' : 'View fix'}</button>
+           <button type="button" class="imp-cta" data-imp-act="apply" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>
+         </div>`;
+
+    binBody = `
+      <div class="iv-titlerow"><div class="iv-title">${escHtml(cur.title)}</div></div>
+      <div class="imp-problem">${escHtml(cur.body)}</div>
+      ${fixPanel}
+      ${actions}`;
+
+    if (typeof _improveCollapsed === 'function' && _improveCollapsed('binary', binAllDone)) {
+      binCardCls = 'iv-card-binary iv-card-collapsed';
+      /* NO BUTTON IN THE COLLAPSED SUMMARY. "Mark unresolved" belongs to one
+         finding — it undoes THAT finding — and collapsed there is no finding on
+         screen for it to act on, so it silently targeted whichever index
+         happened to be selected. The way back is a circle: clicking one opens
+         the batch on that finding, which then offers its own button.
+         The reference pairs the line and the button in one row, and that row is
+         right for a resolved finding you are looking at; it is not the summary. */
+      binBody = binAllDone ? `<div class="iv-strong-line">Your binary is looking good</div>` : '';
+      binHeadRight = _carousel(findings.map((_, i) => binDone.has(i) ? 'reviewed' : 'open'), -1, i => `selectBinFinding('${platformId}',${i})`);
+    }
   }
 
-  const binGrade   = !binAnalyzed ? null : binRemaining === 0 ? 'A' : 'B';
-  const binSection = _section('Binary', binGrade, binContent, binFooter);
+  const binGrade   = !binAnalyzed ? null : binAllDone ? 'A' : 'B';
+  const binSection = _batch('imp-binary-batch', binGrade, 'bin', 'Binary', binHeadExtra, binHeadRight, binBody, binCardCls,
+                            { key: 'binary', allAnswered: binAllDone });
 
   // ── Re-analyze footer ─────────────────────────────────
   const hasResults = (spi && !spi.loading) || (ana && !ana.loading);
@@ -6789,11 +7006,19 @@ function buildImproveSubmissionSection(platformId) {
       </div>
     </div>`).join('')}</div>`;
 
+  /* `.improve-v2` is the scope for everything the new design brings — it is on
+     the root rather than on the modal because this step shares the modal with
+     every other one, and none of them should inherit a 104px grade tab.
+     `.iv-blueconfirm` is the reference's own modifier: it makes the carousel
+     circles separated rather than a segmented band, and confirms a chosen fix
+     in the selection blue rather than in purple. Kept because that blue is the
+     app's existing "this is the selected one" (--pill-on-*), so choosing reads
+     the same here as it does in onboarding. */
   return `
-    <div class="iys-wrap">
+    <div class="iys-wrap improve-v2">
       <div class="iys-chunk">
         <div class="iys-chunk-label">Shipmate Guidance</div>
-        <div class="iys-sections-grid">
+        <div class="imp-list iv-blueconfirm">
           ${spPageSection}
           ${locSection}
           ${binSection}

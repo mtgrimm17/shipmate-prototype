@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.73**
+Current version: **v5.85**
 
 ---
 
@@ -132,6 +132,24 @@ A round `!` or `?` is never coloured: it is a tooltip handle, not an alert. And
 inside a chip the badge takes `currentColor` with no fill, because
 `.tooltip-icon`'s own fill is an opaque grey that punches a hole through a
 selected chip.
+
+**A fourth meaning joined them in v5.73: violet is a change Shipmate is
+PROPOSING.** It lives only in Improve Your Submission — `#5436AD` / `#7A00D2`
+fills with `#FBA4FF` text on `.imp-split-fix`, and a violet hover on
+`.imp-cta[data-imp-act="apply"]`. It marks the suggested half of a
+current-vs-fix pair, which none of the three existing colours could say: the
+suggestion is not done, not an alert and not wrong.
+
+The distinction that keeps it honest is **violet proposes, blue confirms**. The
+moment a fix is chosen the box changes to the selection blue (`--pill-on-*`,
+#52BAFF), the same blue an onboarding pill wears when selected — so "this is
+the one you picked" reads identically everywhere in the app. Violet must never
+mark a chosen or applied state, and blue must never mark an unanswered
+suggestion.
+
+The grade tabs bring five more hues (#50F88A / #B4DE52 / #E8974E / #FF7A5C /
+#FF5C5C for A–F). Those are a scale, not meanings, and they are scoped to
+`.iv-grade-tab`. Don't borrow them for anything else.
 
 Two duplications survive and are worth resolving together some day: **two
 ambers** (`#fb923c` in --orange/--orange-soft vs `#FFB86B` everywhere newer)
@@ -278,13 +296,63 @@ across those tracks" and the Console flags it Shadowed. Steam: any of the last
 50 builds can be set live on any branch. The current block still shows one
 build → one destination; the parallel state needs the build list.
 
+### Improve Your Submission — three batches, one axis
+
+`buildImproveSubmissionSection()` (render.js) draws three batches — Store Page,
+Localization, Binary. Each is a `.iv-card` with its school-grade `.iv-grade-tab`
+sticking out from **behind** it (the card is offset `margin-right: 52px`), and a
+numbered carousel in the header. Everything is scoped under `.improve-v2`, on
+the section's own wrapper rather than on the modal, because this step shares
+`.submit-modal` with every other step.
+
+**The list stopped shrinking, and that is what the carousel rests on.**
+`_mergedStoreItems()` (app.js) returns every suggestion with a derived
+`status` — `applied` / `kept` / `open`, read off `acceptedFixes` and
+`dismissedFixes` rather than stored — where it used to filter answered ones
+out. A tab cannot be drawn for an item the list has forgotten. Answering no
+longer moves you either: you pressed a box on the card you were reading.
+
+**One axis for the header.** Type label, file chip, carousel and grade letter
+all centre on the same line, from three tokens with the grade's position
+*derived*:
+
+```css
+--iv-head-h: 26px;      /* the tallest thing a header holds — the file chip */
+--iv-card-pad-top: 8px; /* and the head's margin-bottom, deliberately equal */
+--iv-grade-lh: 27px;
+padding-top: calc(var(--iv-card-pad-top) + (var(--iv-head-h) - var(--iv-grade-lh)) / 2);
+```
+
+Equal top padding and bottom margin is what makes the gap above the header's
+content equal the gap below it. The file chip carries an explicit `height`: left
+to its padding it came out 27.4px and *it* decided the header's height, pushing
+the binary batch off the axis the other two sat on.
+
+**Collapse means "this is no longer asking anything", not "hidden".** It is a
+three-state override (`_improveCollapsed`): undefined follows the work,
+true/false is the header toggle. Derived-only was tried and locked the batch
+shut, because the condition that collapsed it never stops being true. Two rules
+follow: a collapsed batch has **no selected dot** and **no per-item button** —
+both claim a card that is not on screen — and the "looking good" line is only
+printed when everything really is answered. Folded away with work outstanding it
+shows its header and nothing else.
+
+**Four bugs worth not repeating.** A `contenteditable` inside a `<button>`
+cannot take focus, so the edit pencil did nothing — the boxes are `<button>`
+while they are a choice and `<div>` once they are an answer. `focusout` does not
+fire reliably here, so the save button commits directly instead of blurring and
+hoping. `tabNextPulse` and `impFixFloat` are referenced by the reference's CSS
+and defined nowhere in it; both rules were inert until they were written. And a
+stroked icon at 13px on a 24-unit viewBox scales to about one device pixel —
+the revert arrow was present and invisible, and is a filled path now.
+
 ### Versioning — required on every change
 
 Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.73** → next is **v5.74**, then **v5.75**, etc.
+Current version: **v5.85** → next is **v5.86**, then **v5.87**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -296,7 +364,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.73 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v5.85 — add tooltip to age rating cell"`.
 
 ---
 
@@ -350,7 +418,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.73 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.85 — description of change"`.
 
 ---
 
@@ -370,7 +438,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.73, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.85, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and

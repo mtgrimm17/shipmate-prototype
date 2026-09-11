@@ -6642,7 +6642,16 @@ async function runStorePageInsights() {
   const desc  = fd.description || '(no description)';
 
   const subtitle = state.formData.subtitle || '';
-  const prompt = `You are a senior App Store listing consultant. Review this mobile game listing and identify up to 5 HIGH-IMPACT improvements that would meaningfully increase downloads.
+  /* THREE IS THE TARGET, NOT A QUOTA. The ask used to be "up to 5", which in
+     practice came back with one or two — and one suggestion makes the card's
+     carousel pointless, since there is nothing to page between.
+     Asking for a floor is a real trade: push a model for a count and it pads.
+     So the floor is phrased as an aim and the quality rules are explicitly
+     said to outrank it, with the escape hatches kept — fewer than 3 when the
+     listing does not support 3, and an empty array when it is already strong.
+     A listing with a title, a subtitle and a description almost always has
+     three distinct things worth saying, so this should rarely bite. */
+  const prompt = `You are a senior App Store listing consultant. Review this mobile game listing and identify 3 to 5 HIGH-IMPACT improvements that would meaningfully increase downloads.
 
 GAME: "${title}"
 SUBTITLE (current, max 30 chars): "${subtitle}"
@@ -6666,7 +6675,7 @@ Respond ONLY with valid JSON — a JSON array, no markdown, no preamble:
   }
 ]
 
-Return an EMPTY ARRAY [] if no high-impact improvements exist. Return FEWER than 5 if you cannot find 5 distinct, substantial improvements.`;
+Aim for 3 wherever the listing supports it — a title, a subtitle and a description almost always each have one distinct weakness worth naming. But the rules above still win: a suggestion that breaks any of them is worse than a shorter list. Return FEWER than 3 only if you genuinely cannot find 3 distinct, substantial improvements, and an EMPTY ARRAY [] if the listing is already strong.`;
 
   try {
     const res = await fetch(CLAUDE_ENDPOINT, {
@@ -6701,30 +6710,63 @@ Return an EMPTY ARRAY [] if no high-impact improvements exist. Return FEWER than
 
 /* Build the merged store-page suggestion list (max 5) from current analysis state.
    Used by both the render function and applyStorePageFix so they share one source. */
-function _getCurrentMergedStoreItems() {
+/* THE LIST NO LONGER SHRINKS AS YOU ANSWER IT, and that is the change the
+   carousel rests on.
+   This used to filter accepted and dismissed items OUT, so the card always
+   showed what was left and "advancing" was a side effect of answering. That
+   works for a queue and cannot work for a carousel: pressing tab 2 has to
+   reach the second suggestion whether or not you already dealt with it, and a
+   tab cannot be drawn for an item the list has forgotten.
+   So every item survives and carries its own `status`, derived — not stored —
+   from the two records that already existed:
+     • applied — its field is in state.acceptedFixes
+     • kept    — its identity is in state.dismissedFixes
+     • open    — neither
+   Derived rather than persisted on purpose: those two are what the rest of the
+   app writes when a fix is applied or waved off, so a stored status could
+   disagree with them, and the one that disagreed would be this one. */
+function _mergedStoreItems() {
   const spi = state.storePageInsights;
-  const ana = state.improveSubmissionAnalysis;
-  const accepted   = state.acceptedFixes   || {};  // field → accepted value
-  const dismissed  = state.dismissedFixes  || new Set(); // indices into the ORIGINAL array
+  const accepted  = state.acceptedFixes  || {};          // field → accepted value
+  const dismissed = state.dismissedFixes || new Set();   // "title||field" identities
 
-  const spItems = (!spi?.loading && !spi?.error && spi?.issues)
-    ? spi.issues
-        .filter(iss => !!iss.fixedValue)                        // must have a concrete fix
-        .filter(iss => !iss.field || !(iss.field in accepted))  // skip already-accepted
-        .map(iss => ({
-          tag: { subtitle:'Subtitle', description:'Description', title:'Title' }[iss.field] || 'Store Page',
-          title: iss.issue || iss.title || '',
-          body:  iss.suggestion || iss.body || '',
-          fixedValue: iss.fixedValue,
-          field: iss.field || null,
-          type:  'sp',
-        }))
-    : [];
+  if (spi?.loading || spi?.error || !spi?.issues) return [];
 
-  // anaItems are informational only (no fixedValue) — omitted per policy
-  const all = spItems.slice(0, 5);
-  // Remove dismissed items by identity (title + field) — robust against index shifts
-  return all.filter(item => !dismissed.has(item.title + '||' + (item.field || '')));
+  return spi.issues
+    .filter(iss => !!iss.fixedValue)      // must carry a concrete fix to be answerable
+    .slice(0, 5)
+    .map(iss => {
+      const field = iss.field || null;
+      const title = iss.issue || iss.title || '';
+      const status = (field && field in accepted) ? 'applied'
+                   : dismissed.has(title + '||' + (field || '')) ? 'kept'
+                   : 'open';
+      return {
+        tag: { subtitle:'Subtitle', description:'Description', title:'Title' }[iss.field] || 'Store Page',
+        title,
+        body: iss.suggestion || iss.body || '',
+        fixedValue: iss.fixedValue,
+        field,
+        status,
+        type: 'sp',
+      };
+    });
+}
+
+/* Kept as the old name because several call sites still ask "what is left to
+   answer" — the grade, the footer count and the all-clear line. Now that the
+   full list survives, that question is a filter rather than the list itself. */
+function _getCurrentMergedStoreItems() {
+  return _mergedStoreItems().filter(it => it.status === 'open');
+}
+
+/* The suggestion the Store Page carousel is pointing at. Clamped rather than
+   trusted: the analysis can be re-run underneath a stale index. */
+function _selectedStoreItem() {
+  const items = _mergedStoreItems();
+  if (!items.length) return null;
+  const i = Math.min(state.improveIdx?.storePage || 0, items.length - 1);
+  return items[i] || null;
 }
 
 /* Auto-trigger both analyses when the Improve Your Submission step opens */
@@ -6733,7 +6775,12 @@ function _autoRunImproveSubmission(pid) {
   const needsAI = !state.improveSubmissionAnalysis || !!state.improveSubmissionAnalysis.error;
 
   // Reset cycling index and dismissed/accepted on fresh analysis run
-  state.improveSubmissionIdx = { storePage: 0 };
+  /* A fresh analysis produces a different list, so every carousel goes back to
+     its first card and the answers recorded against the old list are dropped.
+     acceptedFixes is deliberately NOT cleared: those values are already written
+     into the real store copy, and forgetting them here would re-offer a fix the
+     user has applied. */
+  state.improveIdx = { storePage: 0 };
   state.dismissedFixes = new Set();
 
   if (needsSP) state.storePageInsights        = { loading: true };
@@ -10463,44 +10510,253 @@ function setMasIapLocField(field) {
   if (state.masIapLocMode === 'review') _masIapLocSyncBackTranslations(_masIapLocEffectiveIapId());
 }
 
-/* Accept the Shipmate-suggested fix for the current item */
+/* ANSWERING NO LONGER MOVES YOU. All three of these used to reset the index to
+   0 afterwards, because the answered item vanished from the list and 0 was the
+   next unanswered one. With the list intact, staying put is the correct
+   behaviour: you pressed a box on the card you were reading, and the card
+   should show you what you just chose. The carousel is how you move. */
+
+/* Accept the Shipmate-suggested fix for the selected item */
 function applyStorePageFix() {
-  if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
-  const items = _getCurrentMergedStoreItems();
-  const i   = state.improveSubmissionIdx.storePage || 0;
-  const cur = items[i];
+  const cur = _selectedStoreItem();
   if (!cur?.fixedValue || cur.type !== 'sp') return;
   _applyFieldValue(cur.field, cur.fixedValue);
-  // After accepting, filter removes this item so index doesn't need to advance
-  state.improveSubmissionIdx.storePage = 0;
+  _clearImproveCollapsed('storePage');
   renderStepModal();
 }
 
-/* Accept a user-edited value for the current item */
+/* Accept a user-edited value for the selected item */
 function acceptEditedFix() {
   const textarea = document.getElementById('iys-edit-textarea');
   if (!textarea) return;
-  const items = _getCurrentMergedStoreItems();
-  const i   = (state.improveSubmissionIdx?.storePage) || 0;
-  const cur = items[i];
+  const cur = _selectedStoreItem();
   if (!cur?.field) return;
   _applyFieldValue(cur.field, textarea.value.trim());
-  if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
-  state.improveSubmissionIdx.storePage = 0;
   renderStepModal();
 }
 
-/* Dismiss the current item WITHOUT applying or improving the grade.
-   Uses the item's title+field identity as the key so index shifts don't break it. */
+/* Keep what is there, WITHOUT applying and without improving the grade.
+   Keyed by the item's title+field identity rather than its position, so a
+   re-analysis that reorders the list cannot silently dismiss a different one. */
 function keepExistingFix() {
   if (!state.dismissedFixes) state.dismissedFixes = new Set();
-  const items = _getCurrentMergedStoreItems();
-  if (items.length > 0) {
-    const cur = items[0];
-    state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
+  const cur = _selectedStoreItem();
+  if (cur) state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
+  _clearImproveCollapsed('storePage');
+  renderStepModal();
+}
+
+/* Put a suggestion back to unanswered — the carousel's tabs need a way back,
+   and so does the footer's Reset. Undoes both records; for an applied fix that
+   also means dropping the accepted value, which is what makes the grade fall
+   again. It does NOT restore the form field: _applyFieldValue wrote the real
+   store copy and may have triggered translation, so putting the old string
+   back is a separate job that has to go through the same path that set it. */
+function resetStoreFix(idx) {
+  const items = _mergedStoreItems();
+  const cur = items[idx != null ? idx : (state.improveIdx?.storePage || 0)];
+  if (!cur) return;
+  state.dismissedFixes?.delete(cur.title + '||' + (cur.field || ''));
+  if (cur.field && state.acceptedFixes) delete state.acceptedFixes[cur.field];
+  renderStepModal();
+}
+
+/* Carousel: point the Store Page card at suggestion `i`.
+   Picking a circle also forces the batch open. Once everything is answered the
+   batch collapses to a single line, and without this the circles would be
+   unreachable — you could see that suggestion 2 was dealt with but never see
+   WHAT you chose. */
+function selectStoreFix(i) {
+  if (!state.improveIdx) state.improveIdx = {};
+  state.improveIdx.storePage = i;
+  _impQueueSelect('.imp-split-batch', i);
+  /* OPEN IT ONLY IF IT IS SHUT. Setting the override unconditionally was a bug
+     worth keeping the note for: every circle click pinned the batch open, so
+     answering the last suggestion could never collapse it again — the default
+     was permanently overruled by a click the user made for another reason. */
+  const allAnswered = _mergedStoreItems().every(it => it.status !== 'open');
+  if (_improveCollapsed('storePage', allAnswered)) _setImproveCollapsed('storePage', false);
+  renderStepModal();
+}
+
+/* COLLAPSE IS AN OVERRIDE, NOT A DERIVED VALUE — three states, and the third
+   is the point. Undefined means "follow the work": a batch with everything
+   answered collapses on its own, which is the right default and the reason
+   this started life as a derived boolean. But derived-only is a trap: once
+   collapsed it can never reopen, because the condition that collapsed it is
+   still true. So a real true/false, set by the header toggle, wins over the
+   default when present. */
+function _improveCollapsed(which, allAnswered) {
+  const o = state.improveCollapsed?.[which];
+  return o === undefined ? allAnswered : o;
+}
+function _setImproveCollapsed(which, v) {
+  if (!state.improveCollapsed) state.improveCollapsed = {};
+  state.improveCollapsed[which] = v;
+}
+/* Hand the batch back to its default. Answering a suggestion calls this so the
+   "everything done → collapse" rule gets to apply again; without it, one
+   earlier click on a circle would keep the batch open forever. */
+function _clearImproveCollapsed(which) {
+  if (state.improveCollapsed) delete state.improveCollapsed[which];
+}
+function toggleImproveBatch(which, allAnswered) {
+  _setImproveCollapsed(which, !_improveCollapsed(which, !!allAnswered));
+  renderStepModal();
+}
+
+/* ── Improve Your Submission: the three presentation behaviours ────────────
+   All three are added as a class AFTER render and removed on animationend.
+   Never baked into the markup: a class in the HTML replays on every unrelated
+   re-render, and this section re-renders on every answer — the selected circle
+   would blink each time any other card changed. */
+function _impPlayOnce(el, cls) {
+  if (!el) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;                       // force a reflow so the animation restarts
+  el.classList.add(cls);
+  el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+}
+
+/* Pop the circle just selected, and nudge the next one still to do. The nudge
+   is the part that earns its keep: after answering, it says where the work
+   continues without moving anything or printing a count. */
+function _impAfterSelect(root, selEl) {
+  if (!root || !selEl) return;
+  _impPlayOnce(selEl, 'iv-tab-pop');
+  const tabs = [...root.querySelectorAll('.iv-tab')];
+  const next = tabs.find(t => !t.classList.contains('sel') && !t.classList.contains('reviewed'));
+  if (next && next !== selEl) _impPlayOnce(next, 'iv-tab-pulse');
+}
+
+/* Bump the grade tab of a batch whose grade just ROSE. Only called on a rise —
+   a grade that fell is not something to celebrate with a pulse, and a bump on
+   every render would fire on answers that changed nothing. */
+function _impBumpGrade(batchSel) {
+  const tab = document.querySelector(`${batchSel} .iv-grade-tab`);
+  _impPlayOnce(tab, 'iv-grade-bump');
+}
+
+/* Remember each batch's grade across renders so a RISE can be told from a
+   redraw. Keyed by batch, read and rewritten by _impPostRender below. */
+const _impLastGrade = {};
+/* The pop has to land on the circle AFTER the re-render, because the element it
+   was clicked on no longer exists — renderStepModal rebuilds the section with
+   innerHTML. So the intent is queued here and _impPostRender plays it. */
+let _impPendingSelect = null;
+function _impQueueSelect(batchSel, idx) { _impPendingSelect = { batchSel, idx }; }
+function _impPostRender() {
+  if (_impPendingSelect) {
+    const { batchSel, idx } = _impPendingSelect;
+    _impPendingSelect = null;
+    const root = document.querySelector(`${batchSel} .iv-carousel`);
+    _impAfterSelect(root, root?.querySelectorAll('.iv-tab')[idx]);
   }
-  if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
-  state.improveSubmissionIdx.storePage = 0;
+  const order = { '–': -1, F: 0, D: 1, C: 2, B: 3, A: 4 };
+  [['.imp-split-batch', 'storePage'], ['.imp-loc-batch', 'loc'], ['.imp-binary-batch', 'binary']]
+    .forEach(([sel, key]) => {
+      const letter = document.querySelector(`${sel} .iv-grade-letter`)?.textContent?.trim();
+      if (!letter) return;
+      const prev = _impLastGrade[key];
+      if (prev !== undefined && (order[letter] ?? -1) > (order[prev] ?? -1)) _impBumpGrade(sel);
+      _impLastGrade[key] = letter;
+    });
+}
+
+/* EDIT CONTROL on a chosen fix. The pencil focuses the contenteditable value
+   and drops the caret at the end; the check commits by blurring, and the CSS
+   swaps pencil→check on :focus-within so neither button needs a state here.
+   `mousedown` and not `click` for the save button, with preventDefault: a click
+   would blur the field first and the button would disappear out from under the
+   press before its handler ever ran. */
+document.addEventListener('click', (e) => {
+  const start = e.target.closest?.('[data-fix-editstart]');
+  if (!start) return;
+  const ed = start.closest('.imp-split-box')?.querySelector('.imp-fix-edit');
+  if (!ed) return;
+  ed.focus();
+  const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+});
+/* COMMITTING WRITES THE REAL FIELD. Leaving the edit in the DOM only would make
+   it a lie the next render erases — the value goes back through
+   _applyFieldValue, the same path that accepted the fix in the first place, so
+   the store copy and everything it propagates to stay in step. */
+function _impCommitFixEdit(ed) {
+  if (!ed) return;
+  const field = ed.dataset.fixField;
+  const value = ed.textContent.trim();
+  if (!field || !value) return;
+  if (state.acceptedFixes?.[field] === value) return;   // nothing changed
+  _applyFieldValue(field, value);
+  renderStepModal();
+}
+
+/* THE SAVE BUTTON SAVES. It used to only blur and leave the writing to a
+   `focusout` listener — which never fired here, so the edit lived in the DOM
+   until the next render quietly threw it away. Relying on a side effect of
+   losing focus to persist a value was the mistake; the button that says it
+   commits now does the committing, and blur is just tidying up afterwards.
+   `mousedown` with preventDefault, not `click`: a click would blur the field
+   first and the button — hidden again by the :focus-within rule — would vanish
+   out from under the press before its handler ever ran. */
+document.addEventListener('mousedown', (e) => {
+  const save = e.target.closest?.('[data-fix-save]');
+  if (!save) return;
+  e.preventDefault();
+  const ed = save.closest('.imp-split-box')?.querySelector('.imp-fix-edit');
+  ed?.blur();
+  _impCommitFixEdit(ed);
+});
+
+/* And the same on the way out by any other route — clicking elsewhere, tabbing
+   away. Kept as well as the button, not instead of it: this is the fallback,
+   not the mechanism. */
+document.addEventListener('focusout', (e) => {
+  if (e.target.closest?.('.imp-fix-edit')) _impCommitFixEdit(e.target.closest('.imp-fix-edit'));
+});
+
+/* Copy a binary fix's code block. The button swaps to a check for a moment and
+   then swaps back — the same 1.4s acknowledgement CodeBlock.jsx uses, so the
+   two copy buttons in the app behave alike as well as look alike.
+   The icon HTML is stashed on the element rather than rebuilt, because the
+   original markup is the only place that knows which glyph this button had. */
+function impCopyCode(btn) {
+  const pre = btn?.parentElement?.querySelector('.iv-code-pre');
+  if (!pre) return;
+  try { navigator.clipboard.writeText(pre.textContent); } catch (e) {}
+  if (btn.dataset.busy) return;
+  btn.dataset.busy = '1';
+  const original = btn.innerHTML;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  btn.style.color = '#50F88A';
+  setTimeout(() => {
+    btn.innerHTML = original;
+    btn.style.color = '';
+    delete btn.dataset.busy;
+  }, 1400);
+}
+
+/* The localization proposal has one answer and it is recorded, not applied.
+   "Add language" does NOT add the language here: that is a real change to
+   state.formData.localizations with translation consequences, and it belongs to
+   the Localization step that owns those. This marks the recommendation as
+   answered so the batch stops asking, which is all the card is entitled to do.
+   Left deliberately as the smaller lie of the two — silently mutating the
+   user's language list from a suggestion card would be the larger one. */
+function answerLocalizationRec(accepted) {
+  state.improveLocAnswered = accepted ? 'accepted' : 'dismissed';
+  _clearImproveCollapsed('loc');   // hand the batch back to its "done → collapse" default
+  renderStepModal();
+}
+
+/* Put the proposal back to unanswered. It is the only undo in this batch and it
+   is complete, because answering never changed anything outside this card —
+   see answerLocalizationRec for why "Add language" records rather than applies. */
+function resetLocalizationRec() {
+  state.improveLocAnswered = null;
+  _clearImproveCollapsed('loc');
   renderStepModal();
 }
 
@@ -10508,10 +10764,7 @@ function keepExistingFix() {
 function _onFixEdit(textarea) {
   const btn = document.getElementById('iys-accept-btn');
   if (!btn) return;
-  const items = _getCurrentMergedStoreItems();
-  const i   = (state.improveSubmissionIdx?.storePage) || 0;
-  const cur = items[i];
-  const original = cur?.fixedValue || '';
+  const original = _selectedStoreItem()?.fixedValue || '';
   if (textarea.value.trim() !== original.trim()) {
     btn.textContent = 'Accept New';
     btn.setAttribute('onclick', 'acceptEditedFix()');
@@ -10521,14 +10774,8 @@ function _onFixEdit(textarea) {
   }
 }
 
-/* Advance to next item without applying a fix (legacy — kept for compatibility) */
-function _nextImprovementItem(section) {
-  if (!state.improveSubmissionIdx) state.improveSubmissionIdx = { storePage: 0 };
-  if (section === 'storePage') {
-    state.improveSubmissionIdx.storePage = (state.improveSubmissionIdx.storePage || 0) + 1;
-  }
-  renderStepModal();
-}
+/* `_nextImprovementItem` is gone with the index it bumped. It advanced a queue,
+   and there is no queue any more — selectStoreFix(i) is how the card moves. */
 
 function _screenshotSrc(s) {
   if (!s) return '';
@@ -16054,11 +16301,48 @@ function _refreshBuildUI(pid) {
 /* ── Binary findings navigation ─────────────────────────────────────────────── */
 
 // Advance to the next binary finding (called by "Got it" button)
+/* A SET OF RESOLVED FINDINGS, NOT A HIGH-WATER MARK.
+   `binFindingIdx` used to mean "how many you have got through" and this bumped
+   it, so the card always showed the first unresolved one and there was no way
+   back — which is fine for a queue and impossible for a carousel. It now means
+   "which one you are looking at", and what has been dealt with lives in
+   `binFindingDone[pid]`, a Set of indices.
+   Two consequences worth stating: you can revisit a resolved finding, and
+   "resolved" no longer implies "everything before it is resolved too". */
+function _binDone(pid) {
+  if (!state.binFindingDone) state.binFindingDone = {};
+  if (!(state.binFindingDone[pid] instanceof Set)) state.binFindingDone[pid] = new Set();
+  return state.binFindingDone[pid];
+}
+
 function acknowledgeBinFinding(pid) {
-  if (!state.binFindingIdx) state.binFindingIdx = { ios: 0, android: 0, steam: 0 };
-  state.binFindingIdx[pid] = (state.binFindingIdx[pid] || 0) + 1;
+  const i = state.binFindingIdx?.[pid] || 0;
+  _binDone(pid).add(i);
+  _clearImproveCollapsed('binary');
   if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
   state.binFindingFixExpanded[pid] = false;
+  reRenderStepModal();
+}
+
+/* Put a finding back to unresolved — the "Mark unresolved" action. */
+function unresolveBinFinding(pid, i) {
+  _binDone(pid).delete(i != null ? i : (state.binFindingIdx?.[pid] || 0));
+  _clearImproveCollapsed('binary');
+  reRenderStepModal();
+}
+
+/* Carousel: point the Binary card at finding `i`. */
+function selectBinFinding(pid, i) {
+  if (!state.binFindingIdx) state.binFindingIdx = {};
+  state.binFindingIdx[pid] = i;
+  _impQueueSelect('.imp-binary-batch', i);
+  if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
+  state.binFindingFixExpanded[pid] = false;
+  // Same reason as selectStoreFix — and the same correction: only if it is shut,
+  // or the click pins it open and the auto-collapse can never fire again.
+  const findings = (typeof BIN_FINDINGS !== 'undefined') ? (BIN_FINDINGS[pid] || BIN_FINDINGS.ios) : [];
+  const allDone = findings.length > 0 && findings.every((_, k) => _binDone(pid).has(k));
+  if (_improveCollapsed('binary', allDone)) _setImproveCollapsed('binary', false);
   reRenderStepModal();
 }
 
