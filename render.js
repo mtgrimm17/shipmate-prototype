@@ -282,11 +282,12 @@ function buildDistributionTab() {
            just below read the primary/supported languages chosen here, so
            filling this in first now also reads as the natural order) -->
       <div class="ob-section" id="ob-sec-localization">
-        ${/* Repeats the sub-tab on purpose — see the note in Distribution,
-              below. Section id/element ids here (ob-sec-localization,
+        ${/* Header removed by request — the sub-tab above already reads
+              "Languages", and repeating it here was judged redundant.
+              Section id/element ids here (ob-sec-localization,
               ob-lang-list-wrap, etc.) predate the "Languages" rename and
-              stay as-is; only the rendered header text changed. */''}
-        <div class="ob-section-hdr">${t('ob.section.localization') || 'Languages'}</div>
+              stay as-is; only the rendered header text changed (previously)
+              and is now gone entirely. */''}
 
         ${/* By request, this one line is styled as a Shipmate Tip (.sw-tip-box
               — see buildAndroidStubSection for the same plain icon+text usage)
@@ -308,18 +309,10 @@ function buildDistributionTab() {
 
       <!-- ── Distribution ── -->
       <div class="ob-section" id="ob-sec-distribution">
-        ${/* THE HEADER REPEATS THE SUB-TAB, AND STAYS ANYWAY — a decision, not
-              an oversight, so please don't "tidy" it away.
-              It is genuinely redundant: the tab above says Distribution, and
-              Basic info has no .ob-section-hdr at all (its fields label
-              themselves). These three are left over from when this was one
-              long scrolling form, where they were the only way to tell the
-              sections apart. We removed all three, looked at it, and put them
-              back: the panel opening straight onto a line of grey prose gives
-              it no anchor, and the repetition costs less than that.
+        ${/* Header removed by request (matches Languages, above) — the
+              sub-tab above already reads "Distribution".
               "Compliance Questions" keeps its own header for a different
               reason — no tab names it at all. */''}
-        <div class="ob-section-hdr">${t('ob.section.distribution') || 'Distribution'}</div>
 
         ${/* PROSE, NOT A BOX — the same .asset-guidance the Assets section
               uses. Distribution and Assets open the same way: a heading, a
@@ -1165,7 +1158,9 @@ function buildAssetsTab() {
               guidance had the same problem: it described reformatting
               screenshots for each store and said nothing about the sorting,
               which is the part that does the work. */''}
-        ${/* Repeats the sub-tab on purpose — see the note in Distribution. */''}
+        ${/* Repeats the sub-tab on purpose — unlike Distribution and Languages
+              (whose matching headers were removed by request), Assets keeps
+              its header. */''}
         <div class="ob-section-hdr">${t('ob.section.assets') || 'Assets'}</div>
         <div class="asset-guidance">${t('ob.assets.guidance')}</div>
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
@@ -2264,9 +2259,12 @@ function buildGdBox(idx, mod, inner) {
 /* ── Game Details tab: sub-tabs (Game Details / Distribution / Localization / Assets) ── */
 const GD_SUBS = [
   { id: 'gamedetails',  label: 'Basic info' },
+  { id: 'localization', label: 'Languages' },
   { id: 'distribution', label: 'Distribution' },
-  { id: 'localization', label: 'Localization' },
   { id: 'assets',       label: 'Assets' },
+  // Order is Basic info -> Languages -> Distribution -> Assets, by request:
+  // Languages moved before Distribution so its presets (which read the
+  // primary/supported languages chosen here) come after they're filled in.
   // Content rating moved out of Game Details — it now lives as a dedicated step
   // on each platform card (Submission) and inside each product-page preview.
 ];
