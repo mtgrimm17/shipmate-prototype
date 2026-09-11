@@ -51,22 +51,25 @@ const EVENODD_ICONS = new Set(['android', 'steam', 'egs', 'xbox', 'nintendo']);
 
 // Color and white asset variants — keyed by platform ID.
 // Missing entries fall back to the inline SVG from PLATFORM_ICONS.
+//
+// psn/xbox/nintendo used to be listed here too, each pointing at a raster
+// logo (PlayStation.jpg — a flat JPG, no transparency at all — plus Xbox.png
+// and Nintendo.png). By request, all three now render the monochrome
+// PLATFORM_ICONS SVG paths instead (state.js — already correctly configured
+// for it: EVENODD_ICONS includes xbox/nintendo, and PLATFORM_ICON_SCALE.psn
+// tunes its size), matching the treatment already used everywhere else these
+// icons need to sit in a single flat color (currentColor) rather than as
+// full-color/photographic artwork.
 const PLATFORM_ASSET = {
   ios:      'Assets/Platform_Icons/AppStore.png',
   android:  'Assets/Platform_Icons/GooglePlay.webp',
   steam:    'Assets/Platform_Icons/Steam.png',
-  psn:      'Assets/Platform_Icons/PlayStation.jpg',
-  xbox:     'Assets/Platform_Icons/Xbox.png',
-  nintendo: 'Assets/Platform_Icons/Nintendo.png',
 };
 // White-variant: user's actual PNG files for platforms where the PNG has a
 // transparent background — CSS filter whitens the opaque logo pixels.
-// Platforms not listed here (ios, android, steam) fall back to inline SVG paths.
-const PLATFORM_ASSET_WHITE = {
-  psn:      'Assets/Platform_Icons/PlayStation_white.png', // pre-processed transparent bg
-  xbox:     'Assets/Platform_Icons/Xbox.png',              // transparent bg → filter whitens
-  nintendo: 'Assets/Platform_Icons/Nintendo.png',          // transparent bg → filter whitens
-};
+// Platforms not listed here (ios, android, steam, psn, xbox, nintendo — see
+// PLATFORM_ASSET above) fall back to inline SVG paths.
+const PLATFORM_ASSET_WHITE = {};
 
 // Per-platform visual scale tweaks (applied on top of the requested size).
 const PLATFORM_ICON_SCALE = {
@@ -273,13 +276,14 @@ function buildDistributionTab() {
         <div class="ob-section-hdr">${t('ob.section.distribution') || 'Distribution'}</div>
 
         ${/* PROSE, NOT A BOX — the same .asset-guidance the Assets section
-              uses. Distribution, Localization and Assets all open the same
-              way now: a heading, a line of explanation, then the controls.
-              The box is what made this read as an alert and then as something
-              clickable; an outlined box with an icon was still a box. It also
-              goes FIRST here, as it already did in Localization — it used to
-              sit between the preset pills and the country list, which put the
-              advice after the control it advises about. */''}
+              uses. Distribution and Assets open the same way: a heading, a
+              line of explanation, then the controls. The box is what made
+              this read as an alert and then as something clickable; an
+              outlined box with an icon was still a box. It also goes FIRST
+              here, as it used to sit between the preset pills and the country
+              list, which put the advice after the control it advises about.
+              (Localization's own opening line, below, is a deliberate,
+              scoped exception to this — see its own note, further down.) */''}
         <div class="asset-guidance">${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</div>
 
         <div id="ob-dist-map-container" class="world-map-container" style="margin-bottom:14px;"></div>
@@ -307,7 +311,18 @@ function buildDistributionTab() {
         ${/* Repeats the sub-tab on purpose — see the note in Distribution. */''}
         <div class="ob-section-hdr">${t('ob.section.localization') || 'Localization'}</div>
 
-        <div class="asset-guidance">${t('tip.distribution.languages') || 'On average, games see 30–50% more revenue in markets where they support the local language vs. English-only releases. The highest-impact localization for your selected markets is highlighted below.'}</div>
+        ${/* By request, this one line is styled as a Shipmate Tip (.sw-tip-box
+              — see buildAndroidStubSection for the same plain icon+text usage)
+              rather than the prose treatment (.asset-guidance) Distribution's
+              and Assets' own opening lines still use — see the "PROSE, NOT A
+              BOX" note above, in Distribution: that reasoning still holds for
+              those, this is a deliberate, scoped exception for this one. */''}
+        <div class="sw-tip-box" style="margin-bottom:16px;">
+          <div class="sw-tip-box-row">
+            ${SM_INFO_ICON}
+            <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
+          </div>
+        </div>
 
         <div id="ob-lang-list-wrap">${buildObLangList()}</div>
       </div>
@@ -747,23 +762,36 @@ function buildObCountryChips() {
   const topRows   = IOS_COUNTRIES.slice(0, 10).map(buildRow).join('');
   const extraRows = IOS_COUNTRIES.slice(10).map(buildRow).join('');
 
+  // The whole Market section (this function's entire return value, below the
+  // header) collapses behind the header by default — by request, so picking
+  // a preset doesn't immediately dump 190+ country rows into view. Clicking
+  // the header (toggleObMarketSection, app.js) expands/collapses it, same
+  // hidden-class mechanism as the "Show N more markets" sub-toggle just below
+  // it. Only exception: the Custom preset defaults it OPEN, since picking
+  // Custom is itself a request to go manually pick countries — collapsed by
+  // default there would just make the user re-open it immediately.
+  const marketDefaultOpen = fd.distributionPreset === 'custom';
+
   return `
-    <div class="ob-dist-table-header">
+    <div class="ob-dist-table-header ob-dist-table-toggle" id="ob-market-toggle-header"
+         onclick="toggleObMarketSection()">
       <span class="ob-dist-col-market">Market</span>
-      <span class="ob-dist-col-count">Gamers (approx)</span>
+      <span class="ob-dist-col-count">Gamers (approx) <span class="ob-market-chevron" id="ob-market-chevron">${marketDefaultOpen ? _chevUp : _chevDown}</span></span>
     </div>
-    <div class="ob-dist-country-list" id="ob-dist-country-list">${topRows}</div>
-    ${extraCount > 0 ? (() => {
-      const hiddenSelected = IOS_COUNTRIES.slice(10).filter(c => selected.has(c.code)).length;
-      const badge = hiddenSelected > 0
-        ? `<span class="ob-dist-hidden-badge" title="${hiddenSelected} selected market${hiddenSelected > 1 ? 's' : ''} below — expand to review">${hiddenSelected} selected ↓</span>`
-        : '';
-      return `
-    <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
-      ${_chevDown} Show ${extraCount} more markets${badge}
-    </button>
-    <div class="ob-dist-country-list hidden" id="ob-dist-country-list-extra">${extraRows}</div>`;
-    })() : ''}`;
+    <div class="ob-dist-market-body${marketDefaultOpen ? '' : ' hidden'}" id="ob-dist-market-body">
+      <div class="ob-dist-country-list" id="ob-dist-country-list">${topRows}</div>
+      ${extraCount > 0 ? (() => {
+        const hiddenSelected = IOS_COUNTRIES.slice(10).filter(c => selected.has(c.code)).length;
+        const badge = hiddenSelected > 0
+          ? `<span class="ob-dist-hidden-badge" title="${hiddenSelected} selected market${hiddenSelected > 1 ? 's' : ''} below — expand to review">${hiddenSelected} selected ↓</span>`
+          : '';
+        return `
+      <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
+        ${_chevDown} Show ${extraCount} more markets${badge}
+      </button>
+      <div class="ob-dist-country-list hidden" id="ob-dist-country-list-extra">${extraRows}</div>`;
+      })() : ''}
+    </div>`;
 }
 
 /* ── Legacy alias ── */
@@ -773,10 +801,10 @@ function buildObCountryList() { return buildObCountryChips(); }
 /* The icon for a platform tile. The prototype's own mark when it has one,
    otherwise this repo's, wrapped by hand rather than through platformIcon().
 
-   Why not platformIcon(): for ids that appear in PLATFORM_ASSET — psn among
-   them — it returns an <img>, and a raster image can't inherit currentColor,
-   so the icon would stay grey while its tile turned blue. Wrapping the path
-   data directly keeps every tile on one behaviour.
+   Why not platformIcon(): for ids that appear in PLATFORM_ASSET it returns
+   an <img>, and a raster image can't inherit currentColor, so the icon would
+   stay grey while its tile turned blue. Wrapping the path data directly
+   keeps every tile on one behaviour.
 
    Note the viewBoxes differ: the prototype's marks are drawn on 64, this
    repo's on 24, so the fallbacks read a little heavier. If you have the real
@@ -847,6 +875,15 @@ function buildObPlatTilesHTML() {
     { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
     { id:'egs',     iconKey:'epic',        label:'Epic',        comingSoon: true  },
     { id:'psn',     iconKey:'playstation', label:'PlayStation', comingSoon: true  },
+    // Nintendo and Xbox: grayed out / unselectable (comingSoon, same lock
+    // treatment as Epic/PlayStation above), added by request. Neither has a
+    // measured SM_TILE_MARKS entry (platform-icons.js) or a PROTO_PLATFORM_ICONS
+    // one, so iconKey falls straight through protoTileIcon() to this repo's
+    // own PLATFORM_ICONS['nintendo']/['xbox'] SVG path (state.js) — already
+    // monochrome/currentColor and evenodd-correct (EVENODD_ICONS, above),
+    // same as every other tile here.
+    { id:'nintendo', iconKey:'nintendo',   label:'Nintendo',    comingSoon: true  },
+    { id:'xbox',     iconKey:'xbox',       label:'Xbox',        comingSoon: true  },
   ];
   const lockSVG = `<svg class="ob-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
   /* The prototype's tile, markup for markup:
@@ -865,9 +902,12 @@ function buildObPlatTilesHTML() {
      (see style.css's .pg-8, added alongside .pg-6/.pg-7/.pg-3/.pg-2). The
      bare .platform-grid's repeat(4,1fr) is only the fallback.
 
-     HIDDEN_PLATFORMS (further up this file) now hides Mac App Store Full, so
-     7 of the 8 tiles show — hence pg-7 (was pg-8 when nothing was hidden).
-     See the git history around "hide"/"un-hide Mac App Store Full platform". */
+     HIDDEN_PLATFORMS (further up this file) now hides Mac App Store Full,
+     and Nintendo/Xbox were added as two more (grayed-out/comingSoon) tiles
+     on top of the original eight, so 9 of the 10 PLATFORMS_OB entries show —
+     hence pg-9 (was pg-7 with Mac App Store Full hidden and no Nintendo/Xbox,
+     pg-8 before that with nothing hidden). See the git history around
+     "hide"/"un-hide Mac App Store Full platform". */
   const tiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id)).map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -882,7 +922,7 @@ function buildObPlatTilesHTML() {
                     onclick="toggleOnboardingPlatform('${id}')"
                     data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="platform-grid pg-7">${tiles}</div>`;
+  return `<div class="platform-grid pg-9">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -3663,7 +3703,9 @@ function renderDashboard() {
                Epic's export dragging its invisible artboard rect along.
                smMarkFor handles the id aliases (egs→epic, macos→ios) and
                returns null for the two platforms with no measured art yet
-               (Xbox, Nintendo), which fall through to the PNG. */
+               (Xbox, Nintendo), which fall through to platformIcon() — now
+               their own monochrome PLATFORM_ICONS SVG path too (see
+               PLATFORM_ASSET's own note, top of file), not a raster PNG. */
             const icon  = smMarkFor(pid, 18)
               || ((typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '');
             if (COMING_SOON_PLATFORMS.has(pid)) {
@@ -7188,15 +7230,16 @@ function buildStorePreviewSection() {
 
   return `
     <div class="ias-device-wrap">
-      <div class="ias-label-row">
-        <span class="ias-label-badge">
-          <svg viewBox="0 0 16 16" fill="none" width="11" height="11" style="margin-right:4px;vertical-align:-1px;"><path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm.75 10.25h-1.5v-5h1.5v5zm0-6.5h-1.5v-1.5h1.5v1.5z" fill="currentColor"/></svg>
-          App Store Preview
-        </span>
+      <!-- "App Store Preview" badge, "Reflects your submission data" note, and
+           the "Localizations" button are all hidden here by request — only
+           the preview-language dropdown remains. justify-content is forced to
+           flex-end inline (rather than editing .ias-label-row's own
+           space-between, which Steam's own preview header — further below,
+           buildStoreFlipSection — still relies on) so the lone remaining
+           control stays right-aligned instead of collapsing to the start. -->
+      <div class="ias-label-row" style="justify-content:flex-end;">
         <div class="ias-label-right">
-          <span class="ias-label-note">Reflects your submission data</span>
           <div class="ias-locs-lang-group">
-            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">Localizations</button>
             ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
           </div>
         </div>
@@ -7774,15 +7817,12 @@ function buildMacStorePreviewSection() {
 
   return `
     <div class="ias-device-wrap">
-      <div class="ias-label-row">
-        <span class="ias-label-badge">
-          <svg viewBox="0 0 16 16" fill="none" width="11" height="11" style="margin-right:4px;vertical-align:-1px;"><path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm.75 10.25h-1.5v-5h1.5v5zm0-6.5h-1.5v-1.5h1.5v1.5z" fill="currentColor"/></svg>
-          Mac App Store Preview
-        </span>
+      <!-- "Mac App Store Preview" badge, "Reflects your submission data" note,
+           and the "Localizations" button are all hidden here by request —
+           see the ios buildStorePreviewSection's matching note above. -->
+      <div class="ias-label-row" style="justify-content:flex-end;">
         <div class="ias-label-right">
-          <span class="ias-label-note">Reflects your submission data</span>
           <div class="ias-locs-lang-group">
-            <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">Localizations</button>
             ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
           </div>
         </div>
@@ -8028,21 +8068,15 @@ function _macGcAchievementExpandedRow(a) {
 
 function buildMacGameCenterSection() {
   const achievements = state.macGameCenterAchievements || [];
-  // "Localizations" — sits opposite the "Achievements" label, above the
-  // list itself, mirroring Business Questions' own "Localizations"/"IAP
-  // Locs" button (buildIapSection above) both in placement and mechanism:
-  // it flips the whole Game Center step modal over to Achievement
-  // Localizations (openStorePreviewSection('macos','achievementLocalizations')
-  // — see buildStorePreviewFlipSection's 'achievementLocalizations' target,
-  // further above) rather than rendering that section inline beneath the
-  // Achievements list. Only shown once there's at least one SAVED
-  // achievement (persistent `.saved` flag, NOT `.collapsed`) to localize — same guard
-  // buildMacAchievementLocalizationsSection itself uses, so the button
-  // never opens an empty section.
-  const hasSavedAchievements = achievements.some(a => a.saved);
-  const achLocsBtn = hasSavedAchievements
-    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('macos','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
-    : '';
+  // "Localizations" button hidden here by request. It used to sit opposite
+  // the "Achievements" label (mirroring Business Questions' own button,
+  // buildIapSection above), flipping the whole Game Center step modal over
+  // to Achievement Localizations (openStorePreviewSection('macos',
+  // 'achievementLocalizations') — see buildStorePreviewFlipSection's
+  // 'achievementLocalizations' target, further above). Mac App Store Full's
+  // own Game Center (buildMacFullGameCenterSection, further below) still has
+  // it.
+  const achLocsBtn = '';
   return `
     <div class="form-group iap-products-group" style="margin-bottom:8px;">
       <div class="iap-products-label-row">
@@ -8162,10 +8196,9 @@ function _iosGcAchievementExpandedRow(a) {
 
 function buildIosGameCenterSection() {
   const achievements = state.iosGameCenterAchievements || [];
-  const hasSavedAchievements = achievements.some(a => a.saved);
-  const achLocsBtn = hasSavedAchievements
-    ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('ios','achievementLocalizations')" title="Manage translations for your achievements' text">Localizations</button>`
-    : '';
+  // Localizations button hidden here by request (see buildMacGameCenterSection's
+  // matching note above).
+  const achLocsBtn = '';
   return `
     <div class="form-group iap-products-group" style="margin-bottom:8px;">
       <div class="iap-products-label-row">
@@ -9989,12 +10022,12 @@ function buildIapSection(pid = 'ios') {
   // routes 'macos_full' to buildMacFullIapLocalizationsSection (reading its
   // own independent state.macFullSubmitAnswers.iapProducts, never iOS's).
   const hasSavedIapProducts = iapProducts.some(p => p.collapsed);
-  // Mac App Store's own button reads just "Localizations" (by request) —
-  // iOS and Mac App Store Full keep the original "IAP Locs" label, since
-  // buildIapSection is shared across all three platforms (pid) and only Mac
-  // App Store's Business Questions was asked to change.
-  const iapLocsBtnLabel = pid === 'macos' ? 'Localizations' : 'IAP Locs';
-  const iapLocsBtn = hasSavedIapProducts
+  // Hidden for iOS and Mac App Store's own Business Questions (by request) —
+  // Mac App Store Full keeps its "IAP Locs" button, since buildIapSection is
+  // shared across all three platforms (pid) and only those two were asked
+  // to have it hidden.
+  const iapLocsBtnLabel = 'IAP Locs';
+  const iapLocsBtn = (hasSavedIapProducts && pid === 'macos_full')
     ? `<button class="ias-all-locs-btn" type="button" onclick="openStorePreviewSection('${pid}','iapLocalizations')" title="Manage translations for your IAP products' Name and Description">${iapLocsBtnLabel}</button>`
     : '';
 

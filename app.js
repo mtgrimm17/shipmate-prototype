@@ -14878,6 +14878,20 @@ function setCQSingle(qid, optIdx) {
 // Multi-select checkbox toggle
 /* ── Country chip expand/collapse ────────────────────── */
 
+// Collapses/expands the whole Market section (buildObCountryChips, render.js)
+// behind its own header — separate from, and a level above, toggleObDistExpand
+// below (which only reveals the markets past the first 10, and only once this
+// outer section is already open). Defaults collapsed unless the Custom preset
+// is selected (see buildObCountryChips' own marketDefaultOpen note) — this
+// function only handles the user's own manual toggling after that.
+function toggleObMarketSection() {
+  const body    = document.getElementById('ob-dist-market-body');
+  const chevron = document.getElementById('ob-market-chevron');
+  if (!body) return;
+  const nowHidden = body.classList.toggle('hidden');
+  if (chevron) chevron.innerHTML = nowHidden ? _chevDown : _chevUp;
+}
+
 function toggleObDistExpand(btn) {
   const extraList = document.getElementById('ob-dist-country-list-extra');
   if (!extraList) return;
