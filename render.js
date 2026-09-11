@@ -12467,6 +12467,29 @@ function _locsSettingsMenu(cfg) {
       </div>`;
 }
 
+// Renders the Store Page/IAPs/Achievements sub-tabs that replace the unified
+// Localizations step's own former leftmost dropdown (by request) — same
+// three LOC_VIEW_OPTIONS entries that dropdown used to list. Sits top-left,
+// directly under the modal's own title/subtitle ("Localizations"/"Mac App
+// Store" etc., .submit-modal-header, renderStepModal) since this is the
+// first thing _buildUnifiedLocalizationsSection renders. Reuses the Game
+// Details sub-tab row's own .app-subtab/.app-subtab-sep pill language
+// (renderAppSubnav) via .loc-view-tabs, dialed down the same way
+// .cr-toggle-bar already dials it down for Content Rating's Unanswered/All
+// filter (buildCRTogglePill, above) — a secondary in-modal nav, not the
+// app's primary one.
+function _locsViewTabsHtml(current, setterFn) {
+  return `
+    <div class="loc-view-tabs">
+      ${LOC_VIEW_OPTIONS.map((opt, i) => {
+        const on = opt.value === current;
+        const prevOn = i > 0 && LOC_VIEW_OPTIONS[i - 1].value === current;
+        const sep = i > 0 ? `<span class="app-subtab-sep${(on || prevOn) ? ' is-off' : ''}">|</span>` : '';
+        return `${sep}<button class="app-subtab${on ? ' is-on' : ''}" onclick="${setterFn}('${opt.value}')">${opt.label}</button>`;
+      }).join('')}
+    </div>`;
+}
+
 // Builds one platform's unified Localizations section. `p` carries every
 // platform-specific name this needs — see the three thin wrappers below
 // (buildIosLocalizationsSection/buildMacLocalizationsSection/
@@ -12622,21 +12645,33 @@ function _buildUnifiedLocalizationsSection(p) {
     : swSelect(`${p.idPrefix}-locs-item`, itemId, itemOptions, itemSetterName, 'auto', 'right');
   const fieldDropdown = swSelect(`${p.idPrefix}-locs-field`, field, fieldOptions, view === 'storePage' ? p.storePage.fieldSetterFn : (view === 'iaps' ? p.iaps.fieldSetterFn : p.achievements.fieldSetterFn), 'auto', 'right');
 
+  // By request: the "Localizations" title text is gone (the sub-tabs below
+  // already say which section this is), the leftmost Store Page/IAPs/
+  // Achievements dropdown is now the .loc-view-tabs sub-tab row above the
+  // header instead of a swSelect in .iap-loc-selectors-row, the Review/All
+  // locs toggle moved from .loc-review-header-controls to sit left of the
+  // settings gear in .loc-review-title-group, and the item/field dropdowns
+  // moved from their own row into .loc-review-header-controls (right-aligned
+  // by .loc-review-header's existing justify-content:space-between) beside
+  // that same Review button and gear. .loc-unified-header/-title-group scope
+  // the gap tweak below to just this page — every standalone Localization
+  // Review/IAP Localizations/Achievement Localizations page (which still
+  // pairs a text title with the gear, and the toggle button alone on the
+  // right) keeps its original 4px title-to-gear spacing untouched.
+  const reviewBtnHtml = `<button class="loc-review-toggle-btn" onclick="${toggleReviewFnName}()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>`;
+
   return `
     <div class="form-group iap-loc-section">
-      <div class="loc-review-header">
-        <div class="loc-review-title-group">
-          <div class="loc-review-title">Localizations</div>
+      ${_locsViewTabsHtml(view, p.viewSetterFn)}
+      <div class="loc-review-header loc-unified-header">
+        <div class="loc-review-title-group loc-unified-title-group">
+          ${reviewBtnHtml}
           ${settingsHtml}
         </div>
         <div class="loc-review-header-controls">
-          <button class="loc-review-toggle-btn" onclick="${toggleReviewFnName}()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+          ${itemDropdown}
+          ${fieldDropdown}
         </div>
-      </div>
-      <div class="iap-loc-selectors-row">
-        ${swSelect(`${p.idPrefix}-locs-view`, view, LOC_VIEW_OPTIONS, p.viewSetterFn, 'auto', 'right')}
-        ${itemDropdown}
-        ${fieldDropdown}
       </div>
       ${emptyState || `<div class="${wrapperClass}${wrapperModifiers}">${cardsHtml}</div>`}
     </div>`;

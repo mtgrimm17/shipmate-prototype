@@ -5673,6 +5673,28 @@ body.viewing-splash .app-subnav { display: none; }
    dropdown on the main preview above this section. */
 .loc-review-header-controls { display: flex; align-items: center; gap: 10px; }
 
+/* Unified Game Details - Localizations step only (App Store/Mac App Store/
+   Mac App Store Full — _buildUnifiedLocalizationsSection, render.js). By
+   request this page dropped its "Localizations" title text from
+   .loc-review-title-group and put the Review/All locs toggle button there
+   instead, beside the settings gear — a button needs more breathing room
+   next to the gear than the plain-text title did, so this scoped class
+   widens just this page's gap rather than every standalone Localization
+   Review/IAP Localizations/Achievement Localizations page's (which still
+   pairs a text title with the gear at the original 4px). */
+.loc-unified-title-group { gap: 10px; }
+
+/* Same unified step: the Store Page/IAPs/Achievements sub-tabs that replace
+   its former leftmost dropdown (LOC_VIEW_OPTIONS/_locsViewTabsHtml,
+   render.js), sitting top-left, directly under the modal's own title/
+   subtitle. Same .app-subtab/.app-subtab-sep pill language as the Game
+   Details sub-tab row (renderAppSubnav), dialed down the same way
+   .cr-toggle-bar already dials it down for Content Rating's Unanswered/All
+   filter, below — a secondary in-modal nav, not the app's primary one. */
+.loc-view-tabs { display: flex; align-items: center; width: fit-content; margin-bottom: 14px; }
+.loc-view-tabs .app-subtab { font-size: 12px; padding: 6px 14px; }
+.loc-view-tabs .app-subtab-sep { font-size: 12px; }
+
 /* "Automatically translated fields" settings — gear icon beside the
    "Localization Review" heading + its dropdown of checkboxes. Reuses the
    .sw-select-wrap/.loc-dropdown shell (see swSelect above) for the open/
