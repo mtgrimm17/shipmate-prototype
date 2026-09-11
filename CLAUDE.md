@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.54**
+Current version: **v5.72**
 
 ---
 
@@ -284,7 +284,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.54** → next is **v5.55**, then **v5.56**, etc.
+Current version: **v5.72** → next is **v5.73**, then **v5.74**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -296,7 +296,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.54 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v5.72 — add tooltip to age rating cell"`.
 
 ---
 
@@ -350,7 +350,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.54 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.72 — description of change"`.
 
 ---
 
@@ -370,7 +370,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.54, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.72, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and

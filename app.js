@@ -166,20 +166,19 @@ function setView(view) {
 
   if (state.activeView !== view) scrollContentToTop();
 
-  /* DEMO BUILDS, TOPPED UP HERE, and the location is the point.
-     seedDemoBuilds started life at project creation and then also in
-     activatePlatform(), and it still missed: a platform can become active
-     without going through either (the onboarding tiles are a third path), so
-     its card opened with no release line and no track picker at all — which is
-     exactly the bug you hit. Rather than chase a fourth entry point, this is
-     the same argument the comment above makes about closeStepModal: every
-     route into a view goes through setView, so a top-up here cannot be
-     forgotten by whatever adds the next way of activating a platform.
-     seedDemoBuilds refuses to overwrite a build that already exists, so this
-     is idempotent and never touches a binary you actually dropped in. */
-  if (typeof seedDemoBuilds === 'function') {
+  /* BUILD STATE, ENSURED HERE, and the location is the point.
+     This began life at project creation and then also in activatePlatform(),
+     and it still missed: a platform can become active without going through
+     either (the onboarding tiles are a third path), so its card opened with
+     state.platformBuilds undefined. Rather than chase a fourth entry point,
+     this is the same argument the comment above makes about closeStepModal:
+     every route into a view goes through setView, so it cannot be forgotten by
+     whatever adds the next way of activating a platform.
+     It only fills in missing objects, so it is idempotent and never touches a
+     binary you actually dropped in. */
+  if (typeof ensureBuildState === 'function') {
     const proj = state.projects.find(p => p.id === state.activeProjectId);
-    if (proj) seedDemoBuilds(proj, [...state.activePlatforms]);
+    if (proj) ensureBuildState(proj);
   }
   state.activeView = view;
   document.getElementById('splashview')?.classList.add('hidden');   // leave the splash
@@ -994,9 +993,8 @@ function completeOnboarding() {
     state.activeVersionId = ver.id;
     // Keep state.activePlatforms — already populated by platform-select tab in onboarding
     state.platformStepStatus = makeEmptyPlatformSteps();
-    // Demo only, and only on the first project: gives the cards a build to
-    // talk about so the release line isn't empty on open. See seedDemoBuilds.
-    seedDemoBuilds(proj, [...state.activePlatforms]);
+    // Build counters start at 0 here, so the first upload is build 1.
+    ensureBuildState(proj);
   }
 
   state.onboardingComplete = true;
@@ -3328,13 +3326,13 @@ function activatePlatform(platformId) {
   // "add a platform" entry point needs the same one-time seed.
   if (platformId === 'macos') seedMacAppStoreListing();
   if (platformId === 'macos_full') seedMacFullAppStoreListing();
-  /* And the same for the demo build, on the same reasoning: a platform added
-     here never went through onboarding, so nothing had seeded it and its card
-     opened with no release line at all. seedDemoBuilds refuses to overwrite a
-     real build, so calling it per activation is safe. */
+  /* And the build state, on the same reasoning: a platform added here never
+     went through onboarding, so nothing had guaranteed the objects its card
+     reads. It only fills in what is missing, so calling it per activation is
+     safe. */
   {
     const proj = state.projects.find(p => p.id === state.activeProjectId);
-    if (proj && typeof seedDemoBuilds === 'function') seedDemoBuilds(proj, [platformId]);
+    if (proj && typeof ensureBuildState === 'function') ensureBuildState(proj);
   }
   renderDashboard();
   // Shippy's platform item lives in the Details view, which renderDashboard()

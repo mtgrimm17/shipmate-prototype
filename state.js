@@ -2468,53 +2468,31 @@ function makeBuildCounters() {
   return { ios: 0, android: 0, xbox: 0, psn: 0, nintendo: 0 };
 }
 
-/* DEMO SEED — gives a brand-new project a binary already uploaded, so the
-   card's release line has something to show on open and in a demo. Without it
-   the block is invisible until you drag a file in, because it only renders
-   when a build exists (see buildReleaseBlock).
+/* NOTHING IS SEEDED ANY MORE — this only guarantees the three shapes exist.
 
-   What it fakes and what it doesn't, deliberately:
-     • The COUNTER is seeded high (42 on iOS). Forty-two builds of the same
-       version is ordinary iOS life, so this is the one number that can be
-       generous without lying.
-     • The VERSION is not touched. It stays whatever the project actually is —
-       v1.0 for a game you just onboarded. Seeding "v1.0.4" onto a project
-       created thirty seconds ago would read as history that never happened.
-     • The DATE is two days back, which is what makes the line worth having:
-       a build that landed just now needs no reminding.
-   Called once, at first-project creation. */
-function seedDemoBuilds(proj, platformIds) {
-  const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
-  const SEED = {
-    ios:        { count: 42, track: 'testflight_internal', file: 'GoApeShip-1.0.ipa'  },
-    macos:      { count: 12, track: 'testflight_internal', file: 'GoApeShip-1.0.pkg'  },
-    macos_full: { count: 12, track: 'testflight_internal', file: 'GoApeShip-1.0.pkg'  },
-    android:    { count: 18, track: 'internal',            file: 'goapeship-1.0.aab'  },
-    steam:      { count:  7, track: 'beta',                file: 'GoApeShip_win64.zip' },
-  };
-  state.platformBuilds  = state.platformBuilds  || {};
-  state.selectedTracks  = state.selectedTracks  || {};
-  proj.buildCounters    = proj.buildCounters    || makeBuildCounters();
+   It has lost two jobs in two rounds, and both are worth recording because the
+   reasoning was the same each time: a demo that starts mid-story has nothing
+   left to demonstrate.
+     • It used to stamp a finished binary onto every platform, so a brand-new
+       project opened with Upload Build already ticked green and a file name in
+       the pill. The whole point of the card is dropping a binary in and
+       watching the step complete.
+     • It then still seeded the COUNTER high (42 on iOS), so the first real
+       upload minted 43 — true to how a shipped game looks, but it made the
+       first build of a brand-new project claim forty-two ancestors. Counting
+       from 1 is the honest start, and it is also the clearer demo: you watch
+       the number begin.
+   The VERSION was never touched in either round; it stays whatever the project
+   actually is.
 
-  for (const pid of platformIds) {
-    const seed = SEED[pid];
-    if (!seed) continue;                       // consoles and Web: nothing to fake
-    /* NEVER OVERWRITE A REAL BUILD. This is called from two places now — at
-       first-project creation for the platforms picked during onboarding, and
-       from activatePlatform() for anything added later — so it has to be safe
-       to call twice. Without this guard, activating a platform would stamp a
-       fake build over a binary the user had actually dropped in. */
-    if (state.platformBuilds[pid]) continue;
-    proj.buildCounters[pid] = seed.count;
-    state.platformBuilds[pid] = {
-      name: seed.file, size: 48 * 1024 * 1024,
-      buildNumber: seed.count,
-      uploadedAt: Date.now() - TWO_DAYS,
-    };
-    /* Deliberately NOT seeding a track. The build is fake history; the track
-       is a decision, and choosing it for you both hides the placeholder and
-       unlocks Submit without you having said where to send it. */
-  }
+   What remains is real work despite the name: the three call sites (project
+   creation, setView, activatePlatform) all assume these exist before they
+   touch them, and makeBuildCounters() is what starts every counter at 0 so
+   mintBuildNumber returns 1 on the first upload. */
+function ensureBuildState(proj) {
+  state.platformBuilds = state.platformBuilds || {};
+  state.selectedTracks = state.selectedTracks || {};
+  proj.buildCounters   = proj.buildCounters   || makeBuildCounters();
 }
 
 // Build numbers / versionCodes are global, monotonic, project-lifetime counters —

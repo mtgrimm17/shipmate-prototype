@@ -5063,9 +5063,21 @@ body.viewing-splash .app-subnav { display: none; }
    which looks like the line vanishing for no reason.
    Owned by the container it is not a hover target at all: it is the edge of
    the list and it never moves. Same colour and the same 12px insets as the
-   dividers below, because it is the same line, not a section rule. */
+   dividers below, because it is the same line, not a section rule.
+
+   AND ONLY WHEN THERE IS SOMETHING ABOVE IT TO SEPARATE — hence the adjacent
+   sibling, `.card-release-block +`. A divider divides two things; with no
+   build uploaded yet buildReleaseBlock renders nothing at all, so the list
+   opens directly under the card's header and the line would be closing a gap
+   that has nothing on its far side. That is the card's first frame now, which
+   is exactly when a stray rule is most visible.
+   This works because the block, when it exists, is the list's immediate
+   previous sibling in all four card builders — head, release block, steps. If
+   anything is ever inserted between them, this selector goes quiet and the
+   line disappears; put it back by naming the new neighbour, not by dropping
+   the condition. */
 .ios-step-cards { position: relative; }
-.ios-step-cards::before {
+.card-release-block + .ios-step-cards::before {
   content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px;
   background: rgba(255, 255, 255, .07);
 }
