@@ -796,8 +796,8 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'localizations',    label: 'Localizations'                                },
+      { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
@@ -826,8 +826,8 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'localizations',    label: 'Localizations'                                },
+      { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },

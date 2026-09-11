@@ -12239,11 +12239,14 @@ function buildMacFullIapLocalizationsSection() {
 
 /* ── Unified "Localizations" step (App Store / Mac App Store / Mac App
    Store Full) ────────────────────────────────────────────────────────────
-   A NEW combined-view step (state.js PLATFORMS.{ios,macos,macos_full}.steps,
-   id 'localizations') that sits right after Product Page Preview and is
-   only shown once state.formData.localizations (the languages selected in
-   Game Details - Localization) is non-empty (see _visiblePlatformSteps,
-   state.js). Opening it takes the user to one of three per-platform
+   A combined-view step (state.js PLATFORMS.{ios,macos,macos_full}.steps,
+   id 'localizations') shown only once state.formData.localizations (the
+   languages selected in Game Details - Localization) is non-empty (see
+   _visiblePlatformSteps, state.js). Sits between Content Rating and Product
+   Page Preview for App Store/Mac App Store (moved there per request — it
+   originally sat right after Product Page Preview, which is still where
+   Mac App Store Full's own copy of this step sits). Opening it takes the
+   user to one of three per-platform
    sections below — buildIosLocalizationsSection / buildMacLocalizationsSection
    / buildMacFullLocalizationsSection — reached via renderStepModal's
    'localizations' dispatch branches, further below in this file.
