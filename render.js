@@ -247,18 +247,64 @@ function buildAboutTab() {
 /* Tab 1: Distribution */
 function buildDistributionTab() {
   const fd = state.formData;
-  const knownPresets = ['everywhere','english_only','minimize_regulation','custom'];
+  // Primary language, for the "{lang} only" preset below — same lookup
+  // buildObLangList uses for its own primary-language display name.
+  const primaryLang     = fd.primaryLanguage || 'en';
+  const primaryLangName = OB_LANG_NAMES[primaryLang] || primaryLang;
+  // OB_LANG_NAMES keys can carry a region suffix (zh-TW, pt-BR, es-419);
+  // IOS_COUNTRIES' own `lang` field never does (see _obLangBaseCode, app.js,
+  // which this same base-code logic mirrors for the actual country lookup).
+  const primaryLangBase = primaryLang.split('-')[0];
+  const showPrimaryLangPreset = primaryLangBase !== 'en';
+
+  const knownPresets = ['everywhere','english_only','minimize_regulation','primary_lang_only','selected_languages','custom'];
   const dPreset = knownPresets.includes(fd.distributionPreset) ? fd.distributionPreset : null;
 
   const distPresets = [
     { id:'everywhere',          label: t('ob.dist.preset.everywhere') || 'Everywhere' },
     { id:'english_only',        label: t('ob.dist.preset.english_only') || 'English only' },
+    // "{lang} only" — hidden when the primary language IS English, since
+    // that would just be a second "English only" pill (_obCountriesForPreset,
+    // app.js, would compute the identical country set either way).
+    ...(showPrimaryLangPreset ? [{ id:'primary_lang_only', label: t('ob.dist.preset.primary_lang_only', { lang: primaryLangName }) || `${primaryLangName} only` }] : []),
+    // Primary + every supported language from the Languages step, combined —
+    // see _obCountriesForPreset's 'selected_languages' case (app.js) for how
+    // "spoken" is resolved to a country list.
+    { id:'selected_languages',  label: t('ob.dist.preset.selected_languages') || 'Selected languages' },
     { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'Minimize regulation' },
     { id:'custom',              label: t('ob.dist.preset.custom') || 'Custom' },
   ];
 
   return `
     <div class="ob-form">
+
+      <!-- ── Languages ── (moved before Distribution, by request — presets
+           just below read the primary/supported languages chosen here, so
+           filling this in first now also reads as the natural order) -->
+      <div class="ob-section" id="ob-sec-localization">
+        ${/* Repeats the sub-tab on purpose — see the note in Distribution,
+              below. Section id/element ids here (ob-sec-localization,
+              ob-lang-list-wrap, etc.) predate the "Languages" rename and
+              stay as-is; only the rendered header text changed. */''}
+        <div class="ob-section-hdr">${t('ob.section.localization') || 'Languages'}</div>
+
+        ${/* By request, this one line is styled as a Shipmate Tip (.sw-tip-box
+              — see buildAndroidStubSection for the same plain icon+text usage)
+              rather than the prose treatment (.asset-guidance) Distribution's
+              and Assets' own opening lines still use — see the "PROSE, NOT A
+              BOX" note below, in Distribution: that reasoning still holds for
+              those, this is a deliberate, scoped exception for this one. */''}
+        <div class="sw-tip-box" style="margin-bottom:16px;">
+          <div class="sw-tip-box-row">
+            ${SM_INFO_ICON}
+            <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
+          </div>
+        </div>
+
+        <div id="ob-lang-list-wrap">${buildObLangList()}</div>
+      </div>
+
+      <div class="ob-sec-divider"></div>
 
       <!-- ── Distribution ── -->
       <div class="ob-section" id="ob-sec-distribution">
@@ -282,8 +328,8 @@ function buildDistributionTab() {
               outlined box with an icon was still a box. It also goes FIRST
               here, as it used to sit between the preset pills and the country
               list, which put the advice after the control it advises about.
-              (Localization's own opening line, below, is a deliberate,
-              scoped exception to this — see its own note, further down.) */''}
+              (Languages' own opening line, above, is a deliberate, scoped
+              exception to this — see its own note, further up.) */''}
         <div class="asset-guidance">${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</div>
 
         <div id="ob-dist-map-container" class="world-map-container" style="margin-bottom:14px;"></div>
@@ -302,29 +348,6 @@ function buildDistributionTab() {
         </div>
 
         <div id="ob-country-list-wrap">${buildObCountryChips()}</div>
-      </div>
-
-      <div class="ob-sec-divider"></div>
-
-      <!-- ── Localization ── -->
-      <div class="ob-section" id="ob-sec-localization">
-        ${/* Repeats the sub-tab on purpose — see the note in Distribution. */''}
-        <div class="ob-section-hdr">${t('ob.section.localization') || 'Localization'}</div>
-
-        ${/* By request, this one line is styled as a Shipmate Tip (.sw-tip-box
-              — see buildAndroidStubSection for the same plain icon+text usage)
-              rather than the prose treatment (.asset-guidance) Distribution's
-              and Assets' own opening lines still use — see the "PROSE, NOT A
-              BOX" note above, in Distribution: that reasoning still holds for
-              those, this is a deliberate, scoped exception for this one. */''}
-        <div class="sw-tip-box" style="margin-bottom:16px;">
-          <div class="sw-tip-box-row">
-            ${SM_INFO_ICON}
-            <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
-          </div>
-        </div>
-
-        <div id="ob-lang-list-wrap">${buildObLangList()}</div>
       </div>
 
     </div>`;

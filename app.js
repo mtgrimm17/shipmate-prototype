@@ -3988,14 +3988,65 @@ function toggleLang(el, code) {
 
 const OB_REGULATORY_EXCLUSIONS = ['CN', 'KR', 'JP', 'DE', 'BE', 'VN', 'ZA'];
 
+// Normalizes a Languages-step code (state.formData.primaryLanguage /
+// .localizations — which can carry a region suffix: zh-TW, pt-BR, es-419)
+// down to the bare code IOS_COUNTRIES' own `lang` field uses. One further
+// alias: OB_LANG_NAMES' Norwegian is 'nb' (Bokmål), but IOS_COUNTRIES keys
+// Norway as 'no' — with no 'nb' entry, 'nb' would otherwise silently match
+// zero countries.
+function _obLangBaseCode(code) {
+  const base = (code || '').split('-')[0];
+  return base === 'nb' ? 'no' : base;
+}
+
 function _obCountriesForPreset(preset) {
+  const fd = state.formData;
   switch (preset) {
     case 'everywhere':
     case 'global':              return IOS_COUNTRIES.map(c => c.code);
     case 'english_only':        return IOS_COUNTRIES.filter(c => c.lang === 'en').map(c => c.code);
+    // "{lang} only" pill (buildDistributionTab, render.js — hidden there
+    // when the primary language is English, so this case is only ever
+    // reached with a non-English primary in normal use).
+    case 'primary_lang_only': {
+      const base = _obLangBaseCode(fd.primaryLanguage || 'en');
+      return IOS_COUNTRIES.filter(c => c.lang === base).map(c => c.code);
+    }
+    // Primary language plus every supported language from the Languages
+    // step (state.formData.localizations), combined.
+    case 'selected_languages': {
+      const bases = new Set([
+        _obLangBaseCode(fd.primaryLanguage || 'en'),
+        ...(fd.localizations || []).map(_obLangBaseCode),
+      ]);
+      return IOS_COUNTRIES.filter(c => bases.has(c.lang)).map(c => c.code);
+    }
     case 'minimize_regulation': return IOS_COUNTRIES.filter(c => !OB_REG_TIPS[c.code]).map(c => c.code);
     default:                    return state.formData.selectedCountries || IOS_COUNTRIES.map(c => c.code);
   }
+}
+
+// Distribution presets 'primary_lang_only' and 'selected_languages' are
+// defined in terms of the Languages step's current primary/supported
+// languages (_obCountriesForPreset above) — so every place that mutates
+// primaryLanguage/localizations (selectLocPrimary, toggleObLang,
+// addLangFromSearch, further below) calls this afterward to keep a
+// currently-active one of those two presets in sync, rather than leaving
+// its pill highlighted against a now-stale country selection. Re-snapping
+// the preset id (not just leaving it as the same id) covers the one edge
+// case that needs it: switching primary language to English hides the
+// "{lang} only" pill entirely (buildDistributionTab) — english_only is
+// checked first below, so the identical resulting country set relabels to
+// that pill instead of leaving 'primary_lang_only' active with no matching
+// button to highlight.
+function _obResyncDistPresetIfLangDriven() {
+  const preset = state.formData.distributionPreset;
+  if (preset !== 'primary_lang_only' && preset !== 'selected_languages') return;
+  state.formData.selectedCountries = _obCountriesForPreset(preset);
+  const namedPresets = ['everywhere', 'english_only', 'minimize_regulation', 'primary_lang_only', 'selected_languages'];
+  const matched = namedPresets.find(p => _selectionMatchesPreset(p));
+  state.formData.distributionPreset = matched || 'custom';
+  _refreshObDistSection();
 }
 
 function setObDistPreset(preset) {
@@ -4027,8 +4078,12 @@ function toggleObCountry(code) {
   const idx = arr.indexOf(code);
   if (idx === -1) arr.push(code); else arr.splice(idx, 1);
 
-  // Snap preset label to whichever named preset matches the new selection, else 'custom'
-  const namedPresets = ['everywhere', 'english_only', 'minimize_regulation'];
+  // Snap preset label to whichever named preset matches the new selection,
+  // else 'custom'. english_only is checked before primary_lang_only so a
+  // non-English-primary game whose manually-picked countries happen to be
+  // English-speaking still snaps to the pill that's actually shown (see
+  // _obResyncDistPresetIfLangDriven's own note on the same ordering).
+  const namedPresets = ['everywhere', 'english_only', 'minimize_regulation', 'primary_lang_only', 'selected_languages'];
   const matched = namedPresets.find(p => _selectionMatchesPreset(p));
   state.formData.distributionPreset = matched || 'custom';
 
@@ -4218,6 +4273,9 @@ function selectLocPrimary(lang) {
   }
   closeAllDropdowns();
   updateObLangListWrap();
+  // Keep a language-driven Distribution preset ('primary_lang_only' /
+  // 'selected_languages') in sync with the new primary language.
+  _obResyncDistPresetIfLangDriven();
 }
 
 // Legacy alias — kept for any older callers
@@ -4323,6 +4381,9 @@ function toggleObLang(lang) {
   }
   // Full re-render so the Shipmate tip ! badge moves to the next best candidate
   updateObLangListWrap();
+  // Keep a language-driven Distribution preset ('primary_lang_only' /
+  // 'selected_languages') in sync with the new supported-language set.
+  _obResyncDistPresetIfLangDriven();
 }
 
 function _refreshLangListInPlace() {
@@ -15217,6 +15278,9 @@ function addLangFromSearch(code) {
     state.formData.localizations = arr;
   }
   updateObLangListWrap();
+  // Keep a language-driven Distribution preset ('primary_lang_only' /
+  // 'selected_languages') in sync with the new supported-language set.
+  _obResyncDistPresetIfLangDriven();
 }
 
 function handleCQMulti(el) {
