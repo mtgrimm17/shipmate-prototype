@@ -14384,7 +14384,46 @@ function toggleProfileMenu(e) {
   const menu = document.getElementById('profileMenu');
   const isOpen = menu.classList.contains('open');
   closeAllDropdowns();
-  if (!isOpen) menu.classList.add('open');
+  if (!isOpen) { renderProfileMenu(); menu.classList.add('open'); }
+}
+
+/* Fill the Dev (profile) dropdown on open: a functional language picker
+   (only the locales we actually ship — en + zh-CN) with the active one
+   ticked, and a single combined Sign in / Sign out item reflecting state.
+   Replaces the old static "Language: English" label and the pair of separate
+   Sign in / Sign out buttons. */
+function renderProfileMenu() {
+  const langsEl = document.getElementById('profileMenuLangs');
+  if (langsEl && typeof getSupportedLanguages === 'function') {
+    const active = (typeof getCurrentLang === 'function') ? getCurrentLang() : 'en';
+    const avail  = (typeof AVAILABLE_LANGUAGES !== 'undefined') ? AVAILABLE_LANGUAGES : ['en'];
+    const byCode = Object.fromEntries(getSupportedLanguages().map(l => [l.code, l]));
+    langsEl.innerHTML = `<div class="profile-menu-header">Language</div>` + avail.map(code => {
+      const l  = byCode[code] || { code, label: code, flag: '' };
+      const on = code === active;
+      return `<button class="profile-menu-item profile-menu-lang${on ? ' is-active' : ''}"
+                onclick="switchLanguage('${code}')">${l.flag ? l.flag + '  ' : ''}${l.label}${on ? '  ✓' : ''}</button>`;
+    }).join('');
+  }
+  const authEl = document.getElementById('profile-menu-auth');
+  if (authEl) {
+    const signedIn = state.devSignedIn !== false;   // default: signed in
+    authEl.textContent = signedIn ? 'Sign out' : 'Sign in';
+    authEl.classList.toggle('danger', signedIn);
+  }
+}
+
+/* One combined control: sign out when signed in, sign in when signed out.
+   Signing in also completes onboarding if it hasn't run yet (the old "Sign in"
+   behaviour). Prototype-cosmetic — never touches project/version data. */
+function toggleDevSignIn() {
+  const signingOut = state.devSignedIn !== false;
+  state.devSignedIn = !signingOut;
+  if (!signingOut && !state.onboardingComplete && typeof completeOnboarding === 'function') {
+    completeOnboarding();
+  }
+  renderProfileMenu();
+  closeAllDropdowns();
 }
 
 /* ── Multi-project / version management ──────────────── */

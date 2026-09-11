@@ -3472,6 +3472,7 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 .profile-menu-item:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
+.profile-menu-lang.is-active { color: var(--text); font-weight: 600; }
 .profile-menu-item.danger { color: var(--magenta); }
 .profile-menu-item.danger:hover { background: var(--magenta-soft); }
 
