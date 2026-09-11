@@ -873,17 +873,20 @@ function buildObPlatTilesHTML() {
     { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
     { id:'android', iconKey:'android',     label:'Google Play', comingSoon: false },
     { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
-    { id:'egs',     iconKey:'epic',        label:'Epic',        comingSoon: true  },
-    { id:'psn',     iconKey:'playstation', label:'PlayStation', comingSoon: true  },
-    // Nintendo and Xbox: grayed out / unselectable (comingSoon, same lock
-    // treatment as Epic/PlayStation above), added by request. Neither has a
-    // measured SM_TILE_MARKS entry (platform-icons.js) or a PROTO_PLATFORM_ICONS
-    // one, so iconKey falls straight through protoTileIcon() to this repo's
-    // own PLATFORM_ICONS['nintendo']/['xbox'] SVG path (state.js) — already
+    // The four grayed-out/unselectable (comingSoon) tiles below are kept in
+    // alphabetical order by label (Epic, Nintendo, PlayStation, Xbox), by
+    // request — this is purely a display-order convention among themselves;
+    // the always-available tiles above keep their own existing order.
+    // Nintendo and Xbox: neither has a measured SM_TILE_MARKS entry
+    // (platform-icons.js) or a PROTO_PLATFORM_ICONS one, so iconKey falls
+    // straight through protoTileIcon() to this repo's own
+    // PLATFORM_ICONS['nintendo']/['xbox'] SVG path (state.js) — already
     // monochrome/currentColor and evenodd-correct (EVENODD_ICONS, above),
     // same as every other tile here.
-    { id:'nintendo', iconKey:'nintendo',   label:'Nintendo',    comingSoon: true  },
-    { id:'xbox',     iconKey:'xbox',       label:'Xbox',        comingSoon: true  },
+    { id:'egs',      iconKey:'epic',        label:'Epic',        comingSoon: true  },
+    { id:'nintendo', iconKey:'nintendo',    label:'Nintendo',    comingSoon: true  },
+    { id:'psn',      iconKey:'playstation', label:'PlayStation', comingSoon: true  },
+    { id:'xbox',     iconKey:'xbox',        label:'Xbox',        comingSoon: true  },
   ];
   const lockSVG = `<svg class="ob-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
   /* The prototype's tile, markup for markup:
@@ -1907,8 +1910,12 @@ function buildConsolidatedBanner() {
     </div>`;
 }
 
-// Canonical display order for platform cards (active and inactive sections)
-const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web', 'egs', 'psn', 'xbox', 'nintendo'];
+// Canonical display order for platform cards (active and inactive sections).
+// The trailing four (egs/nintendo/psn/xbox) are the always-comingSoon
+// platforms (COMING_SOON_PLATFORMS, further below) — kept alphabetical by
+// name (Epic, Nintendo, PlayStation, Xbox) among themselves, by request;
+// the five live platforms ahead of them keep their own existing order.
+const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web', 'egs', 'nintendo', 'psn', 'xbox'];
 
 // Platforms that stay fully defined in PLATFORMS (state.js) — steps, their
 // own answers/listing state, everything — but are deliberately hidden from
