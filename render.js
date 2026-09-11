@@ -6650,11 +6650,13 @@ function buildImproveSubmissionSection(platformId) {
       </div>`;
     binFooter = `
       ${counterHtml}
-      <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
-              onclick="toggleBinFindingFix('${platformId}')">
-        ${binFixOpen ? 'Hide Fix' : 'View Fix'}
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>`;
+      <div class="iys-section-actions">
+        <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
+                onclick="toggleBinFindingFix('${platformId}')">
+          ${binFixOpen ? 'Hide Fix' : 'View Fix'}
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>
+      </div>`;
   }
 
   const binGrade   = !binAnalyzed ? null : binRemaining === 0 ? 'A' : 'B';
@@ -9315,23 +9317,11 @@ function buildPrivacySection(pid = 'ios') {
 
   let collectBlock = '';
   if (a.collectsData === 'yes') {
-    const descVal = (a.privacyDescription || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const statusHtml = state.privacyAIStatus === 'loading'
-      ? `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating to privacy labels…</div>`
-      : state.privacyAIStatus === 'complete'
-      ? `<div class="prv-nlp-status done">✓ Privacy labels updated — expand below to review or adjust</div>`
-      : state.privacyAIStatus === 'error'
-      ? `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_triggerPrivacyAI('${pid}')">Try again</button></div>`
-      : '';
+    // Natural-language "Describe your data collection" box removed by request —
+    // Shipmate infers the data types directly, and the developer adjusts them
+    // via "Show all data types" (the matrix) rather than micromanaging free text.
     collectBlock = `
       <div class="prv-nlp-wrap">
-        <label class="form-label">${t('ios.privacy.desc.label') || 'Describe your data collection'}
-          <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${t('ios.privacy.desc.tooltip') || 'Describe every data type your app collects and why. Shipmate will translate this into the required Apple privacy label selections.'}</span></span>
-        </label>
-        <textarea class="form-input prv-nlp-textarea"
-                  placeholder="${t('ios.privacy.desc.placeholder') || 'e.g., We collect email addresses for account creation, device crash reports to fix bugs, and advertising IDs to serve relevant ads through our ad network.'}"
-                  onblur="updatePrivacyDescription(this.value)">${descVal}</textarea>
-        ${statusHtml}
         ${buildPrivacyMatrix(a)}
       </div>`;
   }

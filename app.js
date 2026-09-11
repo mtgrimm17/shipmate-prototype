@@ -15511,13 +15511,17 @@ function _postInferenceSetup(stepId) {
   // Mac App Store Full is fully independent (never receives AI-inferred
   // answers via the unified iOS/Android/Steam inference call — see
   // inferAllQuestionnaires/runInference, claude.js), so it still needs its
-  // own filter snapshot taken here rather than via that call's results, the
-  // same way 'macos' itself never appears in this list either (its Content
-  // Rating is shared with iOS, so iOS's own snapshot already covers it).
-  for (const p of ['ios', 'android', 'steam', 'macos_full']) {
+  // own filter snapshot taken here rather than via that call's results.
+  // 'macos' shares its Content Rating answers with iOS, but its Unanswered/All
+  // toggle reads state.macAnsweredAtInference specifically — which stays null
+  // (no toggle) unless we snapshot it too. So take its snapshot here, from the
+  // shared iOS answers (takeFilterSnapshot('macos') handles that), and default
+  // it to the "Unanswered" view like every other platform.
+  for (const p of ['ios', 'macos', 'android', 'steam', 'macos_full']) {
     if (!state.activePlatforms.has(p)) continue;
     takeFilterSnapshot(p);
     if (p === 'ios')        state.iosContentRatingExpanded     = false;
+    if (p === 'macos')      state.macContentRatingExpanded     = false;
     if (p === 'android')    state.androidContentRatingExpanded = false;
     if (p === 'steam')      state.steamContentRatingExpanded   = false;
     if (p === 'macos_full') state.macFullContentRatingExpanded = false;
