@@ -865,11 +865,9 @@ function buildObPlatTilesHTML() {
      (see style.css's .pg-8, added alongside .pg-6/.pg-7/.pg-3/.pg-2). The
      bare .platform-grid's repeat(4,1fr) is only the fallback.
 
-     HIDDEN_PLATFORMS (further up this file) is currently empty, so nothing
-     is filtered out of PLATFORMS_OB below — all 8 tiles show, hence pg-8.
-     Hiding one again later drops the grid back to pg-7 (see the git
-     history around "hide"/"un-hide Mac App Store Full platform" for the
-     exact precedent). */
+     HIDDEN_PLATFORMS (further up this file) now hides Mac App Store Full, so
+     7 of the 8 tiles show — hence pg-7 (was pg-8 when nothing was hidden).
+     See the git history around "hide"/"un-hide Mac App Store Full platform". */
   const tiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id)).map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -884,7 +882,7 @@ function buildObPlatTilesHTML() {
                     onclick="toggleOnboardingPlatform('${id}')"
                     data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="platform-grid pg-8">${tiles}</div>`;
+  return `<div class="platform-grid pg-7">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -1888,8 +1886,9 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // about the platform itself (PLATFORMS in state.js, every step, its own
 // independent answers/listing state, stays fully intact) — see the git
 // history around "hide"/"un-hide Mac App Store Full platform" for the
-// precedent this mechanism follows. Empty for now — nothing hidden.
-const HIDDEN_PLATFORMS = new Set([]);
+// precedent this mechanism follows. Hiding Mac App Store Full for the demo —
+// it stays fully built (state/steps/answers intact), just not newly selectable.
+const HIDDEN_PLATFORMS = new Set(['macos_full']);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -4763,7 +4762,7 @@ function renderStepModal() {
           <div class="inf-ring inf-ring-3"></div>
           <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
         </div>
-        <div class="inf-headline">Shipmate is working…</div>
+        <div class="inf-headline">Generating Report Card…</div>
         <div class="inf-steps">
           ${iaMsgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
         </div>
