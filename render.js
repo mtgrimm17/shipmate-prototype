@@ -2162,11 +2162,15 @@ const TAB_HERO = {
 function buildTabHero(view) {
   const c = TAB_HERO[view];
   if (!c) return '';
+  // Resolve title/sub through t() at render time (TAB_HERO is a module const,
+  // frozen before the locale loads, so it can't hold the translations itself).
+  const title = t(`hero.${view}.title`) || c.title;
+  const sub   = t(`hero.${view}.sub`)   || c.sub;
   return `<div class="tab-hero" style="--accent:${c.accent};--accent-soft:${c.soft}">
     <div class="tab-hero-icon">${c.icon}</div>
     <div class="tab-hero-text">
-      <div class="tab-hero-title">${c.title}</div>
-      <div class="tab-hero-sub">${c.sub}</div>
+      <div class="tab-hero-title">${title}</div>
+      <div class="tab-hero-sub">${sub}</div>
     </div>
   </div>`;
 }
@@ -3139,29 +3143,29 @@ function _chkGroups() {
   const fd = state.formData || {};
   const plats = state.activePlatforms ? state.activePlatforms.size : 0;
   return [
-    { group: 'Details', view: 'details', items: [
-      { label: 'Add a game title',        section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
-      { label: 'Write a description',      section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
-      { label: 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
-      { label: 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
-      { label: 'List localizations',      section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
-      { label: 'Upload screenshots',      section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
-      { label: 'Add a trailer',           section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
+    { group: t('guide.group.details') || 'Details', view: 'details', items: [
+      { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
+      { label: t('guide.item.desc') || 'Write a description',          section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
+      { label: t('guide.item.platforms') || 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
+      { label: t('guide.item.countries') || 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
+      { label: t('guide.item.localizations') || 'List localizations',  section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
+      { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
+      { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
     ] },
-    { group: 'Platforms', view: 'dashboard', items: [
-      { label: 'Set content ratings',      done: true },
-      { label: 'Data-safety disclosures',  done: true },
-      { label: 'Build store pages',        done: false },
-      { label: 'Submit builds for review', done: false },
+    { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
+      { label: t('guide.item.contentRatings') || 'Set content ratings',    done: true },
+      { label: t('guide.item.dataSafety') || 'Data-safety disclosures',    done: true },
+      { label: t('guide.item.storePages') || 'Build store pages',          done: false },
+      { label: t('guide.item.submitBuilds') || 'Submit builds for review', done: false },
     ] },
-    { group: 'Marketing', view: 'broadcast', items: [
-      { label: 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
-      { label: 'Set up your website',     section: 'website',     done: false },
-      { label: 'Line up press',           section: 'press',       done: false },
-      { label: 'Reach out to creators',   section: 'influencers', done: false },
+    { group: t('guide.group.marketing') || 'Marketing', view: 'broadcast', items: [
+      { label: t('guide.item.announcement') || 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
+      { label: t('guide.item.website') || 'Set up your website',          section: 'website',     done: false },
+      { label: t('guide.item.press') || 'Line up press',                 section: 'press',       done: false },
+      { label: t('guide.item.creators') || 'Reach out to creators',      section: 'influencers', done: false },
     ] },
-    { group: 'Performance', view: 'performance', items: [
-      { label: 'Update Shipmate permissions', done: false },
+    { group: t('guide.group.performance') || 'Performance', view: 'performance', items: [
+      { label: t('guide.item.permissions') || 'Update Shipmate permissions', done: false },
     ] },
   ];
 }
@@ -3298,14 +3302,14 @@ function renderGuide() {
     </button>`;
   }).join('');
   const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
-  const tabName = TAB_NAME[view] || '';
+  const tabName = t('guide.tab.' + view) || TAB_NAME[view] || '';
   el.innerHTML = `
     ${shippyLayersHTML()}
     <div class="guide-card">
       <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
-      <div class="guide-eyebrow">Shippy Guide</div>
-      <div class="guide-title">${hero.title || ''}</div>
-      <div class="guide-sub">${hero.sub || ''}</div>
+      <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
+      <div class="guide-title">${t('hero.' + view + '.title') || hero.title || ''}</div>
+      <div class="guide-sub">${t('hero.' + view + '.sub') || hero.sub || ''}</div>
       ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}
     </div>`;
   mountShippy(el);
@@ -3475,7 +3479,8 @@ function renderAppSubnav() {
        read off it — CAL_VIEW_NAME is the fallback for any tab in that case. */
     const tabLabel = (navId ? (document.querySelector('#' + navId + ' .lbl')?.textContent || '') : '')
       || CAL_VIEW_NAME[state.activeView] || '';
-    const text = (list.find(s => s.id === data.cur) || {}).label || tabLabel;
+    const curSub = list.find(s => s.id === data.cur);
+    const text = (curSub ? (t('subtab.' + curSub.id) || curSub.label) : '') || tabLabel;
     el.innerHTML = text ? `<span class="app-subnav-title">${text}</span>` : '';
     return;
   }
@@ -3485,8 +3490,9 @@ function renderAppSubnav() {
     const sep = i < list.length - 1
       ? `<span class="app-subtab-sep${(on || nextOn) ? ' is-off' : ''}">|</span>`
       : '';
+    const label = t('subtab.' + s.id) || s.label;
     return `<button class="app-subtab${on ? ' is-on' : ''}"`
-      + ` onclick="${data.fn}('${s.id}')">${s.label}</button>${sep}`;
+      + ` onclick="${data.fn}('${s.id}')">${label}</button>${sep}`;
   }).join('');
 }
 
@@ -4315,7 +4321,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
     ? `<span class="build-pill no-build submit-connect-req"
              onclick="event.stopPropagation();platformGearFromSteps('${pid}')"
              title="Connect ${escHtml(platLabel(pid))} to submit"><span
-             class="build-pill-label">Connect to submit</span></span>`
+             class="build-pill-label">${t('card.connect_to_submit') || 'Connect to submit'}</span></span>`
     : '';
 
   return `
@@ -4323,7 +4329,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
          id="${pid}-step-card-submit" style="${readyToSubmit ? 'cursor:pointer;' : ''}" ${cardClick}>
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
-        <div class="ios-step-name">${isWeb ? 'Deploy' : 'Submit'}</div>
+        <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
       </div>
       ${trailing}
     </div>`;
