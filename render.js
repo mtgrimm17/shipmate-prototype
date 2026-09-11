@@ -886,7 +886,7 @@ function buildObPlatTilesHTML() {
     { id:'egs',      iconKey:'epic',        label:'Epic',        comingSoon: true  },
     { id:'nintendo', iconKey:'nintendo',    label:'Nintendo',    comingSoon: true  },
     { id:'psn',      iconKey:'playstation', label:'PlayStation', comingSoon: true  },
-    { id:'xbox',     iconKey:'xbox',        label:'Xbox',        comingSoon: true  },
+    { id:'xbox',     iconKey:'xbox',        label:'XBOX',        comingSoon: true  },
   ];
   const lockSVG = `<svg class="ob-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
   /* The prototype's tile, markup for markup:

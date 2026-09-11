@@ -923,7 +923,7 @@ const PLATFORMS = {
     ],
   },
   xbox: {
-    id: 'xbox', label: 'Microsoft Store | XBOX', color: '#107C10',
+    id: 'xbox', label: 'XBOX | Microsoft Store', color: '#107C10',
     steps: [
       { id: 'reviewStoreListing', label: 'Review Store Listing' },
       { id: 'confirmMedia',       label: 'Confirm Media' },
