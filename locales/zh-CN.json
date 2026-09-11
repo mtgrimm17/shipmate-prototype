@@ -52,7 +52,6 @@
   "hero.performance.sub": "在一个实时视图中查看所有平台的愿望单、评价、销量和收入——无需登录各个后台。",
   "hero.assets.title": "添加你的美术与媒体素材",
   "hero.assets.sub": "截图、预告片和主视觉——只需上传一次，Shipmate 就会在每个商店页面和你的媒体资料包中复用它们。",
-  "card.connect_to_submit": "连接以提交",
   "ob.headline": "让我们让您的游戏准备就绪",
   "ob.subline": "只需填写一次核心信息，然后专注于每个平台的具体要求。",
   "ob.tab.about": "游戏信息",
@@ -531,5 +530,6 @@
   "ob.media.drop_label": "将截图、主视觉图或预告片拖到此处",
   "ob.media.drop_hint": "PNG、JPG 或 MP4 · 可多选",
   "ob.section.assets": "素材",
-  "ob.assets.guidance": "把所有素材都拖到这里——截图、应用图标、主视觉图、标识和视频。Shipmate 会判断每个文件是什么并统一存入素材库，上传一次即可用于所有需要它的商店。"
+  "ob.assets.guidance": "把所有素材都拖到这里——截图、应用图标、主视觉图、标识和视频。Shipmate 会判断每个文件是什么并统一存入素材库，上传一次即可用于所有需要它的商店。",
+  "card.connect_account": "连接账户"
 }

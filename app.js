@@ -2430,6 +2430,11 @@ function _enqueueTranslateTask(taskFn) {
     }
     if (!text) return;
     tip.textContent = text;
+    /* The bubble is shared with smTipAt's nudge variant, which reshapes and
+       recolours it. Dropping that here rather than trying to undo it on the
+       way out is what makes the reset unconditional: whatever state the last
+       caller left, a hover tooltip always starts from the base shape. */
+    tip.classList.remove('g-tip--nudge');
     tip.classList.add('is-visible');
 
     const r = anchor.getBoundingClientRect();
@@ -2463,6 +2468,79 @@ function _enqueueTranslateTask(taskFn) {
     if (anchor && !anchor.contains(e.relatedTarget)) hideTip();
   });
   document.addEventListener('scroll', hideTip, true);
+
+  /* THE SAME BUBBLE, SHOWN ON DEMAND. Everything above is hover-driven off a
+     `.tooltip-anchor`; this publishes the one thing a click-driven caller
+     needs — point the existing #g-tip at any element, with any text, for a
+     moment. Reusing it rather than building a second bubble means one look,
+     one z-index, and one piece of placement logic: the above/below fallback
+     and the viewport clamping in showTip() are exactly what a tooltip pinned
+     to a gear in the card's top-right corner needs, and they are easy to get
+     subtly wrong twice.
+     The timer is stored on the element so a second call replaces the first
+     rather than letting an old timeout hide a fresh tip. */
+  let _atTimer = null;
+  /* THE TRAILING RESET NEEDS A HANDLE TOO, and not having one was a real bug.
+     dropNudge strips the variant 160ms later, after the fade. Press Submit
+     twice and the order is: pointerdown → dropNudge schedules the strip; click
+     → smTipAt raises a fresh nudge; 160ms later that orphaned timeout fires
+     and takes the variant off a tooltip that is on screen. The bubble kept its
+     narrow position and snapped to the base 230px grey — measured, 127.5 → 230
+     at t=180ms — which is exactly the "second, wider, older card" it looked
+     like. One shared element, two overlapping lifetimes. */
+  let _resetTimer = null;
+
+  /* Take the nudge down now, wherever it is in its life. Split out because two
+     things end it — its own timer and the user acting — and both have to leave
+     the shared bubble in the same state. */
+  function dropNudge() {
+    const tip = document.getElementById('g-tip');
+    if (!tip || !tip.classList.contains('g-tip--nudge')) return;
+    clearTimeout(_atTimer);
+    clearTimeout(_resetTimer);
+    hideTip();
+    // After the fade, or the bubble snaps back to 230px grey while still lit.
+    _resetTimer = setTimeout(() => tip.classList.remove('g-tip--nudge'), 160);
+  }
+
+  /* ACTING DISMISSES IT. The nudge points at a control and says what to do
+     with it; the moment you touch anything it has been read, and leaving it
+     hovering over a gear you just pressed makes it look stuck rather than
+     timed.
+     `pointerdown` and not `click` for the ordering: the press that SPAWNS a
+     nudge fires pointerdown first and click after, so this cannot cancel the
+     tip the same gesture is about to raise. On `click` it would. */
+  document.addEventListener('pointerdown', dropNudge, true);
+
+  window.smTipAt = function (el, text, ms) {
+    const tip = document.getElementById('g-tip');
+    if (!tip || !el || !text) return;
+    /* BOTH timers, because raising a nudge has to cancel the previous one's
+       whole tail — its hide AND its trailing reset. Clearing only _atTimer is
+       what let an orphaned reset strip this tooltip mid-life. */
+    clearTimeout(_atTimer);
+    clearTimeout(_resetTimer);
+    tip.textContent = text;
+    /* The nudge variant shrink-wraps, so the class has to go on BEFORE the
+       measurement below — width is what everything here is computed from. */
+    tip.classList.add('g-tip--nudge', 'is-visible');
+
+    const r = el.getBoundingClientRect();
+    /* MEASURED, NOT THE TIP_W CONSTANT. showTip() above can use the constant
+       because the hover tooltip really is a fixed 230px; this one is sized by
+       its text, so centring it on 230 would put a 120px bubble 55px to the
+       left of its anchor — which is exactly the "off-centre" it looked. */
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(MARGIN, Math.min(left, window.innerWidth - tw - MARGIN));
+    let top = r.top - th - 8;
+    if (top < MARGIN) top = r.bottom + 8;
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
+
+    _atTimer = setTimeout(dropNudge, ms || 2200);
+  };
 })();
 
 // Called by YES/NO and intensity/chip clicks — re-renders immediately
@@ -3127,6 +3205,163 @@ function selectTrack(pid, trackId) {
     const newHtml  = buildSubmitStepCard(pid, p ? p.steps.length : 0, locked, done);
     cardEl.outerHTML = newHtml;
   }
+}
+
+/* ONE SHAKE, REPLAYABLE — and it has to be element.animate(), not a class.
+   A CSS animation attached by adding a class plays once and then does nothing
+   on a second click, because the class is already there; the usual dodge is
+   remove → force a reflow → re-add, which is three lines of ceremony that only
+   exist to defeat the cascade. A WAAPI animation starts from the beginning
+   every time it is created, by definition.
+   Cancelling any shake already running on the element is what makes rapid
+   clicks read as one insistent object rather than a stack of overlapping
+   transforms fighting each other. */
+function _smShake(el, kind, delay) {
+  if (!el) return;
+  /* Respect the OS switch. A shake is pure emphasis — there is no information
+     in it that the colour and the position don't already carry — so when
+     motion is turned down it simply doesn't happen. */
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+  el.getAnimations?.().forEach(a => { if (a.id === 'sm-shake') a.cancel(); });
+
+  /* THE GEAR PULSES, A ROW SLIDES — and the gear does NOT rotate, which it did
+     for a round. Rotation looked like the obvious choice because the gear
+     already turns 90° on hover, so a rotary shake reads as the same object
+     insisting. It was wrong for a reason worth writing down: this gear has
+     eight lobes and, as measured when its hover turn was tuned, its only real
+     symmetry is 90° — at ±20° the silhouette does not map onto itself at any
+     point in the swing, so the icon appears to wander even though its centre
+     is provably fixed (0.00px of drift in both axes, sampled across the
+     animation). A shape that changes outline while it rocks reads as a shape
+     that moved.
+     So the motion comes off the glyph entirely and goes onto the button's
+     box: its amber fill surges and a ring blooms out of it. Nothing
+     translates, nothing rotates, and it is louder than the shake was. */
+  /* ONE RIPPLE, NOT TWO FLASHES. The first pulse strobed the fill between .14
+     and .55 twice and bloomed a ring on each beat — three things happening in
+     760ms, which is why it read as cheap rather than as emphasis. A single
+     expanding ring that fades as it grows is the gesture everything else uses
+     for "here", and the fill only swells behind it, to .34 rather than .55.
+     The ring carries the attention and the fill carries the colour, instead of
+     both shouting.
+     The fill starts and ends on .14, the alert gear's own resting value, so
+     there is no step at either edge — and the button's `transition:
+     background .15s` has nothing to catch on the way out. */
+  /* NOTHING MOVES ANY MORE, on either target. The rows used to slide sideways
+     and it was the same objection the gear's rotation drew: displacement reads
+     as a glitch in a card whose whole layout is a pair of fixed columns, and
+     with four rows shaking at once it read as the card coming apart.
+
+     THE ROWS BLINK THEIR TEXT, IN WHITE, ALL AT ONCE. Three corrections in one
+     round, each worth keeping:
+       • the box was wrong — filling four 50px rows is a lot of surface for a
+         hint, and the fill is already spoken for by hover;
+       • amber was wrong here — the gear and the tooltip carry the colour
+         because they are the ONE thing to go do; the rows are just a list of
+         what is outstanding, and tinting them made four things look like four
+         alerts;
+       • the cascade was wrong — a stagger narrates, and this is a glance, not
+         a sentence. All together, once.
+     A white blink on text that is ALREADY near-white has to go down before it
+     goes up: adding white to #f5f5f5 is invisible. So it drops to 28% and
+     returns, twice — the text stays exactly where it is and only its presence
+     flickers. */
+  const ease = 'cubic-bezier(.22,1,.36,1)';
+  const opts = { duration: 560, easing: ease, delay: delay || 0, fill: 'backwards' };
+
+  const anim = kind === 'pulse'
+    ? el.animate([
+        { backgroundColor: 'rgba(255,184,107,.14)', boxShadow: '0 0 0 0 rgba(255,184,107,.45)' },
+        { backgroundColor: 'rgba(255,184,107,.34)', boxShadow: '0 0 0 5px rgba(255,184,107,.18)', offset: .45 },
+        { backgroundColor: 'rgba(255,184,107,.14)', boxShadow: '0 0 0 10px rgba(255,184,107,0)' },
+      ], opts)
+    : el.animate([
+        { color: 'rgb(245,245,245)' },
+        { color: 'rgba(255,255,255,.28)', offset: .22 },
+        { color: 'rgb(255,255,255)',      offset: .44 },
+        { color: 'rgba(255,255,255,.28)', offset: .68 },
+        { color: 'rgb(245,245,245)' },
+      ], { ...opts, easing: 'ease-in-out' });
+  anim.id = 'sm-shake';
+}
+
+/* THE SPOTLIGHT — dim the whole card except the things standing in the way.
+   Every gesture before this one tried to make the obstacles louder: shake
+   them, tint them, flash them. This does the opposite and is better for it —
+   it takes everything else AWAY, so the answer to "why can't I submit" is
+   whatever is still lit. Nothing moves, nothing changes colour, and it scales
+   to one obstacle or five without becoming five alerts.
+   The dimming lives on leaf groups, never on .ios-step-cards, because opacity
+   is a filter over a subtree: dim the container and the lit row inside it can
+   never climb back out. */
+let _spotTimer = null;
+function _smSpotlight(card, targets, ms) {
+  if (!card || !targets || !targets.length) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+  clearTimeout(_spotTimer);
+  card.querySelectorAll('.is-spotlit').forEach(el => el.classList.remove('is-spotlit'));
+  targets.forEach(el => el && el.classList.add('is-spotlit'));
+  card.classList.add('is-spotlight');
+
+  _spotTimer = setTimeout(() => {
+    card.classList.remove('is-spotlight');
+    /* Clear the marks only after the fade back, or the last thing you see is
+       the spotlit rows dropping to the dim level for a frame before everything
+       comes up together. */
+    setTimeout(() => card.querySelectorAll('.is-spotlit')
+      .forEach(el => el.classList.remove('is-spotlit')), 260);
+  }, ms || 1100);
+}
+
+/* THE SUBMIT ROW'S ONE HANDLER. Every press of the row lands here, whether or
+   not it is allowed to submit, because a control that silently ignores you is
+   the worst answer available — the user cannot tell a locked button from a
+   broken one.
+   The order is the order a person would hit the walls in: you cannot submit
+   without an account, you cannot submit with steps outstanding, and you cannot
+   submit without saying where it goes. Each one points at the thing that fixes
+   it rather than describing it. */
+function submitStepClick(pid) {
+  const isWeb     = pid === 'web';
+  const connected = isWeb ? true : isPlatformConnected(pid);
+  const card      = document.getElementById('active-card-' + pid);
+
+  /* 1 — no account linked. The gear is where linking happens, so the gear
+     answers: it shakes, and a tooltip over it says what the shake is about.
+     The two together are the point — motion alone tells you WHERE to look but
+     not what for, and a tooltip alone is easy to miss when your eye is on the
+     row you just pressed at the other end of the card. */
+  if (!connected) {
+    const gear = card?.querySelector('.active-card-settings');
+    _smShake(gear, 'pulse');
+    window.smTipAt?.(gear, t('card.connect_account') || 'Connect account');
+    return;
+  }
+
+  /* 2 — steps outstanding. Shake the ones that are actually outstanding, which
+     is read off the DOM rather than recomputed: `is-complete` on the row is
+     what _paintStepRow() maintains, so this cannot disagree with what the user
+     is looking at. The submit row excludes itself — it is the thing being
+     pressed, not a thing in the way. */
+  const pending = [...(card?.querySelectorAll('.ios-step-card:not(.is-complete)') || [])]
+    .filter(row => !row.classList.contains('submit-step-card'));
+  if (pending.length) {
+    _smSpotlight(card, pending);
+    return;
+  }
+
+  /* 3 — no track chosen. Not in the brief, but it is a real gate (readyToSubmit
+     tests it) and leaving it out would put back the dead press this change
+     exists to remove: everything ticked, account linked, and the row still
+     does nothing. The picker lives in the release block above. */
+  if (!isWeb && !(state.selectedTracks || {})[pid]) {
+    _smSpotlight(card, [card?.querySelector('.rel-track')]);
+    return;
+  }
+
+  confirmSubmit(pid);
 }
 
 /* Confirm and execute the submit from the inline step card */

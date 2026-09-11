@@ -4349,38 +4349,31 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      `selTrack` stays because it still gates readyToSubmit: you cannot submit
      without a track, whichever control set it. */
 
-  // Whole card is clickable to submit when ready
-  const cardClick = readyToSubmit ? `onclick="confirmSubmit('${pid}')"` : '';
+  /* THE ROW IS ALWAYS CLICKABLE, and that is the change this shape rests on.
+     It used to carry `onclick` only when readyToSubmit, so pressing Submit
+     before you were allowed to did nothing at all — the card's one dead
+     control, at the one moment you most want it to answer. Now every press
+     lands in submitStepClick() (app.js), which either submits or points at
+     whatever is in the way.
+     `readyToSubmit` survives, but only to style the row; the decision itself
+     moved to the handler, where it can name the obstacle instead of just
+     withholding the click. */
   const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
   const stepLocked = locked || !connected;
 
-  /* Trailing control: not connected → a "Connect to submit" prompt. Connected
-     → nothing, now that the track picker lives in the release block. The row
-     is the action itself: the whole card submits when readyToSubmit.
-
-     "Connect to submit" WEARS THE BINARY PILL'S OWN CLASSES rather than a copy
-     of its measurements. Both are the same thing in the same slot — an action
-     the row offers on its right-hand end — and step 1's "Upload Build" is the
-     one that got the layout right: a fixed-width 30px pill, radius 8, centred
-     content, 12.5px at a normal weight. This was a 20px-radius capsule at
-     11px/650 sized to its own text, in alarm red. Sharing `.build-pill
-     .no-build` means the geometry has one definition and cannot drift again;
-     .submit-connect-req is left holding nothing but the title. */
-  const trailing = !connected
-    ? `<span class="build-pill no-build submit-connect-req"
-             onclick="event.stopPropagation();platformGearFromSteps('${pid}')"
-             title="Connect ${escHtml(platLabel(pid))} to submit"><span
-             class="build-pill-label">${t('card.connect_to_submit') || 'Connect to submit'}</span></span>`
-    : '';
+  /* NO TRAILING CONTROL. "Connect to submit" lived here, a second button in a
+     row that is itself a button — press one and nothing happens, press the
+     other and you go to settings, with nothing saying which was which. The row
+     now answers for both: press it unconnected and the gear shakes, which
+     points at where connecting actually happens rather than duplicating it. */
 
   return `
     <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
-         id="${pid}-step-card-submit" style="${readyToSubmit ? 'cursor:pointer;' : ''}" ${cardClick}>
+         id="${pid}-step-card-submit" onclick="submitStepClick('${pid}')">
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
         <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
       </div>
-      ${trailing}
     </div>`;
 }
 

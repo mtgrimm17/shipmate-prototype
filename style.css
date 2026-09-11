@@ -3911,6 +3911,20 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text-muted, #8f98a0);
   cursor: pointer;
   transition: color 0.15s, background 0.15s, transform 0.2s;
+  /* A RESTING IDENTITY TRANSFORM, so the element never has NONE.
+     The hover turns the gear 90° and the transition turns it back; at the end
+     of that return, `transform` used to go from a rotation to `none`, and that
+     is a change of painting path, not of geometry. While a transform is set
+     the browser rasterises the element against its own grid; with none it
+     paints on the parent's. If the button's box sits on a fractional device
+     pixel — which at this zoom and in this layout it does — the two rasters
+     can land a pixel apart, and the icon appears to hop sideways just as the
+     animation settles. It is invisible to measurement: the layout box never
+     moves (svgCx stays 657 at rest, mid-hover and through the whole return,
+     sampled every 40ms), because nothing about the layout is what changed.
+     rotate(0deg) is geometrically nothing and keeps the element on one
+     painting path from first frame to last. */
+  transform: rotate(0deg);
 }
 /* A QUARTER TURN, because that is the gear's own symmetry.
    It was 30deg, which is why the hover read as "almost 45 but not": at 30 the
@@ -5111,11 +5125,70 @@ body.viewing-splash .app-subnav { display: none; }
    state, so nothing else needs to change. */
 .ios-step-card.is-complete .ios-step-name { color: #fff; }
 
+/* ── The spotlight: press Submit, everything in the way stays lit ──────────
+   Set by _smSpotlight (app.js) for about a second. The dim goes on LEAF GROUPS
+   and never on .ios-step-cards, because opacity is a filter over a whole
+   subtree — dim the list container and the one row that is supposed to stay
+   bright cannot climb back out of it. Same trap as the `is-complete`
+   opacity that made a finished step's green look like a different green.
+   `:not(:has(.is-spotlit))` keeps any group that CONTAINS the lit thing at
+   full, which is what lets the track picker be spotlit without its own
+   VERSION / BUILD line going dark around it — that line is the context the
+   picker's value is read against. */
+.active-card.is-spotlight .active-card-head:not(:has(.is-spotlit)),
+.active-card.is-spotlight .card-release-block:not(:has(.is-spotlit)),
+.active-card.is-spotlight .ios-step-card:not(.is-spotlit) {
+  opacity: .18;
+}
+/* On both the element and its spotlit siblings, so the card dims AND comes
+   back on one curve rather than snapping on the way out. */
+.active-card .active-card-head,
+.active-card .card-release-block,
+.active-card .ios-step-card {
+  transition: opacity .22s ease;
+}
+/* Nothing is clickable while the card is explaining itself — a dimmed row that
+   still opens its step invites you to act on the thing being de-emphasised. */
+.active-card.is-spotlight .ios-step-card:not(.is-spotlit) { pointer-events: none; }
+
 /* ── Submit step card ───────────────────────────────────────── */
-.submit-step-card { cursor: default; }
-/* Locked: reduced opacity but dropdown is still interactive */
-.submit-step-card.submit-step-locked { opacity: 0.45; }
-.submit-step-card.submit-step-locked:hover { background: transparent; }
+/* ALWAYS A POINTER, because the row is always a button now — every press
+   answers, either by submitting or by shaking whatever is in the way (see
+   submitStepClick, app.js). It was `default`, which is what a dead control
+   looks like, and it was telling the truth at the time. */
+/* Two classes, not one: `.ios-step-card--inline { cursor: default }` is the
+   same (0,1,0) and sits later in the file, so a bare `.submit-step-card` lost
+   on source order and the row still showed an arrow. */
+.ios-step-card.submit-step-card { cursor: pointer; }
+
+/* IT LIGHTS ON HOVER EVEN WHILE IT CANNOT SUBMIT, and the divider rule is the
+   argument. `.ios-step-card:hover::before` hides the line above a lit row —
+   that rule is generic and fires here whatever the row's state — so pointing at
+   Submit already took the divider away. What it did NOT do was fill the row,
+   because `.ios-step-card--inline:hover { background: transparent }` is the
+   same (0,2,0) and sits later in the file, so it beat the generic fill. The
+   result was half an effect: a line vanishing with nothing arriving to explain
+   it, which reads as a rendering glitch rather than as a row lifting.
+   Either both or neither, and both is right now that the row always answers a
+   press. Declared before the submit-ready rules so a ready row keeps its own
+   warmer tint.
+   THE `!important` IS ANSWERING AN `!important` — `.ios-step-card--inline:hover`
+   carries one, which is why (0,3,0) against its (0,2,0) still lost: priority
+   is weighed before specificity. The honest fix is to drop it there, but that
+   rule serves every inline row and this is not the change to find out which
+   ones were relying on it. Remove both together when someone audits --inline. */
+.ios-step-card.submit-step-card:hover { background: rgba(255, 255, 255, .07) !important; }
+/* LOCKED DIMS THE ROW'S OWN CONTENT, NOT THE ROW — the row carried
+   `opacity: .45`, and an opacity is a filter over everything inside it, so it
+   also dimmed the thing the user is being invited to press. It is the same
+   mistake as `.ios-step-card.is-complete { opacity: .6 }`, which is why a
+   finished step's green looked like the wrong green. Dim by colour instead,
+   and only the two things that ARE waiting: the step number and its title. */
+.submit-step-card.submit-step-locked .ios-step-name { color: rgba(255, 255, 255, .40); }
+.submit-step-card.submit-step-locked .ios-step-num {
+  background: rgba(255, 255, 255, .04);
+  color: rgba(255, 255, 255, .26);
+}
 /* Ready: steps complete. Separator and subtle tint. Cursor/click only when track also chosen. */
 .submit-step-card.submit-step-ready {
   background: rgba(47, 220, 128, 0.04);
@@ -9850,6 +9923,42 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .g-tip.is-visible { opacity: 1; }
+
+/* THE NUDGE VARIANT — a prompt, not an explanation, so it is shaped like one.
+   The base .g-tip is a fixed 230px because it carries paragraphs of help text
+   next to a "?"; two words in that box leave most of it empty and the text
+   stranded on the left, which is what made it read as misaligned even though
+   the BOX was centred on the gear. Shrink-wrapped and centred, the text's
+   centre and the gear's centre are the same point.
+   Amber because this is the card's attention colour and the thing it is
+   attached to — the alert gear — is already wearing it: the tooltip and the
+   icon it points at are one signal, not two.
+
+   AN AMBER WASH ON AN OPAQUE GREY, which takes two layers rather than one
+   colour. The wash itself is the right look — the same .14 the alert gear
+   wears — but a single translucent background lets the card's edge and the
+   page show through, and a bubble that floats above the layout must not be
+   transparent to it. So: --panel-2 as an opaque base, and the amber laid over
+   it as a flat gradient. The strengths stay legible as what they are (.14 of
+   amber) instead of being composited by hand into one hex that nobody can
+   trace back.
+   It spent a round as solid #FFB86B with dark text, the done disc's treatment.
+   That is right for a permanent state marker and too loud for a two-second
+   prompt: this is a whisper pointing at the gear, not a badge. */
+.g-tip.g-tip--nudge {
+  width: auto;
+  max-width: 240px;
+  white-space: nowrap;
+  text-align: center;
+  padding: 7px 11px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background-color: var(--panel-2, #1c1c1c);
+  background-image: linear-gradient(rgba(255, 184, 107, .14), rgba(255, 184, 107, .14));
+  border-color: rgba(255, 184, 107, .30);
+  color: rgba(255, 184, 107, .95);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
 
 /* ── Submit button — incomplete state ────────────────── */
 

@@ -52,7 +52,6 @@
   "hero.performance.sub": "Wishlists, reviews, units, and revenue across every platform in one live view — no logging into separate portals.",
   "hero.assets.title": "Add your art & media",
   "hero.assets.sub": "Screenshots, trailers, and key art — upload them once and Shipmate reuses them across every store listing and your press kit.",
-  "card.connect_to_submit": "Connect to submit",
   "ob.headline": "Let's get your game ready",
   "ob.subline": "We'll collect the essentials once — then you focus on each platform.",
   "ob.tab.about": "Game Info",
@@ -532,5 +531,6 @@
   "ob.media.drop_label": "Drop screenshots, key art or your trailer here",
   "ob.media.drop_hint": "PNG, JPG or MP4 · Multiple files accepted",
   "ob.section.assets": "Assets",
-  "ob.assets.guidance": "Drop everything here — screenshots, app icons, key art, logos and video. Shipmate works out what each file is and keeps it in one library, so anything you upload once is ready for every store that needs it."
+  "ob.assets.guidance": "Drop everything here — screenshots, app icons, key art, logos and video. Shipmate works out what each file is and keeps it in one library, so anything you upload once is ready for every store that needs it.",
+  "card.connect_account": "Connect account"
 }
