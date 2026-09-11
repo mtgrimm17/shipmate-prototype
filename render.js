@@ -7873,9 +7873,15 @@ function buildMacStorePreviewSection() {
                  onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
-          </div>
-          <div class="ias-header-cta">
-            <button class="ias-get-btn">${price}</button>
+            <!-- GET sits beneath the title/subtitle stack, not beside it as a
+                 separate header-cta column — matches the native macOS App
+                 Store app's own product page (see the Mac-Store-Preview-only
+                 mac-spp-get-row rule, style.css) rather than the in-browser
+                 store page's side-by-side layout .ias-header-cta gives the
+                 iOS/Mac Full previews (untouched, still shared elsewhere). -->
+            <div class="mac-spp-get-row">
+              <button class="ias-get-btn">${price}</button>
+            </div>
           </div>
         </div>
 
@@ -7900,14 +7906,35 @@ function buildMacStorePreviewSection() {
         ${screenshotsArea}
 
         <!-- ── Description ── -->
+        <!-- Developer/Website/Support sit in their own column to the right
+             of the description text, matching the native macOS App Store
+             app's own product page — not stacked below it the way the
+             shared .ias-dev-row (iOS/Mac Full previews, untouched) does.
+             "Developer Website" used to live down in the Information card
+             below (still built there as infoRows, just no longer rendered
+             into it — see the removed .ias-info-link for it) — moved up
+             here and relabeled "Website" per request, with a new "Support"
+             link alongside it. Both are decorative (no real destination),
+             same as the Information card's own Privacy Policy link. -->
         <div class="ias-section">
-          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
-               onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
-            ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
-          ${descStatusHtml}
-          <div class="ias-dev-row">
-            <span class="ias-dev-name">Developer</span>
-            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="mac-spp-desc-row">
+            <div class="mac-spp-desc-col">
+              <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
+                   onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
+                ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
+              ${descStatusHtml}
+            </div>
+            <div class="mac-spp-dev-links">
+              <span class="ias-dev-name">Developer</span>
+              <span class="mac-spp-link-row">
+                <span>Website</span>
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M10.1 5.9L8.6 8.7 5.9 10.1 7.4 7.3 10.1 5.9Z" fill="currentColor"/></svg>
+              </span>
+              <span class="mac-spp-link-row mac-spp-link-row--muted">
+                <span>Support</span>
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.4a1.8 1.8 0 113.3 1c-.25.5-.95.8-1.25 1.3-.15.25-.2.5-.2.75" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.55" fill="currentColor"/></svg>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -7944,7 +7971,6 @@ function buildMacStorePreviewSection() {
         <div class="ias-section">
           <div class="ias-section-head">Information</div>
           <div class="ias-info-grid">${infoRows}</div>
-          <div class="ias-info-link">Developer Website <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="ias-info-link">Privacy Policy <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         </div>
 

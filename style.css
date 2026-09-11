@@ -6550,18 +6550,46 @@ textarea.loc-review-field.ias-inline-input {
 .mac-spp-page .ias-icon, .mac-spp-page .ias-icon-empty { width: 96px; height: 96px; border-radius: 21px; }
 .mac-spp-page .ias-app-name { font-size: 21px; }
 .mac-spp-page .ias-app-subtitle { font-size: 13px; }
+/* GET sits under the title/subtitle stack here (render.js moved it out of
+   .ias-header-cta, which the iOS/Mac Full previews still use unchanged) —
+   matching the native app's own product page rather than the side-by-side
+   in-browser layout. */
+.mac-spp-get-row { margin-top: 8px; }
 
-/* Screenshots get more room in the wider layout — natural aspect ratio is
-   kept for real uploaded shots (no cropping), just a taller frame since
-   there's space for it. The empty-state placeholders ("Gameplay"/
-   "Gameplay"/"Menu") have no natural aspect ratio to preserve — the
-   shared .ias-shot-empty rule hardcodes a narrow 130px width that reads
-   as portrait/phone-shaped, wrong for a Mac game's landscape screenshots,
-   so give them an explicit 16:10 landscape box here instead (300 * 1.6 =
-   480). Scoped to .mac-spp-shots-scroll so the iOS/Mac-Full previews'
-   own empty-state placeholders are untouched. */
-.mac-spp-shots-scroll .ias-shot-frame { height: 300px; max-width: 560px; }
-.mac-spp-shots-scroll .ias-shot-empty { width: 480px; }
+/* Screenshots — sized down from the first pass to better match the actual
+   native app's own proportions (screenshots read as one element among
+   several on the page, not as the dominant one). Natural aspect ratio is
+   still kept for real uploaded shots (no cropping). The empty-state
+   placeholders ("Gameplay"/"Gameplay"/"Menu") have no natural aspect
+   ratio to preserve — the shared .ias-shot-empty rule hardcodes a narrow
+   130px width that reads as portrait/phone-shaped, wrong for a Mac game's
+   landscape screenshots, so give them an explicit 16:10 landscape box
+   here instead (210 * 1.6 = 336). Scoped to .mac-spp-shots-scroll so the
+   iOS/Mac-Full previews' own screenshot sizing and empty-state
+   placeholders are untouched. */
+.mac-spp-shots-scroll .ias-shot-frame { height: 210px; max-width: 400px; }
+.mac-spp-shots-scroll .ias-shot-empty { width: 336px; }
+
+/* Description — Developer/Website/Support move into their own column to
+   the right of the description text (render.js), matching the native
+   app's own product page instead of the shared .ias-dev-row's stacked-
+   below layout (still used, unchanged, by the iOS/Mac Full previews). */
+.mac-spp-desc-row { display: flex; gap: 24px; align-items: flex-start; }
+.mac-spp-desc-col { flex: 1; min-width: 0; }
+.mac-spp-dev-links {
+  flex-shrink: 0; width: 132px;
+  display: flex; flex-direction: column; gap: 10px;
+  padding-top: 2px;
+}
+.mac-spp-link-row {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; color: #0a84ff;
+}
+.mac-spp-link-row svg { flex-shrink: 0; }
+/* Support reads as a secondary, less prominent action than Website/the
+   developer name — same neutral tone the rest of this preview uses for
+   "not an accent-colored link" text (.ias-info-label and friends). */
+.mac-spp-link-row--muted { color: var(--text-dim); }
 
 /* ── Inline upload step card (no click-to-open modal) ── */
 .ios-step-card--inline { cursor: default; }
