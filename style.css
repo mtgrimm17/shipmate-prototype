@@ -9652,13 +9652,12 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .ios-q-divider:has(+ .ios-content-step-label) { display: none; }
 
 /* ── Content Rating "Unanswered / All" toggle ───────── */
+/* Restyled to the Game Details sub-tab language (.app-subtab pills + a vertical
+   bar), so the Unanswered/All toggle reads the same as the sub-section nav
+   rather than as a boxed segmented control. */
 .cr-toggle-bar {
   display: flex;
-  gap: 2px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 3px;
+  align-items: center;
   width: fit-content;
   margin-bottom: 4px;
 }

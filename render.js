@@ -9046,12 +9046,16 @@ function _platformAIBadge(platformId, qid, val) {
 // offFn / onFn are onclick strings (e.g. 'toggleContentRatingExpanded(false)')
 function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
   if (!collapseMode) return '';
+  // Same selection language as the Game Details sub-tabs (.app-subtab): the
+  // picked option takes the quiet dark pill + white label, the other stays at
+  // 50% and lifts on hover, with a vertical bar between them. The separator is
+  // always shown here (a 2-way toggle always has one selected, so the sub-nav's
+  // "hide the bar next to the selected pill" rule would erase it entirely).
   return `
     <div class="cr-toggle-bar">
-      <button class="cr-toggle-btn${!showAll ? ' cr-toggle-active' : ''}"
-              onclick="${offFn}">Unanswered</button>
-      <button class="cr-toggle-btn${showAll ? ' cr-toggle-active' : ''}"
-              onclick="${onFn}">All</button>
+      <button class="app-subtab${!showAll ? ' is-on' : ''}" onclick="${offFn}">Unanswered</button>
+      <span class="app-subtab-sep">|</span>
+      <button class="app-subtab${showAll ? ' is-on' : ''}" onclick="${onFn}">All</button>
     </div>`;
 }
 
@@ -9433,10 +9437,10 @@ function buildPrivacyMatrix(a) {
   return `
     <div class="ios-subsection" style="margin-top:10px;">
       <div class="prv-matrix-header">
-        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
         <button class="prv-expand-btn" onclick="togglePrivacyMatrix()">
           ${expanded ? `${_chevUp} Hide data types` : `${_chevDown} Show all data types`}
         </button>
+        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} data type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
       </div>
       ${tableHtml}
     </div>`;
@@ -13529,10 +13533,10 @@ function buildAndroidDataMatrix(a) {
   return `
     <div class="ios-subsection" style="margin-top:10px;">
       <div class="prv-matrix-header">
-        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
         <button class="prv-expand-btn" onclick="toggleAndroidMatrix()">
           ${expanded ? `${_chevUp} Hide data types` : `${_chevDown} Show all data types`}
         </button>
+        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} data type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
       </div>
       ${tableHtml}
     </div>`;
