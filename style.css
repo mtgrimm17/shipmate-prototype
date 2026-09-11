@@ -6491,7 +6491,14 @@ textarea.loc-review-field.ias-inline-input {
    "current section" highlight. Paired with .submit-modal-mac-spp
    (below, near the other width modifiers) which widens the modal enough
    to fit it alongside the existing .ias-device-wrap content unchanged. */
-.mac-spp-shell { display: flex; align-items: flex-start; gap: 20px; }
+/* Row fills the available modal height (see .submit-modal-mac-spp's own
+   .submit-modal-scroll/.ios-step-body-content overrides below, near the
+   other width modifiers) so align-items' default 'stretch' makes both
+   the sidebar and .mac-spp-main span that same full height — the sidebar
+   staying put while only .mac-spp-main scrolls internally (its own
+   overflow-y:auto, below), rather than the whole page (including the
+   sidebar) scrolling together the way it did before. */
+.mac-spp-shell { display: flex; gap: 20px; flex: 1; min-height: 0; }
 .mac-spp-sidebar {
   flex-shrink: 0; width: 176px;
   background: var(--panel-2);
@@ -6500,7 +6507,7 @@ textarea.loc-review-field.ias-inline-input {
   padding: 12px 10px;
   display: flex; flex-direction: column; gap: 2px;
   font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
-  align-self: stretch;
+  overflow: hidden;
 }
 .mac-spp-search {
   display: flex; align-items: center; gap: 6px;
@@ -6530,7 +6537,11 @@ textarea.loc-review-field.ias-inline-input {
 }
 .mac-spp-account-label { font-size: 12px; color: var(--text-dim); font-weight: 500; }
 
-.mac-spp-main { flex: 1; min-width: 0; }
+.mac-spp-main {
+  flex: 1; min-width: 0; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  padding-bottom: 4px;
+}
 
 /* Header/icon get a modest bump inside the wider Mac preview only — the
    existing .ias-header/.ias-icon rules (shared with iOS/Mac Full) are
@@ -6541,8 +6552,16 @@ textarea.loc-review-field.ias-inline-input {
 .mac-spp-page .ias-app-subtitle { font-size: 13px; }
 
 /* Screenshots get more room in the wider layout — natural aspect ratio is
-   kept (no cropping), just a taller frame since there's space for it. */
+   kept for real uploaded shots (no cropping), just a taller frame since
+   there's space for it. The empty-state placeholders ("Gameplay"/
+   "Gameplay"/"Menu") have no natural aspect ratio to preserve — the
+   shared .ias-shot-empty rule hardcodes a narrow 130px width that reads
+   as portrait/phone-shaped, wrong for a Mac game's landscape screenshots,
+   so give them an explicit 16:10 landscape box here instead (300 * 1.6 =
+   480). Scoped to .mac-spp-shots-scroll so the iOS/Mac-Full previews'
+   own empty-state placeholders are untouched. */
 .mac-spp-shots-scroll .ias-shot-frame { height: 300px; max-width: 560px; }
+.mac-spp-shots-scroll .ias-shot-empty { width: 480px; }
 
 /* ── Inline upload step card (no click-to-open modal) ── */
 .ios-step-card--inline { cursor: default; }
@@ -8220,6 +8239,26 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    isMacSpp comment for why this only applies un-flipped. */
 .submit-modal.submit-modal-mac-spp {
   max-width: 1000px;
+}
+/* The Mac Product Page Preview's own sidebar (.mac-spp-sidebar) needs to
+   stay put at full modal height while only its main pane scrolls, instead
+   of the whole step body (including the sidebar) scrolling together the
+   way every other step's .submit-modal-scroll does. So just for this step,
+   stop .submit-modal-scroll itself from scrolling and hand that job to
+   .mac-spp-main (its own overflow-y:auto, see the .mac-spp-* rules above)
+   by turning the two ancestors in between into an unscrolled flex column
+   that hands .mac-spp-shell its exact remaining height — which is what
+   lets .mac-spp-sidebar's align-items:stretch span the full modal height
+   in the first place. Scoped to this one modifier class so every other
+   step's normal whole-page scrolling (buildStorePreviewSection's own
+   iOS/Mac-Full previews included) is completely unaffected. */
+.submit-modal.submit-modal-mac-spp .submit-modal-scroll {
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.submit-modal.submit-modal-mac-spp .ios-step-body-content {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
 }
 .submit-modal {
   height: clamp(560px, 88vh, 860px);
