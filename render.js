@@ -338,6 +338,8 @@ function buildDistributionTab() {
                         onclick="setObDistPreset('${p.id}')">${p.label}</button>`).join('')}
             </div>
           </div>
+
+          <div id="ob-dist-excluded-wrap">${buildObExcludedChips()}</div>
         </div>
 
         <div id="ob-country-list-wrap">${buildObCountryChips()}</div>
@@ -541,12 +543,43 @@ const OB_REG_TIPS = {
   ZA: 'Film and Publication Board (FPB) classification required. Unclassified games may not be sold commercially.',
 };
 
+/* Countries whose regulatory tooltip is suppressed. South Korea, Brazil and
+   Australia's regional ratings turned out to be generated automatically by
+   Apple's own App Store Connect age-rating questionnaire for an ordinary
+   game — no separate board submission — and Japan's CERO / Germany's USK
+   don't apply to Apple's App Store at all (confirmed against Apple's own
+   App Store Connect documentation and each board's own site). The tip TEXT
+   stays in OB_REG_TIPS/the locale files rather than being deleted, in case
+   this needs revisiting; every reader of "does this country have a
+   tooltip" goes through regTip() below, so hiding it here is the one place
+   that needs to change — that includes the Minimize Regulation preset's own
+   country list (_obCountriesForPreset, app.js) and its "Excluded" chips
+   (buildObExcludedChips below), which both read regTip() rather than
+   OB_REG_TIPS directly for exactly this reason. */
+const OB_REG_TIP_HIDDEN = new Set(['KR', 'BR', 'AU', 'JP', 'DE']);
+
 /** Regulatory tip: prefers locale key, falls back to OB_REG_TIPS const.
- *  Guards against locale returning the key string itself (meaning "not found"). */
+ *  Guards against locale returning the key string itself (meaning "not found").
+ *  Returns '' for OB_REG_TIP_HIDDEN countries regardless of what locale/
+ *  OB_REG_TIPS still hold for them — see that set's own comment. */
 function regTip(code) {
+  if (OB_REG_TIP_HIDDEN.has(code)) return '';
   const key = `reg.tip.${code.toLowerCase()}`;
   const localeVal = typeof t === 'function' ? t(key) : null;
   return (localeVal && localeVal !== key ? localeVal : null) || OB_REG_TIPS[code] || '';
+}
+
+/* The "?" tooltip icon + anchor a country's regulatory tip renders as,
+   shared by the Market list's own rows (buildObCountryChips) and the
+   Minimize Regulation preset's "Excluded" chips (buildObExcludedChips) so
+   the two never drift into looking or behaving differently. Returns ''
+   when the country has no (visible) tip. `event.stopPropagation()` keeps a
+   click on the "?" from also toggling the country the icon sits inside. */
+function _obRegTipIconHtml(code, isOn) {
+  const tip = regTip(code);
+  return tip
+    ? `<span class="tooltip-anchor" data-tip="${tip}" onclick="event.stopPropagation()"><span class="tooltip-icon${isOn ? ' is-warned' : ''}">?</span></span>`
+    : '';
 }
 
 const _chevDown = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
@@ -757,16 +790,12 @@ function buildObCountryChips() {
   const buildRow = (c, i) => {
     const isOn   = selected.has(c.code);
     const barPct = Math.round((c.gamers / maxGamers) * 100);
-    const regTipText = regTip(c.code);
-    const regTipHtml = regTipText
-      ? `<span class="tooltip-anchor" data-tip="${regTipText}" onclick="event.stopPropagation()"><span class="tooltip-icon${isOn ? ' is-warned' : ''}">?</span></span>`
-      : '';
     return `
       <div class="ob-dist-row${isOn ? ' is-on' : ''}"
            data-code="${c.code}"
            onclick="toggleObCountry('${c.code}')">
         <div class="ob-dist-row-chip${isOn ? ' is-on' : ''}" id="ob-dist-chip-${c.code}">
-          ${c.name}${regTipHtml}
+          ${c.name}${_obRegTipIconHtml(c.code, isOn)}
         </div>
         <div class="ob-dist-row-bar-wrap">
           <div class="ob-dist-row-bar-fill" style="width:${barPct}%"></div>
@@ -812,6 +841,54 @@ function buildObCountryChips() {
 
 /* ── Legacy alias ── */
 function buildObCountryList() { return buildObCountryChips(); }
+
+/* ── "Excluded" chips — Minimize Regulation preset only ──────────────────
+   Minimize Regulation's whole premise is "leave out every country with a
+   regulatory tooltip" (_obCountriesForPreset, app.js), which means the
+   moment it's picked, those countries drop out of view down in the Market
+   list below — exactly the ones a developer choosing this preset most
+   needs to be able to glance back at and reconsider. Surfaced right under
+   the preset pills instead, using the SAME clickable chip + tooltip pieces
+   the Market rows use (_obRegTipIconHtml, toggleObCountry) so reading a
+   tip and toggling a country both work identically in either place — laid
+   out in a wrapping horizontal row rather than the Market list's one-per-
+   row layout, since there's no gamer-count bar to make a full row worth
+   here and the whole point is scanning the set at a glance.
+
+   Always lists every tooltip-bearing country, regardless of whether the
+   user has already clicked one back on — an excluded country that vanished
+   the moment you un-excluded it would give you no way to reconsider a
+   second time (by request). `is-on` still marks which ones are currently
+   part of the selection, matching the Market list's own chips. */
+function buildObExcludedChips() {
+  // _minRegBase (app.js: setObDistPreset, toggleObCountry), not a direct
+  // distributionPreset === 'minimize_regulation' check — the whole point of
+  // this list is to stay put while the user clicks countries back on/off
+  // to review them, and doing that snaps distributionPreset to 'custom'
+  // the moment the selection no longer matches the preset exactly. A check
+  // against distributionPreset itself would make the list vanish after the
+  // very first click, which defeats "review, then decide" for every
+  // country after the first.
+  if (!state.formData._minRegBase) return '';
+  const selected = new Set(state.formData.selectedCountries || []);
+  const excluded = IOS_COUNTRIES.filter(c => regTip(c.code));
+  if (!excluded.length) return '';
+
+  const chips = excluded.map(c => {
+    const isOn = selected.has(c.code);
+    return `
+      <button type="button" class="ob-dist-excluded-chip${isOn ? ' is-on' : ''}"
+              onclick="toggleObCountry('${c.code}')">
+        ${c.name}${_obRegTipIconHtml(c.code, isOn)}
+      </button>`;
+  }).join('');
+
+  return `
+    <div class="ob-dist-excluded" id="ob-dist-excluded-block">
+      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Excluded'}</div>
+      <div class="ob-dist-excluded-list">${chips}</div>
+    </div>`;
+}
 
 /* ── Platform chips (text-only multi-select, same style as lang chips) ── */
 /* The icon for a platform tile. The prototype's own mark when it has one,

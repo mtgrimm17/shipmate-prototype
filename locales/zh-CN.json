@@ -171,6 +171,7 @@
   "ob.dist.preset.selected_languages": "已选语言",
   "ob.dist.preset.minimize_reg": "最小化监管",
   "ob.dist.preset.custom": "自定义",
+  "ob.dist.excluded": "已排除",
   "ob.section.localization": "语言",
   "ob.field.lang_search.placeholder": "搜索语言……",
   "ob.field.trailer_url.label": "或粘贴 YouTube 链接",

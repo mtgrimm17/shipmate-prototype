@@ -4021,7 +4021,12 @@ function _obCountriesForPreset(preset) {
       ]);
       return IOS_COUNTRIES.filter(c => bases.has(c.lang)).map(c => c.code);
     }
-    case 'minimize_regulation': return IOS_COUNTRIES.filter(c => !OB_REG_TIPS[c.code]).map(c => c.code);
+    // regTip(), not OB_REG_TIPS directly — regTip() is what also hides Korea/
+    // Brazil/Australia/Japan/Germany's tips (OB_REG_TIP_HIDDEN, render.js),
+    // so this preset and the "Excluded" chips it surfaces (buildObExcludedChips)
+    // agree on exactly which countries count as "regulated" without a second
+    // copy of that judgment call to keep in sync.
+    case 'minimize_regulation': return IOS_COUNTRIES.filter(c => !regTip(c.code)).map(c => c.code);
     default:                    return state.formData.selectedCountries || IOS_COUNTRIES.map(c => c.code);
   }
 }
@@ -4061,6 +4066,14 @@ function setObDistPreset(preset) {
     }
     // 'custom' keeps whatever countries are currently selected
   }
+  // Minimize Regulation's "Excluded" chips (buildObExcludedChips, render.js)
+  // stay on screen through a Custom deviation FROM this preset — see
+  // toggleObCountry's own note on _minRegBase below — but landing here on
+  // any OTHER explicit pill click (including re-clicking Minimize
+  // Regulation off, or Custom's own pill) is a deliberate move away from
+  // reviewing it, so this is the one place that always sets the flag
+  // outright rather than only ever clearing it.
+  state.formData._minRegBase = state.formData.distributionPreset === 'minimize_regulation';
   _refreshObDistSection();
   if (typeof renderGuide === 'function') renderGuide();   // "Select target countries" reacts live
 }
@@ -4086,11 +4099,23 @@ function toggleObCountry(code) {
   const namedPresets = ['everywhere', 'english_only', 'minimize_regulation', 'primary_lang_only', 'selected_languages'];
   const matched = namedPresets.find(p => _selectionMatchesPreset(p));
   state.formData.distributionPreset = matched || 'custom';
+  // The Excluded chips stay up through a Custom deviation FROM Minimize
+  // Regulation — by request, so clicking one excluded country back on
+  // doesn't take away the list you'd use to reconsider a second one. Only
+  // clear the flag when the selection snaps to a DIFFERENT concrete named
+  // preset (a genuine change of intent, e.g. it now happens to match
+  // "English only" instead); landing on 'custom' (matched is falsy) leaves
+  // it exactly as it was.
+  if (matched) state.formData._minRegBase = (matched === 'minimize_regulation');
 
   // Update map + lang list; update chips in-place to preserve expand state
   renderObDistMap();
   updateObLangListWrap();
   _refreshCountryListInPlace();
+  // Toggling a country can flip _minRegBase (above) — a full rebuild, since
+  // the whole "Excluded" block needs to appear/disappear, not just re-mark
+  // a chip.
+  updateObExcludedSection();
   // Refresh preset pills
   document.querySelectorAll('.ob-preset-pill[data-preset]').forEach(btn => {
     btn.classList.toggle('is-active', btn.dataset.preset === state.formData.distributionPreset);
@@ -4118,6 +4143,7 @@ function _refreshCountryListInPlace() {
 function _refreshObDistSection() {
   renderObDistMap();
   updateObCountryList();
+  updateObExcludedSection();
   updateObLangListWrap();
   // Refresh dist preset pill active states
   document.querySelectorAll('.ob-preset-pill[data-preset]').forEach(btn => {
@@ -4141,6 +4167,16 @@ function _refreshCountrySummary() {
 function updateObCountryList() {
   const el = document.getElementById('ob-country-list-wrap');
   if (el) el.innerHTML = buildObCountryChips();
+}
+
+// The Minimize Regulation preset's "Excluded" chips (buildObExcludedChips,
+// render.js) — a full rebuild rather than the Market list's in-place class
+// toggling (_refreshCountryListInPlace), since there's no expand/collapse
+// state here worth preserving and the whole block also needs to appear or
+// disappear as the preset itself changes, not just re-mark which chips are on.
+function updateObExcludedSection() {
+  const el = document.getElementById('ob-dist-excluded-wrap');
+  if (el) el.innerHTML = buildObExcludedChips();
 }
 
 function toggleObCountryList() {

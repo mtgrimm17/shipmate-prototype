@@ -1823,6 +1823,63 @@ body {
   white-space: nowrap;
 }
 
+/* ── "Excluded" chips (Minimize Regulation preset) ────────────────────────
+   Same pill tokens as .ob-dist-row-chip (border/fill/on-state, and the
+   shared selection ring further down), but the chip itself is the click
+   target here — .ob-dist-row-chip only shows its hover/dim state because
+   its PARENT .ob-dist-row is the row-wide target, and there is no such row
+   wrapping these. Auto-width in a wrapping flex row instead of the Market
+   list's fixed 172px column: read as a jumbled set to scan, not a table. */
+.ob-dist-excluded {
+  margin-top: 12px;
+}
+
+.ob-dist-excluded-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.ob-dist-excluded-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ob-dist-excluded-chip {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1px;
+  height: var(--field-h); padding: 0 10px;
+  border-radius: var(--field-radius);
+  border: 1px solid var(--pill-off-border);
+  background: var(--pill-off-bg);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pill-off-color);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.ob-dist-excluded-chip:hover:not(.is-on) {
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+.ob-dist-excluded-chip.is-on {
+  border-color: transparent;
+  background: var(--pill-on-bg);
+  color: var(--pill-on-color);
+}
+.ob-dist-excluded-chip.is-on:hover {
+  background: var(--pill-on-bg-hover);
+  color: var(--pill-on-color-hover);
+}
+
 .ob-dist-expand-btn {
   display: flex;
   align-items: center;
@@ -14594,6 +14651,7 @@ body.viewing-splash #app-guide { display: none; }
 .ob-form .platform-tile.selected::after,
 .ob-preset-pill.is-active::after,
 .ob-dist-row-chip.is-on::after,
+.ob-dist-excluded-chip.is-on::after,
 .loc-chip.is-on::after,
 .bar-nav .bar-nav-btn.is-active::after,
 .app-subtab.is-on::after,
@@ -14629,7 +14687,7 @@ body.viewing-splash #app-guide { display: none; }
           mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
 }
-.ob-preset-pill, .ob-dist-row-chip, .app-subtab { position: relative; }
+.ob-preset-pill, .ob-dist-row-chip, .ob-dist-excluded-chip, .app-subtab { position: relative; }
 
 /* ── Continue ────────────────────────────────────────── */
 .btn-continue {
