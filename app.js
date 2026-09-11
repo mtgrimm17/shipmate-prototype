@@ -14433,7 +14433,46 @@ function toggleProfileMenu(e) {
   const menu = document.getElementById('profileMenu');
   const isOpen = menu.classList.contains('open');
   closeAllDropdowns();
-  if (!isOpen) menu.classList.add('open');
+  if (!isOpen) { renderProfileMenu(); menu.classList.add('open'); }
+}
+
+/* Fill the Dev (profile) dropdown on open: a functional language picker
+   (only the locales we actually ship — en + zh-CN) with the active one
+   ticked, and a single combined Sign in / Sign out item reflecting state.
+   Replaces the old static "Language: English" label and the pair of separate
+   Sign in / Sign out buttons. */
+function renderProfileMenu() {
+  const langsEl = document.getElementById('profileMenuLangs');
+  if (langsEl && typeof getSupportedLanguages === 'function') {
+    const active = (typeof getCurrentLang === 'function') ? getCurrentLang() : 'en';
+    const avail  = (typeof AVAILABLE_LANGUAGES !== 'undefined') ? AVAILABLE_LANGUAGES : ['en'];
+    const byCode = Object.fromEntries(getSupportedLanguages().map(l => [l.code, l]));
+    langsEl.innerHTML = `<div class="profile-menu-header">Language</div>` + avail.map(code => {
+      const l  = byCode[code] || { code, label: code, flag: '' };
+      const on = code === active;
+      return `<button class="profile-menu-item profile-menu-lang${on ? ' is-active' : ''}"
+                onclick="switchLanguage('${code}')">${l.flag ? l.flag + '  ' : ''}${l.label}${on ? '  ✓' : ''}</button>`;
+    }).join('');
+  }
+  const authEl = document.getElementById('profile-menu-auth');
+  if (authEl) {
+    const signedIn = state.devSignedIn !== false;   // default: signed in
+    authEl.textContent = signedIn ? 'Sign out' : 'Sign in';
+    authEl.classList.toggle('danger', signedIn);
+  }
+}
+
+/* One combined control: sign out when signed in, sign in when signed out.
+   Signing in also completes onboarding if it hasn't run yet (the old "Sign in"
+   behaviour). Prototype-cosmetic — never touches project/version data. */
+function toggleDevSignIn() {
+  const signingOut = state.devSignedIn !== false;
+  state.devSignedIn = !signingOut;
+  if (!signingOut && !state.onboardingComplete && typeof completeOnboarding === 'function') {
+    completeOnboarding();
+  }
+  renderProfileMenu();
+  closeAllDropdowns();
 }
 
 /* ── Multi-project / version management ──────────────── */
@@ -15560,13 +15599,17 @@ function _postInferenceSetup(stepId) {
   // Mac App Store Full is fully independent (never receives AI-inferred
   // answers via the unified iOS/Android/Steam inference call — see
   // inferAllQuestionnaires/runInference, claude.js), so it still needs its
-  // own filter snapshot taken here rather than via that call's results, the
-  // same way 'macos' itself never appears in this list either (its Content
-  // Rating is shared with iOS, so iOS's own snapshot already covers it).
-  for (const p of ['ios', 'android', 'steam', 'macos_full']) {
+  // own filter snapshot taken here rather than via that call's results.
+  // 'macos' shares its Content Rating answers with iOS, but its Unanswered/All
+  // toggle reads state.macAnsweredAtInference specifically — which stays null
+  // (no toggle) unless we snapshot it too. So take its snapshot here, from the
+  // shared iOS answers (takeFilterSnapshot('macos') handles that), and default
+  // it to the "Unanswered" view like every other platform.
+  for (const p of ['ios', 'macos', 'android', 'steam', 'macos_full']) {
     if (!state.activePlatforms.has(p)) continue;
     takeFilterSnapshot(p);
     if (p === 'ios')        state.iosContentRatingExpanded     = false;
+    if (p === 'macos')      state.macContentRatingExpanded     = false;
     if (p === 'android')    state.androidContentRatingExpanded = false;
     if (p === 'steam')      state.steamContentRatingExpanded   = false;
     if (p === 'macos_full') state.macFullContentRatingExpanded = false;

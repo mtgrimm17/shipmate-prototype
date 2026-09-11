@@ -183,6 +183,10 @@ async function switchLanguage(lang) {
       if (typeof renderOnboarding === 'function') renderOnboarding();
     }
   }
+  // The splash view is a persistent in-app screen (renderSplashView) and isn't
+  // covered by the dashboard/onboarding re-render above — refresh it too so its
+  // now-localized strings pick up the new language immediately.
+  if (typeof renderSplashView === 'function') renderSplashView();
   // Refresh lang menu highlight
   if (typeof renderLangMenu === 'function') renderLangMenu();
   // Close the menu

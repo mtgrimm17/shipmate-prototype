@@ -865,11 +865,9 @@ function buildObPlatTilesHTML() {
      (see style.css's .pg-8, added alongside .pg-6/.pg-7/.pg-3/.pg-2). The
      bare .platform-grid's repeat(4,1fr) is only the fallback.
 
-     HIDDEN_PLATFORMS (further up this file) is currently empty, so nothing
-     is filtered out of PLATFORMS_OB below — all 8 tiles show, hence pg-8.
-     Hiding one again later drops the grid back to pg-7 (see the git
-     history around "hide"/"un-hide Mac App Store Full platform" for the
-     exact precedent). */
+     HIDDEN_PLATFORMS (further up this file) now hides Mac App Store Full, so
+     7 of the 8 tiles show — hence pg-7 (was pg-8 when nothing was hidden).
+     See the git history around "hide"/"un-hide Mac App Store Full platform". */
   const tiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id)).map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -884,7 +882,7 @@ function buildObPlatTilesHTML() {
                     onclick="toggleOnboardingPlatform('${id}')"
                     data-platform="${label}" title="${label}">${icon}</button>`;
   }).join('');
-  return `<div class="platform-grid pg-8">${tiles}</div>`;
+  return `<div class="platform-grid pg-7">${tiles}</div>`;
 }
 
 /* ── Language picker ── two-row: primary (amber dropdown) + supported (green chips) */
@@ -1888,8 +1886,9 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // about the platform itself (PLATFORMS in state.js, every step, its own
 // independent answers/listing state, stays fully intact) — see the git
 // history around "hide"/"un-hide Mac App Store Full platform" for the
-// precedent this mechanism follows. Empty for now — nothing hidden.
-const HIDDEN_PLATFORMS = new Set([]);
+// precedent this mechanism follows. Hiding Mac App Store Full for the demo —
+// it stays fully built (state/steps/answers intact), just not newly selectable.
+const HIDDEN_PLATFORMS = new Set(['macos_full']);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -2163,11 +2162,15 @@ const TAB_HERO = {
 function buildTabHero(view) {
   const c = TAB_HERO[view];
   if (!c) return '';
+  // Resolve title/sub through t() at render time (TAB_HERO is a module const,
+  // frozen before the locale loads, so it can't hold the translations itself).
+  const title = t(`hero.${view}.title`) || c.title;
+  const sub   = t(`hero.${view}.sub`)   || c.sub;
   return `<div class="tab-hero" style="--accent:${c.accent};--accent-soft:${c.soft}">
     <div class="tab-hero-icon">${c.icon}</div>
     <div class="tab-hero-text">
-      <div class="tab-hero-title">${c.title}</div>
-      <div class="tab-hero-sub">${c.sub}</div>
+      <div class="tab-hero-title">${title}</div>
+      <div class="tab-hero-sub">${sub}</div>
     </div>
   </div>`;
 }
@@ -3140,29 +3143,29 @@ function _chkGroups() {
   const fd = state.formData || {};
   const plats = state.activePlatforms ? state.activePlatforms.size : 0;
   return [
-    { group: 'Details', view: 'details', items: [
-      { label: 'Add a game title',        section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
-      { label: 'Write a description',      section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
-      { label: 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
-      { label: 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
-      { label: 'List localizations',      section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
-      { label: 'Upload screenshots',      section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
-      { label: 'Add a trailer',           section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
+    { group: t('guide.group.details') || 'Details', view: 'details', items: [
+      { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
+      { label: t('guide.item.desc') || 'Write a description',          section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
+      { label: t('guide.item.platforms') || 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
+      { label: t('guide.item.countries') || 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
+      { label: t('guide.item.localizations') || 'List localizations',  section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
+      { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
+      { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
     ] },
-    { group: 'Platforms', view: 'dashboard', items: [
-      { label: 'Set content ratings',      done: true },
-      { label: 'Data-safety disclosures',  done: true },
-      { label: 'Build store pages',        done: false },
-      { label: 'Submit builds for review', done: false },
+    { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
+      { label: t('guide.item.contentRatings') || 'Set content ratings',    done: true },
+      { label: t('guide.item.dataSafety') || 'Data-safety disclosures',    done: true },
+      { label: t('guide.item.storePages') || 'Build store pages',          done: false },
+      { label: t('guide.item.submitBuilds') || 'Submit builds for review', done: false },
     ] },
-    { group: 'Marketing', view: 'broadcast', items: [
-      { label: 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
-      { label: 'Set up your website',     section: 'website',     done: false },
-      { label: 'Line up press',           section: 'press',       done: false },
-      { label: 'Reach out to creators',   section: 'influencers', done: false },
+    { group: t('guide.group.marketing') || 'Marketing', view: 'broadcast', items: [
+      { label: t('guide.item.announcement') || 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
+      { label: t('guide.item.website') || 'Set up your website',          section: 'website',     done: false },
+      { label: t('guide.item.press') || 'Line up press',                 section: 'press',       done: false },
+      { label: t('guide.item.creators') || 'Reach out to creators',      section: 'influencers', done: false },
     ] },
-    { group: 'Performance', view: 'performance', items: [
-      { label: 'Update Shipmate permissions', done: false },
+    { group: t('guide.group.performance') || 'Performance', view: 'performance', items: [
+      { label: t('guide.item.permissions') || 'Update Shipmate permissions', done: false },
     ] },
   ];
 }
@@ -3299,14 +3302,14 @@ function renderGuide() {
     </button>`;
   }).join('');
   const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
-  const tabName = TAB_NAME[view] || '';
+  const tabName = t('guide.tab.' + view) || TAB_NAME[view] || '';
   el.innerHTML = `
     ${shippyLayersHTML()}
     <div class="guide-card">
       <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
-      <div class="guide-eyebrow">Shippy Guide</div>
-      <div class="guide-title">${hero.title || ''}</div>
-      <div class="guide-sub">${hero.sub || ''}</div>
+      <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
+      <div class="guide-title">${t('hero.' + view + '.title') || hero.title || ''}</div>
+      <div class="guide-sub">${t('hero.' + view + '.sub') || hero.sub || ''}</div>
       ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}
     </div>`;
   mountShippy(el);
@@ -3476,7 +3479,8 @@ function renderAppSubnav() {
        read off it — CAL_VIEW_NAME is the fallback for any tab in that case. */
     const tabLabel = (navId ? (document.querySelector('#' + navId + ' .lbl')?.textContent || '') : '')
       || CAL_VIEW_NAME[state.activeView] || '';
-    const text = (list.find(s => s.id === data.cur) || {}).label || tabLabel;
+    const curSub = list.find(s => s.id === data.cur);
+    const text = (curSub ? (t('subtab.' + curSub.id) || curSub.label) : '') || tabLabel;
     el.innerHTML = text ? `<span class="app-subnav-title">${text}</span>` : '';
     return;
   }
@@ -3486,8 +3490,9 @@ function renderAppSubnav() {
     const sep = i < list.length - 1
       ? `<span class="app-subtab-sep${(on || nextOn) ? ' is-off' : ''}">|</span>`
       : '';
+    const label = t('subtab.' + s.id) || s.label;
     return `<button class="app-subtab${on ? ' is-on' : ''}"`
-      + ` onclick="${data.fn}('${s.id}')">${s.label}</button>${sep}`;
+      + ` onclick="${data.fn}('${s.id}')">${label}</button>${sep}`;
   }).join('');
 }
 
@@ -3497,15 +3502,15 @@ function renderSplashView() {
   const el = document.getElementById('splashview');
   if (!el) return;
   const pillars = [
-    { tag: 'Submission', title: 'Submit to every platform', body: 'One streamlined flow, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
-    { tag: 'Marketing',  title: 'Market like a studio',  body: 'All the marketing tools you need in one place. Push posts and media specced for every channel, connect with press and content creators, and build a press kit in seconds.' },
-    { tag: 'Analysis',   title: 'Analyze performance', body: 'Track your game\'s performance with a unified dashboard. Monitor revenue, wishlists, reviews, and engagement across every platform, all in one place.' },
+    { tag: t('splash.pillar.submission.tag') || 'Submission', title: t('splash.pillar.submission.title') || 'Submit to every platform', body: t('splash.pillar.submission.body') || 'One streamlined flow, every store. Shipmate infers your ratings, disclosures, and metadata, then submits to Steam, the App Store, Google Play and more.' },
+    { tag: t('splash.pillar.marketing.tag') || 'Marketing',   title: t('splash.pillar.marketing.title') || 'Market like a studio',      body: t('splash.pillar.marketing.body') || 'All the marketing tools you need in one place. Push posts and media specced for every channel, connect with press and content creators, and build a press kit in seconds.' },
+    { tag: t('splash.pillar.analysis.tag') || 'Analysis',     title: t('splash.pillar.analysis.title') || 'Analyze performance',        body: t('splash.pillar.analysis.body') || "Track your game's performance with a unified dashboard. Monitor revenue, wishlists, reviews, and engagement across every platform, all in one place." },
   ];
   el.innerHTML = `
     <div class="splash2">
       <section class="splash2-hero">
-        <h1 class="splash2-title">Publish your game yourself.</h1>
-        <p class="splash2-sub">Everything you need to submit, distribute, and market your game — in one intelligent tool.</p>
+        <h1 class="splash2-title">${t('splash.title') || 'Publish your game yourself.'}</h1>
+        <p class="splash2-sub">${t('splash.sub') || 'Everything you need to submit, distribute, and market your game — in one intelligent tool.'}</p>
       </section>
       <section class="splash2-pillars">
         ${pillars.map(p => `
@@ -3516,8 +3521,8 @@ function renderSplashView() {
           </div>`).join('')}
       </section>
       <section class="splash2-foot">
-        <div class="splash2-foot-line">Easy to do yourself. Easy to get right.</div>
-        <button class="splash2-btn splash2-btn-primary" onclick="setView('details')">Get started →</button>
+        <div class="splash2-foot-line">${t('splash.foot') || 'Easy to do yourself. Easy to get right.'}</div>
+        <button class="splash2-btn splash2-btn-primary" onclick="setView('details')">${t('splash.cta') || 'Get started →'}</button>
       </section>
     </div>`;
 }
@@ -4316,7 +4321,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
     ? `<span class="build-pill no-build submit-connect-req"
              onclick="event.stopPropagation();platformGearFromSteps('${pid}')"
              title="Connect ${escHtml(platLabel(pid))} to submit"><span
-             class="build-pill-label">Connect to submit</span></span>`
+             class="build-pill-label">${t('card.connect_to_submit') || 'Connect to submit'}</span></span>`
     : '';
 
   return `
@@ -4324,7 +4329,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
          id="${pid}-step-card-submit" style="${readyToSubmit ? 'cursor:pointer;' : ''}" ${cardClick}>
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
-        <div class="ios-step-name">${isWeb ? 'Deploy' : 'Submit'}</div>
+        <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
       </div>
       ${trailing}
     </div>`;
@@ -4763,7 +4768,7 @@ function renderStepModal() {
           <div class="inf-ring inf-ring-3"></div>
           <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
         </div>
-        <div class="inf-headline">Shipmate is working…</div>
+        <div class="inf-headline">Generating Report Card…</div>
         <div class="inf-steps">
           ${iaMsgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
         </div>
@@ -6651,11 +6656,13 @@ function buildImproveSubmissionSection(platformId) {
       </div>`;
     binFooter = `
       ${counterHtml}
-      <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
-              onclick="toggleBinFindingFix('${platformId}')">
-        ${binFixOpen ? 'Hide Fix' : 'View Fix'}
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>`;
+      <div class="iys-section-actions">
+        <button class="btn btn-ghost btn-sm iys-bin-fix-btn${binFixOpen ? ' is-active' : ''}"
+                onclick="toggleBinFindingFix('${platformId}')">
+          ${binFixOpen ? 'Hide Fix' : 'View Fix'}
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>
+      </div>`;
   }
 
   const binGrade   = !binAnalyzed ? null : binRemaining === 0 ? 'A' : 'B';
@@ -9045,12 +9052,16 @@ function _platformAIBadge(platformId, qid, val) {
 // offFn / onFn are onclick strings (e.g. 'toggleContentRatingExpanded(false)')
 function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
   if (!collapseMode) return '';
+  // Same selection language as the Game Details sub-tabs (.app-subtab): the
+  // picked option takes the quiet dark pill + white label, the other stays at
+  // 50% and lifts on hover, with a vertical bar between them. The separator is
+  // always shown here (a 2-way toggle always has one selected, so the sub-nav's
+  // "hide the bar next to the selected pill" rule would erase it entirely).
   return `
     <div class="cr-toggle-bar">
-      <button class="cr-toggle-btn${!showAll ? ' cr-toggle-active' : ''}"
-              onclick="${offFn}">Unanswered</button>
-      <button class="cr-toggle-btn${showAll ? ' cr-toggle-active' : ''}"
-              onclick="${onFn}">All</button>
+      <button class="app-subtab${!showAll ? ' is-on' : ''}" onclick="${offFn}">Unanswered</button>
+      <span class="app-subtab-sep">|</span>
+      <button class="app-subtab${showAll ? ' is-on' : ''}" onclick="${onFn}">All</button>
     </div>`;
 }
 
@@ -9316,28 +9327,18 @@ function buildPrivacySection(pid = 'ios') {
 
   let collectBlock = '';
   if (a.collectsData === 'yes') {
-    const descVal = (a.privacyDescription || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const statusHtml = state.privacyAIStatus === 'loading'
-      ? `<div class="prv-nlp-status loading"><span class="ai-spinner"></span> Translating to privacy labels…</div>`
-      : state.privacyAIStatus === 'complete'
-      ? `<div class="prv-nlp-status done">✓ Privacy labels updated — expand below to review or adjust</div>`
-      : state.privacyAIStatus === 'error'
-      ? `<div class="prv-nlp-status error">Translation failed. <button class="btn-inline" onclick="_triggerPrivacyAI('${pid}')">Try again</button></div>`
-      : '';
+    // Natural-language "Describe your data collection" box removed by request —
+    // Shipmate infers the data types directly, and the developer adjusts them
+    // via "Show all data types" (the matrix) rather than micromanaging free text.
     collectBlock = `
       <div class="prv-nlp-wrap">
-        <label class="form-label">${t('ios.privacy.desc.label') || 'Describe your data collection'}
-          <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${t('ios.privacy.desc.tooltip') || 'Describe every data type your app collects and why. Shipmate will translate this into the required Apple privacy label selections.'}</span></span>
-        </label>
-        <textarea class="form-input prv-nlp-textarea"
-                  placeholder="${t('ios.privacy.desc.placeholder') || 'e.g., We collect email addresses for account creation, device crash reports to fix bugs, and advertising IDs to serve relevant ads through our ad network.'}"
-                  onblur="updatePrivacyDescription(this.value)">${descVal}</textarea>
-        ${statusHtml}
         ${buildPrivacyMatrix(a)}
       </div>`;
   }
 
   return `
+    ${iosYNRow(t('ios.privacy.collects.label') || 'Does your app collect any data from users?', 'collectsData',
+      t('ios.privacy.collects.tooltip') || 'Includes analytics SDKs, crash reporters, accounts, device IDs, or any third-party SDK that collects data.', null, false, pid)}
     <div class="form-group">
       <label class="form-label">${t('ios.privacy.url.label') || 'Privacy Policy URL'}
         <span class="tooltip-anchor">
@@ -9352,8 +9353,6 @@ function buildPrivacySection(pid = 'ios') {
       ${(noUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
-    ${a.collectsData === null ? iosYNRow(t('ios.privacy.collects.label') || 'Does your app collect any data from users?', 'collectsData',
-      t('ios.privacy.collects.tooltip') || 'Includes analytics SDKs, crash reporters, accounts, device IDs, or any third-party SDK that collects data.', null, false, pid) : ''}
     ${collectBlock}`;
 }
 
@@ -9444,10 +9443,10 @@ function buildPrivacyMatrix(a) {
   return `
     <div class="ios-subsection" style="margin-top:10px;">
       <div class="prv-matrix-header">
-        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
         <button class="prv-expand-btn" onclick="togglePrivacyMatrix()">
           ${expanded ? `${_chevUp} Hide data types` : `${_chevDown} Show all data types`}
         </button>
+        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} data type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
       </div>
       ${tableHtml}
     </div>`;
@@ -13543,10 +13542,10 @@ function buildAndroidDataMatrix(a) {
   return `
     <div class="ios-subsection" style="margin-top:10px;">
       <div class="prv-matrix-header">
-        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
         <button class="prv-expand-btn" onclick="toggleAndroidMatrix()">
           ${expanded ? `${_chevUp} Hide data types` : `${_chevDown} Show all data types`}
         </button>
+        ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} data type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
       </div>
       ${tableHtml}
     </div>`;
