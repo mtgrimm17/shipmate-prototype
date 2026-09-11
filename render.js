@@ -6691,6 +6691,13 @@ function buildImproveSubmissionSection(platformId) {
         </div>
       </div>`;
   } else if (!spAll.length) {
+    /* ALL-GOOD IS A SUMMARY, NOT A BODY — so it wears the collapsed class and
+       loses the divider with it. A rule divides two things; "nothing to fix
+       here" has nothing under it to divide from the header, and the line was
+       drawing a boundary across a card with one sentence in it.
+       Collapsed is also the honest class: it means "no longer asking
+       anything", which is exactly what an all-clear batch is. */
+    spCardCls = 'iv-card-collapsed';
     spBody = _allGood('Store page, assets & metadata all look strong');
   } else {
     const cur      = spAll[spSel];
@@ -6798,7 +6805,16 @@ function buildImproveSubmissionSection(platformId) {
        a circle opens it too. Derived-only was the first attempt and it locked
        the batch shut — the condition that collapsed it never stops being true. */
     spAllAnswered = spAll.every(it => it.status !== 'open');
-    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', spAllAnswered)) {
+    /* STORE PAGE NEVER COLLAPSES ON ITS OWN — the default is `false`, not
+       `spAllAnswered` like the other two.
+       Collapsing means "no longer asking anything", and that is true of Binary
+       and Localization once answered: those are acknowledgements, and there is
+       nothing left to do with them. A Store Page answer is not finished when it
+       is made — the accepted fix stays editable through its pencil, and the
+       text it wrote is the real store copy. Folding that away the instant you
+       choose hides the thing you are most likely to want to reread.
+       The header toggle still works, so it can be parked by hand. */
+    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', false)) {
       spCardCls = 'iv-card-collapsed';
       /* THE LINE IS EARNED, NOT A CONSEQUENCE OF BEING SHUT. Collapsing happens
          for two different reasons — the work finished, or you parked it — and
@@ -6811,7 +6827,7 @@ function buildImproveSubmissionSection(platformId) {
     }
   }
   const spPageSection = _batch('imp-split-batch', spGrade, 'store', 'Store page', '', spHeadRight, spBody, spCardCls,
-                               { key: 'storePage', allAnswered: spAllAnswered });
+                               { key: 'storePage', allAnswered: false });
 
   // ── LOCALIZATION SECTION ──────────────────────────────
   const langRec  = _highestImpactUnselectedLang();
@@ -6835,6 +6851,8 @@ function buildImproveSubmissionSection(platformId) {
 
   let locBody = '', locCardCls = '';
   if (!langName) {
+    // Same as Store Page's all-clear: a summary, so no divider. See there.
+    locCardCls = 'iv-card-collapsed';
     locBody = _allGood('Localization looks strong for your target markets');
   } else if (!locOpen) {
     locCardCls = 'iv-card-collapsed';
@@ -6872,8 +6890,9 @@ function buildImproveSubmissionSection(platformId) {
   const binFixOpen  = !!(state.binFindingFixExpanded?.[platformId]);
   const binRemaining = Math.max(0, findings.length - binIdx);
 
-  // Build the binary upload pill (same control as card header, using modal variant)
-  const binUploadPill = buildBuildDropdown(platformId, true);
+  /* buildBuildDropdown's modal pill is gone from here: the header chip is the
+     upload control now, in both states. The function still serves the platform
+     card, which is where it belongs. */
 
   /* THE FILE CHIP LIVES IN THE HEADER NOW, next to the "Binary" label, instead
      of a pill row above the content. No caret: the reference draws one because
@@ -6893,21 +6912,36 @@ function buildImproveSubmissionSection(platformId) {
                   : platformId === 'android' ? '.apk,.aab'
                   : '.exe,.zip';
   const binChipInput = `iv-binfile-input-${platformId}`;
+  const UPLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex:none"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>';
+
+  /* ONE SLOT, TWO STATES. With a build the chip names it; without one it offers
+     to upload. Both are the same `.iv-binfile` object in the same place — same
+     height, so the header keeps its axis, and same affordance, so the thing
+     that names the binary is always the thing that changes it.
+     The upload pill used to sit in the BODY instead, which put the card's only
+     action below a divider that had nothing to divide, and moved it somewhere
+     else entirely the moment a build existed. */
+  const binChip = (label, icon, title) => `
+    <span class="iv-binfile" title="${title}"
+          onclick="event.stopPropagation();document.getElementById('${binChipInput}').click()">
+      <input type="file" id="${binChipInput}" accept="${binAccept}" hidden
+             onchange="handleBuildUpload('${platformId}', this.files)">
+      ${icon || ''}<span class="iv-binfile-name">${escHtml(label)}</span>
+    </span>`;
+
   const binHeadExtra = binBuild
-    ? `<span class="iv-binfile" title="Change build"
-             onclick="event.stopPropagation();document.getElementById('${binChipInput}').click()">
-         <input type="file" id="${binChipInput}" accept="${binAccept}" hidden
-                onchange="handleBuildUpload('${platformId}', this.files)">
-         <span class="iv-binfile-name">${escHtml(binBuild.name || 'build')}</span>
-       </span>`
-    : binProcessing ? `<span class="iv-binfile-pending">analyzing…</span>` : '';
+    ? binChip(binBuild.name || 'build', '', 'Change build')
+    : binProcessing ? `<span class="iv-binfile-pending">analyzing…</span>`
+    : binChip('Upload build', UPLOAD_SVG, 'Upload build');
 
   let binBody = '', binHeadRight = '', binCardCls = 'iv-card-binary';
   const binAllDone = binAnalyzed && findings.every((_, i) => binDone.has(i));
 
   if (!binBuild && !binProcessing) {
-    binBody = `<div class="iys-bin-row">${binUploadPill}</div>
-      <div class="imp-problem" style="margin-top:12px;margin-bottom:0;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
+    /* Collapsed: the sentence is a caption for the header's control, not a body
+       under it, so it gets no divider — same reasoning as the all-clear states. */
+    binCardCls = 'iv-card-binary iv-card-collapsed';
+    binBody = `<div class="imp-problem" style="margin-bottom:0;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
   } else if (binProcessing) {
     binBody = `<div class="iys-bin-analyzing"><span class="build-proc-spin"></span><span>Analyzing binary… this takes about 10 seconds.</span></div>`;
   } else {

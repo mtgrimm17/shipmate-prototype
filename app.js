@@ -10521,7 +10521,6 @@ function applyStorePageFix() {
   const cur = _selectedStoreItem();
   if (!cur?.fixedValue || cur.type !== 'sp') return;
   _applyFieldValue(cur.field, cur.fixedValue);
-  _clearImproveCollapsed('storePage');
   renderStepModal();
 }
 
@@ -10542,7 +10541,6 @@ function keepExistingFix() {
   if (!state.dismissedFixes) state.dismissedFixes = new Set();
   const cur = _selectedStoreItem();
   if (cur) state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
-  _clearImproveCollapsed('storePage');
   renderStepModal();
 }
 
@@ -10574,8 +10572,9 @@ function selectStoreFix(i) {
      worth keeping the note for: every circle click pinned the batch open, so
      answering the last suggestion could never collapse it again — the default
      was permanently overruled by a click the user made for another reason. */
-  const allAnswered = _mergedStoreItems().every(it => it.status !== 'open');
-  if (_improveCollapsed('storePage', allAnswered)) _setImproveCollapsed('storePage', false);
+  /* Store Page has no auto-collapse (see the note in buildImproveSubmissionSection),
+     so "open it if it is shut" only ever undoes a manual collapse. */
+  if (_improveCollapsed('storePage', false)) _setImproveCollapsed('storePage', false);
   renderStepModal();
 }
 

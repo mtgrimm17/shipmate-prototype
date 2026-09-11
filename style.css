@@ -5390,7 +5390,17 @@ body.viewing-splash .app-subnav { display: none; }
    with the body. It used to stay behind as a line to nowhere. */
 .improve-v2 .iv-card-collapsed .iv-divider{ display: none; }
 
-.improve-v2 .iv-card-collapsed .iv-head{ margin-bottom: 0; }
+/* THE HEADER DROPS ITS MARGIN ONLY WHEN IT IS THE LAST THING IN THE CARD —
+   `:last-child` says exactly that. A blanket `margin-bottom: 0` was right while
+   collapsed meant "header and nothing else", and wrong the moment collapsed
+   also covered the states that keep one caption line: the all-clear summaries
+   and Binary's "upload your build to scan for…", which ended up flush against
+   the label above them.
+   And the strong line gives up its own 11px here so that whatever follows a
+   collapsed header — caption, all-clear or completion line — sits at the same
+   one distance. */
+.improve-v2 .iv-card-collapsed .iv-head:last-child{ margin-bottom: 0; }
+.improve-v2 .iv-card-collapsed .iv-strong-line{ margin-top: 0; }
 
 /* Completion line when every Store Page suggestion was accepted (same green as an A). */
   .improve-v2 .iv-strong-line{ margin-top: 11px; padding-left: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #50F88A; }

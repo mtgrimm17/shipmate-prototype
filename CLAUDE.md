@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.85**
+Current version: **v5.86**
 
 ---
 
@@ -337,6 +337,20 @@ both claim a card that is not on screen — and the "looking good" line is only
 printed when everything really is answered. Folded away with work outstanding it
 shows its header and nothing else.
 
+**Only two of the three auto-collapse.** Binary and Localization are
+acknowledgements: answered, there is nothing left to do with them. A Store Page
+answer is *not* finished when it is made — the accepted fix stays editable
+through its pencil, and the text it wrote is the real store copy — so its
+default is `false` and it only ever collapses by hand. That is why the all-clear
+and no-build states wear `.iv-card-collapsed` too: they are the same claim, and
+it buys them the right padding and no divider.
+
+A divider divides two things, so **summaries never have one**: the two
+all-clears, Binary's "upload your build to scan for…" caption, and any collapsed
+card. `.iv-head:last-child` is what drops the header's bottom margin only when
+the header really is the whole card — a blanket `margin-bottom: 0` left those
+captions flush against the label above them.
+
 **Four bugs worth not repeating.** A `contenteditable` inside a `<button>`
 cannot take focus, so the edit pencil did nothing — the boxes are `<button>`
 while they are a choice and `<div>` once they are an answer. `focusout` does not
@@ -352,7 +366,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.85** → next is **v5.86**, then **v5.87**, etc.
+Current version: **v5.86** → next is **v5.87**, then **v5.88**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -364,7 +378,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.85 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v5.86 — add tooltip to age rating cell"`.
 
 ---
 
@@ -418,7 +432,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.85 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v5.86 — description of change"`.
 
 ---
 
@@ -438,7 +452,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.85, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v5.86, the following items are in the queue:
 
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and
