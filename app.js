@@ -11694,6 +11694,21 @@ function closeAllDropdowns() {
   // (_steamToggleReviewSettingsMenu above) — its own independent flag/DOM id,
   // never shared with either other platform's gear menu.
   state.steamReviewSettingsOpen = false;
+  // Same treatment for the two platforms' own Achievement Localizations
+  // settings menus (_iasAchLocToggleSettingsMenu/_masAchLocToggleSettingsMenu
+  // above) and all three of Mac App Store Full's (_macFullToggleReviewSettingsMenu/
+  // _macFullIapLocToggleSettingsMenu/_macFullAchLocToggleSettingsMenu, further
+  // below) plus the generic _locsToggleSettingsMenu above (the unified Game
+  // Details - Localizations step reuses these same five flags per view) — these
+  // five were missing from this list, so closing one of these six menus via the
+  // generic '.sw-select-wrap' class removal above visually closed it but left
+  // its state flag stuck true, popping it back open on the next unrelated
+  // re-render.
+  state.iasAchLocSettingsOpen = false;
+  state.masAchLocSettingsOpen = false;
+  state.macFullReviewSettingsOpen = false;
+  state.macFullIapLocSettingsOpen = false;
+  state.macFullAchLocSettingsOpen = false;
 }
 
 /* ── Language picker ─────────────────────────────────── */
@@ -11738,6 +11753,29 @@ _registerTrackCallbacks();
 function swSelectChoose(id, value, callbackFn) {
   closeAllDropdowns();
   if (typeof window[callbackFn] === 'function') window[callbackFn](value);
+}
+
+/* Generic gear-menu toggle for the UNIFIED Game Details - Localizations step
+   (_buildUnifiedLocalizationsSection/_locsSettingsMenu, render.js — the "App
+   Store - Localizations"/"Mac App Store - Localizations" step, not any of
+   the standalone sections below). That one page needs a distinct settings
+   gear per view (Store Page/IAPs/Achievements), each with its own state flag
+   and its own DOM id (`${idPrefix}-locs-{storepage,iaps,achievements}-settings-wrap`).
+   The standalone toggle functions below can't be reused for it: each
+   hardcodes both a single state flag AND a single DOM id that only ever
+   matches ITS OWN page, so calling e.g. _iasToggleReviewSettingsMenu from the
+   unified page set the right state flag but tried to classList.add('is-open')
+   on an id that page never renders — the click set state correctly but the
+   menu never visibly opened. This version takes the state key and wrap id as
+   arguments instead, so it stays correct for whichever view is showing. */
+function _locsToggleSettingsMenu(event, stateKey, wrapId) {
+  event.stopPropagation();
+  const wasOpen = !!state[stateKey];
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state[stateKey] = true;
+    document.getElementById(wrapId)?.classList.add('is-open');
+  }
 }
 
 /* ── Localization Review — "Automatically translated fields" settings ──

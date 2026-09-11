@@ -12496,7 +12496,14 @@ function _buildUnifiedLocalizationsSection(p) {
     settingsHtml = _locsSettingsMenu({
       wrapId: `${p.idPrefix}-locs-storepage-settings-wrap`,
       isOpen: !!state[p.storePage.settingsOpenKey],
-      toggleMenuOnclick: `${p.storePage.toggleSettingsMenuFn}(event)`,
+      // Was `${p.storePage.toggleSettingsMenuFn}(event)` — that reused each
+      // standalone section's own toggle function, which hardcodes ITS OWN
+      // (different) DOM id, so the gear here never found its wrap and the
+      // menu never visually opened. _locsToggleSettingsMenu (app.js) is the
+      // generic replacement: it takes the state key and wrap id this page
+      // actually renders, so it stays correct for whichever of the three
+      // views (Store Page/IAPs/Achievements) is currently selected.
+      toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.storePage.settingsOpenKey}', '${p.idPrefix}-locs-storepage-settings-wrap')`,
       toggleFieldOnclick: (key) => `${p.storePage.toggleAutoTranslateFieldFn}('${key}')`,
       autoCfg: state[p.storePage.autoCfgKey] || p.storePage.autoCfgDefault,
       rows: p.storePage.settingsRows,
@@ -12536,7 +12543,8 @@ function _buildUnifiedLocalizationsSection(p) {
     settingsHtml = _locsSettingsMenu({
       wrapId: `${p.idPrefix}-locs-iaps-settings-wrap`,
       isOpen: !!state[p.iaps.settingsOpenKey],
-      toggleMenuOnclick: `${p.iaps.toggleSettingsMenuFn}(event)`,
+      // See the Store Page branch's own note above — same fix, same reason.
+      toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.iaps.settingsOpenKey}', '${p.idPrefix}-locs-iaps-settings-wrap')`,
       toggleFieldOnclick: (key) => `${p.iaps.toggleAutoTranslateFieldFn}('${key}')`,
       autoCfg: state[p.iaps.autoCfgKey] || { name: true, desc: true },
       rows: [['name', 'Name'], ['desc', 'Description']],
@@ -12579,7 +12587,8 @@ function _buildUnifiedLocalizationsSection(p) {
     settingsHtml = _locsSettingsMenu({
       wrapId: `${p.idPrefix}-locs-achievements-settings-wrap`,
       isOpen: !!state[p.achievements.settingsOpenKey],
-      toggleMenuOnclick: `${p.achievements.toggleSettingsMenuFn}(event)`,
+      // See the Store Page branch's own note above — same fix, same reason.
+      toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.achievements.settingsOpenKey}', '${p.idPrefix}-locs-achievements-settings-wrap')`,
       toggleFieldOnclick: (key) => `${p.achievements.toggleAutoTranslateFieldFn}('${key}')`,
       autoCfg: state[p.achievements.autoCfgKey] || { displayName: true, earnedDescription: true, preEarnedDescription: true },
       rows: [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
@@ -12652,7 +12661,7 @@ function buildIosLocalizationsSection() {
       undoFn: 'locReviewUndo', redoFn: 'locReviewRedo',
       inlineEditFn: 'startLocReviewInlineEdit', backEditFn: 'startLocReviewBackTranslationEdit',
       toggleReviewModeFn: 'toggleLocReviewMode', fieldSetterFn: 'setLocReviewField',
-      toggleSettingsMenuFn: '_iasToggleReviewSettingsMenu', toggleAutoTranslateFieldFn: '_iasToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_iasToggleAutoTranslateField',
     },
     iaps: {
       answersKey: 'iosSubmitAnswers', fieldKey: 'iapLocField', modeKey: 'iapLocMode',
@@ -12667,7 +12676,7 @@ function buildIosLocalizationsSection() {
       undoFn: 'iapLocUndo', redoFn: 'iapLocRedo',
       inlineEditFn: 'startIapLocInlineEdit', backEditFn: 'startIapLocBackTranslationEdit',
       toggleReviewModeFn: 'toggleIapLocReviewMode', itemSetterFn: 'setIapLocReviewIapId', fieldSetterFn: 'setIapLocField',
-      toggleSettingsMenuFn: '_iapLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_iapLocToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_iapLocToggleAutoTranslateField',
     },
     achievements: {
       savedKey: 'iosGameCenterAchievements', fieldKey: 'iasAchLocField', modeKey: 'iasAchLocMode',
@@ -12682,7 +12691,7 @@ function buildIosLocalizationsSection() {
       undoFn: 'iasAchLocUndo', redoFn: 'iasAchLocRedo',
       inlineEditFn: 'startIasAchLocInlineEdit', backEditFn: 'startIasAchLocBackTranslationEdit',
       toggleReviewModeFn: 'toggleIasAchLocReviewMode', itemSetterFn: 'setIasAchLocReviewAchId', fieldSetterFn: 'setIasAchLocField',
-      toggleSettingsMenuFn: '_iasAchLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_iasAchLocToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_iasAchLocToggleAutoTranslateField',
     },
   });
 }
@@ -12706,7 +12715,7 @@ function buildMacLocalizationsSection() {
       undoFn: 'masLocReviewUndo', redoFn: 'masLocReviewRedo',
       inlineEditFn: 'startMasLocReviewInlineEdit', backEditFn: 'startMasLocReviewBackTranslationEdit',
       toggleReviewModeFn: 'toggleMasLocReviewMode', fieldSetterFn: 'setMasLocReviewField',
-      toggleSettingsMenuFn: '_masToggleReviewSettingsMenu', toggleAutoTranslateFieldFn: '_masToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_masToggleAutoTranslateField',
     },
     iaps: {
       answersKey: 'macSubmitAnswers', fieldKey: 'masIapLocField', modeKey: 'masIapLocMode',
@@ -12721,7 +12730,7 @@ function buildMacLocalizationsSection() {
       undoFn: 'masIapLocUndo', redoFn: 'masIapLocRedo',
       inlineEditFn: 'startMasIapLocInlineEdit', backEditFn: 'startMasIapLocBackTranslationEdit',
       toggleReviewModeFn: 'toggleMasIapLocReviewMode', itemSetterFn: 'setMasIapLocReviewIapId', fieldSetterFn: 'setMasIapLocField',
-      toggleSettingsMenuFn: '_masIapLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_masIapLocToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_masIapLocToggleAutoTranslateField',
     },
     achievements: {
       savedKey: 'macGameCenterAchievements', fieldKey: 'masAchLocField', modeKey: 'masAchLocMode',
@@ -12736,7 +12745,7 @@ function buildMacLocalizationsSection() {
       undoFn: 'masAchLocUndo', redoFn: 'masAchLocRedo',
       inlineEditFn: 'startMasAchLocInlineEdit', backEditFn: 'startMasAchLocBackTranslationEdit',
       toggleReviewModeFn: 'toggleMasAchLocReviewMode', itemSetterFn: 'setMasAchLocReviewAchId', fieldSetterFn: 'setMasAchLocField',
-      toggleSettingsMenuFn: '_masAchLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_masAchLocToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_masAchLocToggleAutoTranslateField',
     },
   });
 }
@@ -12760,7 +12769,7 @@ function buildMacFullLocalizationsSection() {
       undoFn: 'macFullLocReviewUndo', redoFn: 'macFullLocReviewRedo',
       inlineEditFn: 'startMacFullLocReviewInlineEdit', backEditFn: 'startMacFullLocReviewBackTranslationEdit',
       toggleReviewModeFn: 'toggleMacFullLocReviewMode', fieldSetterFn: 'setMacFullLocReviewField',
-      toggleSettingsMenuFn: '_macFullToggleReviewSettingsMenu', toggleAutoTranslateFieldFn: '_macFullToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_macFullToggleAutoTranslateField',
     },
     iaps: {
       answersKey: 'macFullSubmitAnswers', fieldKey: 'macFullIapLocField', modeKey: 'macFullIapLocMode',
@@ -12775,7 +12784,7 @@ function buildMacFullLocalizationsSection() {
       undoFn: 'macFullIapLocUndo', redoFn: 'macFullIapLocRedo',
       inlineEditFn: 'startMacFullIapLocInlineEdit', backEditFn: 'startMacFullIapLocBackTranslationEdit',
       toggleReviewModeFn: 'toggleMacFullIapLocReviewMode', itemSetterFn: 'setMacFullIapLocReviewIapId', fieldSetterFn: 'setMacFullIapLocField',
-      toggleSettingsMenuFn: '_macFullIapLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_macFullIapLocToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_macFullIapLocToggleAutoTranslateField',
     },
     achievements: {
       savedKey: 'macFullGameCenterAchievements', fieldKey: 'macFullAchLocField', modeKey: 'macFullAchLocMode',
@@ -12790,7 +12799,7 @@ function buildMacFullLocalizationsSection() {
       undoFn: 'macFullAchLocUndo', redoFn: 'macFullAchLocRedo',
       inlineEditFn: 'startMacFullAchLocInlineEdit', backEditFn: 'startMacFullAchLocBackTranslationEdit',
       toggleReviewModeFn: 'toggleMacFullAchLocReviewMode', itemSetterFn: 'setMacFullAchLocReviewAchId', fieldSetterFn: 'setMacFullAchLocField',
-      toggleSettingsMenuFn: '_macFullAchLocToggleSettingsMenu', toggleAutoTranslateFieldFn: '_macFullAchLocToggleAutoTranslateField',
+      toggleAutoTranslateFieldFn: '_macFullAchLocToggleAutoTranslateField',
     },
   });
 }
