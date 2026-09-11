@@ -4721,7 +4721,16 @@ function renderStepModal() {
   // request, rather than shrinking fonts to force the glance column
   // shorter.
   const isSteamSpp = stepId === 'storePreviewPrototype' && platformId === 'steam';
-  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (state.showHighlights ? ' is-validating' : '');
+  // Mac App Store's own Product Page Preview (buildMacStorePreviewSection)
+  // gets a wider modal + decorative sidebar to more closely match the
+  // native macOS App Store app — but only in its un-flipped state; flipping
+  // into a sub-section (Content/Business/Data Questions, via
+  // buildStorePreviewFlipSection) should keep the normal step-modal width,
+  // same as every other flip target. flipTarget itself isn't computed until
+  // below, so this reads state.storePreviewFlipTarget directly rather than
+  // duplicating that computation.
+  const isMacSpp = stepId === 'storePreview' && platformId === 'macos' && !(state.storePreviewFlipTarget?.[platformId]);
+  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];
@@ -7770,9 +7779,9 @@ function buildMacStorePreviewSection() {
        </div>`;
 
   const screenshotsArea = `
-    <div class="ias-shots-scroll">${shotHtml}</div>
+    <div class="ias-shots-scroll mac-spp-shots-scroll">${shotHtml}</div>
     <div class="ias-device-compat">
-      <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+      <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5v7H3v-7Z" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 15.5h17l-1 1.2a1 1 0 0 1-.78.3H3.28a1 1 0 0 1-.78-.3l-1-1.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
       <span>Mac</span>
     </div>
     <div style="padding:0 16px 10px;">
@@ -7837,7 +7846,10 @@ function buildMacStorePreviewSection() {
         <div class="ias-section-divider"></div>`;
 
   return `
-    <div class="ias-device-wrap">
+    <div class="mac-spp-shell">
+      ${_buildMacSppSidebar()}
+      <div class="mac-spp-main">
+      <div class="ias-device-wrap">
       <!-- "Mac App Store Preview" badge, "Reflects your submission data" note,
            and the "Localizations" button are all hidden here by request —
            see the ios buildStorePreviewSection's matching note above. -->
@@ -7849,7 +7861,7 @@ function buildMacStorePreviewSection() {
         </div>
       </div>
 
-      <div class="ias-page">
+      <div class="ias-page mac-spp-page">
 
         <!-- ── Header ── -->
         <div class="ias-header">
@@ -7938,9 +7950,60 @@ function buildMacStorePreviewSection() {
 
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
+      </div><!-- /mac-spp-main -->
+    </div><!-- /mac-spp-shell -->
 
     ${navBar}
   `;
+}
+
+/* Decorative-only mockup of the native macOS App Store app's persistent
+   left sidebar (Discover/Arcade/Create/Work/Play/Develop, Categories,
+   Updates, account) — shown in every screen of the real app, not a
+   per-app info rail (that pattern was retired years ago). Purely visual:
+   no onclick handlers, since none of it does anything real — it exists to
+   make buildMacStorePreviewSection's Product Page Preview read as "the
+   App Store app on a Mac" rather than the in-browser store page. Scoped
+   entirely to its own .mac-spp-* classes (style.css). */
+function _buildMacSppSidebar() {
+  const navIcon = d => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none">${d}</svg>`;
+  const ICONS = {
+    discover: '<path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13Z" stroke="currentColor" stroke-width="1.3"/><path d="M10.2 5.8L6.6 7.3 5.1 10.9l3.6-1.5 1.5-3.6Z" fill="currentColor"/>',
+    arcade:   '<rect x="1.5" y="4.5" width="13" height="8" rx="3" stroke="currentColor" stroke-width="1.3"/><circle cx="5.2" cy="8.5" r="0.9" fill="currentColor"/><circle cx="11.2" cy="7.3" r="0.9" fill="currentColor"/><circle cx="11.2" cy="9.7" r="0.9" fill="currentColor"/>',
+    create:   '<path d="M2 12.5l1-3.3 7-7 2.3 2.3-7 7-3.3 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+    work:     '<rect x="1.5" y="4.5" width="13" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5" stroke="currentColor" stroke-width="1.3"/>',
+    play:     '<path d="M3.5 2.5v11l9-5.5-9-5.5Z" fill="currentColor"/>',
+    develop:  '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+    categories: '<rect x="1.7" y="1.7" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.1" y="1.7" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.7" y="9.1" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.1" y="9.1" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/>',
+    updates:  '<path d="M8 1.8a6.2 6.2 0 105.2 2.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13.3 1.8v3h-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+  };
+  const item = (key, label, current) => `
+    <div class="mac-spp-nav-item${current ? ' is-current' : ''}">
+      ${navIcon(ICONS[key])}
+      <span>${label}</span>
+    </div>`;
+  return `
+    <div class="mac-spp-sidebar">
+      <div class="mac-spp-search">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="6.8" cy="6.8" r="4.8" stroke="currentColor" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>Search</span>
+      </div>
+      ${item('discover', 'Discover', true)}
+      ${item('arcade', 'Arcade', false)}
+      ${item('create', 'Create', false)}
+      ${item('work', 'Work', false)}
+      ${item('play', 'Play', false)}
+      ${item('develop', 'Develop', false)}
+      <div class="mac-spp-nav-divider"></div>
+      ${item('categories', 'Categories', false)}
+      ${item('updates', 'Updates', false)}
+      <div class="mac-spp-account">
+        <div class="mac-spp-account-avatar">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="8" cy="5.6" r="2.6" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 13.2c0-2.5 2.3-4.2 5.2-4.2s5.2 1.7 5.2 4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        </div>
+        <span class="mac-spp-account-label">Account</span>
+      </div>
+    </div>`;
 }
 
 /* ═══════════════════════════════════════════════════

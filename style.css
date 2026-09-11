@@ -6479,6 +6479,71 @@ textarea.loc-review-field.ias-inline-input {
 }
 .spp-section-btn--compact .spp-section-btn-title { font-size: 11px; }
 
+/* ── Mac App Store Product Page Preview — native-app shell ──
+   buildMacStorePreviewSection (render.js) only — scoped entirely to new
+   .mac-spp-* classes so the shared .ias-* rules above (also used by the
+   iOS App Store's buildStorePreviewSection and Mac App Store Full's
+   buildMacFullStorePreviewSection) are never touched. Mimics the
+   persistent global-nav sidebar shown in every screen of the native macOS
+   App Store app (Discover/Arcade/Create/Work/Play/Develop, Categories,
+   Updates, account) — this is decorative chrome only, not a functional
+   nav, so its rows carry no hover/active affordance beyond the one
+   "current section" highlight. Paired with .submit-modal-mac-spp
+   (below, near the other width modifiers) which widens the modal enough
+   to fit it alongside the existing .ias-device-wrap content unchanged. */
+.mac-spp-shell { display: flex; align-items: flex-start; gap: 20px; }
+.mac-spp-sidebar {
+  flex-shrink: 0; width: 176px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
+  align-self: stretch;
+}
+.mac-spp-search {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--panel-3); border-radius: 7px;
+  padding: 6px 9px; margin-bottom: 10px;
+  color: var(--text-faint); font-size: 12px;
+}
+.mac-spp-search svg { flex-shrink: 0; }
+.mac-spp-nav-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 8px; border-radius: 6px;
+  font-size: 12.5px; font-weight: 500; color: var(--text-dim);
+}
+.mac-spp-nav-item svg { flex-shrink: 0; opacity: 0.75; }
+.mac-spp-nav-item.is-current { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--text); }
+.mac-spp-nav-item.is-current svg { opacity: 1; color: var(--blue); }
+.mac-spp-nav-divider { height: 1px; background: var(--border); margin: 8px 4px; }
+.mac-spp-account {
+  margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.mac-spp-account-avatar {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  background: var(--border-hover);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-faint);
+}
+.mac-spp-account-label { font-size: 12px; color: var(--text-dim); font-weight: 500; }
+
+.mac-spp-main { flex: 1; min-width: 0; }
+
+/* Header/icon get a modest bump inside the wider Mac preview only — the
+   existing .ias-header/.ias-icon rules (shared with iOS/Mac Full) are
+   left exactly as they were. */
+.mac-spp-page .ias-header { padding: 22px 22px 14px; gap: 18px; }
+.mac-spp-page .ias-icon, .mac-spp-page .ias-icon-empty { width: 96px; height: 96px; border-radius: 21px; }
+.mac-spp-page .ias-app-name { font-size: 21px; }
+.mac-spp-page .ias-app-subtitle { font-size: 13px; }
+
+/* Screenshots get more room in the wider layout — natural aspect ratio is
+   kept (no cropping), just a taller frame since there's space for it. */
+.mac-spp-shots-scroll .ias-shot-frame { height: 300px; max-width: 560px; }
+
 /* ── Inline upload step card (no click-to-open modal) ── */
 .ios-step-card--inline { cursor: default; }
 .ios-step-card--inline:hover { background: transparent !important; }
@@ -8148,6 +8213,13 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    would otherwise open up above the thumbnail strip. */
 .submit-modal.submit-modal-steam-spp {
   max-width: 1180px;
+}
+/* Mac App Store Product Page Preview — wide enough for the new decorative
+   sidebar (.mac-spp-sidebar, ~176px + gap) alongside the existing preview
+   content at roughly its original width. See renderStepModal's own
+   isMacSpp comment for why this only applies un-flipped. */
+.submit-modal.submit-modal-mac-spp {
+  max-width: 1000px;
 }
 .submit-modal {
   height: clamp(560px, 88vh, 860px);
