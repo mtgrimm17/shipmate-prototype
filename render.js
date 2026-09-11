@@ -7672,28 +7672,48 @@ function buildMacStorePreviewSection() {
         `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
       ).join('');
 
-  const _infoRowHtml = r => `
-    <div class="ias-info-row">
-      <span class="ias-info-label">${r.label}</span>
-      <span class="ias-info-value">${r.value}</span>
+  // Grid cell — label (with an optional chevron, for the fields the native
+  // app lets you expand: Compatibility/Age Rating/Copyright) above its
+  // value, matching the native macOS App Store's own Information card
+  // rather than the shared .ias-info-row's side-by-side label/value line
+  // (still used unchanged by the iOS/Mac Full previews below). The chevron
+  // here is decorative, same as the rest of this preview's non-functional
+  // affordances (Developer/Website/Support alongside it) — there's no real
+  // expanded state behind it.
+  const _infoCellHtml = r => `
+    <div class="mac-spp-info-cell">
+      <div class="mac-spp-info-label-row">
+        <span class="ias-info-label">${r.label}</span>
+        ${r.chevron ? `<svg class="mac-spp-info-chevron" viewBox="0 0 16 16" width="10" height="10" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+      </div>
+      <span class="mac-spp-info-value">${r.value}</span>
     </div>`;
 
   // Compatibility reads "Mac" — this is the Mac App Store, not iPhone/iPad.
-  const infoRowsTop = [
+  // Grid auto-flows these seven cells into 1–3 columns by the pane's own
+  // width (.mac-spp-info-grid, style.css) — Copyright, as the 7th cell,
+  // naturally lands alone on its own row whenever there's more than one
+  // column, the same way the reference screenshot shows it.
+  const infoCellsHtml = [
     { label: 'Seller',        value: 'Your Company'      },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
-    { label: 'Compatibility', value: 'Mac'                },
+    { label: 'Compatibility', value: 'Mac',      chevron: true },
     { label: 'Languages',     value: langCode            },
-    { label: 'Age Rating',    value: ageRating           },
-  ].map(_infoRowHtml).join('');
-  const copyrightRowHtml = _infoRowHtml({ label: 'Copyright', value: `© ${new Date().getFullYear()}` });
+    { label: 'Age Rating',    value: ageRating,  chevron: true },
+    { label: 'Copyright',     value: `© ${new Date().getFullYear()}`, chevron: true },
+  ].map(_infoCellHtml).join('');
 
   const savedIapProducts = (a.iapProducts || []).filter(p => p.collapsed);
   const iapPriceLabel = price => {
     const val = parseFloat(price);
     return (!price || isNaN(val) || val <= 0) ? 'Free' : `$${price}`;
   };
+  // In-App Purchases is a variable-length list, not a single label/value
+  // pair, so it sits in its own block below the grid rather than as one of
+  // its cells — same shared .ias-info-row/.ias-info-subhead the iOS/Mac
+  // Full previews still use for theirs, just no longer interleaved with
+  // Copyright the way the old single-column layout had it.
   const iapInfoBlock = savedIapProducts.length ? `
     <div class="ias-info-subhead">In-App Purchases</div>
     ${savedIapProducts.map(p => `
@@ -7701,8 +7721,6 @@ function buildMacStorePreviewSection() {
         <span class="ias-iap-name">${escHtml(p.name) || 'Untitled IAP'}</span>
         <span class="ias-iap-price">${iapPriceLabel(p.price)}</span>
       </div>`).join('')}` : '';
-
-  const infoRows = `${infoRowsTop}${iapInfoBlock}${copyrightRowHtml}`;
 
   // Section completion status for DocuSign navigation — Mac App Store's own
   // storePreviewSectionSeen/isMacSectionComplete, independent of iOS's.
@@ -7930,7 +7948,7 @@ function buildMacStorePreviewSection() {
                 <span>Website</span>
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M10.1 5.9L8.6 8.7 5.9 10.1 7.4 7.3 10.1 5.9Z" fill="currentColor"/></svg>
               </span>
-              <span class="mac-spp-link-row mac-spp-link-row--muted">
+              <span class="mac-spp-link-row">
                 <span>Support</span>
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.4a1.8 1.8 0 113.3 1c-.25.5-.95.8-1.25 1.3-.15.25-.2.5-.2.75" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.55" fill="currentColor"/></svg>
               </span>
@@ -7970,8 +7988,19 @@ function buildMacStorePreviewSection() {
         <!-- ── Information ── -->
         <div class="ias-section">
           <div class="ias-section-head">Information</div>
-          <div class="ias-info-grid">${infoRows}</div>
-          <div class="ias-info-link">Privacy Policy <svg viewBox="0 0 8 14" fill="none" width="5" height="9" style="margin-left:auto;"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="mac-spp-info-grid">${infoCellsHtml}</div>
+          ${iapInfoBlock}
+          <!-- Privacy Policy anchored to the bottom of the card, with its
+               own hand icon to the left — reuses .ias-info-link verbatim
+               (shared with the iOS/Mac Full previews' own Privacy Policy
+               row, untouched) for the border-top divider/blue text/flex
+               row, just with different children: a leading icon instead of
+               a trailing chevron, since this is the one row here with
+               nothing further to reveal. -->
+          <div class="ias-info-link">
+            <svg class="mac-spp-hand-icon" viewBox="0 0 16 16" width="14" height="14" fill="none"><path d="M5 7.6V3.3a1 1 0 1 1 2 0V7.2M7 7.2V2.5a1 1 0 1 1 2 0V7.4M9 7.4V3a1 1 0 1 1 2 0V7.8M11 7.9V4.7a1 1 0 1 1 2 0v4.5c0 2.15-1.5 3.8-3.6 3.8h-1c-1.2 0-1.9-.4-2.6-1.2L3.9 9.7c-.45-.55-.35-1.2.2-1.6.5-.35 1.1-.25 1.55.2L6.7 9.4" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Privacy Policy</span>
+          </div>
         </div>
 
       </div><!-- /ias-page -->

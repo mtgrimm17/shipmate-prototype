@@ -6581,15 +6581,45 @@ textarea.loc-review-field.ias-inline-input {
   display: flex; flex-direction: column; gap: 10px;
   padding-top: 2px;
 }
+/* Website and Support read the same neutral tone as the rest of this
+   preview's non-accent-colored text (.ias-info-label and friends) — only
+   the Developer name (.ias-dev-name, above) keeps the accent blue, since
+   it's the one actual identity link in this column. Was blue on Website
+   alone (matching its old life as the Information card's "Developer
+   Website" link, before it moved up here) until request; the two rows
+   are meant to read as a matched pair, not one accented and one not. */
 .mac-spp-link-row {
   display: flex; align-items: center; gap: 5px;
-  font-size: 13px; color: #0a84ff;
+  font-size: 13px; color: var(--text-dim);
 }
 .mac-spp-link-row svg { flex-shrink: 0; }
-/* Support reads as a secondary, less prominent action than Website/the
-   developer name — same neutral tone the rest of this preview uses for
-   "not an accent-colored link" text (.ias-info-label and friends). */
-.mac-spp-link-row--muted { color: var(--text-dim); }
+
+/* Information — a responsive 1–3 column grid of label/value cells, matching
+   the native macOS App Store's own Information card, instead of the shared
+   .ias-info-row's single-column side-by-side rows (still used unchanged by
+   the iOS/Mac Full previews). auto-fit + a 200px floor does the "1 to 3,
+   dynamic on width" behavior on its own: at this pane's own widest (the
+   modal's max 1000px minus the sidebar) three 200px+ columns fit and a
+   fourth would not, so it never goes past three; it drops to two and then
+   one as the modal (or the window behind it) narrows, with no breakpoint
+   to keep in sync by hand. */
+.mac-spp-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 18px 20px;
+  margin-bottom: 4px;
+}
+.mac-spp-info-cell { min-width: 0; }
+.mac-spp-info-label-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+.mac-spp-info-chevron { color: var(--text-faint); flex-shrink: 0; }
+.mac-spp-info-value {
+  display: block; font-size: 13px; font-weight: 500; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The hand beside Privacy Policy, at the Information card's own bottom —
+   inherits .ias-info-link's blue via currentColor, same as the compass/
+   question-mark icons above inherit .mac-spp-link-row's. */
+.mac-spp-hand-icon { flex-shrink: 0; }
 
 /* ── Inline upload step card (no click-to-open modal) ── */
 .ios-step-card--inline { cursor: default; }
