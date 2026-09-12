@@ -7044,6 +7044,29 @@ textarea.loc-review-field.ias-inline-input {
 }
 .ias-meta-bot--action { color: var(--accent); font-weight: 600; }
 
+/* ── Required-element focus (App Store/Mac App Store Product Page Preview
+   only — buildStorePreviewSection/buildMacStorePreviewSection, REQUIRED_
+   ELEMENTS/_sppFooterNav, render.js) ──
+   A required element (Title, Subtitle, Content, Business, Adjust
+   Screenshots, Answer Data Collection Questions) that still needs attention
+   but ISN'T the one currently in focus gets this additive modifier instead
+   of the animated pulse every "needs attention" glow on this preview
+   defaults to (ias-meta-pulse/spp-pulse, above/below) — a fixed, duller
+   version of the same orange ring, using !important the same way
+   .spp-section-btn--done already does two rules below, since it must beat
+   the plain base class it's layered onto regardless of stylesheet order.
+   Only the element actually in focus keeps the real animated pulse (no
+   override needed for that state — it's simply the base class's normal,
+   unmodified behavior). Every OTHER surface that reuses .ias-placeholder/
+   .ias-meta-cell--action/.spp-section-btn — Mac App Store Full and
+   Android/Steam's own Product Page Previews, Localization Review/IAP
+   fields — never has this class added to it and keeps its original
+   unconditional pulse, untouched by any of this. */
+.is-spp-static {
+  animation: none !important;
+  box-shadow: 0 0 0 3px rgba(255,149,0,0.16);
+}
+
 /* ── Mac App Store Full only: Product Page Preview's Information section,
    made selectable and glowing-until-visited like Subtitle/Content/Business
    above (openStorePreviewSection('macos_full','appInformation') — flips to
@@ -7161,6 +7184,29 @@ textarea.loc-review-field.ias-inline-input {
   transition: opacity 0.15s;
 }
 .spp-nav-btn:hover { opacity: 0.85; }
+
+/* ── Required-element prev/next footer navigator (App Store/Mac App Store
+   Product Page Preview only — _sppFooterNav, render.js) — replaces the old
+   single "Next required" spp-nav-label/spp-nav-btn pair above for these two
+   previews only. Mac App Store Full and Android/Steam's own Product Page
+   Previews keep that original pair untouched, still sitting inside the same
+   shared .spp-nav-bar container. Both arrows always render (so the footer
+   never reflows depending on position); an arrow with nothing to move to
+   gets .is-disabled instead of disappearing. ── */
+.spp-nav-arrow {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; padding: 4px 2px;
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  cursor: pointer; max-width: 45%;
+}
+.spp-nav-arrow span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.spp-nav-arrow:hover:not(.is-disabled) { color: var(--text); }
+.spp-nav-arrow--next { margin-left: auto; }
+.spp-nav-arrow.is-disabled {
+  color: var(--text-faint); opacity: 0.4; cursor: not-allowed;
+}
 
 /* ── "Edit Screenshots" inline link ── */
 .spp-edit-link {

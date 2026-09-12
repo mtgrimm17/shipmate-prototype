@@ -2974,6 +2974,18 @@ const state = {
   // Tracks which sub-sections the user has actually visited (gates "done" state)
   storePreviewSectionSeen:  { ios: {}, macos: {}, macos_full: {}, android: {}, steam: {}, web: {} },
 
+  // Which required element (Title/Subtitle/Content/Business/Screenshots/Data)
+  // currently has the animated "needs attention" glow on the App Store/Mac
+  // App Store Product Page Preview footer's prev/next navigator
+  // (buildStorePreviewSection/buildMacStorePreviewSection, setStorePreviewFocus
+  // — app.js). null = no explicit choice yet, so the preview defaults to the
+  // first not-yet-addressed required element on every render; a value here
+  // (an element id, e.g. 'title'/'content'/'screenshots') is only ever set by
+  // clicking the footer's prev/next arrows, and sticks until changed again or
+  // this resets (e.g. app reload) — it does not auto-advance just because the
+  // focused element gets addressed elsewhere in the app.
+  storePreviewFocus:        { ios: null, macos: null },
+
   // Web self-distribution site — editable fields shown in the Preview Website
   // step, organized in "Edit site details" into four groups: Factsheet,
   // Description, Media, About. Preview renders four always-visible main

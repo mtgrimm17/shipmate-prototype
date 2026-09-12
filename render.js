@@ -7164,6 +7164,76 @@ function _iasAllPreviewLangCodes() {
   return [primary, ...supporting];
 }
 
+/* ── Required-element focus system for the App Store/Mac App Store Product
+   Page Preview footer (buildStorePreviewSection/buildMacStorePreviewSection
+   only — Mac App Store Full and Android/Steam's own preview builders keep
+   their original always-pulsing "Next required" footer, out of scope here)
+   ──
+   Six required elements, always in this same top-down/left-to-right order:
+   Title, Subtitle, Content, Business, Adjust Screenshots, Answer Data
+   Collection Questions — matching the order they actually appear in the
+   preview (header → meta strip → screenshots → privacy). Exactly one is
+   ever "in focus" at a time; only the focused, not-yet-addressed element
+   keeps the animated pulse (is-spp-focused, reusing ias-meta-pulse/spp-pulse
+   below) — every other not-yet-addressed element instead gets a static,
+   duller glow box (is-spp-static, style.css), and an already-addressed
+   element gets neither (its existing done styling — .ias-meta-cell--seen /
+   .spp-section-btn--done / plain filled-in text — is untouched). Replaces
+   the old always-on "Next required" footer with a prev/next navigator
+   (_sppFooterNav) that walks this same ordered list and can move focus off
+   the default.
+
+   state.storePreviewFocus[pid] (state.js) holds an explicit focus choice,
+   set only by clicking the footer's prev/next arrows (setStorePreviewFocus,
+   app.js) — until then, or if that choice's element no longer exists, focus
+   always falls back to the first not-yet-addressed element, computed fresh
+   on every render. That means fixing the currently-focused field elsewhere
+   in the app (e.g. finally typing a Title) naturally advances the glow to
+   whatever's next incomplete the next time this re-renders, as long as the
+   user hasn't explicitly clicked to some other element in the meantime. */
+function _sppFocusIndex(pid, elements) {
+  const saved = state.storePreviewFocus?.[pid];
+  let idx = saved ? elements.findIndex(e => e.id === saved) : -1;
+  if (idx === -1) {
+    idx = elements.findIndex(e => !e.done);
+    if (idx === -1) idx = elements.length - 1; // everything addressed — park at the end
+  }
+  return idx;
+}
+
+// True when `id` is this preview's single currently-focused element — the
+// only not-yet-addressed element that should still carry the animated
+// pulse; every other incomplete element gets the static/duller treatment
+// instead (is-spp-focused vs is-spp-static, applied by each element's own
+// markup below).
+function _sppIsFocused(pid, elements, id) {
+  return elements[_sppFocusIndex(pid, elements)]?.id === id;
+}
+
+// Prev/next footer navigator — replaces the old single "Next required"
+// button. Always renders both arrows so the footer's layout never shifts;
+// an arrow with nothing to move to (already at the first/last required
+// element) renders disabled/greyed with no label rather than wrapping
+// around to the other end.
+function _sppFooterNav(pid, elements) {
+  const idx  = _sppFocusIndex(pid, elements);
+  const prev = idx > 0 ? elements[idx - 1] : null;
+  const next = idx < elements.length - 1 ? elements[idx + 1] : null;
+  const arrowLeft  = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const arrowRight = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `
+    <div class="spp-nav-bar">
+      <button type="button" class="spp-nav-arrow${prev ? '' : ' is-disabled'}"
+        ${prev ? `onclick="setStorePreviewFocus('${pid}','${prev.id}')"` : 'disabled'}>
+        ${arrowLeft}<span>${prev ? escHtml(prev.label) : ''}</span>
+      </button>
+      <button type="button" class="spp-nav-arrow spp-nav-arrow--next${next ? '' : ' is-disabled'}"
+        ${next ? `onclick="setStorePreviewFocus('${pid}','${next.id}')"` : 'disabled'}>
+        <span>${next ? escHtml(next.label) : ''}</span>${arrowRight}
+      </button>
+    </div>`;
+}
+
 function buildStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
@@ -7480,8 +7550,10 @@ function buildStorePreviewSection() {
   const dataDone        = isIOSSectionComplete('privacy');
   const screenshotsDone = isIOSSectionComplete('screenshots');
 
-  // Section button helper — orange pulsing tab when incomplete, green check when done
-  function _sppBtn(target, label, sub, isDone) {
+  // Section button helper — glows (animated if focused, static otherwise)
+  // when incomplete, green check when done. glowCls is the is-spp-focused/
+  // is-spp-static modifier computed by the caller (empty string when done).
+  function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
       return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -7492,7 +7564,7 @@ function buildStorePreviewSection() {
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>`;
     }
-    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+    return `<button class="spp-section-btn${glowCls || ''}" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
       <div>
         <div class="spp-section-btn-title">${label}</div>
@@ -7502,46 +7574,49 @@ function buildStorePreviewSection() {
     </button>`;
   }
 
-  // DocuSign-style "next required" nav bar
-  const SPP_SECTIONS = [
-    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
-    { target: 'screenshots', done: screenshotsDone, label: 'Adjust Screenshots'             },
-    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
-    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  // Required elements, top-down/left-to-right — drives both the focus glow
+  // (_sppIsFocused, below) and the footer's prev/next navigator (_sppFooterNav).
+  const REQUIRED_ELEMENTS = [
+    { id: 'title',       label: 'Title',                            done: !!titleRaw },
+    { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
+    { id: 'content',     label: 'Content',                           done: contentDone },
+    { id: 'business',    label: 'Business',                          done: businessDone },
+    { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
+    { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
   ];
-  const nextSection = SPP_SECTIONS.find(s => !s.done);
-  const navBar = nextSection ? `
-    <div class="spp-nav-bar">
-      <span class="spp-nav-label">Next required</span>
-      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
-        ${nextSection.label} →
-      </button>
-    </div>` : `
-    <div class="spp-nav-bar spp-nav-bar--done">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      All sections complete — ready to save
-    </div>`;
+  // Additive glow class for a not-yet-addressed required element: the
+  // animated pulse if it's the one in focus, a static/duller box otherwise.
+  // Returns '' for an already-addressed element — its own done styling
+  // (ias-meta-cell--seen/spp-section-btn--done/plain filled-in text) is
+  // untouched.
+  const _sppGlowCls = id => {
+    const el = REQUIRED_ELEMENTS.find(e => e.id === id);
+    if (!el || el.done) return '';
+    return _sppIsFocused(pid, REQUIRED_ELEMENTS, id) ? ' is-spp-focused' : ' is-spp-static';
+  };
 
-  // Age meta cell — always clickable; orange pulse when not done, green hover when done
+  // Age meta cell — always clickable; glows when not done (animated if
+  // focused, static otherwise), green hover when done
   const ageCell = contentDone
     ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
          <div class="ias-meta-bot">Age</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
          <div class="ias-meta-bot ias-meta-bot--action">Content</div>
        </div>`;
 
-  // Price meta cell — always clickable; orange pulse when not done, green hover when done
+  // Price meta cell — always clickable; glows when not done (animated if
+  // focused, static otherwise), green hover when done
   const priceCell = businessDone
     ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
          <div class="ias-meta-top">${priceText}</div>
          <div class="ias-meta-bot">Price</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -7556,7 +7631,7 @@ function buildStorePreviewSection() {
       <span>iPhone, iPad</span>
     </div>
     <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
+      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone, _sppGlowCls('screenshots'))}
     </div>`;
 
   // Privacy section
@@ -7568,7 +7643,7 @@ function buildStorePreviewSection() {
        <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
        ${privacyHtml}
        <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
 
   // Achievements widget — App Store (ios) only (this builder is also reused,
   // unmodified, for android/steam/egs/psn/xbox/switch's own Product Page
@@ -7627,9 +7702,9 @@ function buildStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}"
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
@@ -7711,7 +7786,7 @@ function buildStorePreviewSection() {
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
 
-    ${navBar}
+    ${_sppFooterNav(pid, REQUIRED_ELEMENTS)}
   `;
 }
 
@@ -8098,7 +8173,7 @@ function buildMacStorePreviewSection() {
   const dataDone        = isMacSectionComplete('privacy');
   const screenshotsDone = isMacSectionComplete('screenshots');
 
-  function _sppBtn(target, label, sub, isDone) {
+  function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
       return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -8109,7 +8184,7 @@ function buildMacStorePreviewSection() {
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>`;
     }
-    return `<button class="spp-section-btn" onclick="openStorePreviewSection('${pid}','${target}')">
+    return `<button class="spp-section-btn${glowCls || ''}" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
       <div>
         <div class="spp-section-btn-title">${label}</div>
@@ -8119,31 +8194,30 @@ function buildMacStorePreviewSection() {
     </button>`;
   }
 
-  const SPP_SECTIONS = [
-    { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
-    { target: 'screenshots', done: screenshotsDone, label: 'Adjust Screenshots'             },
-    { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
-    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+  // Required elements, top-down/left-to-right — drives both the focus glow
+  // (_sppIsFocused, above) and the footer's prev/next navigator (_sppFooterNav).
+  const REQUIRED_ELEMENTS = [
+    { id: 'title',       label: 'Title',                            done: !!titleRaw },
+    { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
+    { id: 'content',     label: 'Content',                           done: contentDone },
+    { id: 'business',    label: 'Business',                          done: businessDone },
+    { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
+    { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
   ];
-  const nextSection = SPP_SECTIONS.find(s => !s.done);
-  const navBar = nextSection ? `
-    <div class="spp-nav-bar">
-      <span class="spp-nav-label">Next required</span>
-      <button class="spp-nav-btn" onclick="openStorePreviewSection('${pid}','${nextSection.target}')">
-        ${nextSection.label} →
-      </button>
-    </div>` : `
-    <div class="spp-nav-bar spp-nav-bar--done">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      All sections complete — ready to save
-    </div>`;
+  // Additive glow class for a not-yet-addressed required element — see the
+  // twin definition's own comment in buildStorePreviewSection above.
+  const _sppGlowCls = id => {
+    const el = REQUIRED_ELEMENTS.find(e => e.id === id);
+    if (!el || el.done) return '';
+    return _sppIsFocused(pid, REQUIRED_ELEMENTS, id) ? ' is-spp-focused' : ' is-spp-static';
+  };
 
   const ageCell = contentDone
     ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
          <div class="ias-meta-bot">Age</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -8155,7 +8229,7 @@ function buildMacStorePreviewSection() {
          <div class="ias-meta-top">${priceText}</div>
          <div class="ias-meta-bot">Price</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -8169,7 +8243,7 @@ function buildMacStorePreviewSection() {
       <span>Mac</span>
     </div>
     <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone)}
+      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone, _sppGlowCls('screenshots'))}
     </div>`;
 
   const privacySection = dataDone
@@ -8180,7 +8254,7 @@ function buildMacStorePreviewSection() {
        <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
        ${privacyHtml}
        <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
 
   // Achievements — a Game Center widget preview, mirroring the real App
   // Store product page's own "GAME CENTER / Achievements" card. Always
@@ -8246,9 +8320,9 @@ function buildMacStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}"
                  onclick="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}"
                  onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
@@ -8369,7 +8443,7 @@ function buildMacStorePreviewSection() {
       </div><!-- /mac-spp-main -->
     </div><!-- /mac-spp-shell -->
 
-    ${navBar}
+    ${_sppFooterNav(pid, REQUIRED_ELEMENTS)}
   `;
 }
 

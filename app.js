@@ -16388,6 +16388,18 @@ function toggleBinFindingFix(pid) {
   reRenderStepModal();
 }
 
+// Moves the App Store/Mac App Store Product Page Preview's required-element
+// focus (state.storePreviewFocus, state.js) to `elementId`, in response to
+// clicking the footer's prev/next arrow (_sppFooterNav, render.js). Stays on
+// the Product Page Preview itself — unlike openStorePreviewSection below,
+// this never flips to a sub-section, it only moves which required element
+// carries the animated "needs attention" glow.
+function setStorePreviewFocus(pid, elementId) {
+  if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
+  state.storePreviewFocus[pid] = elementId;
+  reRenderStepModal();
+}
+
 /* ══════════════════════════════════════════════════════
    STORE PREVIEW FLIP NAVIGATION
    ══════════════════════════════════════════════════════ */
