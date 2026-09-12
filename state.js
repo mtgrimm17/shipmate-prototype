@@ -1576,10 +1576,13 @@ function isIOSSectionComplete(sectionId) {
   // so it needs an answer.
   if (sectionId === 'gameCenter') return true;
 
-  // Localizations is purely a unified editing surface over Store
-  // Page/IAPs/Achievements' own already-tracked localization data — it
-  // never gates submission on its own, same convention as gameCenter above.
-  if (sectionId === 'localizations') return true;
+  // Localizations is a unified editing surface over Store Page/IAPs/
+  // Achievements' own already-tracked localization data — it never gates on
+  // any field of its own, but (like storePreview below) still requires the
+  // developer to have actually opened and reviewed it at least once before
+  // counting as done, so a step nothing's forced them to look at doesn't
+  // silently show as complete.
+  if (sectionId === 'localizations') return !!state.iosLocalizationsSeen;
 
   // storePreview is complete when all 4 sub-sections are done
   if (sectionId === 'storePreview') {
@@ -1727,10 +1730,12 @@ function isMacSectionComplete(sectionId) {
   // blocks submission.
   if (sectionId === 'gameCenter') return true;
 
-  // Localizations is purely a unified editing surface over Store
-  // Page/IAPs/Achievements' own already-tracked localization data — it
-  // never gates submission on its own, same convention as gameCenter above.
-  if (sectionId === 'localizations') return true;
+  // Localizations is a unified editing surface over Store Page/IAPs/
+  // Achievements' own already-tracked localization data — it never gates on
+  // any field of its own, but (same as iOS's own isIOSSectionComplete
+  // above) still requires the developer to have actually opened and
+  // reviewed it at least once before counting as done.
+  if (sectionId === 'localizations') return !!state.macLocalizationsSeen;
 
   // Content Rating and Data Privacy are answered ONCE, shared with the App
   // Store (state.iosSubmitAnswers — see IOS_MAC_SHARED_ANSWER_FIELDS and
@@ -1902,10 +1907,12 @@ function isMacFullSectionComplete(sectionId) {
   // the list(s) empty, so an empty list never blocks completion.
   if (sectionId === 'gameCenter')    return true;
 
-  // Localizations is purely a unified editing surface over Store
-  // Page/IAPs/Achievements' own already-tracked localization data — it
-  // never gates submission on its own, same convention as gameCenter above.
-  if (sectionId === 'localizations') return true;
+  // Localizations is a unified editing surface over Store Page/IAPs/
+  // Achievements' own already-tracked localization data — it never gates on
+  // any field of its own, but (same as iOS's own isIOSSectionComplete
+  // above) still requires the developer to have actually opened and
+  // reviewed it at least once before counting as done.
+  if (sectionId === 'localizations') return !!state.macFullLocalizationsSeen;
 
   // App Information (the new, non-"Full" section reached from Product
   // Page Preview's own Information card — see buildMacFullStorePreviewSection's
@@ -3430,6 +3437,18 @@ const state = {
 
   // Mac App Store Full twin of iosStorePreviewSeen/macStorePreviewSeen above.
   macFullStorePreviewSeen: false,
+
+  // Whether the user has opened and reviewed the Localizations step
+  // (isIOSSectionComplete, state.js) — same "seen" gate as
+  // iosStorePreviewSeen above, so Localizations doesn't show as complete in
+  // the platform card until the developer has actually looked at it once.
+  iosLocalizationsSeen: false,
+
+  // Mac App Store twin of iosLocalizationsSeen above.
+  macLocalizationsSeen: false,
+
+  // Mac App Store Full twin of iosLocalizationsSeen/macLocalizationsSeen above.
+  macFullLocalizationsSeen: false,
 
   // Mac App Store's OWN independent Product Page Preview listing text —
   // Title/Subtitle/Description/What's New, plus per-language overrides

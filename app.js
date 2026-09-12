@@ -1953,6 +1953,15 @@ async function openStepModal(pid, stepId) {
     else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
     else                      state.iosStorePreviewSeen     = true;
   }
+  // Mark Localizations as visited before rendering — same "seen" gate as
+  // Store Page Preview above (isIOSSectionComplete/isMacSectionComplete/
+  // isMacFullSectionComplete, state.js), so it only counts as complete once
+  // the developer has actually opened it.
+  if (stepId === 'localizations') {
+    if (pid === 'macos')      state.macLocalizationsSeen     = true;
+    else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
+    else                      state.iosLocalizationsSeen     = true;
+  }
 
   document.getElementById('submit-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -15196,6 +15205,14 @@ function confirmCreateRelease() {
   state.androidSubmitAnswers.storePreviewSeen      = false;
   state.steamSubmitAnswers.storePreviewSeen        = false;
 
+  // Localizations is driven by the same kind of "seen" flag (isIOSSection
+  // Complete/isMacSectionComplete/isMacFullSectionComplete, state.js) —
+  // reset it too, so a new release requires the developer to look at
+  // Localizations again rather than inheriting the previous release's review.
+  state.iosLocalizationsSeen                       = false;
+  state.macLocalizationsSeen                       = false;
+  state.macFullLocalizationsSeen                   = false;
+
   closeNewReleaseModal();
   renderDashboard();
 }
@@ -16400,16 +16417,38 @@ function setStorePreviewFocus(pid, elementId) {
   reRenderStepModal();
   // If the newly-focused element isn't already visible in whichever pane
   // scrolls it (the step modal body on iOS, .mac-spp-main on Mac App
-  // Store — scrollIntoView finds the right one on its own either way),
-  // bring it on screen. block:'nearest' is a deliberate no-op when the
-  // element is already fully visible, so jumping focus never yanks the
-  // scroll position around for an element that was on screen already.
-  // data-spp-el (render.js) marks each of the six required elements'
-  // real DOM node with its own id, the same one passed in here.
+  // Store), bring it on screen — but only just then, and centered rather
+  // than snapped to the nearest edge, so it lands clearly in the middle of
+  // the visible area instead of flush against the top/bottom. data-spp-el
+  // (render.js) marks each of the six required elements' real DOM node with
+  // its own id, the same one passed in here.
   requestAnimationFrame(() => {
     const el = document.querySelector(`[data-spp-el="${elementId}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (el) _sppScrollIntoViewIfNeeded(el);
   });
+}
+
+// Scrolls `el` into view, centered, but ONLY if it isn't already fully
+// visible within whichever ancestor actually scrolls it — re-centering an
+// element that's already on screen would yank the scroll position around
+// for no reason every time focus moves. Walks up from `el` to find the
+// nearest scrollable ancestor (rather than assuming a fixed container id,
+// since iOS's Product Page Preview and Mac App Store's own each scroll a
+// different pane), checks visibility against THAT ancestor's own bounds
+// (not the whole viewport, which could differ if the modal itself doesn't
+// fill the screen), and only calls the native scrollIntoView (which finds
+// the right scrolling ancestor on its own) when the element falls outside it.
+function _sppScrollIntoViewIfNeeded(el) {
+  let container = el.parentElement;
+  while (container && container !== document.body) {
+    const style = getComputedStyle(container);
+    if (/(auto|scroll)/.test(style.overflowY) && container.scrollHeight > container.clientHeight) break;
+    container = container.parentElement;
+  }
+  const elRect = el.getBoundingClientRect();
+  const cRect  = (container && container !== document.body) ? container.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+  const fullyVisible = elRect.top >= cRect.top && elRect.bottom <= cRect.bottom;
+  if (!fullyVisible) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 /* ══════════════════════════════════════════════════════
