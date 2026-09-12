@@ -16415,40 +16415,16 @@ function setStorePreviewFocus(pid, elementId) {
   if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
   state.storePreviewFocus[pid] = elementId;
   reRenderStepModal();
-  // If the newly-focused element isn't already visible in whichever pane
-  // scrolls it (the step modal body on iOS, .mac-spp-main on Mac App
-  // Store), bring it on screen — but only just then, and centered rather
-  // than snapped to the nearest edge, so it lands clearly in the middle of
-  // the visible area instead of flush against the top/bottom. data-spp-el
-  // (render.js) marks each of the six required elements' real DOM node with
-  // its own id, the same one passed in here.
+  // Whenever focus shifts, re-center the newly-focused element in whichever
+  // pane scrolls it (the step modal body on iOS, .mac-spp-main on Mac App
+  // Store — scrollIntoView finds the right one on its own either way),
+  // every time — not just when it was off-screen. data-spp-el (render.js)
+  // marks each of the six required elements' real DOM node with its own id,
+  // the same one passed in here.
   requestAnimationFrame(() => {
     const el = document.querySelector(`[data-spp-el="${elementId}"]`);
-    if (el) _sppScrollIntoViewIfNeeded(el);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
-}
-
-// Scrolls `el` into view, centered, but ONLY if it isn't already fully
-// visible within whichever ancestor actually scrolls it — re-centering an
-// element that's already on screen would yank the scroll position around
-// for no reason every time focus moves. Walks up from `el` to find the
-// nearest scrollable ancestor (rather than assuming a fixed container id,
-// since iOS's Product Page Preview and Mac App Store's own each scroll a
-// different pane), checks visibility against THAT ancestor's own bounds
-// (not the whole viewport, which could differ if the modal itself doesn't
-// fill the screen), and only calls the native scrollIntoView (which finds
-// the right scrolling ancestor on its own) when the element falls outside it.
-function _sppScrollIntoViewIfNeeded(el) {
-  let container = el.parentElement;
-  while (container && container !== document.body) {
-    const style = getComputedStyle(container);
-    if (/(auto|scroll)/.test(style.overflowY) && container.scrollHeight > container.clientHeight) break;
-    container = container.parentElement;
-  }
-  const elRect = el.getBoundingClientRect();
-  const cRect  = (container && container !== document.body) ? container.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
-  const fullyVisible = elRect.top >= cRect.top && elRect.bottom <= cRect.bottom;
-  if (!fullyVisible) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 /* ══════════════════════════════════════════════════════
