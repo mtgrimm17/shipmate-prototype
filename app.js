@@ -9405,6 +9405,50 @@ function toggleIasDescMore(btn) {
   btn.textContent = expand ? 'less' : 'more';
 }
 
+/* Mac App Store's own Product Page Preview Description
+   (buildMacStorePreviewSection, render.js) — a twin of toggleIasDescMore
+   above for its different truncation approach: that one swaps in a hand-
+   picked short/full substring pair; this one's description is always the
+   full text in the DOM, clamped to exactly 4 rows by CSS
+   (.mac-spp-desc-clamp's -webkit-line-clamp, style.css), so "more"/"less"
+   just flips that clamp off (is-desc-expanded) instead of swapping text.
+   Same lightweight, ephemeral, DOM-only toggle as toggleIasDescMore — no
+   reRenderStepModal call, and no state to persist it, so an unrelated
+   re-render elsewhere (switching languages, editing another field) resets
+   it back to collapsed the same way "more" already does over there. */
+function toggleMasDescMore(btn) {
+  const el = btn.closest('.mac-spp-desc-clamp');
+  if (!el) return;
+  const expand = !el.classList.contains('is-desc-expanded');
+  el.classList.toggle('is-desc-expanded', expand);
+  btn.textContent = expand ? 'less' : 'more';
+  _updateMasDescMoreBtn();
+}
+
+/* Whether Mac App Store's Description (#mas-desc-text) is actually
+   overflowing its 4-row clamp can only be known once the browser has laid
+   the text out — a fixed character count can't guarantee an exact row
+   count at every column width/font the way native -webkit-line-clamp can,
+   but that means the "more" chip's own visibility has to be measured
+   after the fact instead of decided from the raw string. Run via
+   requestAnimationFrame right after this step modal renders
+   (renderStepModal's own isMacSpp hook, render.js) and again from
+   toggleMasDescMore above after every toggle — a no-op everywhere else,
+   since #mas-desc-text only ever exists on Mac App Store's own un-flipped
+   Product Page Preview. */
+function _updateMasDescMoreBtn() {
+  const el = document.getElementById('mas-desc-text');
+  if (!el) return;
+  const btn = el.querySelector('.mac-spp-desc-more');
+  if (!btn) return;
+  if (el.classList.contains('is-desc-expanded')) {
+    btn.style.display = 'inline-block';
+    return;
+  }
+  const isTruncated = el.scrollHeight > el.clientHeight + 1;
+  btn.style.display = isTruncated ? 'inline-block' : 'none';
+}
+
 /* App Store Product Page Preview — top-right language dropdown (swSelect).
    Options are the Distribution section's Primary Language (always first)
    followed by its selected supported languages in alphabetical order,

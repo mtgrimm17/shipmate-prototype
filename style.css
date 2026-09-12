@@ -7346,13 +7346,27 @@ textarea.loc-review-field.ias-inline-input {
 /* Description — Developer/Website/Support move into their own column to
    the right of the description text (render.js), matching the native
    app's own product page instead of the shared .ias-dev-row's stacked-
-   below layout (still used, unchanged, by the iOS/Mac Full previews). */
-.mac-spp-desc-row { display: flex; gap: 24px; align-items: flex-start; }
+   below layout (still used, unchanged, by the iOS/Mac Full previews).
+   align-items: stretch (not the flex default/flex-start) so this column
+   is always exactly as tall as .mac-spp-desc-col's own 4-row-clamped
+   description beside it — see .mac-spp-dev-links' own comment below for
+   why that's what makes Support's bottom land on the description's own
+   bottom edge, per request. */
+.mac-spp-desc-row { display: flex; gap: 24px; align-items: stretch; }
 .mac-spp-desc-col { flex: 1; min-width: 0; }
+/* justify-content: space-between (not a fixed gap alone) spreads
+   Developer/Website/Support across this column's full stretched height
+   (== the description's own 4-row-clamped height, from align-items:
+   stretch above) — Developer stays flush with the description's first
+   row (both start at the row's own top) and Support ends up flush with
+   the description's last row (both end at the row's own bottom), with
+   Website landing in the middle, exactly matching the native macOS App
+   Store product page this column is modeled on. The 10px gap is a floor
+   only (flexbox honors it as a minimum alongside justify-content), for
+   a description short enough to leave less than 2 gaps' worth of slack. */
 .mac-spp-dev-links {
   flex-shrink: 0; width: 132px;
-  display: flex; flex-direction: column; gap: 10px;
-  padding-top: 2px;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
 }
 /* Website and Support read the same neutral tone as the rest of this
    preview's non-accent-colored text (.ias-info-label and friends) — only
@@ -7366,6 +7380,50 @@ textarea.loc-review-field.ias-inline-input {
   font-size: 13px; color: var(--text-dim);
 }
 .mac-spp-link-row svg { flex-shrink: 0; }
+
+/* Description text — always exactly 4 rows before collapsing, via native
+   -webkit-line-clamp rather than a fixed character count (which can't
+   guarantee an exact row count at every column width/font) — see
+   buildMacStorePreviewSection's own comment, render.js, for the full
+   more/less mechanics. position:relative anchors .mac-spp-desc-more
+   (below) to this box's own corner, not the page's. */
+.mac-spp-desc-clamp {
+  position: relative;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mac-spp-desc-clamp.is-desc-expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+/* Overlaid at the clamped box's own bottom-right corner — where the
+   browser's own native ellipsis would otherwise land — rather than
+   appended inline after a hand-truncated substring, per request. Solid
+   background (matching whatever this sits on: --panel-2 normally,
+   --panel-3 while .ias-editable's own :hover highlight is active) so it
+   reads as one continuous "…more" affordance over the clamped text's
+   trailing edge instead of overlapping/illegible text underneath. Hidden
+   by default (inline style, render.js) — _updateMasDescMoreBtn (app.js)
+   reveals it only once the browser confirms the text actually overflows
+   4 rows. */
+.mac-spp-desc-more {
+  position: absolute;
+  right: 0; bottom: 0;
+  padding-left: 22px;
+  background: var(--panel-2);
+}
+.mac-spp-desc-clamp:hover .mac-spp-desc-more { background: var(--panel-3); }
+/* Once expanded (is-desc-expanded, above), nothing is clamped or hidden
+   any more — "less" just sits in normal flow right after the now-fully-
+   visible text, not overlaid over anything. */
+.mac-spp-desc-clamp.is-desc-expanded .mac-spp-desc-more {
+  position: static;
+  padding-left: 4px;
+  background: none;
+}
 
 /* Information — a responsive 1–3 column grid of label/value cells, matching
    the native macOS App Store's own Information card, instead of the shared

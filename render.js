@@ -5089,6 +5089,15 @@ function renderStepModal() {
     requestAnimationFrame(_impPostRender);
   }
 
+  // Mac App Store's own Description clamps to exactly 4 rows via native
+  // -webkit-line-clamp (buildMacStorePreviewSection, above) — whether that
+  // actually truncated anything (and so whether the "more" chip should
+  // show at all) can only be known once the browser has laid the text out,
+  // not from the raw string alone. isMacSpp (computed above) is exactly
+  // "un-flipped Mac App Store Product Page Preview", the only place
+  // #mas-desc-text exists — see _updateMasDescMoreBtn's own comment, app.js.
+  if (isMacSpp) requestAnimationFrame(() => _updateMasDescMoreBtn());
+
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
 }
@@ -7969,10 +7978,13 @@ function buildMacStorePreviewSection() {
   const descPlaceholder = previewLang === previewPrimaryLang
     ? 'Your game description will appear here once you fill in the Description field in Game Details.'
     : `Add a ${previewLangName} description to populate this section.`;
+  // Unlike the App Store/Mac Full previews (descShort/descFull pair,
+  // toggleIasDescMore), there's no separate hand-truncated "short" string
+  // here — the full text always renders, and CSS (.mac-spp-desc-clamp,
+  // style.css) clamps it to exactly 4 rows via native -webkit-line-clamp.
+  // A fixed character count can't guarantee an exact row count at every
+  // column width/font, but the browser's own line-breaking always can.
   const descFull  = descRaw ? escHtml(descRaw) : descPlaceholder;
-  const descShort = descRaw.length > 240
-    ? escHtml(descRaw.slice(0, 240)) + '…'
-    : descFull;
 
   // Subtitle/Description/What's New auto-translate via _masTriggerAutoTranslate
   // (app.js) — same loading/error indicator treatment as the App Store's own
@@ -8387,9 +8399,19 @@ function buildMacStorePreviewSection() {
         <div class="ias-section">
           <div class="mac-spp-desc-row">
             <div class="mac-spp-desc-col">
-              <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
-                   onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
-                ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
+              <!-- mac-spp-desc-clamp (style.css) clamps this to exactly 4
+                   rows via native -webkit-line-clamp — the "more" chip is a
+                   separate absolutely-positioned element overlaid at the
+                   clamped box's own bottom-right corner (matching where the
+                   browser's own truncation/ellipsis lands) rather than a
+                   hand-picked substring cutoff, so it's always exactly 4
+                   rows regardless of the actual description length or this
+                   column's width. Hidden by default; _updateMasDescMoreBtn
+                   (app.js, run via requestAnimationFrame after this step
+                   modal renders — see renderStepModal's own isMacSpp hook)
+                   reveals it only if the text actually overflows 4 rows. -->
+              <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
+                   onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span><button type="button" class="ias-more-btn mac-spp-desc-more" style="display:none;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button></div>
               ${descStatusHtml}
             </div>
             <div class="mac-spp-dev-links">
