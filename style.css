@@ -7064,7 +7064,11 @@ textarea.loc-review-field.ias-inline-input {
    unconditional pulse, untouched by any of this. */
 .is-spp-static {
   animation: none !important;
-  box-shadow: 0 0 0 3px rgba(255,149,0,0.16);
+  /* Deliberately much fainter than the focused element's own animated ring
+     (ias-meta-pulse/spp-pulse peaks at 0.35/0.25 alpha) — barely visible, so
+     the one element in focus reads as clearly the only thing asking for
+     attention right now. */
+  box-shadow: 0 0 0 2px rgba(255,149,0,0.06);
 }
 
 /* ── Mac App Store Full only: Product Page Preview's Information section,
@@ -7206,6 +7210,18 @@ textarea.loc-review-field.ias-inline-input {
 .spp-nav-arrow--next { margin-left: auto; }
 .spp-nav-arrow.is-disabled {
   color: var(--text-faint); opacity: 0.4; cursor: not-allowed;
+}
+/* Name of the element currently in focus, centered in the footer regardless
+   of how wide the prev/next labels on either side of it are — absolutely
+   positioned against .spp-nav-bar's own position:sticky (any non-static
+   position value works as the containing block for this), rather than
+   relying on flex distribution, which would only center it when both side
+   buttons happened to be equal width. */
+.spp-nav-current {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 12px; font-weight: 600; color: var(--text);
+  max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ── "Edit Screenshots" inline link ── */

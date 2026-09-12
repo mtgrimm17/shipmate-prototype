@@ -7216,9 +7216,10 @@ function _sppIsFocused(pid, elements, id) {
 // element) renders disabled/greyed with no label rather than wrapping
 // around to the other end.
 function _sppFooterNav(pid, elements) {
-  const idx  = _sppFocusIndex(pid, elements);
-  const prev = idx > 0 ? elements[idx - 1] : null;
-  const next = idx < elements.length - 1 ? elements[idx + 1] : null;
+  const idx     = _sppFocusIndex(pid, elements);
+  const current = elements[idx];
+  const prev    = idx > 0 ? elements[idx - 1] : null;
+  const next    = idx < elements.length - 1 ? elements[idx + 1] : null;
   const arrowLeft  = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const arrowRight = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   return `
@@ -7227,6 +7228,7 @@ function _sppFooterNav(pid, elements) {
         ${prev ? `onclick="setStorePreviewFocus('${pid}','${prev.id}')"` : 'disabled'}>
         ${arrowLeft}<span>${prev ? escHtml(prev.label) : ''}</span>
       </button>
+      <span class="spp-nav-current">${current ? escHtml(current.label) : ''}</span>
       <button type="button" class="spp-nav-arrow spp-nav-arrow--next${next ? '' : ' is-disabled'}"
         ${next ? `onclick="setStorePreviewFocus('${pid}','${next.id}')"` : 'disabled'}>
         <span>${next ? escHtml(next.label) : ''}</span>${arrowRight}
