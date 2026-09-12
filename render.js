@@ -4810,7 +4810,20 @@ function renderStepModal() {
   // below, so this reads state.storePreviewFlipTarget directly rather than
   // duplicating that computation.
   const isMacSpp = stepId === 'storePreview' && platformId === 'macos' && !(state.storePreviewFlipTarget?.[platformId]);
-  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (state.showHighlights ? ' is-validating' : '');
+  // ios/macos's Data Collection Questions (buildPrivacyMatrix) — reached via
+  // Product Page Preview's "Data" flip target, so state.stepModal.stepId
+  // stays 'storePreview' the whole time and only storePreviewFlipTarget
+  // changes (see the flipTarget comment below) — needs the same extra width
+  // as Mac App Store's own Product Page Preview modal so the purpose/meta
+  // column headers (and their tooltip icons) have room to wrap instead of
+  // crowding into horizontal scroll. Its own modifier rather than reusing
+  // .submit-modal-mac-spp: that class also carries mac-spp-sidebar-specific
+  // flex/scroll overrides (see its comment above) that don't apply to this
+  // plain step body. Scoped to ios/macos only, per request — macos_full's
+  // own 'privacy' step is a separate, differently-reached surface that
+  // wasn't asked for here.
+  const isPrivacyWide = stepId === 'storePreview' && (platformId === 'ios' || platformId === 'macos') && state.storePreviewFlipTarget?.[platformId] === 'data';
+  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];
@@ -9941,7 +9954,7 @@ function buildPrivacySection(pid = 'ios') {
     // via "Show all data types" (the matrix) rather than micromanaging free text.
     collectBlock = `
       <div class="prv-nlp-wrap">
-        ${buildPrivacyMatrix(a)}
+        ${buildPrivacyMatrix(a, pid)}
       </div>`;
   }
 
@@ -9965,7 +9978,7 @@ function buildPrivacySection(pid = 'ios') {
     ${collectBlock}`;
 }
 
-function buildPrivacyMatrix(a) {
+function buildPrivacyMatrix(a, pid = 'ios') {
   const cols = IOS_PURPOSES;
   const META_COLS = [
     { id: 'linked_identity', label: t('ios.privacy.linked.label') || 'Linked to Identity' },
@@ -9980,6 +9993,25 @@ function buildPrivacyMatrix(a) {
   const selectedTypeIds = new Set(Object.keys(a.dataPerType));
   const selectedCount   = Object.keys(a.dataPerType).length;
 
+  // Per-group collapse state (Contact Info, Health & Fitness, ...) — each of
+  // the 16 groups defaults to collapsed UNLESS it has one or more
+  // flagged/selected data types, so opening this table for the first time
+  // surfaces only what already needs review instead of all 16 groups at
+  // once. Once a group's header is clicked, that explicit choice
+  // (state.privacyGroupExpanded, keyed "pid:Group Name") overrides the
+  // default in either direction until clicked again. Keyed by pid (not
+  // shared flat) because although ios/macos share the same dataPerType
+  // (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's is fully
+  // independent (_appStoreAnswers) and shouldn't inherit ios/macos's
+  // per-group choices or vice versa.
+  if (!state.privacyGroupExpanded) state.privacyGroupExpanded = {};
+  const _groupKey = g => `${pid}:${g.group}`;
+  const _isGroupExpanded = g => {
+    const override = state.privacyGroupExpanded[_groupKey(g)];
+    if (override !== undefined) return override;
+    return g.types.some(gt => selectedTypeIds.has(gt.id));
+  };
+
   // Header row with inline tooltips
   const purposeHeaders = cols.map(c => {
     const cLabel = t(`ios.purpose.${c.id}.label`) || c.label;
@@ -9993,7 +10025,12 @@ function buildPrivacyMatrix(a) {
   let bodyHtml = '';
   if (expanded) {
     IOS_DATA_TYPES.forEach(group => {
-      bodyHtml += `<tr class="prv-group-row"><td colspan="${1 + cols.length + META_COLS.length}">${group.group}</td></tr>`;
+      const groupOn = _isGroupExpanded(group);
+      bodyHtml += `
+        <tr class="prv-group-row${groupOn ? ' is-expanded' : ''}" onclick="togglePrivacyGroup('${pid}','${group.group}',${groupOn})">
+          <td colspan="${1 + cols.length + META_COLS.length}"><span class="prv-group-chev">${groupOn ? _chevUp : _chevDown}</span>${group.group}</td>
+        </tr>`;
+      if (!groupOn) return;
       group.types.forEach(t => {
         const isOn = !!a.dataPerType[t.id];
         const td   = a.dataPerType[t.id] || { purposes: [], identity: null, tracking: null };

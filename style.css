@@ -9071,6 +9071,15 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-mac-spp {
   max-width: 1000px;
 }
+/* ios/macos Data Collection Questions (buildPrivacyMatrix) — same width as
+   Mac App Store's Product Page Preview modal above, so the purpose/meta
+   column headers (and their tooltip icons) have room to wrap instead of
+   crowding into horizontal scroll. See renderStepModal's own isPrivacyWide
+   comment for why this is a separate class rather than reusing
+   .submit-modal-mac-spp — no sidebar flex/scroll overrides apply here. */
+.submit-modal.submit-modal-privacy-wide {
+  max-width: 1000px;
+}
 /* The Mac Product Page Preview's own sidebar (.mac-spp-sidebar) needs to
    stay put at full modal height while only its main pane scrolls, instead
    of the whole step body (including the sidebar) scrolling together the
@@ -10968,7 +10977,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-collapse: collapse;
   width: 100%;
   table-layout: fixed;
-  min-width: 700px;
+  min-width: 950px;
 }
 
 .prv-matrix th, .prv-matrix td {
@@ -10991,7 +11000,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 
 .prv-type-hd {
   text-align: left !important;
-  width: 170px;
+  width: 150px;
   padding-left: 12px !important;
   font-size: 11px;
   font-weight: 600;
@@ -11001,12 +11010,47 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 
 .prv-col-hd {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   color: var(--text-faint);
-  line-height: 1.3;
-  width: 76px;
+  line-height: 1.35;
+  width: 98px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+/* Slightly tighter horizontal padding and a smaller font-size than the
+   table's other header cells (.prv-matrix th/.prv-matrix thead th, above)
+   — frees just enough width for the longest single unbreakable purpose
+   label ("Personalization") to fit on one line instead of forcing an
+   awkward mid-word break. Both need this more specific selector
+   (.prv-matrix th.prv-col-hd, not just .prv-col-hd) to actually win: the
+   generic ".prv-matrix th, .prv-matrix td{font-size:11px}" rule above
+   outranks a bare .prv-col-hd class selector on specificity alone. */
+.prv-matrix th.prv-col-hd {
+  font-size: 9px;
+  letter-spacing: 0.2px;
+}
+.prv-matrix thead th.prv-col-hd {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* The label + "?" tooltip icon inside a column header need to wrap together
+   as normal text flow (label onto up to two lines, icon trailing the last
+   word) instead of tooltip-anchor's usual single-line inline-flex row —
+   at the old fixed 76px column width that inline-flex row simply didn't
+   fit "3rd-Party Advertising" (or the other longer purpose/meta labels) and
+   their tooltip icon, so they crowded together and read as cut off. Scoped
+   to just this table's headers so every other .tooltip-anchor elsewhere
+   (single-line labels with plenty of room) keeps its normal layout. */
+.prv-matrix .prv-col-hd .tooltip-anchor {
+  display: inline;
+  white-space: normal;
+}
+.prv-matrix .prv-col-hd .tooltip-icon {
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 .prv-meta-col {
@@ -11016,7 +11060,9 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 
 thead .prv-meta-col { background: var(--panel-2) !important; }
 
-/* Group header rows */
+/* Group header rows — clickable to collapse/expand that group's data-type
+   rows (togglePrivacyGroup, app.js). Defaults to collapsed unless the group
+   has a flagged/selected type (buildPrivacyMatrix's _isGroupExpanded). */
 .prv-group-row td {
   background: var(--panel-3);
   color: var(--text-faint);
@@ -11029,6 +11075,19 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
+.prv-group-row {
+  cursor: pointer;
+  user-select: none;
+}
+.prv-group-row:hover td { background: var(--panel-2); color: var(--text-dim); }
+.prv-group-chev {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-right: 6px;
+  color: var(--text-faint);
+}
+.prv-group-row:hover .prv-group-chev { color: var(--text-dim); }
 
 /* Data rows */
 .prv-data-row {

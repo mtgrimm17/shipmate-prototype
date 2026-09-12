@@ -2637,6 +2637,16 @@ function togglePrivacyMatrix() {
   reRenderStepModal();
 }
 
+// Per-group collapse inside the Data Types table (buildPrivacyMatrix,
+// render.js) — currentlyExpanded is the group's effective state at render
+// time (explicit override, or the "has a flagged type" default), passed
+// straight through so this just flips it rather than re-deriving it.
+function togglePrivacyGroup(pid, groupName, currentlyExpanded) {
+  if (!state.privacyGroupExpanded) state.privacyGroupExpanded = {};
+  state.privacyGroupExpanded[`${pid}:${groupName}`] = !currentlyExpanded;
+  reRenderStepModal();
+}
+
 function toggleContentRatingExpanded(value) {
   const pid = state.stepModal?.platformId || 'ios';
   // Re-snapshot on "Unanswered" click so newly-answered questions get hidden

@@ -3916,6 +3916,13 @@ const state = {
   // Whether the privacy matrix is showing all types (default: fully collapsed)
   privacyMatrixExpanded: false,
 
+  // Per-group collapse overrides inside the Data Types table
+  // (buildPrivacyMatrix/togglePrivacyGroup), keyed "pid:Group Name" (e.g.
+  // "ios:Health & Fitness"). Absent = use the default (expanded only if the
+  // group has a flagged/selected data type); present = the developer's own
+  // explicit choice from clicking that group's header, which wins either way.
+  privacyGroupExpanded: {},
+
   // Content Rating question collapse (iOS + future AI-inferred steps)
   // Set of question IDs that were answered when AI inference last completed.
   // null = inference has not run yet (show all questions).
