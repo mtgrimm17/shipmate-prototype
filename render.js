@@ -2530,7 +2530,7 @@ function buildMktWebsite() {
   // were removed by request. Nothing else in this function used that `slug`,
   // so its declaration is gone too rather than left as dead code.
   return `
-    <p class="mkt-web-note">A ready-made landing page, built from the metadata and assets you've already given Shipmate.</p>
+    <p class="mkt-web-note">A ready-made landing page, built from the metadata and assets you've already put into Shipmate.</p>
     <div class="mkt-web-embed" data-wp-card>${_mktWebInnerHTML()}</div>
     <div class="mkt-card-actions">
       <button class="btn btn-ghost" onclick="mktToast('Website editor')">Edit page</button>
@@ -10162,15 +10162,26 @@ function buildContentRatingSection(pid = 'ios') {
   // than just reading answered.size. Y is the fixed total across all six
   // categories (Additional Information/ageCategory isn't a content
   // question — see its own section below — so it's excluded from Y).
+  // Only shown in the "Unanswered" view (by request) — once the user has
+  // switched to "All" they're already looking at everything, so the prompt
+  // to go look has nothing left to do.
   const crTotalQuestions = IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.length, 0);
   const crInferredCount  = collapseMode
     ? IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.filter(q => answered.has(q.id)).length, 0)
     : 0;
-  const inferredBanner = crInferredCount > 0 ? `
+  // The "All" inside the message is a real pill button — same look as the
+  // real "All" toggle above (.cr-toggle-bar .app-subtab's 12px/5px-12px
+  // sizing, reused here via .cr-toggle-bar-all-inline rather than
+  // duplicated, so the two can't drift apart) — and it actually works,
+  // flipping to the All view exactly like clicking the real tab would.
+  // {allPill} is a substitution point in the locale string, not literal
+  // HTML a translator has to reproduce.
+  const allPillHtml = `<button type="button" class="app-subtab cr-toggle-bar-all-inline" onclick="toggleContentRatingExpanded(true)">All</button>`;
+  const inferredBanner = (crInferredCount > 0 && !showAll) ? `
     <div class="sw-tip-box sw-tip-box-inference">
       <div class="sw-tip-box-row">
         ${SM_INFO_ICON}
-        <span class="sw-tip-text">${t('cr.inferred_banner', { count: crInferredCount, total: crTotalQuestions }) || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses. Click All to review before submitting.`}</span>
+        <span class="sw-tip-text">${t('cr.inferred_banner', { count: crInferredCount, total: crTotalQuestions, allPill: allPillHtml }) || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses. Click ${allPillHtml} to review before submitting.`}</span>
       </div>
     </div>` : '';
 

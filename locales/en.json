@@ -172,7 +172,7 @@
   "ob.dist.preset.minimize_reg": "Minimize regulation",
   "ob.dist.preset.custom": "Custom",
   "ob.dist.excluded": "Excluded",
-  "cr.inferred_banner": "Shipmate inferred {count} out of {total} responses. Click All to review before submitting.",
+  "cr.inferred_banner": "Shipmate inferred {count} out of {total} responses. Click {allPill} to review before submitting.",
   "ob.section.localization": "Languages",
   "ob.field.lang_search.placeholder": "Search languages…",
   "ob.field.trailer_url.label": "Or paste a YouTube URL",

@@ -10657,6 +10657,13 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    section nav, so it wears a smaller pill than the Game Details sub-tabs. */
 .cr-toggle-bar .app-subtab { font-size: 12px; padding: 5px 12px; }
 .cr-toggle-bar .app-subtab-sep { font-size: 12px; }
+/* The "All" pill embedded inline in the inferred-answers banner's own text
+   (buildContentRatingSection, render.js) — everything else about it (font,
+   weight, color, hover, the is-on look it never uses here) already comes
+   from .app-subtab; this just re-applies .cr-toggle-bar's own 12px/5px-12px
+   sizing without requiring the banner to literally nest inside a
+   .cr-toggle-bar element, so the two pills can't drift apart. */
+.cr-toggle-bar-all-inline.app-subtab { font-size: 12px; padding: 5px 12px; }
 
 .cr-toggle-btn {
   padding: 5px 14px;
@@ -14139,7 +14146,12 @@ body.viewing-splash #app-guide { display: none; }
 .mkt-pk-dot.is-done { background: var(--green); border-color: var(--green); }
 
 /* Website embed (reuses the Web store-page preview) */
-.mkt-web-note { font-size: 13px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.5; max-width: 620px; }
+/* max-width: 620px removed by request — it used to keep this paragraph from
+   running the full width of .sec-panel while it shared the row above with
+   .mkt-card-head's "Shipmate Pages"/URL text (now removed entirely, see
+   buildMktWebsite), which left empty space in the panel's top-right corner
+   with nothing there to justify the narrower measure any more. */
+.mkt-web-note { font-size: 13px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.5; }
 /* Note: web-page.css cancels this box when the NEW preview design is inside,
    which arrives already wearing a browser frame of its own. */
 .mkt-web-embed { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
