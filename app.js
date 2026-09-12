@@ -16398,6 +16398,18 @@ function setStorePreviewFocus(pid, elementId) {
   if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
   state.storePreviewFocus[pid] = elementId;
   reRenderStepModal();
+  // If the newly-focused element isn't already visible in whichever pane
+  // scrolls it (the step modal body on iOS, .mac-spp-main on Mac App
+  // Store — scrollIntoView finds the right one on its own either way),
+  // bring it on screen. block:'nearest' is a deliberate no-op when the
+  // element is already fully visible, so jumping focus never yanks the
+  // scroll position around for an element that was on screen already.
+  // data-spp-el (render.js) marks each of the six required elements'
+  // real DOM node with its own id, the same one passed in here.
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`[data-spp-el="${elementId}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 }
 
 /* ══════════════════════════════════════════════════════

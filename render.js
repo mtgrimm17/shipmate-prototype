@@ -7557,7 +7557,7 @@ function buildStorePreviewSection() {
   // is-spp-static modifier computed by the caller (empty string when done).
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
-      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+      return `<button class="spp-section-btn spp-section-btn--done" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="spp-section-btn-title">${label}</div>
@@ -7566,7 +7566,7 @@ function buildStorePreviewSection() {
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>`;
     }
-    return `<button class="spp-section-btn${glowCls || ''}" onclick="openStorePreviewSection('${pid}','${target}')">
+    return `<button class="spp-section-btn${glowCls || ''}" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
       <div>
         <div class="spp-section-btn-title">${label}</div>
@@ -7600,11 +7600,11 @@ function buildStorePreviewSection() {
   // Age meta cell — always clickable; glows when not done (animated if
   // focused, static otherwise), green hover when done
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
          <div class="ias-meta-bot">Age</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -7614,11 +7614,11 @@ function buildStorePreviewSection() {
   // Price meta cell — always clickable; glows when not done (animated if
   // focused, static otherwise), green hover when done
   const priceCell = businessDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
          <div class="ias-meta-top">${priceText}</div>
          <div class="ias-meta-bot">Price</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -7704,9 +7704,9 @@ function buildStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
@@ -8177,7 +8177,7 @@ function buildMacStorePreviewSection() {
 
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
-      return `<button class="spp-section-btn spp-section-btn--done" onclick="openStorePreviewSection('${pid}','${target}')">
+      return `<button class="spp-section-btn spp-section-btn--done" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="spp-section-btn-title">${label}</div>
@@ -8186,7 +8186,7 @@ function buildMacStorePreviewSection() {
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style="flex-shrink:0;margin-left:auto;opacity:0.4"><path d="M1 1l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>`;
     }
-    return `<button class="spp-section-btn${glowCls || ''}" onclick="openStorePreviewSection('${pid}','${target}')">
+    return `<button class="spp-section-btn${glowCls || ''}" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="white" stroke-width="1.2"/></svg>
       <div>
         <div class="spp-section-btn-title">${label}</div>
@@ -8215,11 +8215,11 @@ function buildMacStorePreviewSection() {
   };
 
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
          <div class="ias-meta-bot">Age</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -8227,11 +8227,11 @@ function buildMacStorePreviewSection() {
        </div>`;
 
   const priceCell = businessDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
          <div class="ias-meta-top">${priceText}</div>
          <div class="ias-meta-bot">Price</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
@@ -8322,9 +8322,9 @@ function buildMacStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
                  onclick="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}

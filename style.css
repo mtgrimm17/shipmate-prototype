@@ -7049,26 +7049,36 @@ textarea.loc-review-field.ias-inline-input {
    ELEMENTS/_sppFooterNav, render.js) ──
    A required element (Title, Subtitle, Content, Business, Adjust
    Screenshots, Answer Data Collection Questions) that still needs attention
-   but ISN'T the one currently in focus gets this additive modifier instead
-   of the animated pulse every "needs attention" glow on this preview
-   defaults to (ias-meta-pulse/spp-pulse, above/below) — a fixed, duller
-   version of the same orange ring, using !important the same way
-   .spp-section-btn--done already does two rules below, since it must beat
-   the plain base class it's layered onto regardless of stylesheet order.
-   Only the element actually in focus keeps the real animated pulse (no
-   override needed for that state — it's simply the base class's normal,
-   unmodified behavior). Every OTHER surface that reuses .ias-placeholder/
+   but ISN'T the one currently in focus gets is-spp-static instead of the
+   animated pulse every "needs attention" glow on this preview defaults to
+   (ias-meta-pulse/spp-pulse, above/below) — a fixed, much fainter version of
+   the same orange ring. The element actually in focus gets is-spp-focused,
+   its own brighter/more vivid pulse (spp-focus-pulse, below) — replacing
+   the base class's own default animation rather than just leaving it,
+   since a single shared brighter ring (used no matter which of
+   .ias-placeholder/.ias-meta-cell--action/.spp-section-btn the focused
+   element happens to be) reads as more clearly "this one" than each type's
+   own base intensity would. Both modifiers use !important, the same way
+   .spp-section-btn--done already does two rules below, since each must
+   beat the plain base class it's layered onto regardless of stylesheet
+   order. Every OTHER surface that reuses .ias-placeholder/
    .ias-meta-cell--action/.spp-section-btn — Mac App Store Full and
    Android/Steam's own Product Page Previews, Localization Review/IAP
-   fields — never has this class added to it and keeps its original
-   unconditional pulse, untouched by any of this. */
+   fields — never has either class added to it and keeps its original
+   unconditional (non-brightened) pulse, untouched by any of this. */
 .is-spp-static {
   animation: none !important;
-  /* Deliberately much fainter than the focused element's own animated ring
-     (ias-meta-pulse/spp-pulse peaks at 0.35/0.25 alpha) — barely visible, so
-     the one element in focus reads as clearly the only thing asking for
-     attention right now. */
+  /* Deliberately much fainter than is-spp-focused's own ring below —
+     barely visible, so the one element in focus reads as clearly the only
+     thing asking for attention right now. */
   box-shadow: 0 0 0 2px rgba(255,149,0,0.06);
+}
+@keyframes spp-focus-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.7); }
+  50%       { box-shadow: 0 0 0 7px rgba(255,149,0,0); }
+}
+.is-spp-focused {
+  animation: spp-focus-pulse 1.6s ease-in-out infinite !important;
 }
 
 /* ── Mac App Store Full only: Product Page Preview's Information section,
