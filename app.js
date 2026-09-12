@@ -7788,7 +7788,24 @@ function startMasInlineEdit(field, el, ev) {
   }
 
   el.replaceWith(input);
-  input.insertAdjacentElement('afterend', counterRow);
+  // Description's display box (#mas-desc-text) lives inside the
+  // .mac-spp-desc-flex row alongside the "more"/"less" chip (see
+  // buildMacStorePreviewSection, render.js) — replaceWith drops this
+  // textarea into that same flex slot, so inserting counterRow right
+  // after it (the plain behavior below, which every other field here
+  // uses) would make counterRow a THIRD flex item in that row instead of
+  // a block-level line underneath, squeezing the textarea itself down to
+  // a sliver of its real width instead of matching the display box's own
+  // width, per request. Anchor the insertion after the flex wrapper as a
+  // whole instead, whenever that's what we're actually inside, so
+  // counterRow stacks below the row exactly like it does for every other
+  // (non-flex-wrapped) field. Title/Subtitle are untouched by this — their
+  // display element's parent is never .mac-spp-desc-flex, so counterAnchor
+  // is just the input itself there, same as before.
+  const counterAnchor = (input.parentElement && input.parentElement.classList.contains('mac-spp-desc-flex'))
+    ? input.parentElement
+    : input;
+  counterAnchor.insertAdjacentElement('afterend', counterRow);
   updateCounter();
   input.focus();
   input.select();

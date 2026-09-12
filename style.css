@@ -7413,6 +7413,30 @@ textarea.loc-review-field.ias-inline-input {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* While actively being edited (startMasInlineEdit, app.js, swaps this box
+   for a <textarea> that copies its classes, including mac-spp-desc-clamp,
+   and adds ias-inline-input — see that function's own comment) the two
+   classes' rules tie on specificity, and mac-spp-desc-clamp (declared
+   later in this file) was winning by source order alone: a <textarea>
+   ignores display:-webkit-box (resolving it to flow-root instead, since
+   -webkit-box doesn't apply to replaced/form-control elements), and that
+   silently broke this flex item's own width resolution down to its
+   default ~20-column intrinsic size — a sliver next to the "more" chip,
+   not the description box's actual width, so the wrapped text while
+   editing didn't match the wrapped text once editing finished, per
+   request. This compound selector settles the tie explicitly instead of
+   depending on rule order: flex:1/min-width:0 (unchanged — still shares
+   the row with the chip exactly like the display box does) but a real
+   display:block/width:100% and no line-clamp, since editing needs the
+   full text visible and correctly widthed, not capped at 4 rows. */
+.mac-spp-desc-clamp.ias-inline-input {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
 /* Expanded ("less"): the row becomes a normal block stack instead of a
    flex row — the full (often much taller, multi-paragraph) text shouldn't
    be squeezed by a fixed-width sibling column, and "less" reads better on
