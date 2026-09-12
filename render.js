@@ -8400,18 +8400,28 @@ function buildMacStorePreviewSection() {
           <div class="mac-spp-desc-row">
             <div class="mac-spp-desc-col">
               <!-- mac-spp-desc-clamp (style.css) clamps this to exactly 4
-                   rows via native -webkit-line-clamp — the "more" chip is a
-                   separate absolutely-positioned element overlaid at the
-                   clamped box's own bottom-right corner (matching where the
-                   browser's own truncation/ellipsis lands) rather than a
-                   hand-picked substring cutoff, so it's always exactly 4
-                   rows regardless of the actual description length or this
-                   column's width. Hidden by default; _updateMasDescMoreBtn
-                   (app.js, run via requestAnimationFrame after this step
-                   modal renders — see renderStepModal's own isMacSpp hook)
-                   reveals it only if the text actually overflows 4 rows. -->
-              <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
-                   onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span><button type="button" class="ias-more-btn mac-spp-desc-more" style="display:none;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button></div>
+                   rows via native -webkit-line-clamp. The "more" chip
+                   (mas-desc-more-btn) is now a FLEX SIBLING in
+                   .mac-spp-desc-flex, not an overlay on top of the text —
+                   it sits to the right of the description box's own right
+                   edge, never covering its text, and the description box
+                   (flex:1, min-width:0) shrinks on its own to leave room for
+                   it, which is also what keeps it clear of the Support
+                   column alongside (mac-spp-dev-links) — see
+                   .mac-spp-desc-flex's own comment, style.css. Reserved via
+                   visibility (not display:none) from the very first render
+                   so the description box's width — and therefore its own
+                   line-wrapping — never changes between "chip hidden" and
+                   "chip shown"; only _updateMasDescMoreBtn (app.js, run via
+                   requestAnimationFrame after this step modal renders — see
+                   renderStepModal's own isMacSpp hook) decides whether it's
+                   actually visible, once the browser confirms the text
+                   overflows 4 rows. -->
+              <div class="mac-spp-desc-flex" id="mas-desc-flex">
+                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
+                     onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
+                <button type="button" class="ias-more-btn mac-spp-desc-more" id="mas-desc-more-btn" style="visibility:hidden;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button>
+              </div>
               ${descStatusHtml}
             </div>
             <div class="mac-spp-dev-links">
@@ -10321,9 +10331,14 @@ function buildContentRatingSection(pid = 'ios') {
   // sizing, reused here via .cr-toggle-bar-all-inline rather than
   // duplicated, so the two can't drift apart) — and it actually works,
   // flipping to the All view exactly like clicking the real tab would.
-  // {allPill} is a substitution point in the locale string, not literal
-  // HTML a translator has to reproduce.
-  const allPillHtml = `<button type="button" class="app-subtab cr-toggle-bar-all-inline" onclick="toggleContentRatingExpanded(true)">All</button>`;
+  // is-on is included so it always reads as the SELECTED pill look (the
+  // quiet gray/dark fill + white label, same as whichever of
+  // Unanswered/All is currently active above) rather than the dimmed
+  // 50%-opacity unselected look .app-subtab defaults to — this pill isn't
+  // "currently selected" in the toggle-pair sense, it's a call-to-action
+  // styled to match, per request. {allPill} is a substitution point in the
+  // locale string, not literal HTML a translator has to reproduce.
+  const allPillHtml = `<button type="button" class="app-subtab is-on cr-toggle-bar-all-inline" onclick="toggleContentRatingExpanded(true)">All</button>`;
   const inferredBanner = (crInferredCount > 0 && !showAll) ? `
     <div class="sw-tip-box sw-tip-box-inference">
       <div class="sw-tip-box-row">

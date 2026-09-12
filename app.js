@@ -9412,15 +9412,20 @@ function toggleIasDescMore(btn) {
    full text in the DOM, clamped to exactly 4 rows by CSS
    (.mac-spp-desc-clamp's -webkit-line-clamp, style.css), so "more"/"less"
    just flips that clamp off (is-desc-expanded) instead of swapping text.
-   Same lightweight, ephemeral, DOM-only toggle as toggleIasDescMore — no
+   The class now lives on the wrapper (#mas-desc-flex, the flex row holding
+   the description box and the "more"/"less" button as siblings — see that
+   element's own comment, style.css) rather than on the description box
+   itself, since collapsed vs. expanded now changes that wrapper's own
+   layout (row vs. block), not just the description box's clamp. Same
+   lightweight, ephemeral, DOM-only toggle as toggleIasDescMore — no
    reRenderStepModal call, and no state to persist it, so an unrelated
    re-render elsewhere (switching languages, editing another field) resets
    it back to collapsed the same way "more" already does over there. */
 function toggleMasDescMore(btn) {
-  const el = btn.closest('.mac-spp-desc-clamp');
-  if (!el) return;
-  const expand = !el.classList.contains('is-desc-expanded');
-  el.classList.toggle('is-desc-expanded', expand);
+  const wrap = btn.closest('.mac-spp-desc-flex');
+  if (!wrap) return;
+  const expand = !wrap.classList.contains('is-desc-expanded');
+  wrap.classList.toggle('is-desc-expanded', expand);
   btn.textContent = expand ? 'less' : 'more';
   _updateMasDescMoreBtn();
 }
@@ -9430,23 +9435,26 @@ function toggleMasDescMore(btn) {
    the text out — a fixed character count can't guarantee an exact row
    count at every column width/font the way native -webkit-line-clamp can,
    but that means the "more" chip's own visibility has to be measured
-   after the fact instead of decided from the raw string. Run via
-   requestAnimationFrame right after this step modal renders
-   (renderStepModal's own isMacSpp hook, render.js) and again from
-   toggleMasDescMore above after every toggle — a no-op everywhere else,
-   since #mas-desc-text only ever exists on Mac App Store's own un-flipped
-   Product Page Preview. */
+   after the fact instead of decided from the raw string. Uses
+   visibility (not display) so the chip's reserved column width — and so
+   the description box's own width/line-wrapping, which sits alongside it
+   in a flex row — never shifts depending on whether the chip ends up
+   shown; only its visibility changes. Run via requestAnimationFrame right
+   after this step modal renders (renderStepModal's own isMacSpp hook,
+   render.js) and again from toggleMasDescMore above after every toggle —
+   a no-op everywhere else, since #mas-desc-flex only ever exists on Mac
+   App Store's own un-flipped Product Page Preview. */
 function _updateMasDescMoreBtn() {
-  const el = document.getElementById('mas-desc-text');
-  if (!el) return;
-  const btn = el.querySelector('.mac-spp-desc-more');
-  if (!btn) return;
-  if (el.classList.contains('is-desc-expanded')) {
-    btn.style.display = 'inline-block';
+  const wrap = document.getElementById('mas-desc-flex');
+  const el   = document.getElementById('mas-desc-text');
+  const btn  = document.getElementById('mas-desc-more-btn');
+  if (!wrap || !el || !btn) return;
+  if (wrap.classList.contains('is-desc-expanded')) {
+    btn.style.visibility = 'visible';
     return;
   }
   const isTruncated = el.scrollHeight > el.clientHeight + 1;
-  btn.style.display = isTruncated ? 'inline-block' : 'none';
+  btn.style.visibility = isTruncated ? 'visible' : 'hidden';
 }
 
 /* App Store Product Page Preview — top-right language dropdown (swSelect).

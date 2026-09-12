@@ -7381,49 +7381,58 @@ textarea.loc-review-field.ias-inline-input {
 }
 .mac-spp-link-row svg { flex-shrink: 0; }
 
+/* Description — the clamped text box (mac-spp-desc-clamp) and the
+   "more"/"less" chip (mac-spp-desc-more) are FLEX SIBLINGS in this row, not
+   text + an overlay on top of it, per request: the chip sits to the right
+   of the description box's own right edge and never covers its text.
+   align-items: flex-end bottom-aligns the chip with the description box's
+   own bottom edge — which is also the bottom of the visible 4th text row,
+   since -webkit-line-clamp crops exactly there — rather than centering it.
+   The description box is flex:1 + min-width:0, so it shrinks on its own to
+   leave room for the chip's width; that's what "reduces the width of the
+   Description box" (per request) without a hardcoded number, and since the
+   row's own total width is unchanged, it's also what keeps the chip clear
+   of the Support column (.mac-spp-dev-links) sitting beside this whole
+   row. See .mac-spp-desc-more below for why the chip reserves that space
+   even while it isn't visible. */
+.mac-spp-desc-flex {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
 /* Description text — always exactly 4 rows before collapsing, via native
    -webkit-line-clamp rather than a fixed character count (which can't
    guarantee an exact row count at every column width/font) — see
    buildMacStorePreviewSection's own comment, render.js, for the full
-   more/less mechanics. position:relative anchors .mac-spp-desc-more
-   (below) to this box's own corner, not the page's. */
+   more/less mechanics. */
 .mac-spp-desc-clamp {
-  position: relative;
+  flex: 1;
+  min-width: 0;
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.mac-spp-desc-clamp.is-desc-expanded {
+/* Expanded ("less"): the row becomes a normal block stack instead of a
+   flex row — the full (often much taller, multi-paragraph) text shouldn't
+   be squeezed by a fixed-width sibling column, and "less" reads better on
+   its own line right under the paragraph than floating flex-end-aligned
+   beside a tall block of text. */
+.mac-spp-desc-flex.is-desc-expanded { display: block; }
+.mac-spp-desc-flex.is-desc-expanded .mac-spp-desc-clamp {
   display: block;
   -webkit-line-clamp: unset;
   overflow: visible;
 }
-/* Overlaid at the clamped box's own bottom-right corner — where the
-   browser's own native ellipsis would otherwise land — rather than
-   appended inline after a hand-truncated substring, per request. Solid
-   background (matching whatever this sits on: --panel-2 normally,
-   --panel-3 while .ias-editable's own :hover highlight is active) so it
-   reads as one continuous "…more" affordance over the clamped text's
-   trailing edge instead of overlapping/illegible text underneath. Hidden
-   by default (inline style, render.js) — _updateMasDescMoreBtn (app.js)
-   reveals it only once the browser confirms the text actually overflows
-   4 rows. */
-.mac-spp-desc-more {
-  position: absolute;
-  right: 0; bottom: 0;
-  padding-left: 22px;
-  background: var(--panel-2);
-}
-.mac-spp-desc-clamp:hover .mac-spp-desc-more { background: var(--panel-3); }
-/* Once expanded (is-desc-expanded, above), nothing is clamped or hidden
-   any more — "less" just sits in normal flow right after the now-fully-
-   visible text, not overlaid over anything. */
-.mac-spp-desc-clamp.is-desc-expanded .mac-spp-desc-more {
-  position: static;
-  padding-left: 4px;
-  background: none;
-}
+/* flex-shrink: 0 so the chip keeps its own natural (content) width and
+   only the description box (flex:1 above) gives up width to it. Reserved
+   via visibility (render.js's inline style + _updateMasDescMoreBtn,
+   app.js) rather than display:none, so the description box's width — and
+   so its own line-wrapping — is identical whether the chip ends up shown
+   or not; only _updateMasDescMoreBtn's later visibility flip changes,
+   never a reflow of the text next to it. */
+.mac-spp-desc-more { flex-shrink: 0; white-space: nowrap; }
+.mac-spp-desc-flex.is-desc-expanded .mac-spp-desc-more { margin-top: 4px; }
 
 /* Information — a responsive 1–3 column grid of label/value cells, matching
    the native macOS App Store's own Information card, instead of the shared
