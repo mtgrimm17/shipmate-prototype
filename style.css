@@ -10977,7 +10977,16 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-collapse: collapse;
   width: 100%;
   table-layout: fixed;
-  min-width: 950px;
+  /* Below the target width (.prv-type-hd's 148px + 8 × .prv-col-hd's 96px =
+     916px) this is just a legibility floor for a narrower viewport — the
+     wrap's own overflow-x:auto is the fallback there. At the intended
+     ~948px-wide Data Collection Questions modal (submit-modal-privacy-wide),
+     it must stay UNDER that 948px: table-layout:fixed's width:100% then
+     stretches the columns to fill the container exactly, with zero
+     overflow — a min-width ≥ the container (950px, before this fix) forced
+     a permanent few-px horizontal scrollbar no matter how the columns were
+     sized. */
+  min-width: 900px;
 }
 
 .prv-matrix th, .prv-matrix td {

@@ -9993,24 +9993,36 @@ function buildPrivacyMatrix(a, pid = 'ios') {
   const selectedTypeIds = new Set(Object.keys(a.dataPerType));
   const selectedCount   = Object.keys(a.dataPerType).length;
 
-  // Per-group collapse state (Contact Info, Health & Fitness, ...) — each of
-  // the 16 groups defaults to collapsed UNLESS it has one or more
-  // flagged/selected data types, so opening this table for the first time
-  // surfaces only what already needs review instead of all 16 groups at
-  // once. Once a group's header is clicked, that explicit choice
-  // (state.privacyGroupExpanded, keyed "pid:Group Name") overrides the
-  // default in either direction until clicked again. Keyed by pid (not
-  // shared flat) because although ios/macos share the same dataPerType
-  // (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's is fully
-  // independent (_appStoreAnswers) and shouldn't inherit ios/macos's
-  // per-group choices or vice versa.
+  // Per-group collapse state (Contact Info, Health & Fitness, ...) — a
+  // group with one or more flagged/selected data types is ALWAYS expanded,
+  // every time the table renders (whether it's first shown, or right after
+  // a preset is applied/removed via togglePrivacyPreset, app.js) — that
+  // invariant is non-negotiable, so a flagged group ignores any override
+  // below. A group with nothing flagged defaults to collapsed, but can
+  // still be expanded manually (state.privacyGroupExpanded, keyed
+  // "pid:Group Name") to browse/select types inside it that no preset has
+  // touched — that manual peek is the ONLY thing the override map is for
+  // now, which is why togglePrivacyPreset clears it for this pid on every
+  // preset click rather than letting a stale peek survive a data change.
+  // Keyed by pid (not shared flat) because although ios/macos share the
+  // same dataPerType (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's
+  // is fully independent (_appStoreAnswers) and shouldn't inherit ios/macos's
+  // per-group peeks or vice versa.
   if (!state.privacyGroupExpanded) state.privacyGroupExpanded = {};
-  const _groupKey = g => `${pid}:${g.group}`;
-  const _isGroupExpanded = g => {
-    const override = state.privacyGroupExpanded[_groupKey(g)];
-    if (override !== undefined) return override;
-    return g.types.some(gt => selectedTypeIds.has(gt.id));
-  };
+  const _groupKey     = g => `${pid}:${g.group}`;
+  const _groupFlagged = g => g.types.some(gt => selectedTypeIds.has(gt.id));
+  const _isGroupExpanded = g => _groupFlagged(g) || !!state.privacyGroupExpanded[_groupKey(g)];
+
+  // Dynamic ordering: flagged (always-expanded) groups float to the top,
+  // in their original relative order, followed by unflagged (collapsed —
+  // unless manually peeked open) groups, also in their original relative
+  // order — so a group that just gained a flagged type (individually, or
+  // via a preset) visibly moves up next to the others that already need
+  // review, instead of staying buried in its fixed catalog position.
+  const sortedGroups = IOS_DATA_TYPES
+    .map((g, i) => ({ g, i, flagged: _groupFlagged(g) }))
+    .sort((x, y) => (x.flagged === y.flagged) ? x.i - y.i : (x.flagged ? -1 : 1))
+    .map(x => x.g);
 
   // Header row with inline tooltips
   const purposeHeaders = cols.map(c => {
@@ -10024,7 +10036,7 @@ function buildPrivacyMatrix(a, pid = 'ios') {
   // Build rows — all types shown when expanded (grouped); none when collapsed
   let bodyHtml = '';
   if (expanded) {
-    IOS_DATA_TYPES.forEach(group => {
+    sortedGroups.forEach(group => {
       const groupOn = _isGroupExpanded(group);
       bodyHtml += `
         <tr class="prv-group-row${groupOn ? ' is-expanded' : ''}" onclick="togglePrivacyGroup('${pid}','${group.group}',${groupOn})">

@@ -2698,6 +2698,22 @@ function togglePrivacyPreset(id) {
   const hasGuest  = selected.includes('guest');
   const pid       = state.stepModal?.platformId;
 
+  // Every preset click resets the Data Types table's manual per-group
+  // "peek" overrides for this pid (buildPrivacyMatrix, render.js) — once
+  // dataPerType finishes updating (synchronously below, or async once
+  // _triggerPrivacyAI's fetch resolves), _isGroupExpanded is a pure
+  // function of which groups now have a flagged type, so clearing these
+  // just means that fresh flagged/unflagged split — not a stale manual
+  // expand/collapse from before this click — is what decides which
+  // groups show open, exactly as requested ("whenever a preset is
+  // selected or deselected, the table should update").
+  if (pid && state.privacyGroupExpanded) {
+    const prefix = `${pid}:`;
+    Object.keys(state.privacyGroupExpanded).forEach(k => {
+      if (k.startsWith(prefix)) delete state.privacyGroupExpanded[k];
+    });
+  }
+
   // Which App-Store-shaped answers object this preset click should write
   // into. 'ios' and 'macos' both resolve to state.iosSubmitAnswers (macos's
   // collectsData/privacyDescription are the SAME shared field — see
