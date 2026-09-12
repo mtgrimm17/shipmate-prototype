@@ -2245,12 +2245,27 @@ function reRenderStepModal() {
   // that re-renders (group toggle, checkbox, preset) keeps its place.
   const matrixEl = document.querySelector('.prv-matrix-wrap');
   const matrixScrollTop = matrixEl ? matrixEl.scrollTop : null;
+  // Mac App Store's own Product Page Preview scrolls independently too —
+  // .mac-spp-main (style.css) is its own overflow-y:auto pane nested inside
+  // #step-modal-body, with the sidebar beside it staying fixed. Committing
+  // an inline-edited field (startMasInlineEdit's blur handler, above)
+  // calls this same function, which replaces #step-modal-body's whole
+  // innerHTML — including a brand-new .mac-spp-main with scrollTop reset
+  // to 0 — so without this, finishing an edit while scrolled down (e.g.
+  // past the screenshots) snapped the preview back to the top every time,
+  // per request. Same capture/restore pattern as matrixEl above.
+  const macMainEl = document.querySelector('.mac-spp-main');
+  const macMainScrollTop = macMainEl ? macMainEl.scrollTop : null;
   renderStepModal();
   const newBodyEl = document.getElementById('step-modal-body');
   if (newBodyEl) newBodyEl.scrollTop = scrollTop;
   if (matrixScrollTop !== null) {
     const newMatrixEl = document.querySelector('.prv-matrix-wrap');
     if (newMatrixEl) newMatrixEl.scrollTop = matrixScrollTop;
+  }
+  if (macMainScrollTop !== null) {
+    const newMacMainEl = document.querySelector('.mac-spp-main');
+    if (newMacMainEl) newMacMainEl.scrollTop = macMainScrollTop;
   }
 }
 
@@ -7789,23 +7804,15 @@ function startMasInlineEdit(field, el, ev) {
 
   el.replaceWith(input);
   // Description's display box (#mas-desc-text) lives inside the
-  // .mac-spp-desc-flex row alongside the "more"/"less" chip (see
+  // .mac-spp-desc-flex grid alongside the "more"/"less" chip (see
   // buildMacStorePreviewSection, render.js) — replaceWith drops this
-  // textarea into that same flex slot, so inserting counterRow right
-  // after it (the plain behavior below, which every other field here
-  // uses) would make counterRow a THIRD flex item in that row instead of
-  // a block-level line underneath, squeezing the textarea itself down to
-  // a sliver of its real width instead of matching the display box's own
-  // width, per request. Anchor the insertion after the flex wrapper as a
-  // whole instead, whenever that's what we're actually inside, so
-  // counterRow stacks below the row exactly like it does for every other
-  // (non-flex-wrapped) field. Title/Subtitle are untouched by this — their
-  // display element's parent is never .mac-spp-desc-flex, so counterAnchor
-  // is just the input itself there, same as before.
-  const counterAnchor = (input.parentElement && input.parentElement.classList.contains('mac-spp-desc-flex'))
-    ? input.parentElement
-    : input;
-  counterAnchor.insertAdjacentElement('afterend', counterRow);
+  // textarea into that same grid cell (grid-column/row set per-class in
+  // CSS, not by DOM position), and counterRow's own grid placement
+  // (.mac-spp-desc-flex > .ias-char-counter-row, style.css) puts it on its
+  // own row under column 1 regardless of where in the DOM it's inserted —
+  // so plain afterend-of-input insertion, the same for every field here,
+  // is enough; no special-casing needed for this field's grid parent.
+  input.insertAdjacentElement('afterend', counterRow);
   updateCounter();
   input.focus();
   input.select();

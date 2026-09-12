@@ -7367,6 +7367,13 @@ textarea.loc-review-field.ias-inline-input {
 .mac-spp-dev-links {
   flex-shrink: 0; width: 132px;
   display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
+  /* Right-aligned per request — Developer/Website/Support read closer to
+     the modal's own right edge instead of flush against the description
+     column, matching the native app's own product page. align-items
+     (not text-align) since each row is itself a flex row (mac-spp-link-row,
+     below) rather than a plain text node — flex cross-axis alignment is
+     what moves each row's own box to this column's right edge. */
+  align-items: flex-end;
 }
 /* Website and Support read the same neutral tone as the rest of this
    preview's non-accent-colored text (.ias-info-label and friends) — only
@@ -7381,32 +7388,45 @@ textarea.loc-review-field.ias-inline-input {
 }
 .mac-spp-link-row svg { flex-shrink: 0; }
 
-/* Description — the clamped text box (mac-spp-desc-clamp) and the
-   "more"/"less" chip (mac-spp-desc-more) are FLEX SIBLINGS in this row, not
-   text + an overlay on top of it, per request: the chip sits to the right
-   of the description box's own right edge and never covers its text.
-   align-items: flex-end bottom-aligns the chip with the description box's
-   own bottom edge — which is also the bottom of the visible 4th text row,
-   since -webkit-line-clamp crops exactly there — rather than centering it.
-   The description box is flex:1 + min-width:0, so it shrinks on its own to
-   leave room for the chip's width; that's what "reduces the width of the
-   Description box" (per request) without a hardcoded number, and since the
-   row's own total width is unchanged, it's also what keeps the chip clear
-   of the Support column (.mac-spp-dev-links) sitting beside this whole
-   row. See .mac-spp-desc-more below for why the chip reserves that space
-   even while it isn't visible. */
+/* Description — a 2-column CSS GRID (not flexbox, per request — see below
+   for why): column 1 (1fr) holds the clamped text box (mac-spp-desc-clamp,
+   or the editing <textarea> that swaps in for it) and, on its own row
+   underneath, the character-counter row (ias-char-counter-row, app.js,
+   only present while actively editing); column 2 is a FIXED px (not auto)
+   — "more" and "less" aren't the same rendered width (measured ~29.6px vs
+   ~23.1px at this font/weight), so an auto column would itself resize by
+   that ~6.5px difference depending on which label is showing, which then
+   changes column 1's own (1fr) share of the row too — the opposite of
+   constant. A fixed column, comfortably fitting the wider of the two
+   words, is what actually keeps column 1's width identical collapsed vs.
+   expanded, chip shown or reserved-but-hidden (requirement: "the width of
+   the Description field shouldn't change when the 'more' button is
+   selected"). Grid also solves the character counter's own width for
+   free: placed in column 1 via a scoped selector below, it's naturally
+   exactly as wide as the text box beside it — no JS measurement needed —
+   so its own right edge lands flush on the description box's right edge
+   (requirement) instead of stretching under the chip's reserved space too
+   (flexbox couldn't express "this OTHER row is exactly one column's
+   width" without a hardcoded number or a JS measurement; grid's column
+   tracks are shared by every item placed in them for free). align-items
+   would have done this for a flex ROW, but there's no flex equivalent for
+   "share this width with a row I'm not even a sibling of" — hence grid
+   over flex here specifically. */
 .mac-spp-desc-flex {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 32px;
+  column-gap: 8px;
 }
 /* Description text — always exactly 4 rows before collapsing, via native
    -webkit-line-clamp rather than a fixed character count (which can't
    guarantee an exact row count at every column width/font) — see
    buildMacStorePreviewSection's own comment, render.js, for the full
-   more/less mechanics. */
+   more/less mechanics. Explicit grid-row so this box and the chip beside
+   it (mac-spp-desc-more, below) always share row 1 regardless of DOM
+   order or whatever else lands in this grid (the counter row, below). */
 .mac-spp-desc-clamp {
-  flex: 1;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   display: -webkit-box;
   -webkit-line-clamp: 4;
@@ -7415,48 +7435,73 @@ textarea.loc-review-field.ias-inline-input {
 }
 /* While actively being edited (startMasInlineEdit, app.js, swaps this box
    for a <textarea> that copies its classes, including mac-spp-desc-clamp,
-   and adds ias-inline-input — see that function's own comment) the two
-   classes' rules tie on specificity, and mac-spp-desc-clamp (declared
-   later in this file) was winning by source order alone: a <textarea>
-   ignores display:-webkit-box (resolving it to flow-root instead, since
-   -webkit-box doesn't apply to replaced/form-control elements), and that
-   silently broke this flex item's own width resolution down to its
-   default ~20-column intrinsic size — a sliver next to the "more" chip,
-   not the description box's actual width, so the wrapped text while
-   editing didn't match the wrapped text once editing finished, per
-   request. This compound selector settles the tie explicitly instead of
-   depending on rule order: flex:1/min-width:0 (unchanged — still shares
-   the row with the chip exactly like the display box does) but a real
-   display:block/width:100% and no line-clamp, since editing needs the
-   full text visible and correctly widthed, not capped at 4 rows. */
+   and adds ias-inline-input — see that function's own comment) a
+   <textarea> ignores display:-webkit-box (resolving it to flow-root
+   instead, since -webkit-box doesn't apply to replaced/form-control
+   elements) — this override settles it explicitly with a real
+   display:block and no line-clamp, since editing needs the full text
+   visible and correctly widthed (matching the display box's own width,
+   per request — grid-column:1 here keeps it in the same column/width as
+   the display box, unaffected by editing), not capped at 4 rows. */
 .mac-spp-desc-clamp.ias-inline-input {
+  grid-column: 1;
+  grid-row: 1;
   display: block;
   width: 100%;
-  flex: 1;
   min-width: 0;
   -webkit-line-clamp: unset;
   overflow: visible;
 }
-/* Expanded ("less"): the row becomes a normal block stack instead of a
-   flex row — the full (often much taller, multi-paragraph) text shouldn't
-   be squeezed by a fixed-width sibling column, and "less" reads better on
-   its own line right under the paragraph than floating flex-end-aligned
-   beside a tall block of text. */
-.mac-spp-desc-flex.is-desc-expanded { display: block; }
+/* Expanded ("less"): only the clamp itself changes (full text, no crop) —
+   the grid's own column widths are untouched either way, which is what
+   keeps the description box's width constant between collapsed and
+   expanded (requirement, above). */
 .mac-spp-desc-flex.is-desc-expanded .mac-spp-desc-clamp {
   display: block;
   -webkit-line-clamp: unset;
   overflow: visible;
 }
-/* flex-shrink: 0 so the chip keeps its own natural (content) width and
-   only the description box (flex:1 above) gives up width to it. Reserved
-   via visibility (render.js's inline style + _updateMasDescMoreBtn,
-   app.js) rather than display:none, so the description box's width — and
-   so its own line-wrapping — is identical whether the chip ends up shown
-   or not; only _updateMasDescMoreBtn's later visibility flip changes,
-   never a reflow of the text next to it. */
-.mac-spp-desc-more { flex-shrink: 0; white-space: nowrap; }
-.mac-spp-desc-flex.is-desc-expanded .mac-spp-desc-more { margin-top: 4px; }
+/* grid-row/column pin the chip to column 2 of row 1, beside the text box,
+   never below it; align-self: end bottom-aligns it with row 1's own
+   bottom edge — which is also the bottom of the description box's visible
+   4th text row, since -webkit-line-clamp crops exactly there (requirement:
+   the "more" chip's own text bottom-aligns with the description text and
+   with Support alongside, see .mac-spp-dev-links' own comment). Reserved
+   via visibility (render.js's inline style + _updateMasDescMoreBtn, app.js)
+   rather than display:none — column 2's own width comes from the chip's
+   content either way, hidden or shown, so the grid's columns (and so the
+   description box's width) never shift when _updateMasDescMoreBtn later
+   flips only its visibility. */
+.mac-spp-desc-more {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  white-space: nowrap;
+  /* Grid items stretch to fill their column by default (justify-self:
+     stretch) — at this fixed 32px column that leaves a few spare px past
+     "more"/"less" own text width either way; text-align keeps the label
+     flush left (immediately after the description text, reading as its
+     natural continuation) rather than centered or drifting right,
+     regardless of which of the two slightly different-width words is
+     showing. */
+  text-align: left;
+}
+/* The character-counter row (ias-char-counter-row, app.js) is a shared
+   class used all over this app (Title/Subtitle editing, IAP fields, Loc
+   Review cards, …) with its own generic width:100%/margin rules (further
+   up this file) — scoped here, rather than changed globally, to just this
+   grid: grid-column:1 alone is enough to make its existing width:100%
+   resolve against column 1's own track width (a grid item's percentage
+   width resolves against its own grid area, not the whole container) —
+   exactly the display box's width, automatically, with no JS measurement
+   — and grid-row:2 keeps it on its own line under row 1 rather than
+   competing for row 1's horizontal space the way a third flex sibling
+   would (which is what made the textarea collapse to a sliver before this
+   became a grid). */
+.mac-spp-desc-flex > .ias-char-counter-row {
+  grid-column: 1;
+  grid-row: 2;
+}
 
 /* Information — a responsive 1–3 column grid of label/value cells, matching
    the native macOS App Store's own Information card, instead of the shared
