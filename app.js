@@ -2233,9 +2233,25 @@ function reRenderStepModal() {
   }
   const bodyEl   = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
+  // The Data Types table (buildPrivacyMatrix) scrolls independently of the
+  // step modal body — it's its own overflow-y:auto pane (.prv-matrix-wrap,
+  // style.css) nested inside #step-modal-body, not the same scroll
+  // container. Re-rendering replaces its DOM node outright (a fresh
+  // .prv-matrix-wrap string every buildPrivacyMatrix call), which reset its
+  // scrollTop to 0 on every toggle — most noticeably when manually
+  // expanding/collapsing a group (togglePrivacyGroup) scrolled partway down
+  // the table, which visibly snapped back to the top. Captured/restored the
+  // same way as bodyEl's own scroll above, so any Data Types table action
+  // that re-renders (group toggle, checkbox, preset) keeps its place.
+  const matrixEl = document.querySelector('.prv-matrix-wrap');
+  const matrixScrollTop = matrixEl ? matrixEl.scrollTop : null;
   renderStepModal();
   const newBodyEl = document.getElementById('step-modal-body');
   if (newBodyEl) newBodyEl.scrollTop = scrollTop;
+  if (matrixScrollTop !== null) {
+    const newMatrixEl = document.querySelector('.prv-matrix-wrap');
+    if (newMatrixEl) newMatrixEl.scrollTop = matrixScrollTop;
+  }
 }
 
 // ── Deferred step-modal re-render for background auto-translate updates ──
