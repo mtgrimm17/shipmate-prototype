@@ -314,16 +314,17 @@ function buildDistributionTab() {
               "Compliance Questions" keeps its own header for a different
               reason — no tab names it at all. */''}
 
-        ${/* PROSE, NOT A BOX — the same .asset-guidance the Assets section
-              uses. Distribution and Assets open the same way: a heading, a
-              line of explanation, then the controls. The box is what made
-              this read as an alert and then as something clickable; an
-              outlined box with an icon was still a box. It also goes FIRST
-              here, as it used to sit between the preset pills and the country
-              list, which put the advice after the control it advises about.
-              (Languages' own opening line, above, is a deliberate, scoped
-              exception to this — see its own note, further up.) */''}
-        <div class="asset-guidance">${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</div>
+        ${/* Styled as a Shipmate Tip (.sw-tip-box), matching Languages' own
+              opening line above — by request, this supersedes the previous
+              "PROSE, NOT A BOX" treatment (.asset-guidance) this line used
+              to have. It still goes FIRST, ahead of the preset pills and
+              country list, same placement as before. */''}
+        <div class="sw-tip-box" style="margin-bottom:16px;">
+          <div class="sw-tip-box-row">
+            ${SM_INFO_ICON}
+            <span class="sw-tip-text">${t('tip.distribution.regions') || 'Gamer behavior varies significantly between regions. A successful launch carefully considers localization, culturalization, purchase behavior, and market fit in each region.'}</span>
+          </div>
+        </div>
 
         <div id="ob-dist-map-container" class="world-map-container" style="margin-bottom:14px;"></div>
 
@@ -2524,10 +2525,12 @@ function _mktWebInnerHTML() {
 }
 
 function buildMktWebsite() {
-  const slug = (state.formData.title || 'your-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // The "Shipmate Pages" heading + its slug.shipmate.page URL (.mkt-card-head,
+  // previously built from a local `slug` derived from state.formData.title)
+  // were removed by request. Nothing else in this function used that `slug`,
+  // so its declaration is gone too rather than left as dead code.
   return `
-    <div class="mkt-card-head"><h3>Shipmate Pages</h3><span class="mkt-url">${slug}.shipmate.page</span></div>
-    <p class="mkt-web-note">A ready-made landing page, built from the title, description, capsule art, screenshots, and store links you've already given Shipmate.</p>
+    <p class="mkt-web-note">A ready-made landing page, built from the metadata and assets you've already given Shipmate.</p>
     <div class="mkt-web-embed" data-wp-card>${_mktWebInnerHTML()}</div>
     <div class="mkt-card-actions">
       <button class="btn btn-ghost" onclick="mktToast('Website editor')">Edit page</button>
@@ -7632,7 +7635,7 @@ function buildStorePreviewSection() {
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
           </div>
           <div class="ias-header-cta">
-            <button class="ias-get-btn">${price}</button>
+            <button class="ias-get-btn ias-get-btn--interactive" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
           </div>
         </div>
 
@@ -8256,7 +8259,7 @@ function buildMacStorePreviewSection() {
                  store page's side-by-side layout .ias-header-cta gives the
                  iOS/Mac Full previews (untouched, still shared elsewhere). -->
             <div class="mac-spp-get-row">
-              <button class="ias-get-btn">${price}</button>
+              <button class="ias-get-btn ias-get-btn--interactive" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
             </div>
           </div>
         </div>
@@ -10150,6 +10153,27 @@ function buildContentRatingSection(pid = 'ios') {
   const togglePill = buildCRTogglePill(collapseMode, showAll,
     'toggleContentRatingExpanded(false)', 'toggleContentRatingExpanded(true)');
 
+  // "Shipmate inferred X out of Y responses" banner — sits between the toggle
+  // pill and the first question category ("Features"). X counts only actual
+  // Content Rating questions (IOS_CR_CATEGORIES) that inference answered;
+  // `answered` also carries Business/Export Compliance field ids (hasIAP,
+  // usesEncryption, etc. — see takeFilterSnapshot), which don't belong in
+  // this section's count, so we intersect against IOS_CR_CATEGORIES rather
+  // than just reading answered.size. Y is the fixed total across all six
+  // categories (Additional Information/ageCategory isn't a content
+  // question — see its own section below — so it's excluded from Y).
+  const crTotalQuestions = IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.length, 0);
+  const crInferredCount  = collapseMode
+    ? IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.filter(q => answered.has(q.id)).length, 0)
+    : 0;
+  const inferredBanner = crInferredCount > 0 ? `
+    <div class="sw-tip-box sw-tip-box-inference">
+      <div class="sw-tip-box-row">
+        ${SM_INFO_ICON}
+        <span class="sw-tip-text">${t('cr.inferred_banner', { count: crInferredCount, total: crTotalQuestions }) || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses. Click All to review before submitting.`}</span>
+      </div>
+    </div>` : '';
+
   // Build question rows — filter by answered/unanswered when in collapseMode + "Unanswered" view
   // Uses snapshot (answered) not live state so questions don't vanish mid-session
   let questionsHtml = '';
@@ -10225,7 +10249,7 @@ function buildContentRatingSection(pid = 'ios') {
              onblur="reRenderStepModal()">
     </div>`}`;
 
-  return togglePill + questionsHtml + additionalSection;
+  return togglePill + inferredBanner + questionsHtml + additionalSection;
 }
 
 function computeIOSAgeRating() {
@@ -13168,9 +13192,18 @@ function _buildUnifiedLocalizationsSection(p) {
   // right) keeps its original 4px title-to-gear spacing untouched.
   const reviewBtnHtml = `<button class="loc-review-toggle-btn" onclick="${toggleReviewFnName}()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>`;
 
+  // By request: .loc-view-tabs now sits OUTSIDE/above .iap-loc-section
+  // instead of as its first child. .iap-loc-section's own border-top (see
+  // style.css) used to read as the divider immediately above the tabs; with
+  // the tabs moved above it, that same border now reads as the divider
+  // immediately BELOW them (between the tabs and the Review/settings/
+  // dropdown row), while the modal header's own border-bottom (unchanged)
+  // continues to serve as the divider above the tabs — so both the "above"
+  // and "below" dividers this page needs come from CSS that already existed
+  // for other reasons, with no new divider element required.
   return `
+    ${_locsViewTabsHtml(view, p.viewSetterFn, visibleViewOptions)}
     <div class="form-group iap-loc-section">
-      ${_locsViewTabsHtml(view, p.viewSetterFn, visibleViewOptions)}
       <div class="loc-review-header loc-unified-header">
         <div class="loc-review-title-group loc-unified-title-group">
           ${reviewBtnHtml}

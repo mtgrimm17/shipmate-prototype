@@ -6193,7 +6193,16 @@ body.viewing-splash .app-subnav { display: none; }
   border: none; border-radius: 20px;
   padding: 6px 18px; cursor: default;
   letter-spacing: 0.2px; white-space: nowrap;
+  transition: opacity 0.15s;
 }
+/* App Store's and Mac App Store's own GET button (buildStorePreviewSection/
+   buildMacStorePreviewSection) now navigates to Business Questions
+   (openStorePreviewSection) and gets this modifier for a pointer cursor +
+   hover, matching .spp-nav-btn's own solid-fill-button hover treatment.
+   Mac App Store Full's GET button (buildMacFullStorePreviewSection) is left
+   purely decorative and keeps the base class's cursor:default, unaffected. */
+.ias-get-btn--interactive { cursor: pointer; }
+.ias-get-btn--interactive:hover { opacity: 0.85; }
 
 /* Inline click-to-edit — Title/Subtitle/Description/Release Notes
    (startIasInlineEdit, app.js). ias-editable marks every clickable field;
