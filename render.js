@@ -7191,18 +7191,21 @@ function _iasAllPreviewLangCodes() {
    only — Mac App Store Full and Android/Steam's own preview builders keep
    their original always-pulsing "Next required" footer, out of scope here)
    ──
-   Six required elements, always in this same top-down/left-to-right order:
-   Title, Subtitle, Content, Business, Adjust Screenshots, Answer Data
-   Collection Questions — matching the order they actually appear in the
-   preview (header → meta strip → screenshots → privacy). Exactly one is
-   ever "in focus" at a time; only the focused, not-yet-addressed element
-   keeps the animated pulse (is-spp-focused, reusing ias-meta-pulse/spp-pulse
-   below) — every other not-yet-addressed element instead gets a static,
-   duller glow box (is-spp-static, style.css), and an already-addressed
-   element gets neither (its existing done styling — .ias-meta-cell--seen /
-   .spp-section-btn--done / plain filled-in text — is untouched). Replaces
-   the old always-on "Next required" footer with a prev/next navigator
-   (_sppFooterNav) that walks this same ordered list and can move focus off
+   Seven required elements, always in this same top-down/left-to-right
+   order: Title, Subtitle, Content, Business, Adjust Screenshots,
+   Description, Answer Data Collection Questions — matching the order they
+   actually appear in the preview (header → meta strip → screenshots →
+   description → privacy). Exactly one is ever "in focus" at a time; only
+   the focused, not-yet-addressed element keeps the animated pulse
+   (is-spp-focused, reusing ias-meta-pulse/spp-pulse below) — every other
+   not-yet-addressed element instead gets a static, duller glow box
+   (is-spp-static, style.css), and an already-addressed element gets neither
+   (its existing done styling — .ias-meta-cell--seen / .spp-section-btn--done
+   / plain filled-in text — is untouched). Replaces the old always-on "Next
+   required" footer with a prev/next navigator (_sppFooterNav) that walks
+   this same ordered list — filtered down to only the not-yet-done elements
+   by every call site, so a fulfilled required element drops out of the
+   navigator entirely, not just out of the glow — and can move focus off
    the default.
 
    state.storePreviewFocus[pid] (state.js) holds an explicit focus choice,
@@ -7238,6 +7241,11 @@ function _sppIsFocused(pid, elements, id) {
 // element) renders disabled/greyed with no label rather than wrapping
 // around to the other end.
 function _sppFooterNav(pid, elements) {
+  // Callers pass only the not-yet-done elements (REQUIRED_ELEMENTS.filter(e
+  // => !e.done)) — once every required element is fulfilled there's nothing
+  // left to navigate to, so the whole bar disappears rather than rendering
+  // two disabled arrows around an empty label.
+  if (!elements.length) return '';
   const idx     = _sppFocusIndex(pid, elements);
   const current = elements[idx];
   const prev    = idx > 0 ? elements[idx - 1] : null;
@@ -7562,17 +7570,22 @@ function buildStorePreviewSection() {
 
   const infoRows = `${infoRowsTop}${iapInfoBlock}${copyrightRowHtml}`;
 
-  // Section completion status for DocuSign navigation
-  // content/business require the user to have actually visited the sub-section
-  // (prevents auto-marking done from onboarding data without user review)
+  // Section completion status for the required-elements footer nav (below).
+  // Content/Business/Adjust Screenshots/Answer Data Collection Questions are
+  // all "opens to another section" required elements — each counts as done
+  // only once the developer has opened that section at least once AND every
+  // required question inside it has been answered, so a section pre-filled
+  // from onboarding data never silently shows as complete without a review.
   const seenSections    = state.storePreviewSectionSeen?.ios || {};
-  // Content rating is now completed as its own platform-card step, so the age
-  // rating reflects completion directly — no longer gated on visiting the
-  // preview's content section (matches Android/Steam behavior).
-  const contentDone     = isIOSSectionComplete('contentRating');
+  const contentDone     = !!(seenSections.content && isIOSSectionComplete('contentRating'));
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
-  const dataDone        = isIOSSectionComplete('privacy');
-  const screenshotsDone = isIOSSectionComplete('screenshots');
+  const dataDone        = !!(seenSections.data && isIOSSectionComplete('privacy'));
+  const screenshotsDone = !!(seenSections.screenshots && isIOSSectionComplete('screenshots'));
+  // Description is a plain text field, same as Title/Subtitle — done once it
+  // has any text other than the pre-populated placeholder copy, regardless
+  // of whether that text arrived from direct editing here or was filled in
+  // from another section (e.g. Game Details).
+  const descDone        = !!descRaw;
 
   // Section button helper — glows (animated if focused, static otherwise)
   // when incomplete, green check when done. glowCls is the is-spp-focused/
@@ -7606,6 +7619,7 @@ function buildStorePreviewSection() {
     { id: 'content',     label: 'Content',                           done: contentDone },
     { id: 'business',    label: 'Business',                          done: businessDone },
     { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
+    { id: 'description', label: 'Description',                       done: descDone },
     { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
   ];
   // Additive glow class for a not-yet-addressed required element: the
@@ -7760,7 +7774,7 @@ function buildStorePreviewSection() {
 
         <!-- ── Description ── -->
         <div class="ias-section">
-          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text"
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder' + _sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
                onclick="startIasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
@@ -7810,7 +7824,7 @@ function buildStorePreviewSection() {
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
 
-    ${_sppFooterNav(pid, REQUIRED_ELEMENTS)}
+    ${_sppFooterNav(pid, REQUIRED_ELEMENTS.filter(e => !e.done))}
   `;
 }
 
@@ -8190,15 +8204,24 @@ function buildMacStorePreviewSection() {
         <span class="ias-iap-price">${iapPriceLabel(p.price)}</span>
       </div>`).join('')}` : '';
 
-  // Section completion status for DocuSign navigation — Mac App Store's own
-  // storePreviewSectionSeen/isMacSectionComplete, independent of iOS's.
+  // Section completion status for the required-elements footer nav (below)
+  // — Mac App Store's own storePreviewSectionSeen/isMacSectionComplete,
+  // independent of iOS's. Content/Business/Adjust Screenshots/Answer Data
+  // Collection Questions are all "opens to another section" required
+  // elements — each counts as done only once the developer has opened that
+  // section at least once AND every required question inside it has been
+  // answered, so a section pre-filled from onboarding data never silently
+  // shows as complete without a review.
   const seenSections    = state.storePreviewSectionSeen?.macos || {};
-  // Content rating is now its own platform-card step — reflect completion
-  // directly rather than requiring a visit to the preview's content section.
-  const contentDone     = isMacSectionComplete('contentRating');
+  const contentDone     = !!(seenSections.content && isMacSectionComplete('contentRating'));
   const businessDone    = !!(seenSections.business && isMacSectionComplete('business'));
-  const dataDone        = isMacSectionComplete('privacy');
-  const screenshotsDone = isMacSectionComplete('screenshots');
+  const dataDone        = !!(seenSections.data && isMacSectionComplete('privacy'));
+  const screenshotsDone = !!(seenSections.screenshots && isMacSectionComplete('screenshots'));
+  // Description is a plain text field, same as Title/Subtitle — done once it
+  // has any text other than the pre-populated placeholder copy, regardless
+  // of whether that text arrived from direct editing here or was filled in
+  // from another section (e.g. Game Details).
+  const descDone        = !!descRaw;
 
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
@@ -8229,6 +8252,7 @@ function buildMacStorePreviewSection() {
     { id: 'content',     label: 'Content',                           done: contentDone },
     { id: 'business',    label: 'Business',                          done: businessDone },
     { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
+    { id: 'description', label: 'Description',                       done: descDone },
     { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
   ];
   // Additive glow class for a not-yet-addressed required element — see the
@@ -8418,7 +8442,7 @@ function buildMacStorePreviewSection() {
                    actually visible, once the browser confirms the text
                    overflows 4 rows. -->
               <div class="mac-spp-desc-flex" id="mas-desc-flex">
-                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text"
+                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder' + _sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
                      onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
                 <button type="button" class="ias-more-btn mac-spp-desc-more" id="mas-desc-more-btn" style="visibility:hidden;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button>
               </div>
@@ -8490,7 +8514,7 @@ function buildMacStorePreviewSection() {
       </div><!-- /mac-spp-main -->
     </div><!-- /mac-spp-shell -->
 
-    ${_sppFooterNav(pid, REQUIRED_ELEMENTS)}
+    ${_sppFooterNav(pid, REQUIRED_ELEMENTS.filter(e => !e.done))}
   `;
 }
 

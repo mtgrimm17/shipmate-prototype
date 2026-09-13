@@ -7048,8 +7048,8 @@ textarea.loc-review-field.ias-inline-input {
    only — buildStorePreviewSection/buildMacStorePreviewSection, REQUIRED_
    ELEMENTS/_sppFooterNav, render.js) ──
    A required element (Title, Subtitle, Content, Business, Adjust
-   Screenshots, Answer Data Collection Questions) that still needs attention
-   but ISN'T the one currently in focus gets is-spp-static instead of the
+   Screenshots, Description, Answer Data Collection Questions) that still
+   needs attention but ISN'T the one currently in focus gets is-spp-static instead of the
    animated pulse every "needs attention" glow on this preview defaults to
    (ias-meta-pulse/spp-pulse, above/below) — a fixed, much fainter version of
    the same orange ring. The element actually in focus gets is-spp-focused,

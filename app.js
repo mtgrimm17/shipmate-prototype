@@ -9473,12 +9473,71 @@ function _updateMasDescMoreBtn() {
   const el   = document.getElementById('mas-desc-text');
   const btn  = document.getElementById('mas-desc-more-btn');
   if (!wrap || !el || !btn) return;
+  _alignMasDescTextBottom(el);
   if (wrap.classList.contains('is-desc-expanded')) {
     btn.style.visibility = 'visible';
     return;
   }
   const isTruncated = el.scrollHeight > el.clientHeight + 1;
   btn.style.visibility = isTruncated ? 'visible' : 'hidden';
+}
+
+/* Aligns the visual bottom of Mac App Store's Description text (its actual
+   glyph ink, not #mas-desc-text's own line-box bottom edge) with the
+   "more"/"less" chip beside it (mac-spp-desc-more, grid-aligned to this
+   box's own bottom via align-self:end, style.css) and with Support below
+   it (mac-spp-dev-links, stretched to this box's own height via
+   .mac-spp-desc-row's align-items:stretch) — per request. Both of those
+   already land on #mas-desc-text's own getBoundingClientRect().bottom (the
+   v6.01 fix), but that bottom sits line-height:1.6's "half-leading" below
+   the last line's actual ink — a fixed gap baked into every line box,
+   independent of font size, that reads as visually low next to "more"'s
+   own tight label bottom and Support's own tight text+icon bottom.
+
+   Measuring the real ink bottom needs a Range, not this element's own
+   bounding rect: a Range over inline text returns one CLIENT RECT PER LINE,
+   each already tight to that line's glyphs (no half-leading), unlike the
+   element's own box which reports the full line-height-padded height. The
+   LAST such rect that's still visible within the 4-row -webkit-line-clamp
+   (its top above this box's own bottom edge — anything past that is
+   cropped and irrelevant) is exactly the ink-bottom of the last visible
+   line, whether collapsed to 4 rows or fully expanded via "more".
+
+   Applied as a negative margin-bottom on #mas-desc-text itself: shrinking
+   its own margin box pulls its grid row's auto-computed height up by the
+   same amount, which is what carries the correction through to both the
+   "more" chip (same row, align-self:end) and Support (mac-spp-dev-links,
+   stretched to mac-spp-desc-col's — and so this box's — new shorter
+   height) without touching either of their own layout rules.
+
+   Always resets marginBottom to '' before measuring, since this runs on
+   every render (renderStepModal's isMacSpp hook, render.js) and every
+   "more"/"less" toggle (toggleMasDescMore, above) — measuring against a
+   box already shifted by a previous pass would compound the offset. */
+function _alignMasDescTextBottom(el) {
+  el.style.marginBottom = '';
+  const inner = el.querySelector('.ias-desc-text-inner');
+  if (!inner || !inner.firstChild) return;
+  const boxRect = el.getBoundingClientRect();
+  const range = document.createRange();
+  range.selectNodeContents(inner);
+  const rects = Array.from(range.getClientRects());
+  if (!rects.length) return;
+  // A line only counts as "visible" (not cropped away by -webkit-line-
+  // clamp) if its ENTIRE rect fits inside the box's own bottom edge — not
+  // merely if its top does. The clamp's own used height can land a hair
+  // past a later line's top (sub-pixel), which would otherwise make a
+  // mostly-cropped line look "visible" by a top-only check and throw the
+  // measured ink bottom off by a full line.
+  let lastVisibleBottom = null;
+  for (const r of rects) {
+    if (r.bottom <= boxRect.bottom + 1) {
+      lastVisibleBottom = lastVisibleBottom === null ? r.bottom : Math.max(lastVisibleBottom, r.bottom);
+    }
+  }
+  if (lastVisibleBottom === null) return;
+  const delta = boxRect.bottom - lastVisibleBottom;
+  if (delta > 0.5) el.style.marginBottom = `${-delta}px`;
 }
 
 /* App Store Product Page Preview — top-right language dropdown (swSelect).
