@@ -7768,7 +7768,6 @@ function buildStorePreviewSection() {
             <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
-            ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
             <!-- GET now sits beneath the Title/Subtitle stack, matching the
                  real App Store's own product page (previously a separate
                  .ias-header-cta column beside Title/Subtitle) — reuses
@@ -7777,11 +7776,16 @@ function buildStorePreviewSection() {
                  (.ios-spp-page .ias-header-cta, style.css) swapping its
                  alignment padding for a margin-top that clears Subtitle's
                  own glow, the same way Mac App Store's mac-spp-get-row
-                 does. -->
+                 does. "In-App Purchases" (when shown) now sits beside GET
+                 on this same row rather than as its own line above it —
+                 matching the reference screenshot and Mac App Store's own
+                 mac-spp-get-row treatment — via the same scoped flex-row
+                 override. -->
             <div class="ias-header-cta">
               <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
                 <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
               </span>
+              ${iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
           </div>
         </div>

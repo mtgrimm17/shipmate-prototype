@@ -6194,8 +6194,13 @@ body.viewing-splash .app-subnav { display: none; }
    Store Full's own side-by-side layout, above) is swapped for a plain
    block margin-top here — sized, like Mac App Store's own
    .mac-spp-get-row margin-top, to clear Subtitle's own glow ring rather
-   than sit flush against it. */
-.ios-spp-page .ias-header-cta { padding-top: 0; margin-top: 24px; }
+   than sit flush against it. Also made a flex row (gap 8px, matching
+   Mac App Store's own mac-spp-get-row) so "In-App Purchases" — when
+   shown — sits beside GET rather than stacked above it. */
+.ios-spp-page .ias-header-cta {
+  padding-top: 0; margin-top: 24px;
+  display: flex; align-items: center; gap: 8px;
+}
 .ias-get-btn {
   background: #0a84ff; color: #fff;
   font-size: 13px; font-weight: 700;
