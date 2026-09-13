@@ -11142,12 +11142,20 @@ function _impBreatheNext() {
   document.querySelectorAll('.iv-tab-next').forEach(el => {
     if (typeof el.animate !== 'function') return;
     el.getAnimations().forEach(a => a.cancel());
-    /* The floor is ABOVE the resting .2 of a normal .iv-tab, not equal to it:
-       a sine spends half its cycle near the trough, so a curve that returns to
-       rest reads as "this dot dims", which is the opposite of a hint. It sits
-       lit at .38 and breathes up to .8 — always brighter than its neighbours. */
+    /* FILL AND INK, NEVER OPACITY. Every carousel on screen is inside
+       `.imp-list.iv-blueconfirm`, where a resting tab is opacity 1 with a white
+       5% fill and white 35% text — opacity is not what separates the states
+       there, so animating it only made this one circle paler than the ones it
+       was pointing at. Those two are the resting values below, and the floor
+       sits ABOVE them (.12 / .60): a sine spends half its cycle near the
+       trough, so a curve that comes back to rest reads as a dot that dims. It
+       is lit the whole time and the sine only says how lit. */
     const anim = el.animate(
-      [{ opacity: 0.38 }, { opacity: 0.8 }, { opacity: 0.38 }],
+      [
+        { backgroundColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.60)' },
+        { backgroundColor: 'rgba(255,255,255,0.28)', color: 'rgba(255,255,255,1)' },
+        { backgroundColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.60)' },
+      ],
       { duration: 2200, iterations: Infinity, easing: 'cubic-bezier(.37,0,.63,1)' },
     );
     try { anim.startTime = 0; } catch (e) { /* not on a timeline yet; harmless */ }

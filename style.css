@@ -5965,11 +5965,18 @@ body.viewing-splash .app-subnav { display: none; }
    file, so both rules were inert — the "next to-do" nudge did nothing and the
    bubbles inside a fix pill never moved. Written here from what each is
    plainly meant to do; if the real ones turn up, these are the two to replace. */
-/* .2 is `.iv-tab`'s resting opacity — the start and end have to BE the resting
-   state, or the dot jumps when the class is stripped on animationend. */
+/* THE CAROUSEL CARRIES ITS STATE IN FILL, NOT IN OPACITY — every carousel that
+   renders is inside `.imp-list.iv-blueconfirm`, where `.iv-tab` rests at
+   `opacity: 1` with `background: rgba(255,255,255,.05)` and
+   `color: rgba(255,255,255,.35)`. The bare `.iv-tab` rule's `opacity: .2` is the
+   unused variant, so an animation written against it does the opposite of what
+   it means: this glint used to drive the dot DOWN to .2 and a transparent fill
+   for 900ms — it faded the one circle it was meant to point at.
+   0% and 100% are the resting fill exactly, because a one-shot is stripped on
+   animationend and anything else jumps. */
 @keyframes tabNextGlint {
-  0%, 100% { opacity: 0.2;  background-color: rgba(255,255,255,0); }
-  50%      { opacity: 0.85; background-color: rgba(255,255,255,0.08); }
+  0%, 100% { background-color: rgba(255,255,255,0.05); color: rgba(255,255,255,0.35); }
+  50%      { background-color: rgba(255,255,255,0.28); color: rgba(255,255,255,1); }
 }
 @keyframes impFixFloat {
   0%   { transform: translateY(0)                 scale(0.9); opacity: 0; }
@@ -13543,11 +13550,16 @@ body.is-splash .ai-disclaimer { display: none; }
    voice and size (12px mono, --text-dim) rather than the 10px uppercase label
    it replaced — that was a category heading, this is a statement about your
    submission, and the two steps should not sound like different products. */
+/* The 10px above it drops the WHOLE block — the sentence and the cards under it
+   move together, because everything below is in flow behind this margin. Put on
+   the intro rather than on `.iys-wrap`'s padding so it reads as "this chunk
+   starts here" and not as a change to the step's own frame. */
 .iys-chunk-intro {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);
   line-height: 1.45;
+  margin-top: 10px;
   margin-bottom: 10px;
 }
 

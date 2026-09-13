@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.19**
+Current version: **v6.20**
 
 ---
 
@@ -393,23 +393,37 @@ unresolved circle **forward from the one answered, wrapping**, not the first
 unresolved in the row: answering #3 with #1 still open points at #4, because the
 eye is already at #3.
 
-The glint itself changes **only light**. A resting `.iv-tab` sits at
-`opacity: .2`, so raising it to .85 and back on a sine
-(`cubic-bezier(.37,0,.63,1)`, 900ms) is the whole animation, plus a white-8%
-fill at the peak for body. The first version scaled the dot to 1.18 and threw a
-7px ring out of it, which on a 28px circle reads as a control demanding a press
-rather than as a hint. Keyframe 0%/100% must *be* the resting opacity, or the
-dot jumps when the class is stripped on `animationend`.
+The glint changes **only light**, on a sine (`cubic-bezier(.37,0,.63,1)`). The
+first version scaled the dot to 1.18 and threw a 7px ring out of it, which on a
+28px circle reads as a control demanding a press rather than as a hint.
 
-That last rule is the one-shot glint's, and the **persistent breath is its
-opposite**. `_impBreatheNext()` (app.js) marks the next open circle for as long
-as it is next, and a curve that returns to rest spends half of every cycle
-indistinguishable from the dots either side of it — the dot reads as *dimming*,
-which is the opposite of a hint. So its floor sits **above** the resting .2:
-`.38 → .8 → .38`, measured min .38 against a neighbour's .2. It is lit the whole
-time and the sine only says how lit. (`startTime = 0` still puts every rebuilt
-node on one phase; note that writing `currentTime` to sample it recomputes
-`startTime`, so a probe cannot check both at once.)
+**But the light it changes is FILL AND INK, never opacity — and read this
+before touching either animation.** The bare `.improve-v2 .iv-tab` rule says
+`opacity: .2`, and it is a decoy: every carousel that renders is inside
+`.imp-list.iv-blueconfirm` (see the `return` of
+`buildImproveSubmissionSection`), where the modifier resets the tab to
+`opacity: 1` and carries all four states in `background` / `color` instead —
+resting is white **5%** fill with white **35%** text. Both animations were
+written against the decoy and so did the exact opposite of what they meant:
+each drove the one circle it was pointing at *down* to opacity .2 and a
+transparent fill. Twice, because the second was "fixed" by measuring a probe
+built without the `.iv-blueconfirm` wrapper. **If you measure a carousel tab,
+put it inside `.imp-list.iv-blueconfirm` or you are measuring dead CSS.**
+
+- **The one-shot glint** (`tabNextGlint`, 900ms) runs 5%/35% → 28%/white →
+  5%/35%. 0% and 100% must *be* the resting fill, because the class is stripped
+  on `animationend` and anything else jumps.
+- **The persistent breath** (`_impBreatheNext()`, app.js) is the opposite case
+  and takes the opposite floor. It marks the next open circle for as long as it
+  is next, and a curve returning to rest spends half of every cycle
+  indistinguishable from the dots either side of it — the dot reads as
+  *dimming*. So its floor sits **above** resting: 12%/60% → 28%/white, measured
+  against a neighbour's 5%/35%. It is lit the whole time and the sine only says
+  how lit.
+
+(`startTime = 0` still puts every rebuilt node on one phase; note that writing
+`currentTime` to sample it recomputes `startTime`, so a probe cannot check both
+at once.)
 
 **Four bugs worth not repeating.** A `contenteditable` inside a `<button>`
 cannot take focus, so the edit pencil did nothing — the boxes are `<button>`
@@ -630,7 +644,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.19** → next is **v6.20**, then **v6.21**, etc.
+Current version: **v6.20** → next is **v6.21**, then **v6.22**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -642,7 +656,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.19 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.20 — add tooltip to age rating cell"`.
 
 ---
 
@@ -696,7 +710,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.19 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.20 — description of change"`.
 
 ---
 
@@ -716,7 +730,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.19, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.20, the following items are in the queue:
 
 - ~~The step modal's chrome~~ — all three landed: 1 and 2 in v6.11, and the
   scroll reflow in v6.17. `.submit-modal-scroll` and `.mac-spp-main` now carry
