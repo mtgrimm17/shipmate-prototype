@@ -542,7 +542,7 @@
   "ob.assets.guidance": "Drop everything here — screenshots, app icons, key art, logos and video. Shipmate works out what each file is and keeps it in one library, so anything you upload once is ready for every store that needs it.",
   "card.connect_account": "Connect account",
   "cr.inferred_compact": "Shipmate inferred {count} out of {total} responses.",
-  "cr.showing_all": "All {total} questions. {count} responses inferred by Shipmate.",
+  "cr.showing_all": "All {total} questions from Apple's content questionnaire.",
   "cr.left_to_answer": "{count} of {total} still to answer.",
   "cr.all_answered": "All {total} answered.",
   "imp.found": "Shipmate found some ways to make your submission stronger.",

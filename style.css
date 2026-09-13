@@ -11674,17 +11674,20 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-radius: var(--field-radius);
 }
 .cr-toggle-bar .app-subtab-sep { font-size: 12px; }
-/* The "All" pill embedded inline in the inferred-answers banner's own text
-   (buildContentRatingSection, render.js) — everything else about it (font,
-   weight, color, hover, the is-on look it never uses here) already comes
-   from .app-subtab; this just re-applies .cr-toggle-bar .app-subtab's own
-   three overrides (12px font, 7px/16px padding, --field-radius rather than
-   the base pill's --pill-radius) verbatim, without requiring the banner to
-   literally nest inside a .cr-toggle-bar element — so this pill reads as
-   pixel-identical to the real "All" tab beside it, not just similar. */
-.cr-toggle-bar-all-inline.app-subtab {
-  font-size: 12px; padding: 7px 16px;
-  border-radius: var(--field-radius);
+/* The word "All" embedded inline in the inferred-answers banner's own text
+   (buildContentRatingSection, render.js), pointing at the real All tab in
+   .cr-toggle-bar beside it. It was a pill sized to match that tab exactly
+   (padding, radius, the works) — pulled back to plain text on request: sitting
+   mid-sentence with no onclick, a pill read as a second, dead button rather
+   than a label. What's kept is only the font match — .app-subtab's own
+   family/weight/color at the toggle's 12px — so "All" still reads as the
+   same word as the tab, just not as another control: no padding, no radius,
+   no hover fill. */
+.cr-inferred-all-word {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, .5);
 }
 
 /* The Unanswered-view sentence's own two rows ("what Shipmate did" / "what to

@@ -10586,20 +10586,21 @@ function buildContentRatingSection(pid = 'ios') {
      so they are one box now: the toggle at the left, the count beside it,
      inside the same `.sw-tip-box` Distribution uses.
 
-     THE INLINE "ALL" PILL IS BACK, on request — it had been dropped as
+     THE INLINE "ALL" WORD IS BACK, on request — it had been dropped as
      redundant with the real toggle sitting right there, but review feedback
      was that the plain word "all" in the Unanswered-view sentence read as
-     just prose, not as a pointer to the switch beside it. cr-toggle-bar-all-
-     inline (style.css) is sized to match .cr-toggle-bar's own "All" pill
-     (12px font, 7px/16px padding, --field-radius) without literally nesting
-     inside one, and rendered without .is-on since the real "All" tab is
-     always in its OFF state whenever this sentence is showing (it only
-     appears in the Unanswered view, and only when there's something inferred
-     to review — see "THE BAR IS NEVER SILENT" below for the other cases).
-     `cr.inferred_compact`/`cr.inferred_click_all` are the two locale keys for
-     the two-row Unanswered-view sentence below; `cr.inferred_banner` (the
-     older single-line form with the same {allPill}) is left in the locale
-     files unused, for any surface that still wants one line instead of two. */
+     just prose, not as a pointer to the switch beside it. It first came back
+     as a pill matching .cr-toggle-bar's own "All" tab exactly (padding,
+     radius, the works) — then THAT was taken back out: sitting mid-sentence
+     with no onclick, it read as a button you could press, not as a label
+     pointing at one. cr-inferred-all-word (style.css) keeps only the font/
+     color match (12px, weight 600, the tab's own dimmed white) and drops the
+     box — no padding, no radius, no hover fill — so it reads as emphasis on
+     a word, not as a second control. `cr.inferred_compact`/`cr.inferred_
+     click_all` are the two locale keys for the two-row Unanswered-view
+     sentence below; `cr.inferred_banner` (the older single-line form with
+     the same {allPill}) is left in the locale files unused, for any surface
+     that still wants one line instead of two. */
   /* THE LINE SURVIVES THE SWITCH. It used to be printed only in the Unanswered
      view — the reasoning being that once you are looking at everything, a
      prompt to go look has nothing left to do. True of the prompt, not of the
@@ -10628,11 +10629,11 @@ function buildContentRatingSection(pid = 'ios') {
       return v === undefined || v === null || v === '';
     }).length, 0);
 
-  const crAllPillHtml = `<span class="cr-toggle-bar-all-inline app-subtab">All</span>`;
+  const crAllPillHtml = `<span class="cr-inferred-all-word">All</span>`;
   const inferredText = crInferredCount > 0
     ? (showAll
-        ? (t('cr.showing_all', { count: crInferredCount, total: crTotalQuestions })
-           || `All ${crTotalQuestions} questions. ${crInferredCount} responses inferred by Shipmate.`)
+        ? (t('cr.showing_all', { total: crTotalQuestions })
+           || `All ${crTotalQuestions} questions from Apple's content questionnaire.`)
         : `<div class="cr-inferred-row">${
              t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
                || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses.`
