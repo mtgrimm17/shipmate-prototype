@@ -7647,19 +7647,42 @@ function buildStorePreviewSection() {
          <div class="ias-meta-bot ias-meta-bot--action">Content</div>
        </div>`;
 
-  // Price meta cell — always clickable; glows when not done (animated if
-  // focused, static otherwise), green hover when done
-  const priceCell = businessDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
-         <div class="ias-meta-top">${priceText}</div>
-         <div class="ias-meta-bot">Price</div>
-       </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
-         <div class="ias-meta-top ias-meta-action-icon">
-           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
-         </div>
-         <div class="ias-meta-bot ias-meta-bot--action">Business</div>
-       </div>`;
+  // Price/Business meta cell is gone from the meta strip (by request) — the
+  // Get button itself (ias-header-cta, below) is now the required element
+  // that glows for Business/carries navigation to Business Questions, so
+  // there's no separate cell duplicating that. businessDone/_sppGlowCls
+  // ('business') live on, just applied to the Get button instead.
+
+  // Developer meta cell — decorative only (no developer-logo data tracked
+  // anywhere in Shipmate yet), a generic placeholder icon matching the
+  // native App Store's own default "no verified developer icon" look.
+  const devCell = `
+    <div class="ias-meta-cell">
+      <div class="ias-meta-top ias-meta-dev-logo">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+      </div>
+      <div class="ias-meta-bot">Developer</div>
+    </div>`;
+
+  // Language meta cell — the Primary Language's own 2-letter code (Game
+  // Details - Languages, state.formData.primaryLanguage — langCode, above),
+  // plus a "+ X More" line when any supporting languages are selected there
+  // too (state.formData.localizations).
+  const supportingLangCount = (fd.localizations || []).length;
+  const langCell = `
+    <div class="ias-meta-cell">
+      <div class="ias-meta-top">${langCode}</div>
+      ${supportingLangCount > 0 ? `<div class="ias-meta-lang-more">+ ${supportingLangCount} More</div>` : ''}
+      <div class="ias-meta-bot">Language</div>
+    </div>`;
+
+  // Size meta cell — no build/binary size tracked yet, same "—" placeholder
+  // convention as the Ratings cell above for not-yet-available data.
+  const sizeCell = `
+    <div class="ias-meta-cell">
+      <div class="ias-meta-top">—</div>
+      <div class="ias-meta-bot">Size</div>
+    </div>`;
 
   // Screenshots area — always show shots; full-width Select/Edit button below
   const screenshotsArea = `
@@ -7748,11 +7771,12 @@ function buildStorePreviewSection() {
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
           </div>
           <div class="ias-header-cta">
-            <button class="ias-get-btn ias-get-btn--interactive" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+            <button class="ias-get-btn ias-get-btn--interactive${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
           </div>
         </div>
 
-        <!-- ── Meta strip (Age → Content Qs, Price → Business Qs) ── -->
+        <!-- ── Meta strip (Age → Content Qs; Business now lives on the Get
+             button above, not a separate cell here) ── -->
         <div class="ias-meta-strip">
           <div class="ias-meta-cell">
             <div class="ias-meta-top">—</div>
@@ -7761,12 +7785,16 @@ function buildStorePreviewSection() {
           <div class="ias-meta-divider"></div>
           ${ageCell}
           <div class="ias-meta-divider"></div>
-          ${priceCell}
-          <div class="ias-meta-divider"></div>
           <div class="ias-meta-cell ias-meta-cell-wide">
             <div class="ias-meta-top">${category}</div>
             <div class="ias-meta-bot">Category</div>
           </div>
+          <div class="ias-meta-divider"></div>
+          ${devCell}
+          <div class="ias-meta-divider"></div>
+          ${langCell}
+          <div class="ias-meta-divider"></div>
+          ${sizeCell}
         </div>
 
         <!-- ── Screenshots (or Select Screenshots button) ── -->
@@ -8275,17 +8303,40 @@ function buildMacStorePreviewSection() {
          <div class="ias-meta-bot ias-meta-bot--action">Content</div>
        </div>`;
 
-  const priceCell = businessDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Edit Business Questions">
-         <div class="ias-meta-top">${priceText}</div>
-         <div class="ias-meta-bot">Price</div>
-       </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">
-         <div class="ias-meta-top ias-meta-action-icon">
-           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
-         </div>
-         <div class="ias-meta-bot ias-meta-bot--action">Business</div>
-       </div>`;
+  // Price/Business meta cell is gone from the meta strip (by request) — the
+  // Get button itself (mac-spp-get-row, below) is now the required element
+  // that glows for Business/carries navigation to Business Questions.
+
+  // Developer meta cell — decorative only (no developer-logo data tracked
+  // anywhere in Shipmate yet), a generic placeholder icon matching the
+  // native App Store's own default "no verified developer icon" look.
+  const devCell = `
+    <div class="ias-meta-cell">
+      <div class="ias-meta-top ias-meta-dev-logo">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+      </div>
+      <div class="ias-meta-bot">Developer</div>
+    </div>`;
+
+  // Language meta cell — the Primary Language's own 2-letter code (Game
+  // Details - Languages, state.formData.primaryLanguage — langCode, above),
+  // plus a "+ X More" line when any supporting languages are selected there
+  // too (state.formData.localizations).
+  const supportingLangCount = (fd.localizations || []).length;
+  const langCell = `
+    <div class="ias-meta-cell">
+      <div class="ias-meta-top">${langCode}</div>
+      ${supportingLangCount > 0 ? `<div class="ias-meta-lang-more">+ ${supportingLangCount} More</div>` : ''}
+      <div class="ias-meta-bot">Language</div>
+    </div>`;
+
+  // Size meta cell — no build/binary size tracked yet, same "—" placeholder
+  // convention as the Ratings cell above for not-yet-available data.
+  const sizeCell = `
+    <div class="ias-meta-cell">
+      <div class="ias-meta-top">—</div>
+      <div class="ias-meta-bot">Size</div>
+    </div>`;
 
   const screenshotsArea = `
     <div class="ias-shots-scroll mac-spp-shots-scroll">${shotHtml}</div>
@@ -8376,20 +8427,30 @@ function buildMacStorePreviewSection() {
             <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
-            ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
             <!-- GET sits beneath the title/subtitle stack, not beside it as a
                  separate header-cta column — matches the native macOS App
                  Store app's own product page (see the Mac-Store-Preview-only
                  mac-spp-get-row rule, style.css) rather than the in-browser
                  store page's side-by-side layout .ias-header-cta gives the
-                 iOS/Mac Full previews (untouched, still shared elsewhere). -->
+                 iOS/Mac Full previews (untouched, still shared elsewhere).
+                 "In-App Purchases" now sits beside GET itself (free games
+                 only, matching the native app's own product page) rather
+                 than under the title/subtitle stack — see mac-spp-get-row's
+                 own comment, style.css, for the row's layout. Get is also
+                 this preview's own "Business" required element — it glows
+                 (_sppGlowCls('business')) until Business Questions has been
+                 opened and answered, same as every other required element,
+                 replacing the meta strip's old separate Business cell
+                 below. -->
             <div class="mac-spp-get-row">
-              <button class="ias-get-btn ias-get-btn--interactive" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              <button class="ias-get-btn ias-get-btn--interactive${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              ${isFree && iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
           </div>
         </div>
 
-        <!-- ── Meta strip (Age → Content Qs, Price → Business Qs) ── -->
+        <!-- ── Meta strip (Age → Content Qs; Business now lives on the Get
+             button above, not a separate cell here) ── -->
         <div class="ias-meta-strip">
           <div class="ias-meta-cell">
             <div class="ias-meta-top">—</div>
@@ -8398,12 +8459,16 @@ function buildMacStorePreviewSection() {
           <div class="ias-meta-divider"></div>
           ${ageCell}
           <div class="ias-meta-divider"></div>
-          ${priceCell}
-          <div class="ias-meta-divider"></div>
           <div class="ias-meta-cell ias-meta-cell-wide">
             <div class="ias-meta-top">${category}</div>
             <div class="ias-meta-bot">Category</div>
           </div>
+          <div class="ias-meta-divider"></div>
+          ${devCell}
+          <div class="ias-meta-divider"></div>
+          ${langCell}
+          <div class="ias-meta-divider"></div>
+          ${sizeCell}
         </div>
 
         <!-- ── Screenshots (or Select Screenshots button) ── -->

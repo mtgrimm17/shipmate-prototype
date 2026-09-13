@@ -6771,6 +6771,18 @@ textarea.loc-review-field.ias-inline-input {
 .ias-meta-age { font-size: 14px; }
 .ias-meta-bot { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
 .ias-meta-divider { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; margin: 0 4px; }
+/* Developer meta cell's generic placeholder icon — sits in the same
+   .ias-meta-top slot every other cell puts its bold value in, just
+   centered as a small icon instead of text (no developer-logo data is
+   tracked anywhere in Shipmate, so this is decorative, matching the native
+   App Store's own default "no verified developer icon" look). Fixed height
+   matches .ias-meta-top's own approximate text line-height so Developer's
+   row lines up with its neighbors instead of sitting taller/shorter. */
+.ias-meta-dev-logo { display: flex; align-items: center; justify-content: center; height: 16px; }
+/* Language meta cell's "+ X More" line (buildStorePreviewSection/
+   buildMacStorePreviewSection) — same size/color as .ias-meta-bot beneath
+   it but not uppercased, sitting between the language code and that label. */
+.ias-meta-lang-more { font-size: 9px; color: var(--text-faint); margin-top: 1px; }
 
 /* Screenshots */
 .ias-shots-scroll {
@@ -7056,12 +7068,15 @@ textarea.loc-review-field.ias-inline-input {
    its own brighter/more vivid pulse (spp-focus-pulse, below) — replacing
    the base class's own default animation rather than just leaving it,
    since a single shared brighter ring (used no matter which of
-   .ias-placeholder/.ias-meta-cell--action/.spp-section-btn the focused
-   element happens to be) reads as more clearly "this one" than each type's
-   own base intensity would. Both modifiers use !important, the same way
-   .spp-section-btn--done already does two rules below, since each must
-   beat the plain base class it's layered onto regardless of stylesheet
-   order. Every OTHER surface that reuses .ias-placeholder/
+   .ias-placeholder/.ias-meta-cell--action/.spp-section-btn/.ias-get-btn the
+   focused element happens to be) reads as more clearly "this one" than
+   each type's own base intensity would. Both modifiers use !important, the
+   same way .spp-section-btn--done already does two rules below, since each
+   must beat the plain base class it's layered onto regardless of
+   stylesheet order — .ias-get-btn (Business's own glow target, now that
+   the meta strip's old separate Business cell is gone) has no base
+   animation of its own to beat, but gets the same treatment for
+   consistency. Every OTHER surface that reuses .ias-placeholder/
    .ias-meta-cell--action/.spp-section-btn — Mac App Store Full and
    Android/Steam's own Product Page Previews, Localization Review/IAP
    fields — never has either class added to it and keeps its original
@@ -7326,8 +7341,11 @@ textarea.loc-review-field.ias-inline-input {
 /* GET sits under the title/subtitle stack here (render.js moved it out of
    .ias-header-cta, which the iOS/Mac Full previews still use unchanged) —
    matching the native app's own product page rather than the side-by-side
-   in-browser layout. */
-.mac-spp-get-row { margin-top: 8px; }
+   in-browser layout. Flex row (not just the button alone) so the
+   "In-App Purchases" note (free games with IAP only — render.js) sits
+   beside GET rather than stacked above/below it, matching the native
+   app's own product page. */
+.mac-spp-get-row { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
 
 /* Screenshots — sized down from the first pass to better match the actual
    native app's own proportions (screenshots read as one element among
