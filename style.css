@@ -5203,6 +5203,16 @@ body.viewing-splash .app-subnav { display: none; }
    state, so nothing else needs to change. */
 .ios-step-card.is-complete .ios-step-name { color: #fff; }
 
+/* ── The form's spotlight: the guide points, the form answers ──────────────
+   Set by _gdSpotlight (app.js) when a Shippy Guide task is pressed. Same rules
+   as the card's below: the dim goes on the LEAF question, never on a container,
+   because opacity filters a whole subtree and the lit child cannot climb back
+   out of it. Nothing is clickable while it is explaining itself — a dimmed
+   question that still takes a click invites you to answer the one being
+   de-emphasised. */
+.ob-form.is-spotlight .ob-q:not(.is-spotlit) { opacity: .18; pointer-events: none; }
+.ob-form .ob-q { transition: opacity .22s ease; }
+
 /* ── The spotlight: press Submit, everything in the way stays lit ──────────
    Set by _smSpotlight (app.js) for about a second. The dim goes on LEAF GROUPS
    and never on .ios-step-cards, because opacity is a filter over a whole
@@ -5340,7 +5350,12 @@ body.viewing-splash .app-subnav { display: none; }
     transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
   }
 
-.improve-v2 .imp-split-current:hover{ background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.14); filter: brightness(1.2); }
+/* QUIETER THAN THE FIX BESIDE IT, and it was louder: a white 9% lift AND a
+   brightness(1.2) on top, which multiplies whatever the lift just produced. The
+   two boxes are a pair and the eye compares them, so the unchanged option
+   should not out-shout the proposal. The multiplier is gone; the lift alone
+   does it, at 6%. */
+.improve-v2 .imp-split-current:hover{ background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 
 .improve-v2 .imp-split-current .imp-split-label{ color: #8A918D; }
 
@@ -5361,7 +5376,17 @@ body.viewing-splash .app-subnav { display: none; }
   .improve-v2 .imp-split-fix{
     position: relative; isolation: isolate; overflow: hidden;
     border: 1px solid transparent;
-    background-color: var(--pill-ai-bg);
+    /* THE VIOLET NEEDS THE SAME FLOOR IT HAS IN CONTENT RATING. --pill-ai-bg is
+       translucent (35%), so what you actually see is violet MIXED WITH WHATEVER
+       IS BEHIND IT: over the modal's --panel (#141414) it comes out (69,49,97);
+       over .iv-card's #262626 it comes out (80,61,109) — lighter, greyer, and
+       visibly weaker than the identical token two clicks away.
+
+       So the card's grey is taken out of the equation: an opaque --panel base
+       with the violet painted over it as an image layer. Same token, same
+       result, wherever the box happens to sit. */
+    background-color: var(--panel);
+    background-image: linear-gradient(var(--pill-ai-bg), var(--pill-ai-bg));
     background-clip: padding-box;
     transition: background-color 0.18s ease, color 0.18s ease;
   }
@@ -5378,7 +5403,17 @@ body.viewing-splash .app-subnav { display: none; }
 
 .improve-v2 .imp-split-fix .imp-split-val{ color: var(--pill-ai-color); }
 
-.improve-v2 .imp-split-fix:hover{ background-color: var(--pill-ai-bg-hover); }
+/* HOVER MOVES THE VIOLET, NOT THE FLOOR. Since the fill became two layers — an
+   opaque --panel base with the violet painted over it — setting
+   `background-color` here replaced the FLOOR with a translucent violet, so the
+   card's #262626 came back through it and the box turned pale exactly when you
+   were looking at it. The lift belongs to the same layer that carries the
+   colour. .35 → .43 by eye against the pair beside it: the pills' own step
+   (.42) is the right size on a 52px control, and this box needed a touch more
+   to answer at its own scale without going pale. */
+.improve-v2 .imp-split-fix:hover{
+  background-image: linear-gradient(rgba(159,104,240,.43), rgba(159,104,240,.43));
+}
 
 /* The bubble engine stays in the file (it is driven from JS and is used by the
    pill playground) but it is not drawn here any more: floating particles were
@@ -5409,7 +5444,12 @@ body.viewing-splash .app-subnav { display: none; }
 .improve-v2 .iv-card{
     position: relative;
     border-radius: 12px; padding: var(--iv-card-pad-top) 14px 11px; border: 1px solid rgba(255,255,255,0.1);
-    background: #262626;   /* solid grey fill (no gradient) */
+    /* One notch down from #262626 — 5 points of grey. The card is a tray for
+       three batches, not a surface in its own right, and against the modal's
+       #141414 the old value sat close enough to --panel-3 (#242424) to read as
+       a panel. The violet and blue boxes inside are unaffected: they composite
+       over their own --panel floor now, not over this. */
+    background: #212121;   /* solid grey fill (no gradient) */
     font-family: 'IBM Plex Mono', ui-monospace, monospace; color: #fff;
     display: flex; flex-direction: column; box-sizing: border-box;
   }
@@ -5491,6 +5531,12 @@ body.viewing-splash .app-subnav { display: none; }
 /* A collapsed card has nothing under its header to divide, so the rule goes
    with the body. It used to stay behind as a line to nowhere. */
 .improve-v2 .iv-card-collapsed .iv-divider{ display: none; }
+/* Binary's "upload your build to scan for…" caption. It sat on the header's
+   own 8px margin, which is --iv-card-pad-top — the number that keeps the
+   header's axis symmetric, so it cannot be raised without moving every batch.
+   The air is added here instead, 4px on each side of the sentence: 12 above,
+   12 below (4 + the card's own 8 of bottom padding). */
+.improve-v2 .iv-card-binary.iv-card-collapsed .imp-problem{ margin: 4px 0; }
 
 /* THE HEADER DROPS ITS MARGIN ONLY WHEN IT IS THE LAST THING IN THE CARD —
    `:last-child` says exactly that. A blanket `margin-bottom: 0` was right while
@@ -5733,6 +5779,14 @@ body.viewing-splash .app-subnav { display: none; }
 
 .improve-v2 .iv-card .imp-discarded .imp-fix-bubbles{ display: none; }
 
+/* AND ITS RING GOES WITH IT. The fix box draws its violet 1px ring as an
+   ::after — a masked gradient painted OVER the box — so setting a neutral
+   border and `background-image: none` on the discarded state left the violet
+   outline sitting on top of a grey box: the "weird purple stroke on the option
+   I did not pick". A ring is part of the fill's statement, not decoration
+   independent of it. */
+.improve-v2 .iv-card .imp-discarded::after{ display: none; }
+
 /* Check on the chosen box, in that box's own font colour. */
   .improve-v2 .iv-card .imp-split-box{ position: relative; }
 
@@ -5754,8 +5808,10 @@ body.viewing-splash .app-subnav { display: none; }
    pair and the CSS had drifted off it. Now a chosen fix wears exactly what a
    confirmed answer pill wears in Content Rating. */
   .improve-v2 .iv-card .imp-split-fix.imp-chosen{
-    background-image: none;
-    background-color: var(--pill-on-bg);   /* real single fill, inside the border */
+    /* Same floor as the violet above — the blue is translucent too, and the
+       confirmed state has to weigh the same here as it does on a pill. */
+    background-color: var(--panel);
+    background-image: linear-gradient(var(--pill-on-bg), var(--pill-on-bg));
     background-clip: padding-box;
     border: 1px solid transparent;
   }
@@ -5776,8 +5832,8 @@ body.viewing-splash .app-subnav { display: none; }
 
 /* Chosen "Keep current" → onboarding SELECTED pill (blue fill + blue gradient ring). */
   .improve-v2 .iv-card .imp-split-current.imp-chosen{
-    background-color: rgba(0,154,255,0.35);
-    background-image: none;
+    background-color: var(--panel);                                        /* see .imp-split-fix */
+    background-image: linear-gradient(var(--pill-on-bg), var(--pill-on-bg));
     background-clip: padding-box;
     border: 1px solid transparent;
   }
@@ -5903,14 +5959,60 @@ body.viewing-splash .app-subnav { display: none; }
   85%  { opacity: 1; }
   100% { transform: translateY(calc(-1 * var(--travel, 200px))) scale(1.15); opacity: 0; }
 }
-/* The submit row while it is asking where to send the build. The options are
-   .yn-btn — the answer pill from Content Rating — because that is what this is:
-   a question with three answers, in a card that already speaks that language.
-   The row keeps its own padding; only the pills are new. */
-.submit-track-opts { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
-.ios-step-card.submit-step-asking { cursor: default; }
-.ios-step-card.submit-step-asking .ios-step-name { color: var(--text); }
-.submit-track-opt { white-space: nowrap; }
+/* The destination picker at the end of the submit row, sized to Upload Build's
+   chip so the two rows end on the same edge: 184px wide (--bd-pill-w), 30px
+   tall, 8px radius. Three inline pills lived here for a version and overflowed
+   the card at "TestFlight / external" lengths. */
+.submit-track-pick { flex: none; margin-left: auto; }
+/* swSelect draws .loc-primary-wrap > .loc-primary-pill (Localization's picker),
+   so the sizing lands on THOSE, not on a .sw-select-* name that does not exist
+   in the markup. Matched to .build-pill: 160px wide, 30px tall, 8px radius,
+   12.5px — so the Submit row and the Upload Build row end on the same edge
+   with the same object. */
+.submit-track-pick .loc-primary-wrap { width: 160px !important; max-width: 160px !important; }
+.submit-track-pick .loc-primary-pill {
+  width: 100%;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  justify-content: space-between;
+}
+/* PLAIN, LIKE UPLOAD BUILD'S CHIP. swSelect's pill is Localization's, which
+   wears the selection blue (--pill-on-*) and its gradient ring — right there,
+   where the picked language IS the selected thing, and wrong here: this chip is
+   a field waiting for an answer, sitting next to a row whose own chip is a
+   quiet outline. Copied from .build-pill.no-build, value for value, including
+   the hover; the ring is switched off because .build-pill has none. */
+.submit-track-pick .loc-primary-pill,
+.submit-track-pick .loc-primary-pill:hover {
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: transparent;
+  color: rgba(255, 255, 255, .62);
+}
+.submit-track-pick .loc-primary-pill:hover {
+  border-color: rgba(255, 255, 255, .34);
+  color: #fff;
+  background: rgba(255, 255, 255, .06);
+}
+.submit-track-pick .loc-primary-pill::after { display: none; }
+/* A chosen track is a value, so it reads brighter than the placeholder — but
+   still in the same quiet box. Green is Upload Build's word for "a file is in",
+   which is a different claim from "this is where it goes". */
+.submit-track-pick .loc-primary-name { color: rgba(255,255,255,.88); }
+.submit-track-pick .loc-primary-name.is-placeholder { color: rgba(255,255,255,.62); }
+
+/* IT DIMS WITH ITS ROW. While steps are outstanding the submit row is held back
+   — its name at white 40%, its disc at 26% — and a chosen track sitting at full
+   white inside it was the brightest thing in a row that is explicitly not ready,
+   so the eye read the destination as the live control and the step as disabled
+   scenery. The chip follows the row's own level instead. Not an `opacity` on
+   the row: that filters the whole subtree, and the picker's panel opens out of
+   it (same trap as the card's spotlight and `is-complete`'s green). */
+.submit-step-card.submit-step-locked .submit-track-pick .loc-primary-name { color: rgba(255,255,255,.42); }
+.submit-step-card.submit-step-locked .submit-track-pick .loc-primary-name.is-placeholder { color: rgba(255,255,255,.30); }
+.submit-step-card.submit-step-locked .submit-track-pick .loc-primary-pill { border-color: rgba(255,255,255,.08); }
+.submit-step-card.submit-step-locked .submit-track-pick .loc-primary-pill svg { opacity: .45; }
 
 /* ── Submit step card ───────────────────────────────────────── */
 /* ALWAYS A POINTER, because the row is always a button now — every press
@@ -13388,6 +13490,18 @@ body.is-splash .ai-disclaimer { display: none; }
 
 /* Chunk = one of the two top-level sections */
 .iys-chunk { display: flex; flex-direction: column; gap: 10px; }
+/* The sentence that opens the guidance chunk. Content Rating's pinned line's
+   voice and size (12px mono, --text-dim) rather than the 10px uppercase label
+   it replaced — that was a category heading, this is a statement about your
+   submission, and the two steps should not sound like different products. */
+.iys-chunk-intro {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
 .iys-chunk-label {
   font-size: 10px;
   font-weight: 700;

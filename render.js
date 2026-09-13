@@ -3925,48 +3925,12 @@ function buildReleaseBlock(pid) {
   const rowLabel = (shape.versionLabel && version) ? 'Version' : 'Build';
   const rows = [[rowLabel, parts.join('')]];
 
-  /* THE DROPDOWN IS swSelect(), the component the app already had.
-     This first shipped as a pill of its own that opened the hidden native
-     <select> via _openTrackMenu() — so it looked like nothing else in the app
-     and behaved like the OS, which is why it misbehaved. swSelect draws the
-     pill AND its own styled panel (.loc-dropdown), the same one the primary
-     language picker opens, and handles opening, closing and choosing.
-
-     `align: 'right'` because this pill sits under the card's header with the
-     card's right edge close by; a left-anchored panel wide enough for
-     "TestFlight — External" would grow past it. That parameter exists for
-     exactly this case — see swSelect's own doc comment. */
-  /* THE ROW ONLY EXISTS ONCE THERE IS A DESTINATION. An empty "Select track"
-     pill took a whole row of the card to hold a question, and the card is a
-     status surface — it should say where the build went, not ask where to send
-     it. The asking moved to the moment of sending (submitStepClick, app.js:
-     press Submit with no destination and the row offers them). Once chosen the
-     pill comes back, still a picker, so changing your mind does not require
-     going through Submit again. */
-  const tracks = (shape.trackNoun && (state.selectedTracks || {})[pid]) ? (PLATFORM_TRACKS[pid] || []) : [];
-  let picker = '';
-  if (tracks.length) {
-    /* NOTHING IS PRESELECTED. This used to fall back to getLastUsedTrack(),
-       which meant the pill always showed a track the user had never picked —
-       and, worse, `readyToSubmit` in buildSubmitStepCard gates on a chosen
-       track, so a silent default was quietly unlocking Submit on their
-       behalf. Null until they choose, and the placeholder says what to
-       choose. */
-    const sel = (state.selectedTracks || {})[pid] ?? null;
-    picker = `<div class="rel-track">${swSelect(
-      'track-' + pid,
-      sel,
-      tracks.map(tr => ({ value: tr.id, label: tr.label })),
-      /* swSelectChoose calls window[name](value) — a plain global name, one
-         argument. So the platform can't ride along in the string; it is baked
-         into a per-platform callback registered once at load
-         (_registerTrackCallbacks, app.js). */
-      'selectTrack__' + pid,
-      'auto',
-      'left',
-      'Select ' + shape.trackNoun,
-    )}</div>`;
-  }
+  /* THE TRACK PICKER IS NOT HERE ANY MORE. It moved to the Submit row
+     (buildSubmitStepCard), where the destination is actually used, and this
+     block went back to reporting what was uploaded. The swSelect call, the
+     placeholder and the -14px pull that used to align its pill all went with
+     it; `.rel-track`'s rules in style.css have no consumer left, and
+     `.submit-track-pick` is where the styling lives now. */
 
   /* LABELLED ROWS, two columns: the store's own noun in mono caps on the left,
      the value on the right. Which rows exist comes off the shape table rather
@@ -3975,19 +3939,22 @@ function buildReleaseBlock(pid) {
      `.rel-line` stays as the wrapper inside every value cell: it carries the
      line's type and the gap between the number and the date. Dropping it when
      this became a grid took its gap with it and the two ran together. */
-  /* The picker's cell takes no .rel-line: that wrapper carries the 14px indent
-     which puts a TEXT value on the same column as the pill's LABEL, and
-     wrapping the pill in it too would just push the pill 14px further right
-     and undo the alignment. `raw` is what says "this value is a control, not a
-     line of text". */
+  /* `raw` says "this value is a control, not a line of text" — it skips the
+     .rel-line wrapper and its 14px indent. Nothing passes it since the track
+     picker left, but the rows are data-driven and the next control-shaped
+     value will want it. */
   const row = (label, value, raw) => `
     <div class="rel-label">${escHtml(label)}</div>
     <div class="rel-value">${raw ? value : `<div class="rel-line">${value}</div>`}</div>`;
 
+  /* NO TRACK ROW. The destination now lives in the Submit row, as a chip shaped
+     like Upload Build's (buildSubmitStepCard) — one control, at the moment it
+     is used. A second copy up here would be the same value in two places, and
+     the first thing that happens to two copies of a value is that they drift.
+     The block is back to what it is good at: what was uploaded. */
   return `
     <div class="card-release-block">
       ${rows.map(r => row(r[0], r[1])).join('')}
-      ${picker ? row(shape.trackNoun, picker, true) : ''}
     </div>`;
 }
 
@@ -4463,26 +4430,29 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      now answers for both: press it unconnected and the gear shakes, which
      points at where connecting actually happens rather than duplicating it. */
 
-  /* ASKING WHERE TO SEND IT, in the row that sends it. Set by submitStepClick
-     when Submit is pressed with everything ready and no destination chosen —
-     the one question left, asked where the answer is used. Picking one sets the
-     track and submits in the same gesture; the pills are the card's own
-     vocabulary, so nothing new had to be drawn. */
-  const asking = !isWeb && !selTrack && (state.submitAskTrack || {})[pid];
-  if (asking) {
-    const opts = (PLATFORM_TRACKS[pid] || []).map(tr =>
-      `<button type="button" class="yn-btn submit-track-opt"
-               onclick="event.stopPropagation();chooseTrackAndSubmit('${pid}','${tr.id}')">${escHtml(tr.label)}</button>`).join('');
-    return `
-    <div class="ios-step-card ios-step-card--inline submit-step-card submit-step-asking"
-         id="${pid}-step-card-submit">
-      <div class="${numClass}">${num}</div>
-      <div class="ios-step-info">
-        <div class="ios-step-name">${t('card.send_to') || 'Send to'}</div>
-      </div>
-      <div class="submit-track-opts">${opts}</div>
-    </div>`;
-  }
+  /* THE DESTINATION PICKER IS A CHIP IN THE ROW, the same object Upload Build
+     puts at the end of its own row (.build-pill: 184px, 30px tall, 8px radius).
+     The first version grew three pills inline when Submit was pressed — they
+     overflowed the card at the App Store's label lengths, and they only existed
+     after every other step was done, which made the last decision the least
+     reachable one. A picker is available from the first paint: choosing where
+     this build goes does not depend on the store page being written.
+
+     swSelect draws the app's own panel (the release block used the same control
+     when the pill lived there), and `selectTrack__<pid>` is the per-platform
+     callback registered once at load — swSelectChoose calls window[name](value)
+     with one argument, so the platform cannot ride along in the string. */
+  const trackOpts = isWeb ? [] : (PLATFORM_TRACKS[pid] || []);
+  const trackPicker = trackOpts.length ? `
+      <div class="submit-track-pick" onclick="event.stopPropagation()">${swSelect(
+        'submit-track-' + pid,
+        selTrack,
+        trackOpts.map(tr => ({ value: tr.id, label: tr.label })),
+        'selectTrack__' + pid,
+        'auto',
+        'right',
+        t('card.select_track') || 'Select track',
+      )}</div>` : '';
 
   return `
     <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
@@ -4491,6 +4461,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
       <div class="ios-step-info">
         <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
       </div>
+      ${submitDone ? '' : trackPicker}
     </div>`;
 }
 
@@ -7069,7 +7040,10 @@ function buildImproveSubmissionSection(platformId) {
     /* Collapsed: the sentence is a caption for the header's control, not a body
        under it, so it gets no divider — same reasoning as the all-clear states. */
     binCardCls = 'iv-card-binary iv-card-collapsed';
-    binBody = `<div class="imp-problem" style="margin-bottom:0;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
+    /* The margins live in CSS (.iv-card-binary.iv-card-collapsed .imp-problem),
+       not inline: the caption needs air on BOTH sides and an inline
+       margin-bottom:0 cannot be overridden by a rule. */
+    binBody = `<div class="imp-problem">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
   } else if (binProcessing) {
     binBody = `<div class="iys-bin-analyzing"><span class="build-proc-spin"></span><span>Analyzing binary… this takes about 10 seconds.</span></div>`;
   } else {
@@ -7126,11 +7100,33 @@ function buildImproveSubmissionSection(platformId) {
   const binSection = _batch('imp-binary-batch', binGrade, 'bin', 'Binary', binHeadExtra, binHeadRight, binBody, binCardCls,
                             { key: 'binary', allAnswered: binAllDone });
 
+  /* ── What Shipmate found, in a sentence ────────────────
+     "SHIPMATE GUIDANCE" was a category label: it named the machine's role and
+     told you nothing about your own submission. This counts what is actually
+     asking for a decision — open store-page suggestions, the localization
+     recommendation if it is unanswered, and unresolved binary findings — in the
+     same voice as Content Rating's pinned line, so the two steps sound like one
+     app. Unlike that line it is NOT a pill: a pill there holds a control (the
+     filter), and a box drawn around a sentence with nothing to press is a box
+     for nothing. */
+  const openStoreCount = spAll.filter(it => it.status === 'open').length;
+  const openLocCount   = (langName && !locDone) ? 1 : 0;
+  const openBinCount   = binAnalyzed ? findings.filter((_, i) => !binDone.has(i)).length : 0;
+  const openTotal      = openStoreCount + openLocCount + openBinCount;
+  const guidanceLine   = openTotal > 0
+    ? (t('imp.found', { count: openTotal })
+       || `Shipmate found ${openTotal} way${openTotal === 1 ? '' : 's'} to make your submission stronger.`)
+    : (t('imp.found_none')
+       || 'Shipmate checked your store page, localization and build.');
+
   // ── Re-analyze footer ─────────────────────────────────
+  /* "Re-analyze all" read like a debug button — the verb is what the machine
+     does to your data, and "all" is scope nobody asked about. "Check again" is
+     what you would say out loud. */
   const hasResults = (spi && !spi.loading) || (ana && !ana.loading);
   const reanalyzeRow = hasResults ? `
     <div class="iys-reanalyze-row">
-      <button class="btn btn-ghost btn-sm" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">Re-analyze all</button>
+      <button class="btn btn-ghost btn-sm" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">${t('imp.check_again') || 'Check again'}</button>
     </div>` : '';
 
   // ── Chunk 2: Recommended Partners — 3 columns (QA · Press · Marketing) ──
@@ -7179,7 +7175,7 @@ function buildImproveSubmissionSection(platformId) {
   return `
     <div class="iys-wrap improve-v2">
       <div class="iys-chunk">
-        <div class="iys-chunk-label">Shipmate Guidance</div>
+        <div class="iys-chunk-intro">${guidanceLine}</div>
         <div class="imp-list iv-blueconfirm">
           ${spPageSection}
           ${locSection}

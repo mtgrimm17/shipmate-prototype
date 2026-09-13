@@ -769,8 +769,64 @@ function chkGo(view, anchor, section) {
   setView(view);
   if (anchor) requestAnimationFrame(() => {
     const el = document.getElementById(anchor);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    _gdSpotlight(el);
+
+    /* AND THE CARET IS ALREADY IN IT. "Write a description" that lands you next
+       to the box, with the box still waiting to be clicked, asks you to do the
+       same thing twice. Only when the anchor IS a field or contains one —
+       "Choose platforms" points at a grid, and stealing focus there would put
+       the caret somewhere invisible.
+
+       `preventScroll` because focus() scrolls the field into view its own way
+       and would fight the smooth scroll above, landing the page a few pixels
+       off with a jump. The caret goes to the end of whatever is already there:
+       for an empty field that is the start, and for a written one it is where
+       you would carry on. */
+    const field = el.matches('input, textarea, select') ? el
+                : el.querySelector('input:not([type=hidden]), textarea, select');
+    if (field) {
+      field.focus({ preventScroll: true });
+      if (typeof field.setSelectionRange === 'function' && typeof field.value === 'string') {
+        try { const n = field.value.length; field.setSelectionRange(n, n); } catch (e) {}
+      }
+    }
   });
+}
+
+/* THE GUIDE POINTS, THE FORM ANSWERS. Pressing "Write a description" used to
+   scroll the form to that field and stop there — on a long page of questions
+   that all look alike, "which one did it mean?" is left to the user a second
+   after they asked. The platform card already answers that kind of question by
+   dimming everything that is not in the way (see _smSpotlight); this is the
+   same move on the form.
+
+   The dim goes on `.ob-q` — one question — and never on `.ob-section` or the
+   form itself: opacity is a filter over a whole subtree, so dimming a container
+   and expecting one child to climb back out of it does not work. Same trap as
+   the card's, and as `is-complete`'s green. Scoped to the onboarding form,
+   which is where every guide anchor but Marketing's lands; elsewhere it is a
+   no-op rather than a half-applied effect. */
+let _gdSpotTimer = null;
+function _gdSpotlight(el, ms) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const form = el.closest('.ob-form');
+  const q    = el.closest('.ob-q');
+  if (!form || !q) return;
+
+  clearTimeout(_gdSpotTimer);
+  form.querySelectorAll('.is-spotlit').forEach(n => n.classList.remove('is-spotlit'));
+  q.classList.add('is-spotlit');
+  form.classList.add('is-spotlight');
+
+  _gdSpotTimer = setTimeout(() => {
+    form.classList.remove('is-spotlight');
+    /* Marks cleared only after the fade back, or the lit question drops to the
+       dim level for a frame before everything comes up together. */
+    setTimeout(() => form.querySelectorAll('.is-spotlit')
+      .forEach(n => n.classList.remove('is-spotlit')), 260);
+  }, ms || 1700);
 }
 
 /* ── Broadcast composer handlers ──────────────────────── */
@@ -3576,31 +3632,18 @@ function submitStepClick(pid) {
      tests it) and leaving it out would put back the dead press this change
      exists to remove: everything ticked, account linked, and the row still
      does nothing. The picker lives in the release block above. */
-  /* 3 — no destination yet. This used to spotlight the picker in the release
-     block above; that pill no longer exists until a destination has been
-     chosen (buildReleaseBlock), because an empty "Select track" spent a row of
-     a status card asking a question. So the row asks it itself: pressing
-     Submit turns it into "Send to — [Internal] [External] [App Store]", and
-     picking one submits in the same gesture (chooseTrackAndSubmit). Nothing is
-     preselected, here or anywhere: the destination is a decision, and a silent
-     default would make it on your behalf. */
+  /* 3 — no destination yet. The picker sits in this very row (a chip shaped
+     like Upload Build's, see buildSubmitStepCard), so the row points at itself:
+     the chip is spotlighted rather than a control somewhere else on the card.
+     Nothing is preselected, here or anywhere — the destination is a decision,
+     and a silent default would make it on your behalf. */
   if (!isWeb && !(state.selectedTracks || {})[pid]) {
-    if (!state.submitAskTrack) state.submitAskTrack = {};
-    state.submitAskTrack[pid] = true;
-    renderDashboard();
+    const chip = card?.querySelector('.submit-track-pick');
+    _smSpotlight(card, [chip]);
+    _smShake?.(chip, 'nudge');
     return;
   }
 
-  confirmSubmit(pid);
-}
-
-/* One gesture: the destination and the send. Called by the pills the submit row
-   grows when it is pressed without a track (buildSubmitStepCard). */
-function chooseTrackAndSubmit(pid, trackId) {
-  if (!state.selectedTracks) state.selectedTracks = {};
-  state.selectedTracks[pid] = trackId;
-  if (state.submitAskTrack) delete state.submitAskTrack[pid];
-  renderDashboard();
   confirmSubmit(pid);
 }
 

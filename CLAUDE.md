@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.17**
+Current version: **v6.18**
 
 ---
 
@@ -533,30 +533,39 @@ read the filter's snapshot — which is deliberately re-taken every time you pre
 "Unanswered" — so answering five questions yourself and pressing it turned
 "12 inferred" into 17.
 
-### The destination is chosen when you send, not before
+### The destination lives in the Submit row
 
-The release block's TRACK row **does not exist until a destination has been
-chosen** (`buildReleaseBlock`, render.js). An empty "Select track" pill spent a
-whole row of a status card asking a question, and the card's job is to say where
-the build went.
+The release block has **no TRACK row** (`buildReleaseBlock`, render.js): it
+reports what was uploaded and nothing else. The destination is picked in the
+Submit row itself, from a chip shaped exactly like Upload Build's — 160×30, 8px
+radius, `.build-pill.no-build`'s quiet outline — so the two rows end on the same
+edge with the same kind of object. It is there from the first paint: choosing
+where a build goes does not depend on the store page being written.
 
-The asking moved to the moment of sending. Pressing Submit with everything ready
-and no destination turns the submit row itself into the question — "Send to —
-[TestFlight / internal] [TestFlight / external] [Mac App Store]" — and choosing
-one sets the track and submits in the same gesture (`chooseTrackAndSubmit`,
-app.js). The options are `.yn-btn`, the answer pill from Content Rating, because
-that is what they are.
+Three earlier shapes and why each went:
 
-That replaced gate 3 of `submitStepClick`, which used to spotlight the pill in
-the block above: a prerequisite you could only satisfy by finding a ghost
-control elsewhere on the card. Nothing is preselected, here or anywhere — the
-destination is a decision, and a silent default would make it on your behalf.
+1. **A pill in the release block.** An empty "Select track" spent a row of a
+   status card asking a question, and `submitStepClick`'s third gate had to
+   spotlight it — a prerequisite you could only satisfy by finding a ghost
+   control elsewhere on the card.
+2. **Three inline pills**, grown by the row when Submit was pressed. They
+   overflowed the card at App Store label lengths, and they only existed after
+   every other step was done, which made the last decision the least reachable.
+3. Labels **"TestFlight / internal"** → **"TF (internal)"**: measured, the chip
+   leaves 114px for the label and "TestFlight (Int)" needs 115. One pixel.
 
-Once chosen the row comes back **still a picker**, so changing your mind does not
-mean going through Submit again. This is the small version of "the track belongs
-to the Submit step": the full version gives Submit a body that states what each
-destination implies (they are different review paths), and the row is now in the
-right place to grow into it.
+Nothing is preselected, here or anywhere — the destination is a decision, and a
+silent default would make it on your behalf. Gate 3 now spotlights the chip in
+its own row, so the row points at itself.
+
+**`.rel-track`'s rules in style.css are dormant on purpose — do not sweep them.**
+The current shape has a real tension: a Submit button should *celebrate*, and
+this one also asks a question, so the picker and the act of sending compete for
+one row. The likely end state is the opposite of today — the destination back in
+the card's chrome (where those rules already live), and Submit reduced to the
+single confident act. What is missing before that is the piece both shapes want:
+a Submit step with a body that states what each destination implies, since they
+are different review paths with different waits.
 
 ### The Content Rating bar is never silent
 
@@ -587,7 +596,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.17** → next is **v6.18**, then **v6.19**, etc.
+Current version: **v6.18** → next is **v6.19**, then **v6.20**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -599,7 +608,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.17 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.18 — add tooltip to age rating cell"`.
 
 ---
 
@@ -653,7 +662,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.17 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.18 — description of change"`.
 
 ---
 
@@ -673,7 +682,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.17, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.18, the following items are in the queue:
 
 - ~~The step modal's chrome~~ — all three landed: 1 and 2 in v6.11, and the
   scroll reflow in v6.17. `.submit-modal-scroll` and `.mac-spp-main` now carry
