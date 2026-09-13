@@ -10545,9 +10545,7 @@ function buildContentRatingSection(pid = 'ios') {
   // than just reading answered.size. Y is the fixed total across all six
   // categories (Additional Information/ageCategory isn't a content
   // question — see its own section below — so it's excluded from Y).
-  // Only shown in the "Unanswered" view (by request) — once the user has
-  // switched to "All" they're already looking at everything, so the prompt
-  // to go look has nothing left to do.
+  // Shown in both views now — see "THE LINE SURVIVES THE SWITCH" below.
   /* COUNT THE VIOLET PILLS, NOT THE SNAPSHOT. This read `answered` — the
      filter's frozen Set — and that Set is deliberately RE-TAKEN every time you
      press "Unanswered" (toggleContentRatingExpanded, app.js), so questions you
@@ -10585,15 +10583,23 @@ function buildContentRatingSection(pid = 'ios') {
   /* ONE BOX, NOT TWO STACKED THINGS. The switch and the sentence explaining it
      were a pill floating above a two-line tip box — 147px of a 714px window,
      permanently, once the bar was pinned. They are one control and its caption,
-     so they are one box now: the toggle at the left, the count beside it, on a
-     single line inside the same `.sw-tip-box` Distribution uses.
+     so they are one box now: the toggle at the left, the count beside it,
+     inside the same `.sw-tip-box` Distribution uses.
 
-     The sentence also lost its inline "All" pill. It existed to teach the click
-     when the real toggle was a separate object further up; with the switch
-     sitting right there, a second "All" in the prose was the same button said
-     twice. `cr.inferred_compact` is the locale key for the shorter line;
-     `cr.inferred_banner` (with its {allPill}) is left in the locale files for
-     any surface that still wants the long form. */
+     THE INLINE "ALL" PILL IS BACK, on request — it had been dropped as
+     redundant with the real toggle sitting right there, but review feedback
+     was that the plain word "all" in the Unanswered-view sentence read as
+     just prose, not as a pointer to the switch beside it. cr-toggle-bar-all-
+     inline (style.css) is sized to match .cr-toggle-bar's own "All" pill
+     (12px font, 7px/16px padding, --field-radius) without literally nesting
+     inside one, and rendered without .is-on since the real "All" tab is
+     always in its OFF state whenever this sentence is showing (it only
+     appears in the Unanswered view, and only when there's something inferred
+     to review — see "THE BAR IS NEVER SILENT" below for the other cases).
+     `cr.inferred_compact`/`cr.inferred_click_all` are the two locale keys for
+     the two-row Unanswered-view sentence below; `cr.inferred_banner` (the
+     older single-line form with the same {allPill}) is left in the locale
+     files unused, for any surface that still wants one line instead of two. */
   /* THE LINE SURVIVES THE SWITCH. It used to be printed only in the Unanswered
      view — the reasoning being that once you are looking at everything, a
      prompt to go look has nothing left to do. True of the prompt, not of the
@@ -10602,6 +10608,12 @@ function buildContentRatingSection(pid = 'ios') {
      answers than in the one that hides them. It also kept the pinned bar from
      changing height under the pointer when you pressed All. So both views get
      a line; only the half that asks you to do something changes. */
+  // The Unanswered view's own sentence is two rows, not one — "what Shipmate
+  // did" on top, "what to do about it" (with the inline All pill) below —
+  // stacked inside .sw-tip-text (a <div> here, not the usual <span>, since it
+  // now holds block children) rather than run together as one sentence. The
+  // All view keeps its own single-line count, unchanged in shape. Neither of
+  // the "nothing inferred" cases below (crUnanswered / all_answered) changes.
   /* THE BAR IS NEVER SILENT. Inferring nothing is a real outcome — `tryApply`
      (claude.js) needs a valid value AND confidence ≥ 80, so a vague game can
      come back with the call succeeding and not one answer filled. The snapshot
@@ -10616,12 +10628,18 @@ function buildContentRatingSection(pid = 'ios') {
       return v === undefined || v === null || v === '';
     }).length, 0);
 
+  const crAllPillHtml = `<span class="cr-toggle-bar-all-inline app-subtab">All</span>`;
   const inferredText = crInferredCount > 0
     ? (showAll
         ? (t('cr.showing_all', { count: crInferredCount, total: crTotalQuestions })
-           || `All ${crTotalQuestions} — ${crInferredCount} inferred by Shipmate.`)
-        : (t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
-           || `Shipmate inferred ${crInferredCount} of ${crTotalQuestions} — review them all.`))
+           || `All ${crTotalQuestions} questions. ${crInferredCount} responses inferred by Shipmate.`)
+        : `<div class="cr-inferred-row">${
+             t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
+               || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses.`
+           }</div><div class="cr-inferred-row">${
+             t('cr.inferred_click_all', { allPill: crAllPillHtml })
+               || `Click ${crAllPillHtml} to review before submitting.`
+           }</div>`)
     : crUnanswered > 0
       ? (t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
          || `${crUnanswered} of ${crTotalQuestions} still to answer.`)
@@ -10715,7 +10733,7 @@ function buildContentRatingSection(pid = 'ios') {
     ? `<div class="cr-pinned">
          <div class="sw-tip-box cr-pinned-bar">
            ${togglePill}
-           ${inferredText ? `<span class="sw-tip-text">${inferredText}</span>` : ''}
+           ${inferredText ? `<div class="sw-tip-text">${inferredText}</div>` : ''}
          </div>
        </div>`
     : '';

@@ -11677,10 +11677,25 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 /* The "All" pill embedded inline in the inferred-answers banner's own text
    (buildContentRatingSection, render.js) — everything else about it (font,
    weight, color, hover, the is-on look it never uses here) already comes
-   from .app-subtab; this just re-applies .cr-toggle-bar's own 12px/5px-12px
-   sizing without requiring the banner to literally nest inside a
-   .cr-toggle-bar element, so the two pills can't drift apart. */
-.cr-toggle-bar-all-inline.app-subtab { font-size: 12px; padding: 5px 12px; }
+   from .app-subtab; this just re-applies .cr-toggle-bar .app-subtab's own
+   three overrides (12px font, 7px/16px padding, --field-radius rather than
+   the base pill's --pill-radius) verbatim, without requiring the banner to
+   literally nest inside a .cr-toggle-bar element — so this pill reads as
+   pixel-identical to the real "All" tab beside it, not just similar. */
+.cr-toggle-bar-all-inline.app-subtab {
+  font-size: 12px; padding: 7px 16px;
+  border-radius: var(--field-radius);
+}
+
+/* The Unanswered-view sentence's own two rows ("what Shipmate did" / "what to
+   do about it", buildContentRatingSection) — .sw-tip-text is a <div> here
+   (not the usual <span>) specifically to hold these as block children rather
+   than running them together. No extra vertical alignment needed beyond
+   this: .cr-pinned-bar is already align-items:center (above), so this two-
+   row block's own middle centers against the toggle pill beside it the same
+   way the old one-row text did. */
+.cr-inferred-row { display: block; }
+.cr-inferred-row + .cr-inferred-row { margin-top: 2px; }
 
 .cr-toggle-btn {
   padding: 5px 14px;
