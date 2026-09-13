@@ -9439,7 +9439,12 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 16px;
+  /* 16/6, from 20/16. The 16px bottom was sized against a divider that is no
+     longer drawn — it was holding the title off a line. With the line gone the
+     only job left is separating the title from the first row, and the body's
+     own top padding was already doing most of it: the two together came to
+     36px of nothing under a header 66px tall. */
+  padding: 16px 24px 6px;
   flex-shrink: 0;
 }
 
@@ -9535,8 +9540,12 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   display: flex; flex-direction: column;
 }
 .submit-modal-scroll {
+  /* ONE NUMBER, TWO CONSUMERS. .cr-pinned cancels this padding with a negative
+     margin and puts it back as its own padding, so the two have to agree — as a
+     literal they silently disagreed the first time this moved. */
+  --sm-body-pad-top: 6px;
   flex: 1; overflow-y: auto; overflow-x: hidden;
-  padding: 20px 24px 4px;
+  padding: var(--sm-body-pad-top) 24px 4px;
   min-height: 0;
 }
 /* rgb(20,20,20) IS --panel — written out because a gradient cannot fade a
@@ -9693,6 +9702,20 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 
 /* Footer */
+/* THE FOOTER BUTTON IS THE SIZE OF GAME DETAILS' NAV BUTTONS. `.step-nav-btn`
+   (the "Languages →" pair at the foot of every Game Details tab) is 39px tall
+   at 13px/10-18 padding, and the modal's own footer button was 30 at 12px/7-18:
+   two buttons in the same role, one visibly smaller. Only the metrics are
+   copied — the pill keeps its own white fill and gradient ring, because
+   .step-nav-btn's purple says "Shipmate did this", which a Save button doesn't.
+   Scoped to the footer: .imp-cta is also every small action inside an Improve
+   card, and 39px there would be a slab. */
+.submit-modal-footer .imp-cta {
+  min-height: 39px;
+  padding: 10px 18px;
+  font-size: 13px;
+}
+
 /* No top border — see .submit-modal-header. The extra bottom padding is what
    the line used to do structurally: separate the button from the modal's edge.
    (Reference: the questionnaire's .imp-actions, 14px 28px 22px.) */
@@ -11143,15 +11166,143 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 /* Restyled to the Game Details sub-tab language (.app-subtab pills + a vertical
    bar), so the Unanswered/All toggle reads the same as the sub-section nav
    rather than as a boxed segmented control. */
+/* THE FILTER TRAVELS WITH THE LIST IT FILTERS. The Unanswered / All switch and
+   the "Shipmate inferred X out of Y" line are read against the rows below them,
+   and thirty rows down both had scrolled away — leaving no way to tell which
+   view you were in, or to leave it, without scrolling back to the top.
+
+   Sticky rather than moved into the modal's header, because the same section is
+   also rendered inline in Game Details' Content Questions pane, where there is
+   no header to move it into; sticky pins to whatever scrollport it finds. */
+.cr-pinned {
+  position: sticky;
+  top: 0;
+  z-index: 5;                 /* over the rows, under the modal's own chrome */
+  background: var(--panel);
+}
+/* Full-bleed inside the step modal only. The scroller pads 20/24, and the
+   question rows hang 11px INTO that left padding (.ios-q-row's negative
+   margin), so a bar the width of the content column would let a sliver of text
+   slide past its left edge. The negative margins take the bar out to the
+   scroller's own edges and its padding puts the content back where it was;
+   the -20px top is what lets `top: 0` pin it flush instead of 20px down. */
+/* THE BAR OWNS ALL THE SPACE ABOVE IT. The scroller's own top padding is given
+   up whenever a pinned bar is present, and the bar pays it back as padding of
+   its own — which matters because sticky measures from the MARGIN box: with the
+   scroller padding still in place, the bar came to rest that many pixels below
+   the scrollport (measured: 6) and rows slid through the strip in between. The
+   fix was to pull the stick point up by the same amount, which worked but left
+   the gap above the bar different at rest (6) and pinned (0). Moving the space
+   inside the bar makes the two states identical — and the space is opaque, so
+   nothing can leak through it either way. */
+.submit-modal-scroll:has(.cr-pinned) { padding-top: 0; }
+.submit-modal-scroll .cr-pinned {
+  margin: 0 -24px 0;
+  /* 11 above, 5 below: 11 puts 17px between the modal's title and the bar (the
+     header's own 6px of padding plus these), and the 5 below keeps the first
+     question exactly where it was — the pair has to add up to the 16 the old
+     6/10 did, or lowering the bar would push every row down with it. */
+  padding: 11px 24px 5px;
+  top: 0;
+}
+/* Rows dissolve as they go under the bar rather than being cut by it. This is
+   the top fade the modal gives up while a pinned bar exists (see
+   .submit-modal-fade-top), re-hung where it belongs: at the bar's own bottom
+   edge, which is the real boundary between what is pinned and what scrolls. */
+.cr-pinned::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  /* 36, not 18: at 18px the ramp did most of its work in the first eight, so a
+     line of text went from hidden to fully legible inside its own height and
+     the edge read as a hard cut with a smudge on it. A fade has to be longer
+     than the thing crossing it — a row is 34px here — and the midpoint sits at
+     55% so the top half stays close to the panel and the ending is the gentle
+     part. (The modal's own fades are 40 top / 80 bottom, for the same reason.) */
+  height: 36px;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(20,20,20,0.96) 0%,
+    rgba(20,20,20,0.72) 30%,
+    rgba(20,20,20,0.34) 55%,
+    rgba(20,20,20,0.10) 78%,
+    rgba(20,20,20,0) 100%);
+}
+/* An opaque pinned bar already says "there is more above" — better than the
+   fade does, since it covers the rows outright. Two of them stacked just made
+   the bar's own top edge muddy. */
+.submit-modal-body-wrap:has(.cr-pinned) .submit-modal-fade-top { display: none; }
+
+/* The pinned bar IS the tip box — same border, radius and padding as
+   Distribution's, with the switch living inside it instead of floating above.
+   One row, centred: the toggle, then the ⓘ and its line. */
+.cr-pinned-bar {
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0;
+  flex-wrap: wrap;               /* the sentence drops under the switch only if it truly cannot fit */
+  /* A WASH, NOT A PANEL. .sw-tip-box is transparent, which is right for a note
+     sitting in the flow; this one is pinned over the rows that scroll beneath
+     it, so it needs a floor of its own. 5% is the lowest value that still
+     separates it from --panel without turning into a second card. */
+  background: rgba(255, 255, 255, .05);
+  /* UNIFORM. The selected half of the switch is a filled pill against the box's
+     own edge, so the gap around it is read as a frame — and 6 top/bottom
+     against 12 left made that frame twice as wide on one side as on the others.
+     One value, so the pill sits the same distance from every edge it touches.
+     (Kept small against .sw-tip-box's 10: this bar is on screen permanently, so
+     every pixel it takes is one the questions never get back.) */
+  padding: 7px;
+  /* NESTED RADII: outer = inner + the gap between them. The track is 16px and
+     sits 7px inside, so 23. (At .sw-tip-box's 8px the box cut across the pill's
+     corner and the frame looked bent at the ends.) */
+  border-radius: 23px;
+}
+.cr-pinned-bar .sw-tip-text { line-height: 1.4; }
+/* A HIGHER FLOOR THAN THE NAV'S. --chip-fill's 15% is tuned for a pill sitting
+   on the page's own background; this one sits inside a bordered box on the same
+   dark panel, so the box's edge eats the contrast and the selected half stopped
+   reading as selected. 22% here only — the token still serves every nav pill in
+   the app, and they are all fine where they are. */
+.cr-pinned-bar .app-subtab.is-on { background: rgba(255, 255, 255, .22); }
+.cr-pinned-bar .app-subtab.is-on:hover { background: rgba(255, 255, 255, .27); }
+/* NO ⓘ HERE. The icon marks a note you could have missed — this line sits
+   welded to the control it describes, permanently on screen, so the handle was
+   pointing at something already in your hand. (.sw-tip-box keeps its icon
+   everywhere else; only this instance drops it.) */
+
 .cr-toggle-bar {
   display: flex;
   align-items: center;
   width: fit-content;
   margin-bottom: 4px;
 }
-/* Same sub-tab language, dialed down: this is an inline filter, not the primary
-   section nav, so it wears a smaller pill than the Game Details sub-tabs. */
-.cr-toggle-bar .app-subtab { font-size: 12px; padding: 5px 12px; }
+/* No bottom margin inside the pinned bar — the box's own padding is the gap. */
+/* A REAL TRACK, the way a segmented control works: the two halves ride inside
+   their own filled pill, and the selected one is a lighter pill sitting on it.
+   Before this the pair floated loose in the message box, and "which of these
+   two am I in" was carried by the fill alone with nothing to compare it to.
+   See buildCRTogglePill (render.js) for why the separator between them is gone.
+
+   The radii nest: 13 on the selected half, +3 of track padding = 16 here, +7 of
+   box padding = 23 on .cr-pinned-bar. Each curve is concentric with the one
+   outside it, which is what stops the corners looking bent. */
+.cr-pinned-bar .cr-toggle-bar {
+  margin-bottom: 0;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .06);
+}
+/* THE HEIGHT OF AN ANSWER PILL — 32px, the same as .yn-btn and .intensity-btn
+   in the rows below. The switch and the answers are the two things you press in
+   this step, and one standing 5px taller than the other read as a different
+   class of control. (It wore the sub-tabs' 37px for a version; matching the
+   pills it sits above won over matching the nav it borrows its markup from.)
+   The 13px radius is a shared token, so at 32 it reads rounder than a sub-tab
+   does at 41 — which is the same thing that happens to the answer pills. */
+.cr-toggle-bar .app-subtab { font-size: 12px; padding: 7px 16px; }
 .cr-toggle-bar .app-subtab-sep { font-size: 12px; }
 /* The "All" pill embedded inline in the inferred-answers banner's own text
    (buildContentRatingSection, render.js) — everything else about it (font,

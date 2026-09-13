@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.11**
+Current version: **v6.12**
 
 ---
 
@@ -461,13 +461,48 @@ enough that no label overshoots the floor. Those two numbers track the type —
 change the size or the weight and they have to be re-measured, which is what
 happened twice in one afternoon here.
 
+**The filter travels with the list it filters.** The Unanswered / All switch
+and the "Shipmate inferred X of Y" line are read against the rows below them,
+and thirty rows down both had scrolled away. They are now one `.cr-pinned` bar,
+`position: sticky` — sticky rather than moved into the modal's header, because
+this section also renders inline in Game Details' Content Questions pane, where
+there is no header to move it into.
+
+Four things that bar had to be taught, all of them measured:
+
+- **Sticky measures from the MARGIN box.** With the scroller's own top padding
+  still in place the bar came to rest 6px below the scrollport and rows slid
+  through the strip between it and the title. The scroller now gives up its top
+  padding whenever a pinned bar is present (`:has(.cr-pinned)`) and the bar pays
+  it back as padding of its own — opaque, so nothing can leak through, and the
+  gap above it is identical at rest and pinned (11px, or 17 from the title).
+- **Its padding is one number** (7px). The selected half is a filled pill
+  against the box's edge, so the gap around it reads as a frame; 6 top/bottom
+  against 12 left made that frame twice as wide on one side.
+- **The radii nest**: 13 on the selected half, +3 of track padding = 16 on the
+  toggle's own rail, +7 of box padding = 23 on the bar. Each curve concentric
+  with the one outside it.
+- **The fade hangs from the bar's bottom edge** (`.cr-pinned::after`, 36px) and
+  the modal's own top fade is switched off while a pinned bar exists. A fade has
+  to be longer than what crosses it — a row is 34px — so the first try at 18px
+  did most of its ramp in eight and read as a hard cut with a smudge on it.
+
+The toggle is a **segmented control, not a nav**: no separator between the two
+halves (a rule down the middle made them read as two adjacent buttons), both at
+32px so they match the answer pills they sit above rather than the sub-tabs they
+borrow their markup from, and a filled track behind the pair. The line beside it
+is printed in **both** views — only the half that asks you to do something
+changes ("review the rest" → "12 inferred by Shipmate") — because the count is
+the reason to read the list carefully, and because a line that vanishes changed
+the bar's height under the pointer.
+
 ### Versioning — required on every change
 
 Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.11** → next is **v6.12**, then **v6.13**, etc.
+Current version: **v6.12** → next is **v6.13**, then **v6.14**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -479,7 +514,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.11 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.12 — add tooltip to age rating cell"`.
 
 ---
 
@@ -533,7 +568,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.11 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.12 — description of change"`.
 
 ---
 
@@ -553,7 +588,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.11, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.12, the following items are in the queue:
 
 - **The step modal's chrome** — items 1 and 2 landed in v6.11 (see "The step
   modal has no lines" above). What is left:

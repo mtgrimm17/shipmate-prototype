@@ -3414,7 +3414,14 @@ function smFakeInference(pid = 'macos', fraction = 0.66) {
   if (pid === 'macos')      state.macContentRatingExpanded     = false;
   if (pid === 'ios')        state.iosContentRatingExpanded     = false;
   if (pid === 'macos_full') state.macFullContentRatingExpanded = false;
-  if (state.stepModal) state.stepModal.inferenceStatus = 'done';
+  /* A SUCCESSFUL RUN LEAVES NO ERROR BEHIND. Without this the faked inference
+     sat under the red "Analysis failed: No API key set." banner from the real
+     call that failed a second earlier — which is exactly the thing that makes
+     the preview unreadable. */
+  if (state.stepModal) {
+    state.stepModal.inferenceStatus = 'done';
+    state.stepModal.inferenceError  = null;
+  }
   renderStepModal();
 }
 

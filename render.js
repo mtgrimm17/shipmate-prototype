@@ -9818,13 +9818,16 @@ function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
   if (!collapseMode) return '';
   // Same selection language as the Game Details sub-tabs (.app-subtab): the
   // picked option takes the quiet dark pill + white label, the other stays at
-  // 50% and lifts on hover, with a vertical bar between them. The separator is
-  // always shown here (a 2-way toggle always has one selected, so the sub-nav's
-  // "hide the bar next to the selected pill" rule would erase it entirely).
+  // 50% and lifts on hover.
+  //
+  // NO SEPARATOR. The sub-nav uses a vertical bar because it is a row of peers
+  // you move along; this is a two-state switch, and a rule down the middle made
+  // it read as two buttons that happen to be adjacent. With the bar gone and
+  // the box around them acting as the track, the filled half IS the state —
+  // which is what a toggle looks like everywhere else.
   return `
     <div class="cr-toggle-bar">
       <button class="app-subtab${!showAll ? ' is-on' : ''}" onclick="${offFn}">Unanswered</button>
-      <span class="app-subtab-sep">|</span>
       <button class="app-subtab${showAll ? ' is-on' : ''}" onclick="${onFn}">All</button>
     </div>`;
 }
@@ -10436,26 +10439,34 @@ function buildContentRatingSection(pid = 'ios') {
   const crInferredCount  = collapseMode
     ? IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.filter(q => answered.has(q.id)).length, 0)
     : 0;
-  // The "All" inside the message is a real pill button — same look as the
-  // real "All" toggle above (.cr-toggle-bar .app-subtab's 12px/5px-12px
-  // sizing, reused here via .cr-toggle-bar-all-inline rather than
-  // duplicated, so the two can't drift apart) — and it actually works,
-  // flipping to the All view exactly like clicking the real tab would.
-  // is-on is included so it always reads as the SELECTED pill look (the
-  // quiet gray/dark fill + white label, same as whichever of
-  // Unanswered/All is currently active above) rather than the dimmed
-  // 50%-opacity unselected look .app-subtab defaults to — this pill isn't
-  // "currently selected" in the toggle-pair sense, it's a call-to-action
-  // styled to match, per request. {allPill} is a substitution point in the
-  // locale string, not literal HTML a translator has to reproduce.
-  const allPillHtml = `<button type="button" class="app-subtab is-on cr-toggle-bar-all-inline" onclick="toggleContentRatingExpanded(true)">All</button>`;
-  const inferredBanner = (crInferredCount > 0 && !showAll) ? `
-    <div class="sw-tip-box sw-tip-box-inference">
-      <div class="sw-tip-box-row">
-        ${SM_INFO_ICON}
-        <span class="sw-tip-text">${t('cr.inferred_banner', { count: crInferredCount, total: crTotalQuestions, allPill: allPillHtml }) || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses. Click ${allPillHtml} to review before submitting.`}</span>
-      </div>
-    </div>` : '';
+  /* ONE BOX, NOT TWO STACKED THINGS. The switch and the sentence explaining it
+     were a pill floating above a two-line tip box — 147px of a 714px window,
+     permanently, once the bar was pinned. They are one control and its caption,
+     so they are one box now: the toggle at the left, the count beside it, on a
+     single line inside the same `.sw-tip-box` Distribution uses.
+
+     The sentence also lost its inline "All" pill. It existed to teach the click
+     when the real toggle was a separate object further up; with the switch
+     sitting right there, a second "All" in the prose was the same button said
+     twice. `cr.inferred_compact` is the locale key for the shorter line;
+     `cr.inferred_banner` (with its {allPill}) is left in the locale files for
+     any surface that still wants the long form. */
+  /* THE LINE SURVIVES THE SWITCH. It used to be printed only in the Unanswered
+     view — the reasoning being that once you are looking at everything, a
+     prompt to go look has nothing left to do. True of the prompt, not of the
+     count: "12 of 22 came from Shipmate" is the reason to read this list
+     carefully, and it is MORE relevant in the view that shows the inferred
+     answers than in the one that hides them. It also kept the pinned bar from
+     changing height under the pointer when you pressed All. So both views get
+     a line; only the half that asks you to do something changes. */
+  const inferredText = crInferredCount > 0
+    ? (showAll
+        ? (t('cr.showing_all', { count: crInferredCount, total: crTotalQuestions })
+           || `All ${crTotalQuestions} — ${crInferredCount} inferred by Shipmate.`)
+        : (t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
+           || `Shipmate inferred ${crInferredCount} of ${crTotalQuestions} — review the rest.`))
+    : '';
+  const inferredBanner = '';
 
   // Build question rows — filter by answered/unanswered when in collapseMode + "Unanswered" view
   // Uses snapshot (answered) not live state so questions don't vanish mid-session
@@ -10532,7 +10543,20 @@ function buildContentRatingSection(pid = 'ios') {
              onblur="reRenderStepModal()">
     </div>`}`;
 
-  return togglePill + inferredBanner + questionsHtml + additionalSection;
+  /* THE FILTER AND ITS SENTENCE STAY ON SCREEN. Both are controls for the list
+     below them — "you are seeing 7 of 22" and the switch that changes which —
+     and thirty rows down the page they had scrolled away, leaving no way to
+     tell which view you were in without going back up. Wrapped in .cr-pinned,
+     which is `position: sticky` (style.css). */
+  const pinned = togglePill
+    ? `<div class="cr-pinned">
+         <div class="sw-tip-box cr-pinned-bar">
+           ${togglePill}
+           ${inferredText ? `<span class="sw-tip-text">${inferredText}</span>` : ''}
+         </div>
+       </div>`
+    : '';
+  return pinned + questionsHtml + additionalSection;
 }
 
 function computeIOSAgeRating() {
@@ -14565,7 +14589,7 @@ function buildSteamContentRatingSection() {
 
   // Content categories — each item is a ynRow
   // Filter uses snapshot so questions don't vanish while actively answering
-  let catHtml = steamTogglePill;
+  let catHtml = steamTogglePill ? `<div class="cr-pinned">${steamTogglePill}</div>` : '';   // pinned — see buildContentRatingSection
   STEAM_CONTENT_CATEGORIES.forEach(grp => {
     const items = (steamCollapse && !steamShowAll)
       ? grp.items.filter(item => !steamAnsweredSet?.has(item.id))
