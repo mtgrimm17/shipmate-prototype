@@ -6314,16 +6314,15 @@ body.viewing-splash .app-subnav { display: none; }
   padding: 4px;
   margin: -4px;
 }
-/* Business's own static ring specifically needs to be bigger/stronger than
-   the shared .is-spp-static default (below) — that default was tuned for
-   fields that already have their own visible border/background to set
-   the ring off from; the GET button's glossy blue pill has neither, so
-   the same faint ring all but disappeared against it. Scoped to this
-   wrapper only — the shared .is-spp-static rule every other required
-   element still uses is untouched. */
-.spp-get-glow-wrap.is-spp-static {
-  box-shadow: 0 0 0 3px rgba(255,149,0,0.14);
-}
+/* Business's own static ring used to be a bigger/stronger override here
+   (3px @ 0.14 alpha vs. the shared .is-spp-static default's 2px @ 0.06)
+   to stand out against the GET button's glossy blue pill, which has no
+   border/background of its own to set a faint ring off from the way
+   other fields do. That read as visibly brighter/thicker than every
+   other non-focused element's own ring, which is inconsistent on its own
+   terms — removed so this wrapper just inherits the same shared
+   .is-spp-static rule (below) everything else uses, matching its color
+   and thickness exactly. */
 
 /* Inline click-to-edit — Title/Subtitle/Description/Release Notes
    (startIasInlineEdit, app.js). ias-editable marks every clickable field;
