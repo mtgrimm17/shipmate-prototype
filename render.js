@@ -3936,7 +3936,14 @@ function buildReleaseBlock(pid) {
      card's right edge close by; a left-anchored panel wide enough for
      "TestFlight — External" would grow past it. That parameter exists for
      exactly this case — see swSelect's own doc comment. */
-  const tracks = shape.trackNoun ? (PLATFORM_TRACKS[pid] || []) : [];
+  /* THE ROW ONLY EXISTS ONCE THERE IS A DESTINATION. An empty "Select track"
+     pill took a whole row of the card to hold a question, and the card is a
+     status surface — it should say where the build went, not ask where to send
+     it. The asking moved to the moment of sending (submitStepClick, app.js:
+     press Submit with no destination and the row offers them). Once chosen the
+     pill comes back, still a picker, so changing your mind does not require
+     going through Submit again. */
+  const tracks = (shape.trackNoun && (state.selectedTracks || {})[pid]) ? (PLATFORM_TRACKS[pid] || []) : [];
   let picker = '';
   if (tracks.length) {
     /* NOTHING IS PRESELECTED. This used to fall back to getLastUsedTrack(),
@@ -4455,6 +4462,27 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      other and you go to settings, with nothing saying which was which. The row
      now answers for both: press it unconnected and the gear shakes, which
      points at where connecting actually happens rather than duplicating it. */
+
+  /* ASKING WHERE TO SEND IT, in the row that sends it. Set by submitStepClick
+     when Submit is pressed with everything ready and no destination chosen —
+     the one question left, asked where the answer is used. Picking one sets the
+     track and submits in the same gesture; the pills are the card's own
+     vocabulary, so nothing new had to be drawn. */
+  const asking = !isWeb && !selTrack && (state.submitAskTrack || {})[pid];
+  if (asking) {
+    const opts = (PLATFORM_TRACKS[pid] || []).map(tr =>
+      `<button type="button" class="yn-btn submit-track-opt"
+               onclick="event.stopPropagation();chooseTrackAndSubmit('${pid}','${tr.id}')">${escHtml(tr.label)}</button>`).join('');
+    return `
+    <div class="ios-step-card ios-step-card--inline submit-step-card submit-step-asking"
+         id="${pid}-step-card-submit">
+      <div class="${numClass}">${num}</div>
+      <div class="ios-step-info">
+        <div class="ios-step-name">${t('card.send_to') || 'Send to'}</div>
+      </div>
+      <div class="submit-track-opts">${opts}</div>
+    </div>`;
+  }
 
   return `
     <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
@@ -9877,6 +9905,17 @@ function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
 /* ── Snapshot helper — captures answered IDs at filter time ─ */
 // Called when inference completes or when user clicks "Unanswered".
 // Stores a frozen Set so re-answering questions doesn't auto-disappear them.
+/* Age Category counts as answered the same way the rows do, and it has to go
+   into the SNAPSHOT rather than be read live — see the note on addlAnswered in
+   buildContentRatingSection. Its follow-ups are part of the answer: picking
+   "Made for kids" without an age range, or "Override" without a rating, is a
+   half-answer and stays on the list. */
+function _crAgeAnswered(a) {
+  return a.ageCategory !== null && a.ageCategory !== undefined
+    && !(a.ageCategory === 'made_for_kids'   && (a.kidsAgeRange   === null || a.kidsAgeRange   === undefined))
+    && !(a.ageCategory === 'override_higher' && (a.overrideRating === null || a.overrideRating === undefined));
+}
+
 function takeFilterSnapshot(platformId) {
   if (platformId === 'ios') {
     const a = state.iosSubmitAnswers;
@@ -9888,6 +9927,7 @@ function takeFilterSnapshot(platformId) {
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    if (_crAgeAnswered(a)) s.add('ageCategory');
     state.iosAnsweredAtInference = s;
   } else if (platformId === 'macos') {
     // Content Rating fields are shared with the App Store (state.iosSubmitAnswers
@@ -9904,6 +9944,11 @@ function takeFilterSnapshot(platformId) {
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    /* ROUTED BY FIELD. ageCategory (and its two follow-ups) are in
+       IOS_MAC_SHARED_ANSWER_FIELDS, so for Mac App Store they live in the iOS
+       store — _appStoreAnswers('macos') with no field id hands back Mac's own
+       bucket, where they are always null. */
+    if (_crAgeAnswered(_appStoreAnswers('macos', 'ageCategory'))) s.add('ageCategory');
     state.macAnsweredAtInference = s;
   } else if (platformId === 'macos_full') {
     // Fully independent — reads state.macFullSubmitAnswers directly, no
@@ -9917,6 +9962,7 @@ function takeFilterSnapshot(platformId) {
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    if (_crAgeAnswered(a)) s.add('ageCategory');
     state.macFullAnsweredAtInference = s;
   } else if (platformId === 'android') {
     const androidQs = CQ_QUESTIONS.filter(q => q.platforms.includes('android'));
@@ -10531,13 +10577,31 @@ function buildContentRatingSection(pid = 'ios') {
      answers than in the one that hides them. It also kept the pinned bar from
      changing height under the pointer when you pressed All. So both views get
      a line; only the half that asks you to do something changes. */
+  /* THE BAR IS NEVER SILENT. Inferring nothing is a real outcome — `tryApply`
+     (claude.js) needs a valid value AND confidence ≥ 80, so a vague game can
+     come back with the call succeeding and not one answer filled. The snapshot
+     is still taken, so the toggle appeared with an empty space beside it and
+     the step looked broken rather than untouched. When there is nothing to
+     credit Shipmate with, the line counts what is left for YOU instead.
+     (A call that actually failed never gets here: with no snapshot there is no
+     bar at all, and the red "Analysis failed" banner has the floor.) */
+  const crUnanswered = IOS_CR_CATEGORIES.reduce((sum, cat) =>
+    sum + cat.questions.filter(q => {
+      const v = (typeof _getLiveAnswer === 'function') ? _getLiveAnswer(pid, q.id) : undefined;
+      return v === undefined || v === null || v === '';
+    }).length, 0);
+
   const inferredText = crInferredCount > 0
     ? (showAll
         ? (t('cr.showing_all', { count: crInferredCount, total: crTotalQuestions })
            || `All ${crTotalQuestions} — ${crInferredCount} inferred by Shipmate.`)
         : (t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
            || `Shipmate inferred ${crInferredCount} of ${crTotalQuestions} — review them all.`))
-    : '';
+    : crUnanswered > 0
+      ? (t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
+         || `${crUnanswered} of ${crTotalQuestions} still to answer.`)
+      : (t('cr.all_answered', { total: crTotalQuestions })
+         || `All ${crTotalQuestions} answered.`);
   const inferredBanner = '';
 
   // Build question rows — filter by answered/unanswered when in collapseMode + "Unanswered" view
@@ -10580,12 +10644,14 @@ function buildContentRatingSection(pid = 'ios') {
       </div>
     </div>` : '';
 
-  // "Not applicable" (like any set Age Category) is a sufficient answer, so once
-  // it's chosen the whole section is done and should drop out of the Unanswered
-  // view like every other answered question — rather than lingering forever.
-  const addlAnswered = a.ageCategory !== null
-    && !(a.ageCategory === 'made_for_kids'   && a.kidsAgeRange   === null)
-    && !(a.ageCategory === 'override_higher' && a.overrideRating === null);
+  /* THE SNAPSHOT DECIDES, NOT THE LIVE VALUE — the same rule every question row
+     follows. This read `a.ageCategory` directly, so choosing "Not applicable"
+     made the whole section vanish on the very next render, out from under the
+     pointer that had just set it. Every other answer stays put until the filter
+     is re-taken (pressing "Unanswered", or a fresh analysis), which is what
+     lets you change your mind about the thing you just answered. Age Category
+     now goes into that snapshot too — see _crAgeAnswered above. */
+  const addlAnswered = collapseMode && answered.has('ageCategory');
   const additionalSection = (collapseMode && !showAll && addlAnswered) ? '' : `
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Additional Information</div>

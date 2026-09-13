@@ -3576,11 +3576,31 @@ function submitStepClick(pid) {
      tests it) and leaving it out would put back the dead press this change
      exists to remove: everything ticked, account linked, and the row still
      does nothing. The picker lives in the release block above. */
+  /* 3 — no destination yet. This used to spotlight the picker in the release
+     block above; that pill no longer exists until a destination has been
+     chosen (buildReleaseBlock), because an empty "Select track" spent a row of
+     a status card asking a question. So the row asks it itself: pressing
+     Submit turns it into "Send to — [Internal] [External] [App Store]", and
+     picking one submits in the same gesture (chooseTrackAndSubmit). Nothing is
+     preselected, here or anywhere: the destination is a decision, and a silent
+     default would make it on your behalf. */
   if (!isWeb && !(state.selectedTracks || {})[pid]) {
-    _smSpotlight(card, [card?.querySelector('.rel-track')]);
+    if (!state.submitAskTrack) state.submitAskTrack = {};
+    state.submitAskTrack[pid] = true;
+    renderDashboard();
     return;
   }
 
+  confirmSubmit(pid);
+}
+
+/* One gesture: the destination and the send. Called by the pills the submit row
+   grows when it is pressed without a track (buildSubmitStepCard). */
+function chooseTrackAndSubmit(pid, trackId) {
+  if (!state.selectedTracks) state.selectedTracks = {};
+  state.selectedTracks[pid] = trackId;
+  if (state.submitAskTrack) delete state.submitAskTrack[pid];
+  renderDashboard();
   confirmSubmit(pid);
 }
 

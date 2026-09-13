@@ -5903,6 +5903,15 @@ body.viewing-splash .app-subnav { display: none; }
   85%  { opacity: 1; }
   100% { transform: translateY(calc(-1 * var(--travel, 200px))) scale(1.15); opacity: 0; }
 }
+/* The submit row while it is asking where to send the build. The options are
+   .yn-btn — the answer pill from Content Rating — because that is what this is:
+   a question with three answers, in a card that already speaks that language.
+   The row keeps its own padding; only the pills are new. */
+.submit-track-opts { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.ios-step-card.submit-step-asking { cursor: default; }
+.ios-step-card.submit-step-asking .ios-step-name { color: var(--text); }
+.submit-track-opt { white-space: nowrap; }
+
 /* ── Submit step card ───────────────────────────────────────── */
 /* ALWAYS A POINTER, because the row is always a button now — every press
    answers, either by submitting or by shaking whatever is in the way (see
@@ -7546,7 +7555,12 @@ textarea.loc-review-field.ias-inline-input {
 
 .mac-spp-main {
   flex: 1; min-width: 0; min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
+  /* Same reserved lane as .submit-modal-scroll — see the note there. This is
+     the surface the Mac preview actually scrolls, so it is the one that would
+     have jumped when a screenshot or a longer description pushed it over. */
+  overflow-y: scroll; overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-color: rgba(255, 255, 255, .13) transparent;   /* Firefox */
   padding-bottom: 4px;
 }
 
@@ -9682,9 +9696,49 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
      margin and puts it back as its own padding, so the two have to agree — as a
      literal they silently disagreed the first time this moved. */
   --sm-body-pad-top: 6px;
-  flex: 1; overflow-y: auto; overflow-x: hidden;
+  flex: 1;
+  /* THE LANE IS RESERVED WHETHER OR NOT THERE IS A THUMB. With `auto`, the
+     scrollbar appears the moment the content outgrows the box and takes its
+     width out of the content column — so answering one question, or a card
+     growing by a line, reflowed the whole step sideways. It is invisible on a
+     Mac with overlay scrollbars and obvious on any machine set to always show
+     them, which is why it looked intermittent.
+
+     `scrollbar-gutter: stable` reserves the space up front; `overflow-y:
+     scroll` is required alongside it because Safari ignores the gutter on an
+     `auto` scroller. With overlay scrollbars the gutter costs nothing, so this
+     is free where the bug never showed. The cost where it does show is 6px
+     (the width set on ::-webkit-scrollbar at the top of this file) of extra
+     gap on the right — a static asymmetry, against content that used to move
+     under the pointer.
+
+     .submit-modal-mac-spp overrides this back to `overflow: hidden` (0,2,0,
+     further up): that surface hands its scrolling to .mac-spp-main. */
+  overflow-y: scroll; overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-color: rgba(255, 255, 255, .13) transparent;   /* Firefox */
   padding: var(--sm-body-pad-top) 24px 4px;
   min-height: 0;
+}
+/* Forcing the track on means macOS stops using its overlay scrollbar and paints
+   the system one — a grey slab down the edge of the modal. The width has to
+   stay reserved (that is the whole point), so the bar is styled down instead:
+   no track, a thin translucent thumb inset from the edge by a transparent
+   border. Copied from .main, which made this trade first. */
+.submit-modal-scroll::-webkit-scrollbar,
+.mac-spp-main::-webkit-scrollbar { width: 11px; }
+.submit-modal-scroll::-webkit-scrollbar-track,
+.mac-spp-main::-webkit-scrollbar-track { background: transparent; }
+.submit-modal-scroll::-webkit-scrollbar-thumb,
+.mac-spp-main::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .13);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+.submit-modal-scroll::-webkit-scrollbar-thumb:hover,
+.mac-spp-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, .26); background-clip: content-box;
 }
 /* rgb(20,20,20) IS --panel — written out because a gradient cannot fade a
    token to alpha 0, and `transparent` is rgba(0,0,0,0), which would grey the

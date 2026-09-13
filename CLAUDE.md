@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.13**
+Current version: **v6.17**
 
 ---
 
@@ -533,13 +533,61 @@ read the filter's snapshot — which is deliberately re-taken every time you pre
 "Unanswered" — so answering five questions yourself and pressing it turned
 "12 inferred" into 17.
 
+### The destination is chosen when you send, not before
+
+The release block's TRACK row **does not exist until a destination has been
+chosen** (`buildReleaseBlock`, render.js). An empty "Select track" pill spent a
+whole row of a status card asking a question, and the card's job is to say where
+the build went.
+
+The asking moved to the moment of sending. Pressing Submit with everything ready
+and no destination turns the submit row itself into the question — "Send to —
+[TestFlight / internal] [TestFlight / external] [Mac App Store]" — and choosing
+one sets the track and submits in the same gesture (`chooseTrackAndSubmit`,
+app.js). The options are `.yn-btn`, the answer pill from Content Rating, because
+that is what they are.
+
+That replaced gate 3 of `submitStepClick`, which used to spotlight the pill in
+the block above: a prerequisite you could only satisfy by finding a ghost
+control elsewhere on the card. Nothing is preselected, here or anywhere — the
+destination is a decision, and a silent default would make it on your behalf.
+
+Once chosen the row comes back **still a picker**, so changing your mind does not
+mean going through Submit again. This is the small version of "the track belongs
+to the Submit step": the full version gives Submit a body that states what each
+destination implies (they are different review paths), and the row is now in the
+right place to grow into it.
+
+### The Content Rating bar is never silent
+
+Three outcomes, three lines (`buildContentRatingSection`): Shipmate inferred
+something → the count; the call succeeded and inferred **nothing** → "X of Y
+still to answer"; everything answered → "All Y answered". A failed call never
+reaches the bar at all — with no snapshot there is no toggle, and the red
+"Analysis failed" banner has the floor.
+
+Inferring nothing is a real outcome, not a failure: `tryApply` (claude.js) needs
+a valid value AND confidence ≥ 80, so a thin game comes back with the call
+perfect and not one answer filled. The snapshot is still taken, so the toggle
+appeared with an empty space beside it and the step looked broken rather than
+untouched.
+
+Age Category goes into that snapshot too (`_crAgeAnswered`). It was the one
+condition reading the LIVE answer, so picking "Not applicable" made the whole
+Additional Information section vanish on the next render, out from under the
+pointer that had just set it — where every other answer stays until the filter
+is re-taken. Note the routing trap: `ageCategory` is in
+`IOS_MAC_SHARED_ANSWER_FIELDS`, so for Mac App Store it lives in the iOS store —
+`_appStoreAnswers('macos')` without a field id hands back Mac's own bucket,
+where it is always null.
+
 ### Versioning — required on every change
 
 Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.13** → next is **v6.14**, then **v6.15**, etc.
+Current version: **v6.17** → next is **v6.18**, then **v6.19**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -551,7 +599,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.13 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.17 — add tooltip to age rating cell"`.
 
 ---
 
@@ -605,7 +653,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.13 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.17 — description of change"`.
 
 ---
 
@@ -625,19 +673,15 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.13, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.17, the following items are in the queue:
 
-- **The step modal's chrome** — items 1 and 2 landed in v6.11 (see "The step
-  modal has no lines" above). What is left:
-  3. **The content resizes depending on whether the page scrolls**, which is a
-     real layout bug rather than a preference: when the scrollbar appears it
-     takes width from the content, so everything reflows the moment a card
-     grows. The reference solves it on `.imp-body` with
-     `overflow-y: scroll; scrollbar-gutter: stable` — the lane is reserved
-     whether or not there is a thumb. Note its own comment: Safari does not
-     honour `scrollbar-gutter` without `overflow-y: scroll`, and the right
-     padding then has to account for the 12px lane (16 + 12 = 28) to match the
-     left.
+- ~~The step modal's chrome~~ — all three landed: 1 and 2 in v6.11, and the
+  scroll reflow in v6.17. `.submit-modal-scroll` and `.mac-spp-main` now carry
+  `overflow-y: scroll` + `scrollbar-gutter: stable` with the thumb styled down
+  (11px, no track, transparent border) the way `.main` does it — the lane is
+  reserved whether or not there is a thumb, so a card growing by a line no
+  longer reflows the step sideways. Invisible where scrollbars overlay, which
+  is why the bug looked intermittent.
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and
   `SM_REQS.macos` in assets.js already carries Apple's numbers: icon 1024×1024
