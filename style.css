@@ -6176,17 +6176,6 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text-faint);
 }
 .ias-header-meta { flex: 1; min-width: 0; padding-top: 2px; }
-/* App Store's own Product Page Preview only (buildStorePreviewSection —
-   Mac App Store Full/Android/Steam keep the base 12px .ias-header gap
-   untouched): extra breathing room between Title/Subtitle and the GET
-   button so its (now perfectly even, spp-get-glow-wrap below) glow box
-   has room to sit a few px clear of Title/Subtitle's own glow rather than
-   butting straight up against it. Increasing the flex row's own gap (not
-   a margin on .ias-header-cta) means only .ias-header-meta gives up
-   width — .ias-header-cta's own position/width, and so the GET button's
-   position, is untouched, so this can't push the button's glow off the
-   right edge of the panel. */
-.ios-spp-page .ias-header { gap: 24px; }
 .ias-app-name {
   font-size: 16px; font-weight: 700; color: var(--text);
   line-height: 1.2; margin-bottom: 3px;
@@ -6198,6 +6187,15 @@ body.viewing-splash .app-subnav { display: none; }
 }
 .ias-iap-note { font-size: 10px; color: var(--text-faint); }
 .ias-header-cta { flex-shrink: 0; padding-top: 6px; }
+/* App Store's own Product Page Preview only: GET now sits beneath the
+   Title/Subtitle stack (render.js — matches the real App Store's own
+   product page) rather than beside it as a flex sibling, so
+   .ias-header-cta's shared padding-top:6px (still used as-is by Mac App
+   Store Full's own side-by-side layout, above) is swapped for a plain
+   block margin-top here — sized, like Mac App Store's own
+   .mac-spp-get-row margin-top, to clear Subtitle's own glow ring rather
+   than sit flush against it. */
+.ios-spp-page .ias-header-cta { padding-top: 0; margin-top: 24px; }
 .ias-get-btn {
   background: #0a84ff; color: #fff;
   font-size: 13px; font-weight: 700;
@@ -6873,6 +6871,19 @@ textarea.loc-review-field.ias-inline-input {
   font-size: 11px; color: var(--text-faint);
   width: 130px; height: 100%;
 }
+/* App Store's own Product Page Preview only: the empty-state placeholders
+   ("Gameplay"/"Gameplay"/"Menu") are meant to stand in for real iPhone
+   portrait screenshots, but height:100% above never actually resolved
+   against .ias-shots-scroll's own auto height, so in practice they
+   rendered as a short, wide strip rather than a portrait box. Fixed here
+   with an explicit height (matching .ias-shot-frame's own 230px) and
+   aspect-ratio set to a real iPhone screenshot's own proportions
+   (1320 x 2868, portrait) instead of the stale fixed width — width is
+   computed from that ratio automatically. Scoped to .ios-spp-page so Mac
+   App Store Full's own (separately unfixed, out of scope here) use of the
+   same base class is untouched, matching Mac App Store's own landscape
+   override further down this file. */
+.ios-spp-page .ias-shot-empty { width: auto; height: 230px; aspect-ratio: 1320 / 2868; }
 
 /* Device compat row */
 .ias-device-compat {
