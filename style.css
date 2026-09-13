@@ -6783,6 +6783,21 @@ textarea.loc-review-field.ias-inline-input {
    buildMacStorePreviewSection) — same size/color as .ias-meta-bot beneath
    it but not uppercased, sitting between the language code and that label. */
 .ias-meta-lang-more { font-size: 9px; color: var(--text-faint); margin-top: 1px; }
+/* Label-on-top meta cells (App Store/Mac App Store Product Page Preview
+   only — buildStorePreviewSection/buildMacStorePreviewSection) — matches
+   the native App Store's own product page, where each meta-strip column's
+   caps label sits ABOVE its value (RATINGS/AGE RATING/CHART/DEVELOPER/
+   LANGUAGE/SIZE), per request. Reuses .ias-meta-bot's exact look (same
+   font-size/color/uppercase/letter-spacing) rather than redefining it, just
+   flipped to margin-bottom (spacing below the label, above the value that
+   follows it) instead of .ias-meta-bot's own margin-top (spacing above the
+   label, which sits after its value there). Scoped to a new class instead
+   of just reordering the existing .ias-meta-top/.ias-meta-bot divs so
+   Mac App Store Full and Android/Steam's own Product Page Previews —
+   which reuse those same two classes for their OWN value-then-label
+   cells — are completely unaffected; only these two builders' markup
+   places .ias-meta-label-top first. */
+.ias-meta-label-top { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
 
 /* Screenshots */
 .ias-shots-scroll {

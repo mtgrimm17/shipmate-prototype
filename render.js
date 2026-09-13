@@ -7637,14 +7637,14 @@ function buildStorePreviewSection() {
   // focused, static otherwise), green hover when done
   const ageCell = contentDone
     ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+         <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
-         <div class="ias-meta-bot">Age</div>
        </div>`
     : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+         <div class="ias-meta-label-top ias-meta-bot--action">Content</div>
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
-         <div class="ias-meta-bot ias-meta-bot--action">Content</div>
        </div>`;
 
   // Price/Business meta cell is gone from the meta strip (by request) — the
@@ -7658,10 +7658,10 @@ function buildStorePreviewSection() {
   // native App Store's own default "no verified developer icon" look.
   const devCell = `
     <div class="ias-meta-cell">
+      <div class="ias-meta-label-top">Developer</div>
       <div class="ias-meta-top ias-meta-dev-logo">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
       </div>
-      <div class="ias-meta-bot">Developer</div>
     </div>`;
 
   // Language meta cell — the Primary Language's own 2-letter code (Game
@@ -7671,17 +7671,17 @@ function buildStorePreviewSection() {
   const supportingLangCount = (fd.localizations || []).length;
   const langCell = `
     <div class="ias-meta-cell">
+      <div class="ias-meta-label-top">Language</div>
       <div class="ias-meta-top">${langCode}</div>
       ${supportingLangCount > 0 ? `<div class="ias-meta-lang-more">+ ${supportingLangCount} More</div>` : ''}
-      <div class="ias-meta-bot">Language</div>
     </div>`;
 
   // Size meta cell — no build/binary size tracked yet, same "—" placeholder
   // convention as the Ratings cell above for not-yet-available data.
   const sizeCell = `
     <div class="ias-meta-cell">
+      <div class="ias-meta-label-top">Size</div>
       <div class="ias-meta-top">—</div>
-      <div class="ias-meta-bot">Size</div>
     </div>`;
 
   // Screenshots area — always show shots; full-width Select/Edit button below
@@ -7779,15 +7779,15 @@ function buildStorePreviewSection() {
              button above, not a separate cell here) ── -->
         <div class="ias-meta-strip">
           <div class="ias-meta-cell">
+            <div class="ias-meta-label-top">Ratings</div>
             <div class="ias-meta-top">—</div>
-            <div class="ias-meta-bot">Ratings</div>
           </div>
           <div class="ias-meta-divider"></div>
           ${ageCell}
           <div class="ias-meta-divider"></div>
           <div class="ias-meta-cell ias-meta-cell-wide">
+            <div class="ias-meta-label-top">Category</div>
             <div class="ias-meta-top">${category}</div>
-            <div class="ias-meta-bot">Category</div>
           </div>
           <div class="ias-meta-divider"></div>
           ${devCell}
@@ -8293,14 +8293,14 @@ function buildMacStorePreviewSection() {
 
   const ageCell = contentDone
     ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+         <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
-         <div class="ias-meta-bot">Age</div>
        </div>`
     : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+         <div class="ias-meta-label-top ias-meta-bot--action">Content</div>
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
          </div>
-         <div class="ias-meta-bot ias-meta-bot--action">Content</div>
        </div>`;
 
   // Price/Business meta cell is gone from the meta strip (by request) — the
@@ -8312,10 +8312,10 @@ function buildMacStorePreviewSection() {
   // native App Store's own default "no verified developer icon" look.
   const devCell = `
     <div class="ias-meta-cell">
+      <div class="ias-meta-label-top">Developer</div>
       <div class="ias-meta-top ias-meta-dev-logo">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
       </div>
-      <div class="ias-meta-bot">Developer</div>
     </div>`;
 
   // Language meta cell — the Primary Language's own 2-letter code (Game
@@ -8325,17 +8325,17 @@ function buildMacStorePreviewSection() {
   const supportingLangCount = (fd.localizations || []).length;
   const langCell = `
     <div class="ias-meta-cell">
+      <div class="ias-meta-label-top">Language</div>
       <div class="ias-meta-top">${langCode}</div>
       ${supportingLangCount > 0 ? `<div class="ias-meta-lang-more">+ ${supportingLangCount} More</div>` : ''}
-      <div class="ias-meta-bot">Language</div>
     </div>`;
 
   // Size meta cell — no build/binary size tracked yet, same "—" placeholder
   // convention as the Ratings cell above for not-yet-available data.
   const sizeCell = `
     <div class="ias-meta-cell">
+      <div class="ias-meta-label-top">Size</div>
       <div class="ias-meta-top">—</div>
-      <div class="ias-meta-bot">Size</div>
     </div>`;
 
   const screenshotsArea = `
@@ -8453,15 +8453,15 @@ function buildMacStorePreviewSection() {
              button above, not a separate cell here) ── -->
         <div class="ias-meta-strip">
           <div class="ias-meta-cell">
+            <div class="ias-meta-label-top">Ratings</div>
             <div class="ias-meta-top">—</div>
-            <div class="ias-meta-bot">Ratings</div>
           </div>
           <div class="ias-meta-divider"></div>
           ${ageCell}
           <div class="ias-meta-divider"></div>
           <div class="ias-meta-cell ias-meta-cell-wide">
+            <div class="ias-meta-label-top">Category</div>
             <div class="ias-meta-top">${category}</div>
-            <div class="ias-meta-bot">Category</div>
           </div>
           <div class="ias-meta-divider"></div>
           ${devCell}
