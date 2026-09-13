@@ -7398,6 +7398,20 @@ textarea.loc-review-field.ias-inline-input {
 /* ── DocuSign-style sticky nav bar ── */
 .spp-nav-bar {
   position: sticky; bottom: 0;
+  /* Above .submit-modal-fade-bottom's own z-index:6 (further below). That
+     fade is a scrolling-CONTENT affordance — "there's more this way" —
+     painted over .submit-modal-scroll's body while it's genuinely not
+     scrolled to the end yet. This bar isn't scrolling content, it's a
+     persistent sticky control (same idea as .submit-modal-header staying
+     crisp above everything), so it has no business reading as dimmed/
+     greyed-out just because there happens to be more to scroll past below
+     it — that read as the footer being disabled. The Mac App Store Product
+     Page Preview's own footer never has this problem since that step
+     hands scrolling to .mac-spp-main instead, leaving the outer wrap
+     permanently "at-bottom" (submit-modal-mac-spp, below) with the fade
+     never engaging at all — same fix in spirit, just via a different route
+     since iOS has no equivalent second scroll region to hand this off to. */
+  z-index: 7;
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px;
   background: var(--panel-3);
