@@ -7184,36 +7184,49 @@ function _iasAllPreviewLangCodes() {
   return [primary, ...supporting];
 }
 
-/* ── Required-element focus system for the App Store/Mac App Store Product
-   Page Preview footer (buildStorePreviewSection/buildMacStorePreviewSection
+/* ── Element focus system for the App Store/Mac App Store Product Page
+   Preview footer (buildStorePreviewSection/buildMacStorePreviewSection
    only — Mac App Store Full and Android/Steam's own preview builders keep
    their original always-pulsing "Next required" footer, out of scope here)
    ──
-   Seven required elements, always in this same top-down/left-to-right
-   order: Title, Subtitle, Content, Business, Adjust Screenshots,
-   Description, Answer Data Collection Questions — matching the order they
-   actually appear in the preview (header → meta strip → screenshots →
-   description → privacy). Exactly one is ever "in focus" at a time; only
-   the focused, not-yet-addressed element keeps the animated pulse
-   (is-spp-focused, reusing ias-meta-pulse/spp-pulse below) — every other
-   not-yet-addressed element instead gets a static, duller glow box
-   (is-spp-static, style.css), and an already-addressed element gets neither
-   (its existing done styling — .ias-meta-cell--seen / .spp-section-btn--done
-   / plain filled-in text — is untouched). Replaces the old always-on "Next
-   required" footer with a prev/next navigator (_sppFooterNav) that walks
-   this same ordered list — filtered down to only the not-yet-done elements
-   by every call site, so a fulfilled required element drops out of the
-   navigator entirely, not just out of the glow — and can move focus off
-   the default.
+   Nine focusable elements total, always in this same top-down/left-to-right
+   order: Title, Subtitle, Business (the GET button), Content, Adjust
+   Screenshots, Description, Achievements, What's New, Answer Data
+   Collection Questions — matching the order they actually appear in the
+   preview (header → meta strip → screenshots → description → Game
+   Center → What's New → privacy). Seven of these are REQUIRED (every one
+   except Achievements/What's New); the two optional ones have no
+   completion concept of their own; they're just as fully navigable but
+   never block or drive the default focus below. Exactly one element is
+   ever "in focus" at a time, and the footer's prev/next navigator
+   (_sppFooterNav) always walks the complete, unfiltered nine-element list
+   — nothing ever drops out of it, whether done, required, or optional.
+
+   The focused element's glow is one of three colors, all layered on top of
+   is-spp-focused's shared brighter pulse shape (spp-focus-pulse family,
+   style.css):
+     - is-spp-focused       (yellow/orange) — required, not yet done
+     - is-spp-focused-done  (green)         — required, already done
+     - is-spp-focused-optional (purple)     — Achievements/What's New
+   A required, not-yet-done element that ISN'T the one in focus instead gets
+   a static, duller glow box (is-spp-static, style.css). An already-done
+   required element or an optional element that ISN'T focused gets neither
+   — its existing done styling (.ias-meta-cell--seen / .spp-section-btn--done
+   / plain filled-in text) or plain unstyled look is untouched.
 
    state.storePreviewFocus[pid] (state.js) holds an explicit focus choice,
    set only by clicking the footer's prev/next arrows (setStorePreviewFocus,
    app.js) — until then, or if that choice's element no longer exists, focus
-   always falls back to the first not-yet-addressed element, computed fresh
-   on every render. That means fixing the currently-focused field elsewhere
-   in the app (e.g. finally typing a Title) naturally advances the glow to
-   whatever's next incomplete the next time this re-renders, as long as the
-   user hasn't explicitly clicked to some other element in the meantime. */
+   always falls back to the first not-yet-done REQUIRED element (optional
+   elements are marked done:true purely so this fallback scan skips over
+   them — see ALL_ELEMENTS in each builder), computed fresh on every render.
+   That means fixing the currently-focused field elsewhere in the app (e.g.
+   finally typing a Title) naturally advances the default focus to whatever
+   required element is next incomplete the next time this re-renders, as
+   long as the user hasn't explicitly clicked to some other element (done,
+   optional, or otherwise) in the meantime. Once every required element is
+   done, the fallback parks on the last element (Answer Data Collection
+   Questions) rather than wrapping or landing on an optional element. */
 function _sppFocusIndex(pid, elements) {
   const saved = state.storePreviewFocus?.[pid];
   let idx = saved ? elements.findIndex(e => e.id === saved) : -1;
@@ -7235,14 +7248,14 @@ function _sppIsFocused(pid, elements, id) {
 
 // Prev/next footer navigator — replaces the old single "Next required"
 // button. Always renders both arrows so the footer's layout never shifts;
-// an arrow with nothing to move to (already at the first/last required
-// element) renders disabled/greyed with no label rather than wrapping
-// around to the other end.
+// an arrow with nothing to move to (already at the first/last element)
+// renders disabled/greyed with no label rather than wrapping around to the
+// other end. Callers now always pass the complete, unfiltered ALL_ELEMENTS
+// list (required and optional, done and not) — the bar itself no longer
+// ever disappears, since navigation should always reach every interactive
+// element on the preview. The `if (!elements.length)` guard below is just
+// defensive now.
 function _sppFooterNav(pid, elements) {
-  // Callers pass only the not-yet-done elements (REQUIRED_ELEMENTS.filter(e
-  // => !e.done)) — once every required element is fulfilled there's nothing
-  // left to navigate to, so the whole bar disappears rather than rendering
-  // two disabled arrows around an empty label.
   if (!elements.length) return '';
   const idx     = _sppFocusIndex(pid, elements);
   const current = elements[idx];
@@ -7590,7 +7603,11 @@ function buildStorePreviewSection() {
   // is-spp-static modifier computed by the caller (empty string when done).
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
-      return `<button class="spp-section-btn spp-section-btn--done" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
+      // glowCls can still be non-empty here now: a required, already-done
+      // element (Content/Screenshots/Data) that's the one currently in
+      // focus gets is-spp-focused-done's green pulse layered on top of its
+      // own done styling, same as every other done-but-focused element.
+      return `<button class="spp-section-btn spp-section-btn--done${glowCls || ''}" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="spp-section-btn-title">${label}</div>
@@ -7609,32 +7626,45 @@ function buildStorePreviewSection() {
     </button>`;
   }
 
-  // Required elements, top-down/left-to-right — drives both the focus glow
-  // (_sppIsFocused, below) and the footer's prev/next navigator (_sppFooterNav).
-  const REQUIRED_ELEMENTS = [
-    { id: 'title',       label: 'Title',                            done: !!titleRaw },
-    { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
-    { id: 'business',    label: 'Business',                          done: businessDone },
-    { id: 'content',     label: 'Content',                           done: contentDone },
-    { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
-    { id: 'description', label: 'Description',                       done: descDone },
-    { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
+  // All nine focusable elements, top-down/left-to-right — drives both the
+  // focus glow (_sppIsFocused, below) and the footer's prev/next navigator
+  // (_sppFooterNav), which now always walks this same complete list
+  // unfiltered. Achievements/What's New are marked `required: false` and a
+  // fixed `done: true` — the latter purely so _sppFocusIndex's own
+  // first-not-done fallback scan skips over them and never parks default
+  // focus on an optional element; it plays no other role, since optional
+  // elements have no real completion state of their own.
+  const ALL_ELEMENTS = [
+    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
+    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw },
+    { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
+    { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
+    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone },
+    { id: 'description',  label: 'Description',                       required: true,  done: descDone },
+    { id: 'achievements', label: 'Achievements',                      required: false, done: true },
+    { id: 'whatsnew',     label: "What's New",                        required: false, done: true },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone },
   ];
-  // Additive glow class for a not-yet-addressed required element: the
-  // animated pulse if it's the one in focus, a static/duller box otherwise.
-  // Returns '' for an already-addressed element — its own done styling
-  // (ias-meta-cell--seen/spp-section-btn--done/plain filled-in text) is
-  // untouched.
+  // Additive glow class for any focusable element (required or optional).
+  // Not focused: a required-not-done element gets the static/duller box;
+  // everything else (done required, or any optional element) gets '' — its
+  // own existing done/plain styling is untouched. Focused: yellow
+  // (is-spp-focused) for a required-not-done element, green
+  // (is-spp-focused-done) for a required-already-done element, purple
+  // (is-spp-focused-optional) for Achievements/What's New.
   const _sppGlowCls = id => {
-    const el = REQUIRED_ELEMENTS.find(e => e.id === id);
-    if (!el || el.done) return '';
-    return _sppIsFocused(pid, REQUIRED_ELEMENTS, id) ? ' is-spp-focused' : ' is-spp-static';
+    const el = ALL_ELEMENTS.find(e => e.id === id);
+    if (!el) return '';
+    const focused = _sppIsFocused(pid, ALL_ELEMENTS, id);
+    if (!el.required) return focused ? ' is-spp-focused-optional' : '';
+    if (!focused) return el.done ? '' : ' is-spp-static';
+    return el.done ? ' is-spp-focused-done' : ' is-spp-focused';
   };
 
   // Age meta cell — always clickable; glows when not done (animated if
   // focused, static otherwise), green hover when done
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
        </div>`
@@ -7716,7 +7746,7 @@ function buildStorePreviewSection() {
   // would show for a game with none.
   const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.saved) : [];
   const achievementsHtml = `
-        <div class="ias-section ias-achv-section" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
+        <div class="ias-section ias-achv-section${_sppGlowCls('achievements')}" data-spp-el="achievements" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
           <div class="ias-achv-card">
@@ -7761,9 +7791,9 @@ function buildStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             <!-- GET now sits beneath the Title/Subtitle stack, matching the
@@ -7818,7 +7848,7 @@ function buildStorePreviewSection() {
 
         <!-- ── Description ── -->
         <div class="ias-section">
-          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder' + _sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${_sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
                onclick="startIasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
@@ -7833,7 +7863,7 @@ function buildStorePreviewSection() {
         ${achievementsHtml}
 
         <!-- ── What's New ── -->
-        <div class="ias-section">
+        <div class="ias-section ias-wn-section${_sppGlowCls('whatsnew')}" data-spp-el="whatsnew">
           <div class="ias-section-head-row">
             <span class="ias-section-head">What's New</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -7868,7 +7898,7 @@ function buildStorePreviewSection() {
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
 
-    ${_sppFooterNav(pid, REQUIRED_ELEMENTS.filter(e => !e.done))}
+    ${_sppFooterNav(pid, ALL_ELEMENTS)}
   `;
 }
 
@@ -8269,7 +8299,11 @@ function buildMacStorePreviewSection() {
 
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
-      return `<button class="spp-section-btn spp-section-btn--done" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
+      // glowCls can still be non-empty here now: a required, already-done
+      // element (Content/Screenshots/Data) that's the one currently in
+      // focus gets is-spp-focused-done's green pulse layered on top of its
+      // own done styling, same as every other done-but-focused element.
+      return `<button class="spp-section-btn spp-section-btn--done${glowCls || ''}" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="spp-section-btn-title">${label}</div>
@@ -8288,27 +8322,32 @@ function buildMacStorePreviewSection() {
     </button>`;
   }
 
-  // Required elements, top-down/left-to-right — drives both the focus glow
-  // (_sppIsFocused, above) and the footer's prev/next navigator (_sppFooterNav).
-  const REQUIRED_ELEMENTS = [
-    { id: 'title',       label: 'Title',                            done: !!titleRaw },
-    { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
-    { id: 'business',    label: 'Business',                          done: businessDone },
-    { id: 'content',     label: 'Content',                           done: contentDone },
-    { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
-    { id: 'description', label: 'Description',                       done: descDone },
-    { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
+  // All nine focusable elements, top-down/left-to-right — see the twin
+  // definition's own comment in buildStorePreviewSection above.
+  const ALL_ELEMENTS = [
+    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
+    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw },
+    { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
+    { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
+    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone },
+    { id: 'description',  label: 'Description',                       required: true,  done: descDone },
+    { id: 'achievements', label: 'Achievements',                      required: false, done: true },
+    { id: 'whatsnew',     label: "What's New",                        required: false, done: true },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone },
   ];
-  // Additive glow class for a not-yet-addressed required element — see the
-  // twin definition's own comment in buildStorePreviewSection above.
+  // Additive glow class for any focusable element — see the twin
+  // definition's own comment in buildStorePreviewSection above.
   const _sppGlowCls = id => {
-    const el = REQUIRED_ELEMENTS.find(e => e.id === id);
-    if (!el || el.done) return '';
-    return _sppIsFocused(pid, REQUIRED_ELEMENTS, id) ? ' is-spp-focused' : ' is-spp-static';
+    const el = ALL_ELEMENTS.find(e => e.id === id);
+    if (!el) return '';
+    const focused = _sppIsFocused(pid, ALL_ELEMENTS, id);
+    if (!el.required) return focused ? ' is-spp-focused-optional' : '';
+    if (!focused) return el.done ? '' : ' is-spp-static';
+    return el.done ? ' is-spp-focused-done' : ' is-spp-focused';
   };
 
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
        </div>`
@@ -8399,7 +8438,7 @@ function buildMacStorePreviewSection() {
   // "chosen" achievement to name-drop.
   const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.saved);
   const achievementsHtml = `
-        <div class="ias-section ias-achv-section" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
+        <div class="ias-section ias-achv-section${_sppGlowCls('achievements')}" data-spp-el="achievements" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
           <div class="ias-achv-card">
@@ -8438,9 +8477,9 @@ function buildMacStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
                  onclick="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             <!-- GET sits beneath the title/subtitle stack, not beside it as a
@@ -8528,7 +8567,7 @@ function buildMacStorePreviewSection() {
                    actually visible, once the browser confirms the text
                    overflows 4 rows. -->
               <div class="mac-spp-desc-flex" id="mas-desc-flex">
-                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder' + _sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
+                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${_sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
                      onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
                 <button type="button" class="ias-more-btn mac-spp-desc-more" id="mas-desc-more-btn" style="visibility:hidden;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button>
               </div>
@@ -8553,7 +8592,7 @@ function buildMacStorePreviewSection() {
         ${achievementsHtml}
 
         <!-- ── What's New ── -->
-        <div class="ias-section">
+        <div class="ias-section ias-wn-section${_sppGlowCls('whatsnew')}" data-spp-el="whatsnew">
           <div class="ias-section-head-row">
             <span class="ias-section-head">What's New</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -8600,7 +8639,7 @@ function buildMacStorePreviewSection() {
       </div><!-- /mac-spp-main -->
     </div><!-- /mac-spp-shell -->
 
-    ${_sppFooterNav(pid, REQUIRED_ELEMENTS.filter(e => !e.done))}
+    ${_sppFooterNav(pid, ALL_ELEMENTS)}
   `;
 }
 

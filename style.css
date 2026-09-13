@@ -7204,36 +7204,44 @@ textarea.loc-review-field.ias-inline-input {
 }
 .ias-meta-bot--action { color: var(--accent); font-weight: 600; }
 
-/* ── Required-element focus (App Store/Mac App Store Product Page Preview
-   only — buildStorePreviewSection/buildMacStorePreviewSection, REQUIRED_
-   ELEMENTS/_sppFooterNav, render.js) ──
+/* ── Element focus (App Store/Mac App Store Product Page Preview only —
+   buildStorePreviewSection/buildMacStorePreviewSection, ALL_ELEMENTS/
+   _sppFooterNav, render.js) ──
    A required element (Title, Subtitle, Content, Business, Adjust
    Screenshots, Description, Answer Data Collection Questions) that still
    needs attention but ISN'T the one currently in focus gets is-spp-static instead of the
    animated pulse every "needs attention" glow on this preview defaults to
    (ias-meta-pulse/spp-pulse, above/below) — a fixed, much fainter version of
-   the same orange ring. The element actually in focus gets is-spp-focused,
-   its own brighter/more vivid pulse (spp-focus-pulse, below) — replacing
-   the base class's own default animation rather than just leaving it,
-   since a single shared brighter ring (used no matter which of
-   .ias-placeholder/.ias-meta-cell--action/.spp-section-btn/.ias-get-btn the
-   focused element happens to be) reads as more clearly "this one" than
-   each type's own base intensity would. Both modifiers use !important, the
-   same way .spp-section-btn--done already does two rules below, since each
-   must beat the plain base class it's layered onto regardless of
-   stylesheet order. Business's own glow target is .spp-get-glow-wrap, a
-   dedicated rectangular wrapper AROUND .ias-get-btn rather than the pill
-   button itself — see that class's own comment, further up this file, for
-   why. Every OTHER surface that reuses .ias-placeholder/
-   .ias-meta-cell--action/.spp-section-btn — Mac App Store Full and
-   Android/Steam's own Product Page Previews, Localization Review/IAP
-   fields — never has either class added to it and keeps its original
-   unconditional (non-brightened) pulse, untouched by any of this. */
+   the same orange ring. The element actually in focus gets one of three
+   colors depending on its own required/done state — replacing the base
+   class's own default animation rather than just leaving it, since a
+   single shared brighter ring (used no matter which of
+   .ias-placeholder/.ias-meta-cell--action/.spp-section-btn/.ias-get-btn/
+   .ias-achv-section/.ias-section the focused element happens to be) reads
+   as more clearly "this one" than each type's own base intensity would:
+     - is-spp-focused      — required, not yet done: same orange/yellow ring
+       as before (spp-focus-pulse).
+     - is-spp-focused-done — required, already done: green ring
+       (spp-focus-pulse-green), same hue as .spp-section-btn--done's own
+       checkmark/hover (#34c759 / rgba(52,199,89,…)) elsewhere on this file.
+     - is-spp-focused-optional — Achievements/What's New, which have no
+       "done" state of their own: purple ring (spp-focus-pulse-purple).
+   All three (plus is-spp-static) use !important, the same way
+   .spp-section-btn--done already does two rules below, since each must
+   beat the plain base class it's layered onto regardless of stylesheet
+   order. Business's own glow target is .spp-get-glow-wrap, a dedicated
+   rectangular wrapper AROUND .ias-get-btn rather than the pill button
+   itself — see that class's own comment, further up this file, for why.
+   Every OTHER surface that reuses .ias-placeholder/.ias-meta-cell--action/
+   .spp-section-btn — Mac App Store Full and Android/Steam's own Product
+   Page Previews, Localization Review/IAP fields — never has any of these
+   classes added to it and keeps its original unconditional
+   (non-brightened) pulse, untouched by any of this. */
 .is-spp-static {
   animation: none !important;
-  /* Deliberately much fainter than is-spp-focused's own ring below —
-     barely visible, so the one element in focus reads as clearly the only
-     thing asking for attention right now. */
+  /* Deliberately much fainter than the focused rings below — barely
+     visible, so the one element in focus reads as clearly the only thing
+     asking for attention right now. */
   box-shadow: 0 0 0 2px rgba(255,149,0,0.06);
 }
 @keyframes spp-focus-pulse {
@@ -7242,6 +7250,55 @@ textarea.loc-review-field.ias-inline-input {
 }
 .is-spp-focused {
   animation: spp-focus-pulse 1.6s ease-in-out infinite !important;
+}
+@keyframes spp-focus-pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52,199,89,0.7); }
+  50%       { box-shadow: 0 0 0 7px rgba(52,199,89,0); }
+}
+.is-spp-focused-done {
+  animation: spp-focus-pulse-green 1.6s ease-in-out infinite !important;
+}
+@keyframes spp-focus-pulse-purple {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(159,104,240,0.7); }
+  50%       { box-shadow: 0 0 0 7px rgba(159,104,240,0); }
+}
+.is-spp-focused-optional {
+  animation: spp-focus-pulse-purple 1.6s ease-in-out infinite !important;
+}
+/* What's New's whole card is a plain .ias-section (unlike every other
+   glowing element here), which has no border-radius of its own — its
+   focus/static ring would render with square corners otherwise. Every
+   other glow target already gets a rounded ring for free from its own
+   base class (.ias-editable/.ias-meta-cell--action/.spp-section-btn/
+   .ias-achv-section all set their own radius already). */
+.ias-section.is-spp-static,
+.ias-section.is-spp-focused,
+.ias-section.is-spp-focused-done,
+.ias-section.is-spp-focused-optional {
+  border-radius: 10px;
+}
+/* Achievements/What's New sit flush against .ias-page's own left/right
+   edges (its 16px padding is theirs, not extra clearance from .ias-page's
+   boundary) — less than 1px actually separates them from .ias-page's own
+   overflow:hidden edge (see .ias-info-section's own near-identical comment,
+   below, for the same problem on Mac App Store Full's Information
+   section). With no room at all for is-spp-focused-optional's 7px outward
+   spread, the ring came out almost entirely clipped down both sides.
+   Giving both sections 6px of margin — and shaving the same 6px off their
+   own left/right padding to cancel it out, so their actual content (the
+   Achievements card, the What's New kicker/notes) stays flush with every
+   other section above/below rather than shifting inward — opens up
+   exactly that clearance, same fix/same math as .ias-info-section uses.
+   Applied unconditionally (not just while focused), so nothing shifts
+   width when focus moves on or off either section. Scoped to the App
+   Store/Mac App Store Product Page Preview only (.ios-spp-page/
+   .mac-spp-page) — Mac App Store Full's own Achievements card
+   (buildMacFullAppInformationSection's twin, out of scope here) shares
+   .ias-achv-section too and keeps its original flush layout untouched. */
+.ios-spp-page .ias-achv-section, .mac-spp-page .ias-achv-section,
+.ios-spp-page .ias-wn-section,   .mac-spp-page .ias-wn-section {
+  margin: 0 6px;
+  padding: 14px 10px;
 }
 
 /* ── Mac App Store Full only: Product Page Preview's Information section,
