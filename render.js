@@ -2376,19 +2376,7 @@ function buildContentQuestionsPane() {
     const msgs = (typeof _getInferenceMsgs === 'function')
       ? _getInferenceMsgs(pid, 'questionnaire')
       : ['Reading your game details…', 'Matching against store policies…', 'Pre-filling answers…'];
-    body = `
-      <div class="inf-loading-screen cq-inline-loading">
-        <div class="inf-rings-wrap">
-          <div class="inf-ring inf-ring-1"></div>
-          <div class="inf-ring inf-ring-2"></div>
-          <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="inf-headline">Analyzing your game…</div>
-        <div class="inf-steps">
-          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
-        </div>
-      </div>`;
+    body = _infLoadingScreen('Analyzing your game…', msgs, 'cq-inline-loading');
   } else {
     const q = pid === 'ios'   ? buildContentRatingSection()
             : pid === 'steam' ? buildSteamContentRatingSection()
@@ -4729,6 +4717,25 @@ function buildTaskContent(platformId, stepId, done) {
     <p class="task-stub-note">Full task UI coming in the next iteration. Mark complete to continue.</p>`;
 }
 
+/* ONE LOADER, ONE DEFINITION. The same markup was pasted at three call sites
+   (step-modal inference, Improve's report card, Game Details' inline pane), so
+   any change had to be made three times — and the orange Subwoofer icon had
+   already outlived the palette in all three.
+
+   The rings and the centre logo are gone for now; what is left is the headline
+   and the list of what Shipmate is doing, which is the part that actually says
+   anything. The centre of the loader is an open design question, deliberately
+   left empty rather than filled with the old mark. */
+function _infLoadingScreen(headline, msgs, extraCls) {
+  return `
+      <div class="inf-loading-screen${extraCls ? ' ' + extraCls : ''}">
+        <div class="inf-headline">${headline}</div>
+        <div class="inf-steps">
+          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
+        </div>
+      </div>`;
+}
+
 /* ── Inference loading messages (per platform + step) ─── */
 function _getInferenceMsgs(platformId, stepId) {
   // The Content Rating step shares the unified questionnaire inference, so it
@@ -4905,19 +4912,7 @@ function renderStepModal() {
   let body = '';
   if (inferenceStatus === 'loading') {
     const msgs = _getInferenceMsgs(platformId, stepId);
-    body = `
-      <div class="inf-loading-screen">
-        <div class="inf-rings-wrap">
-          <div class="inf-ring inf-ring-1"></div>
-          <div class="inf-ring inf-ring-2"></div>
-          <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="inf-headline">Shipmate is working…</div>
-        <div class="inf-steps">
-          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
-        </div>
-      </div>`;
+    body = _infLoadingScreen('Shipmate is working…', msgs);
   } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
     const iaMsgs = [
       'Comparing store page to best in class…',
@@ -4925,19 +4920,7 @@ function renderStepModal() {
       'Analyzing binary to gauge compliance risk…',
       'Preparing your personalized report…',
     ];
-    body = `
-      <div class="inf-loading-screen">
-        <div class="inf-rings-wrap">
-          <div class="inf-ring inf-ring-1"></div>
-          <div class="inf-ring inf-ring-2"></div>
-          <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="inf-headline">Generating Report Card…</div>
-        <div class="inf-steps">
-          ${iaMsgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
-        </div>
-      </div>`;
+    body = _infLoadingScreen('Generating Report Card…', iaMsgs);
   } else if (platformId === 'android') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -5029,8 +5012,13 @@ function renderStepModal() {
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>` : ''}
-        <div class="submit-modal-hicon">${platformIcon(platformId, 30, 'white')}</div>
-        <div>
+        <!-- THE MEASURED MARK FIRST, exactly as the platform card does it
+             (buildIOSActiveCard → smMarkFor). The modal used to call
+             platformIcon() straight, so macOS wore the bare Apple glyph in the
+             header while its card wore the App Store mark — two different
+             identities for one store. Sized in CSS, not by these arguments. -->
+        <div class="submit-modal-hicon">${(typeof smMarkFor === 'function' && smMarkFor(platformId, 30)) || platformIcon(platformId, 30, 'white')}</div>
+        <div class="submit-modal-head-titles">
           <div class="submit-modal-title">${displayStepLabel || ''}</div>
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
@@ -5044,11 +5032,15 @@ function renderStepModal() {
         <button class="task-modal-close" onclick="closeStepModal()">×</button>
       </div>`}
     </div>
-    <div class="submit-modal-scroll" id="step-modal-body">
-      ${inferenceBanner}
-      <div class="ios-step-body-content">
-        ${body}
+    <div class="submit-modal-body-wrap at-top at-bottom" id="step-modal-body-wrap">
+      <div class="submit-modal-scroll" id="step-modal-body">
+        ${inferenceBanner}
+        <div class="ios-step-body-content">
+          ${body}
+        </div>
       </div>
+      <div class="submit-modal-fade-top"></div>
+      <div class="submit-modal-fade-bottom"></div>
     </div>
     <div class="submit-modal-footer">
       ${_localSaveNote(platformId)}
@@ -5062,8 +5054,8 @@ function renderStepModal() {
         // Store Preview, skipping right over the Business Questions they
         // actually came from. Both this and the header's back arrow read the
         // same `returnAction`, so the two ways out can never disagree.
-        ? `<button class="btn btn-primary" onclick="${returnAction}">Save &amp; Return</button>`
-        : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
+        ? `<button class="imp-cta" onclick="${returnAction}">Save &amp; Return</button>`
+        : `<button class="imp-cta" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
 
@@ -5088,6 +5080,12 @@ function renderStepModal() {
   if (stepId === 'improveSubmission' && typeof _impPostRender === 'function') {
     requestAnimationFrame(_impPostRender);
   }
+
+  /* The header and footer no longer draw a line — the body dissolves into them
+     instead. That has to be re-armed on EVERY render: this function replaces
+     the modal's innerHTML, so the previous scroller (and its listener) is gone.
+     See _smModalFades in app.js. */
+  if (typeof _smModalFades === 'function') requestAnimationFrame(_smModalFades);
 
   // Mac App Store's own Description clamps to exactly 4 rows via native
   // -webkit-line-clamp (buildMacStorePreviewSection, above) — whether that
@@ -6681,11 +6679,11 @@ function buildImproveSubmissionSection(platformId) {
     }).join('')}</span>`;
   }
 
+  /* An all-clear is the same claim as a completion line, so it wears the same
+     format — `.iv-strong-line`, no icon. The green circle-check it replaced was
+     the last `iys-` legacy styling left inside this section. */
   function _allGood(msg) {
-    return `<div class="iys-issue-content iys-all-good-inline">
-      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="7" stroke="var(--green)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>${msg || 'Looking good'}</span>
-    </div>`;
+    return `<div class="iv-strong-line">${msg || 'Looking good'}</div>`;
   }
 
   /* The batch shell: tab behind, card in front. `headRight` is the carousel (or

@@ -517,6 +517,7 @@ body {
   white-space: nowrap;
 }
 .ob-preset-pill:hover:not(.is-active) {
+  background: var(--pill-off-bg-hover);   /* see .loc-chip:hover */
   color: var(--text);
 }
 /* Same treatment as Basic Info's platform tiles — see --pill-on-* at the top.
@@ -1264,7 +1265,14 @@ body {
   color: var(--pill-on-color-hover);
 }
 
+/* THE FILL LIFTS ON HOVER, like SELECT PLATFORMS' tile
+   (.ob-form .platform-tile:not(.selected):hover). Every pill in this family
+   shares --pill-off-bg at rest, and each of them used to answer the pointer
+   with a text colour alone — a half-shade on a 12px word. The fill is the part
+   you see without looking. Each family keeps whatever it already did with its
+   border; only the background is new. */
 .loc-chip:hover:not(.is-on) {
+  background: var(--pill-off-bg-hover);
   color: var(--text);
 }
 
@@ -1779,6 +1787,7 @@ body {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .ob-dist-row:hover .ob-dist-row-chip:not(.is-on) {
+  background: var(--pill-off-bg-hover);   /* see .loc-chip:hover */
   color: var(--text);
 }
 
@@ -1867,6 +1876,7 @@ body {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .ob-dist-excluded-chip:hover:not(.is-on) {
+  background: var(--pill-off-bg-hover);   /* see .loc-chip:hover */
   color: var(--text);
   border-color: var(--border-hover);
 }
@@ -2822,7 +2832,7 @@ body.viewing-splash .app-subnav { display: none; }
 .cq-plat-btn:hover { color: var(--text); border-color: var(--border-hover); }
 .cq-plat-btn.is-on { background: var(--panel-3); border-color: var(--accent-details, #60a5fa); color: var(--text); }
 .cq-plat-btn svg, .cq-plat-btn img { width: 16px; height: 16px; display: block; }
-.cq-inline-loading { min-height: 320px; --accent: var(--purple); }
+.cq-inline-loading { min-height: 320px; }   /* --accent now lives on .inf-loading-screen */
 .cq-inline-empty { padding: 40px 24px; text-align: center; color: var(--text-dim); font-size: 13px; line-height: 1.6; }
 /* Distribution + Localization share one builder — show only the relevant section */
 .gd-sub[data-gd="distribution"] #ob-sec-localization,
@@ -5234,8 +5244,13 @@ body.viewing-splash .app-subnav { display: none; }
 
 
 /* Primary CTA — identical to the onboarding "Continue / Launch dashboard":
-     whitish fill, inward white gradient ring, 8px radius, 12px / 500. */
-  .improve-v2 .imp-cta{
+     whitish fill, inward white gradient ring, 8px radius, 12px / 500.
+
+     UNSCOPED ON PURPOSE. This is the app's pill, and the step modal's footer
+     button wears it too, so it cannot live inside .improve-v2. The variants
+     below (data-imp-act, .iv-bin-actions) stay scoped — they are Improve's
+     own vocabulary, and their (0,2,0)+ selectors still outrank this one. */
+  .imp-cta{
     position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     border: 1px solid transparent; border-radius: 8px;
     background: rgba(255,255,255,0.12); color: #FFFFFF;
@@ -5246,13 +5261,13 @@ body.viewing-splash .app-subnav { display: none; }
 
 /* Violet fill (Shipmate) as a fade-in overlay over the persistent white base,
      so hovering out reveals white directly — never a dark in-between. */
-  .improve-v2 .imp-cta::before{
+  .imp-cta::before{
     content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
     background: linear-gradient(135deg, rgba(138,101,248,0.5), rgba(96,64,196,0.42));
     opacity: 0; transition: opacity 0.2s ease;
   }
 
-.improve-v2 .imp-cta::after{
+.imp-cta::after{
     content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
     background: linear-gradient(180deg, rgba(255,255,255,0.40) 0%, rgba(255,255,255,0.12) 100%);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -5260,7 +5275,7 @@ body.viewing-splash .app-subnav { display: none; }
     transition: background 0.2s ease;
   }
 
-.improve-v2 .imp-cta:hover{ background: rgba(255,255,255,0.17); color: #FFFFFF; }
+.imp-cta:hover{ background: rgba(255,255,255,0.17); color: #FFFFFF; }
 
 /* Apply Fix hovers violet (fill + text + ring) to signal a Shipmate change. */
   .improve-v2 .imp-cta[data-imp-act="apply"]:hover{ color: #EADBFF; }
@@ -5662,7 +5677,15 @@ body.viewing-splash .app-subnav { display: none; }
 
 @keyframes tabSelPop { from { transform: scale(1); } to { transform: scale(1.2); } }
 
-.improve-v2 .iv-tab.iv-tab-pulse{ animation: tabNextPulse 0.95s ease-in-out; }
+/* THE NUDGE IS A GLINT, NOT A WAVE. The first version scaled the circle to
+   1.18 and threw a 7px ring out of it — two moving geometries on a 28px dot,
+   which read as a control demanding to be pressed rather than as a hint. This
+   one changes nothing but light: a resting circle sits at `opacity: .2`, so
+   raising it to .85 and back IS the whole animation, with a barely-there fill
+   at the peak for body. Nothing moves, nothing overlaps its neighbour.
+   Sine in and out (the standard cubic-bezier(.37,0,.63,1)) applied to each
+   half, so the dot swells and fades with no corner at the top. */
+.improve-v2 .iv-tab.iv-tab-pulse{ animation: tabNextGlint 900ms cubic-bezier(0.37, 0, 0.63, 1); }
 
 .improve-v2 .iv-card .imp-chosen,
 .improve-v2 .iv-card .imp-discarded{ cursor: default; }
@@ -5832,10 +5855,11 @@ body.viewing-splash .app-subnav { display: none; }
    file, so both rules were inert — the "next to-do" nudge did nothing and the
    bubbles inside a fix pill never moved. Written here from what each is
    plainly meant to do; if the real ones turn up, these are the two to replace. */
-@keyframes tabNextPulse {
-  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,255,255,0); }
-  35%      { transform: scale(1.18); box-shadow: 0 0 0 4px rgba(255,255,255,0.10); }
-  70%      { transform: scale(1);    box-shadow: 0 0 0 7px rgba(255,255,255,0); }
+/* .2 is `.iv-tab`'s resting opacity — the start and end have to BE the resting
+   state, or the dot jumps when the class is stripped on animationend. */
+@keyframes tabNextGlint {
+  0%, 100% { opacity: 0.2;  background-color: rgba(255,255,255,0); }
+  50%      { opacity: 0.85; background-color: rgba(255,255,255,0.08); }
 }
 @keyframes impFixFloat {
   0%   { transform: translateY(0)                 scale(0.9); opacity: 0; }
@@ -7981,22 +8005,32 @@ textarea.loc-review-field.ias-inline-input {
   text-overflow: ellipsis;
 }
 
+/* THE SAME OBJECT AS THE PLATFORM CARD'S GEAR — a bare glyph that only grows a
+   soft grey square when you go near it. Copied from .active-card-settings down
+   to the tokens (30px, 8px radius, --surface-hover), not approximated: a
+   circled, bordered × is a control drawn at rest, and closing is the one action
+   in the modal nobody needs pointed out. Applies to every modal's ×, which is
+   the point — they were three different closers. */
 .task-modal-close {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
+  width: 30px; height: 30px;
+  border: none;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 19px;
+  line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-dim);
-  transition: all 0.12s;
+  color: var(--text-muted, #8f98a0);
+  transition: color 0.15s, background 0.15s;
   flex-shrink: 0;
   margin-left: 10px;
   font-family: inherit;
 }
 
-.task-modal-close:hover { background: var(--panel-2); color: var(--text); }
+.task-modal-close:hover {
+  background: var(--surface-hover, rgba(255,255,255,0.06));
+  color: var(--text);
+}
 
 .task-modal-body {
   flex: 1;
@@ -9205,7 +9239,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .question-yn {
   display: flex;
   flex-direction: row;
-  gap: 4px;
+  gap: 6px;                     /* paired with .intensity-group — see there */
   flex-shrink: 0;
   align-self: center;
 }
@@ -9218,25 +9252,52 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    --pill-bw is 1px here as it is everywhere else in the family, and it is what
    places the selected ring against the border box.
 
-   The type stays as it was: 10px, 700, tracked and (for intensity) uppercase.
-   These sit in a dense question list rather than in a form, and shrinking or
-   unbolding them would cost more than the consistency is worth. */
+   THE TYPE CHANGED IN v6.11 (this comment used to argue for keeping it): the
+   pills were 10px/700 uppercase with 0.8px of tracking — a shout, repeated
+   three times per row down a list of thirty questions. They are now 11px/500
+   and lowercase, and 4px taller. Bold uppercase micro-type is what you use when
+   a label must be found; these are answers you read, and the row already has
+   the question in white above them. Lowercase via `text-transform` rather than
+   by rewriting the markup, because "YES" is written literally at fourteen call
+   sites (content rating, Game Center on three platforms) and one of them would
+   have been missed. Sentence case ("Yes") is the version that does need those
+   edits — CSS cannot get there from an already-uppercase string. */
 .yn-btn {
   --pill-bw: 1px;
   --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
   position: relative;
-  padding: 5px 14px;
+  /* 13, not 14: at 12px type "Yes" is naturally 52.5 wide and would sit a
+     pixel proud of "No", which the 52px floor pins exactly. Pull the padding in
+     and the floor decides both. */
+  padding: 7px 13px;
   border-radius: var(--field-radius);
   border: 1px solid var(--pill-off-border);
   background: var(--pill-off-bg);
-  font-size: 10px; font-weight: 700;
-  letter-spacing: 0.8px;
+  font-size: 12px; font-weight: 500;
+  letter-spacing: 0.3px; text-transform: lowercase;
   cursor: pointer; transition: all 0.15s;
   font-family: inherit; color: var(--pill-off-color);
   text-align: center;
   min-width: 52px;
 }
-.yn-btn:hover { border-color: var(--border-hover); color: var(--text-dim); }
+/* Sentence case WITHOUT touching the markup. `text-transform` cannot raise one
+   letter of an already-uppercase string, but ::first-letter is a second pass
+   over the same text: lowercase the word, then re-raise its head. "YES" in the
+   HTML, "Yes" on screen, and the fourteen call sites that write it stay as they
+   are. Buttons are inline-block, which is what makes ::first-letter apply. */
+.yn-btn::first-letter,
+.intensity-btn::first-letter { text-transform: uppercase; }
+
+/* THE FILL MOVES TOO. Hover used to change only the border and the text, which
+   on a 52px pill against a dark panel is a hairline and half a shade — you had
+   to be looking for it to know the pill was live. `--pill-off-bg-hover` already
+   existed and was already what the onboarding pills lift to; these two were
+   simply never wired to it. */
+.yn-btn:hover {
+  background: var(--pill-off-bg-hover);
+  border-color: var(--border-hover);
+  color: var(--text-dim);
+}
 
 /* Yes and No were two rules saying the same thing; the answer is selected or
    it is not, and which of the two it was never changed the look. */
@@ -9304,7 +9365,11 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border: 1px solid var(--border);
   border-radius: 14px;
   width: 100%;
-  max-width: 640px;
+  /* 680, not 640: the box's 1px borders leave 638px of content, and at that
+     width the step bodies were crowding their own padding. +40 goes entirely
+     to the content column — no padding changed with it. The wide variants
+     (920 / 1000 / 1180) are sized by what they hold and are untouched. */
+  max-width: 680px;
 }
 /* Privacy step needs wider modal for the data matrix */
 .submit-modal.submit-modal-wide {
@@ -9365,12 +9430,16 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   transition: max-width 0.2s ease;
 }
 
+/* NO DIVIDER, TOP OR BOTTOM. A modal that draws a line under its header and
+   over its footer is three stacked boxes; the content scrolling under a fade is
+   one surface with more of itself above and below. The lines are replaced by
+   .submit-modal-fade-top / -bottom (below), which say the same thing — "there
+   is more this way" — only when it is true. */
 .submit-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -9409,25 +9478,43 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal-back:hover { background: var(--panel-2); color: var(--text); }
 .submit-modal-back svg { width: 19px; height: 19px; display: block; }
 
+/* THE GLYPH WEARS NO WELL — the same move the platform cards made in v5.72,
+   for the same reason: a filled rounded square made the header the heaviest
+   thing on a surface whose every other control is an outline. The slot stays
+   (40px) so the title column does not move when a mark is wider than another;
+   only the panel behind it is gone.
+
+   Sized in CSS, never by the size argument — platformIcon()'s 30 is ignored
+   here, exactly as .active-card-icon ignores smMarkFor's. */
 .submit-modal-hicon {
-  width: 42px; height: 42px;
-  border-radius: 10px;
-  background: var(--panel-3);
+  width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   color: var(--text);
-  overflow: hidden;
 }
 .submit-modal-hicon .plat-img {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
   display: block;
   filter: brightness(0) invert(1);
 }
+/* 34 in a 40px slot. The measured marks sit on a 39×37 canvas, not a square —
+   they are safe in a square box only because the SVG keeps its own aspect ratio
+   (preserveAspectRatio's default letterboxes rather than stretches), so the ink
+   comes out ~34 × 32.3 and centred. Don't "fix" that by stretching it. */
 .submit-modal-hicon svg {
+  width: 34px; height: auto;
   display: block;
   flex-shrink: 0;
+}
+
+/* Title over subtitle, taking the row's flexible space, 2px apart — the
+   Improve modal's header is the model. The pair is one block against the
+   glyph's centre, rather than two lines that happen to follow each other. */
+.submit-modal-head-titles {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
 }
 
 .submit-modal-title {
@@ -9436,13 +9523,51 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   color: var(--text); letter-spacing: -0.2px;
 }
 
-.submit-modal-subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.submit-modal-subtitle { font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--text-faint, var(--text-dim)); }
 
+/* The scroller's own box, so the fades can be absolutely positioned over it.
+   It takes the flex sizing that used to belong to .submit-modal-scroll; the
+   scroller keeps flex: 1 inside it, so every rule that targets the scroller
+   (including .submit-modal-mac-spp's overrides) still applies unchanged. */
+.submit-modal-body-wrap {
+  position: relative;
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+}
 .submit-modal-scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 20px 24px 4px;
   min-height: 0;
 }
+/* rgb(20,20,20) IS --panel — written out because a gradient cannot fade a
+   token to alpha 0, and `transparent` is rgba(0,0,0,0), which would grey the
+   middle of the ramp on any panel lighter than black. If --panel moves, these
+   move with it. */
+.submit-modal-fade-top,
+.submit-modal-fade-bottom {
+  position: absolute; left: 0; right: 0;
+  z-index: 6;                 /* over the body's own cards, which sit at 1 */
+  pointer-events: none;       /* the fade is scenery, never a click target */
+  transition: opacity 0.3s ease;
+}
+.submit-modal-fade-top {
+  top: 0; height: 40px;
+  background: linear-gradient(to top,
+    rgba(20,20,20,0) 0%, rgba(20,20,20,0.55) 50%, rgba(20,20,20,0.95) 100%);
+  opacity: 0;
+}
+.submit-modal-fade-bottom {
+  bottom: 0; height: 80px;
+  background: linear-gradient(to bottom,
+    rgba(20,20,20,0) 0%, rgba(20,20,20,0.75) 45%, rgba(20,20,20,1) 100%);
+  opacity: 0;
+}
+.submit-modal-body-wrap:not(.at-top)    .submit-modal-fade-top    { opacity: 1; }
+.submit-modal-body-wrap:not(.at-bottom) .submit-modal-fade-bottom { opacity: 1; }
+/* Set for one frame after a render — see _smModalFades. A re-render is not a
+   scroll, so the fade must be where it was, not fade back into place. */
+.submit-modal-body-wrap.no-fade-anim .submit-modal-fade-top,
+.submit-modal-body-wrap.no-fade-anim .submit-modal-fade-bottom { transition: none; }
 
 .submit-modal-intro {
   font-size: 13px; color: var(--text-dim); line-height: 1.65;
@@ -9568,11 +9693,13 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 
 /* Footer */
+/* No top border — see .submit-modal-header. The extra bottom padding is what
+   the line used to do structurally: separate the button from the modal's edge.
+   (Reference: the questionnaire's .imp-actions, 14px 28px 22px.) */
 .submit-modal-footer {
   display: flex; align-items: center;
   justify-content: flex-end;
-  gap: 10px; padding: 14px 24px;
-  border-top: 1px solid var(--border);
+  gap: 10px; padding: 14px 24px 20px;
   flex-shrink: 0;
 }
 
@@ -9620,7 +9747,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 
 /* Pin modal to a fixed flex width so it never narrows during loading or content changes */
 .step-modal-group .submit-modal {
-  flex: 0 0 640px;
+  flex: 0 0 680px;   /* must track .submit-modal's max-width above */
 }
 .step-modal-group .submit-modal.submit-modal-wide {
   flex-basis: 920px;
@@ -10069,15 +10196,23 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 
 /* Content Rating step headers */
+/* NO RULE UNDER THE HEADER. The line did the work of saying "a group starts
+   here" with a graphic element, on a surface that had just lost the header's
+   and the footer's own lines. The questions say it by POSITION instead: they
+   are indented 12px (.ios-q-label, below) and the section header sits out to
+   their left as a margin marker, rather than floating over a 624px rule.
+
+   The margins are what the border was holding up: 22/10 replaces 20/8 plus
+   5px of padding-bottom. Without that the header lands flush on its first
+   question and the group loses its head. */
 .ios-content-step-label {
-  font-size: 11px; font-weight: 700; color: var(--text);
+  font-size: 12px; font-weight: 700; color: var(--text);
   text-transform: uppercase; letter-spacing: 0.06em;
-  margin: 20px 0 8px; padding-bottom: 5px;
-  border-bottom: 1px solid var(--border);
+  margin: 22px 0 10px; padding-bottom: 0;
 }
 .ios-content-step-label:first-child { margin-top: 0; }
 .ios-content-step-sub {
-  font-size: 11px; font-weight: 600; color: var(--text-faint);
+  font-size: 12px; font-weight: 600; color: var(--text-faint);
   margin: 10px 0 4px;
 }
 
@@ -10107,7 +10242,11 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   display: flex; align-items: center;
   justify-content: space-between; gap: 14px;
   min-height: 34px;
-  margin-bottom: 6px;
+  /* 8, not 6: at 6 the gap between rows was nearly the 4px gap between the
+     pills inside a row, so the list of questions and each row's group of
+     answers competed for the same rhythm. 8 against 6 lets a row read as one
+     unit. Costs 32px of scroll across the whole step — no row per screen. */
+  margin-bottom: 8px;
   border-left: 3px solid transparent;
   padding-left: 8px;
   margin-left: -11px;
@@ -10133,9 +10272,24 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 
 .ios-q-left { flex: 1; min-width: 0; }
 
-.ios-q-label { font-size: 13px; font-weight: 500; color: var(--text-dim); line-height: 1.4; }
-.ios-q-label-sm { font-size: 13px; }
-.ios-q-desc { font-size: 12px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
+/* THE WHOLE STEP WENT UP A SIZE in v6.11. Content Rating was the densest type
+   in the app — a 13px question with 11px section headers and 9px tooltip handles
+   — and it is also the step a developer reads most carefully, because every row
+   is a legal declaration. The question, its description and the pills each gained
+   a point; the relationships between them are unchanged. */
+/* THE INDENT IS ON THE LABEL, NOT THE ROW. Indenting .ios-q-row would carry
+   the answer pills with it and narrow the row; the pills stay anchored 88px
+   from the right edge this way. The validation rail also keeps the row's own
+   left edge, so it now marks the row from 12px outside the text — which is
+   what a rail is for. */
+.ios-q-label { font-size: 14px; font-weight: 500; color: var(--text-dim); line-height: 1.4; padding-left: 12px; }
+.ios-q-label-sm { font-size: 14px; }
+.ios-q-desc { font-size: 13px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
+/* The handle follows its label: 9px beside 14px type reads as a speck. Scoped to
+   the question row — .tooltip-icon is app-wide and its 15px disc is tuned to the
+   12px labels it sits next to everywhere else. */
+.ios-q-label .tooltip-icon,
+.ios-q-left .tooltip-icon { width: 16px; height: 16px; font-size: 10px; }
 
 /* ── Intensity buttons (None / Infrequent / Frequent) ── */
 
@@ -10147,10 +10301,11 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    reads it and believes the problem is handled. The rows now agree without a
    wrapper, so neither is needed. */
 
-/* 4px, the same as .question-yn's. The two rows answer the same kind of
+/* 6px, the same as .question-yn's. The two rows answer the same kind of
    question one under the other, and they were at 2 and 4 — close enough to
-   look like a mistake rather than a distinction. */
-.intensity-group { display: flex; gap: 4px; flex-shrink: 0; }
+   look like a mistake rather than a distinction. Both went 4 → 6 with the
+   v6.11 type, against the row's 8px margin. */
+.intensity-group { display: flex; gap: 6px; flex-shrink: 0; }   /* see .ios-q-row's margin */
 
 .intensity-btn {
   --pill-bw: 1px;
@@ -10158,18 +10313,23 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   position: relative;
   /* NONE COMES OUT EXACTLY THE WIDTH OF NO — 52px, measured, not assumed.
 
-     min-width alone did not do it: NONE is uppercase with 0.4px of tracking,
-     so at .yn-btn's 14px padding its natural width is 56 and the floor never
-     applies. 12px is the value where it lands on 52, and it is the LARGEST
-     one that does — below it the min-width takes over and the long labels
-     (INFREQUENT, FREQUENT) would just lose air for nothing. */
-  padding: 5px 12px; min-width: 52px; border-radius: var(--field-radius);
+     min-width alone does not do it: "none" has four characters and its natural
+     width overshoots the floor, so the horizontal padding is what lands it on
+     52. 10px is that value at the v6.11 type (12px/500, 0.3px tracking) and it
+     is the LARGEST one that does — below it the min-width takes over and the
+     long labels (infrequent, frequent) would just lose air for nothing. It was
+     12px while the type was 10px/700 uppercase; the number tracks the type. */
+  padding: 7px 10px; min-width: 52px; border-radius: var(--field-radius);
   border: 1px solid var(--pill-off-border); background: var(--pill-off-bg);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  font-size: 12px; font-weight: 500; letter-spacing: 0.3px; text-transform: lowercase;
   cursor: pointer; font-family: inherit; color: var(--pill-off-color);
   transition: all 0.12s; white-space: nowrap; text-align: center;
 }
-.intensity-btn:hover { border-color: var(--border-hover); color: var(--text-dim); }
+.intensity-btn:hover {
+  background: var(--pill-off-bg-hover);   /* same lift as .yn-btn — see there */
+  border-color: var(--border-hover);
+  color: var(--text-dim);
+}
 /* Three classes, one appearance — the intensity chosen has never changed how
    the pill looks, only which one carries it. Kept as three selectors because
    the markup names them individually. */
@@ -12576,12 +12736,27 @@ body.signed-in       .splash-signin-btn { display: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
-  padding: 40px 24px 32px;
+  /* 18, not 28: that gap was set to hold a 80px ring stack away from the
+     headline. With the rings gone the headline and its list are one block. */
+  gap: 18px;
+  padding: 56px 24px 32px;
   min-height: 280px;
+  /* THE COLOUR THE WHOLE LOADER IS PAINTED IN. Every rule below reaches for
+     `--accent`, which was never defined anywhere in :root — only the Game
+     Details pane declared it, so in the step modal the dot resolved to no
+     background at all and was invisible. Purple because `--purple` already
+     means "Shipmate did this" (see "Colour has meanings" in CLAUDE.md); the
+     loader is that statement in its purest form. */
+  --accent: var(--purple);
 }
 
-/* Rotating rings */
+/* THE RINGS AND THE CENTRE MARK ARE NOT DRAWN ANY MORE. The markup is gone
+   from `_infLoadingScreen()` (render.js): the centre held
+   Assets/SubwooferIcon_Orange.png, a logo from a palette this app retired, and
+   what replaces it is an open question. These rules are kept, unused, because
+   the answer is likely to be "rings, with something else in the middle" — and
+   because `.loc-review-spinner` (style.css, Localization Review) was modelled
+   on them and is still live. Delete them if the loader lands somewhere else. */
 .inf-rings-wrap {
   position: relative;
   width: 80px; height: 80px;

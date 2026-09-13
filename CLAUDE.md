@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v5.86**
+Current version: **v6.11**
 
 ---
 
@@ -351,6 +351,32 @@ card. `.iv-head:last-child` is what drops the header's bottom margin only when
 the header really is the whole card — a blanket `margin-bottom: 0` left those
 captions flush against the label above them.
 
+An all-clear and a completion line make the **same claim**, so they wear the
+same format: `.iv-strong-line`, uppercase mono at 11px in #50F88A, no icon.
+`_allGood()` used to draw a green circle-check with sentence-case text in
+`.iys-all-good-inline` — the last of the legacy `iys-` styling inside this
+section, and the reason "Localization looks strong for your target markets" and
+"YOUR STORE PAGE IS LOOKING GOOD" looked like two different kinds of statement.
+(`.iys-all-good-inline`'s rule in style.css now has no live consumer.)
+
+**The carousel nudge answers an answer, not a click.** `_impAfterSelect`
+(app.js) pops the circle you pressed; the glint on the *next* one is reserved
+for `_impQueueResolve`, called only from the four actions that actually resolve
+something (apply, accept-edited, keep, and Binary's "Got it"). It used to run on
+every carousel press, so merely reading suggestion 2 lit up suggestion 3 — a
+"keep going" shown to someone who had not done anything. The target is the next
+unresolved circle **forward from the one answered, wrapping**, not the first
+unresolved in the row: answering #3 with #1 still open points at #4, because the
+eye is already at #3.
+
+The glint itself changes **only light**. A resting `.iv-tab` sits at
+`opacity: .2`, so raising it to .85 and back on a sine
+(`cubic-bezier(.37,0,.63,1)`, 900ms) is the whole animation, plus a white-8%
+fill at the peak for body. The first version scaled the dot to 1.18 and threw a
+7px ring out of it, which on a 28px circle reads as a control demanding a press
+rather than as a hint. Keyframe 0%/100% must *be* the resting opacity, or the
+dot jumps when the class is stripped on `animationend`.
+
 **Four bugs worth not repeating.** A `contenteditable` inside a `<button>`
 cannot take focus, so the edit pencil did nothing — the boxes are `<button>`
 while they are a choice and `<div>` once they are an answer. `focusout` does not
@@ -360,13 +386,88 @@ and defined nowhere in it; both rules were inert until they were written. And a
 stroked icon at 13px on a 24-unit viewBox scales to about one device pixel —
 the revert arrow was present and invisible, and is a filled path now.
 
+### The step modal has no lines
+
+The shell is `renderStepModal()` (render.js) and its `.submit-modal-*` rules in
+style.css. Four changes in v6.11, all of them taken from the questionnaire
+prototype's Improve modal rather than invented:
+
+- **The header and footer draw no borders.** A modal that rules a line under its
+  header and over its footer is three stacked boxes; content dissolving into
+  them is one surface with more of itself above and below. The line is replaced
+  by `.submit-modal-fade-top` / `-bottom`, absolutely positioned over
+  `.submit-modal-body-wrap` (the scroller's new parent — it took the flex sizing
+  so every rule that targets `.submit-modal-scroll`, `.submit-modal-mac-spp`'s
+  included, still applies).
+- **A fade only shows while there is more content that way.** `_smModalFades()`
+  (app.js) toggles `at-top` / `at-bottom` and is re-armed after *every* render,
+  because the modal is rebuilt with innerHTML and the old scroller's listener
+  goes with it. Two traps it already pays for: **a taller content is not a
+  scroller** — the Mac Product Page Preview hands scrolling to `.mac-spp-main`
+  and leaves this element `overflow: hidden` with tall content, which pinned the
+  bottom fade on and washed out the footer nav, so the overflow is asked before
+  the heights; and the wrapper ships with **both classes already on** so a short
+  body never flashes a fade on its first paint.
+- **The glyph wears no well** (`.submit-modal-hicon`), exactly as the platform
+  cards dropped theirs in v5.72 and for the same reason. The 40px slot stays so
+  the title column cannot shift between platforms; the glyph is sized in CSS at
+  34px, never by `platformIcon()`'s size argument.
+- **The × is the platform card's gear**: 30px, no border, 8px radius, bare until
+  hover, then `--surface-hover`. Changed on `.task-modal-close` itself, so all
+  five modals that use it close the same way.
+- **The footer button is the app's pill.** `.imp-cta` was unscoped from
+  `.improve-v2` — it is the onboarding "Continue" pill, and the step modal wears
+  it too, so it cannot live inside one section's namespace. Improve's variants
+  (`data-imp-act`, `.iv-bin-actions`) stay scoped and still outrank it.
+
+The base modal is **680px** (638 of content was crowding its own padding); the
+wide variants are sized by what they hold and did not move. `.step-modal-group
+.submit-modal`'s flex-basis has to track that number.
+
+**Content Rating went up a size with it.** It was the densest type in the app —
+13px questions, 11px section headers, 9px tooltip handles, and answer pills at
+10px/700 uppercase with 0.8px of tracking — and it is the step read most
+carefully, because every row is a legal declaration. Now: question 14, section
+header 12, pill 12/500, handle 10 in a 16px disc (scoped to the question row;
+`.tooltip-icon` is app-wide and stays 15/9 elsewhere).
+
+The pills read **"Yes" / "No" / "Frequent"** without a single markup change:
+`text-transform: lowercase` on the button, `::first-letter { uppercase }` over
+it. CSS cannot sentence-case an already-uppercase string in one pass, but
+`::first-letter` is a second pass — and "YES" is written literally at fourteen
+call sites (content rating plus Game Center on three platforms), one of which
+would certainly have been missed by hand.
+
+**The section headers lost their rule and the questions gained an indent.** A
+line under "FEATURES" said "a group starts here" with a graphic element, on a
+surface that had just lost the header's and the footer's own lines; position
+says it more quietly. Questions sit 12px in (`.ios-q-label`'s padding, NOT the
+row's — indenting the row carries the answer pills with it and narrows the row,
+where this leaves them anchored 88px from the right edge, and leaves the amber
+validation rail on the row's own edge, 12px outside the text). The header's
+margins absorbed what the border was holding up: 22/10 for 20/8 plus 5 of
+padding-bottom, or it lands flush on its first question. Measured: header at 24,
+both question families at 36, pills at 88 from the right.
+
+Rows sit **8px** apart and the pills inside a row **6px** (both `.question-yn`
+and `.intensity-group`, which were at 4). At 6 and 4 the two rhythms were close
+enough that a row did not read as one unit. Costs 32px of scroll on the whole
+step and no row per screen.
+
+Their widths are held equal by hand, and the padding is the lever: **yes / no /
+none all measure 52×32**, with `min-width: 52` doing the deciding and the
+horizontal padding (13 for `.yn-btn`, 10 for `.intensity-btn`) pulled in far
+enough that no label overshoots the floor. Those two numbers track the type —
+change the size or the weight and they have to be re-measured, which is what
+happened twice in one afternoon here.
+
 ### Versioning — required on every change
 
 Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v5.86** → next is **v5.87**, then **v5.88**, etc.
+Current version: **v6.11** → next is **v6.12**, then **v6.13**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -378,7 +479,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v5.86 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.11 — add tooltip to age rating cell"`.
 
 ---
 
@@ -432,7 +533,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v5.86 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.11 — description of change"`.
 
 ---
 
@@ -452,8 +553,19 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v5.86, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.11, the following items are in the queue:
 
+- **The step modal's chrome** — items 1 and 2 landed in v6.11 (see "The step
+  modal has no lines" above). What is left:
+  3. **The content resizes depending on whether the page scrolls**, which is a
+     real layout bug rather than a preference: when the scrollbar appears it
+     takes width from the content, so everything reflows the moment a card
+     grows. The reference solves it on `.imp-body` with
+     `overflow-y: scroll; scrollbar-gutter: stable` — the lane is reserved
+     whether or not there is a thumb. Note its own comment: Safari does not
+     honour `scrollbar-gutter` without `overflow-y: scroll`, and the right
+     padding then has to account for the 12px lane (16 + 12 = 28) to match the
+     left.
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and
   `SM_REQS.macos` in assets.js already carries Apple's numbers: icon 1024×1024

@@ -3362,6 +3362,109 @@ function _smShake(el, kind, delay) {
    is a filter over a subtree: dim the container and the lit row inside it can
    never climb back out. */
 let _spotTimer = null;
+/* DEV TOOL — hold a loading screen open so it can actually be looked at.
+   The keys are injected at deploy time, so locally every inference fails in
+   about a second and the loader is gone before you can judge it. Open a step
+   modal, then from the console:
+
+     smPreviewLoader('report')      Improve's "Generating Report Card…"
+     smPreviewLoader('inference')   the step modal's "Shipmate is working…"
+     smPreviewLoader(false)         let go — the step renders normally again
+
+   It only writes the same state the real run writes, so nothing here is a
+   special path through the loader: what you see is what ships. */
+function smPreviewLoader(which = 'report') {
+  if (which === false || which === 'off') {
+    state.storePageInsights = null;
+    state.improveSubmissionAnalysis = null;
+    if (state.stepModal) state.stepModal.inferenceStatus = null;
+  } else if (which === 'inference') {
+    if (!state.stepModal) { console.warn('smPreviewLoader: open a step modal first'); return; }
+    state.stepModal.inferenceStatus = 'loading';
+  } else {
+    state.storePageInsights = { loading: true };
+    state.improveSubmissionAnalysis = { loading: true };
+  }
+  renderStepModal();
+}
+
+/* DEV TOOL — stand in for a successful inference, so the states that only
+   exist AFTER one can be looked at locally. The Unanswered / All toggle and the
+   "Shipmate inferred X out of Y" banner are both gated on
+   `state.<plat>AnsweredAtInference` being a Set, which never happens with no
+   API key: the call fails and the snapshot is never taken.
+
+     smFakeInference()             two thirds of the questions answered
+     smFakeInference('macos', 1)   all of them  → the Unanswered view is empty
+     smFakeInference('macos', 0)   none         → toggle shows, banner does not
+
+   It fills the same answer fields a real inference fills and then calls the
+   real `takeFilterSnapshot`, so the filter sees exactly what it would see in
+   production. Answers are 'no' / 'none' — the quiet end of every question,
+   which is also the honest default for a demo. */
+function smFakeInference(pid = 'macos', fraction = 0.66) {
+  const shared = (pid === 'macos_full') ? state.macFullSubmitAnswers : state.iosSubmitAnswers;
+  if (!shared) { console.warn('smFakeInference: no answer store for ' + pid); return; }
+  const take = (list, value) => (list || []).forEach((q, i) => {
+    if (i / Math.max(1, list.length) < fraction) shared[q.id] = value;
+  });
+  take(typeof IOS_INTENSITY_QUESTIONS !== 'undefined' ? IOS_INTENSITY_QUESTIONS : [], 'none');
+  take(typeof IOS_CONTENT_YN_QUESTIONS !== 'undefined' ? IOS_CONTENT_YN_QUESTIONS : [], 'no');
+  takeFilterSnapshot(pid);
+  if (pid === 'macos')      state.macContentRatingExpanded     = false;
+  if (pid === 'ios')        state.iosContentRatingExpanded     = false;
+  if (pid === 'macos_full') state.macFullContentRatingExpanded = false;
+  if (state.stepModal) state.stepModal.inferenceStatus = 'done';
+  renderStepModal();
+}
+
+/* ── Step modal: the body dissolves instead of being cut by a line ─────────
+   The header's and footer's 1px borders are gone; in their place the scroller
+   fades into the panel at both ends. A fade is only honest while there IS more
+   content that way, so both are gated: the top one hides at the top, the bottom
+   one at the bottom, and BOTH hide when the body does not scroll at all —
+   otherwise a short step would sit under a permanent shadow with nothing behind
+   it. That "not scrollable" case is why the class is set to true rather than
+   left alone: the wrapper ships with both classes on, so the first paint of a
+   short body never flashes a fade.
+
+   The 2px slack in each comparison is for fractional scroll heights — a body at
+   999.4 of 1000 never satisfies a strict equality and the bottom fade would
+   never clear. Re-armed after every render (renderStepModal). */
+function _smModalFades() {
+  const wrap = document.getElementById('step-modal-body-wrap');
+  const body = document.getElementById('step-modal-body');
+  if (!wrap || !body) return;
+  /* `instant` is for the first update after a render, and it is not a nicety.
+     The fresh markup ships with both classes on (so nothing flashes on a short
+     body), which means the fades start at opacity 0 — and measuring the
+     scroller here resolves that 0 as a real starting value, so restoring the
+     bottom fade animates it in. Every answered question re-renders the modal,
+     so the fade pulsed on every single click. Suppressing the transition for
+     that one application makes a re-render look like no change at all, which
+     is what it is: the scroll position never moved. */
+  const update = (instant) => {
+    /* A TALLER CONTENT IS NOT A SCROLLER. The Mac Product Page Preview hands
+       its scrolling to .mac-spp-main and leaves this element `overflow:hidden`
+       with content still taller than its box — read as scrollable, it pinned
+       the bottom fade on permanently and washed out the footer nav underneath.
+       So the overflow is asked first, and only then the heights. */
+    const ov = getComputedStyle(body).overflowY;
+    const scrollable = (ov === 'auto' || ov === 'scroll') &&
+                       body.scrollHeight > body.clientHeight + 2;
+    if (instant) wrap.classList.add('no-fade-anim');
+    wrap.classList.toggle('at-top',    !scrollable || body.scrollTop <= 2);
+    wrap.classList.toggle('at-bottom', !scrollable ||
+      body.scrollTop + body.clientHeight >= body.scrollHeight - 2);
+    if (instant) {
+      void wrap.offsetWidth;                 // commit the new opacities untransitioned
+      requestAnimationFrame(() => wrap.classList.remove('no-fade-anim'));
+    }
+  };
+  body.addEventListener('scroll', () => update(false), { passive: true });
+  update(true);
+}
+
 function _smSpotlight(card, targets, ms) {
   if (!card || !targets || !targets.length) return;
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -10742,8 +10845,18 @@ function setMasIapLocField(field) {
 function applyStorePageFix() {
   const cur = _selectedStoreItem();
   if (!cur?.fixedValue || cur.type !== 'sp') return;
+  _impQueueResolve('.imp-split-batch', _selectedStoreIdx());
   _applyFieldValue(cur.field, cur.fixedValue);
   renderStepModal();
+}
+
+/* The carousel index the Store Page card is pointing at, clamped the way
+   _selectedStoreItem clamps it — the resolve nudge has to glint relative to the
+   circle that was actually answered, not to a stale index. */
+function _selectedStoreIdx() {
+  const n = _mergedStoreItems().length;
+  if (!n) return -1;
+  return Math.min(state.improveIdx?.storePage || 0, n - 1);
 }
 
 /* Accept a user-edited value for the selected item */
@@ -10752,6 +10865,7 @@ function acceptEditedFix() {
   if (!textarea) return;
   const cur = _selectedStoreItem();
   if (!cur?.field) return;
+  _impQueueResolve('.imp-split-batch', _selectedStoreIdx());
   _applyFieldValue(cur.field, textarea.value.trim());
   renderStepModal();
 }
@@ -10762,7 +10876,9 @@ function acceptEditedFix() {
 function keepExistingFix() {
   if (!state.dismissedFixes) state.dismissedFixes = new Set();
   const cur = _selectedStoreItem();
-  if (cur) state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
+  if (!cur) return;
+  _impQueueResolve('.imp-split-batch', _selectedStoreIdx());
+  state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
   renderStepModal();
 }
 
@@ -10840,15 +10956,31 @@ function _impPlayOnce(el, cls) {
   el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
 }
 
-/* Pop the circle just selected, and nudge the next one still to do. The nudge
-   is the part that earns its keep: after answering, it says where the work
-   continues without moving anything or printing a count. */
-function _impAfterSelect(root, selEl) {
+/* Pop the circle just acted on, and — ONLY WHEN SOMETHING WAS RESOLVED — glint
+   the next one still to do.
+
+   THE NUDGE ANSWERS AN ANSWER, NOT A CLICK. It used to fire on every carousel
+   press, so merely LOOKING at suggestion 2 lit up suggestion 3: a prompt to
+   keep going, shown to someone who had not done anything yet. Navigation now
+   pops the circle you pressed and nothing else; the nudge is reserved for the
+   moment work actually moved, which is the only moment "here is where it
+   continues" is true.
+
+   The next one is the next UNRESOLVED circle FORWARD from the one just
+   answered, wrapping — not the first unresolved in the row. Answering #3 of
+   five with #1 still open should point at #4; the list is read left to right
+   and the eye is already at #3. */
+function _impAfterSelect(root, selEl, resolved) {
   if (!root || !selEl) return;
   _impPlayOnce(selEl, 'iv-tab-pop');
+  if (!resolved) return;
   const tabs = [...root.querySelectorAll('.iv-tab')];
-  const next = tabs.find(t => !t.classList.contains('sel') && !t.classList.contains('reviewed'));
-  if (next && next !== selEl) _impPlayOnce(next, 'iv-tab-pulse');
+  const from = tabs.indexOf(selEl);
+  if (from < 0 || tabs.length < 2) return;
+  for (let k = 1; k < tabs.length; k++) {
+    const t = tabs[(from + k) % tabs.length];
+    if (!t.classList.contains('reviewed')) { _impPlayOnce(t, 'iv-tab-pulse'); return; }
+  }
 }
 
 /* Bump the grade tab of a batch whose grade just ROSE. Only called on a rise —
@@ -10866,13 +10998,16 @@ const _impLastGrade = {};
    was clicked on no longer exists — renderStepModal rebuilds the section with
    innerHTML. So the intent is queued here and _impPostRender plays it. */
 let _impPendingSelect = null;
-function _impQueueSelect(batchSel, idx) { _impPendingSelect = { batchSel, idx }; }
+/* Two intents, one queue. `select` is navigation — pop the circle pressed.
+   `resolve` is an answer — pop it AND glint the next one still to do. */
+function _impQueueSelect(batchSel, idx)  { _impPendingSelect = { batchSel, idx, resolved: false }; }
+function _impQueueResolve(batchSel, idx) { _impPendingSelect = { batchSel, idx, resolved: true  }; }
 function _impPostRender() {
   if (_impPendingSelect) {
-    const { batchSel, idx } = _impPendingSelect;
+    const { batchSel, idx, resolved } = _impPendingSelect;
     _impPendingSelect = null;
     const root = document.querySelector(`${batchSel} .iv-carousel`);
-    _impAfterSelect(root, root?.querySelectorAll('.iv-tab')[idx]);
+    _impAfterSelect(root, root?.querySelectorAll('.iv-tab')[idx], resolved);
   }
   const order = { '–': -1, F: 0, D: 1, C: 2, B: 3, A: 4 };
   [['.imp-split-batch', 'storePage'], ['.imp-loc-batch', 'loc'], ['.imp-binary-batch', 'binary']]
@@ -16546,6 +16681,7 @@ function _binDone(pid) {
 
 function acknowledgeBinFinding(pid) {
   const i = state.binFindingIdx?.[pid] || 0;
+  _impQueueResolve('.imp-binary-batch', i);
   _binDone(pid).add(i);
   _clearImproveCollapsed('binary');
   if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
