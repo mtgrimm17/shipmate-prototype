@@ -7093,18 +7093,27 @@ textarea.loc-review-field.ias-inline-input {
   width: 130px; height: 100%;
 }
 /* App Store's own Product Page Preview only: the empty-state placeholders
-   ("Gameplay"/"Gameplay"/"Menu") are meant to stand in for real iPhone
-   portrait screenshots, but height:100% above never actually resolved
-   against .ias-shots-scroll's own auto height, so in practice they
-   rendered as a short, wide strip rather than a portrait box. Fixed here
-   with an explicit height (matching .ias-shot-frame's own 230px) and
-   aspect-ratio set to a real iPhone screenshot's own proportions
-   (1320 x 2868, portrait) instead of the stale fixed width — width is
-   computed from that ratio automatically. Scoped to .ios-spp-page so Mac
-   App Store Full's own (separately unfixed, out of scope here) use of the
-   same base class is untouched, matching Mac App Store's own landscape
-   override further down this file. */
-.ios-spp-page .ias-shot-empty { width: auto; height: 230px; aspect-ratio: 1320 / 2868; }
+   ("Gameplay"/"Gameplay"/"Menu") are meant to stand in for real screenshots,
+   but height:100% above never actually resolved against .ias-shots-scroll's
+   own auto height, so in practice they rendered as a short, wide strip
+   rather than a portrait box. Fixed here with an explicit height and an
+   aspect-ratio of 2048 x 2732 — the portrait iPad screenshot size Apple
+   actually asks for on this page — instead of the stale fixed width; width
+   is computed from that ratio automatically.
+
+   SIZED AGAINST A REAL LISTING, not guessed. A live App Store product page
+   (reference screenshot) puts its own screenshot row at ~34% of the page's
+   width and ~46% of it tall; .ias-page here is 615px in the modal, and
+   34%/46% of that lands on 210 x 280 — the frame height below is set to
+   match. (230 — this rule's own previous height, sized for the old, far
+   narrower iPhone-shaped ratio — read as small once the box widened to an
+   iPad's proportions; 280 is what keeps it reading as full-size rather than
+   shrunken to fit.) Scoped to .ios-spp-page so Mac App Store Full's own
+   (separately unfixed, out of scope here) use of the same base class is
+   untouched, matching Mac App Store's own landscape override further down
+   this file. */
+.ios-spp-page .ias-shot-frame { height: 280px; }
+.ios-spp-page .ias-shot-empty { width: auto; height: 280px; aspect-ratio: 2048 / 2732; }
 
 /* Device compat row */
 .ias-device-compat {
