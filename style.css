@@ -6176,6 +6176,17 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text-faint);
 }
 .ias-header-meta { flex: 1; min-width: 0; padding-top: 2px; }
+/* App Store's own Product Page Preview only (buildStorePreviewSection —
+   Mac App Store Full/Android/Steam keep the base 12px .ias-header gap
+   untouched): extra breathing room between Title/Subtitle and the GET
+   button so its (now perfectly even, spp-get-glow-wrap below) glow box
+   has room to sit a few px clear of Title/Subtitle's own glow rather than
+   butting straight up against it. Increasing the flex row's own gap (not
+   a margin on .ias-header-cta) means only .ias-header-meta gives up
+   width — .ias-header-cta's own position/width, and so the GET button's
+   position, is untouched, so this can't push the button's glow off the
+   right edge of the panel. */
+.ios-spp-page .ias-header { gap: 24px; }
 .ias-app-name {
   font-size: 16px; font-weight: 700; color: var(--text);
   line-height: 1.2; margin-bottom: 3px;
@@ -6210,37 +6221,23 @@ body.viewing-splash .app-subnav { display: none; }
    pill's rounded silhouette, reading as faint and easy to miss next to
    every other required element's rectangular glow. This wrapper is a
    plain rectangle (low border-radius) a few px larger than the button on
-   every side, so the ring reads as a clearly bigger, rectangular box like
-   the rest — negative margin cancels the added padding so it doesn't
-   shift .ias-header-cta's/.mac-spp-get-row's own layout (the IAP note's
-   position, the CTA's alignment) at all.
-   Padding (how much bigger than the button) is set per platform, not
-   here, because Title/Subtitle sit immediately adjacent to this button on
-   ONE particular side with zero spare gap — a symmetric padding on that
-   side would have the ring paint straight over Title/Subtitle's own glow.
-   See .spp-get-glow-wrap--ios/--mac below. */
+   EVERY side by the same amount, so the ring reads as a clearly bigger,
+   evenly-balanced rectangular box — negative margin cancels the added
+   padding so it doesn't shift .ias-header-cta's/.mac-spp-get-row's own
+   layout (the IAP note's position, the CTA's alignment) at all.
+   Title/Subtitle sit immediately adjacent to this button on one side in
+   both layouts (beside it on iOS, above it on Mac) with no natural gap —
+   rather than shrinking the padding on just that side (which read as
+   lopsided), .ios-spp-page's .ias-header gap and .mac-spp-get-row's own
+   margin-top (both above) were widened instead, so Title/Subtitle's own
+   glow has moved back far enough that this wrapper's full, even padding
+   clears it on every side without needing to touch the wrapper's shape at
+   all. */
 .spp-get-glow-wrap {
   display: inline-flex;
   border-radius: 8px;
-}
-/* iOS App Store: Title/Subtitle sit directly to the LEFT of the GET button
-   (same row) with no gap, so padding-left stays 0 — the ring's only
-   left-side extension is the small shadow spread below, tuned to clear
-   Title/Subtitle's own ring rather than paint over it. The other three
-   sides face empty space (nothing else glows there) and keep the full,
-   clearly-visible padding. */
-.spp-get-glow-wrap--ios {
-  padding: 6px 8px 6px 0;
-  margin: -6px -8px -6px 0;
-}
-/* Mac App Store: Subtitle sits directly ABOVE the GET button (stacked
-   layout) with no gap, so padding-top stays 0 for the same reason
-   padding-left does on iOS, above. Right/bottom/left all face empty space
-   (the In-App Purchases note has no glow of its own to collide with) and
-   keep the full padding. */
-.spp-get-glow-wrap--mac {
-  padding: 0 8px 6px 8px;
-  margin: 0 -8px -6px -8px;
+  padding: 8px;
+  margin: -8px;
 }
 /* Business's own static ring specifically needs to be bigger/stronger than
    the shared .is-spp-static default (below) — that default was tuned for
@@ -6248,16 +6245,9 @@ body.viewing-splash .app-subnav { display: none; }
    the ring off from; the GET button's glossy blue pill has neither, so
    the same faint ring all but disappeared against it. Scoped to this
    wrapper only — the shared .is-spp-static rule every other required
-   element still uses is untouched. Spread is deliberately smaller (2px,
-   vs. a plain field's 2px too, but starting from 0 padding on the tight
-   side above) than a first pass at this used — a bigger spread here read
-   well in isolation but, combined with the padding, ate into Title/
-   Subtitle's own ring on their touching side. 2px is enough to still read
-   as a clear rectangle on the three open sides (padding + spread there)
-   while keeping the tight side's total reach to the smallest amount that
-   still clears the button by more than the required 1px. */
+   element still uses is untouched. */
 .spp-get-glow-wrap.is-spp-static {
-  box-shadow: 0 0 0 2px rgba(255,149,0,0.16);
+  box-shadow: 0 0 0 3px rgba(255,149,0,0.14);
 }
 
 /* Inline click-to-edit — Title/Subtitle/Description/Release Notes
@@ -7416,7 +7406,12 @@ textarea.loc-review-field.ias-inline-input {
    "In-App Purchases" note (free games with IAP only — render.js) sits
    beside GET rather than stacked above/below it, matching the native
    app's own product page. */
-.mac-spp-get-row { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+/* margin-top bumped from 8px to give the GET button's (now perfectly
+   even, spp-get-glow-wrap below) glow box room to clear Subtitle's own
+   glow above it rather than sitting flush against it — a plain block
+   margin, so unlike the iOS row's flex gap this only needs the one
+   value. */
+.mac-spp-get-row { margin-top: 24px; display: flex; align-items: center; gap: 8px; }
 
 /* Screenshots — sized down from the first pass to better match the actual
    native app's own proportions (screenshots read as one element among
