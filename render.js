@@ -7771,7 +7771,7 @@ function buildStorePreviewSection() {
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
           </div>
           <div class="ias-header-cta">
-            <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
+            <span class="spp-get-glow-wrap spp-get-glow-wrap--ios${_sppGlowCls('business')}">
               <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
             </span>
           </div>
@@ -8445,7 +8445,7 @@ function buildMacStorePreviewSection() {
                  replacing the meta strip's old separate Business cell
                  below. -->
             <div class="mac-spp-get-row">
-              <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
+              <span class="spp-get-glow-wrap spp-get-glow-wrap--mac${_sppGlowCls('business')}">
                 <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
               </span>
               ${isFree && iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
