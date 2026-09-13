@@ -6203,6 +6203,33 @@ body.viewing-splash .app-subnav { display: none; }
    purely decorative and keeps the base class's cursor:default, unaffected. */
 .ias-get-btn--interactive { cursor: pointer; }
 .ias-get-btn--interactive:hover { opacity: 0.85; }
+/* Wrapper the required-element glow (.is-spp-static/.is-spp-focused, below)
+   is applied to instead of .ias-get-btn directly. box-shadow always traces
+   the shadow-casting element's OWN border-radius — put it straight on the
+   pill-shaped button (border-radius: 20px above) and the ring hugs the
+   pill's rounded silhouette, reading as faint and easy to miss next to
+   every other required element's rectangular glow. This wrapper is a
+   plain rectangle (low border-radius) a few px larger than the button on
+   every side, so the ring reads as a clearly bigger, rectangular box like
+   the rest — negative margin cancels the added padding so it doesn't
+   shift .ias-header-cta's/.mac-spp-get-row's own layout (the IAP note's
+   position, the CTA's alignment) at all. */
+.spp-get-glow-wrap {
+  display: inline-flex;
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin: -6px -8px;
+}
+/* Business's own static ring specifically needs to be bigger/stronger than
+   the shared .is-spp-static default (below) — that default was tuned for
+   fields that already have their own visible border/background to set
+   the ring off from; the GET button's glossy blue pill has neither, so
+   the same faint ring all but disappeared against it. Scoped to this
+   wrapper only — the shared .is-spp-static rule every other required
+   element still uses is untouched. */
+.spp-get-glow-wrap.is-spp-static {
+  box-shadow: 0 0 0 3px rgba(255,149,0,0.14);
+}
 
 /* Inline click-to-edit — Title/Subtitle/Description/Release Notes
    (startIasInlineEdit, app.js). ias-editable marks every clickable field;
@@ -7088,10 +7115,10 @@ textarea.loc-review-field.ias-inline-input {
    each type's own base intensity would. Both modifiers use !important, the
    same way .spp-section-btn--done already does two rules below, since each
    must beat the plain base class it's layered onto regardless of
-   stylesheet order — .ias-get-btn (Business's own glow target, now that
-   the meta strip's old separate Business cell is gone) has no base
-   animation of its own to beat, but gets the same treatment for
-   consistency. Every OTHER surface that reuses .ias-placeholder/
+   stylesheet order. Business's own glow target is .spp-get-glow-wrap, a
+   dedicated rectangular wrapper AROUND .ias-get-btn rather than the pill
+   button itself — see that class's own comment, further up this file, for
+   why. Every OTHER surface that reuses .ias-placeholder/
    .ias-meta-cell--action/.spp-section-btn — Mac App Store Full and
    Android/Steam's own Product Page Previews, Localization Review/IAP
    fields — never has either class added to it and keeps its original

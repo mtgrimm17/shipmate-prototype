@@ -7616,8 +7616,8 @@ function buildStorePreviewSection() {
   const REQUIRED_ELEMENTS = [
     { id: 'title',       label: 'Title',                            done: !!titleRaw },
     { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
-    { id: 'content',     label: 'Content',                           done: contentDone },
     { id: 'business',    label: 'Business',                          done: businessDone },
+    { id: 'content',     label: 'Content',                           done: contentDone },
     { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
     { id: 'description', label: 'Description',                       done: descDone },
     { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
@@ -7771,7 +7771,9 @@ function buildStorePreviewSection() {
             ${iapNote ? `<div class="ias-iap-note">${iapNote}</div>` : ''}
           </div>
           <div class="ias-header-cta">
-            <button class="ias-get-btn ias-get-btn--interactive${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+            <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
+              <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+            </span>
           </div>
         </div>
 
@@ -8277,8 +8279,8 @@ function buildMacStorePreviewSection() {
   const REQUIRED_ELEMENTS = [
     { id: 'title',       label: 'Title',                            done: !!titleRaw },
     { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
-    { id: 'content',     label: 'Content',                           done: contentDone },
     { id: 'business',    label: 'Business',                          done: businessDone },
+    { id: 'content',     label: 'Content',                           done: contentDone },
     { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
     { id: 'description', label: 'Description',                       done: descDone },
     { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
@@ -8443,7 +8445,9 @@ function buildMacStorePreviewSection() {
                  replacing the meta strip's old separate Business cell
                  below. -->
             <div class="mac-spp-get-row">
-              <button class="ias-get-btn ias-get-btn--interactive${_sppGlowCls('business')}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
+                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              </span>
               ${isFree && iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
           </div>
