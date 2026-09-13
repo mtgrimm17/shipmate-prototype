@@ -541,6 +541,6 @@
   "ob.section.assets": "Assets",
   "ob.assets.guidance": "Drop everything here — screenshots, app icons, key art, logos and video. Shipmate works out what each file is and keeps it in one library, so anything you upload once is ready for every store that needs it.",
   "card.connect_account": "Connect account",
-  "cr.inferred_compact": "Shipmate inferred {count} of {total} — review the rest.",
+  "cr.inferred_compact": "Shipmate inferred {count} of {total} — review them all.",
   "cr.showing_all": "All {total} — {count} inferred by Shipmate."
 }

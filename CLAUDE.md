@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.12**
+Current version: **v6.13**
 
 ---
 
@@ -496,13 +496,50 @@ changes ("review the rest" → "12 inferred by Shipmate") — because the count 
 the reason to read the list carefully, and because a line that vanishes changed
 the bar's height under the pointer.
 
+### Violet proposes, blue confirms — now stated in tokens
+
+The rule was written in "Colour has meanings" and the CSS had drifted off it in
+both directions. v6.13 makes it one pair of tokens that two surfaces read:
+
+```css
+--pill-ai-bg / --pill-ai-color        /* Shipmate put this here */
+--pill-on-bg / --pill-on-color        /* you confirmed it */
+```
+
+An **inferred answer** in Content Rating used to be the selected pill at
+`opacity: .5` with a white ✦ hanging off its corner. Half a tone is the app's
+word for *disabled* and for *not selected*, and this is nearly the opposite —
+the answer IS in, it just came from Shipmate. The dimming needed the ✦ on top to
+explain what the dimming meant: two marks for one fact. It is now the violet
+fill, at full opacity, and pressing it turns it the selection blue.
+`_platformAIBadge()` is a no-op stub rather than deleted — a dozen row builders
+across four platforms call it.
+
+A **Store Page suggestion** in Improve was three stacked gradients, a pink
+gradient stroke, hover bubbles and a `brightness(1.3)` — and in a *different*
+violet from the answers, which make the identical claim. Same flat fill now. Its
+chosen state was violet too (so one colour meant both "proposed" and "picked");
+it is blue.
+
+**Two numbers, because there are two facts.** The pinned line's count of what
+Shipmate inferred must not shrink when you agree with an answer — provenance
+does not expire — while the review queue must. `confidence` in the answer meta
+is the tell: only inference writes it, and the human-confirm path spreads the
+existing meta rather than replacing it, so it survives; an answer you typed gets
+a meta entry but never a confidence, which is what keeps your own work from
+being credited to Shipmate. The count of violet pills (`_platformAIClass`, the
+same test that paints them) is the part that counts down. Before this, the line
+read the filter's snapshot — which is deliberately re-taken every time you press
+"Unanswered" — so answering five questions yourself and pressing it turned
+"12 inferred" into 17.
+
 ### Versioning — required on every change
 
 Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.12** → next is **v6.13**, then **v6.14**, etc.
+Current version: **v6.13** → next is **v6.14**, then **v6.15**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -514,7 +551,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.12 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.13 — add tooltip to age rating cell"`.
 
 ---
 
@@ -568,7 +605,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.12 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.13 — description of change"`.
 
 ---
 
@@ -588,7 +625,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.12, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.13, the following items are in the queue:
 
 - **The step modal's chrome** — items 1 and 2 landed in v6.11 (see "The step
   modal has no lines" above). What is left:

@@ -3405,8 +3405,22 @@ function smPreviewLoader(which = 'report') {
 function smFakeInference(pid = 'macos', fraction = 0.66) {
   const shared = (pid === 'macos_full') ? state.macFullSubmitAnswers : state.iosSubmitAnswers;
   if (!shared) { console.warn('smFakeInference: no answer store for ' + pid); return; }
+  /* THE ANSWER AND WHERE IT CAME FROM ARE TWO WRITES. An inferred answer is
+     marked by its meta entry ({ confidence, humanConfirmed: false }), which is
+     what draws the ✦ and the dimming — write only the answer and the questions
+     look hand-picked, which is the one thing this preview must not fake.
+
+     The bucket has to be asked for PER FIELD: _appStoreAnswerMeta routes a
+     shared Content Rating field to state.iosAnswerMeta and everything else to
+     the platform's own, and called without a field id it hands back the
+     platform bucket — where the badge never looks. */
+  const metaFor = (qid) => (typeof _appStoreAnswerMeta === 'function')
+    ? _appStoreAnswerMeta(pid, qid)
+    : (state.iosAnswerMeta || {});
   const take = (list, value) => (list || []).forEach((q, i) => {
-    if (i / Math.max(1, list.length) < fraction) shared[q.id] = value;
+    if (i / Math.max(1, list.length) >= fraction) return;
+    shared[q.id] = value;
+    metaFor(q.id)[q.id] = { confidence: 0.9, humanConfirmed: false };
   });
   take(typeof IOS_INTENSITY_QUESTIONS !== 'undefined' ? IOS_INTENSITY_QUESTIONS : [], 'none');
   take(typeof IOS_CONTENT_YN_QUESTIONS !== 'undefined' ? IOS_CONTENT_YN_QUESTIONS : [], 'no');
@@ -3422,6 +3436,36 @@ function smFakeInference(pid = 'macos', fraction = 0.66) {
     state.stepModal.inferenceStatus = 'done';
     state.stepModal.inferenceError  = null;
   }
+  renderStepModal();
+}
+
+/* DEV TOOL — a plausible Store Page analysis, so Improve's suggestion boxes can
+   be looked at locally. Same shape the real call returns (state.storePageInsights
+   with an `issues` array; _mergedStoreItems keeps the ones carrying a
+   `fixedValue`). Open Improve Your Submission, then:
+
+     smFakeStoreInsights()      three suggestions
+     smFakeStoreInsights(false) clear them again */
+function smFakeStoreInsights(on = true) {
+  if (!on) { state.storePageInsights = null; renderStepModal(); return; }
+  state.storePageInsights = {
+    grade: 'B',
+    issues: [
+      { field: 'subtitle', issue: 'Subtitle repeats the title',
+        suggestion: 'Say what the player DOES, not what the game is called.',
+        fixedValue: 'Build a colony, survive the winter' },
+      { field: 'description', issue: 'Opening line buries the hook',
+        suggestion: 'Lead with the fantasy, not the genre.',
+        fixedValue: 'You are the last engineer on a dying station — keep it breathing until dawn.' },
+      { field: 'title', issue: 'Title is missing a searchable keyword',
+        suggestion: 'Players look for the genre by name.',
+        fixedValue: 'Frostline: Colony Survival' },
+    ],
+  };
+  /* OVERWRITE, don't `||`. The card's error state is `spi?.error || ana?.error`,
+     so leaving the failed analysis in place kept "Analysis failed" on screen
+     over a perfectly good set of suggestions. */
+  state.improveSubmissionAnalysis = { grade: 'B' };
   renderStepModal();
 }
 

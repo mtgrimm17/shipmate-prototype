@@ -540,6 +540,6 @@
   "ob.section.assets": "素材",
   "ob.assets.guidance": "把所有素材都拖到这里——截图、应用图标、主视觉图、标识和视频。Shipmate 会判断每个文件是什么并统一存入素材库，上传一次即可用于所有需要它的商店。",
   "card.connect_account": "连接账户",
-  "cr.inferred_compact": "Shipmate 已推断 {total} 项中的 {count} 项 — 请核查其余部分。",
+  "cr.inferred_compact": "Shipmate 已推断 {total} 项中的 {count} 项 — 请逐一核查。",
   "cr.showing_all": "全部 {total} 项 — 其中 {count} 项由 Shipmate 推断。"
 }

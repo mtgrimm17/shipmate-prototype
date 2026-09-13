@@ -64,6 +64,17 @@
   --pill-on-color:       #52BAFF;
   --pill-on-bg-hover:    rgba(0, 154, 255, .42);
   --pill-on-color-hover: #6FC4FF;
+  /* VIOLET PROPOSES, BLUE CONFIRMS — the same pair Improve Your Submission
+     uses, stated once so Content Rating's answers and Improve's fixes cannot
+     drift apart. An answer Shipmate put in wears the violet; the moment you
+     press it yourself it turns the blue above. Same alphas as that pair, so
+     the two states weigh the same and only the hue changes. */
+  --pill-ai-bg:          rgba(159, 104, 240, .35);
+  --pill-ai-color:       #C9A6FF;
+  --pill-ai-bg-hover:    rgba(159, 104, 240, .42);
+  --pill-ai-color-hover: #DCC6FF;
+  --pill-ai-stroke-top:    rgba(201, 166, 255, .75);
+  --pill-ai-stroke-bottom: rgba(201, 166, 255, .25);
   /* ── SUB-SECTION LABEL ────────────────────────────────────────────────
      Basic Info's "GAME TITLE" / "DESCRIPTION" / "SELECT PLATFORMS" set the
      house look for a label, and the rest of the onboarding form now reads it
@@ -5337,23 +5348,42 @@ body.viewing-splash .app-subnav { display: none; }
 
 .improve-v2 .imp-split-current:hover .imp-split-val{ color: #FFFFFF; }
 
-/* Shipmate fix: #5436AD base with soft blurred radial glows + a #FBA4FF
-     top→bottom gradient stroke (100% → 30%). */
+/* A PROPOSAL, NOT A PRODUCT SHOT. This was three stacked gradients — two
+   radial glows over a 150° violet ramp — plus a pink gradient stroke, rising
+   bubbles on hover and a brightness(1.3) lift. It said "Shipmate suggests this"
+   at a volume the rest of the app never uses, and it said it in a different
+   violet from the inferred answers in Content Rating, which make the identical
+   claim.
+
+   It is now the same flat --pill-ai-* fill those answers wear. The statement is
+   unchanged; only the volume is. Chosen, it turns the selection blue below,
+   exactly as a violet answer pill does when you press it. */
   .improve-v2 .imp-split-fix{
     position: relative; isolation: isolate; overflow: hidden;
     border: 1px solid transparent;
-    background:
-      radial-gradient(160% 180% at 8% 10%, rgba(210,100,255,0.33) 0%, rgba(210,100,255,0) 64%) padding-box,
-      radial-gradient(150% 165% at 96% 92%, rgba(82,35,193,1) 0%, rgba(82,35,193,0) 64%) padding-box,
-      linear-gradient(150deg, #4B3396 0%, #6D00CF 58%, #7A00D2 100%) padding-box,
-      linear-gradient(180deg, rgba(251,164,255,1) 0%, rgba(251,164,255,0.15) 100%) border-box;
+    background-color: var(--pill-ai-bg);
+    background-clip: padding-box;
+    transition: background-color 0.18s ease, color 0.18s ease;
   }
+/* The 1px ring, drawn inside, in the same violet as the answer pills'. */
+.improve-v2 .imp-split-fix::after{
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: linear-gradient(180deg, var(--pill-ai-stroke-top) 0%, var(--pill-ai-stroke-bottom) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  pointer-events: none;
+}
 
-.improve-v2 .imp-split-fix .imp-split-label{ color: rgba(251,164,255,0.75); }
+.improve-v2 .imp-split-fix .imp-split-label{ color: rgba(201,166,255,0.72); }
 
-.improve-v2 .imp-split-fix .imp-split-val{ color: #FBA4FF; }
+.improve-v2 .imp-split-fix .imp-split-val{ color: var(--pill-ai-color); }
 
-.improve-v2 .imp-split-fix:hover{ filter: brightness(1.3); }
+.improve-v2 .imp-split-fix:hover{ background-color: var(--pill-ai-bg-hover); }
+
+/* The bubble engine stays in the file (it is driven from JS and is used by the
+   pill playground) but it is not drawn here any more: floating particles were
+   the loudest part of the old treatment. */
+.improve-v2 .imp-split-fix .imp-fix-bubbles{ display: none; }
 
 /* Rising bubbles inside the fix pill, revealed on hover (from the pill engine). */
   .improve-v2 .imp-fix-bubbles{ position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: -1; opacity: 0; transition: opacity 0.28s ease; --travel: 200px; }
@@ -5717,22 +5747,28 @@ body.viewing-splash .app-subnav { display: none; }
 
 .improve-v2 .imp-split-current .imp-split-check{ color: #FFFFFF; }
 
-/* Chosen fix goes tenue (onboarding selected-pill style, in purple): translucent
-     fill + soft pink gradient stroke, no glow/bubbles. */
+/* CHOSEN IS BLUE. It used to stay violet at 30% with a pink ring, which left
+   the app saying two different things with one colour: violet for "Shipmate
+   proposes this" on the box next to it, and violet again for "you picked it".
+   CLAUDE.md's own rule — violet proposes, blue confirms — was written for this
+   pair and the CSS had drifted off it. Now a chosen fix wears exactly what a
+   confirmed answer pill wears in Content Rating. */
   .improve-v2 .iv-card .imp-split-fix.imp-chosen{
     background-image: none;
-    background-color: rgba(122,0,210,0.3);   /* real single fill, inside the border */
+    background-color: var(--pill-on-bg);   /* real single fill, inside the border */
     background-clip: padding-box;
     border: 1px solid transparent;
   }
 
 .improve-v2 .iv-card .imp-split-fix.imp-chosen::after{   /* stroke: 1px ring drawn internally */
     content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
-    background: linear-gradient(180deg, rgba(251,164,255,0.75) 0%, rgba(251,164,255,0.25) 100%);
+    background: linear-gradient(180deg, var(--pill-on-stroke-top) 0%, var(--pill-on-stroke-bottom) 100%);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude;
     pointer-events: none;
   }
+.improve-v2 .iv-card .imp-split-fix.imp-chosen .imp-split-val{ color: var(--pill-on-color); }
+.improve-v2 .iv-card .imp-split-fix.imp-chosen .imp-split-label{ color: rgba(82,186,255,0.72); }
 
 .improve-v2 .iv-card .imp-split-fix.imp-chosen .imp-fix-bubbles{ display: none; }
 
@@ -9324,10 +9360,42 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 /* Selected yn-btn → blue border (standard selection color) */
 /* (no override needed — existing .yn-btn.is-selected already uses --sel-color blue) */
 
-/* AI inference confidence states
-   ai-confident: dimmed (0.5) + white ✦ badge — all AI-inferred answers look the same */
-.yn-btn.is-selected.ai-confident   { opacity: 0.5 !important; }
-.intensity-btn.ai-confident        { opacity: 0.5 !important; }
+/* AN INFERRED ANSWER IS VIOLET, NOT FADED.
+
+   It used to be the selected pill at `opacity: .5` with a white ✦ hanging off
+   its corner. Half a tone is the app's word for *disabled* and for *not
+   selected*, and this is nearly the opposite: the answer IS in, it just came
+   from Shipmate rather than from you. Reading "pending confirmation" out of a
+   dimmed control asks the eye to spot a shade, and then the ✦ had to be added
+   on top to say what the shade meant.
+
+   Violet says it by itself — it is already the app's word for "Shipmate did
+   this" (see "Colour has meanings" in CLAUDE.md) — and pressing the answer
+   turns it the selection blue, so confirming is a change of hue on the same
+   object rather than something disappearing. The star went with the dimming:
+   two marks for one fact. */
+/* The three .is-sel-* rules are the same (0,2,0) as a bare .intensity-btn.ai-
+   confident and sit LATER in the file, so they won on order alone and the
+   intensity rows stayed blue while the yes/no rows went violet. Naming both
+   classes makes this (0,3,0) and settles it by weight instead. */
+.yn-btn.is-selected.ai-confident,
+.intensity-btn.is-sel-none.ai-confident,
+.intensity-btn.is-sel-infrequent.ai-confident,
+.intensity-btn.is-sel-frequent.ai-confident,
+.intensity-btn.ai-confident {
+  --ring-top: var(--pill-ai-stroke-top); --ring-bottom: var(--pill-ai-stroke-bottom);
+  background: var(--pill-ai-bg);
+  color: var(--pill-ai-color);
+  border-color: transparent;
+}
+.yn-btn.is-selected.ai-confident:hover,
+.intensity-btn.is-sel-none.ai-confident:hover,
+.intensity-btn.is-sel-infrequent.ai-confident:hover,
+.intensity-btn.is-sel-frequent.ai-confident:hover,
+.intensity-btn.ai-confident:hover {
+  background: var(--pill-ai-bg-hover);
+  color: var(--pill-ai-color-hover);
+}
 
 /* ✦ sparkle badge for AI-inferred answers */
 .ai-badge {
@@ -11253,10 +11321,11 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
      (Kept small against .sw-tip-box's 10: this bar is on screen permanently, so
      every pixel it takes is one the questions never get back.) */
   padding: 7px;
-  /* NESTED RADII: outer = inner + the gap between them. The track is 16px and
-     sits 7px inside, so 23. (At .sw-tip-box's 8px the box cut across the pill's
-     corner and the frame looked bent at the ends.) */
-  border-radius: 23px;
+  /* NESTED RADII: outer = inner + the gap between them. The track is
+     --field-radius + 3 and sits 7px inside, so this is + 10. (At .sw-tip-box's
+     flat 8px the box cut across the pill's corner and the frame looked bent at
+     the ends.) */
+  border-radius: calc(var(--field-radius) + 10px);
 }
 .cr-pinned-bar .sw-tip-text { line-height: 1.4; }
 /* A HIGHER FLOOR THAN THE NAV'S. --chip-fill's 15% is tuned for a pill sitting
@@ -11292,7 +11361,10 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   flex-shrink: 0;
   gap: 2px;
   padding: 3px;
-  border-radius: 16px;
+  /* 8 + 3 = 11, and the bar below is 11 + 7 = 18. The nesting rule is the same
+     as before; only the innermost number changed, and the two outer ones follow
+     it rather than being picked again. */
+  border-radius: calc(var(--field-radius) + 3px);
   background: rgba(255, 255, 255, .06);
 }
 /* THE HEIGHT OF AN ANSWER PILL — 32px, the same as .yn-btn and .intensity-btn
@@ -11302,7 +11374,14 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    pills it sits above won over matching the nav it borrows its markup from.)
    The 13px radius is a shared token, so at 32 it reads rounder than a sub-tab
    does at 41 — which is the same thing that happens to the answer pills. */
-.cr-toggle-bar .app-subtab { font-size: 12px; padding: 7px 16px; }
+.cr-toggle-bar .app-subtab {
+  font-size: 12px; padding: 7px 16px;
+  /* THE ANSWER PILLS' OWN RADIUS, not the nav's. It borrows .app-subtab's
+     markup, which carries --pill-radius (13) — right for a 41px sub-tab, and a
+     capsule at 32. The controls it must not look foreign beside are the yes/no
+     and frequent/none pills directly under it, and those are --field-radius. */
+  border-radius: var(--field-radius);
+}
 .cr-toggle-bar .app-subtab-sep { font-size: 12px; }
 /* The "All" pill embedded inline in the inferred-answers banner's own text
    (buildContentRatingSection, render.js) — everything else about it (font,

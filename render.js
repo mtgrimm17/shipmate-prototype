@@ -9806,9 +9806,12 @@ function _platformAIClass(platformId, qid, val) {
   return ' ai-confident';
 }
 
-/** Returns AI badge HTML or empty string. */
+/** The ✦ badge is retired — the violet fill says it on its own (see
+    .ai-confident in style.css). Kept as a no-op rather than deleted because it
+    is called from a dozen row builders across four platforms, and a stub that
+    returns nothing is one edit instead of twelve. */
 function _platformAIBadge(platformId, qid, val) {
-  return _platformAIClass(platformId, qid, val) ? '<span class="ai-badge">✦</span>' : '';
+  return '';
 }
 
 /* ── Shared toggle pill for Unanswered / All filter ─────── */
@@ -10435,10 +10438,40 @@ function buildContentRatingSection(pid = 'ios') {
   // Only shown in the "Unanswered" view (by request) — once the user has
   // switched to "All" they're already looking at everything, so the prompt
   // to go look has nothing left to do.
+  /* COUNT THE VIOLET PILLS, NOT THE SNAPSHOT. This read `answered` — the
+     filter's frozen Set — and that Set is deliberately RE-TAKEN every time you
+     press "Unanswered" (toggleContentRatingExpanded, app.js), so questions you
+     had just answered by hand joined it and the line went on to credit Shipmate
+     with them: answer five yourself, press Unanswered, and "12 inferred"
+     became 17.
+
+     The snapshot is the right source for what to HIDE and the wrong one for who
+     answered what. Provenance lives in the answer meta, which is exactly what
+     paints a pill violet — so the number now counts the pills that are violet
+     on screen, and it ticks DOWN as you confirm them. */
   const crTotalQuestions = IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.length, 0);
-  const crInferredCount  = collapseMode
-    ? IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.filter(q => answered.has(q.id)).length, 0)
+  /* TWO NUMBERS, BECAUSE THERE ARE TWO FACTS.
+
+     Provenance does not expire: an answer Shipmate inferred was still inferred
+     by Shipmate after you agree with it, so confirming one must not take it off
+     the count. `confidence` is the tell — only inference writes it, and the
+     human-confirm path spreads the existing meta rather than replacing it, so
+     it survives. An answer you typed yourself gets a meta entry too
+     ({ humanConfirmed: true }) but never a confidence, which is what keeps your
+     own work from being credited to Shipmate.
+
+     A COUNTDOWN OF WHAT IS LEFT was tried here and taken out: "11 of 22 — 11 to
+     review" put two numbers a sentence apart that kept drifting from each other
+     as you worked, and the second one read as a score. The line says what
+     Shipmate did and asks you to check it, and it says the same thing until you
+     leave — the violet pills are already the per-row record of what you have
+     been through. */
+  const crMeta = (qid) => (typeof _getAnswerMeta === 'function') ? _getAnswerMeta(pid, qid) : null;
+  const crInferredCount = collapseMode
+    ? IOS_CR_CATEGORIES.reduce((sum, cat) =>
+        sum + cat.questions.filter(q => crMeta(q.id)?.confidence !== undefined).length, 0)
     : 0;
+
   /* ONE BOX, NOT TWO STACKED THINGS. The switch and the sentence explaining it
      were a pill floating above a two-line tip box — 147px of a 714px window,
      permanently, once the bar was pinned. They are one control and its caption,
@@ -10464,7 +10497,7 @@ function buildContentRatingSection(pid = 'ios') {
         ? (t('cr.showing_all', { count: crInferredCount, total: crTotalQuestions })
            || `All ${crTotalQuestions} — ${crInferredCount} inferred by Shipmate.`)
         : (t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
-           || `Shipmate inferred ${crInferredCount} of ${crTotalQuestions} — review the rest.`))
+           || `Shipmate inferred ${crInferredCount} of ${crTotalQuestions} — review them all.`))
     : '';
   const inferredBanner = '';
 
