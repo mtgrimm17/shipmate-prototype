@@ -425,6 +425,15 @@ put it inside `.imp-list.iv-blueconfirm` or you are measuring dead CSS.**
 `currentTime` to sample it recomputes `startTime`, so a probe cannot check both
 at once.)
 
+**Every control in a card is 30px, and the sum has to be integral.** `.imp-cta`
+was `line-height: 1.2` on 12px — 14.4, so the pill measured **30.4**, and a
+fractional box straddles the device pixel grid: two identical buttons painted a
+pixel apart purely from the y they landed on, which is what looked like "some
+are 28 and some are 29". It is 16px of line-height + 6 + 6 of padding + two 1px
+borders = 30 exactly, which is also `.iv-undo`'s and `.iv-code-copy`'s size. The
+footer's own override (`min-height: 39px`) is unaffected. Retune it if you like,
+but keep the total a whole number.
+
 **Four bugs worth not repeating.** A `contenteditable` inside a `<button>`
 cannot take focus, so the edit pencil did nothing — the boxes are `<button>`
 while they are a choice and `<div>` once they are an answer. `focusout` does not
