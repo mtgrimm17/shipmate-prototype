@@ -6198,9 +6198,17 @@ body.viewing-splash .app-subnav { display: none; }
    Mac App Store's own mac-spp-get-row) so "In-App Purchases" — when
    shown — sits beside GET rather than stacked above it. */
 .ios-spp-page .ias-header-cta {
-  padding-top: 0; margin-top: 24px;
+  padding-top: 0; margin-top: 20px;
   display: flex; align-items: center; gap: 8px;
 }
+/* Business done (render.js adds this once Business Questions has been
+   opened and answered) — the button no longer has a glow box at all
+   (_sppGlowCls returns '' for a done element), so the extra margin-top
+   above, only ever there to clear that glow, is dropped back down to a
+   plain, tight line-spacing gap matching the reference screenshot's own
+   layout — the same value .mac-spp-get-row itself started from before
+   any glow-clearance margin was added. */
+.ios-spp-page .ias-header-cta.is-spp-done { margin-top: 8px; }
 .ias-get-btn {
   background: #0a84ff; color: #fff;
   font-size: 13px; font-weight: 700;
@@ -6223,24 +6231,28 @@ body.viewing-splash .app-subnav { display: none; }
    pill-shaped button (border-radius: 20px above) and the ring hugs the
    pill's rounded silhouette, reading as faint and easy to miss next to
    every other required element's rectangular glow. This wrapper is a
-   plain rectangle (low border-radius) a few px larger than the button on
-   EVERY side by the same amount, so the ring reads as a clearly bigger,
+   plain rectangle (low border-radius) 4px larger than the button on EVERY
+   side by the same amount, so the ring reads as a clearly bigger,
    evenly-balanced rectangular box — negative margin cancels the added
    padding so it doesn't shift .ias-header-cta's/.mac-spp-get-row's own
    layout (the IAP note's position, the CTA's alignment) at all.
-   Title/Subtitle sit immediately adjacent to this button on one side in
-   both layouts (beside it on iOS, above it on Mac) with no natural gap —
+   GET now sits directly beneath Title/Subtitle in both layouts (App
+   Store and Mac App Store alike) with no natural gap between them —
    rather than shrinking the padding on just that side (which read as
-   lopsided), .ios-spp-page's .ias-header gap and .mac-spp-get-row's own
-   margin-top (both above) were widened instead, so Title/Subtitle's own
-   glow has moved back far enough that this wrapper's full, even padding
-   clears it on every side without needing to touch the wrapper's shape at
-   all. */
+   lopsided), .ios-spp-page's .ias-header-cta margin-top and
+   .mac-spp-get-row's own margin-top (both further down) are widened
+   instead, so Title/Subtitle's own glow has moved back far enough that
+   this wrapper's full, even padding clears it on every side without
+   needing to touch the wrapper's shape at all. Once Business is done,
+   this button has no glow at all (_sppGlowCls returns '' below), and
+   .is-spp-done on the row above drops that extra margin back to the
+   reference layout's own tight spacing — the glow-clearance margin is
+   simply never needed for a button with no glow to clear. */
 .spp-get-glow-wrap {
   display: inline-flex;
   border-radius: 8px;
-  padding: 8px;
-  margin: -8px;
+  padding: 4px;
+  margin: -4px;
 }
 /* Business's own static ring specifically needs to be bigger/stronger than
    the shared .is-spp-static default (below) — that default was tuned for
@@ -7427,7 +7439,14 @@ textarea.loc-review-field.ias-inline-input {
    glow above it rather than sitting flush against it — a plain block
    margin, so unlike the iOS row's flex gap this only needs the one
    value. */
-.mac-spp-get-row { margin-top: 24px; display: flex; align-items: center; gap: 8px; }
+.mac-spp-get-row { margin-top: 20px; display: flex; align-items: center; gap: 8px; }
+/* Business done (render.js adds this once Business Questions has been
+   opened and answered) — the button no longer has a glow box at all, so
+   the margin-top above (only ever there to clear that glow) drops back
+   to 8px, the plain line-spacing gap this row started from before any
+   glow-clearance margin was added — matching the reference screenshot's
+   own tight layout. */
+.mac-spp-get-row.is-spp-done { margin-top: 8px; }
 
 /* Screenshots — sized down from the first pass to better match the actual
    native app's own proportions (screenshots read as one element among

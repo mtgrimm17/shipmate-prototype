@@ -7780,8 +7780,11 @@ function buildStorePreviewSection() {
                  on this same row rather than as its own line above it —
                  matching the reference screenshot and Mac App Store's own
                  mac-spp-get-row treatment — via the same scoped flex-row
-                 override. -->
-            <div class="ias-header-cta">
+                 override. Once Business is done, .is-spp-done drops that
+                 extra margin (only needed to clear the glow this button no
+                 longer has) back down to the reference layout's own tight
+                 spacing — see .is-spp-done, style.css. -->
+            <div class="ias-header-cta${businessDone ? ' is-spp-done' : ''}">
               <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
                 <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
               </span>
@@ -8456,8 +8459,11 @@ function buildMacStorePreviewSection() {
                  (_sppGlowCls('business')) until Business Questions has been
                  opened and answered, same as every other required element,
                  replacing the meta strip's old separate Business cell
-                 below. -->
-            <div class="mac-spp-get-row">
+                 below. Once Business is done, is-spp-done drops the extra
+                 margin-top (only there to clear the glow this button no
+                 longer has) back down to the reference layout's own tight
+                 spacing — see mac-spp-get-row's own rule, style.css. -->
+            <div class="mac-spp-get-row${businessDone ? ' is-spp-done' : ''}">
               <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
                 <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
               </span>
