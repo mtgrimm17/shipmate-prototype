@@ -2736,6 +2736,14 @@ function togglePrivacyGroup(pid, groupName, currentlyExpanded) {
 
 function toggleContentRatingExpanded(value) {
   const pid = state.stepModal?.platformId || 'ios';
+  /* SWITCHING THE VIEW GOES BACK TO THE TOP. The two views are different lists,
+     not two states of one: "All" has every question and "Unanswered" only what
+     is left, so a scroll position carried across lands you in the middle of a
+     list you have not seen, beside rows you did not choose. reRenderStepModal
+     deliberately restores scrollTop (see its own note) — this clears the memory
+     of it first, so the restore has nothing to put back. */
+  const body = document.getElementById('step-modal-body');
+  if (body) body.scrollTop = 0;
   // Re-snapshot on "Unanswered" click so newly-answered questions get hidden
   if (!value) takeFilterSnapshot(pid);
   if (pid === 'macos')      state.macContentRatingExpanded     = value;
@@ -11116,6 +11124,36 @@ let _impPendingSelect = null;
    `resolve` is an answer — pop it AND glint the next one still to do. */
 function _impQueueSelect(batchSel, idx)  { _impPendingSelect = { batchSel, idx, resolved: false }; }
 function _impQueueResolve(batchSel, idx) { _impPendingSelect = { batchSel, idx, resolved: true  }; }
+/* THE NEXT-TO-DO CIRCLE BREATHES, on the document's clock.
+
+   A CSS `animation: … infinite` restarts at 0% every time the section
+   re-renders — and this section re-renders on every answer — so the dot would
+   snap back to the bottom of its curve at the exact moment you were looking at
+   it. Driving it with element.animate() and pinning `startTime = 0` puts every
+   newly created node at the same phase by definition: the pulse looks like one
+   continuous breath across renders because it IS one clock. Same trick, and the
+   same reason, as shippyBreathe (render.js).
+
+   It changes only light — opacity between the tab's resting .2 and .62. Nothing
+   moves: a 28px circle that grows is a control asking to be pressed, which is
+   what the first version of this got wrong. */
+function _impBreatheNext() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('.iv-tab-next').forEach(el => {
+    if (typeof el.animate !== 'function') return;
+    el.getAnimations().forEach(a => a.cancel());
+    /* The floor is ABOVE the resting .2 of a normal .iv-tab, not equal to it:
+       a sine spends half its cycle near the trough, so a curve that returns to
+       rest reads as "this dot dims", which is the opposite of a hint. It sits
+       lit at .38 and breathes up to .8 — always brighter than its neighbours. */
+    const anim = el.animate(
+      [{ opacity: 0.38 }, { opacity: 0.8 }, { opacity: 0.38 }],
+      { duration: 2200, iterations: Infinity, easing: 'cubic-bezier(.37,0,.63,1)' },
+    );
+    try { anim.startTime = 0; } catch (e) { /* not on a timeline yet; harmless */ }
+  });
+}
+
 function _impPostRender() {
   if (_impPendingSelect) {
     const { batchSel, idx, resolved } = _impPendingSelect;
@@ -11123,6 +11161,8 @@ function _impPostRender() {
     const root = document.querySelector(`${batchSel} .iv-carousel`);
     _impAfterSelect(root, root?.querySelectorAll('.iv-tab')[idx], resolved);
   }
+  _impBreatheNext();
+
   const order = { '–': -1, F: 0, D: 1, C: 2, B: 3, A: 4 };
   [['.imp-split-batch', 'storePage'], ['.imp-loc-batch', 'loc'], ['.imp-binary-batch', 'binary']]
     .forEach(([sel, key]) => {

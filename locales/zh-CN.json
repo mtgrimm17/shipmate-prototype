@@ -544,7 +544,7 @@
   "cr.showing_all": "全部 {total} 项 — 其中 {count} 项由 Shipmate 推断。",
   "cr.left_to_answer": "{total} 项中还有 {count} 项待回答。",
   "cr.all_answered": "{total} 项已全部回答。",
-  "imp.found": "Shipmate 找到 {count} 处可以让这次提交更稳妥。",
+  "imp.found": "Shipmate 找到了几处可以让这次提交更稳妥的地方。",
   "imp.found_none": "Shipmate 已检查商店页面、本地化和构建包。",
   "imp.check_again": "重新检查",
   "card.select_track": "选择轨道"

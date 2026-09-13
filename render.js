@@ -6668,11 +6668,23 @@ function buildImproveSubmissionSection(platformId) {
      is the only thing still making it. */
   function _carousel(states, sel, onClickFor) {
     if (states.length < 2) return '';
+    /* THE NEXT ONE TO DO BREATHES — but only once the one you are on is
+       answered. Before that the pulse would be pointing past work you have not
+       started. It is the next OPEN circle forward from the selected one,
+       wrapping; with nothing left open there is nothing to point at. */
+    let nextIdx = -1;
+    if (sel >= 0 && states[sel] && states[sel] !== 'open') {
+      for (let k = 1; k < states.length; k++) {
+        const j = (sel + k) % states.length;
+        if (states[j] === 'open') { nextIdx = j; break; }
+      }
+    }
     return `<span class="iv-carousel">${states.map((st, i) => {
       const cls = 'iv-tab'
         + (i === sel ? ' sel' : '')
         + (st === 'reviewed' ? ' reviewed' : '')
-        + (st === 'pend' ? ' pend' : '');
+        + (st === 'pend' ? ' pend' : '')
+        + (i === nextIdx ? ' iv-tab-next' : '');
       return `<button type="button" class="${cls}" onclick="${onClickFor(i)}">`
            + (st === 'reviewed' ? TAB_CHECK_SVG : (i + 1)) + '</button>';
     }).join('')}</span>`;
@@ -6976,7 +6988,15 @@ function buildImproveSubmissionSection(platformId) {
            <button type="button" class="imp-cta" data-imp-act="apply" onclick="answerLocalizationRec(true)">Add language</button>
          </div>`}`;
   }
-  const locSection = _batch('imp-loc-batch', locDone ? 'A' : locGrade, 'loc', 'Localization', '', '', locBody, locCardCls,
+  /* ONLY ACCEPTING MOVES THE GRADE. It was `locDone ? 'A' : locGrade`, so "Not
+     now" scored the same as adding the language — the batch went to A for
+     having been answered. The grade rates the SUBMISSION, not whether you have
+     dealt with the card: declining a language leaves the submission exactly as
+     weak as it was, and a grade that rises for dismissing its own advice is
+     worth nothing. Dismissed still collapses the batch (it is no longer asking
+     anything) and still says "Localization handled" — those are about the ask,
+     which is a different fact from the score. */
+  const locSection = _batch('imp-loc-batch', locAccepted ? 'A' : locGrade, 'loc', 'Localization', '', '', locBody, locCardCls,
                             langName ? { key: 'loc', allAnswered: locDone } : null);
 
   // ── BINARY SECTION ────────────────────────────────────
@@ -7113,9 +7133,12 @@ function buildImproveSubmissionSection(platformId) {
   const openLocCount   = (langName && !locDone) ? 1 : 0;
   const openBinCount   = binAnalyzed ? findings.filter((_, i) => !binDone.has(i)).length : 0;
   const openTotal      = openStoreCount + openLocCount + openBinCount;
+  /* NO NUMBER. The count was drawn from the locale string, which cannot say
+     "1 way" and "3 ways" from one template — and the batches below are the
+     count anyway. "Some ways" is true at every value it can take. */
   const guidanceLine   = openTotal > 0
-    ? (t('imp.found', { count: openTotal })
-       || `Shipmate found ${openTotal} way${openTotal === 1 ? '' : 's'} to make your submission stronger.`)
+    ? (t('imp.found')
+       || 'Shipmate found some ways to make your submission stronger.')
     : (t('imp.found_none')
        || 'Shipmate checked your store page, localization and build.');
 
@@ -9891,6 +9914,12 @@ function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
   // it read as two buttons that happen to be adjacent. With the bar gone and
   // the box around them acting as the track, the filled half IS the state —
   // which is what a toggle looks like everywhere else.
+  /* A SLIDING THUMB WAS TRIED AND REVERTED. The fill lived in its own element so
+     it could travel between the halves; with two labels of very different
+     widths ("Unanswered" is 106px against "All"'s 56) the box has to resize as
+     it moves, and width and transform animating together read as the control
+     stretching rather than the selection sliding. The state is a step, so it
+     is painted as one. */
   return `
     <div class="cr-toggle-bar">
       <button class="app-subtab${!showAll ? ' is-on' : ''}" onclick="${offFn}">Unanswered</button>

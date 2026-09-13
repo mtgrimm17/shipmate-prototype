@@ -545,7 +545,7 @@
   "cr.showing_all": "All {total} — {count} inferred by Shipmate.",
   "cr.left_to_answer": "{count} of {total} still to answer.",
   "cr.all_answered": "All {total} answered.",
-  "imp.found": "Shipmate found {count} ways to make your submission stronger.",
+  "imp.found": "Shipmate found some ways to make your submission stronger.",
   "imp.found_none": "Shipmate checked your store page, localization and build.",
   "imp.check_again": "Check again",
   "card.select_track": "Select track"

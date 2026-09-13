@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.18**
+Current version: **v6.19**
 
 ---
 
@@ -151,6 +151,12 @@ The grade tabs bring five more hues (#50F88A / #B4DE52 / #E8974E / #FF7A5C /
 #FF5C5C for A–F). Those are a scale, not meanings, and they are scoped to
 `.iv-grade-tab`. Don't borrow them for anything else.
 
+Each tab's **fill is that same hue over the tab's #161616 at ~17%** (it was
+~10%, which left five panels that were all the same dark grey with a coloured
+character on them — the scale was only legible in the letter). Border at 30%.
+If a hue changes, recompute the fill rather than eyeballing it:
+`c = 22 + (hue − 22) × 0.17` per channel.
+
 Two duplications survive and are worth resolving together some day: **two
 ambers** (`#fb923c` in --orange/--orange-soft vs `#FFB86B` everywhere newer)
 and **two selection blues** (`--sel-*` #60a5fa, ~14 consumers in Marketing and
@@ -250,6 +256,16 @@ Still open: the guide's pending discs are still rings, so the *pending* state
 diverges between the card and the Shippy panel (the tick proportion still
 matches).
 
+**The next task wears no ring.** `.gd-task.is-current` used to throw a 1.5px
+`--guide-mark` ring around its disc, which reads as "you are here" — a claim the
+guide cannot make. `is-current` is derived as the first undone item, while one
+tab routinely holds three of them, so it pointed at "Write description" while
+you sat on a page containing that and two more. What the guide does know is
+which one is NEXT, and that is weight, not a locator: the disc goes to violet
+42% (from the pending 20%) and the label comes up out of `--text-dim` to
+#cfc4ee, short of the white a *done* label wears. The collapsed rail's
+`.guide-mini-dot`s never had the ring, so the two views now agree.
+
 ### The release block (VERSION / BUILD / TRACK)
 
 `buildReleaseBlock()` in render.js. Two rows: what was uploaded, then where it
@@ -337,6 +353,14 @@ both claim a card that is not on screen — and the "looking good" line is only
 printed when everything really is answered. Folded away with work outstanding it
 shows its header and nothing else.
 
+**A grade rates the submission, not the reading of it.** Localization's grade is
+`locAccepted ? 'A' : locGrade`, not `locDone ? …`: "Not now" used to score the
+same as "Add language", so the batch went to A for having been answered, and a
+grade that rises for dismissing its own advice is worth nothing. Declining a
+language leaves the submission exactly as weak as it was. Dismissed still
+*collapses* the batch and still prints "Localization handled" — being no longer
+asked is a different fact from being better, and only the first is true.
+
 **Only two of the three auto-collapse.** Binary and Localization are
 acknowledgements: answered, there is nothing left to do with them. A Store Page
 answer is *not* finished when it is made — the accepted fix stays editable
@@ -376,6 +400,16 @@ fill at the peak for body. The first version scaled the dot to 1.18 and threw a
 7px ring out of it, which on a 28px circle reads as a control demanding a press
 rather than as a hint. Keyframe 0%/100% must *be* the resting opacity, or the
 dot jumps when the class is stripped on `animationend`.
+
+That last rule is the one-shot glint's, and the **persistent breath is its
+opposite**. `_impBreatheNext()` (app.js) marks the next open circle for as long
+as it is next, and a curve that returns to rest spends half of every cycle
+indistinguishable from the dots either side of it — the dot reads as *dimming*,
+which is the opposite of a hint. So its floor sits **above** the resting .2:
+`.38 → .8 → .38`, measured min .38 against a neighbour's .2. It is lit the whole
+time and the sine only says how lit. (`startTime = 0` still puts every rebuilt
+node on one phase; note that writing `currentTime` to sample it recomputes
+`startTime`, so a probe cannot check both at once.)
 
 **Four bugs worth not repeating.** A `contenteditable` inside a `<button>`
 cannot take focus, so the edit pencil did nothing — the boxes are `<button>`
@@ -596,7 +630,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.18** → next is **v6.19**, then **v6.20**, etc.
+Current version: **v6.19** → next is **v6.20**, then **v6.21**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -608,7 +642,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.18 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.19 — add tooltip to age rating cell"`.
 
 ---
 
@@ -662,7 +696,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.18 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.19 — description of change"`.
 
 ---
 
@@ -682,7 +716,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.18, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.19, the following items are in the queue:
 
 - ~~The step modal's chrome~~ — all three landed: 1 and 2 in v6.11, and the
   scroll reflow in v6.17. `.submit-modal-scroll` and `.mac-spp-main` now carry

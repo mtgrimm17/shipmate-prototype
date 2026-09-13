@@ -3146,7 +3146,15 @@ body.viewing-splash .app-subnav { display: none; }
 .guide-mini-dot svg,
 .mcal-task-box svg { width: 100%; height: 100%; display: block; }
 .gd-task-box { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--guide-mark-dim); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: var(--guide-bg); }
-.gd-task.is-current .gd-task-box { box-shadow: 0 0 0 1.5px var(--guide-mark); }
+/* NO RING on the next task. A ring around a disc reads as "you are here", and
+   the guide cannot know that: `is-current` is derived as the first undone item,
+   while a single tab routinely holds three of them — so it pointed at "Write
+   description" while you sat on a page containing that and two more. What the
+   guide does know is which one is NEXT, and that is a matter of weight, not of
+   a locator: the disc takes a fuller fill and the label comes up out of the dim.
+   (The collapsed rail's dots never had the ring, so the two views now agree.) */
+.gd-task.is-current .gd-task-box { background: rgba(160, 120, 255, 0.42); }
+.gd-task.is-current .gd-task-label { color: #cfc4ee; }
 .gd-task.is-done .gd-task-box { background: var(--guide-mark); }
 .gd-task-label { font-family: var(--mono); font-size: 13px; letter-spacing: 0; color: var(--text-dim); }
 .gd-task.is-done .gd-task-label { color: var(--text); }
@@ -5450,6 +5458,7 @@ body.viewing-splash .app-subnav { display: none; }
        a panel. The violet and blue boxes inside are unaffected: they composite
        over their own --panel floor now, not over this. */
     background: #212121;   /* solid grey fill (no gradient) */
+    transition: background-color .18s ease;
     font-family: 'IBM Plex Mono', ui-monospace, monospace; color: #fff;
     display: flex; flex-direction: column; box-sizing: border-box;
   }
@@ -5507,15 +5516,18 @@ body.viewing-splash .app-subnav { display: none; }
   .improve-v2 .iv-grade-tab.iv-grade-bump .iv-grade-letter{ animation: gradeLetterPop 1.1s cubic-bezier(0.16,1,0.3,1); }
 
 /* Border tint = the grade's own letter colour, at the same low opacity as the default. */
-  .improve-v2 .iv-grade-tab.iv-grade-a{ color: #50F88A; background: #1E2D23; border-color: rgba(80,248,138,0.22); }
+  /* Each fill is the grade's own letter colour laid over the tab's #161616 at a
+     measured alpha — ~10% before, ~17% now, so the panel reads as its grade at a
+     glance instead of as a neutral chip with a coloured letter on it. */
+  .improve-v2 .iv-grade-tab.iv-grade-a{ color: #50F88A; background: #203C2A; border-color: rgba(80,248,138,0.30); }
 
-.improve-v2 .iv-grade-tab.iv-grade-b{ color: #B4DE52; background: #242B18; border-color: rgba(180,222,82,0.22); }
+.improve-v2 .iv-grade-tab.iv-grade-b{ color: #B4DE52; background: #313820; border-color: rgba(180,222,82,0.30); }
 
-.improve-v2 .iv-grade-tab.iv-grade-c{ color: #E8974E; background: #2E2417; border-color: rgba(232,151,78,0.22); }
+.improve-v2 .iv-grade-tab.iv-grade-c{ color: #E8974E; background: #3C2D20; border-color: rgba(232,151,78,0.30); }
 
-.improve-v2 .iv-grade-tab.iv-grade-d{ color: #FF7A5C; background: #2E2016; border-color: rgba(255,122,92,0.22); }
+.improve-v2 .iv-grade-tab.iv-grade-d{ color: #FF7A5C; background: #3E2722; border-color: rgba(255,122,92,0.30); }
 
-.improve-v2 .iv-grade-tab.iv-grade-f{ color: #FF5C5C; background: #2E1B1B; border-color: rgba(255,92,92,0.22); }
+.improve-v2 .iv-grade-tab.iv-grade-f{ color: #FF5C5C; background: #3E2222; border-color: rgba(255,92,92,0.30); }
 
 /* Collapsed batch: header + carousel only (all steps done). */
   /* THE COLLAPSED CARD IS SYMMETRIC, and it is the CARD that gives, not the
@@ -5552,6 +5564,12 @@ body.viewing-splash .app-subnav { display: none; }
 
 /* Completion line when every Store Page suggestion was accepted (same green as an A). */
   .improve-v2 .iv-strong-line{ margin-top: 11px; padding-left: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #50F88A; }
+
+/* A MINIMAL LIFT ON HOVER — two points of grey, #212121 → #232323. The card is
+   a tray, not a button: it should acknowledge the pointer without implying the
+   whole thing is pressable, and the things inside it that ARE pressable have
+   their own, larger hovers to stay ahead of. */
+.improve-v2 .iv-card:hover{ background: #232323; }
 
 /* Batch headers act as a collapse toggle. */
   .improve-v2 .imp-split-batch > .iv-card > .iv-head,
@@ -11535,18 +11553,38 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   gap: 12px;
   margin-bottom: 0;
   flex-wrap: wrap;               /* the sentence drops under the switch only if it truly cannot fit */
-  /* A WASH, NOT A PANEL. .sw-tip-box is transparent, which is right for a note
-     sitting in the flow; this one is pinned over the rows that scroll beneath
-     it, so it needs a floor of its own. 5% is the lowest value that still
-     separates it from --panel without turning into a second card. */
-  background: rgba(255, 255, 255, .05);
+  /* A REAL SURFACE NOW, not a wash. .sw-tip-box is transparent — right for a
+     note sitting in the flow, wrong for something pinned OVER the rows that
+     scroll beneath it. At white 5% it composed to rgb(32,32,32) against the
+     modal's panel, barely a tint; at 15% it lands on rgb(55,55,55) and reads as
+     the object it is. The dark track inside keeps its own contrast either way,
+     because that contrast is measured against this fill, not against the panel.
+
+     The stroke is INSIDE the fill: a 1px inset ring at white 5%, with the
+     border kept at the same width but transparent so the box's geometry does
+     not move. `--field-stroke`'s #23272A went with it — a blue-grey line that
+     was invisible against a 32 fill and would be worse against 55, and a
+     translucent white ring lights up or fades with whatever is behind it
+     instead of being one fixed colour. */
+  background: rgba(255, 255, 255, .15);
+  /* NO BORDER AT ALL, and the padding grows by the 1px it gave back. Keeping a
+     transparent 1px border left the fill reaching the outer edge (background
+     clips to the border box) with the ring drawn one pixel inside it, at a
+     radius one pixel tighter — two curves that cannot stay concentric at 18px,
+     which is what read as a doubled, blurry stroke on the corners. With the
+     border gone the ring IS the edge, at the full radius, and the box keeps its
+     size because 0 + 8 equals 1 + 7. */
+  border: 0;
+  padding: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
   /* UNIFORM. The selected half of the switch is a filled pill against the box's
      own edge, so the gap around it is read as a frame — and 6 top/bottom
      against 12 left made that frame twice as wide on one side as on the others.
      One value, so the pill sits the same distance from every edge it touches.
      (Kept small against .sw-tip-box's 10: this bar is on screen permanently, so
      every pixel it takes is one the questions never get back.) */
-  padding: 7px;
+  /* padding lives with the border decision below — 8px, which is the 7 this
+     used to be plus the 1 the border gave back. */
   /* NESTED RADII: outer = inner + the gap between them. The track is
      --field-radius + 3 and sits 7px inside, so this is + 10. (At .sw-tip-box's
      flat 8px the box cut across the pill's corner and the frame looked bent at
@@ -11559,8 +11597,13 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    dark panel, so the box's edge eats the contrast and the selected half stopped
    reading as selected. 22% here only — the token still serves every nav pill in
    the app, and they are all fine where they are. */
-.cr-pinned-bar .app-subtab.is-on { background: rgba(255, 255, 255, .22); }
-.cr-pinned-bar .app-subtab.is-on:hover { background: rgba(255, 255, 255, .27); }
+/* 15, down from 22. The 22 was set when the half sat on a white-6% rail and
+   needed to out-shout it; the rail is black 25% now, so the same fill reads
+   about fifty points above its own floor instead of fifteen and it had become
+   the brightest thing in the modal's chrome. The contrast that matters is
+   against the TRACK, and the track went dark — so the pill can come down. */
+.cr-pinned-bar .app-subtab.is-on { background: rgba(255, 255, 255, .15); }
+.cr-pinned-bar .app-subtab.is-on:hover { background: rgba(255, 255, 255, .19); }
 /* NO ⓘ HERE. The icon marks a note you could have missed — this line sits
    welded to the control it describes, permanently on screen, so the handle was
    pointing at something already in your hand. (.sw-tip-box keeps its icon
@@ -11591,7 +11634,13 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
      as before; only the innermost number changed, and the two outer ones follow
      it rather than being picked again. */
   border-radius: calc(var(--field-radius) + 3px);
-  background: rgba(255, 255, 255, .06);
+  /* A GROOVE, NOT A RAISED PATCH. The track was white 6% inside a box that is
+     itself white 5% — two washes a point apart, so the rail barely existed and
+     the selected half had to carry the whole control. Black instead cuts it
+     INTO the bar, which is what a segmented control is: a well with one half
+     lifted out of it. Composited it lands around rgb(24,24,24) against the
+     bar's 32, and the selected pill's white 22% sits ~50 points above that. */
+  background: rgba(0, 0, 0, .25);
 }
 /* THE HEIGHT OF AN ANSWER PILL — 32px, the same as .yn-btn and .intensity-btn
    in the rows below. The switch and the answers are the two things you press in
