@@ -2602,16 +2602,63 @@ function buildMktInfluencers() {
    and parks the undated items at the bottom — the point of those being to show
    that an item doesn't have to be scheduled to exist.
 
-   Colour is the item's origin, not its status: Submission items take the
-   Submission tab's accent and Marketing items take Marketing's, so the coding
-   is the one already used by the top-level navigation rather than a new one.
+   COLOUR IS THE ITEM'S STATUS, NOT ITS ORIGIN — and it used to be the other
+   way round. `CAL_KIND` carried a hue each: Submission green #4ADE80,
+   Marketing yellow #FACC15, borrowed from the top-level tabs. Meanwhile the
+   submitted card colours by STATE — #2fdc80 done, #FFD84D the store has it,
+   #FFB86B it is back with you, magenta rejected. Two vocabularies, the same
+   two hues, on two surfaces you can see at once: the month said "green =
+   this came from the Submission tab" three inches from a card saying "green =
+   finished", and it drew the REVIEW WAIT — the one thing on the month that is
+   nobody's achievement — as a green band.
+
+   So the month now speaks the app's own three-colour rule (green done, amber
+   this needs you, red wrong) plus the card's review yellow, and a task that is
+   merely pending wears no hue at all, because "not done yet" is information,
+   not a state. What you lose is the glance that separated a marketing beat
+   from a submission one. That was never legible in a 4px dot anyway, and the
+   day panel names every item in words.
+
+   The KIND did not go away — it is still a field, still cycled from the day
+   panel, and it is still what the popover and the legend name. It just stopped
+   being a colour and became a SHAPE, in the two places where a dot is all there
+   is room for: square for Submission, round for Marketing. Shape says what a
+   thing is, colour says how it is going.
    ══════════════════════════════════════════════════════════════════ */
 const CAL_KIND = {
-  /* Green is also what the launch-day block uses, so the legend stays true for
-     every submission item including that one. */
-  submission: { label: 'Submission', color: '#4ADE80' },   // --green
-  marketing:  { label: 'Marketing',  color: '#FACC15' },   // yellow, no token yet
+  submission: { label: 'Submission', shape: 'sq' },
+  marketing:  { label: 'Marketing',  shape: 'rd' },
 };
+
+/* The five states an item can be in, and the only source of colour on any
+   calendar surface. `todo` is deliberately not a hue: white at 55% is the
+   month's resting ink, so a month of unstarted work reads as a list rather
+   than as an alarm, and the two things that ARE happening — the wait and the
+   launch — are the only colour on it.
+   `waiting` is #FFD84D to the digit: it is the same constant the submitted
+   card's in-review segment uses, which is the whole point of the exercise. */
+const CAL_STATUS = {
+  todo:    'rgba(255,255,255,.55)',
+  waiting: '#FFD84D',                 // the store has it — .sub-seg.is-current
+  yours:   '#FFB86B',                 // accepted: it is back with you
+  bad:     '#ff3b78',                 // rejected
+  done:    '#2fdc80',
+  launch:  '#2fdc80',                 // the goal, and green is the app's done
+};
+
+/* An item's state. Ticked beats everything — a thing you have crossed off is
+   done whatever it was about — then the `status` a submission fact carries
+   from its phase (stamped in _calItems, where the phase is known), then the
+   default. Launch day is asked for separately because it is not a task and
+   cannot be "done" in the sense the others are. */
+function _calStatus(it) {
+  if (!it) return 'todo';
+  if (it.isLaunch) return 'launch';
+  if (typeof _calDone === 'function' && _calDone(it)) return 'done';
+  return CAL_STATUS[it.status] ? it.status : 'todo';
+}
+const _calColor = it => CAL_STATUS[_calStatus(it)] || CAL_STATUS.todo;
+const _calShape = it => (CAL_KIND[it && it.kind] || CAL_KIND.marketing).shape;
 
 /* Recurring. weekday is 0=Sun … 6=Sat, matching Date.getDay(). */
 const CAL_RECURRING = [
@@ -2726,7 +2773,53 @@ function _calItems(from, to, opts = {}) {
              lead, note: `${lead} days before launch · ~${timing.days}d review` };
   });
 
-  submissions.forEach(s => push({ ...s, date: _calDay(launch, -s.lead) }));
+  /* A PLAN ITEM BECOMES TWO FACTS THE MOMENT IT REALLY HAPPENS. Everything
+     above is a workback from the target launch — "Submit to the App Store, 5
+     days before". Once a platform has actually been submitted
+     (`state.platformFlipped[pid]`), that plan is history: it is replaced by the
+     day it WENT, and by the day its store is expected to answer.
+     Before this the calendar knew nothing about submitting. You could send a
+     build and the month would still be telling you to send it. */
+  const sent = state.platformFlipped || {};
+  submissions.forEach(s => {
+    const pid = s.id.slice('submit-'.length);
+    if (sent[pid]) return;                       // superseded by the two below
+    push({ ...s, date: _calDay(launch, -s.lead) });
+  });
+
+  Object.entries(sent).forEach(([pid, f]) => {
+    const timing = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+    const label  = timing.label;
+    const when   = f && f.time ? new Date(f.time) : _calToday();
+    /* THE PHASE IS THE COLOUR. This is the one place the calendar knows which
+       of the four phases a submission is in, so it is where the status gets
+       stamped — everything downstream just reads `it.status` through
+       _calColor and never has to look at `platformFlipped` again. The month
+       and the card therefore cannot disagree about what yellow means. */
+    const ph = (f && f.phase) || 'in_review';
+    const sentStatus = ph === 'accepted' ? 'yours'
+                     : ph === 'rejected' ? 'bad'
+                     : ph === 'live'     ? 'done'
+                     : 'waiting';
+    push({ id: 'sent-' + pid, kind: 'submission', label: `Sent to ${label}`,
+           status: sentStatus,
+           note: `Waiting on review · ~${timing.days}d`, go: { view: 'dashboard' },
+           date: new Date(when.getFullYear(), when.getMonth(), when.getDate()) });
+    /* The decision date is Mark's own `days` off the day it was sent — the same
+       number the workback above leads with, so the plan and the fact are drawn
+       from one table and cannot drift. `Math.ceil`, because a calendar has no
+       2.2nd of the month. Phases past the wait have had their answer, so they
+       print no expected date. */
+    if (ph === 'in_review') {
+      push({ id: 'decide-' + pid, kind: 'submission', isDecision: true,
+             status: 'waiting',
+             label: `${label} decision expected`,
+             note: `Estimated from a ~${timing.days} day average review`,
+             go: { view: 'dashboard' },
+             date: _calDay(when, Math.ceil(timing.days)) });
+    }
+  });
+
   push({ id: 'launch-day', kind: 'submission', label: 'Launch day', isLaunch: true,
          go: { view: 'dashboard' }, date: launch });
 
@@ -2801,7 +2894,7 @@ function buildCalendarMonth() {
           <div class="mcal-chips">
             ${shown.map(it => `
               <button class="mcal-chip${_calDone(it) ? ' is-done' : ''}${it.isLaunch ? ' is-launch' : ''}"
-                      style="--k:${CAL_KIND[it.kind].color}"
+                      style="--k:${_calColor(it)}"
                       data-key="${it.key}" draggable="true"
                       ondragstart="event.stopPropagation(); calDragStart(event, '${it.key}')"
                       ondragend="calDragEnd()"
@@ -2861,8 +2954,14 @@ function buildCalendarMonth() {
         </div>
       </div>
       <div class="mcal-legend">
-        ${Object.entries(CAL_KIND).map(([k, v]) =>
-          `<span class="mcal-key"><span class="mcal-key-dot" style="background:${v.color}"></span>${v.label}</span>`).join('')}
+        ${/* THE LEGEND EXPLAINS THE COLOUR, so when the colour stopped meaning
+              "which tab this came from" the legend had to stop saying that too.
+              It listed Submission and Marketing; it now lists the states, in the
+              order a submission passes through them. `todo` is not in it — a
+              legend entry for "no colour" is a line explaining the absence of a
+              mark, and the unmarked things are most of the month. */ ''}
+        ${[['waiting', 'In review'], ['yours', 'Needs you'], ['done', 'Done']].map(([s, label]) =>
+          `<span class="mcal-key"><span class="mcal-key-dot" style="background:${CAL_STATUS[s]}"></span>${label}</span>`).join('')}
         ${q ? `<button class="mcal-clearwk" onclick="calSearch('')">Filtered by “${escHtml(q)}” · clear</button>`
             : cal.selectedWeek ? `<button class="mcal-clearwk" onclick="calSelectWeek('${cal.selectedWeek}')">Showing one week · clear</button>`
             /* Teaches the one gesture nothing else announces. Rides in the
@@ -2929,8 +3028,14 @@ function _calDraftHTML() {
             to change, so its edit is kept as an override keyed on the
             occurrence (state.calendar.overrides) and laid on top on rebuild. */
   const editing = d.mode === 'edit';
+  /* The kind picker went NEUTRAL with the rest of it. Each pill used to wear
+     its kind's hue, which is exactly the claim that was retired: the hue now
+     belongs to the item's state, and a picker that paints a colour it does not
+     actually set is a lie you can see. `--k` stays as the selected-pill accent
+     — white, the app's ordinary "this one" — so the CSS underneath is
+     untouched and only the meaning changed. */
   const kinds = Object.entries(CAL_KIND).map(([k, v]) =>
-    `<button class="mcal-pop-kind${d.kind === k ? ' is-on' : ''}" style="--k:${v.color}"
+    `<button class="mcal-pop-kind${d.kind === k ? ' is-on' : ''}" style="--k:#fff"
              onclick="calDraftKind('${k}')">${v.label}</button>`).join('');
   const repeats = [
     { id: 'none',   label: 'One-off' },
@@ -3000,7 +3105,7 @@ function _calDetailHTML(d) {
                stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
-      <span class="mcal-pop-tag" style="--k:${kind.color}">${kind.label}</span>
+      <span class="mcal-pop-tag" style="--k:var(--text-dim)">${kind.label}</span>
       <h4 class="mcal-pop-h">${escHtml(d.text || '')}</h4>
       <div class="mcal-pop-when">${when}${repeats ? `<span class="mcal-pop-rep-note">${repeats}</span>` : ''}</div>
       ${d.note ? `<p class="mcal-pop-notetext">${escHtml(d.note).replace(/\n/g, '<br>')}</p>` : ''}
@@ -3053,7 +3158,7 @@ function buildCalChecklist() {
   const doneUndated = undated.filter(_calDone).length;
 
   const row = it => `
-    <button class="mcal-task${_calDone(it) ? ' is-done' : ''}${it.date ? '' : ' is-loose'}" style="--k:${CAL_KIND[it.kind].color}"
+    <button class="mcal-task${_calDone(it) ? ' is-done' : ''}${it.date ? '' : ' is-loose'}" style="--k:${_calColor(it)}"
             ${it.date ? '' : `draggable="true" ondragstart="calDragStart(event, '${it.key}')" ondragend="calDragEnd()"`}
             onclick="calOpenItem('${it.key}', event)"
             ${it.date ? `onmouseenter="calHiliteDay('${_calISO(it.date)}')" onmouseleave="calHiliteDay(null)"` : ''}>
@@ -3421,7 +3526,7 @@ function renderGuide() {
       `<button class="guide-mini-dot${i.done ? ' is-done' : ''}" title="${i.label}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">${i.done ? GUIDE_CHECK_SVG : ''}</button>`).join('');
     el.innerHTML = `
       <div class="guide-card guide-card--mini">
-        <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Expand guide" title="Expand guide">‹</button>
+        <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Expand guide" title="Expand guide">${GUIDE_CHEV_SVG('left')}</button>
         <div class="guide-mini-dots">${dots}</div>
       </div>`;
     return;
@@ -3447,10 +3552,10 @@ function renderGuide() {
   el.innerHTML = `
     ${shippyLayersHTML()}
     <div class="guide-card${onCal ? ' guide-card--cal' : ''}">
-      <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
+      <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">${GUIDE_CHEV_SVG('right')}</button>
       <button class="guide-cal-btn${onCal ? ' is-on' : ''}" onclick="toggleGuideCal()"
               aria-label="${onCal ? 'Back to the checklist' : 'Show the month'}"
-              title="${onCal ? 'Back to the checklist' : 'Show the month'}">${onCal ? GUIDE_LIST_SVG : GUIDE_CAL_SVG}</button>
+              title="${onCal ? 'Back to the checklist' : 'Show the month'}">${onCal ? GUIDE_LIST_SVG : SM_CAL_SVG}</button>
       <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
       ${onCal ? buildGuideMiniCal() : `
       <div class="guide-title">${t('hero.' + view + '.title') || hero.title || ''}</div>
@@ -3460,9 +3565,21 @@ function renderGuide() {
   mountShippy(el);
 }
 
-/* Stroked at 1.8 on a 24-unit box, like every other chrome glyph in the card. */
-const GUIDE_CAL_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`;
-const GUIDE_LIST_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>`;
+/* The calendar face wears the app's own calendar mark (`SM_CAL_SVG`, state.js)
+   — the same art the topbar's Calendar tab wears, rather than a second
+   calendar drawn from scratch. Its way back is a list glyph; that one has no
+   twin anywhere, so it is drawn here, filled rather than stroked to match. */
+const GUIDE_LIST_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 5.6h2.1v2.1H4V5.6Zm4.6 0H20v2.1H8.6V5.6ZM4 10.95h2.1v2.1H4v-2.1Zm4.6 0H20v2.1H8.6v-2.1ZM4 16.3h2.1v2.1H4v-2.1Zm4.6 0H20v2.1H8.6v-2.1Z"/></svg>`;
+
+/* THE COLLAPSE CHEVRON IS A GLYPH, NOT A CHARACTER. It was the text `›` / `‹`,
+   and a text character sits on a BASELINE: centring it in a 26px flex box
+   centres its line box, not its ink, so it rode a pixel or two high and no
+   amount of line-height fixed it across faces. An SVG path is geometry — the
+   viewBox centre IS the ink's centre — so it lands dead centre by definition,
+   and it takes the same stroke as every other chrome glyph. */
+const GUIDE_CHEV_SVG = (dir) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="${
+    dir === 'left' ? '15 6 9 12 15 18' : '9 6 15 12 9 18'}"/></svg>`;
 
 /* ── THE GUIDE'S MONTH ───────────────────────────────────────────────────────
    A month at a glance in a 254px column: the numbers, and a dot under the days
@@ -3487,6 +3604,25 @@ function buildGuideMiniCal() {
   const byDay = {};
   items.forEach(it => { if (it.date) (byDay[_calISO(it.date)] ||= []).push(it); });
 
+  /* THE WAIT IS A SPAN, NOT TWO DOTS. A submission is two dated facts — the day
+     it went and the day an answer is expected — and between them sit days that
+     belong to it just as much: they are the wait. Two lone dots made the
+     calendar say "something on the 13th, something on the 16th" when what is
+     true is "the App Store has had this since the 13th".
+     So every day from sent through expected-decision is banded, and only while
+     the platform is still `in_review` — once a store has answered there is no
+     wait left to draw. Overlapping platforms make ONE band: the question a
+     glance asks is "am I waiting on anything today", not "on how many". */
+  const span = new Set();
+  Object.entries(state.platformFlipped || {}).forEach(([pid, f]) => {
+    if (((f && f.phase) || 'in_review') !== 'in_review') return;
+    const t = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+    const from = f && f.time ? new Date(f.time) : _calToday();
+    const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const b = _calDay(a, Math.ceil(t.days));
+    for (let d = new Date(a); d <= b; d = _calDay(d, 1)) span.add(_calISO(d));
+  });
+
   const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const head = DOW.map(d => `<span class="gcal-dow">${d}</span>`).join('');
 
@@ -3497,13 +3633,36 @@ function buildGuideMiniCal() {
     const out  = d.getMonth() !== first.getMonth();
     const list = byDay[iso] || [];
     const launch = list.some(it => it.isLaunch);
-    /* ONE DOT PER KIND, never one per item — a day with four marketing items
+    /* ONE DOT PER STATE, never one per item — a day with four marketing items
        would otherwise grow a row of identical dots and push the grid around.
-       Launch day is not a kind: it takes the cell, as it does in the big one. */
-    const kinds = [...new Set(list.map(it => it.kind))].filter(k => CAL_KIND[k]);
-    const dots  = kinds.map(k => `<span class="gcal-dot" style="background:${CAL_KIND[k].color}"></span>`).join('');
+       It used to be one per KIND, which answered "did this come from the
+       Marketing tab or the Submission tab"; a glance at a month asks "is
+       anything waiting on me today", and that is a state. Launch day is
+       neither: it takes the whole cell, as it does in the big calendar, so it
+       is excluded here rather than printing a green dot inside a green box. */
+    const states = [...new Set(list.filter(it => !it.isLaunch).map(_calStatus))];
+    /* An ESTIMATED day gets a hollow dot rather than a filled one, so a date
+       the app worked out and a date something really happened on are not the
+       same mark. A day holding both is filled — a fact outranks a guess. */
+    const estOnly = s => list.some(it => _calStatus(it) === s && it.isDecision)
+                      && !list.some(it => _calStatus(it) === s && !it.isDecision);
+    /* `--d` rather than a bare background, because the hollow variant draws the
+       same colour as an inset ring and hard-coded #4ADE80 for a year — so a
+       decision dot stayed green no matter what its state was. One custom
+       property, two treatments, no second copy of the colour. */
+    const dots = states.map(s => `<span class="gcal-dot${estOnly(s) ? ' is-est' : ''}" style="--d:${CAL_STATUS[s]}"></span>`).join('');
+    /* The band's ends are rounded and its middle is square, so consecutive days
+       read as one stroke. A ROW EDGE counts as an end: the band cannot flow
+       from Saturday to Sunday, it starts again on the next line — which is what
+       `i % 7` is doing here, not arithmetic on dates. */
+    const inSpan = span.has(iso);
+    const spanCls = !inSpan ? '' :
+      ' in-span'
+      + ((i % 7 === 0 || !span.has(_calISO(_calDay(d, -1)))) ? ' span-start' : '')
+      + ((i % 7 === 6 || !span.has(_calISO(_calDay(d,  1)))) ? ' span-end'   : '');
+
     cells += `
-      <button class="gcal-day${out ? ' is-out' : ''}${iso === todayISO ? ' is-today' : ''}${launch ? ' is-launch' : ''}${iso === state.guideCalDay ? ' is-picked' : ''}"
+      <button class="gcal-day${out ? ' is-out' : ''}${iso === todayISO ? ' is-today' : ''}${launch ? ' is-launch' : ''}${iso === state.guideCalDay ? ' is-picked' : ''}${spanCls}"
               onclick="guideCalOpen('${iso}')" title="${escHtml(list.map(it => it.label).join(' · ') || '')}">
         <span class="gcal-num">${d.getDate()}</span>
         <span class="gcal-dots">${dots}</span>
@@ -3513,6 +3672,7 @@ function buildGuideMiniCal() {
   const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   return `
     <div class="gcal">
+      ${_guideCalLede()}
       <div class="gcal-head">
         <span class="gcal-month">${escHtml(monthName)}</span>
         <span class="gcal-nav">
@@ -3523,6 +3683,49 @@ function buildGuideMiniCal() {
       </div>
       <div class="gcal-grid">${head}${cells}</div>
       ${_guideCalDayPanel(byDay)}
+    </div>`;
+}
+
+/* ── WHY THE MONTH IS OPEN ───────────────────────────────────────────────────
+   Pressing Submit throws the guide onto this face (see `_doFinalSubmit`), and a
+   surface that changes under you without saying why is a glitch. This line is
+   the why: it names the store, the date an answer is expected, and the one
+   thing worth doing in the meantime.
+
+   It exists ONLY while something is actually in review — the phases past the
+   wait have had their answer, and a line that outlives its fact is the reason
+   nobody reads the next one. It is not dismissible for the same reason: it is
+   not a notification, it is the state of the month you are looking at, and it
+   leaves on its own the moment that state ends.
+
+   The date wears the wait's own yellow, so the sentence and the band under it
+   are visibly the same fact. The link is violet because it sends you somewhere
+   else, which is the card's rule for the Marketing nudge and the same journey:
+   the answer to "there is nothing to do here" is "so go do that". */
+function _guideCalLede() {
+  const waits = Object.entries(state.platformFlipped || {})
+    .filter(([, f]) => ((f && f.phase) || 'in_review') === 'in_review')
+    .map(([pid, f]) => {
+      const t = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+      const from = f && f.time ? new Date(f.time) : _calToday();
+      const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+      return { label: t.label, date: _calDay(a, Math.ceil(t.days)) };
+    })
+    .sort((a, b) => a.date - b.date);
+  if (!waits.length) return '';
+
+  const when = waits[0].date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  /* One store is named; several are counted. "App Store, Google Play and Steam
+     have your build" is a sentence you have to parse to learn one number. */
+  const who = waits.length === 1
+    ? `${escHtml(waits[0].label)} has your build.`
+    : `${waits.length} stores have your build.`;
+  const lead = waits.length === 1 ? 'Answer expected' : 'First answer expected';
+
+  return `
+    <div class="gcal-lede">
+      <span class="gcal-lede-txt">${who} ${lead} <b>${escHtml(when)}</b>.</span>
+      <button class="gcal-lede-go" onclick="setView('broadcast')">Line up your launch →</button>
     </div>`;
 }
 
@@ -3555,18 +3758,22 @@ function _guideCalDayPanel(byDay) {
      `<button>`, because buttons cannot nest. */
   const rows = list.map(it => {
     const k = CAL_KIND[it.kind] ? it.kind : 'marketing';
+    /* THE DOT NOW CARRIES TWO FACTS AT ONCE, and it has to, because there is
+       one slot and the colour was taken away from it. Its FILL is the item's
+       state and its SHAPE is its kind — square Submission, round Marketing —
+       so pressing it visibly changes something (the shape) even though the
+       colour it is wearing is not the thing being cycled. A control whose only
+       feedback is a hue it does not own would have been unpressable in the
+       dark. The tooltip still says the kind in words. */
     return `
-    <div class="gcal-row${_calDone(it) ? ' is-done' : ''}" style="--k:${CAL_KIND[k].color}">
-      <button class="gcal-kind" onclick="guideCalCycleKind('${it.key}')"
+    <div class="gcal-row${_calDone(it) ? ' is-done' : ''}" style="--k:${_calColor(it)}">
+      <button class="gcal-kind is-${CAL_KIND[k].shape}" onclick="guideCalCycleKind('${it.key}')"
               title="${escHtml(CAL_KIND[k].label)} — press to change"></button>
       <button class="gcal-row-label" onclick="calToggleDone('${it.key}')" title="Tick it off">${escHtml(it.label)}</button>
       <button class="gcal-row-x" onclick="guideCalRemove('${it.key}')" aria-label="Remove" title="Remove">×</button>
     </div>`;
   }).join('');
 
-  /* The add row's dot is the same control doing the same job one step earlier:
-     it colours what you are ABOUT to type, so the choice is made in the same
-     gesture as the typing rather than in a form afterwards. */
   const nextKind = CAL_KIND[state.guideCalKind] ? state.guideCalKind : 'marketing';
 
   return `
@@ -3584,8 +3791,12 @@ function _guideCalDayPanel(byDay) {
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
       </button>
       ${rows || `<div class="gcal-panel-empty">Nothing on this day</div>`}
-      <div class="gcal-add" style="--k:${CAL_KIND[nextKind].color}">
-        <button class="gcal-kind" onclick="guideCalNextKind()"
+      ${/* The add row's dot is the same control one step earlier: it shows the
+            SHAPE of what you are about to type, so the kind is chosen in the
+            same gesture as the typing. Its fill is `todo`, because that is what
+            a thing you have not written yet is. */''}
+      <div class="gcal-add" style="--k:${CAL_STATUS.todo}">
+        <button class="gcal-kind is-${CAL_KIND[nextKind].shape}" onclick="guideCalNextKind()"
                 title="${escHtml(CAL_KIND[nextKind].label)} — press to change"></button>
         <input class="gcal-add-input" id="gcal-add-input" type="text" placeholder="Add to this day…"
                onkeydown="if(event.key==='Enter'){guideCalAdd('${iso}')}else if(event.key==='Escape'){this.value=''}">
@@ -4034,6 +4245,14 @@ function buildReleaseBlock(pid) {
      voice.
      `si existen` is load-bearing: Steam has no version so its row starts at
      BUILD, and Web has neither so the date is the whole value. */
+  /* ONCE IT IS SENT, THE DESTINATION IS A FACT. The picker disappears below
+     (`submitDone`), and a submitted card that showed VERSION and BUILD but not
+     where the thing went was hiding the one decision the developer actually
+     made. So it joins the line as a third named pair, in the same `.rel-pair`
+     shape as BUILD — one line, three facts, no control. */
+  const _sentTrack = (state.platformStepStatus?.[pid]?.submit === 'complete')
+    ? platformTrackLabel(pid, (state.selectedTracks || {})[pid]) : '';
+
   const parts = [];
   if (shape.versionLabel && version) {
     parts.push(`<b class="rel-version" title="${escHtml(shape.versionLabel)}">v${escHtml(version)}</b>`);
@@ -4050,6 +4269,9 @@ function buildReleaseBlock(pid) {
     parts.push(parts.length
       ? `<span class="rel-pair"><span class="rel-label">Build</span>${inner}</span>`
       : inner);
+  }
+  if (_sentTrack) {
+    parts.push(`<span class="rel-pair"><span class="rel-label">Track</span><span class="rel-build">${escHtml(_sentTrack)}</span></span>`);
   }
 
   /* NO DATE. "2 days ago" rode along on this row through three shapes and it
@@ -4112,7 +4334,7 @@ function buildReleaseBlock(pid) {
     const withPick = i === 0 && trackPick;
     return `
     <div class="rel-label">${escHtml(r[0])}</div>
-    <div class="rel-value${withPick ? ' rel-value--pick' : ''}"><div class="rel-line">${r[1]}</div>${withPick ? trackPick : ''}</div>`;
+    <div class="rel-value${withPick ? ' rel-value--pick' : ''}"><div class="rel-line${_sentTrack ? ' rel-line--triple' : ''}">${r[1]}</div>${withPick ? trackPick : ''}</div>`;
   }).join('');
 
   return `
@@ -4188,24 +4410,60 @@ function _gearBtn(onclick, label, active, alert) {
      • signed-in   (account face, logged in)     — gear flips to the linked (steps) face
      • linked      (steps face)                  — gear flips to the signed-in face
    Every state also shows a power button that deactivates the platform. */
+/* A SUBMITTED CARD CANNOT BE SWITCHED OFF, SO IT DOES NOT OFFER TO. The power
+   button deactivates a platform — it is about whether you are shipping there at
+   all, which is not a question you are asking while a store holds your build.
+   The one undo that exists at that point is cancelling the submission, so that
+   is the button, and it looks like a stop sign rather than a power symbol.
+   It ASKS. Deactivating is reversible by pressing the tile again; withdrawing
+   from review is not, so the press opens a question inside the card rather
+   than doing it. */
+function _cancelSubBtn(pid) {
+  return `
+    <button class="active-card-power active-card-cancelsub" type="button"
+            onpointerdown="event.stopPropagation();cancelHoldStart('${pid}', this)"
+            onpointerup="cancelHoldEnd()" onpointerleave="cancelHoldEnd()" onpointercancel="cancelHoldEnd()"
+            onclick="event.stopPropagation()"
+            title="Hold to cancel submission" aria-label="Hold to cancel submission">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+        <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>`;
+}
+
 function _platformHeadActions(pid, face) {
   // Web has no developer-portal login, so its header is power-only (no gear).
-  if (pid === 'web') return `<div class="active-card-actions">${_powerBtn(pid)}</div>`;
+  if (pid === 'web') return `<div class="active-card-actions">${face === 'submitted' ? _cancelSubBtn(pid) : _powerBtn(pid)}</div>`;
   const connected = isPlatformConnected(pid);
   let gear;
-  if (face === 'steps') {
-    // Cog turns alert-red until connected; either way it flips to the account/connect face.
+  if (face === 'steps' || face === 'submitted') {
+    /* SUBMITTED IS NOT THE ACCOUNT FACE, and for a long time this branch said it
+       was. There were only two arms — `steps` and everything else — so a
+       submitted card fell through to the second one and its gear came out LIT
+       (`--active`, the highlight that means "you are inside a temporary,
+       reversible view") with the tooltip **"Back to steps"**. The card was
+       announcing itself as a settings detour you could reverse with one press,
+       on the one face where going back is a withdrawal that costs a 1.4s hold.
+       Measured before the fix: `title: "Back to steps"`, `onclick:
+       platformGearFromAccount`, class carrying `--active`.
+       A sent card and a card being filled in want the same thing from this
+       button — a way to the account — so they share the arm. What differs is
+       the alert: an unconnected account is a problem you can still fix while
+       you are working, and a nag about it after the build has gone is pointing
+       at a door that has already closed. */
     gear = _gearBtn(`platformGearFromSteps('${pid}')`,
-      connected ? 'Account settings' : 'Connect account to publish', false, !connected);
-  } else if (connected) {
-    // Highlighted to signal you're in a temporary, reversible settings view.
-    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
+      connected ? 'Account settings' : 'Connect account to publish',
+      false, !connected && face === 'steps');
   } else {
-    // On the connect face; cog flips back to steps (connecting is optional up front).
+    /* The account/connect face itself: lit, because you ARE in the temporary
+       view, and the same press takes you back out of it. Connected or not makes
+       no difference to the gear here — connecting is optional up front. */
     gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
   }
-  // Settings (gear) on the left, power on the right.
-  return `<div class="active-card-actions">${gear}${_powerBtn(pid)}</div>`;
+  // Settings (gear) on the left; power on the right — or, once submitted, the
+  // one undo that exists at that point: cancelling.
+  return `<div class="active-card-actions">${gear}${face === 'submitted' ? _cancelSubBtn(pid) : _powerBtn(pid)}</div>`;
 }
 
 // Shared header used by all states. Body is inert; only the buttons act.
@@ -5190,7 +5448,18 @@ function renderStepModal() {
         <button class="task-modal-close" onclick="closeStepModal()">×</button>
       </div>`}
     </div>
-    <div class="submit-modal-body-wrap at-top at-bottom" id="step-modal-body-wrap">
+    ${/* READ-ONLY IS A PROPERTY OF THE VISIT, not of the step. A submitted
+          platform's answers are a declaration already made — you can read every
+          one of them and change none. The lock is one class on the scroller
+          plus a banner, rather than a `disabled` on every control: the step
+          bodies are built by a dozen builders across four platforms and
+          touching each of them to learn a second mode is how they drift.
+          The cost, stated: it is a POINTER lock, not a permissions model. A
+          keyboard can still reach a field. That is the right trade for a
+          prototype and the wrong one for a product. */''}
+    ${state.stepModalReadOnly === platformId ? `
+    <div class="step-readonly-note">Submitted — read only. Cancel the submission to change anything.</div>` : ''}
+    <div class="submit-modal-body-wrap at-top at-bottom${state.stepModalReadOnly === platformId ? ' is-readonly' : ''}" id="step-modal-body-wrap">
       <div class="submit-modal-scroll" id="step-modal-body">
         ${inferenceBanner}
         <div class="ios-step-body-content">
@@ -16702,119 +16971,160 @@ function _buildShotEditZoneHtml(pid) {
 /* ══════════════════════════════════════════════════════
    SUBMITTED CARD  (shown after successful submission — "back" of the platform card)
    ══════════════════════════════════════════════════════ */
+/* THE SUBMITTED STEPS, READ ONLY. The same `.ios-step-card` rows the steps face
+   draws — same disc, same tick, same two columns — with three things taken
+   away: the chevron, because there is nothing to open past what the modal
+   shows; the risk dot, because a risk you can no longer act on is just a
+   worry; and the Submit row, which has already happened.
+   They still open their step modal, and that modal comes up in a read-only
+   mode (`state.stepModalReadOnly`) — you can read every answer you declared
+   and change none of them. Reading back what you swore to a store is exactly
+   the thing you want most while you wait for it to answer. */
+function _submittedSteps(pid) {
+  const steps = (typeof _visiblePlatformSteps === 'function' ? _visiblePlatformSteps(pid) : (PLATFORMS[pid]?.steps || []))
+    .filter(s => !s.isSubmit);
+  return steps.map((step, i) => `
+    <div class="ios-step-card sub-step is-complete"
+         onclick="openSubmittedStep('${pid}', '${step.id}')" title="${escHtml(step.label || step.id)} — read only">
+      <div class="ios-step-num is-done">${smCheckSVG(20)}</div>
+      <div class="ios-step-info"><div class="ios-step-name">${escHtml(step.label || step.id)}</div></div>
+    </div>`).join('');
+}
+
+/* ══════════════════════════════════════════════════════
+   SUBMITTED CARD — the SAME card, with the work hidden
+   ══════════════════════════════════════════════════════
+   It used to be a card of its own: coloured header bar, 44px platform icon in
+   a well, its own name row, its own cancel control. Five elements re-drawing
+   things the steps card already draws, in a different shape — so pressing
+   Submit swapped one object for a lookalike rather than changing the one you
+   had. Now it IS the platform card: `platformCardHead` verbatim, the release
+   block verbatim, the same width. The steps are simply gone, because they are
+   done, and the card is shorter by exactly what they occupied.
+
+   Two variants are live while the shape is being chosen — `state.subVariant`,
+   flipped with `smReviewVariant(1|2)`:
+     1  four segments across the whole journey (prepare → review → release →
+        live), with the store's own wait claim beside the status line
+     2  no segments; the two dates instead — submitted, and estimated
+   Both print the state in the store's own words (`STORE_REVIEW`). */
 function buildSubmittedCard(pid, flipData) {
-  const trackId    = (flipData && typeof flipData === 'object') ? flipData.track : (flipData || '');
-  const tracks     = PLATFORM_TRACKS[pid] || [];
-  const track      = tracks.find(t => t.id === trackId);
-  const trackLabel = track ? track.label : trackId;
-  const isWeb      = pid === 'web';
-  const ts         = (flipData && flipData.time)
-    ? new Date(flipData.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : '';
-  // Lock to the exact pre-flip active card height — prevents CSS Grid from stretching
-  // sibling platform cards after submission (min-height alone would allow growth)
-  /* A FLOOR, NOT A CAGE. This was `height` + `max-height` + `overflow: hidden`,
-     which did stop the flipped card from stretching its siblings — and also
-     clipped it, silently, the moment a face held more than the steps face it
-     replaced. The phases that ask something of you (accepted, rejected) carry a
-     sentence and a button and are genuinely taller. `min-height` keeps the
-     no-stretch guarantee the lock was there for and lets the card grow. */
-  const savedH = state.platformFlippedCardHeight?.[pid];
-  const heightStyle = savedH ? ` style="min-height:${savedH}px"` : '';
+  const isWeb  = pid === 'web';
+  const phase  = isWeb ? 'live' : ((flipData && flipData.phase) || 'in_review');
+  const vocab  = storeReviewPhase(pid, phase);
+  const isLive = phase === 'live';
+  const isYours = phase === 'accepted';
+  const isBad   = phase === 'rejected';
 
-  /* THE PHASE IS THE CARD. `state.platformFlipped[pid].phase` is one of
-     STORE_REVIEW_PHASES; anything older (a submit made before phases existed,
-     which wrote only `{track, time}`) reads as `in_review`, so nothing has to
-     be migrated. Web is always `live` — a deploy has no review to wait for. */
-  const phase    = isWeb ? 'live' : ((flipData && flipData.phase) || 'in_review');
-  const vocab    = storeReviewPhase(pid, phase);
-  const isLive   = phase === 'live';
-  const isYours  = phase === 'accepted';   // approved, and the next move is the developer's
-  const isBad    = phase === 'rejected';
+  const _timing    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+  const reviewDays = isWeb ? 0 : _timing.days;
+  const reviewWhole = Math.max(1, Math.ceil(reviewDays));
 
-  // How long this store typically takes — vendor numbers, see STORE_REVIEW.
-  const reviewDays  = (STORE_REVIEW[pid] || STORE_REVIEW.ios).days || 1;
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const sent = (flipData && flipData.time) ? new Date(flipData.time) : new Date();
+  const est  = _addDays(sent, reviewWhole);
 
-  const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const submittedDate = (flipData && flipData.time) ? new Date(flipData.time) : new Date();
-  const estLiveDate   = new Date(submittedDate); estLiveDate.setDate(estLiveDate.getDate() + reviewDays);
-  const submittedStr  = fmtDate(submittedDate);
-  const estLiveStr    = fmtDate(estLiveDate);
-  const daysElapsed   = Math.max(1, Math.min(reviewDays,
-    Math.floor((Date.now() - submittedDate.getTime()) / 86400000) + 1));
-
-  /* FOUR SEGMENTS, ONE PER PHASE OF THE JOURNEY — sent, reviewed, released,
-     live. The phase decides how many are filled, so the bar and the words in
-     the header can never disagree. Rejected does not advance it: it paints the
-     segment the review stopped on red, because a rejection is not progress. */
-  const SEG_COUNT = 4;
-  const stageIdx  = isLive ? SEG_COUNT : isYours ? 2 : 1;
-  const segbar = Array.from({ length: SEG_COUNT }, (_, i) => {
+  /* FOUR SEGMENTS, ONE PER STAGE OF THE JOURNEY — prepare, review, release,
+     live — so the bar means the same thing on every platform and in every
+     phase. Rejected does not advance it: it paints the stage the review
+     stopped on, because a rejection is not progress. */
+  /* THE INDEX IS THE STAGE YOU ARE IN, not the count of stages behind you.
+     `in_review` is the SECOND of the four (prepare → review → release → live),
+     so it is index 1 with only `prepare` filled behind it. It was 2, which lit
+     the third segment and quietly claimed the release stage had been reached
+     while the store was still reading the build. */
+  const stage = isLive ? 4 : isYours ? 2 : 1;      // prepare is always behind you
+  const segs = [0,1,2,3].map(i => {
     if (isBad) return `<span class="sub-seg ${i === 0 ? 'is-done' : i === 1 ? 'is-bad' : ''}"></span>`;
-    return `<span class="sub-seg ${i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : ''}"></span>`;
+    return `<span class="sub-seg ${i < stage ? 'is-done' : i === stage ? 'is-current' : ''}"></span>`;
   }).join('');
 
-  const waitText = isLive
-    ? 'Your game is live. Announce it everywhere and turn launch day into momentum.'
-    : isYours
-      ? 'Nothing is public yet. Pick the moment, then announce it the same hour.'
-      : isBad
-        ? 'Fix what they flagged and send it again. Nothing you published before has changed.'
-        : 'Reviews are quiet time. Line up your announcement so launch day runs itself.';
+  const phaseCls = isLive ? 'is-live' : isYours ? 'is-yours' : isBad ? 'is-bad' : 'is-waiting';
+  const variant  = state.subVariant === 2 ? 2 : 1;
 
-  /* THE PHASE CLASS CARRIES THE COLOUR, and the rule it follows is the app's
-     own: green is done, amber is "this needs you", red is wrong. Which means
-     IN REVIEW is none of the three — nothing needs you while a store reads
-     your build, so it wears a neutral bar rather than the amber it used to.
-     Amber moved to `accepted`, which is the one phase that really is waiting
-     on the developer. */
-  const phaseCls = isLive ? ' is-live' : isYours ? ' is-yours' : isBad ? ' is-bad' : ' is-waiting';
+  /* The store's own wait claim. Apple publishes a percentage rather than a
+     duration, so under two days it says that instead of counting to one. */
+  const waitNote = isWeb ? 'Live now'
+    : reviewWhole <= 1 ? 'Usually under 24h'
+    : `Usually ${reviewWhole} days`;
+
+  const reviewing = !!state.subReview?.[pid];
+
+  /* THE ACTION IS THE STORE'S OWN VERB when the next move is the developer's
+     (Release This Version / Publish changes / Release App) — see STORE_REVIEW. */
+  const action = vocab.action
+    ? `<button class="sub-phase-act${isBad ? ' is-bad' : ''}" onclick="smAdvancePhase('${pid}')">${escHtml(vocab.action)}</button>`
+    : '';
 
   return `
-    <div class="active-card submitted-card${phaseCls}" id="active-card-${pid}"${heightStyle}>
-      <div class="sub-review-bar${phaseCls}">
-        <span class="sub-review-status">${escHtml(vocab.label)}</span>
-        ${/* A DAY COUNTER NEEDS DAYS TO COUNT. Apple's verified figure is "90%
-              in less than 24 hours", i.e. one day, and "Day 1 of 1" is what a
-              counter says when it has nothing to count — it reads like a bug.
-              Under two days the store's own claim goes in that slot instead. */''}
-        ${(isLive || isYours || isBad) ? ''
-          : reviewDays <= 1
-            ? `<span class="sub-review-day">Usually under <b>24h</b></span>`
-            : `<span class="sub-review-day">Day <b>${daysElapsed}</b> of <b>${reviewDays}</b></span>`}
+    <div class="active-card submitted-card ${phaseCls}" id="active-card-${pid}">
+      ${platformCardHead(pid, 'submitted')}
+      ${buildReleaseBlock(pid)}
+      ${variant === 1 ? `<div class="sub-segbar">${segs}</div>` : ''}
+      <div class="sub-state">
+        <span class="sub-state-line">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>
+        ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
+              `!isYours && !isBad`, which let it survive into `live` — so a
+              build that was finished, distributed and on sale still said
+              "Usually 3 days" beside READY FOR DISTRIBUTION. It answers "how
+              long will this take", and past the decision that question has no
+              referent: there is nothing left to be usually-anything. */''}
+        ${variant === 1 && phase === 'in_review' ? `<span class="sub-state-note">${escHtml(waitNote)}</span>` : ''}
       </div>
-      <div class="submitted-body">
-        <div class="sub-plat-row">
-          <div class="sub-plat-icon">${platformIcon(pid, 24, 'white')}</div>
-          <div class="sub-plat-text">
-            <div class="sub-plat-name">${platLabel(pid)}</div>
-            ${trackLabel ? `<div class="sub-plat-sub">${escHtml(trackLabel)}</div>` : ''}
-          </div>
-          <button class="sub-cancel-icon" onclick="cancelSubmission('${pid}')" title="${isWeb ? 'Take down' : 'Cancel submission'}" aria-label="${isWeb ? 'Take down' : 'Cancel submission'}">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"/></svg>
-          </button>
-        </div>
-        <div class="sub-segbar">${segbar}</div>
-        <div class="sub-dates">
-          <span>${isLive && isWeb ? 'Deployed' : 'Submitted'} ${submittedStr}</span>
-          ${isLive
-            ? `<span class="sub-est"><b>Live now</b></span>`
-            : isYours
-              ? `<span class="sub-est"><b>Waiting on you</b></span>`
-              : isBad
-                ? `<span class="sub-est"><b>Needs a fix</b></span>`
-                : `<span class="sub-est"><b>Est. live</b> ${estLiveStr}</span>`}
-        </div>
-        ${/* THE STORE'S OWN SENTENCE, under the bar that names the state. The
-              header says what the store calls it; this says what it means and,
-              when the next move is yours, what the store's own button says. */''}
-        <div class="sub-phase-note">${escHtml(vocab.note || '')}</div>
-        ${vocab.action ? `<button class="imp-cta sub-phase-act${isBad ? ' is-bad' : ''}" onclick="smAdvancePhase('${pid}')">${escHtml(vocab.action)}</button>` : ''}
-        <div class="sub-wait-card">
-          <div class="sub-wait-head">${isLive ? 'Now live' : isYours ? 'Before you release' : isBad ? 'What now' : 'While you wait'}</div>
-          <div class="sub-wait-body">${waitText}</div>
-          <button class="sub-wait-link" onclick="setView('broadcast')">Open Marketing →</button>
-        </div>
-      </div>
+      ${variant === 2 && !isWeb ? `
+      <div class="sub-facts">
+        <span class="rel-pair"><span class="rel-label">Submitted</span><span class="rel-build">${fmt(sent)}</span></span>
+        ${phase === 'in_review' ? `<span class="rel-pair"><span class="rel-label">Estimated</span><span class="rel-build">${fmt(est)}</span></span>` : ''}
+      </div>` : ''}
+      ${vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : ''}
+      ${/* THE WAIT IS THE ONLY PHASE WITH NOTHING TO DO IN IT, so it is the one
+            that should point somewhere. The line it replaced said exactly that
+            — "Nothing to do until they answer" — which is true and useless: it
+            named the dead air without filling it. This names what the dead air
+            is FOR. It lives here rather than in `STORE_REVIEW` because the
+            advice is the same whatever store is reading your build; that table
+            keeps only what differs between them. */''}
+      ${phase === 'in_review' ? `
+      <button class="sub-nudge" onclick="setView('broadcast')">Quiet time. Go plan your launch →</button>` : ''}
+      ${/* THE STEPS ARE STILL THERE, they just have nothing left to ask. A
+            submitted card that hid them entirely made the work unreachable the
+            moment it was done — you could not check what you had declared
+            without withdrawing. Folded by default because the card's job now is
+            the wait, not the form. */''}
+      ${/* NOT "REVIEW". The word is already taken on this very card — the STORE
+            is the one reviewing — and it was wrong twice over: reviewing is
+            what you did before you pressed Submit, and this is just looking at
+            what went. "See what you sent" says the act and the tense.
+            And no arrow: an arrow means somewhere else, and this opens in
+            place.
+
+            THE TOGGLE COMES BEFORE THE THING IT TOGGLES. It sat after the list,
+            so opening pushed it down by the whole height of the list — you
+            pressed "See what you sent" and the button fled from under the
+            pointer, landing four rows lower as "Hide what you sent". A control
+            that moves as a result of being pressed makes its own second press a
+            hunt, and for a disclosure the second press is the likeliest next
+            thing you do. Above it, the list unrolls downwards into space the
+            button never occupied and the hit area does not move at all. */''}
+      <button class="sub-steps-toggle" onclick="toggleSubReview('${pid}')">
+        ${reviewing ? 'Hide what you sent' : 'See what you sent'}
+      </button>
+      ${reviewing ? `<div class="sub-steps">${_submittedSteps(pid)}</div>` : ''}
+      ${/* THE ACT IS THE LAST THING IN THE CARD, because on the other face it
+            already is: the steps list ends in the Submit row, and Release is
+            that same object seen from this side. Putting it there makes one
+            shape for both faces — the facts at the top, everything you read in
+            the middle, the single act at the bottom — where it used to sit
+            above "See what you sent", which reads as though the quiet link were
+            the card's conclusion.
+            The read-only steps are reference, so they belong in the middle with
+            the other things you read, not after the act. The cost, paid
+            knowingly: opening the list pushes this button down by the list's
+            height. That is not the bug the toggle had — there, the control you
+            pressed fled from under your own pointer, which makes its second
+            press a hunt. Here a different control moves as an ordinary
+            consequence of the list growing, exactly as the Submit row would sit
+            below a list that gained a step. */''}
+      ${action}
     </div>`;
 }

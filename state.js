@@ -2443,50 +2443,46 @@ const PLATFORM_TRACKS = {
    outright that "Approved titles will not release themselves". So the state
    names the approval, the line names the obligation, and the verb is yours.
 
-   `days` is the review wait, and these are the vendor's own numbers: Apple
-   publishes "90% of submissions are reviewed in less than 24 hours"; Google
-   gives NO SLA and warns of "up to seven days or longer"; Steam says "typically
-   3-5 business days" and asks for 7 days of margin.
+   THIS TABLE HOLDS NO DURATIONS, and that is deliberate. It had a `days` per
+   store for one day and it was a second answer to a question `OB_PLATFORM_TIMING`
+   (render.js, Mark's, v0.58) had already answered for the Release Timing panel,
+   the dashboard timeline and the calendar's workback — so the same submission
+   came out a different length depending on which surface you read it on. One
+   table for how long, this one for what it is called. The vendor claims that
+   justified the old numbers survive as COPY where they belong: Apple's "90% in
+   less than 24 hours" is a sentence in the card, not arithmetic.
 
-   ⚠ Two things to know before trusting this table:
-   1. `OB_PLATFORM_TIMING` in render.js holds a SECOND set of review durations
-      (ios 2.2, android 4.3, steam 7.1) for the dashboard timeline, and it
-      disagrees with this one. Two tables, one fact. Unify them deliberately.
-   2. Steam's `rejected` label is the only string here with no vendor source:
+   ⚠ One thing left flagged:
+   Steam's `rejected` label is the only string here with no vendor source:
       Steamworks documents no rejection state and no withdrawal at all — the
       model is "feedback sent" or "Ready for release". Flagged rather than
       invented-and-forgotten. */
 const STORE_REVIEW = {
   ios: {
-    days: 1,
-    in_review: { label: 'IN REVIEW',                  note: 'App Review has your build. Nothing to do until they answer.' },
+    in_review: { label: 'IN REVIEW',                  note: '' },
     accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the App Store when you release it.', action: 'Release This Version' },
     live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the App Store.' },
     rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
   },
   macos: {
-    days: 1,
-    in_review: { label: 'IN REVIEW',                  note: 'App Review has your build. Nothing to do until they answer.' },
+    in_review: { label: 'IN REVIEW',                  note: '' },
     accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the Mac App Store when you release it.', action: 'Release This Version' },
     live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the Mac App Store.' },
     rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
   },
   android: {
-    days: 7,
-    in_review: { label: 'IN REVIEW',                  note: 'Google is reviewing this release. There is no published time limit.' },
+    in_review: { label: 'IN REVIEW',                  note: 'Google publishes no time limit.' },
     accepted:  { label: 'READY TO PUBLISH',           note: 'Passed review. It goes out when you publish it.', action: 'Publish changes' },
     live:      { label: 'PUBLISHED',                  note: 'Live on Google Play.' },
     rejected:  { label: 'UPDATE REJECTED',            note: 'Your live version stays up. Fix what they flagged and send again.', action: 'Read the notes' },
   },
   steam: {
-    days: 5,
-    in_review: { label: 'IN REVIEW',                  note: 'Valve reviews the store page and the build separately.' },
+    in_review: { label: 'IN REVIEW',                  note: 'Store page and build are reviewed separately.' },
     accepted:  { label: 'READY FOR RELEASE',          note: 'Approved titles do not release themselves.', action: 'Release App' },
     live:      { label: 'RELEASED',                   note: 'Live on Steam.' },
     rejected:  { label: 'REVIEW FEEDBACK',            note: 'Valve sent notes on the store page or the build.', action: 'Read the notes' },
   },
   web: {
-    days: 0,
     live:      { label: 'LIVE',                       note: 'Your game is live.' },
   },
 };
@@ -2495,6 +2491,16 @@ const STORE_REVIEW = {
    `rejected` is off that line — it can arrive from `in_review` and it goes
    backwards, to work you have to redo. */
 const STORE_REVIEW_PHASES = ['in_review', 'accepted', 'live', 'rejected'];
+
+/* THE APP'S CALENDAR MARK — the same art the topbar's Calendar tab wears, so
+   the guide's month toggle and the nav tab are one icon rather than two
+   calendars drawn by two hands. A filled path on an 82×75 viewBox taking
+   `currentColor`, NOT a stroked 24-unit glyph: at 13px a 1.8 stroke is about
+   one device pixel and the little date squares inside it disappear.
+   NOTE: `index.html` carries a literal copy inside `#nav-calendar`, because
+   that button is static markup with no JS at parse time. If the art changes,
+   change both — this is the one symbol in the app that is knowingly twinned. */
+const SM_CAL_SVG = `<svg viewBox="0 0 82 75" fill="none" aria-hidden="true"><g transform="matrix(1,0,0,1,-10.376,5.49316)"><path d="M23.153,69.417L78.735,69.417C82.994,69.417 86.182,68.366 88.298,66.264C90.413,64.162 91.471,61.008 91.471,56.803L91.471,7.121C91.471,2.916 90.413,-0.237 88.298,-2.34C86.182,-4.442 82.994,-5.493 78.735,-5.493L23.153,-5.493C18.894,-5.493 15.7,-4.442 13.57,-2.34C11.441,-0.237 10.376,2.916 10.376,7.121L10.376,56.803C10.376,61.008 11.441,64.162 13.57,66.264C15.7,68.366 18.894,69.417 23.153,69.417ZM22.542,62.866C20.752,62.866 19.368,62.385 18.392,61.422C17.415,60.459 16.927,59.041 16.927,57.17L16.927,18.799C16.927,16.927 17.415,15.51 18.392,14.547C19.368,13.584 20.752,13.102 22.542,13.102L79.264,13.102C81.082,13.102 82.479,13.584 83.455,14.547C84.432,15.51 84.92,16.927 84.92,18.799L84.92,57.17C84.92,59.041 84.432,60.459 83.455,61.422C82.479,62.385 81.082,62.866 79.264,62.866L22.542,62.866ZM43.009,27.751L45.41,27.751C46.115,27.751 46.611,27.615 46.895,27.344C47.18,27.072 47.323,26.584 47.323,25.879L47.323,23.478C47.323,22.773 47.18,22.291 46.895,22.034C46.611,21.776 46.115,21.647 45.41,21.647L43.009,21.647C42.304,21.647 41.809,21.776 41.524,22.034C41.239,22.291 41.097,22.773 41.097,23.478L41.097,25.879C41.097,26.584 41.239,27.072 41.524,27.344C41.809,27.615 42.304,27.751 43.009,27.751ZM56.519,27.751L58.919,27.751C59.652,27.751 60.154,27.615 60.425,27.344C60.696,27.072 60.832,26.584 60.832,25.879L60.832,23.478C60.832,22.773 60.696,22.291 60.425,22.034C60.154,21.776 59.652,21.647 58.919,21.647L56.519,21.647C55.813,21.647 55.325,21.776 55.054,22.034C54.782,22.291 54.647,22.773 54.647,23.478L54.647,25.879C54.647,26.584 54.782,27.072 55.054,27.344C55.325,27.615 55.813,27.751 56.519,27.751ZM70.068,27.751L72.428,27.751C73.161,27.751 73.663,27.615 73.934,27.344C74.205,27.072 74.341,26.584 74.341,25.879L74.341,23.478C74.341,22.773 74.205,22.291 73.934,22.034C73.663,21.776 73.161,21.647 72.428,21.647L70.068,21.647C69.336,21.647 68.834,21.776 68.563,22.034C68.292,22.291 68.156,22.773 68.156,23.478L68.156,25.879C68.156,26.584 68.292,27.072 68.563,27.344C68.834,27.615 69.336,27.751 70.068,27.751ZM29.5,41.056L31.901,41.056C32.606,41.056 33.095,40.921 33.366,40.649C33.637,40.378 33.773,39.89 33.773,39.185L33.773,36.825C33.773,36.092 33.637,35.597 33.366,35.339C33.095,35.082 32.606,34.953 31.901,34.953L29.5,34.953C28.768,34.953 28.266,35.082 27.995,35.339C27.724,35.597 27.588,36.092 27.588,36.825L27.588,39.185C27.588,39.89 27.724,40.378 27.995,40.649C28.266,40.921 28.768,41.056 29.5,41.056ZM43.009,41.056L45.41,41.056C46.115,41.056 46.611,40.921 46.895,40.649C47.18,40.378 47.323,39.89 47.323,39.185L47.323,36.825C47.323,36.092 47.18,35.597 46.895,35.339C46.611,35.082 46.115,34.953 45.41,34.953L43.009,34.953C42.304,34.953 41.809,35.082 41.524,35.339C41.239,35.597 41.097,36.092 41.097,36.825L41.097,39.185C41.097,39.89 41.239,40.378 41.524,40.649C41.809,40.921 42.304,41.056 43.009,41.056ZM56.519,41.056L58.919,41.056C59.652,41.056 60.154,40.921 60.425,40.649C60.696,40.378 60.832,39.89 60.832,39.185L60.832,36.825C60.832,36.092 60.696,35.597 60.425,35.339C60.154,35.082 59.652,34.953 58.919,34.953L56.519,34.953C55.813,34.953 55.325,35.082 55.054,35.339C54.782,35.597 54.647,36.092 54.647,36.825L54.647,39.185C54.647,39.89 54.782,40.378 55.054,40.649C55.325,40.921 55.813,41.056 56.519,41.056ZM70.068,41.056L72.428,41.056C73.161,41.056 73.663,40.921 73.934,40.649C74.205,40.378 74.341,39.89 74.341,39.185L74.341,36.825C74.341,36.092 74.205,35.597 73.934,35.339C73.663,35.082 73.161,34.953 72.428,34.953L70.068,34.953C69.336,34.953 68.834,35.082 68.563,35.339C68.292,35.597 68.156,36.092 68.156,36.825L68.156,39.185C68.156,39.89 68.292,40.378 68.563,40.649C68.834,40.921 69.336,41.056 70.068,41.056ZM29.5,54.362L31.901,54.362C32.606,54.362 33.095,54.233 33.366,53.975C33.637,53.718 33.773,53.223 33.773,52.49L33.773,50.13C33.773,49.398 33.637,48.903 33.366,48.645C33.095,48.387 32.606,48.258 31.901,48.258L29.5,48.258C28.768,48.258 28.266,48.387 27.995,48.645C27.724,48.903 27.588,49.398 27.588,50.13L27.588,52.49C27.588,53.223 27.724,53.718 27.995,53.975C28.266,54.233 28.768,54.362 29.5,54.362ZM43.009,54.362L45.41,54.362C46.115,54.362 46.611,54.233 46.895,53.975C47.18,53.718 47.323,53.223 47.323,52.49L47.323,50.13C47.323,49.398 47.18,48.903 46.895,48.645C46.611,48.387 46.115,48.258 45.41,48.258L43.009,48.258C42.304,48.258 41.809,48.387 41.524,48.645C41.239,48.903 41.097,49.398 41.097,50.13L41.097,52.49C41.097,53.223 41.239,53.718 41.524,53.975C41.809,54.233 42.304,54.362 43.009,54.362ZM56.519,54.362L58.919,54.362C59.652,54.362 60.154,54.233 60.425,53.975C60.696,53.718 60.832,53.223 60.832,52.49L60.832,50.13C60.832,49.398 60.696,48.903 60.425,48.645C60.154,48.387 59.652,48.258 58.919,48.258L56.519,48.258C55.813,48.258 55.325,48.387 55.054,48.645C54.782,48.903 54.647,49.398 54.647,50.13L54.647,52.49C54.647,53.223 54.782,53.718 55.054,53.975C55.325,54.233 55.813,54.362 56.519,54.362Z" fill="currentColor" fill-rule="nonzero"/></g></svg>`;
 
 function storeReviewPhase(platformId, phase) {
   const store = STORE_REVIEW[platformId] || STORE_REVIEW.ios;
@@ -2977,6 +2983,17 @@ const state = {
   // The kind the panel's add row will use for the next item it creates. A key
   // of CAL_KIND; the dot in front of the field shows it.
   guideCalKind: 'marketing',
+
+  // Submitted-card shape under evaluation: 1 = segmented progress, 2 = dates.
+  // smReviewVariant(1|2) flips it. Temporary — one of the two will win.
+  subVariant: 1,
+
+  // pid → true while a submitted card is showing the steps it sent.
+  subReview: {},
+
+  // While a step modal is open on a SUBMITTED platform, this holds that pid and
+  // the modal renders read-only. Cleared by closeStepModal, never on open.
+  stepModalReadOnly: null,
 
   // DEBUG — the sub-tab band above the content. false = the row of pills,
   // true = just the name of the section you're in. Ctrl+D toggles it; see

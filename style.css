@@ -3050,37 +3050,57 @@ body.viewing-splash .app-subnav { display: none; }
   /* Centred on the eyebrow's line rather than on the card's padding: the card's
      14px top padding, plus half the difference between that 19.2px line box
      (16px x 1.2) and this 22px button. */
-  top: calc(14px + (19.2px - 22px) / 2);
-  width: 22px; height: 22px; padding: 0;
+  top: calc(14px + (19.2px - 26px) / 2);
+  width: 26px; height: 26px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--purple-soft); border: 1px solid rgba(159, 104, 240, .35);
-  border-radius: 6px;
-  color: var(--purple); cursor: pointer; font-size: 15px; line-height: 1;
-  transition: color .12s, border-color .12s, background .12s;
+  /* Bare until hover, like every other micro-button in the app — see the note
+     on .guide-cal-btn, which is its neighbour and its twin. Same 26/16 pair,
+     and no colour change on hover for the same reason. */
+  background: transparent; border: none;
+  border-radius: 7px;
+  color: var(--purple); cursor: pointer; line-height: 1;
+  transition: background .12s;
 }
-.guide-collapse-btn:hover {
-  color: #fff; background: rgba(159, 104, 240, .28); border-color: var(--purple);
-}
+.guide-collapse-btn svg { width: 16px; height: 16px; display: block; }
+.guide-collapse-btn:hover { background: rgba(159, 104, 240, .22); }
 
 /* THE MONTH TOGGLE SITS BESIDE THE COLLAPSE, not under it: same 22px box, same
    fill, same radius, 6px apart — two pieces of card chrome reading as one pair.
    Its `right` is derived (14 + 22 + 6) so moving the collapse button moves this
    one with it, and its `top` is the same expression rather than a copy of the
    number that expression computes to. */
+/* NO STROKE ON A MICRO-BUTTON. Nothing else in the app outlines one — the
+   platform card's gear (`.active-card-settings`) and every modal's × (
+   `.task-modal-close`) are both `border: none` on a transparent ground, bare
+   until the pointer arrives and then a soft fill. These two sat in the corner
+   of a card wearing a 1px violet outline and a permanent fill, which made the
+   guide's chrome the loudest thing on a surface whose job is to be read.
+   The hue stays violet because it is the guide's own; only the outline and the
+   resting fill go. */
+/* THE HOVER BOX IS 26, THE GLYPH IS 16. Two sizes, two jobs: the box is a
+   target and wants to be comfortably bigger than the ink it holds, the glyph
+   is the ink. Both were 22/13-14, which made the target tight and the mark
+   small. Every offset below is derived from the box, so moving 26 moves the
+   pair — `right` is `card padding + box + gap`, `top` centres the box on the
+   eyebrow's 19.2px line. */
 .guide-cal-btn {
-  position: absolute; right: calc(14px + 22px + 6px);
-  top: calc(14px + (19.2px - 22px) / 2);
-  width: 22px; height: 22px; padding: 0;
+  position: absolute; right: calc(14px + 26px + 4px);
+  top: calc(14px + (19.2px - 26px) / 2);
+  width: 26px; height: 26px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--purple-soft); border: 1px solid rgba(159, 104, 240, .35);
-  border-radius: 6px;
+  background: transparent; border: none;
+  border-radius: 7px;
   color: var(--purple); cursor: pointer; line-height: 1;
-  transition: background .15s, color .15s, border-color .15s;
+  transition: background .15s;
 }
-.guide-cal-btn svg { width: 13px; height: 13px; display: block; }
-.guide-cal-btn:hover { color: #fff; background: rgba(159, 104, 240, .28); border-color: var(--purple); }
-/* On the month face the button is the way back, so it reads as pressed. */
-.guide-cal-btn.is-on { background: rgba(159, 104, 240, .30); border-color: var(--purple); color: #fff; }
+.guide-cal-btn svg { width: 16px; height: 16px; display: block; }
+/* THE INK DOES NOT CHANGE COLOUR ON HOVER. Violet IS the guide's colour; going
+   white on approach makes the pointer a second state the icon has to carry,
+   and the fill appearing underneath already says "this is a target". */
+.guide-cal-btn:hover { background: rgba(159, 104, 240, .22); }
+/* On the month face the button is the way back, so it reads as pressed — and
+   pressed is the ONE state that earns a resting fill. */
+.guide-cal-btn.is-on { background: rgba(159, 104, 240, .26); }
 
 /* ── The guide's month ─────────────────────────────────────────────────────
    254px of inner width over seven columns is 36.3 a cell, which is enough for
@@ -3145,6 +3165,65 @@ body.viewing-splash .app-subnav { display: none; }
 /* The hover lands on the DISC, not on the cell: a rounded fill spanning a cell
    that now has a ruled edge reads as a box someone drew over the table. */
 .gcal-day:hover .gcal-num { background: rgba(255,255,255,.12); color: var(--text); }
+
+/* ── WHY THE MONTH IS OPEN ────────────────────────────────────────────────
+   The line that explains the face you were just thrown onto. It sits ABOVE the
+   month name rather than under the grid: it is the reason this view is showing
+   at all, and a reason printed after the thing it explains is a footnote.
+   No box and no border — it is the card's own prose, and a panel here would
+   make the month look like it had grown a notification. */
+.gcal-lede {
+  display: flex; flex-direction: column; gap: 3px;
+  margin: 0 0 12px; padding: 0 0 11px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+.gcal-lede-txt {
+  font-family: var(--mono); font-size: 11px; line-height: 1.45;
+  color: rgba(255,255,255,.62); letter-spacing: 0;
+}
+/* The date takes the wait's own yellow, so this sentence and the band below it
+   are one fact stated twice rather than two things that happen to be about the
+   same week. Not bold-as-weight — the face is mono and 600 at 11px only
+   thickens it — colour is the emphasis. */
+.gcal-lede-txt b { font-weight: 400; color: #FFD84D; }
+/* Violet, and an arrow, because it leaves. Same pair the submitted card's
+   Marketing nudge wears, for the same journey. */
+.gcal-lede-go {
+  align-self: flex-start; padding: 0; background: none; border: none;
+  cursor: pointer; font-family: var(--mono); font-size: 11px;
+  color: var(--guide-mark, #9f68f0); transition: color .12s;
+}
+.gcal-lede-go:hover { color: #c9a6ff; }
+
+/* ── THE WAIT, AS A HIGHLIGHTER STROKE ────────────────────────────────────
+   A band behind the days a submission is out for review. It is drawn on a
+   `::before` rather than on the cell's own background for one reason: the cell
+   carries the week's rule as a `border-bottom`, and a background paints under
+   the border and dulls it. The pseudo-element is inset 5px top and bottom, so
+   the stroke clears both rules and reads as something laid ON the table rather
+   than as a coloured row of it.
+   `z-index: 0` with the number lifted to 1 — without it the band paints over
+   the digit, since a positioned pseudo-element beats static content. */
+.gcal-day.in-span::before {
+  content: ''; position: absolute; z-index: 0;
+  left: 0; right: 0; top: 5px; bottom: 5px;
+  /* AMBER-YELLOW, NOT GREEN, and this is the band's whole point. It was
+     rgba(74,222,128,.13) — the Submission KIND's green, back when colour meant
+     which tab an item came from. So the month drew the review wait, the one
+     stretch of days in which nothing has been achieved and nothing can be done,
+     in the app's colour for DONE, a few inches from a card calling the same
+     state yellow. It is #FFD84D at 13% now: the same constant
+     `.sub-seg.is-current` paints on the submitted card, so the segment and the
+     band are one statement made twice. */
+  background: rgba(255, 216, 77, .13);
+  pointer-events: none;
+}
+.gcal-day.in-span > * { position: relative; z-index: 1; }
+/* Rounded where a run begins and ends, square in between, so a week of days
+   reads as ONE stroke and not as five chips in a row. A row edge counts as an
+   end — the band cannot flow from Saturday to Sunday. */
+.gcal-day.in-span.span-start::before { left: 3px; border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.gcal-day.in-span.span-end::before   { right: 3px; border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 .gcal-num {
   font-family: var(--mono); font-size: 12px; line-height: 1;
   /* White at 80%, not --text-dim's #a0a0a0 (63%). The dim token is for text
@@ -3165,17 +3244,43 @@ body.viewing-splash .app-subnav { display: none; }
   transition: background .12s, color .12s;
 }
 .gcal-day.is-out .gcal-num { color: rgba(255,255,255,.26); }
+/* THE PICKED DAY IS A FILL, AND IT IS DECLARED FIRST ON PURPOSE — so any day
+   that has a fill of its own (today, launch) simply keeps it and this one never
+   lands. Two rings were tried and both failed for the same reason: an outline
+   on a box that is already filled is two marks on one 28×24 shape, whether the
+   outline is drawn inside it (illegible on green) or floated around it (a halo
+   in a grid of flat rectangles). There is no ambiguity to solve anyway — the
+   panel that opens underneath names the day in words. */
+.gcal-day.is-picked .gcal-num { background: rgba(160,120,255,.30); color: #fff; }
 /* Today is a filled disc, the same violet the guide's own marks use — inside
    this card that is the colour that means "here", and borrowing the calendar
    tab's accent would put a second accent in a card that already has one. */
 .gcal-day.is-today .gcal-num { background: var(--guide-mark); color: var(--guide-bg); font-weight: 600; }
-.gcal-day.is-launch .gcal-num { box-shadow: 0 0 0 1.5px #4ADE80; color: #fff; }
+/* LAUNCH DAY IS THE ONE DAY THE WHOLE MONTH IS ABOUT, so it is the only cell
+   that fills. It was a 1.5px green ring, which put it in the same register as
+   the picked day's violet ring — two outlines competing, and the one that
+   matters reading as a selection. A filled green box says it before you have
+   read any number, and green is already the app's word for done. */
+.gcal-day.is-launch .gcal-num { background: #2fdc80; color: #0F2A1A; font-weight: 700; }
+.gcal-day.is-launch:hover .gcal-num { background: #4dea97; color: #0F2A1A; }
+/* Today and launch day can be the same cell, and launch wins outright: you
+   cannot miss today, it is where you already are. No ring marks the
+   coincidence — the same argument as above, and one green box is clearer than
+   a green box wearing a violet halo. */
+/* THE DECISION DAY IS A DATE THE APP GUESSED, not one a store promised, so its
+   dot is hollow: the same size and colour as a real submission dot, drawn as a
+   ring. The estimate and the fact cannot then be read as the same kind of
+   thing at a glance. */
+/* The hollow variant draws the dot's OWN colour as a ring — `var(--d)`, the
+   same property the filled one uses as a background. It hard-coded #4ADE80 for
+   as long as it existed, which was invisible while every submission item was
+   green and a bug the moment they stopped being: a decision expected from a
+   store would have kept printing green next to a yellow band. */
+.gcal-dot.is-est { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--d, #4ADE80); }
 .gcal-dots { display: flex; gap: 3px; height: 4px; align-items: center; }
-.gcal-dot { width: 4px; height: 4px; border-radius: 50%; display: block; }
-/* The picked day keeps its ring while the panel below is open, so the panel
-   always has a visible antecedent. A ring and not a fill: the fill is today's,
-   and a day can be both. */
-.gcal-day.is-picked .gcal-num { box-shadow: inset 0 0 0 1px rgba(160,120,255,.75); color: var(--text); }
+.gcal-dot { width: 4px; height: 4px; border-radius: 50%; display: block; background: var(--d, #888); }
+/* (`.gcal-day.is-picked` is declared up with the other fills — see the note
+   there for why it is first rather than last.) */
 
 /* ── The day panel ────────────────────────────────────────────────────────── */
 /* NO RULE OVER THE PANEL. The grid's last week already stops drawing one, so a
@@ -3206,11 +3311,19 @@ body.viewing-splash .app-subnav { display: none; }
    says what a thing IS and the dot that says what the next thing WILL BE sit
    on one column. */
 .gcal-row { display: flex; align-items: center; gap: 7px; min-height: 24px; }
+/* THE DOT SAYS TWO THINGS: its FILL is the item's state (--k, from _calColor)
+   and its SHAPE is its kind. Colour used to be the kind, and when that moved to
+   status this control lost its only feedback — pressing it would have changed a
+   field with nothing on screen to show for it. Square is Submission, round is
+   Marketing, and the transition covers the radius so the change is a morph
+   rather than a swap. 2px rather than 0: a 9px hard square beside the grid's
+   7px-radius day boxes reads as a different family of object. */
 .gcal-kind {
   flex: none; width: 9px; height: 9px; padding: 0; border-radius: 50%;
   background: var(--k, #888); border: none; cursor: pointer;
-  transition: transform .12s, box-shadow .12s;
+  transition: transform .12s, box-shadow .12s, border-radius .14s;
 }
+.gcal-kind.is-sq { border-radius: 2px; }
 .gcal-kind:hover { transform: scale(1.25); box-shadow: 0 0 0 3px rgba(255,255,255,.10); }
 .gcal-row-label {
   flex: 1 1 auto; min-width: 0; text-align: left; padding: 0;
@@ -3241,13 +3354,16 @@ body.viewing-splash .app-subnav { display: none; }
 }
 .gcal-add-input::placeholder { color: rgba(255,255,255,.30); }
 .gcal-add-input:focus { outline: none; border-color: rgba(160,120,255,.55); background: rgba(0,0,0,.35); }
+/* Same rule as the card's chrome buttons: no outline, nothing at rest. The
+   field beside it keeps ITS border, because a text input is not a micro-button
+   — it has to show where you can type before you go near it. */
 .gcal-add-go {
   flex: none; width: 26px; height: 26px; padding: 0;
-  background: var(--purple-soft); border: 1px solid rgba(159,104,240,.35);
+  background: transparent; border: none;
   border-radius: 7px; color: var(--purple); font-size: 15px; line-height: 1; cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background .12s, color .12s;
 }
-.gcal-add-go:hover { background: rgba(159,104,240,.28); color: #fff; border-color: var(--purple); }
+.gcal-add-go:hover { background: rgba(159,104,240,.22); }
 
 /* Collapsed: a one-icon-wide progress rail (same card fill + border) */
 /* 52px, not 48: the button is pinned at right:14px and must not move, so the
@@ -4948,6 +5064,21 @@ body.viewing-splash .app-subnav { display: none; }
    closes toward 30, which is the "máxima" doing its job.
    It was a flat 66px, which put that gap at 67.2. */
 .rel-version { min-width: calc(4ch + 25px); }
+
+/* THREE FACTS ON ONE LINE, AND IT MISSED BY NOTHING. Once a card is submitted
+   the row carries VERSION, BUILD and TRACK. Measured on a 418px card: the three
+   objects need 287.8 and the value cell is 315.8 — but two 14px gaps make
+   315.8 exactly, so it tied with the container and wrapped.
+   What pays for it is the version column's own slack. `min-width: 4ch + 25px`
+   reserves 53.8 for about 29 of ink, and it exists to start "BUILD" at the same
+   x on every card — an alignment that only means anything on the two-fact row,
+   because a row with a third pair has a different shape anyway. Given back, the
+   line needs 290.8 in 315.8 and has 25 to spare. `nowrap` then states the
+   intent, so a longer track label ellipsises rather than silently folding. */
+.rel-line--triple { flex-wrap: nowrap; min-width: 0; }
+.rel-line--triple .rel-version { min-width: 0; }
+.rel-line--triple .rel-pair { min-width: 0; }
+.rel-line--triple .rel-pair .rel-build { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* A NAMED FACT INSIDE THE ROW — "BUILD 42". The 14px row gap plus this 16px
    margin puts 30px before the name, against the 14px binding the name to its
@@ -14652,19 +14783,258 @@ body.is-splash .ai-disclaimer { display: none; }
    SUBMITTED CARD  (post-flip "Waiting for Review" state)
    ══════════════════════════════════════════════════════ */
 
+/* IT IS THE PLATFORM CARD, so it inherits `.active-card` whole — same width,
+   same padding, same 16px gap between blocks, same header. The only thing that
+   changed is that the step rows are not printed, so the card is shorter by
+   exactly what they occupied. Nothing here re-declares a size. */
 .submitted-card {
   display: flex;
   flex-direction: column;
 }
+/* THE STATUS IS THE LOUDEST LINE ON THE CARD, and it is mono so it reads as a
+   state rather than as a sentence. Its colour is the phase's — the card's
+   border, the segment bar and this line are one signal in three places. */
+.sub-state { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sub-state-line {
+  font-family: var(--mono); font-size: 21px; font-weight: 500; line-height: 1.1;
+  letter-spacing: 0; color: var(--text);
+}
+.sub-state-note { font-family: var(--mono); font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.submitted-card.is-waiting .sub-state-line { color: #FFD84D; }
+.submitted-card.is-yours   .sub-state-line { color: #FFB86B; }
+.submitted-card.is-live    .sub-state-line { color: #2fdc80; }
+.submitted-card.is-bad     .sub-state-line { color: var(--magenta, #ff3b78); }
+
+/* The two dates of variant 2. `.rel-pair` is the release block's own named-fact
+   shape, so SUBMITTED / ESTIMATED read as the same kind of thing as BUILD. */
+.sub-facts { display: flex; align-items: baseline; gap: 26px; font-family: var(--mono); font-size: 12px; }
+.sub-facts .rel-pair { margin-left: 0; }
+.sub-facts .rel-build { color: var(--text); }
+
+.sub-note { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+/* The one phase with nothing to do in it is the one that points somewhere.
+   A link, not a button: it goes to a tab, it does not change anything here —
+   and a filled pill beside the phase's own action button would be two calls to
+   act where only one of them is the card's business. */
+.sub-nudge {
+  align-self: flex-start; padding: 0; background: none; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--purple);
+  transition: color .12s;
+}
+.sub-nudge:hover { color: #fff; }
+
+/* ── HOLD TO CANCEL ───────────────────────────────────────────────────────
+   A red sweep crosses the card for as long as the button is held, and the
+   status line says what is about to happen. The sweep IS the timer: its
+   duration comes from `--cancel-hold`, set in JS from the same constant the
+   timeout uses, so the bar cannot finish early or late relative to the act it
+   is measuring — one number, two consumers.
+   `pointer-events: none` on the sweep so it never steals the press that is
+   driving it, and `overflow: hidden` on the card so it stops at the radius. */
+.submitted-card { position: relative; overflow: hidden; }
+.submitted-card.is-cancelling::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  /* FLAT, NOT A GRADIENT. A gradient has a bright end and a faint one, so the
+     bar looked like it was fading out exactly where it was still filling — it
+     described its own progress twice and disagreed with itself. One even
+     translucent red says "this much of the hold is done" and nothing else. */
+  background: rgba(255, 59, 120, .22);
+  transform-origin: left center;
+  animation: subCancelSweep var(--cancel-hold, 1400ms) linear forwards;
+}
+@keyframes subCancelSweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* NO BLINK. It was a hard step-blink on the word, and two things were wrong
+   with it: a blinking label reads as a fault indicator rather than as a
+   countdown, and it competed with the sweep — the sweep is already the clock,
+   and a second thing keeping time beside it is noise. The word just turns red
+   and stays still while the bar does the counting. */
+.submitted-card.is-cancelling .sub-state-line { color: var(--magenta, #ff3b78) !important; }
+/* The wait estimate GOES, it does not dim: "Usually 3 days" is an answer to a
+   question you have stopped asking the moment you start withdrawing, and it
+   sits on the same line as the word that replaced it. Everything else steps
+   back rather than leaving, because it is still true. */
+/* GONE, NOT DIMMED: the estimate and both links. The estimate answers a
+   question you stopped asking the moment you started withdrawing, and the two
+   links — "Quiet time. Go plan your launch" and "Review what was submitted" —
+   are invitations to go somewhere else, offered in the middle of an act you
+   have to stay put to complete. Dimming them still leaves them there to be
+   aimed at. What stays, at .35, is only what remains TRUE while the bar runs:
+   the progress, the store's sentence, the dates. */
+.submitted-card.is-cancelling .sub-state-note,
+.submitted-card.is-cancelling .sub-nudge,
+.submitted-card.is-cancelling .sub-steps-toggle { opacity: 0; pointer-events: none; }
+.submitted-card.is-cancelling .sub-segbar,
+.submitted-card.is-cancelling .sub-note,
+.submitted-card.is-cancelling .sub-facts,
+.submitted-card.is-cancelling .sub-steps { opacity: .35; }
+
+/* ── THE CARD ADVANCES, IT DOES NOT TURN OVER ─────────────────────────────
+   Set by `_doFinalSubmit` and `cancelSubmission` (app.js) for the length of the
+   height transition. The box itself is animated in JS, because only JS can
+   measure the two heights; this rule is the other half — what happens to the
+   content INSIDE the box while it closes.
+
+   Only the part that changed is animated. The header and the release block are
+   byte-identical across the two faces, so they are excluded by name: fading
+   something that did not change is what makes a swap look like two cards
+   trading places instead of one card losing its list. Everything else rises the
+   last few pixels into the space the steps vacated, which is the direction the
+   box is travelling.
+
+   The delay is deliberate: the content arrives after the close has visibly
+   begun, so the eye reads "the list went, and this is what is left" rather than
+   two things happening at one instant. */
+.active-card.is-advancing > *:not(.active-card-head):not(.card-release-block) {
+  animation: cardAdvanceIn .3s .08s both cubic-bezier(.22, .61, .36, 1);
+}
+@keyframes cardAdvanceIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: none; }
+}
+/* Motion is decoration here — the height change alone still tells the story. */
+@media (prefers-reduced-motion: reduce) {
+  .active-card.is-advancing > * { animation: none; }
+}
+
+/* ── REVIEWING WHAT WAS SUBMITTED ─────────────────────────────────────────
+   The steps face's own rows, reused whole. They are inert-looking on purpose:
+   no chevron, no risk dot, and the name stays white the way a completed step
+   always does in this app. */
+/* THE BLEED IS THE WHOLE POINT — `margin: 0 -12px`, the same the steps face's
+   own `.ios-step-cards` takes. A row is padded 12px inside, so a list sitting
+   inside the card's 20px padding puts its discs at 33 while every other disc,
+   label and release value on the card sits on 21. The rows looked indented
+   because they WERE: one container's negative margin is the only thing that
+   pulls a padded row back onto the card's column. Bottom margin is NOT
+   inherited — there the list is the card's last child and -12 cancels the
+   card's own bottom padding; here the "See what you sent" toggle follows it.
+
+   `.ios-step-card--inline` is also gone from the markup. It is the modifier
+   the *modal's* inline lists wear, and it says `cursor: default` plus
+   `background: transparent !important` on hover — so these rows, which DO open
+   something, sat there with no hover pill and no pointer while claiming to be
+   the same object as the ones on the steps face. The `!important` silently ate
+   a `.sub-step:hover` written to put the fill back. Wear the plain row and
+   there is nothing to put back. */
+.sub-steps { display: flex; flex-direction: column; margin: 0 -12px; }
+
+/* THE TICKS GO QUIET HERE, AND ONLY HERE — which looks like it contradicts
+   "DONE IS NOT DIMMED" and does not.
+
+   That rule was written for the steps FACE, where green marks progress against
+   rows that are still pending: the contrast is the information. On this list
+   every row is complete by definition — being complete is the premise of the
+   list, not news about any row in it — so seven solid #31DC80 discs inform
+   nobody and simply shout, a column of celebration for work you finished days
+   ago. Worse, since v6.26 the card has exactly one celebratory thing on it, the
+   green Release button, and a stack of the same green above it takes the eye
+   off the only control there is.
+
+   Dimmed BY COLOUR, never by opacity on the row — that is the other half of the
+   original rule and it still holds. An `opacity` here would paint the disc
+   through gauze and composite to a muddier version of whatever it was, which
+   reads as the wrong colour rather than as a quiet one.
+
+   IT LEAVES GREEN ALTOGETHER, and a faint green was the intermediate step that
+   showed why. Green is this app's word for done *as news* — it exists to mark
+   one finished thing against others that are not. Nothing here is news: the
+   list is, by definition, entirely finished work you are re-reading. A green at
+   18% still made the claim, just quietly, and it still competed with the
+   Release button, which is now the only green on the card and had better stay
+   that way. So the disc takes the PENDING disc's own soft white fill and the
+   tick is white at 60% — the mark still says "this was filled in", in the
+   informational register the colour rule reserves for exactly that. */
+.sub-steps .ios-step-num.is-done {
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .60);
+}
+/* NOT VIOLET, because violet is the guide's and, on this card, the colour of
+   the one link that sends you somewhere else (the Marketing nudge). This one
+   opens something in place, so it takes the card's own quiet text and brightens
+   on approach — a secondary control, not a destination. */
+.sub-steps-toggle {
+  align-self: flex-start; margin-top: 2px; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  transition: color .12s;
+}
+.sub-steps-toggle:hover { color: var(--text); }
+
+/* The read-only lock on a step modal. A pointer lock, not a permissions
+   model — see the note at its markup. */
+.submit-modal-body-wrap.is-readonly { pointer-events: none; }
+/* THE SAME OBJECT AS THE CONTENT RATING BAR, because it is the same KIND of
+   object: a strip pinned above the step's body that says something about the
+   whole of it. They can appear in one modal at once (open Content Rating from a
+   submitted card) and were two different boxes — this one at white 6% with an
+   8px radius, 11px type and a 28px inset, against the bar's 15% fill, 18px
+   radius, 12px type and a 24px inset. Four points of difference for one claim.
+
+   The width is the tell and it is not 28. `.cr-pinned` bleeds `-24` out of the
+   scroller and pads `24` back, so the bar lands exactly on the scroller's
+   content column; this note lives OUTSIDE the scroller, as a sibling of
+   `.submit-modal-body-wrap`, so it has to reach the same column through the
+   modal's own box — which is 24, not 28. Measured: the bar spans 422.5 → 1052.5
+   and the note now does too.
+
+   Everything else is `.cr-pinned-bar`'s, copied rather than approximated —
+   the 15% fill, the inset 1px ring instead of a border (a border would clip the
+   background to the border box and draw the ring a pixel inside it, two curves
+   that cannot stay concentric), the uniform 8px, and the nested radius. */
+.step-readonly-note {
+  /* 10 ABOVE AS WELL AS BELOW. It was `0 24px 10px`, which measured flush
+     against the header's bottom edge and 10 clear of the body — so it read as
+     something the header had grown rather than as a strip of its own. The
+     position itself is right and stays: OUTSIDE the scroller, because this is a
+     statement about the whole modal and must not scroll away, where
+     `.cr-pinned` is about the list underneath it and so sticks with it. */
+  margin: 10px 24px;
+  border: 0;
+  /* 12 ACROSS, SO THE TEXT LANDS ON THE QUESTION COLUMN. The box spans the
+     scroller's content column at 422.5, and Content Rating's questions sit 12
+     inside that (`.ios-q-label`'s own padding — see "the questions gained an
+     indent"), so their ink starts at 434.5. At the bar's uniform 8 this read
+     430.5: four pixels off the only column the eye has to compare it against.
+     The uniform 8 is `.cr-pinned-bar`'s rule and it is right THERE, where the
+     padding frames a filled pill against the box's edge; this holds a line of
+     text, and text wants to line up with text. The 8 stays on the vertical.
+     Note the pair this does NOT resolve: the CR bar's own sentence is still
+     inside its 8, so it sits at 430.5 while this sits at 434.5 when both are on
+     screen. Moving that one means re-opening its pill frame, so it is left
+     deliberately. */
+  padding: 8px 12px;
+  /* THE ANSWER PILLS' RADIUS, not the bar's. `.cr-pinned-bar` is
+     `--field-radius + 10` because its curve has to stay concentric with a track
+     at +3 wrapping a pill at +0 — three nested boxes. This wraps a line of
+     text: there is nothing to nest, so the +10 was a number borrowed from an
+     arithmetic that does not apply here, and at 18 it bowed out beside the 8px
+     `.yn-btn`s below it. Same token as those pills, measured 8 against 8. */
+  border-radius: var(--field-radius);
+  background: rgba(255, 255, 255, .15);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+  font-size: 12px; line-height: 1.4; color: var(--text-dim);
+}
+/* Bare until hover like every other header control, then the alert colour —
+   this is the one button on the card that cannot be undone. */
+.active-card-cancelsub:hover { color: var(--magenta, #ff3b78); }
 /* FOUR PHASES, AND THE COLOUR RULE DECIDES THEM — green done, amber "this
    needs you", red wrong, and nothing for a wait. IN REVIEW used to wear the
    amber, which meant the card shouted for days at a stretch about a state in
    which there is literally nothing to do; amber moved to `accepted`, the one
    phase that really is waiting on the developer. */
-.submitted-card.is-waiting { border-color: rgba(255, 255, 255, .14); }
-.submitted-card.is-yours   { border-color: rgba(255, 184, 107, .42); }
-.submitted-card.is-live    { border-color: rgba(47, 220, 128, 0.4); }
-.submitted-card.is-bad     { border-color: rgba(255, 59, 120, .42); }
+/* THE CARD IS THE NORMAL CARD PLUS 5% OF ITS STATE — one layer doing both jobs.
+   `.active-card` keeps its `--panel` fill and its `rgba(255,255,255,.08)`
+   border untouched; this adds a flat wash of the phase's hue at 5% on top.
+   Because `background-clip` defaults to `border-box`, that wash paints UNDER
+   the semi-transparent border too — so the fill and the stroke both pick up the
+   same 5% from the same declaration, and there is no second number to keep in
+   sync. The four phases had four hand-picked border colours before this
+   (.14/.42/.40/.42) and no fill tint at all, which made the border the only
+   thing carrying the state and made it carry it four different amounts. */
+.submitted-card.is-waiting { background-image: linear-gradient(rgba(255,216,77,.05), rgba(255,216,77,.05)); }
+.submitted-card.is-yours   { background-image: linear-gradient(rgba(255,184,107,.05), rgba(255,184,107,.05)); }
+.submitted-card.is-live    { background-image: linear-gradient(rgba(47,220,128,.05), rgba(47,220,128,.05)); }
+.submitted-card.is-bad     { background-image: linear-gradient(rgba(255,59,120,.05), rgba(255,59,120,.05)); }
 
 .sub-review-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -14681,12 +15051,67 @@ body.is-splash .ai-disclaimer { display: none; }
 
 /* The store's own sentence, under the bar that names the state. */
 .sub-phase-note { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
-/* The developer's move, worded with the store's own button. It is `.imp-cta`,
-   the app's pill, so a Release This Version here and a Continue in onboarding
-   are the same object — see "Every control in a card is 30px". */
-.sub-phase-act { align-self: flex-start; }
-.sub-phase-act.is-bad { background: rgba(255,59,120,.16); color: #FF8FB0; }
-.sub-phase-act.is-bad:hover { background: rgba(255,59,120,.26); color: #fff; }
+/* ── THE ONE THING LEFT TO DO, AT THE SIZE OF A THING TO DO ────────────────
+   Release This Version is not a form's Continue. It is the last act of the
+   whole submission and the only control on this face, and it wore `.imp-cta`:
+   a 30px pill, left-aligned, identical to "View fix" three screens away. A
+   button that ships a game looked like a button that opens an accordion.
+
+   It is the STEP ROW's box now — the same 50px floor, the same ±12 bleed onto
+   the card's edges, the same 8px radius — so the row that used to say "Submit"
+   is replaced by a row that says "Release", in the same place at the same size.
+   Nothing new had to be invented: the card already had a shape for "the thing
+   you press".
+
+   IT IS SOLID GREEN, AND BOTH HALVES OF THAT WERE ARGUED.
+
+   Solid, because a 14% wash is what a STATE wears in this app, not a button.
+   The first version filled it with the phase's amber at 14%, which over the
+   card's #141414 composites to rgb(53,43,32) — a muddy brown panel with a word
+   in it. It was asked to look "like a step row being hovered", and that was the
+   wrong reference: a hover fill is deliberately faint because it only means
+   "you COULD press this", where this is the one thing there is to press.
+
+   Green, although the phase is amber, because the two are not saying the same
+   thing. Amber is the STATE — you are being waited on — and the card already
+   says it twice, in PENDING DEVELOPER RELEASE and in the card's own 5% wash.
+   The button is not the state; it is the act that ENDS it, and finishing is
+   green everywhere else in this app. The risk taken knowingly: green also means
+   "already done", so a faint green here would read as a finished thing rather
+   than as a thing to do. That is the second reason it is solid with dark ink —
+   filled-and-dark is the app's shape for a call to action, and nothing that is
+   merely *done* is ever painted that way.
+
+   `is-bad` keeps a faint fill on purpose. READ THE NOTES is not a celebration
+   and must not be dressed as one. */
+.sub-phase-act {
+  display: flex; align-items: center; justify-content: center;
+  /* `0 -12px -12px`, the full bleed `.ios-step-cards` takes, not just the sides.
+     It shipped with `0 -12px` and the button sat 9px from each side but 21 from
+     the bottom — the sides are pulled out of the card's 20px padding while the
+     bottom was left sitting inside all of it. The list on the steps face solves
+     this with the third value, and measured there it gives 9 / 9 / 9; this is
+     the same box in the same corner, so it takes the same margin and lands on
+     the same three numbers. */
+  margin: 0 -12px -12px; min-height: 50px; padding: 8px 12px;
+  border: none; border-radius: 8px; cursor: pointer;
+  /* THE STEP ROW'S TYPE, not a button's. The box already claims to be a step
+     row — same 50px, same radius, same bleed — and it was setting 13px with
+     .06em of tracking in small caps, which at that size reads thin and stretched
+     beside a `.ios-step-name` at 15. The family was never the difference: both
+     are IBM Plex Mono. What differed was size, tracking and case, so all three
+     go back to the row's (15 / normal / none) and only the weight was already
+     right. The label loses its uppercase with them — the strings are the
+     stores' own button text ("Release This Version" is Apple's, verbatim), so
+     sentence case is what they are actually called. */
+  font-family: var(--mono); font-size: var(--pstep); font-weight: 500;
+  background: #2fdc80; color: #08140d;
+  transition: background .14s, transform .1s;
+}
+.sub-phase-act:hover  { background: #45e992; }
+.sub-phase-act:active { transform: scale(.995); }
+.sub-phase-act.is-bad        { background: rgba(255,59,120,.14); color: #FF8FB0; }
+.sub-phase-act.is-bad:hover  { background: rgba(255,59,120,.24); color: #fff; }
 .sub-review-status { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; }
 .sub-review-day    { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.02em; }
 .sub-review-day b  { font-weight: 800; color: #fff; }
@@ -14729,7 +15154,14 @@ body.is-splash .ai-disclaimer { display: none; }
   background: rgba(255, 255, 255, 0.08);
 }
 .sub-seg.is-done    { background: #2fdc80; }
+/* THE LIVE SEGMENT WEARS THE PHASE'S OWN COLOUR, so the bar, the status line
+   and the card's 5% wash are one signal said three ways rather than three
+   colours that happen to sit together. `#e07b2e` was a single hard-coded
+   orange for every phase, which made a card that says IN REVIEW in yellow
+   point at an amber segment. */
 .sub-seg.is-current { background: #e07b2e; }
+.submitted-card.is-waiting .sub-seg.is-current { background: #FFD84D; }
+.submitted-card.is-yours   .sub-seg.is-current { background: #FFB86B; }
 /* A rejection is not progress, so it does not advance the bar — it paints the
    segment the review stopped on. */
 .sub-seg.is-bad     { background: var(--magenta, #ff3b78); }
@@ -17277,3 +17709,4 @@ body.sm-picker-open { overflow: hidden; }
 }
 .mkt-web-back:hover { color: var(--text); border-color: var(--text-faint); }
 .mkt-web-back svg { display: block; }
+

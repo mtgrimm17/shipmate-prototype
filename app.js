@@ -2171,6 +2171,11 @@ async function openStepModal(pid, stepId) {
 }
 
 function closeStepModal() {
+  /* The read-only lock lives for one visit. Clearing it here rather than on
+     open is what lets a submitted card and a live one coexist: the flag is
+     set by the one entry point that should lock (openSubmittedStep) and
+     dropped by every exit, so no path can leave a modal locked behind it. */
+  state.stepModalReadOnly = null;
   // Record that this step has been saved/attempted at least once
   // (drives red-dot visibility and required-field alert visibility)
   const sm = state.stepModal;
@@ -3651,6 +3656,11 @@ function smFakeInference(pid = 'macos', fraction = 0.66) {
 let _smPhaseTimer = null;
 function smCardState(pid = 'ios', phase) {
   clearInterval(_smPhaseTimer); _smPhaseTimer = null;
+  /* TAKE ME TO WHERE THE CARD IS. On a cold page the view is the landing, so
+     this built the card into a dashboard nobody was looking at and read as
+     "the command did nothing". A dev helper that renders something you cannot
+     see is worse than no helper. */
+  if (state.activeView !== 'dashboard') setView('dashboard');
   if (!state.activePlatforms.has(pid)) state.activePlatforms.add(pid);
   if (!state.platformBuilds[pid]) {
     state.platformBuilds[pid] = { name: 'Game.ipa', size: 130937, buildNumber: 42, uploadedAt: Date.now() - 2 * 864e5 };
@@ -3661,11 +3671,16 @@ function smCardState(pid = 'ios', phase) {
   }
   if (phase === 'off') {
     delete state.platformFlipped[pid];
-    delete state.platformFlippedCardHeight?.[pid];
     renderDashboard();
     return 'steps face';
   }
   const set = (ph) => {
+    /* A card cannot be in review without its Submit step being done — the real
+       `_doFinalSubmit` writes both. Without this the release block dropped the
+       TRACK fact, because that is gated on the step, and the fake state was
+       subtly unlike the real one in exactly the place being looked at. */
+    state.platformStepStatus[pid] = state.platformStepStatus[pid] || {};
+    state.platformStepStatus[pid].submit = 'complete';
     state.platformFlipped[pid] = {
       track: state.selectedTracks[pid],
       /* Backdated so "Day N of M" has somewhere to count from — a phase set
@@ -3674,7 +3689,14 @@ function smCardState(pid = 'ios', phase) {
       time: Date.now() - 864e5,
       phase: ph,
     };
+    /* The fake submit copies the real one's side effect, or the guide's month
+       face — and the lede that explains it — would only ever be reachable by
+       actually walking every step. The point of this helper is that what you
+       are looking at is the real thing. */
+    state.guideCal = true;
+    state.calendar.monthOffset = 0;
     renderDashboard();
+    if (typeof renderGuide === 'function') renderGuide();
     console.log('[smCardState]', pid, ph, '→', storeReviewPhase(pid, ph).label);
   };
   if (phase) { set(phase); return phase; }
@@ -3685,6 +3707,85 @@ function smCardState(pid = 'ios', phase) {
     set(STORE_REVIEW_PHASES[i]);
   }, 2500);
   return 'cycling — smCardState("' + pid + '", "off") to stop';
+}
+
+/* THE ASK, AND THE ANSWER. `true` opens the question inside the card, `false`
+   puts it away, `'go'` actually withdraws. Three states rather than a
+   `confirm()` because a native dialog is a different app interrupting this one,
+   and because the question belongs beside the thing it is about.
+   The flag is cleared before `cancelSubmission` runs — that unflips the card,
+   and a question left standing on a card that no longer exists would reappear
+   the next time this platform was submitted. */
+/* ── HOLD TO CANCEL ──────────────────────────────────────────────────────────
+   A press that opened two buttons was a dialog wearing a card's clothes: it
+   asked the question in the same place it had just been answered, and the safe
+   answer sat one pixel from the destructive one. A HOLD is the confirmation —
+   the gesture and the consent are the same act, there is no wrong button to
+   land on, and letting go is the undo.
+   Everything it changes is a class and one line of text, so releasing early
+   costs one class removal and no render at all; only the completed hold
+   re-renders, because only then has anything actually changed. */
+const SM_CANCEL_HOLD_MS = 1400;
+let _cancelHold = null;
+
+function cancelHoldStart(pid, btn) {
+  cancelHoldEnd();
+  const card = btn?.closest('.submitted-card');
+  if (!card) return;
+  const line = card.querySelector('.sub-state-line');
+  /* The original word is kept on the node rather than re-derived, because the
+     label is the store's (IN REVIEW / PENDING DEVELOPER RELEASE / …) and
+     reconstructing it here would be a second copy of STORE_REVIEW's job. */
+  _cancelHold = { pid, card, line, was: line ? line.textContent : '' };
+  card.style.setProperty('--cancel-hold', SM_CANCEL_HOLD_MS + 'ms');
+  card.classList.add('is-cancelling');
+  if (line) line.textContent = 'CANCELING SUBMISSION';
+  _cancelHold.timer = setTimeout(() => {
+    const { pid: p } = _cancelHold || {};
+    cancelHoldEnd();
+    if (p) cancelSubmission(p);
+  }, SM_CANCEL_HOLD_MS);
+}
+
+function cancelHoldEnd() {
+  if (!_cancelHold) return;
+  clearTimeout(_cancelHold.timer);
+  _cancelHold.card.classList.remove('is-cancelling');
+  _cancelHold.card.style.removeProperty('--cancel-hold');
+  if (_cancelHold.line) _cancelHold.line.textContent = _cancelHold.was;
+  _cancelHold = null;
+}
+
+/* ── REVIEWING A SUBMISSION ──────────────────────────────────────────────── */
+function toggleSubReview(pid) {
+  state.subReview = state.subReview || {};
+  if (state.subReview[pid]) delete state.subReview[pid]; else state.subReview[pid] = true;
+  renderDashboard();
+}
+
+/* Opens the step the normal way and marks the modal read-only for the length
+   of that visit. The flag is per-platform rather than global: two cards can be
+   in different phases, and only a SUBMITTED one locks its steps. */
+function openSubmittedStep(pid, stepId) {
+  state.stepModalReadOnly = pid;
+  openStepModal(pid, stepId);
+}
+
+/* The on-screen dev bar that used to live here is GONE — the whole block, its
+   `.sm-devbar` rules in style.css and the call at the top of `renderDashboard`.
+   It was a fixed bar switching the submitted card's shape and phase, built for
+   reviewing in a preview pane with no console, and it was always going to be
+   deleted rather than hidden: a comparison control left on screen is how one
+   quietly becomes part of the app. Everything it did is still reachable from a
+   real console, through `smReviewVariant` and `smCardState` below. */
+
+/* DEV: the two shapes being compared for the in-review card.
+     smReviewVariant(1)  four segments + the store's wait claim
+     smReviewVariant(2)  no segments, the two dates instead */
+function smReviewVariant(n) {
+  state.subVariant = n === 2 ? 2 : 1;
+  renderDashboard();
+  return 'variant ' + state.subVariant;
 }
 
 /* The button each phase's own store puts in front of you. It only moves the
@@ -3903,9 +4004,37 @@ function _doFinalSubmit(platformId, trackId) {
   }
   state.platformStepStatus[platformId]['submit'] = 'complete';
 
-  // Card-flip animation: rotate out → swap content → rotate in
+  /* SUBMITTING DOES NOT FLIP THE CARD — IT CLOSES IT. Read this before
+     reaching for `rotateY` here again.
+
+     The flip is already spoken for, and it means one specific thing: THE OTHER
+     SIDE OF THIS CARD. The gear turns the card over to the account/connect
+     face, the same gear turns it back, and nothing about the card has changed
+     in between — it is a reversible look at the reverse of the same object.
+     Submitting is not that. It is the card moving FORWARD into another state,
+     one that costs a 1.4-second hold to undo. Turning something over to say it
+     has advanced spends the "look at the back" gesture on a change of state,
+     and the two then cannot be told apart.
+
+     That overload had already produced a real bug, which is how it was caught:
+     `_platformHeadActions` branched only on `steps` vs everything-else, so a
+     submitted card fell into the ACCOUNT arm and its gear came out lit with the
+     tooltip "Back to steps" — the card announcing itself as a reversible
+     settings detour.
+
+     So the motion is vertical now: the steps are gone and the box closes over
+     the space they occupied, from the steps face's height to the submitted
+     card's own. The header and the release block are IDENTICAL in both faces
+     (see buildSubmittedCard), so they are deliberately left alone — nothing
+     fades that did not change, and the eye reads one continuous object losing
+     its list rather than two cards swapping places.
+
+     `state.platformFlippedCardHeight` went with the rotation. It existed to pin
+     the new card at the OLD card's height so the flip did not end in a jump,
+     and it was written and deleted in four places while no render function ever
+     read it. Here the height change is the animation; pinning it would be
+     pinning the thing being animated. */
   if (!state.platformFlipped) state.platformFlipped = {};
-  if (!state.platformFlippedCardHeight) state.platformFlippedCardHeight = {};
   const card = document.getElementById('active-card-' + platformId);
   const flipData = { track: trackId, time: Date.now() };
 
@@ -3917,45 +4046,65 @@ function _doFinalSubmit(platformId, trackId) {
     if (grid && gridHeight > 0) grid.style.minHeight = gridHeight + 'px';
 
     state.platformFlipped[platformId] = flipData;
+    /* THE GUIDE TURNS INTO THE MONTH. Submitting answers the question the
+       checklist was asking and replaces it with a different one — not "what is
+       left to do" but "when do I hear back, and what do I do until then" — and
+       the month is the surface that answers it. `_guideCalLede` prints the why
+       at the top of it, so the face does not change under you unexplained.
+       `monthOffset` goes to 0 because the wait starts today: the guide's face
+       must never open on a month with no "today" in it, the same rule
+       `toggleGuideCal` follows on the way in.
+       Set ONCE, here, at the moment of the event — not derived from "is
+       anything in review", which would keep dragging you back onto the
+       calendar every time you closed it for the next three days. */
+    state.guideCal = true;
+    state.calendar.monthOffset = 0;
     renderDashboard();
-    // Flip-in: start from -90deg, ease to 0deg
+    /* renderDashboard does NOT rebuild the guide column — they are two
+       independent renders sharing one state — so the face change has to be
+       asked for by name or it lands on the next unrelated repaint. */
+    if (typeof renderGuide === 'function') renderGuide();
+
     const newCard = document.getElementById('active-card-' + platformId);
     if (newCard) {
-      // Pin card height too, as a secondary guard
-      if (cardHeight > 0) newCard.style.minHeight = cardHeight + 'px';
-      newCard.style.transform = 'perspective(700px) rotateY(-90deg)';
+      /* THE HEIGHT IS THE ANIMATION, so it has to be measured, not guessed:
+         `offsetHeight` here is the submitted card's own natural height, taken
+         before anything is pinned. Then the box is put back at the steps face's
+         height and released to travel to it. `overflow: hidden` is what makes
+         the close read as a close rather than as content spilling past a
+         shrinking frame, and it goes away with everything else at the end —
+         leaving it on would clip a card that later grows (opening "See what you
+         sent" does exactly that). */
+      const toH = newCard.offsetHeight;
+      newCard.classList.add('is-advancing');
+      newCard.style.overflow   = 'hidden';
+      newCard.style.height     = (cardHeight || toH) + 'px';
       newCard.style.transition = 'none';
-      // Double rAF ensures the starting state is painted before the transition begins
+      // Double rAF ensures the starting height is painted before it is changed.
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-        newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
+        newCard.style.transition = 'height 0.42s cubic-bezier(0.22, 0.61, 0.36, 1)';
+        newCard.style.height     = toH + 'px';
         setTimeout(() => {
           newCard.style.transition = '';
-          newCard.style.transform  = '';
-          // Don't clear newCard.style.minHeight — card must stay at pre-flip height.
-          // buildSubmittedCard already set the correct min-height via state;
-          // clearing here would cause the post-animation snap the user sees.
+          newCard.style.height     = '';
+          newCard.style.overflow   = '';
+          newCard.classList.remove('is-advancing');
           if (grid) grid.style.minHeight = '';
-        }, 340);
+        }, 440);
       }));
     } else {
-      // No card to animate — release grid pin immediately
-      setTimeout(() => { if (grid) grid.style.minHeight = ''; }, 340);
+      setTimeout(() => { if (grid) grid.style.minHeight = ''; }, 440);
     }
   }
 
-  // Capture height before flip — saved to state so buildSubmittedCard can persist it across re-renders
+  // Where the close STARTS: the steps face's height, measured while it is still
+  // on screen. Nothing is stored — it is consumed by the animation and gone.
   const cardHeight = card ? card.offsetHeight : 0;
-  if (cardHeight > 0) state.platformFlippedCardHeight[platformId] = cardHeight;
 
-  if (card) {
-    // Flip-out: rotate to 90deg, then swap
-    card.style.transition = 'transform 0.28s cubic-bezier(0.55, 0, 1, 0.45)';
-    card.style.transform  = 'perspective(700px) rotateY(90deg)';
-    setTimeout(_applyFlip, 290);
-  } else {
-    _applyFlip();
-  }
+  /* No out-phase. There is nothing to animate away: the header and the release
+     block survive the swap unchanged, and the steps are what the closing box is
+     removing. A fade-out here would dim the two things that did not change. */
+  _applyFlip();
 }
 
 // Legacy alias kept for any paths that still call finalSubmit directly.
@@ -3979,38 +4128,38 @@ function cancelSubmission(pid) {
     state.platformStepStatus[pid]['submit'] = 'not_started';
   }
 
-  // Reverse-flip animation: rotate out → swap content → rotate in
+  /* THE UNDO IS THE SAME MOTION RUN BACKWARDS — the box OPENS, giving the steps
+     back the height the submit took from them. It used to counter-rotate, and
+     it had to stop for the same reason the submit did: withdrawing is not
+     turning the card over either. Sharing one mechanism also means the two
+     cannot drift into different durations or curves, which is what two hand-
+     written rotation blocks 120 lines apart were already halfway to doing. */
   const card = document.getElementById('active-card-' + pid);
   const cardHeight = card ? card.offsetHeight : 0;
 
   function _applyUnflip() {
     if (state.platformFlipped) delete state.platformFlipped[pid];
-    if (state.platformFlippedCardHeight) delete state.platformFlippedCardHeight[pid];
     renderDashboard();
     const newCard = document.getElementById('active-card-' + pid);
-    if (newCard) {
-      if (cardHeight > 0) newCard.style.minHeight = cardHeight + 'px';
-      newCard.style.transform = 'perspective(700px) rotateY(90deg)';
-      newCard.style.transition = 'none';
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        newCard.style.transition = 'transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-        newCard.style.transform  = 'perspective(700px) rotateY(0deg)';
-        setTimeout(() => {
-          newCard.style.transition = '';
-          newCard.style.transform  = '';
-          newCard.style.minHeight  = '';
-        }, 340);
-      }));
-    }
+    if (!newCard) return;
+    const toH = newCard.offsetHeight;
+    newCard.classList.add('is-advancing');
+    newCard.style.overflow   = 'hidden';
+    newCard.style.height     = (cardHeight || toH) + 'px';
+    newCard.style.transition = 'none';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      newCard.style.transition = 'height 0.42s cubic-bezier(0.22, 0.61, 0.36, 1)';
+      newCard.style.height     = toH + 'px';
+      setTimeout(() => {
+        newCard.style.transition = '';
+        newCard.style.height     = '';
+        newCard.style.overflow   = '';
+        newCard.classList.remove('is-advancing');
+      }, 440);
+    }));
   }
 
-  if (card) {
-    card.style.transition = 'transform 0.28s cubic-bezier(0.55, 0, 1, 0.45)';
-    card.style.transform  = 'perspective(700px) rotateY(-90deg)';
-    setTimeout(_applyUnflip, 290);
-  } else {
-    _applyUnflip();
-  }
+  _applyUnflip();
 }
 
 
