@@ -471,6 +471,63 @@ function smSubmitLayout(mode) {
   return 'submission layout: ' + mode;
 }
 
+/* ── THE STEP BODY SAYS WHEN THERE IS MORE ─────────────────────────────────
+   A capped, scrolling box with no edge treatment is indistinguishable from a
+   box that simply ends — Content Rating's twenty-two questions were being read
+   as however many happened to fit, and the eleven below the fold were not
+   "hidden", they were invisible. The cap is right (it is what keeps the steps
+   below an open section on screen); what was missing is the box admitting to
+   it.
+
+   Two marks for one fact, deliberately, because they answer two different
+   questions: the FADE says the content continues (the last row dissolving is
+   the oldest signal there is), and the ARROW says you can do something about
+   it. A fade alone reads as a styling flourish at this size; an arrow alone
+   over a hard cut reads as a button someone dropped on the edge.
+
+   STATED POSITIVELY — the class is `is-scrollable-down`, so the resting state
+   at the end of the scroll needs no class at all. That is `_smModalFades`'s own
+   correction: a mark that has to be REMOVED at the boundary flashes for one
+   frame on every fresh render before the code catches up. */
+function _subScrollCue() {
+  const body = document.getElementById('sub-step-body');
+  if (!body) return;
+
+  const update = () => {
+    /* A TALLER CONTENT IS NOT A SCROLLER. Upload Build's body is
+       `.sub-step-body--free` — no cap, `overflow: visible`, because it holds a
+       dropdown that has to escape. Its content can exceed its own box without
+       being scrollable, and a cue there would point at a scroll that cannot
+       happen. Ask the overflow first, then the heights — the same order, and
+       the same trap, `_smModalFades` already pays for. */
+    const ov = getComputedStyle(body).overflowY;
+    const scrollable = (ov === 'auto' || ov === 'scroll') &&
+                       body.scrollHeight > body.clientHeight + 2;
+    const more = scrollable &&
+                 body.scrollTop + body.clientHeight < body.scrollHeight - 2;
+    body.classList.toggle('is-scrollable-down', more);
+  };
+
+  body.addEventListener('scroll', update, { passive: true });
+  update();
+}
+
+/* Pressing it travels one screenful, through the app's one scroll animation
+   (`_smScrollTo`) rather than `scrollBy({behavior:'smooth'})` — see "The travel
+   is ours, not the browser's" for why a per-engine smooth implementation is the
+   thing this codebase avoids.
+
+   0.85 of a screen, not a whole one: a full page turn leaves nothing in common
+   between the two views, so you cannot tell whether you moved or the content
+   was replaced. The overlap is what makes it read as travel. */
+function _subScrollCueClick(event) {
+  event.stopPropagation();
+  const body = document.getElementById('sub-step-body');
+  if (!body) return;
+  const max = Math.max(0, body.scrollHeight - body.clientHeight);
+  _smScrollTo(body, Math.min(max, body.scrollTop + body.clientHeight * 0.85));
+}
+
 function _retryInferenceInline(pid, stepId) {
   if (!state.submission.openStep) state.submission.openStep = {};
   state.submission.openStep[pid] = null;   // force toggleStepSection to re-open
@@ -533,6 +590,9 @@ function _repaintSubStepBody() {
   if (mmT !== null) { const n = bodyEl.querySelector('.mac-spp-main');    if (n) n.scrollTop = mmT; }
 
   _syncSubRowAndDashes(pid, stepId);
+  // The listener died with the old innerHTML; the cue has to be re-armed for
+  // the same reason _smModalFades is re-armed after every modal render.
+  _subScrollCue();
   return true;
 }
 
@@ -17950,18 +18010,17 @@ function _smNearestScroller(el) {
 }
 
 let _smScrollAnim = null;
-function _smScrollCentre(el) {
-  const sc = _smNearestScroller(el);
-  if (!sc) return;
+/* THE TRAVEL, FACTORED OUT — one curve, two callers.
 
+   `_smScrollCentre` owned the whole animation, and the Content Rating scroll
+   cue needed the same 420ms sine to move the same kind of box. Copying it
+   would have been the third scroll implementation in this file (see "The
+   travel is ours, not the browser's" for why the second one exists at all),
+   and two hand-rolled eases drift the moment one is retuned. So the WHERE and
+   the HOW are separated: callers compute a scrollTop, this moves to it. */
+function _smScrollTo(sc, to) {
+  if (!sc) return;
   const from = sc.scrollTop;
-  const max  = Math.max(0, sc.scrollHeight - sc.clientHeight);
-  // Where the element sits relative to the scrollport, turned into the scrollTop
-  // that would centre it — clamped, so a target near either end simply lands at
-  // the end rather than asking for a position that does not exist.
-  const delta = (el.getBoundingClientRect().top - sc.getBoundingClientRect().top)
-              - (sc.clientHeight - el.getBoundingClientRect().height) / 2;
-  const to = Math.max(0, Math.min(max, Math.round(from + delta)));
 
   if (_smScrollAnim) { cancelAnimationFrame(_smScrollAnim.raf); _smScrollAnim.stop(); }
   if (Math.abs(to - from) < 1) return;
@@ -17991,6 +18050,20 @@ function _smScrollCentre(el) {
     else stop();
   };
   _smScrollAnim = { raf: requestAnimationFrame(step), stop };
+}
+
+function _smScrollCentre(el) {
+  const sc = _smNearestScroller(el);
+  if (!sc) return;
+
+  const from = sc.scrollTop;
+  const max  = Math.max(0, sc.scrollHeight - sc.clientHeight);
+  // Where the element sits relative to the scrollport, turned into the scrollTop
+  // that would centre it — clamped, so a target near either end simply lands at
+  // the end rather than asking for a position that does not exist.
+  const delta = (el.getBoundingClientRect().top - sc.getBoundingClientRect().top)
+              - (sc.clientHeight - el.getBoundingClientRect().height) / 2;
+  _smScrollTo(sc, Math.max(0, Math.min(max, Math.round(from + delta))));
 }
 
 function setStorePreviewFocus(pid, elementId) {

@@ -4297,6 +4297,12 @@ function renderDashboard() {
         ${buildSubmissionPane(tab)}
       </div>
     </div>`;
+
+  /* innerHTML has just thrown away the open body's scroll listener, so the cue
+     is re-armed here — the same arrangement renderStepModal uses for
+     _smModalFades, and for the same reason. Guarded because render.js is
+     loaded before app.js. */
+  if (typeof _subScrollCue === 'function') requestAnimationFrame(_subScrollCue);
 }
 
 /* ── THE PLATFORM TAB STRIP ──────────────────────────────────────────────────
@@ -4601,6 +4607,25 @@ function _subStepRow(pid, step, i, openId) {
    was a CSS problem and no amount of transition would have hidden either.
 
    Now the only node that changes is the one whose contents actually did. */
+/* The cue is the LAST in-flow child of the scroller, which is what lets it be
+   `position: sticky` — an absolutely positioned child of a scroll container is
+   laid out against the padding box and scrolls away with the content (the
+   lesson the Mac preview's fades are written up under). It lives inside
+   _subStepBodyInner rather than beside it so a surgical repaint keeps it.
+
+   `aria-hidden` and `tabindex="-1"`: this duplicates something the box can
+   already do. A keyboard reaches every question by tabbing and a screen reader
+   is never told a row is "below the fold" in the first place, so announcing a
+   second way to scroll adds a control without adding a capability. */
+const SM_SCROLL_CUE = `
+  <div class="sub-scroll-cue" aria-hidden="true">
+    <button type="button" class="sub-scroll-cue-btn" tabindex="-1"
+            onclick="_subScrollCueClick(event)" title="More below">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+  </div>`;
+
 function _subStepBodyInner(pid, stepId) {
   const inf = state.submission?.infer?.[pid] || {};
   const banner = (inf.status === 'error') ? `
@@ -4637,7 +4662,8 @@ function _subStepBodyInner(pid, stepId) {
       </div>`;
     return banner
       + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
-      + _localSaveNote(pid);
+      + _localSaveNote(pid)
+      + SM_SCROLL_CUE;
   }
 
   /* THE FLIP HAPPENS HERE NOW, not in a modal hoisted over the pane.
@@ -4669,7 +4695,8 @@ function _subStepBodyInner(pid, stepId) {
 
   return banner + backBar
     + `<div class="ios-step-body-content">${_stepBodyFor(pid, stepId, flipTarget, inf.status)}</div>`
-    + _localSaveNote(pid);
+    + _localSaveNote(pid)
+    + SM_SCROLL_CUE;
 }
 
 /* Which sub-section this step is currently turned over to, or null.

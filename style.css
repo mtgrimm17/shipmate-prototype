@@ -19048,6 +19048,90 @@ body.sm-picker-open { overflow: hidden; }
   animation: subBodyIn .22s cubic-bezier(.22, .61, .36, 1);
 }
 
+/* ── The scroll cue ───────────────────────────────────────────────────────
+   Sticky, so it rides the scrollport instead of the content. Its own height is
+   given straight back with a negative top margin (the `.mac-spp-main::after`
+   trick) so it adds NOTHING to scrollHeight — a cue that made the box taller
+   would move the very boundary it is reporting on.
+
+   THE GRADIENT IS SOLVED, NOT EYEBALLED. What sits under this box is
+   `--bg` #0a0a0a, and the body's own `rgba(0,0,0,.22)` composites that to
+   **rgb(8)** — so the stops are rgba(8,8,8,·) and the last one is a true 1.0.
+   A fade that stops short of its ground leaves the cut faintly visible
+   underneath it, which is the failure the Mac preview's top fade was re-solved
+   to avoid. Eight even stops rather than a front-loaded ramp, for the same
+   reason written there: front-loaded reads as a smudge with a hard edge above
+   it. 64px because it has to be longer than what crosses it — a question row
+   is ~42px — and it also has to hold the button.
+
+   The side and bottom margins cancel the body's own padding so the fade spans
+   the full width and reaches the scrollport's floor. */
+.sub-scroll-cue {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  height: 64px;
+  margin: -64px -16px -16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 10px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .18s ease, visibility 0s linear .18s;
+  background: linear-gradient(to bottom,
+    rgba(8, 8, 8, 0)   0%,
+    rgba(8, 8, 8, .14) 14%,
+    rgba(8, 8, 8, .29) 29%,
+    rgba(8, 8, 8, .43) 43%,
+    rgba(8, 8, 8, .57) 57%,
+    rgba(8, 8, 8, .71) 71%,
+    rgba(8, 8, 8, .86) 86%,
+    rgba(8, 8, 8,  1)  100%);
+  /* The FADE is inert — it lies over real questions and must never eat a press
+     meant for the pill underneath it. Only the button takes pointer events. */
+  pointer-events: none;
+}
+.sub-step-body.is-scrollable-down .sub-scroll-cue {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .18s ease;
+}
+
+/* THIS ONE EARNS A RESTING FILL, where the app's micro-buttons deliberately do
+   not. A gear or a × is chrome sitting in a row you are already looking at, so
+   it can stay bare until the pointer arrives. This floats over content whose
+   whole problem is that nobody knew it continued — invisible until hover, it
+   would solve nothing. It is a real button rather than a picture of one for
+   the reason the Mac sidebar's traffic lights are explicitly NOT buttons:
+   something that looks pressable has to do something. */
+.sub-scroll-cue-btn {
+  pointer-events: auto;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--panel-3);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .10), 0 2px 8px rgba(0, 0, 0, .45);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background .12s, color .12s, transform .12s;
+}
+.sub-scroll-cue-btn svg { width: 15px; height: 15px; }
+.sub-scroll-cue-btn:hover {
+  background: var(--panel-3);
+  color: var(--text);
+  transform: translateY(1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-scroll-cue { transition: none; }
+  .sub-scroll-cue-btn { transition: none; }
+  .sub-scroll-cue-btn:hover { transform: none; }
+}
+
 /* The one body that neither caps nor clips — see _subStepRow's note. Lifted
    above its neighbours so the track panel paints OVER the steps below rather
    than behind them: the rows carry z-index 1 on hover and the submit row 2 when
