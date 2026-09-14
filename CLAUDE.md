@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.32**
+Current version: **v6.33**
 
 ---
 
@@ -2300,7 +2300,7 @@ same number on the same afternoon, and the local repo had no idea because its
 only thing that makes "the next number" a fact rather than an assumption. This
 work went out as v6.32 for that reason, not v6.29.
 
-Current version: **v6.32** → next is **v6.33**, then **v6.34**, etc. (v6.29 –
+Current version: **v6.33** → next is **v6.34**, then **v6.35**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, shipped in parallel.)
 
 Update the version in **three places**:
@@ -2369,6 +2369,45 @@ GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
 Include the version number in the ship note: `./ship.sh "v6.26 — description of change"`.
 
+### `ship.sh` REBASES, so `--ours` is the OTHER person's side
+
+When two people bump the version on the same afternoon, `index.html` and
+`splash.html` conflict on all fifteen version lines and nothing else. The
+resolution is "keep ours" in plain English and **`--theirs` in the command**,
+because a rebase replays your commit ON TOP of `origin/main`: "ours" is the
+branch being rebased onto — *theirs* — and "theirs" is the commit being
+replayed — *yours*. Inverted from a merge, which is where the instinct comes
+from.
+
+```bash
+git checkout --theirs index.html splash.html && git add index.html splash.html
+GIT_EDITOR=true git rebase --continue && git push
+```
+
+Getting it backwards is silent and expensive: you would publish new bytes under
+a number already live, which is precisely the diverged-cache failure the
+Versioning section exists to prevent. **Verify before continuing** — the count
+of `?v=` must match the new number, not the old one:
+
+```bash
+grep -o '?v=[0-9.]*' index.html | sort | uniq -c   # expect 14 of the new one
+```
+
+`GIT_EDITOR=true` is the second half. `ship.sh` opens `$EDITOR` for the commit
+message, and on this machine that is `vi` — which hit a **three-day-old
+`.COMMIT_EDITMSG.swp`** from a crashed session and sat at an E325 prompt no
+amount of `:wq` escaped. The message is already prepared by the rebase, so
+there is nothing to type: `GIT_EDITOR=true` accepts it without opening an
+editor at all. Worth doing permanently:
+`git config --global core.editor "nano"`.
+
+Two states that look identical from the outside and are not: HEAD detached at
+the same SHA as `.git/rebase-merge/onto`, with `msgnum/end = 1/1`, means the
+commit **has not been created** and the push has nothing to send — live stays
+on the old number. Check `.git/rebase-merge` exists rather than inferring from
+`ls` (an `ls` of two paths where only one exists returns non-zero, which reads
+as "clean" through `&&`; that misread cost a round trip here).
+
 ---
 
 ## Testing
@@ -2424,12 +2463,52 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   the root cause of both flip bugs fixed defensively in v5.4x
   (`_wpEditSurface`). The agreed fix is that the surface which draws keeps the
   page and the other unmounts. Not started.
-- **The modal flip "blink"** — the whole modal appears to flash on flip.
-  Measured: not an opacity issue (no frame at opacity 1 unrotated) and not
-  jank (0 dropped frames on repeat flips). Three suspects left, each a
-  one-line console test: `backdrop-filter: none` on `#submit-overlay`,
-  promoting the modal to its own layer, and removing the 90px `box-shadow`.
-  Awaiting a verdict on which kills it.
+- ~~The modal flip "blink"~~ — **FOUND AND FIXED IN v6.33, and it was none of
+  the three suspects this entry had been carrying for weeks.** Worth keeping
+  the whole story, because the old entry is a case study in how a wrong
+  measurement protects a bug.
+
+  **The modal was replaying its ENTRANCE ANIMATION on every flip.**
+  `.submit-modal` carries `animation: modalIn .25s` with the default fill mode,
+  and `.is-flip-exit` / `.is-flip-enter` REPLACED that shorthand. So when the
+  flip class came off — 300ms after the press, exactly as the card settled —
+  the cascade reverted to `modalIn`, the animation-name changed back, and the
+  browser minted a brand-new `modalIn` starting at its own 0%: `opacity: 0;
+  translateY(10px) scale(.98)`. Measured across the removal: opacity **0** at
+  +0ms, 0.69 at +76, 0.98 at +196, 1 at +396. A quarter-second re-entrance,
+  every flip.
+
+  **The old note said "not an opacity issue (no frame at opacity 1
+  unrotated)", and that sentence is what hid it for weeks.** It is true and
+  irrelevant: the probe went looking for a frame at FULL BRIGHTNESS, on the
+  theory that the modal flashed white. The bad frame is at opacity ZERO. A
+  measurement aimed at the wrong end of the range comes back clean and reads as
+  an exoneration — so the hunt moved on to `backdrop-filter`, layer promotion
+  and the 90px `box-shadow`, none of which had anything to do with it.
+
+  **What made it findable was Jaco's own detail**: *"FLASH al asentarse"* — at
+  the END of the rotation, not during it. That put the suspicion on what
+  happens when the class comes OFF, which is the one moment none of the three
+  suspects could explain and the cascade explains completely.
+
+  The fix is `modalIn` kept at **index 0** of the flip rules' animation list
+  (style.css, beside the keyframes, where the long version of this is written).
+  Animations are matched to the list by position, so `[modalIn]` →
+  `[modalIn, flip]` → `[modalIn]` leaves the first one alone: the same finished
+  animation continues instead of a new one being created. Verified after:
+  opacity 1 at +0 / +16 / +92 / +292ms, transform straight to `none`, no
+  replay.
+
+  **It is CSS animation semantics, not compositing, so it is engine-independent**
+  — which is the one reason it was safe to diagnose in Chromium against a bug
+  reported in Safari. Confirm it in Safari anyway; if any flash survives there,
+  THAT is when the `backdrop-filter` / layer-teardown suspects become live
+  again, and they are still untested.
+
+  `.loc-review-card` and `.iap-loc-card` run the same flip classes and are
+  **not** affected — checked, their base rules carry no `animation`. Only
+  `.submit-modal` has an entrance animation to clobber. Anything that gives one
+  of them a base `animation` later inherits this bug.
 - Steam's tile mark measures 98.96% of the shared canvas against 90.84% for
   every other logo — its own export, left as authored. One line to bring it
   in line if wanted.
@@ -2463,6 +2542,44 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
 
 ### Queued next (Jaco, v6.26)
 
+- **The boxes and outlines are too loud — a refinement pass.** Jaco's brief,
+  given the evening v6.32 shipped and not yet scoped: *"cambios a cómo se
+  stylean los recuadros y outlines que son demasiado llamativos, y afinar todo
+  un poco."* No specific offender named, so the first job is an inventory
+  rather than an edit — walk the step modal and the platform cards and list
+  every rule that draws a ring, a border or a stroked edge, then ask of each
+  whether it is carrying a STATE or merely drawing a box. This file already
+  argues that case in three places and each one is a precedent, not a rule to
+  reapply blind: the micro-buttons lost their strokes because a bare control
+  that fills on hover is the app's pattern; the platform card's step disc
+  dropped its ring because a soft disc turning green is one object changing
+  colour; the Content Rating bar and the pinned nav draw their ring INSIDE the
+  box because a border cannot stay concentric with the fill it clips. Start
+  from the previews, since that is where the complaint was made, and measure
+  the composite of each edge against what it sits ON — half the strokes in this
+  app were tuned over the near-black `--panel` and are now on lighter grounds.
+  **Beware the one trap:** three of those edges are load-bearing state
+  (`.submit-ready`'s border, the cancel hold's red edge, the inline editor's
+  blue focus outline), and softening them by sweep would quietly delete
+  meaning. Anything that changes colour to say something keeps its weight.
+
+  **And the brief got sharper the same evening, in a way that changes the
+  job.** Jaco again: *"le falta claridad, y los recuadros de colores son
+  extraños, no queda muy claro qué campos son editables."* That is not a
+  volume complaint, it is an AFFORDANCE one — the question the page fails to
+  answer is *which of these can I click?* — and the two pull in opposite
+  directions, so turning every edge down would make it worse. The preview
+  currently says "editable" three different ways at once: the amber glow (which
+  actually means UNFINISHED, not editable), the blue focus outline (only once
+  you are already in), and nothing at all on a field that is filled in — so a
+  completed title looks exactly like the drawing around it. The real target is
+  **one resting mark that means "this is yours to edit", present on every
+  editable field whether or not it is finished**, and then the loud colours can
+  come down because they stop carrying a job they were never meant to have.
+  Worth deciding before touching a single value, because it settles which
+  edges are allowed to go quiet. The Mac preview is the place to solve it: it
+  is the one whose whole argument is that the page is a DRAWING of a store with
+  editor chrome laid over it, and this is exactly the seam between the two.
 - **Make the Submit button celebratory.** This is the debt shape 4 took on
   deliberately: the destination moved out of the Submit row precisely so Submit
   could be "reduced to the single confident act" — and then it was left looking
