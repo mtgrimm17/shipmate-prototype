@@ -3062,6 +3062,193 @@ body.viewing-splash .app-subnav { display: none; }
   color: #fff; background: rgba(159, 104, 240, .28); border-color: var(--purple);
 }
 
+/* THE MONTH TOGGLE SITS BESIDE THE COLLAPSE, not under it: same 22px box, same
+   fill, same radius, 6px apart — two pieces of card chrome reading as one pair.
+   Its `right` is derived (14 + 22 + 6) so moving the collapse button moves this
+   one with it, and its `top` is the same expression rather than a copy of the
+   number that expression computes to. */
+.guide-cal-btn {
+  position: absolute; right: calc(14px + 22px + 6px);
+  top: calc(14px + (19.2px - 22px) / 2);
+  width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--purple-soft); border: 1px solid rgba(159, 104, 240, .35);
+  border-radius: 6px;
+  color: var(--purple); cursor: pointer; line-height: 1;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.guide-cal-btn svg { width: 13px; height: 13px; display: block; }
+.guide-cal-btn:hover { color: #fff; background: rgba(159, 104, 240, .28); border-color: var(--purple); }
+/* On the month face the button is the way back, so it reads as pressed. */
+.guide-cal-btn.is-on { background: rgba(159, 104, 240, .30); border-color: var(--purple); color: #fff; }
+
+/* ── The guide's month ─────────────────────────────────────────────────────
+   254px of inner width over seven columns is 36.3 a cell, which is enough for
+   two digits and a dot and nothing else. Everything here is sized off that. */
+.gcal { margin-top: 22px; }
+.gcal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.gcal-month {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  color: var(--text); letter-spacing: 0;
+}
+.gcal-nav { display: flex; align-items: center; gap: 2px; }
+.gcal-arrow, .gcal-today {
+  background: none; border: none; padding: 0 5px; height: 20px;
+  color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: 12px;
+  border-radius: 5px; transition: background .12s, color .12s;
+}
+.gcal-arrow { font-size: 15px; line-height: 1; }
+.gcal-arrow:hover, .gcal-today:hover { background: rgba(255,255,255,.10); color: var(--text); }
+
+/* THE GRID TAKES 16px BACK FROM THE CARD'S PADDING, 8 a side. The card is
+   padded for prose and this is a table: at 254px a cell was 36.3, and pulling
+   the grid out to 270 puts it at 38.6 — the ~2px a day that lets the number,
+   its disc and the divider under it stop touching. The pull is on the GRID
+   only, so the month name, the day panel and everything else keep the card's
+   real text column. */
+.gcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); margin: 0 -8px; }
+.gcal-dow {
+  font-family: var(--mono); font-size: 9px; text-align: center;
+  color: rgba(255,255,255,.34); text-transform: uppercase; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,.11);
+}
+/* A DAY IS A SQUARE WITH A CENTRED NUMBER, and the dots hang under it inside
+   the same box — so a day that gains an item does not become taller than the
+   days beside it and shove the row. The 6px strip is reserved on every cell.
+
+   THE WEEKS ARE RULED, one line per row, and it is the CELL that carries it:
+   `border-bottom` on every day plus `:nth-last-child(-n+7)` to drop it on the
+   last week. Seven borders meeting edge to edge read as one line, and no extra
+   element has to be laid over the grid to draw it. `box-sizing` is said out
+   loud because `aspect-ratio` measures the border box — without it every row
+   would be a pixel taller than the one the ratio asked for. */
+/* THE ROW IS NO LONGER A SQUARE, because a square distributes its slack evenly
+   and the two gaps here are not the same job. A 38.3 cell holding 32 of content
+   left ~3px above the number and ~3px under the dots — and the dots are the
+   thing that needed the room, since they sit right on the rule below them and a
+   4px dot 3px off a line reads as part of the line.
+   46px with 4 of top padding and 8 of bottom: the number breathes under the
+   rule above it, and the dots get twice that before the rule below. Content is
+   25 (disc) + 3 (gap) + 4 (dots) = 32, so the numbers are derived from it — if
+   the disc grows again, these two follow. */
+.gcal-day {
+  position: relative; height: 46px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: none; border: none; padding: 4px 0 8px; cursor: pointer;
+  /* .12, not the .07 it started at: the guide's ground is a dark violet, not
+     the app's near-black, and white at 7% over it was a line you had to be
+     told was there. Matched to the header's rule so the whole table is ruled
+     by one weight. */
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+.gcal-day:nth-last-child(-n+7) { border-bottom: none; }
+/* The hover lands on the DISC, not on the cell: a rounded fill spanning a cell
+   that now has a ruled edge reads as a box someone drew over the table. */
+.gcal-day:hover .gcal-num { background: rgba(255,255,255,.12); color: var(--text); }
+.gcal-num {
+  font-family: var(--mono); font-size: 12px; line-height: 1;
+  /* White at 80%, not --text-dim's #a0a0a0 (63%). The dim token is for text
+     that names something else — a label beside a value. Here the number IS the
+     content of the cell, and on the guide's violet ground 63% read as though
+     the whole month were disabled. Out-of-month days keep the big drop below,
+     so the contrast between in and out does the work instead. */
+  color: rgba(255,255,255,.80);
+  /* A ROUNDED RECTANGLE, NOT A DISC. A circle round a two-digit number has to
+     be as wide as the number is tall and then some, so it wastes the cell's
+     width on air at the corners; 28×24 gives the digits room across and takes
+     3px of height back. It also matches the shape language of everything else
+     in this app — the step discs are the only circles, and they hold ONE
+     character. The radius is 7: the cell's rules are straight lines, and a
+     pill (radius 12) beside a ruled table reads as a tag stuck onto it. */
+  width: 28px; height: 24px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+}
+.gcal-day.is-out .gcal-num { color: rgba(255,255,255,.26); }
+/* Today is a filled disc, the same violet the guide's own marks use — inside
+   this card that is the colour that means "here", and borrowing the calendar
+   tab's accent would put a second accent in a card that already has one. */
+.gcal-day.is-today .gcal-num { background: var(--guide-mark); color: var(--guide-bg); font-weight: 600; }
+.gcal-day.is-launch .gcal-num { box-shadow: 0 0 0 1.5px #4ADE80; color: #fff; }
+.gcal-dots { display: flex; gap: 3px; height: 4px; align-items: center; }
+.gcal-dot { width: 4px; height: 4px; border-radius: 50%; display: block; }
+/* The picked day keeps its ring while the panel below is open, so the panel
+   always has a visible antecedent. A ring and not a fill: the fill is today's,
+   and a day can be both. */
+.gcal-day.is-picked .gcal-num { box-shadow: inset 0 0 0 1px rgba(160,120,255,.75); color: var(--text); }
+
+/* ── The day panel ────────────────────────────────────────────────────────── */
+/* NO RULE OVER THE PANEL. The grid's last week already stops drawing one, so a
+   line here was a second ending a few pixels under the first — and this file
+   has the argument already: a divider divides two things, and position says it
+   more quietly. 18px of space does the separating. */
+.gcal-panel {
+  margin-top: 18px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+/* The whole header folds the panel away. It is pulled 6px left and given that
+   back as padding, so the date still starts on the panel's text column while
+   its hover box extends past it the way a row's does. */
+.gcal-panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: calc(100% + 12px); margin: 0 -6px; padding: 4px 6px;
+  background: none; border: none; border-radius: 7px; cursor: pointer;
+  text-align: left; transition: background .12s;
+}
+.gcal-panel-head:hover { background: rgba(255,255,255,.07); }
+.gcal-panel-date { font-family: var(--mono); font-size: 11px; color: var(--text); letter-spacing: 0; }
+.gcal-panel-fold { width: 13px; height: 13px; flex: none; color: var(--text-faint); display: block; }
+.gcal-panel-head:hover .gcal-panel-fold { color: var(--text); }
+.gcal-panel-empty { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.34); }
+
+/* ── A row: kind · label · remove ──────────────────────────────────────────
+   The row and the add field are the same three-slot shape, so the dot that
+   says what a thing IS and the dot that says what the next thing WILL BE sit
+   on one column. */
+.gcal-row { display: flex; align-items: center; gap: 7px; min-height: 24px; }
+.gcal-kind {
+  flex: none; width: 9px; height: 9px; padding: 0; border-radius: 50%;
+  background: var(--k, #888); border: none; cursor: pointer;
+  transition: transform .12s, box-shadow .12s;
+}
+.gcal-kind:hover { transform: scale(1.25); box-shadow: 0 0 0 3px rgba(255,255,255,.10); }
+.gcal-row-label {
+  flex: 1 1 auto; min-width: 0; text-align: left; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 11px; line-height: 1.35;
+  color: var(--text-dim);
+}
+.gcal-row-label:hover { color: var(--text); }
+/* Struck through and dimmed, the way the Calendar checklist marks a done item.
+   The DOT keeps its colour: what a thing is does not change by being finished. */
+.gcal-row.is-done .gcal-row-label { text-decoration: line-through; color: rgba(255,255,255,.30); }
+.gcal-row-x {
+  flex: none; width: 18px; height: 18px; padding: 0; border: none; background: none;
+  color: transparent; font-size: 14px; line-height: 1; cursor: pointer;
+  border-radius: 5px; transition: color .12s, background .12s;
+}
+/* Bare until the row is under the pointer — a delete on every line, always
+   visible, is a row of invitations to lose something. */
+.gcal-row:hover .gcal-row-x { color: var(--text-faint); }
+.gcal-row-x:hover { background: rgba(255,59,120,.16); color: var(--magenta, #ff3b78); }
+
+.gcal-add { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+.gcal-add-input {
+  flex: 1 1 auto; min-width: 0; height: 26px; padding: 0 8px;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 7px; color: var(--text);
+  font-family: var(--mono); font-size: 11px;
+}
+.gcal-add-input::placeholder { color: rgba(255,255,255,.30); }
+.gcal-add-input:focus { outline: none; border-color: rgba(160,120,255,.55); background: rgba(0,0,0,.35); }
+.gcal-add-go {
+  flex: none; width: 26px; height: 26px; padding: 0;
+  background: var(--purple-soft); border: 1px solid rgba(159,104,240,.35);
+  border-radius: 7px; color: var(--purple); font-size: 15px; line-height: 1; cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.gcal-add-go:hover { background: rgba(159,104,240,.28); color: #fff; border-color: var(--purple); }
+
 /* Collapsed: a one-icon-wide progress rail (same card fill + border) */
 /* 52px, not 48: the button is pinned at right:14px and must not move, so the
    card's width is what sets the gap on its other side. 52 = 1px border + 14 gap
@@ -4625,7 +4812,20 @@ body.viewing-splash .app-subnav { display: none; }
      "DEPLOYED" are different widths and the values then started at a
      different x on each platform's card. 62 fits DEPLOYED, the longest. */
   display: grid;
-  grid-template-columns: 62px 1fr;
+  /* THE LABEL COLUMN HUGS ITS WORD, so the row's own label binds to its value
+     at the same 14px `.rel-pair` uses inside the line. It was a fixed 62px,
+     which left "VERSION" ending 15.8px short of the column edge and made that
+     first gap 29.8 against the pair's 14 — two different bindings for the same
+     relationship, and the eye read "VERSION" as a heading over the row rather
+     than as the name of the value beside it.
+     What the 62 bought was values starting at the same x on every card
+     (VERSION, BUILD and DEPLOYED are different widths). That is given up
+     knowingly: measured, the only two labels that ever render are Version and
+     Build — Web returns no block at all — so the drift is ~12px between a
+     Steam card and an iOS one, and since shape 4 the row's shared line is the
+     picker's right edge, not the value's left. The LABELS still all start on
+     21, which is the card's one real vertical edge. */
+  grid-template-columns: max-content 1fr;
   align-items: center;
   column-gap: 14px;
   row-gap: 8px;
@@ -4674,6 +4874,30 @@ body.viewing-splash .app-subnav { display: none; }
   white-space: nowrap;
 }
 .rel-value { min-width: 0; }
+/* THE VALUE CELL THAT ALSO HOLDS THE DESTINATION. Facts left, picker hard
+   right, one line — the row already ended in empty card, so the picker costs
+   no height at all and the block stays two lines.
+   The picker is `flex: none` (via .submit-track-pick) and keeps its 160; the
+   text cell is what gives. `min-width: 0` on the line is load-bearing: a flex
+   item's default `min-width: auto` refuses to shrink below its content, so
+   without it a long version pushes the picker out of the card at the 320px
+   end of the grid instead of letting the text ellipsise. */
+.rel-value--pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 8px; }
+/* IT BREAKS, IT DOES NOT CLIP. The grid is `minmax(320px, 1fr)`, so at the
+   narrow end the value cell has about 200px and the picker alone wants 160 —
+   there is no arrangement where "v1.0 BUILD 42" also fits, and shrinking the
+   text to make room turned the build number into "4…". A clipped build number
+   is worse than a second line, because the number is the one fact on this row
+   nobody can reconstruct. So the line holds a floor of 120px and the picker
+   wraps under it when the card cannot seat both; `margin-left: auto` on the
+   picker keeps it on the same right edge either way. The ellipsis stays as the
+   last resort for a version string long enough to beat even the floor. */
+.rel-value--pick .rel-line { flex: 1 1 auto; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-wrap: nowrap; }
+/* The version's own column exists to line "BUILD" up card-to-card on a row of
+   pure text. On this row the picker's right edge is the alignment that matters
+   and the 25px of slack that column reserves is 25px the picker could be
+   using, so it is given back. */
+.rel-value--pick .rel-version { min-width: 0; }
 .rel-line {
   display: flex;
   align-items: baseline;
@@ -14429,20 +14653,40 @@ body.is-splash .ai-disclaimer { display: none; }
    ══════════════════════════════════════════════════════ */
 
 .submitted-card {
-  border-color: rgba(255, 149, 0, 0.28);
   display: flex;
   flex-direction: column;
 }
-.submitted-card.is-live { border-color: rgba(47, 220, 128, 0.4); }
+/* FOUR PHASES, AND THE COLOUR RULE DECIDES THEM — green done, amber "this
+   needs you", red wrong, and nothing for a wait. IN REVIEW used to wear the
+   amber, which meant the card shouted for days at a stretch about a state in
+   which there is literally nothing to do; amber moved to `accepted`, the one
+   phase that really is waiting on the developer. */
+.submitted-card.is-waiting { border-color: rgba(255, 255, 255, .14); }
+.submitted-card.is-yours   { border-color: rgba(255, 184, 107, .42); }
+.submitted-card.is-live    { border-color: rgba(47, 220, 128, 0.4); }
+.submitted-card.is-bad     { border-color: rgba(255, 59, 120, .42); }
 
-/* Amber "IN REVIEW · Day X of Y" header bar (green when live) */
 .sub-review-bar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 13px 18px;
   background: linear-gradient(180deg, #d9772e 0%, #c9631f 100%);
   color: #fff;
 }
-.sub-review-bar.is-live { background: linear-gradient(180deg, #24a866 0%, #1c8a54 100%); }
+/* A wait is not an event: flat panel grey, and the label takes the card's own
+   dim text rather than white on a colour. */
+.sub-review-bar.is-waiting { background: rgba(255,255,255,.06); color: rgba(255,255,255,.72); }
+.sub-review-bar.is-yours   { background: linear-gradient(180deg, #d9772e 0%, #c9631f 100%); }
+.sub-review-bar.is-live    { background: linear-gradient(180deg, #24a866 0%, #1c8a54 100%); }
+.sub-review-bar.is-bad     { background: linear-gradient(180deg, #d63a63 0%, #b32a4f 100%); }
+
+/* The store's own sentence, under the bar that names the state. */
+.sub-phase-note { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+/* The developer's move, worded with the store's own button. It is `.imp-cta`,
+   the app's pill, so a Release This Version here and a Continue in onboarding
+   are the same object — see "Every control in a card is 30px". */
+.sub-phase-act { align-self: flex-start; }
+.sub-phase-act.is-bad { background: rgba(255,59,120,.16); color: #FF8FB0; }
+.sub-phase-act.is-bad:hover { background: rgba(255,59,120,.26); color: #fff; }
 .sub-review-status { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; }
 .sub-review-day    { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.02em; }
 .sub-review-day b  { font-weight: 800; color: #fff; }
@@ -14486,6 +14730,9 @@ body.is-splash .ai-disclaimer { display: none; }
 }
 .sub-seg.is-done    { background: #2fdc80; }
 .sub-seg.is-current { background: #e07b2e; }
+/* A rejection is not progress, so it does not advance the bar — it paints the
+   segment the review stopped on. */
+.sub-seg.is-bad     { background: var(--magenta, #ff3b78); }
 
 /* Date row */
 .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
@@ -14830,8 +15077,13 @@ body.viewing-splash #app-guide { display: none; }
 }
 .project-selector-wrap.open #projectSelector { background: var(--panel); border-color: var(--border-hover); color: var(--text); }
 /* Chevron matches the nav tabs: up when closed, down when the menu is open. */
-.project-selector-wrap #projectSelector .bar-chev { margin-left: auto; transform: rotate(180deg); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
-.project-selector-wrap.open #projectSelector .bar-chev { transform: rotate(0deg); }
+/* THE GLYPH IS ALREADY A DOWN CHEVRON (polyline 6 9 12 15 18 9), so closed is
+   the UNROTATED state and open is the 180. It was the other way round, which
+   meant the pill sat there pointing up at a menu that was not open and then
+   pointed down at one that was. The rotation belongs to the state, not to the
+   art — don't fix this by redrawing the polyline. */
+.project-selector-wrap #projectSelector .bar-chev { margin-left: auto; transform: rotate(0deg); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.project-selector-wrap.open #projectSelector .bar-chev { transform: rotate(180deg); }
 
 /* The selected chip carries its own 1px inner stroke, white 10% at the top
    fading to 0% at the bottom — the prototype's .cat.on::after. Same masking

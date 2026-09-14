@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.20**
+Current version: **v6.26**
 
 ---
 
@@ -271,10 +271,19 @@ which one is NEXT, and that is weight, not a locator: the disc goes to violet
 `buildReleaseBlock()` in render.js. Two rows: what was uploaded, then where it
 goes. Every number in it is derived from a constraint rather than picked —
 
-- The label column is a **fixed 62px** + a 14px gap, so values start at 97 on
-  every card. `auto` measures the longest label present, which is fine in one
-  card and wrong across a grid: VERSION, BUILD and DEPLOYED are different
-  widths, so the values started at a different x per platform.
+- The label column is **`max-content` + a 14px gap**, so the row's own label
+  binds to its value at the same 14 `.rel-pair` uses inside the line. It was a
+  fixed 62px, which bought values starting at 97 on every card — but it left
+  "VERSION" ending 15.8px short of the column edge, so that first gap measured
+  **29.8 against the pair's 14**: two different bindings for one relationship,
+  and "VERSION" read as a heading over the row instead of as the name of the
+  value beside it. Now measured 14 and 14, with 30 still separating the two
+  pairs. The cost, paid knowingly: values no longer share an x across cards
+  (~12px between a Steam card, which starts at BUILD, and an iOS one). The old
+  note said `auto` was "wrong across a grid" — that was written when the row
+  was pure text and its left edge was the only thing lining anything up. Since
+  shape 4 the row's shared line is the **picker's right edge**, and the labels
+  still all start on 21, the card's one real vertical edge.
 - `.rel-version { min-width: calc(4ch + 25px) }` caps the gap from the end of
   the version text to the "B" of BUILD at **55px**. That gap is
   `(column − text) + 30` (14px row gap + 16px pair margin) and is widest when
@@ -590,14 +599,38 @@ read the filter's snapshot — which is deliberately re-taken every time you pre
 "Unanswered" — so answering five questions yourself and pressing it turned
 "12 inferred" into 17.
 
-### The destination lives in the Submit row
+### The destination rides the VERSION row
 
-The release block has **no TRACK row** (`buildReleaseBlock`, render.js): it
-reports what was uploaded and nothing else. The destination is picked in the
-Submit row itself, from a chip shaped exactly like Upload Build's — 160×30, 8px
-radius, `.build-pill.no-build`'s quiet outline — so the two rows end on the same
-edge with the same kind of object. It is there from the first paint: choosing
-where a build goes does not depend on the store page being written.
+**Shape 4, and the one the section below predicted.** The picker is back in the
+release block — but not on a row of its own: it sits in the FIRST row's value
+cell, hard right, beside the build it routes. The row already ended in empty
+card, so the destination now costs **no vertical space at all** and the block
+stays the two lines it has been since shape 2. Measured on a 418px card: label
+at 21, facts at 97, picker 160×30 with its right edge at 21 — the same box, to
+the pixel, as the Upload Build pill two rows down.
+
+It wears **`.submit-track-pick`, the same class it had in the Submit row**, so
+its 160×30 is one rule in one place; there is no second sizing rule to drift.
+`.rel-value--pick` is all that is new — the cell becomes a flex row, the picker
+is `flex: none`, and the text takes what is left.
+
+**It breaks, it does not clip.** The grid is `minmax(320px, 1fr)`, so at the
+narrow end the value cell has ~200px and the picker alone wants 160 — there is
+no arrangement where "v1.0 BUILD 42" also fits. Shrinking the text to make room
+turned the build number into "4…", and a clipped build number is worse than a
+second line, because it is the one fact on the row nobody can reconstruct. So
+the line holds a floor of `min-width: 120px` and the picker **wraps under it**
+when the card cannot seat both (measured: one 30px row at 418 and at 420, two
+rows totalling 50 at 360), with `margin-left: auto` keeping it on the same right
+edge either way. The ellipsis stays only as the last resort.
+
+The Submit row keeps **nothing** of it — `trackPicker` there is now the empty
+string. A value in two places drifts, which is what shape 1 was punished for.
+The cost, paid knowingly: `submitStepClick`'s gate 3 now spotlights **up** the
+card rather than at its own row. That works because
+`.active-card.is-spotlight .card-release-block:not(:has(.is-spotlit))` already
+existed — the block stays lit when the lit thing is inside it (measured: card
+rows at .18, block at 1, chip `is-spotlit`).
 
 Three earlier shapes and why each went:
 
@@ -615,14 +648,198 @@ Nothing is preselected, here or anywhere — the destination is a decision, and 
 silent default would make it on your behalf. Gate 3 now spotlights the chip in
 its own row, so the row points at itself.
 
-**`.rel-track`'s rules in style.css are dormant on purpose — do not sweep them.**
-The current shape has a real tension: a Submit button should *celebrate*, and
-this one also asks a question, so the picker and the act of sending compete for
-one row. The likely end state is the opposite of today — the destination back in
-the card's chrome (where those rules already live), and Submit reduced to the
-single confident act. What is missing before that is the piece both shapes want:
-a Submit step with a body that states what each destination implies, since they
-are different review paths with different waits.
+4. **The chip in the Submit row** (shapes 1–3's successor, and what shape 4
+   replaced). The tension it never resolved: a Submit button should
+   *celebrate*, and that one also asked a question, so the picker and the act
+   of sending competed for one row. Shape 4 is the resolution this file
+   predicted — the destination back in the card's chrome, Submit reduced to the
+   single confident act.
+
+**`.rel-track`'s rules in style.css are still dormant — do not sweep them.**
+Shape 4 did NOT revive them: it reuses `.submit-track-pick` instead, because
+that is where the 160×30 already lives and duplicating a size is how two copies
+of a control start to disagree. `.rel-track` remains the older, pulled-left
+ghost-pill treatment from shape 1. Keep or delete it deliberately, not by
+sweep.
+
+Still missing, and wanted by every shape so far: a Submit step with a body that
+states what each destination implies, since they are different review paths
+with different waits.
+
+### After Submit: four phases, in each store's own words
+
+`buildSubmittedCard()` (render.js) draws the card's back face, and the phase it
+is in lives on `state.platformFlipped[pid].phase` — one of
+`STORE_REVIEW_PHASES` (`in_review` / `accepted` / `live` / `rejected`). Older
+submits wrote only `{track, time}` and read as `in_review`, so nothing needed
+migrating. Before this there were two faces: amber IN REVIEW, and green LIVE
+for Web only.
+
+**The words come from `STORE_REVIEW` in state.js, verified against vendor docs
+on 14 Sep 2026** — three of those strings are ones the internet gets wrong.
+Apple's `AppStoreVersionState` is deprecated in favour of `AppVersionState`,
+which renamed READY_FOR_SALE to **READY_FOR_DISTRIBUTION**; Apple says
+**Accepted**, never "Approved"; and it is **Pending Developer Release**, not
+"Waiting for Developer Release".
+
+**`accepted` is its own phase because all three stores stop there and hand the
+release back to you** — Apple with a *Release This Version* button, Google with
+*Publish changes*, Steam saying outright that "Approved titles will not release
+themselves". The pattern the card copies: the state names the approval, the
+line names the obligation, and the verb is the developer's.
+
+**Amber moved, and that is the design decision to argue with first.** IN REVIEW
+used to wear the amber gradient, so the card shouted for days about a state in
+which there is nothing to do. Under the app's own colour rule — green done,
+amber *this needs you*, red wrong — a wait is none of the three, so `in_review`
+is a flat panel grey and amber went to `accepted`, the one phase actually
+waiting on the developer.
+
+**A day counter needs days to count.** Apple's verified figure is "90% in less
+than 24 hours", so `REVIEW_DAYS`-style arithmetic printed "Day 1 of 1", which
+reads as a bug. Under two days the store's own claim goes in that slot instead
+("Usually under 24h"). Android counts to 7, Steam to 5.
+
+Three things left deliberately visible rather than tidied away:
+
+- **Two tables of review durations disagree.** The new `STORE_REVIEW` (1/7/5,
+  from the docs) and `OB_PLATFORM_TIMING` in render.js (ios 2.2, android 4.3,
+  steam 7.1), which feeds the dashboard timeline and onboarding. Unifying them
+  moves graphs, so it is a decision, not a cleanup.
+- **Steam's `rejected` label is the only string with no vendor source.**
+  Steamworks documents no rejection state and no withdrawal at all — the model
+  is "feedback sent" or "Ready for release".
+- **The card promises an "Est. live" date that no store gives.** Apple
+  publishes an aggregate percentage, Google states there is no SLA. That is
+  Shipmate's arithmetic wearing the store's authority, and it predates the
+  phases.
+
+The height lock is now `min-height`, not `height` + `max-height` +
+`overflow: hidden`. The old lock stopped the flipped card stretching its
+siblings and also silently clipped it the moment a face held more than the
+steps face it replaced — which `accepted` and `rejected` both do.
+
+**To see any of it:** `smCardState(pid)` (app.js) cycles the four phases 2.5s
+apart, `smCardState(pid, 'accepted')` holds one, `smCardState(pid, 'off')`
+returns to the steps face. It writes the same state a real submit writes, so it
+is the real card, not a mock. These faces went a long time unexamined because
+reaching them took every step, an account, a track and a press.
+
+### The guide's other face is the month
+
+`buildGuideMiniCal()` (render.js) replaces the tab's checklist inside the same
+`.guide-card`, toggled by `.guide-cal-btn` — a 22px box beside the collapse
+chevron, its `right` derived as `14 + 22 + 6` so moving one moves the other.
+
+It is a **window onto the calendar that already exists**, not a second one. It
+reads the same `state.calendar.monthOffset`, `_calItems`, `_calGridStart` and
+`CAL_KIND` as `buildCalendarMonth`, so the two can never disagree about what is
+on a day, and `_calRerender` already repainted the guide. Weeks start on Sunday
+because the full calendar does — the reference it was drawn from (Notion)
+starts on Monday, and matching it would have put two week starts in one app.
+
+**The grid takes 16px back from the card's padding**, 8 a side (`margin: 0 -8px`
+on `.gcal-grid` only, so the month name and the day panel keep the card's real
+text column). The card is padded for prose and this is a table: 254px over seven
+columns was 36.3 a cell, and 270 makes it **38.3** — the ~2px a day that lets
+the number, its disc and the rule under it stop touching. Measured: grid 268
+wide, sitting 11 from each card edge, discs at 25 (they were 21).
+
+Even so a cell holds two digits and a dot and nothing else, which is why there
+are no chips, no drag and no week selection — all of that is one tab away.
+**One dot per KIND, never one per item**, or a day with four marketing items
+grows a row of identical dots; and the 4px dot strip is reserved on every cell
+so a day that gains an item does not get taller and shove its row.
+
+**The weeks are ruled, and the CELL carries the rule** — `border-bottom` on
+every day plus `:nth-last-child(-n+7)` to drop it on the last week. Seven
+borders meeting edge to edge read as one line, so nothing has to be laid over
+the grid to draw it. Two things that has to say out loud: `box-sizing:
+border-box`, because `aspect-ratio` measures the border box and without it every
+row comes out a pixel taller than the ratio asked for; and **white at .12, not
+.07** — the guide's ground is a dark violet rather than the app's near-black,
+and 7% over it was a line you had to be told was there.
+
+**A row is 46px, not a square**, because a square distributes its slack evenly
+and the two vertical gaps here are not the same job. The 38.3 cell held 32 of
+content and so left ~3px above the number and ~3px under the dots — and a 4px
+dot 3px off the rule below it reads as part of the rule. Now `padding: 4px 0
+8px`, measured 4.5 from the rule above to the number and **9.5 from the dots to
+the rule below**. The content is 25 (disc) + 3 (gap) + 4 (dots) = 32, so both
+paddings are derived from it: grow the disc again and they follow.
+
+**Today and the picked day are rounded RECTANGLES, not discs** — 28×24 at
+radius 7. A circle round a two-digit number has to be as wide as the number is
+tall and then some, so it spends the cell's width on air at the corners; 28
+gives the digits room across and takes 3px of height back (5.1 of side air in a
+38.3 cell). It also keeps the app's shape language: the step discs are the only
+circles here and they hold ONE character. Radius 7 rather than a pill, because
+the table's own rules are straight lines and a fully rounded chip beside them
+reads as a tag stuck on.
+
+With the rows ruled, **the hover moved onto that box**: a rounded fill spanning
+a cell that now has a ruled edge reads as a box someone drew over the table. The
+picked day is a ring on the same box, for the same reason.
+
+Opening the face resets `monthOffset` to 0. The Calendar tab starts at 1 on
+purpose — it is a planning surface and opens on next month — but a glance that
+opens on a month with no "today" in it is the one thing this must not do. Only
+on the way in, so paging here and going back keeps your place; it does move the
+Calendar tab with it, which is the price of one shared calendar.
+
+**A day opens downwards, it does not navigate.** Pressing a cell used to jump
+to the Calendar tab, which is a big move for a small question ("what is on the
+18th?") and threw away the month you were looking at. `_guideCalDayPanel` drops
+out under the grid instead (`state.guideCalDay`, and pressing the same day
+again closes it, so the gesture is its own undo). The way to the full calendar
+is now a link inside that panel rather than a side effect of pointing at a
+date.
+
+**Treat the panel as the only surface there is** — that is the brief it was
+re-cut to, and it is what justifies the extra controls. A row is **three
+controls, not one**: the dot sets the kind, the label ticks, the × removes.
+It began as a single `.mcal-task` button that only ticked, which is all the
+Calendar tab's checklist needs because everything else about an item is a
+double-click away in that view's popover; here the kind was unreachable and
+nothing could be removed. (A `<div>` holding three buttons, because buttons
+cannot nest.) The add row repeats the same three-slot shape, so the dot that
+says what a thing IS and the dot that says what the next thing WILL BE sit on
+one column — the kind is chosen in the same gesture as the typing.
+
+**Two kinds of item, changed in two different places**, which is why these are
+functions and not one-liners. An item you added is a record in
+`calendar.custom` and is edited in place. A built-in (`CAL_RECURRING` /
+`CAL_ONEOFF`) is a constant: its kind is changed by writing an **override**
+keyed on the occurrence, and it is removed by writing to `calendar.hidden`.
+Both maps already existed — `calDraftSave` and `calDraftDelete` write the same
+two — so this reaches them without the popover. An override replaces the whole
+displayed record, so `guideCalCycleKind` spreads what the occurrence is showing
+and changes the one field; carrying less would blank the rest.
+
+`_gcalRerender` is the single repaint for all of it, and it does the two things
+a repaint here always has to: carry the half-typed title across (innerHTML
+throws the input away) and put the caret back. `guideCalAdd` is the one caller
+that wants the field emptied, so it clears it *before* calling.
+
+**No rule over the panel.** The grid's last week already stops drawing one, so
+a line there was a second ending a few pixels under the first; 18px of space
+separates instead. And there is **no "Open in Calendar" link** — a way out is
+not a feature of a surface that is meant to be sufficient.
+
+Still light on purpose: no note, no repeat, no time. Those are the popover's.
+
+**The header folds the panel; it is not an ×.** There was one, and the problem
+was adjacency: it sat a few pixels above the rows' own ×, which *remove an
+item*. Two of the same glyph that close together, one meaning "put this away"
+and one "destroy this", is the collision worth designing out. A chevron says
+fold, says it in a different shape from delete, and lets the whole header be
+the target instead of an 18px box in a corner. (The header is pulled −6px and
+given it back as padding, so the date still starts on the panel's text column
+while its hover box overhangs the way a row's does.)
+
+The picked day wears a **ring**, not a fill: the fill is today's, and a day can
+be both. The × on a row is **bare until the row is hovered** — a delete on every
+line, always visible, is a row of invitations to lose something.
 
 ### The Content Rating bar is never silent
 
@@ -653,7 +870,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.20** → next is **v6.21**, then **v6.22**, etc.
+Current version: **v6.26** → next is **v6.27**, then **v6.28**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -665,7 +882,7 @@ back in v2.34, so nothing references `splash.html` any more. Its badge is
 updated for consistency only — there is no `src="splash.html?v=X.XX"` to change,
 despite what earlier versions of this file said.
 
-Always include the new version number in the ship note, e.g. `"v6.20 — add tooltip to age rating cell"`.
+Always include the new version number in the ship note, e.g. `"v6.26 — add tooltip to age rating cell"`.
 
 ---
 
@@ -719,7 +936,7 @@ Typical workflow:
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.20 — description of change"`.
+Include the version number in the ship note: `./ship.sh "v6.26 — description of change"`.
 
 ---
 
@@ -739,7 +956,7 @@ AI inference features won't work locally (keys are injected at deploy time). All
 
 ## Active Tasks / Known Issues
 
-See GitHub Issues for the current backlog. As of v6.20, the following items are in the queue:
+See GitHub Issues for the current backlog. As of v6.26, the following items are in the queue:
 
 - ~~The step modal's chrome~~ — all three landed: 1 and 2 in v6.11, and the
   scroll reflow in v6.17. `.submit-modal-scroll` and `.mac-spp-main` now carry

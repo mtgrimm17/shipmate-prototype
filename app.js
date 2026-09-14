@@ -405,6 +405,123 @@ function _calFitPop() {
     pop.style.top  = d.y + 'px';
   });
 }
+/* The guide's two faces. Only the guide re-renders — the month it shows comes
+   from `state.calendar`, which nothing here touches. */
+function toggleGuideCal() {
+  state.guideCal = !state.guideCal;
+  /* OPENING IT LANDS ON NOW. `calendar.monthOffset` starts at 1, because the
+     Calendar TAB is a planning surface and opens on next month — but this face
+     is a glance, and a glance that opens on a month with no "today" in it is
+     the one thing it must not do. Only on the way IN, so paging from here and
+     going back to the checklist keeps your place. It does move the Calendar
+     tab's month with it; they are one calendar, and that is the trade. */
+  if (state.guideCal) state.calendar.monthOffset = 0;
+  renderGuide();
+}
+
+/* A day opens the panel underneath the grid rather than navigating: pressing
+   the same day again closes it, so the gesture is its own undo. Only the guide
+   re-renders — nothing about the calendar's own state changes here. */
+function guideCalOpen(iso) {
+  state.guideCalDay = (state.guideCalDay === iso) ? null : iso;
+  renderGuide();
+  /* Put the caret where the next keystroke is most likely meant to go. Not on
+     a close: focusing an input that just stopped existing throws. */
+  if (state.guideCalDay) {
+    requestAnimationFrame(() => document.getElementById('gcal-add-input')?.focus());
+  }
+}
+
+/* Adds to the SAME list `calDraftSave` writes (state.calendar.custom), with the
+   same record shape — a title, on this date, no repeat. Kind, note and repeat
+   are what the big calendar's popover is for; asking for them in a 254px
+   column would make the quick thing the slow one. */
+function guideCalAdd(iso) {
+  const el = document.getElementById('gcal-add-input');
+  const label = (el?.value || '').trim();
+  if (!label) { el?.focus(); return; }
+  const kind = CAL_KIND[state.guideCalKind] ? state.guideCalKind : 'marketing';
+  const list = state.calendar.custom || (state.calendar.custom = []);
+  list.push({ id: 'custom-' + Date.now(), kind, label, note: '', dateISO: iso, repeat: 'none' });
+  /* Emptied BEFORE the repaint, because `_gcalRerender` carries the field's
+     current value across on purpose — this is the one caller that wants it
+     gone. The caret stays in the field either way, so the next one can be
+     typed straight after. */
+  if (el) el.value = '';
+  _gcalRerender();
+  requestAnimationFrame(() => document.getElementById('gcal-add-input')?.focus());
+}
+
+/* ── EDITING FROM THE PANEL ──────────────────────────────────────────────────
+   Two kinds of item live in this list and they are changed in two different
+   places, which is the whole reason these are functions rather than one line
+   each: an item you added is a record in `calendar.custom` and is edited in
+   place, while a built-in (the recurring and one-off items in CAL_RECURRING /
+   CAL_ONEOFF) is a constant — it is changed by writing an OVERRIDE keyed on
+   the occurrence, and removed by writing to `calendar.hidden`. Both of those
+   maps already exist and `calDraftSave` / `calDraftDelete` write the same two;
+   this just reaches them without the popover. */
+function _gcalCustomRec(it) {
+  return (state.calendar.custom || []).find(c => c.id === it.id) || null;
+}
+
+function guideCalCycleKind(key) {
+  const it = _calFindByKey(key);
+  if (!it) return;
+  const kinds = Object.keys(CAL_KIND);
+  const next  = kinds[(kinds.indexOf(it.kind) + 1) % kinds.length];
+  const rec   = _gcalCustomRec(it);
+  if (rec) {
+    rec.kind = next;
+  } else {
+    /* An override replaces the whole displayed record, so every field it does
+       not carry would come back empty. Spread what the occurrence is showing
+       now and change the one thing. */
+    (state.calendar.overrides || (state.calendar.overrides = {}))[key] = {
+      kind: next, label: it.label, note: it.note || '',
+      dateISO: it.date ? _calISO(it.date) : '', repeat: it.repeat || 'none',
+    };
+  }
+  _gcalRerender();
+}
+
+function guideCalRemove(key) {
+  const it = _calFindByKey(key);
+  if (!it) return;
+  const rec = _gcalCustomRec(it);
+  if (rec) {
+    state.calendar.custom = state.calendar.custom.filter(c => c.id !== rec.id);
+  } else {
+    (state.calendar.hidden || (state.calendar.hidden = {}))[key] = true;
+  }
+  _gcalRerender();
+}
+
+/* The colour of the thing you are about to type. Kept on `state` rather than
+   read off the DOM so it survives the re-render that showing it requires. */
+function guideCalNextKind() {
+  const kinds = Object.keys(CAL_KIND);
+  const cur   = CAL_KIND[state.guideCalKind] ? state.guideCalKind : 'marketing';
+  state.guideCalKind = kinds[(kinds.indexOf(cur) + 1) % kinds.length];
+  _gcalRerender();
+}
+
+/* One repaint for all of the above, and it does the two things a repaint here
+   always has to: carry the half-typed title across (innerHTML throws the input
+   away) and put the caret back where it was. */
+function _gcalRerender() {
+  const el    = document.getElementById('gcal-add-input');
+  const text  = el ? el.value : '';
+  const had   = document.activeElement === el;
+  renderGuide();
+  requestAnimationFrame(() => {
+    const next = document.getElementById('gcal-add-input');
+    if (!next) return;
+    next.value = text;
+    if (had || text) { next.focus(); next.setSelectionRange(text.length, text.length); }
+  });
+}
+
 function calShiftMonth(n) {
   state.calendar.monthOffset += n;
   state.calendar.selectedWeek = null;   // a week of the old month means nothing here
@@ -3519,6 +3636,66 @@ function smFakeInference(pid = 'macos', fraction = 0.66) {
 
      smFakeStoreInsights()      three suggestions
      smFakeStoreInsights(false) clear them again */
+/* ── DEV: see any submitted-card phase without doing the work ──────────────
+   The four post-submit faces are otherwise reachable only by completing every
+   step, linking an account, choosing a track and pressing Submit — which is
+   several minutes per look, and the reason these faces went a long time
+   unexamined.
+
+     smCardState('ios')                every phase, 2.5s apart, on a loop
+     smCardState('ios', 'accepted')    one phase, held
+     smCardState('ios', 'off')         back to the steps face
+
+   It writes the same `state.platformFlipped[pid]` the real submit writes, so
+   what you are looking at is the real card, not a mock of it. */
+let _smPhaseTimer = null;
+function smCardState(pid = 'ios', phase) {
+  clearInterval(_smPhaseTimer); _smPhaseTimer = null;
+  if (!state.activePlatforms.has(pid)) state.activePlatforms.add(pid);
+  if (!state.platformBuilds[pid]) {
+    state.platformBuilds[pid] = { name: 'Game.ipa', size: 130937, buildNumber: 42, uploadedAt: Date.now() - 2 * 864e5 };
+  }
+  if (!(state.selectedTracks || {})[pid]) {
+    state.selectedTracks = state.selectedTracks || {};
+    state.selectedTracks[pid] = (PLATFORM_TRACKS[pid] || [{ id: 'production' }])[0].id;
+  }
+  if (phase === 'off') {
+    delete state.platformFlipped[pid];
+    delete state.platformFlippedCardHeight?.[pid];
+    renderDashboard();
+    return 'steps face';
+  }
+  const set = (ph) => {
+    state.platformFlipped[pid] = {
+      track: state.selectedTracks[pid],
+      /* Backdated so "Day N of M" has somewhere to count from — a phase set
+         with `time: Date.now()` always reads Day 1, which hides the counter
+         bug you are most likely to be looking for. */
+      time: Date.now() - 864e5,
+      phase: ph,
+    };
+    renderDashboard();
+    console.log('[smCardState]', pid, ph, '→', storeReviewPhase(pid, ph).label);
+  };
+  if (phase) { set(phase); return phase; }
+  let i = 0;
+  set(STORE_REVIEW_PHASES[i]);
+  _smPhaseTimer = setInterval(() => {
+    i = (i + 1) % STORE_REVIEW_PHASES.length;
+    set(STORE_REVIEW_PHASES[i]);
+  }, 2500);
+  return 'cycling — smCardState("' + pid + '", "off") to stop';
+}
+
+/* The button each phase's own store puts in front of you. It only moves the
+   prototype forward one phase; there is no real store on the other end. */
+function smAdvancePhase(pid) {
+  const cur  = state.platformFlipped?.[pid]?.phase || 'in_review';
+  const next = cur === 'accepted' ? 'live' : cur === 'rejected' ? 'in_review' : 'accepted';
+  state.platformFlipped[pid] = { ...state.platformFlipped[pid], phase: next };
+  renderDashboard();
+}
+
 function smFakeStoreInsights(on = true) {
   if (!on) { state.storePageInsights = null; renderStepModal(); return; }
   state.storePageInsights = {
@@ -3645,13 +3822,14 @@ function submitStepClick(pid) {
     return;
   }
 
-  /* 3 — no track chosen. Not in the brief, but it is a real gate (readyToSubmit
-     tests it) and leaving it out would put back the dead press this change
-     exists to remove: everything ticked, account linked, and the row still
-     does nothing. The picker lives in the release block above. */
-  /* 3 — no destination yet. The picker sits in this very row (a chip shaped
-     like Upload Build's, see buildSubmitStepCard), so the row points at itself:
-     the chip is spotlighted rather than a control somewhere else on the card.
+  /* 3 — no destination yet. The picker is the `.submit-track-pick` chip on the
+     release block's first row (shape 4), so this spotlights UP the card rather
+     than at this row. That is the cost of the move and it is paid knowingly:
+     the block is the card's second element, always on screen, and the
+     spotlight dims everything else to .18 — `.card-release-block:not(:has(
+     .is-spotlit))` in style.css is what lets the block stay lit when the lit
+     thing is inside it. The selector below is unchanged because the chip kept
+     its class when it moved; if it is ever renamed, rename it here too.
      Nothing is preselected, here or anywhere — the destination is a decision,
      and a silent default would make it on your behalf. */
   if (!isWeb && !(state.selectedTracks || {})[pid]) {

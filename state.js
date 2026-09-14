@@ -2423,6 +2423,84 @@ const PLATFORM_TRACKS = {
   ],
 };
 
+/* ══════════════════════════════════════════════════════
+   WHAT EACH STORE CALLS THE WAIT  (STORE_REVIEW)
+   ══════════════════════════════════════════════════════
+   Four phases a submission can be in, in each store's OWN vocabulary —
+   verified against vendor documentation on 14 Sep 2026, not remembered. Three
+   of those strings are ones the internet gets wrong:
+
+   - Apple does NOT say "Ready for Sale" or "Processing for App Store" any
+     more. `AppStoreVersionState` is deprecated in favour of `AppVersionState`,
+     which renamed them READY_FOR_DISTRIBUTION and PROCESSING_FOR_DISTRIBUTION.
+   - Apple never says "Approved" either. The word is **Accepted**.
+   - It is "Pending Developer Release", not "Waiting for Developer Release".
+
+   THE SHAPE THEY SHARE, and the reason `accepted` is its own phase rather than
+   a flavour of live: all three stores stop after approving and hand the release
+   back to you. Apple prints "Pending Developer Release" with a Release This
+   Version button, Google "Ready to publish" with Publish changes, Steam says
+   outright that "Approved titles will not release themselves". So the state
+   names the approval, the line names the obligation, and the verb is yours.
+
+   `days` is the review wait, and these are the vendor's own numbers: Apple
+   publishes "90% of submissions are reviewed in less than 24 hours"; Google
+   gives NO SLA and warns of "up to seven days or longer"; Steam says "typically
+   3-5 business days" and asks for 7 days of margin.
+
+   ⚠ Two things to know before trusting this table:
+   1. `OB_PLATFORM_TIMING` in render.js holds a SECOND set of review durations
+      (ios 2.2, android 4.3, steam 7.1) for the dashboard timeline, and it
+      disagrees with this one. Two tables, one fact. Unify them deliberately.
+   2. Steam's `rejected` label is the only string here with no vendor source:
+      Steamworks documents no rejection state and no withdrawal at all — the
+      model is "feedback sent" or "Ready for release". Flagged rather than
+      invented-and-forgotten. */
+const STORE_REVIEW = {
+  ios: {
+    days: 1,
+    in_review: { label: 'IN REVIEW',                  note: 'App Review has your build. Nothing to do until they answer.' },
+    accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the App Store when you release it.', action: 'Release This Version' },
+    live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the App Store.' },
+    rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
+  },
+  macos: {
+    days: 1,
+    in_review: { label: 'IN REVIEW',                  note: 'App Review has your build. Nothing to do until they answer.' },
+    accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the Mac App Store when you release it.', action: 'Release This Version' },
+    live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the Mac App Store.' },
+    rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
+  },
+  android: {
+    days: 7,
+    in_review: { label: 'IN REVIEW',                  note: 'Google is reviewing this release. There is no published time limit.' },
+    accepted:  { label: 'READY TO PUBLISH',           note: 'Passed review. It goes out when you publish it.', action: 'Publish changes' },
+    live:      { label: 'PUBLISHED',                  note: 'Live on Google Play.' },
+    rejected:  { label: 'UPDATE REJECTED',            note: 'Your live version stays up. Fix what they flagged and send again.', action: 'Read the notes' },
+  },
+  steam: {
+    days: 5,
+    in_review: { label: 'IN REVIEW',                  note: 'Valve reviews the store page and the build separately.' },
+    accepted:  { label: 'READY FOR RELEASE',          note: 'Approved titles do not release themselves.', action: 'Release App' },
+    live:      { label: 'RELEASED',                   note: 'Live on Steam.' },
+    rejected:  { label: 'REVIEW FEEDBACK',            note: 'Valve sent notes on the store page or the build.', action: 'Read the notes' },
+  },
+  web: {
+    days: 0,
+    live:      { label: 'LIVE',                       note: 'Your game is live.' },
+  },
+};
+
+/* Every phase the card can draw, in the order a submission moves through them.
+   `rejected` is off that line — it can arrive from `in_review` and it goes
+   backwards, to work you have to redo. */
+const STORE_REVIEW_PHASES = ['in_review', 'accepted', 'live', 'rejected'];
+
+function storeReviewPhase(platformId, phase) {
+  const store = STORE_REVIEW[platformId] || STORE_REVIEW.ios;
+  return store[phase] || store.in_review || STORE_REVIEW.ios.in_review;
+}
+
 function platformTrackLabel(platformId, trackId) {
   const t = (PLATFORM_TRACKS[platformId] || []).find(t => t.id === trackId);
   return t ? t.label : (trackId === 'production' ? 'Production' : trackId);
@@ -2886,6 +2964,19 @@ const state = {
 
   // Shippy Guide collapse (horizontal): false = full card, true = mini progress rail
   guideCollapsed: false,
+
+  /* Shippy Guide face: false = the tab's checklist, true = the month.
+     It is the same month the Calendar tab is showing — the mini grid reads
+     `calendar.monthOffset` rather than keeping an offset of its own, so paging
+     in one place pages the other. One calendar, two windows onto it. */
+  guideCal: false,
+
+  // The day whose panel is open under the guide's month grid; null = closed.
+  guideCalDay: null,
+
+  // The kind the panel's add row will use for the next item it creates. A key
+  // of CAL_KIND; the dot in front of the field shows it.
+  guideCalKind: 'marketing',
 
   // DEBUG — the sub-tab band above the content. false = the row of pills,
   // true = just the name of the section you're in. Ctrl+D toggles it; see

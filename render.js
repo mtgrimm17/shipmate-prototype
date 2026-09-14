@@ -3439,16 +3439,159 @@ function renderGuide() {
   }).join('');
   const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
   const tabName = t('guide.tab.' + view) || TAB_NAME[view] || '';
+  /* THE CARD HAS TWO FACES, and the calendar replaces the tab's checklist
+     rather than sitting under it: 254px of inner width does not hold both, and
+     a month you have to scroll to is not a month you can read at a glance.
+     The eyebrow stays in both so the card never stops being the guide. */
+  const onCal = !!state.guideCal;
   el.innerHTML = `
     ${shippyLayersHTML()}
-    <div class="guide-card">
+    <div class="guide-card${onCal ? ' guide-card--cal' : ''}">
       <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
+      <button class="guide-cal-btn${onCal ? ' is-on' : ''}" onclick="toggleGuideCal()"
+              aria-label="${onCal ? 'Back to the checklist' : 'Show the month'}"
+              title="${onCal ? 'Back to the checklist' : 'Show the month'}">${onCal ? GUIDE_LIST_SVG : GUIDE_CAL_SVG}</button>
       <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
+      ${onCal ? buildGuideMiniCal() : `
       <div class="guide-title">${t('hero.' + view + '.title') || hero.title || ''}</div>
       <div class="guide-sub">${t('hero.' + view + '.sub') || hero.sub || ''}</div>
-      ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}
+      ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}`}
     </div>`;
   mountShippy(el);
+}
+
+/* Stroked at 1.8 on a 24-unit box, like every other chrome glyph in the card. */
+const GUIDE_CAL_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`;
+const GUIDE_LIST_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>`;
+
+/* ── THE GUIDE'S MONTH ───────────────────────────────────────────────────────
+   A month at a glance in a 254px column: the numbers, and a dot under the days
+   that hold something. No chips, no drag, no week selection — all of that
+   already exists one tab away in `buildCalendarMonth`, and cramming it in here
+   would be a second, worse calendar rather than a window onto the same one.
+
+   It shares `state.calendar.monthOffset` with that view (so paging here pages
+   there, and `_calRerender` already repaints both), and it reads the same
+   `_calItems` / `_calGridStart` / `CAL_KIND`, so the two can never disagree
+   about what is on a day. Weeks start on Sunday because the full calendar
+   does — the reference this was drawn from starts on Monday, and matching it
+   would have put two different week starts in one app. */
+function buildGuideMiniCal() {
+  const first = _calMonth();
+  const start = _calGridStart(first);
+  const end   = _calDay(start, 41);
+  const today = _calToday();
+  const todayISO = _calISO(today);
+
+  const items = _calItems(start, end).filter(_calMatch);
+  const byDay = {};
+  items.forEach(it => { if (it.date) (byDay[_calISO(it.date)] ||= []).push(it); });
+
+  const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const head = DOW.map(d => `<span class="gcal-dow">${d}</span>`).join('');
+
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const d    = _calDay(start, i);
+    const iso  = _calISO(d);
+    const out  = d.getMonth() !== first.getMonth();
+    const list = byDay[iso] || [];
+    const launch = list.some(it => it.isLaunch);
+    /* ONE DOT PER KIND, never one per item — a day with four marketing items
+       would otherwise grow a row of identical dots and push the grid around.
+       Launch day is not a kind: it takes the cell, as it does in the big one. */
+    const kinds = [...new Set(list.map(it => it.kind))].filter(k => CAL_KIND[k]);
+    const dots  = kinds.map(k => `<span class="gcal-dot" style="background:${CAL_KIND[k].color}"></span>`).join('');
+    cells += `
+      <button class="gcal-day${out ? ' is-out' : ''}${iso === todayISO ? ' is-today' : ''}${launch ? ' is-launch' : ''}${iso === state.guideCalDay ? ' is-picked' : ''}"
+              onclick="guideCalOpen('${iso}')" title="${escHtml(list.map(it => it.label).join(' · ') || '')}">
+        <span class="gcal-num">${d.getDate()}</span>
+        <span class="gcal-dots">${dots}</span>
+      </button>`;
+  }
+
+  const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return `
+    <div class="gcal">
+      <div class="gcal-head">
+        <span class="gcal-month">${escHtml(monthName)}</span>
+        <span class="gcal-nav">
+          <button class="gcal-arrow" onclick="calShiftMonth(-1)" aria-label="Previous month">‹</button>
+          <button class="gcal-today" onclick="calToday()">Today</button>
+          <button class="gcal-arrow" onclick="calShiftMonth(1)" aria-label="Next month">›</button>
+        </span>
+      </div>
+      <div class="gcal-grid">${head}${cells}</div>
+      ${_guideCalDayPanel(byDay)}
+    </div>`;
+}
+
+/* ── THE DAY OPENS DOWNWARDS ─────────────────────────────────────────────────
+   A day in the grid used to jump to the Calendar tab, which is a big move for
+   a small question ("what is on the 18th?") and threw away the month you were
+   looking at. It expands the panel instead: the grid stays, the day's items
+   come out underneath it, and the way to the full calendar is a link rather
+   than a side effect of pointing at a date.
+
+   Its rows are `.mcal-task`, the same class the Calendar tab's checklist uses,
+   and the tick calls the same `calToggleDone(key)` — so a thing ticked here is
+   ticked there, with no second model of doneness. Adding writes the same
+   `state.calendar.custom` record `calDraftSave` writes; the difference is only
+   how much it asks for. A title, here. The kind, the note and the repeat are
+   what the popover in the big calendar is for. */
+function _guideCalDayPanel(byDay) {
+  const iso = state.guideCalDay;
+  if (!iso) return '';
+  const d    = new Date(iso + 'T00:00:00');
+  const list = byDay[iso] || [];
+  const head = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  /* A ROW IS THREE CONTROLS, NOT ONE. It was a single `.mcal-task` button that
+     ticked the item — which is all the Calendar tab's checklist needs, because
+     everything else about an item is a double-click away in that view's
+     popover. Treat this panel as the only surface there is and one button is
+     not enough: the kind was unreachable and nothing could be removed. So the
+     dot sets the kind, the label ticks, and the × removes. A `<div>` and not a
+     `<button>`, because buttons cannot nest. */
+  const rows = list.map(it => {
+    const k = CAL_KIND[it.kind] ? it.kind : 'marketing';
+    return `
+    <div class="gcal-row${_calDone(it) ? ' is-done' : ''}" style="--k:${CAL_KIND[k].color}">
+      <button class="gcal-kind" onclick="guideCalCycleKind('${it.key}')"
+              title="${escHtml(CAL_KIND[k].label)} — press to change"></button>
+      <button class="gcal-row-label" onclick="calToggleDone('${it.key}')" title="Tick it off">${escHtml(it.label)}</button>
+      <button class="gcal-row-x" onclick="guideCalRemove('${it.key}')" aria-label="Remove" title="Remove">×</button>
+    </div>`;
+  }).join('');
+
+  /* The add row's dot is the same control doing the same job one step earlier:
+     it colours what you are ABOUT to type, so the choice is made in the same
+     gesture as the typing rather than in a form afterwards. */
+  const nextKind = CAL_KIND[state.guideCalKind] ? state.guideCalKind : 'marketing';
+
+  return `
+    <div class="gcal-panel">
+      ${/* THE HEAD IS THE CLOSER, and it is a fold, not an ×. The × that was
+            here sat a few pixels above the rows' own ×, which REMOVE an item —
+            two of the same glyph that close together meaning "put this away"
+            and "destroy this" is the one adjacency worth designing out. A
+            chevron pointing up says fold, says it in a different shape from
+            delete, and lets the whole header be the target instead of an 18px
+            box in a corner. */''}
+      <button class="gcal-panel-head" onclick="guideCalOpen('${iso}')" title="Fold this day away">
+        <span class="gcal-panel-date">${escHtml(head)}</span>
+        <svg class="gcal-panel-fold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+      </button>
+      ${rows || `<div class="gcal-panel-empty">Nothing on this day</div>`}
+      <div class="gcal-add" style="--k:${CAL_KIND[nextKind].color}">
+        <button class="gcal-kind" onclick="guideCalNextKind()"
+                title="${escHtml(CAL_KIND[nextKind].label)} — press to change"></button>
+        <input class="gcal-add-input" id="gcal-add-input" type="text" placeholder="Add to this day…"
+               onkeydown="if(event.key==='Enter'){guideCalAdd('${iso}')}else if(event.key==='Escape'){this.value=''}">
+        <button class="gcal-add-go" onclick="guideCalAdd('${iso}')" aria-label="Add" title="Add">+</button>
+      </div>
+    </div>`;
 }
 
 /* ── SHIPPY, IN TWO LAYERS ───────────────────────────────────────────────────
@@ -3925,12 +4068,26 @@ function buildReleaseBlock(pid) {
   const rowLabel = (shape.versionLabel && version) ? 'Version' : 'Build';
   const rows = [[rowLabel, parts.join('')]];
 
-  /* THE TRACK PICKER IS NOT HERE ANY MORE. It moved to the Submit row
-     (buildSubmitStepCard), where the destination is actually used, and this
-     block went back to reporting what was uploaded. The swSelect call, the
-     placeholder and the -14px pull that used to align its pill all went with
-     it; `.rel-track`'s rules in style.css have no consumer left, and
-     `.submit-track-pick` is where the styling lives now. */
+  /* THE TRACK PICKER IS BACK, ON THIS ROW — not on a row of its own. Shape 4,
+     and the first one where the destination costs no vertical space at all: the
+     row already ends in empty card, so the picker lands in it and the block
+     stays the two lines it has been since shape 2.
+     It wears `.submit-track-pick`, the SAME class it had in the Submit row, so
+     its 160×30 is one rule in one place — there is no second sizing rule to
+     drift. The Submit row keeps none of it; a value in two places drifts, and
+     that is exactly what shape 1 was punished for. */
+  const trackOpts = (pid === 'web') ? [] : (PLATFORM_TRACKS[pid] || []);
+  const submitDone = state.platformStepStatus?.[pid]?.submit === 'complete';
+  const trackPick = (trackOpts.length && !submitDone) ? `
+      <div class="submit-track-pick" onclick="event.stopPropagation()">${swSelect(
+        'rel-track-' + pid,
+        (state.selectedTracks || {})[pid] || '',
+        trackOpts.map(tr => ({ value: tr.id, label: tr.label })),
+        'selectTrack__' + pid,
+        'auto',
+        'right',
+        t('card.select_track') || 'Select track',
+      )}</div>` : '';
 
   /* LABELLED ROWS, two columns: the store's own noun in mono caps on the left,
      the value on the right. Which rows exist comes off the shape table rather
@@ -3947,14 +4104,20 @@ function buildReleaseBlock(pid) {
     <div class="rel-label">${escHtml(label)}</div>
     <div class="rel-value">${raw ? value : `<div class="rel-line">${value}</div>`}</div>`;
 
-  /* NO TRACK ROW. The destination now lives in the Submit row, as a chip shaped
-     like Upload Build's (buildSubmitStepCard) — one control, at the moment it
-     is used. A second copy up here would be the same value in two places, and
-     the first thing that happens to two copies of a value is that they drift.
-     The block is back to what it is good at: what was uploaded. */
+  /* THE PICKER RIDES THE FIRST ROW'S VALUE CELL — the facts on the left, the
+     destination hard right, one line. `.rel-value--pick` is what turns that
+     cell into a flex row; the picker is `flex: none` so it keeps its 160 and
+     the text takes whatever is left. */
+  const rowsHTML = rows.map((r, i) => {
+    const withPick = i === 0 && trackPick;
+    return `
+    <div class="rel-label">${escHtml(r[0])}</div>
+    <div class="rel-value${withPick ? ' rel-value--pick' : ''}"><div class="rel-line">${r[1]}</div>${withPick ? trackPick : ''}</div>`;
+  }).join('');
+
   return `
     <div class="card-release-block">
-      ${rows.map(r => row(r[0], r[1])).join('')}
+      ${rowsHTML}
     </div>`;
 }
 
@@ -4442,17 +4605,13 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      when the pill lived there), and `selectTrack__<pid>` is the per-platform
      callback registered once at load — swSelectChoose calls window[name](value)
      with one argument, so the platform cannot ride along in the string. */
-  const trackOpts = isWeb ? [] : (PLATFORM_TRACKS[pid] || []);
-  const trackPicker = trackOpts.length ? `
-      <div class="submit-track-pick" onclick="event.stopPropagation()">${swSelect(
-        'submit-track-' + pid,
-        selTrack,
-        trackOpts.map(tr => ({ value: tr.id, label: tr.label })),
-        'selectTrack__' + pid,
-        'auto',
-        'right',
-        t('card.select_track') || 'Select track',
-      )}</div>` : '';
+  /* THE CHIP IS NOT HERE ANY MORE — it went up to the release block's first
+     row, where it costs no vertical space and sits beside the build it routes
+     (buildReleaseBlock, shape 4). Submit is back to being one act.
+     Nothing replaces it in this row: a second copy of the destination is the
+     drift shape 1 was punished for. `selTrack` still reads below, because the
+     row's ready/locked state depends on a destination having been chosen. */
+  const trackPicker = '';
 
   return `
     <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
@@ -16554,13 +16713,27 @@ function buildSubmittedCard(pid, flipData) {
     : '';
   // Lock to the exact pre-flip active card height — prevents CSS Grid from stretching
   // sibling platform cards after submission (min-height alone would allow growth)
+  /* A FLOOR, NOT A CAGE. This was `height` + `max-height` + `overflow: hidden`,
+     which did stop the flipped card from stretching its siblings — and also
+     clipped it, silently, the moment a face held more than the steps face it
+     replaced. The phases that ask something of you (accepted, rejected) carry a
+     sentence and a button and are genuinely taller. `min-height` keeps the
+     no-stretch guarantee the lock was there for and lets the card grow. */
   const savedH = state.platformFlippedCardHeight?.[pid];
-  const heightStyle = savedH ? ` style="height:${savedH}px;max-height:${savedH}px;overflow:hidden"` : '';
+  const heightStyle = savedH ? ` style="min-height:${savedH}px"` : '';
 
-  // Review-time model: how long this store typically takes, used to derive the
-  // "Day X of Y" counter and the Est. live date. Web deploys are live at once.
-  const REVIEW_DAYS = { ios: 2, macos: 2, android: 3, steam: 5 };
-  const reviewDays  = REVIEW_DAYS[pid] || 2;
+  /* THE PHASE IS THE CARD. `state.platformFlipped[pid].phase` is one of
+     STORE_REVIEW_PHASES; anything older (a submit made before phases existed,
+     which wrote only `{track, time}`) reads as `in_review`, so nothing has to
+     be migrated. Web is always `live` — a deploy has no review to wait for. */
+  const phase    = isWeb ? 'live' : ((flipData && flipData.phase) || 'in_review');
+  const vocab    = storeReviewPhase(pid, phase);
+  const isLive   = phase === 'live';
+  const isYours  = phase === 'accepted';   // approved, and the next move is the developer's
+  const isBad    = phase === 'rejected';
+
+  // How long this store typically takes — vendor numbers, see STORE_REVIEW.
+  const reviewDays  = (STORE_REVIEW[pid] || STORE_REVIEW.ios).days || 1;
 
   const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const submittedDate = (flipData && flipData.time) ? new Date(flipData.time) : new Date();
@@ -16570,22 +16743,45 @@ function buildSubmittedCard(pid, flipData) {
   const daysElapsed   = Math.max(1, Math.min(reviewDays,
     Math.floor((Date.now() - submittedDate.getTime()) / 86400000) + 1));
 
-  // 4-segment review progress bar. Stores sit at "In Review" (1 done, 1 current);
-  // web is fully live (all segments filled green).
+  /* FOUR SEGMENTS, ONE PER PHASE OF THE JOURNEY — sent, reviewed, released,
+     live. The phase decides how many are filled, so the bar and the words in
+     the header can never disagree. Rejected does not advance it: it paints the
+     segment the review stopped on red, because a rejection is not progress. */
   const SEG_COUNT = 4;
-  const stageIdx  = isWeb ? SEG_COUNT : 1;
-  const segbar = Array.from({ length: SEG_COUNT }, (_, i) =>
-    `<span class="sub-seg ${i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : ''}"></span>`).join('');
+  const stageIdx  = isLive ? SEG_COUNT : isYours ? 2 : 1;
+  const segbar = Array.from({ length: SEG_COUNT }, (_, i) => {
+    if (isBad) return `<span class="sub-seg ${i === 0 ? 'is-done' : i === 1 ? 'is-bad' : ''}"></span>`;
+    return `<span class="sub-seg ${i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : ''}"></span>`;
+  }).join('');
 
-  const waitText = isWeb
+  const waitText = isLive
     ? 'Your game is live. Announce it everywhere and turn launch day into momentum.'
-    : 'Reviews are quiet time. Line up your announcement so launch day runs itself.';
+    : isYours
+      ? 'Nothing is public yet. Pick the moment, then announce it the same hour.'
+      : isBad
+        ? 'Fix what they flagged and send it again. Nothing you published before has changed.'
+        : 'Reviews are quiet time. Line up your announcement so launch day runs itself.';
+
+  /* THE PHASE CLASS CARRIES THE COLOUR, and the rule it follows is the app's
+     own: green is done, amber is "this needs you", red is wrong. Which means
+     IN REVIEW is none of the three — nothing needs you while a store reads
+     your build, so it wears a neutral bar rather than the amber it used to.
+     Amber moved to `accepted`, which is the one phase that really is waiting
+     on the developer. */
+  const phaseCls = isLive ? ' is-live' : isYours ? ' is-yours' : isBad ? ' is-bad' : ' is-waiting';
 
   return `
-    <div class="active-card submitted-card${isWeb ? ' is-live' : ''}" id="active-card-${pid}"${heightStyle}>
-      <div class="sub-review-bar${isWeb ? ' is-live' : ''}">
-        <span class="sub-review-status">${isWeb ? 'LIVE' : 'IN REVIEW'}</span>
-        ${isWeb ? '' : `<span class="sub-review-day">Day <b>${daysElapsed}</b> of <b>${reviewDays}</b></span>`}
+    <div class="active-card submitted-card${phaseCls}" id="active-card-${pid}"${heightStyle}>
+      <div class="sub-review-bar${phaseCls}">
+        <span class="sub-review-status">${escHtml(vocab.label)}</span>
+        ${/* A DAY COUNTER NEEDS DAYS TO COUNT. Apple's verified figure is "90%
+              in less than 24 hours", i.e. one day, and "Day 1 of 1" is what a
+              counter says when it has nothing to count — it reads like a bug.
+              Under two days the store's own claim goes in that slot instead. */''}
+        ${(isLive || isYours || isBad) ? ''
+          : reviewDays <= 1
+            ? `<span class="sub-review-day">Usually under <b>24h</b></span>`
+            : `<span class="sub-review-day">Day <b>${daysElapsed}</b> of <b>${reviewDays}</b></span>`}
       </div>
       <div class="submitted-body">
         <div class="sub-plat-row">
@@ -16600,13 +16796,22 @@ function buildSubmittedCard(pid, flipData) {
         </div>
         <div class="sub-segbar">${segbar}</div>
         <div class="sub-dates">
-          <span>${isWeb ? 'Deployed' : 'Submitted'} ${submittedStr}</span>
-          ${isWeb
+          <span>${isLive && isWeb ? 'Deployed' : 'Submitted'} ${submittedStr}</span>
+          ${isLive
             ? `<span class="sub-est"><b>Live now</b></span>`
-            : `<span class="sub-est"><b>Est. live</b> ${estLiveStr}</span>`}
+            : isYours
+              ? `<span class="sub-est"><b>Waiting on you</b></span>`
+              : isBad
+                ? `<span class="sub-est"><b>Needs a fix</b></span>`
+                : `<span class="sub-est"><b>Est. live</b> ${estLiveStr}</span>`}
         </div>
+        ${/* THE STORE'S OWN SENTENCE, under the bar that names the state. The
+              header says what the store calls it; this says what it means and,
+              when the next move is yours, what the store's own button says. */''}
+        <div class="sub-phase-note">${escHtml(vocab.note || '')}</div>
+        ${vocab.action ? `<button class="imp-cta sub-phase-act${isBad ? ' is-bad' : ''}" onclick="smAdvancePhase('${pid}')">${escHtml(vocab.action)}</button>` : ''}
         <div class="sub-wait-card">
-          <div class="sub-wait-head">${isWeb ? 'Now live' : 'While you wait'}</div>
+          <div class="sub-wait-head">${isLive ? 'Now live' : isYours ? 'Before you release' : isBad ? 'What now' : 'While you wait'}</div>
           <div class="sub-wait-body">${waitText}</div>
           <button class="sub-wait-link" onclick="setView('broadcast')">Open Marketing →</button>
         </div>
