@@ -1747,7 +1747,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.ob-dist-col-market { flex: 0 0 auto; }
+.ob-dist-col-market { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; }
 .ob-dist-col-count  { text-align: right; display: inline-flex; align-items: center; gap: 4px; }
 
 /* Both header cells double as sort toggles now (setObDistSort, app.js) —
@@ -1760,6 +1760,17 @@ body {
 .ob-dist-col-sort { cursor: pointer; transition: color 0.12s; user-select: none; }
 .ob-dist-col-sort:hover { color: var(--text); }
 .ob-dist-col-sort.is-active { color: var(--text); }
+
+/* Sort-hint glyph on each column label (_sortIcon, render.js) — a plain
+   affordance cue ("this can be clicked") rather than a direction/active
+   indicator, so it doesn't change with .is-active the way the label color
+   does. currentColor makes it track the label's own color automatically;
+   the dimmer opacity at rest keeps it from reading as a third piece of
+   text next to a two-word label, brightening to match on hover/active
+   same as the label itself does. */
+.ob-dist-sort-icon { display: inline-flex; opacity: 0.5; transition: opacity 0.12s; }
+.ob-dist-col-sort:hover .ob-dist-sort-icon,
+.ob-dist-col-sort.is-active .ob-dist-sort-icon { opacity: 0.9; }
 
 /* .ob-dist-table-toggle/.ob-market-chevron used to live here — the header
    itself was clickable, with its own chevron, and collapsed/expanded the
@@ -1917,15 +1928,17 @@ body {
    innerHTML), which meant toggleObDistExpand's own innerHTML rewrite
    (app.js) silently wiped it out on every click. Now that the badge has to
    stay visible through every expand/collapse click (by request), it can't
-   be inside the element that click rewrites — this row is what used to be
-   just the button's own border-top/centering, now shared by both. */
+   be inside the element that click rewrites — this wrapper keeps them
+   moving as one unit.
+   Used to be its own row below a dashed divider under the header; by
+   request it now sits inline in .ob-dist-table-header itself, between the
+   "Market" and "Gamers (approx.)" labels — so no border/vertical padding
+   of its own anymore, just centering + gap. */
 .ob-dist-list-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 0;
-  border-top: 1px dashed var(--border);
 }
 .ob-dist-expand-btn {
   display: flex;

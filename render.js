@@ -587,6 +587,16 @@ function _obRegTipIconHtml(code, isOn) {
 const _chevDown = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 const _chevUp   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
 
+// Small up/down glyph marking a column header as a sort toggle (Distribution's
+// countries-list "Market"/"Gamers (approx.)" headers — buildObCountryChips,
+// setObDistSort/app.js). currentColor, so it always matches whatever color
+// the label text itself is (.ob-dist-col-sort's own dim/hover/active
+// states) rather than needing its own color rules; .ob-dist-sort-icon
+// (style.css) dims it a bit further at rest so it reads as a quiet hint
+// rather than competing with the label text, then brightens to match on
+// hover/active same as the label does.
+const _sortIcon = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 3 17 9"/><polyline points="7 15 12 21 17 15"/></svg>`;
+
 // Windows OS-compatibility glyph (Steam's own purchase-area icon row shows
 // this next to the Apple glyph — platformIcon('macos', size) — when a title
 // supports macOS). Not one of Shipmate's own submission platforms, so it
@@ -854,18 +864,27 @@ function buildObCountryChips(forceExpanded) {
   // WITHIN each of those two groups. .is-active marks whichever one drove
   // the current sort, matching this pattern's own use elsewhere (e.g. the
   // active preset pill) rather than inventing a new "which column" cue.
+  // _sortIcon on each label is a plain affordance hint (this column can be
+  // clicked to sort) — not tied to which one is active.
+  //
+  // The expand/collapse control + selected-count badge (.ob-dist-list-
+  // controls) used to sit in their own row below a dashed divider; by
+  // request they now live in this same header row, between the two column
+  // labels — .ob-dist-table-header's own space-between spreads the three
+  // items (label / controls / label) the same way it used to spread two,
+  // so this is a one-line change in layout, not a new one.
   return `
     <div class="ob-dist-table-header" id="ob-market-toggle-header">
-      <span class="ob-dist-col-market ob-dist-col-sort${sortBy === 'name' ? ' is-active' : ''}" onclick="setObDistSort('name')">Market</span>
-      <span class="ob-dist-col-count ob-dist-col-sort${sortBy === 'gamers' ? ' is-active' : ''}" onclick="setObDistSort('gamers')">Gamers (approx.)</span>
-    </div>
-    <div class="ob-dist-market-body" id="ob-dist-market-body">
+      <span class="ob-dist-col-market ob-dist-col-sort${sortBy === 'name' ? ' is-active' : ''}" onclick="setObDistSort('name')">Market<span class="ob-dist-sort-icon">${_sortIcon}</span></span>
       <div class="ob-dist-list-controls">
         <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
           ${listOpen ? `${_chevUp} Show fewer markets` : `${_chevDown} Show ${totalCount} more markets`}
         </button>
         ${selectedBadge}
       </div>
+      <span class="ob-dist-col-count ob-dist-col-sort${sortBy === 'gamers' ? ' is-active' : ''}" onclick="setObDistSort('gamers')">Gamers (approx.)<span class="ob-dist-sort-icon">${_sortIcon}</span></span>
+    </div>
+    <div class="ob-dist-market-body" id="ob-dist-market-body">
       <div class="ob-dist-country-list${listOpen ? '' : ' hidden'}" id="ob-dist-country-list">${allRows}</div>
     </div>`;
 }
