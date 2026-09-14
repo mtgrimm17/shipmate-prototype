@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.27**
+Current version: **v6.28**
 
 ---
 
@@ -1033,8 +1033,44 @@ reaching them took every step, an account, a track and a press.
 ### The guide's other face is the month
 
 `buildGuideMiniCal()` (render.js) replaces the tab's checklist inside the same
-`.guide-card`, toggled by `.guide-cal-btn` — a 22px box beside the collapse
-chevron, its `right` derived as `14 + 22 + 6` so moving one moves the other.
+`.guide-card`, picked by `.guide-faces` — a two-icon segmented control beside
+the collapse chevron, its `right` derived as `14 + 26 + 4` so moving one moves
+the other.
+
+**IT IS A SEGMENTED CONTROL, NOT A TOGGLE BUTTON, AND THE DIFFERENCE IS
+LOAD-BEARING.** It was one 26px icon button that flipped `guideCal`, which is
+the right shape for "do a thing" and the wrong one for "pick which of two things
+you are looking at" — the card has two faces and only one of them was ever
+named. Two halves in a dark track now, the same language as Content Rating's
+Unanswered/All: a groove at black 22%, the picked half lifted out of it in the
+guide's own violet at 26%, no separator down the middle, radii nesting 7 inside
+10.
+
+**The halves SET, they do not flip** (`setGuideFace('list'|'cal')`, app.js).
+Pressing the half that is already lit must be a no-op: a toggle there turns the
+face OFF, so asking for Checklist while on Checklist would land you on Month,
+which reads as the control breaking. `toggleGuideCal` still exists because
+`_doFinalSubmit` really does mean "flip", and both now run through one
+`_applyGuideFace` so the month-offset reset lives in a single place.
+
+**TWO ICONS, NOT TWO WORDS, and the width is the reason.** The inner column is
+254: the eyebrow is 16px uppercase mono and "SHIPPY GUIDE" eats ~115 of it, the
+chevron takes 26 plus its gap. Labelled halves did not fit that row — they were
+built, measured, and needed a row of their own at 124px a half, costing ~34px of
+card height on BOTH faces (445.8 → 497.8). Two 26px icon halves make a **60×32**
+track that drops straight into the space the single button already had, so the
+control gains its second state for nothing. Measured: track at right 45, 4px
+clear of the chevron, the eyebrow's ink ending 50.8px short of it.
+
+**The glyphs are 16 and 15, not both 16.** The list mark is strokes with air
+between them, the calendar mark is a filled block; at one size the filled one
+reads heavier. Same reason the single button sized its calendar at 14 against a
+stroked box's 13.
+
+**The collapse chevron survives, and killing it was on the table.** It is worth
+saying no to explicitly: `toggleGuide` is the only door into the collapsed rail,
+so removing that button does not tidy a control away — it deletes a feature and
+strands the rail's own expand arrow where nobody can reach it.
 
 **Neither of those two wears a stroke, and nothing in this app's micro-buttons
 should.** `.active-card-settings` (the platform card's gear) and
@@ -1048,7 +1084,7 @@ outline and the resting fill went. The `is-on` state keeps a fill, because
 rule; the text field beside it keeps its border, because an input is not a
 micro-button — it has to show where you can type before you go near it.
 
-**The toggle wears the app's own calendar mark**, `SM_CAL_SVG` in state.js —
+**The month half wears the app's own calendar mark**, `SM_CAL_SVG` in state.js —
 the same art as the topbar's Calendar tab, verified identical path. It is a
 FILLED 82×75 glyph, not a stroked 24-unit one: at this size a 1.8 stroke is
 about one device pixel and the little date squares inside disappear. It is
@@ -1277,6 +1313,463 @@ The picked day wears a **ring**, not a fill: the fill is today's, and a day can
 be both. The × on a row is **bare until the row is hovered** — a delete on every
 line, always visible, is a row of invitations to lose something.
 
+### The Mac preview navigates from the top
+
+`_sppPinnedNav(pid, elements)` (render.js) is the Mac Product Page Preview's
+navigator, and it replaced `_sppFooterNav` **on that surface only** — iOS and
+Mac Full still carry the footer, unchanged and still rendering.
+
+**A stepper was the wrong shape for eight things.** The footer was PREV /
+CURRENT / NEXT: it could name where you were and offer the two places either
+side, so reaching Data privacy from Title meant pressing next seven times, and
+the seven names in between were never on screen together. A pinned row of pills
+is the whole map — every section in one press, in the page's own order, printed
+along the top of the thing it indexes.
+
+**Pressing a pill is `setStorePreviewFocus`, and that is the whole
+implementation.** That function already moved focus AND scrolled
+`[data-spp-el="<id>"]` into view (app.js) — the footer's arrows called it too.
+So the pills needed no travel code, which is what stops this from becoming a
+second navigation model that can disagree with the first. Every section already
+carried its `data-spp-el`; nothing new had to be marked up.
+
+**BOTH NAVIGATORS COULD NOT STAND.** They drive the same `storePreviewFocus`,
+so a press in one silently moves the other — one list with two controls
+reporting different positions. The footer call was removed from the Mac builder
+rather than hidden.
+
+**IT SPANS THE WHOLE MODAL, AND IT USED TO SPAN ONLY THE STORE.** It began as
+the first child of `.mac-spp-main` — the pane that actually scrolls, since
+`.submit-modal-scroll` is `overflow: hidden` on this face — stuck to its top
+with `position: sticky` and made opaque so the page stopped existing at its
+edge. Every one of those facts followed from where it sat, and where it sat was
+wrong: a navigator that indexes the whole step was drawn inside one of the
+step's two panes, so it was the width of the store column, and the product page
+ran underneath it. An opaque strip sliding over a page reads as a sheet laid on
+top of the thing rather than as the modal's own chrome.
+
+It is a **sibling of `.mac-spp-shell`** now, one row of the flex column
+`.submit-modal-mac-spp .ios-step-body-content` already is: it takes its natural
+height, the shell takes the rest (`flex: none` against the shell's `flex: 1`),
+and it sits above the sidebar and the page both. Measured on a 1000px modal:
+bar 339 → 1289, which is the body's own 950px content column exactly.
+
+**So `position` and the opaque `background` are GONE, not kept "just in case".**
+Nothing scrolls past it any more, and a sticky offset on an element nothing
+scrolls past is a claim the next reader would have to disprove. `top: 0`, the
+`z-index`, the `--panel` fill and the "an opaque bar says there is more above"
+argument all left with it.
+
+**TWO BOXES NOW, NOT THREE.** `.cr-pinned`'s third box was the sticky opaque
+strip, and it existed so the container could float without the page showing
+through the gap between its rounded edge and the scrollport. With nothing
+passing beneath, `.spp-pinned` is just the row's padding — the container
+(`.spp-pinned-bar`) and the row of pills (`.spp-pinned-row`) are what is left.
+
+The container is `.cr-pinned-bar`'s: white 15% fill, a 1px ring drawn INSIDE it
+rather than as a border (a border clips the background to the border box and
+draws the ring a pixel in, two curves that cannot stay concentric — the doubled,
+blurry corner that bar was fixed for). Its radius is `--field-radius + 8`, not
+that bar's `+10`: outer = inner + the gap between them, and here the pills sit
+at `--field-radius` inside 8px of padding where the CR bar's track sits at +3.
+Same rule, different arithmetic — copying the 18 would have bent the corners.
+
+**The pills were re-tuned when the container arrived, and they had to be.** They
+were white 6% resting and white 15% lit, which is right on the panel's
+near-black — but the container IS white 15% over `--panel`, compositing to about
+rgb(55,55,55), so a 6% pill on it all but vanished and the lit one matched its
+own background exactly. Contrast is measured against what a thing SITS ON, not
+against the surface two layers down. Resting is transparent now (the container
+is the ground; a fill on every pill would be eight boxes inside a box) and lit
+goes to 24%.
+
+**THE `|` BETWEEN THE PILLS IS `.app-subnav`'s, AND BORROWING IT WAS THE POINT.**
+Eight transparent labels 6px apart read as one run-on line of words — the exact
+problem the Game Details sub-nav (Basic info | Languages | Distribution |
+Assets) already solved, and the two rows are the same kind of object: a nav
+whose resting items draw nothing and whose selected one is the only filled pill.
+So this takes `.app-subtab-sep`'s answer rather than inventing a second one.
+Three things came with it, all load-bearing:
+
+- **Hidden, never removed.** `visibility: hidden` via `.is-off` on the two bars
+  beside the lit pill, and — from CSS, because hover is not a render — beside a
+  hovered one (`.spp-pin:hover + .spp-pin-sep` and the `:has()` twin for the one
+  before). Dropping it from the DOM is what used to let a selected pill and its
+  hovered neighbour meet in `.app-subnav`; keeping the box means the row never
+  reflows. Measured with Screenshots lit: separators 3 and 4 hidden, 8 pills, 7
+  bars.
+- **It is a real glyph, so it is the GAP TOO.** `.spp-pinned-row` goes to
+  `gap: 0` and the pills' own 12px of padding does the spacing. Left at 6 the row
+  would have paid 6 + glyph + 6 seven times and started overflowing, which on a
+  nav whose whole argument is "every section in one press" would have pushed Data
+  privacy off the end. Measured after: 751 of content in 934, no overflow.
+- **RE-TUNED FOR THIS GROUND, exactly as the pills were.** `.app-subtab-sep` is
+  `--text-faint` at 50%, which is right on the near-black its row sits on — about
+  rgb(52) against rgb(20). Copied verbatim into this container it vanished:
+  rgb(70) on rgb(55). It is one white alpha now instead of a colour and an
+  opacity (one lever, not two), `rgba(255,255,255,.25)`, landing near rgb(105) —
+  a third of the way from the container to the pill's own rgb(160) label, which
+  is the relationship the original had.
+- It takes THIS row's type, 11.5px, not the sub-nav's 14: the same object drawn
+  at the size of the thing it separates.
+
+Two more things it took from `.cr-pinned` or decided against it:
+
+- **No bleed arithmetic.** The Content Rating bar has to pull `-24` out of its
+  scroller and pay it back as padding; this one is a plain child of the body's
+  content column, so it is already the width it should be.
+- **It scrolls sideways, it does not wrap.** A nav that wraps to two lines
+  changes its own height, which moves the page under the pointer the moment a
+  label grows in another language. `flex: none` on the pills and `overflow-x:
+  auto` on the row are what keep that from becoming a squeeze later. The
+  scrollbar is hidden, because 4px of scrollbar under a row of pills reads as
+  damage rather than as an affordance.
+- **The leftover width goes INSIDE the row, not at its ends** —
+  `justify-content: space-between`, so the bar's own 8px of padding is the only
+  margin on all four sides. Two wrong answers came first and each fixed half of
+  it. The row is the full width of the container's padding box and the eight
+  pills do not fill it: measured, 15px left over. Left alone it all piled up
+  after the last pill — first pill 8 inside the bar, last pill 23 from the other
+  edge, one number on the left and a different one on the right. `safe center`
+  then split it, 15.5 and 15.5, which is symmetric and **still wrong**: the bar
+  pads 8 top and bottom, so the pills sat nearly twice as far from the side
+  walls as from the ceiling, and a container with one inset is a container with
+  one inset. `space-between` pushes the first and last pills flush against the
+  padding box and shares the 15px among the 14 gaps between the 15 items — about
+  1.1px each, invisible against the pills' own 12px of padding. Measured: 8 / 8
+  / 8 / 8 on all four edges, separator air 1.07 and 1.08.
+  **It needs no `safe`.** With negative free space `space-between` behaves as
+  `flex-start` by spec, so an overflowing row still starts at its left edge and
+  the first pill stays reachable — the exact case `safe center` had to be
+  spelled out for. Verified by clamping the row to 400px: first pill flush,
+  `scrollLeft` 0, nothing stranded.
+- **The lit pill is the app's CHIP, and still not a hue.** It shipped as a bare
+  white 24% wash — the right VALUE against this container and the wrong OBJECT:
+  the one selected pill in the app drawn without the masked gradient stroke that
+  says "selected" on `.app-subtab`, the onboarding pills, the yes/no answers and
+  the project chip. It joins that shared `::after` selector list at the end of
+  style.css rather than redrawing the gradient locally — the list's own note is
+  explicit that a shared selector list is the only way "the same stroke" stays
+  true after the next change.
+  `--pill-bw: 0px`, because `.spp-pin` declares `border: none` and its padding
+  box already IS its border box (the project chip's case; getting it wrong is
+  what used to paint fill on both sides of the ring). **The fill came down from
+  24% to the token's 15%, and that is only safe because the stroke arrived with
+  it** — the same trade `.app-subtab.is-on` made going 20 → 15 ("the stroke does
+  half of it" is written there), and the same question the Content Rating bar's
+  half settled by asking what it sits ON. Here that is the container at white
+  15% over `--panel`, rgb(55), so a 15% pill composites to rgb(85): a 30-point
+  step plus an edge. Measured: fill `rgba(255,255,255,.15)`, ring
+  `rgba(255,255,255,.2)` → `rgba(255,255,255,.05)` top to bottom, inset 0,
+  padding 1px. In the completed (green) bar it is rgb(72,102,86) on rgb(26,64,44)
+  and still reads. Hover needs its own rule (`.spp-pin.is-on:hover`) because
+  `.spp-pin:hover` is weaker and `.is-on` would override it — exactly how
+  `.app-subtab.is-on:hover` is written.
+  This row is still a LOCATOR, not a status: what is finished and what still
+  needs work is the page's own job and it already does it with the glow. A
+  second status vocabulary along the top would compete with it.
+
+**EVERY PILL WEARS A DISC — the pending one until there is a check to put in
+it.** It is the platform card's scheme wholesale (`.ios-step-num`, plus
+`.is-done`), and taking the WHOLE scheme rather than half of it is what fixed
+the shape this went through two wrong versions to reach.
+
+The requirement never changed: a mark that appears when a section is finished
+makes that pill wider, and in a row of eight that means the pill you were about
+to press moves the moment you answer a different one — the `|`'s problem at the
+other end of the same object. Version one answered it the `|`'s way too, a
+reserved slot with `visibility` switched. Geometry-wise that is correct and it
+is still what the numbers say (identical content width with none done and with
+all of them, no overflow either way) — **but an invisible box reads as a HOLE**,
+a gap in each pill where something obviously belongs. The pending disc occupies
+it for real and costs nothing extra, because that geometry was already paid for.
+
+It is also the platform card's own argument applied one surface over: a soft
+disc turning green is the SAME OBJECT changing colour, where a blank becoming a
+disc is a change of kind. That card dropped its empty ring for exactly this.
+
+**So the disc now means "nothing outstanding here", and that FLIPPED what
+Achievements gets.** Under the hidden-slot version the mark meant "you finished
+this", so Achievements — `required: false, done: true` permanently, because
+there is nothing in it to finish — was deliberately left blank rather than wear
+an unearned medal among blanks. With a disc on every pill the reasoning inverts:
+withholding the green would leave one section permanently pending, an item that
+can never complete, which reads as a fault rather than as an exemption. Nothing
+is outstanding there, so it is green. The BAR's own `is-complete` still counts
+required sections only, so the aggregate claim is unchanged.
+
+**IT LEADS THE LABEL, and that is what makes the pill the same object as the
+rows it borrows the disc from.** The platform card's step rows and the guide's
+checklist are both disc-then-name; trailing it made this the only place in the
+app where that mark came second, so the pills read as labels wearing a badge
+rather than as checklist items. Measured, the disc starts exactly 12px inside
+all eight pills — the pill's own padding — one distinct offset across the row.
+
+**ONE CLASS, NOT A SECOND GLYPH.** It shipped as a bare 11px check, a third
+dialect for something this app already draws twice. Wearing `.ios-step-num`
+means the pending fill, the green, the dark `#0F2A1A` check and the 38.3% ink
+ratio are the card's and cannot drift from it; only the SIZE is local, through
+`--pico` set to 15px on the pill's own slot. That is the documented lever for
+that disc and it reaches nothing else from in there — the card's `--pico`, and
+the whole text column derived from it, is untouched. The pending disc carries
+NO NUMBER, unlike the card's: there the digit is the step's position in a
+sequence you work through, and these eight are a map you enter at any point.
+Measured: 15×15 at radius 50%, done `rgb(49,220,128)` on `rgb(15,42,26)` with
+the SVG filling it at 100%.
+
+**THE PENDING FILL IS THE ONE VALUE THIS SLOT OVERRIDES, AND THE GROUND FORCES
+IT.** `.ios-step-num`'s pending is white 7%, tuned for the card's near-black:
+there it composites to rgb(36.5) on rgb(20), a 16.5-point step, **and it holds a
+NUMBER** at white 42%. Its job on the card is to be a legible container for a
+digit, so a modest step is enough — the ink inside is what you read. This slot
+is EMPTY, so the disc's own edge is all there is, and on the bar's lighter
+ground (the container at rgb(55)) white 7% lands at rgb(69): a 14-point pale
+bump with nothing in it.
+
+**Dark changes what the mark MEANS**, which is the real argument rather than
+contrast. A recessed well reads as "an empty socket, something goes here", where
+a faint raised disc reads as "there is a pale thing here" — and the app already
+owns that vocabulary: the guide's segmented control is a groove at black 22%
+with the picked half lifted out of it. So the number is BORROWED from that
+groove rather than invented. Measured: `rgba(0,0,0,.22)` → rgb(43) on rgb(55),
+−12, and the green discs now land against sockets instead of smudges.
+
+**The value cannot be shared, which is what makes this a forced divergence
+rather than a second dialect.** Black 22% over the card's `#141414` composites
+to rgb(15.6) — darker than its own ground, invisible. The two surfaces are 35
+points apart, so one alpha cannot serve both. Everything else stays the card's,
+and only `:not(.is-done)` is touched, so the done state is untouched by
+construction (two classes, so it outranks `.ios-step-num`'s one; the done rule
+is two as well and keeps winning where it applies). Verified with a bare
+`.ios-step-num` probe outside any pill: pending still `rgba(255,255,255,.07)`
+with `.42` ink, done still `rgb(49,220,128)` on `rgb(15,42,26)` — the override
+needs `.spp-pin-tick` and cannot reach a card.
+
+The disc is fatter than the bare check, and it costs: content went 879 → 919 in
+a 934 row. It still does not overflow, but the headroom is 15px now rather than
+55, so another language will start scrolling this row. That is what
+`overflow-x: auto` is there for, and it is the price of one mark instead of two.
+
+**Green is right here, and the submitted card's read-only list argues the
+opposite for a reason that does not apply.** There, every row is finished by
+definition, so a column of green discs is news to nobody and the ticks go white.
+This list is MIXED — that is the entire point of the mark — so green is doing
+what the colour rule reserves it for: one finished thing against others that are
+not.
+
+**"WE DID IT" IS A MOMENT PLUS A STATE, AND THEY ARE TWO MECHANISMS ON PURPOSE.**
+
+The state is `.spp-pinned-bar.is-complete`, derived in `_sppPinnedNav` from the
+sections themselves, so it is exactly as true as they are and it leaves by
+itself if you empty a field. **The whole bar goes green, fill included.**
+
+It shipped as the EDGE only, on the argument that the pills' resting contrast was
+measured against the container's white 15% and tinting the fill would move the
+ground under all eight of them. That argument was right about the risk and wrong
+about the conclusion — the risk is answered by holding the LUMINANCE, not by
+refusing to touch the fill — and edge-only was far too quiet to be the point of
+the thing.
+
+**So the alpha is COMPUTED, not picked.** White at .15 over `--panel` (20,20,20)
+composites to 55 a channel; matching that in perceived light with `#31DC80` means
+solving `20 + 157α = 55.25`, where 157 is the green's channel deltas through the
+0.2126 / 0.7152 / 0.0722 luma weights. That gives **α = .22**. Verified against
+the real panel: the white bar composites to luminance 55.2 and the green one to
+54.5, 1.4% apart — the bar changes hue and keeps its brightness, so every pill on
+it (transparent at rest, white 24% when lit) keeps the relationship it was tuned
+for. If the green ever changes, redo that line rather than eyeballing a new
+alpha; same discipline as the grade tabs' fills.
+
+The ring goes green with it rather than staying the lone signal, so the two are
+one statement. Measured complete: `rgba(49,220,128,.22)` with
+`inset 0 0 0 1px rgba(49,220,128,.45)`.
+
+The moment is `.is-celebrating`, and **it cannot be derived, which is the whole
+reason `_sppCelebrate` (app.js) exists.** A render knows "everything is done"; it
+cannot tell that from "you re-opened a step that was already done", and a bar
+that sweeps green every time you open the modal is a bar whose sweep means
+nothing. So the flank is detected after the paint against what was last seen —
+the same shape `_impPostRender` uses to tell a grade that ROSE from a grade
+merely redrawn, `undefined` guard included so the first paint never counts as a
+rise. Keyed by platform, because finishing Mac must not spend Steam's
+celebration. Verified in three states: still incomplete → no ring, no sweep; the
+render that completes it → ring **and** sweep; a re-render while already
+complete → ring, **no** second sweep.
+
+**The sweep TRAVELS and leaves; the cancel hold's FILLS and stays.** They are
+opposite kinds of thing and the difference decides the paint. That one is a
+clock and must say how much of the hold is done, which is why it is flat and
+even — a gradient there described its own progress twice and disagreed with
+itself. This one measures nothing: it is a specular pass, a light crossing a
+surface, and that is exactly the case where a gradient is honest. Soft at both
+edges, one pass, 900ms, `overflow: hidden` on the container so its rounded
+corners cut it, and the class stripped on `animationend` — left behind, the next
+render would inherit a finished animation and sit permanently mid-celebration.
+Both the sweep and `_sppCelebrate` bail on `prefers-reduced-motion`.
+
+**THE SEARCH FIELD HOLDS THE GAME'S NAME.** `_buildMacSppSidebar(gameTitle)` —
+it is the one line of that fake chrome that can tell the truth about your
+submission, and it costs nothing to: you are looking at your game's product
+page, so the way you got here was by searching for it. A literal "Search" beside
+a page that is unmistakably one game's was the last part of the sidebar still
+describing a generic App Store. It falls back to "Search" with no title — an
+empty field is what an untouched one looks like, and inventing a placeholder
+game name would put a second fake title on a screen whose real one is right
+beside it already saying "Your Game Title". `.is-query` is what separates the
+two registers: a real query is `--text`, a prompt stays `--text-faint`, the same
+distinction an input's value has from its placeholder. Ellipsised, because the
+title is capped at 30 characters and the column is 176 wide.
+
+`ALL_ELEMENTS` grew a `short` on exactly the two entries whose `label` is a
+sentence — "Adjust Screenshots" and "Answer Data Collection Questions" read fine
+after an arrow, and not at all inside a pill. The other six already had names,
+so they carry no `short` rather than a copy of their own label.
+
+**THE SIDEBAR NO LONGER HAS TO CATCH UP WITH THE PAGE.** While the nav was the
+scroller's first child it pushed the page down by its whole height and left the
+sidebar — which starts at the shell's top — that much too high, so
+`--spp-page-top` had to add the strip's paddings and its pill back up
+(`10px + 8px + 28px + 8px + 9px + 4px`) and hand the total to the sidebar as
+`margin-top`. With the nav above BOTH columns the only thing still displacing
+the page is `.ias-device-wrap`'s own 4px of top padding, so the variable is that
+one term. Keep it written as the box it comes from: if that padding moves, this
+is the line to edit. The sidebar still keeps no height of its own, so it
+stretches to the bottom the way the real app's does. Measured: sidebar top 247,
+page top 247, 0 apart.
+
+### The Mac sidebar's glyphs are the real art now
+
+`_buildMacSppSidebar()` (render.js). **Six of the eight are Jaco's exported
+SVGs** — Discover (star), Create (paintbrush), Work (paper plane), Develop
+(hammer), Categories (grid) and Updates (download arrow) — so those six stopped
+being redraws. **Play (rocket) and Arcade (joystick) are still mine** and are the
+only two left to replace; he has said he will supply them.
+
+**That makes the column two families, and the split is temporary rather than a
+design.** The exported art is FILLED — outline shapes drawn as filled paths with
+their own counters, the way SF Symbols are authored — where the two redraws are
+1.3px strokes. Both read as outlines at 14px, which is all that matters here: a
+genuinely filled mark in this column would read as the selected one, and these do
+not, because the fill only ever paints the outline itself.
+
+**EVERY GLYPH IS ON THE SAME 16-UNIT BOX, exported art included.** The source
+files are 128-unit canvases carrying a `matrix(4.01085, …)` of their own, so each
+export's matrix is multiplied by 0.125 (scale → 0.501356, translations ÷ 8) and
+baked into its `<g>`. One viewBox for all eight is what lets one CSS rule size
+them; two canvases would have them bobbing against each other the way the
+platform marks did before `SM_TILE_MARKS`.
+
+Two details that are easy to lose:
+
+- **`fill-rule` is carried per glyph**, not left to the default. `hammer.svg` is
+  authored `evenodd` and the other five `nonzero`; at `nonzero` the hammer loses
+  the holes in its claw.
+- **`overflow: visible` on the filled `<svg>`.** The exported art really does
+  reach the edges — the hammer's ink measures 0 → 16 on the box exactly — so at
+  the default `hidden` its outermost antialiased pixel is the one being clipped.
+
+Measured ink (w × h in the 16-unit box): Discover 14.5 × 13.85, Create 13.88 ×
+15.52, Work 13.68 × 13.68, Develop 16 × 15.15, Categories 12.02 × 12.02, Updates
+11.59 × 14.09 — the variation is the art's own optical balance (a diagonal hammer
+has a bigger box than a grid) and is left alone. My two placeholders are visibly
+lighter at 10.8 and 7.4 wide, which is the tell that they are still placeholders.
+
+**NO ROW IS CURRENT, and the highlight was removed rather than moved.** This
+sidebar is decorative chrome around a PRODUCT PAGE, and a product page is not
+any of the eight destinations listed in it — lighting "Discover" claimed you had
+navigated somewhere you had not, on the surface whose whole job is to say "this
+is your game's page". The real app leaves those rows unselected while a product
+page is open, for the same reason. The `current` parameter and
+`.mac-spp-nav-item.is-current`'s two rules went WITH it rather than being left
+dormant: a state nothing can set is a control waiting to be turned back on,
+which is the argument the dev bar was deleted under.
+
+**The traffic lights are in, and I argued against them once.** When this sidebar
+was first nailed against the reference I left them out on the grounds that they
+are WINDOW chrome rather than sidebar — true about the object, wrong about this
+drawing. Everything else in the column exists to say "you are looking at the Mac
+App Store app", and those three dots are the most recognisable thing on a macOS
+window; without them the column read as a web sidebar that happens to list
+Apple's sections. They are the cheapest fidelity in the whole preview.
+
+They are **dead by construction** — no hover, no `cursor: pointer`, no handler,
+`aria-hidden` — because a control that looks pressable and does nothing is worse
+than a picture of one, and this is a picture. Apple's colours as LITERALS
+(`#FF5F57` / `#FEBC2E` / `#28C840`) on purpose: they belong to macOS, not to
+this app's palette, and pointing them at `--alert-*` or the done green would
+quietly have made them mean something here. 11px at 7px apart rather than the
+real 12 and 8 — the column is 176 wide against a real window's hundreds, so the
+trio is scaled to the drawing it sits in.
+
+**The search field got shorter.** At 7px of vertical padding it measured 30
+tall, which is the height of a real control in this app and is what it looked
+like: something to press, above eight rows that are not. 4px of padding brings
+it to ~25, close enough to the nav rows that the column reads as one rhythm.
+The horizontal 11 stays — it is what keeps the magnifier off the pill's curve.
+
+**THE LANGUAGE SWITCHER IS CHROME, NOT AN ANSWER.** `_macSppLangDropdownHTML`
+puts a `.loc-primary-pill` in the modal's header, and it was the loudest thing
+there. The diagnosis is sharper than "too heavy": it wore `--pill-on-bg` /
+`--pill-on-color`, the SELECTION blue, which in this app means *you confirmed
+this*. In Localization that is right — the primary language is a declaration the
+submission carries, chosen inside a form, and that copy of the pill is
+untouched. Here the same component picks which language you are LOOKING at. It
+is a lens, not an answer; nothing about the submission changes when you move it.
+Blue was making a claim the control cannot make, in the brightest colour
+available, two inches from the title.
+
+**The fix is `.rel-track`'s, wholesale** — that rule was written for this exact
+situation (a picker living in chrome rather than in a form) and a third
+treatment for one component was not needed. Ghost trigger: no fill and no ring
+at rest, both arriving on hover, and the hover box is deliberately
+`.task-modal-close`'s own — 30px tall, 8px radius, flat grey, no stroke — because
+that button is one sibling away and two controls in one row inventing separate
+boxes is the only reason they would look like two different things. The ring is
+switched off with `display: none` rather than deleted, so Localization keeps
+its. Scoped to `.submit-modal-header-actions`.
+
+**And it shrink-wraps**, the third piece of that copy: the card's track picker
+takes the room its value needs, while this one was pinned at a fixed 150px with
+the label stretched across 102 of it. `swSelect` now gets `'auto'` and
+`.loc-primary-name` drops its `flex: 1` (that stretch is what kept the word
+floating in an oversized box). Measured: 150 → 98.4 wide, 30 tall, radius 8,
+transparent, ring `none`, label `--text-dim` → `--text` on approach, same height
+and radius as the × and centred with it, 20px apart. The panel still opens
+right-aligned; open still lights the same 6% fill; Localization's copy still
+measures `rgba(0,154,255,.35)` with its ring `block`.
+
+### The icon has two doors
+
+`smAppIcon()` / `smAppIconSrc()` in assets.js, and they exist because the answer
+to "what is this game's icon" was written five times and right once.
+
+`state.uploads.appIcon` is the dedicated uploader's slot. But the asset library's
+drop well takes any file and classifies it, so a developer who drops their icon
+in there has unmistakably added one — the tool even labels it Icon — while the
+slot stays null. Every store preview read the slot directly, so the page went on
+drawing the grey mountain placeholder beside a title, a subtitle and a GET button
+that were all filled in: broken-looking, over a file we already had. The guide
+was louder still — it kept printing "Upload an app icon", pointing at a job
+already done, and a checklist that nags about finished work is worse than one
+that is merely incomplete.
+
+**The fix already existed on exactly one surface**, written in place in the
+project-selector chip (`renderTopbar`), which is precisely how a rule ends up
+true on one surface and wrong on five. It is lifted out now and the chip reads it
+like everyone else: five previews, the chip and `shippyAssetsNotes`, one
+function.
+
+**The slot still wins when it is set** — that file was chosen for this job, where
+a pool icon was merely recognised as one.
+
+**Two functions, because the two doors hand back two SHAPES.** An upload is a
+screenshot-style entry (`{ref}` / `{dataUrl}` / `{url}`) that only
+`_screenshotSrc` resolves; a pool record carries a flat `.src`. `smAppIcon()`
+returns the record for callers that only need truthiness; `smAppIconSrc()`
+resolves the src so no caller has to know the difference. Verified: with the slot
+empty and one `kind: 'icon'` asset in the pool, the preview draws the real image
+and the placeholder is gone.
+
 ### The Content Rating bar is never silent
 
 Three outcomes, three lines (`buildContentRatingSection`): Shipmate inferred
@@ -1306,7 +1799,7 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.27** → next is **v6.28**, then **v6.29**, etc.
+Current version: **v6.28** → next is **v6.29**, then **v6.30**, etc.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -1406,7 +1899,15 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   `SM_REQS.macos` in assets.js already carries Apple's numbers: icon 1024×1024
   with no alpha, screenshots 16:10 at 2880×1800 / 2560×1600 / 1440×900 /
   1280×800. The web preview (`buildWebSitePreviewSection` + web-page.js) is the
-  most developed one and the best model to copy.
+  most developed one and the best model to copy. (Its NAVIGATION was re-cut in
+  v6.28 — see "The Mac preview navigates from the top" — and the sidebar was
+  nailed against a screenshot of the real app in the same version. The page's own
+  fidelity to Apple's layout is what is still open.)
+- **Play and Arcade are the last two hand-drawn sidebar glyphs.** Six of the
+  eight are Jaco's exported SVGs as of v6.28; those two are still my redraws and
+  he has said he will supply them. Dropping them in is the same one-line swap the
+  other six took — see "The Mac sidebar's glyphs are the real art now" for the
+  16-unit-box arithmetic and the `fill-rule` trap.
 - Auto-fit the hero on mobile: a logotype sized for 1440px overflows at 390px.
   Needs to happen in the measuring pass, re-anchored by the edge it aligns to.
 - Press kit — Adam wants a downloadable one with asset links. Blocked on a real

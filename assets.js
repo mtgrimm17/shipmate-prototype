@@ -275,6 +275,45 @@ function smPool() {
 }
 const smGet = id => smPool().find(a => a.id === id) || null;
 
+/* THE ICON HAS TWO DOORS, AND ONLY ONE OF THEM USED TO REACH THE PREVIEWS.
+
+   `state.uploads.appIcon` is the dedicated icon uploader's slot. But the asset
+   library's drop well takes any file and classifies it, so a developer who drops
+   their icon in there has unmistakably "added an icon" — the tool even labels it
+   Icon — while `appIcon` stays null. Five store previews read the slot directly
+   and so kept drawing the grey mountain placeholder next to a title, a subtitle
+   and a GET button that were all filled in: the page looked broken over a file
+   the developer had already handed us.
+
+   The project-selector chip (renderTopbar, render.js) had already worked this
+   out and fixed it FOR ITSELF, in place, which is exactly how a rule ends up
+   true on one surface and false on five. This is that same fallback, lifted out
+   so there is one answer to "what is this game's icon" and every surface asks
+   it.
+
+   THE SLOT STILL WINS when it is set — that file was chosen for this job
+   deliberately, where a pool icon was merely recognised as one. Returns the
+   asset record, not a src: callers want different things from it (`.src` on a
+   pool record, `_screenshotSrc()` on an upload), and flattening it here would
+   make this decide their markup too. */
+function smAppIcon() {
+  return (typeof state !== 'undefined' && state.uploads?.appIcon)
+      || smPool().find(a => a.kind === 'icon')
+      || null;
+}
+
+/* …and the src, because the two doors hand back two SHAPES and every caller was
+   going to have to know that. An upload is a screenshot-style entry
+   (`{ref}` / `{dataUrl}` / `{url}`) that only `_screenshotSrc` can resolve; a
+   pool record carries a flat `.src`. The chip's own `icon.src ||
+   _screenshotSrc(icon)` is that knowledge, and copying it to five previews is
+   five places to get it wrong. Resolved once, here. */
+function smAppIconSrc() {
+  const icon = smAppIcon();
+  if (!icon) return '';
+  return icon.src || (typeof _screenshotSrc === 'function' ? _screenshotSrc(icon) : '');
+}
+
 /* THE RECORD. `origin` is the field that matters most, and it is a bug fix as
    much as a feature.
 

@@ -343,7 +343,8 @@ function gdSetSection(id) {
 function gdSetContentPlatform(pid) { state.details.contentPlatform = pid; renderDetails(); }
 
 /* Shippy Guide horizontal collapse toggle (full card ↔ mini progress rail). */
-function toggleGuide() { state.guideCollapsed = !state.guideCollapsed; renderGuide(); }
+/* `toggleGuide` is gone with the collapse chevron that was its only caller —
+   see the note in renderGuide (render.js). */
 
 /* Drive the inline "analyzing → questionnaire" flow for the selected platform.
    First view of a platform shows a loading screen; after a short beat we snapshot
@@ -407,8 +408,28 @@ function _calFitPop() {
 }
 /* The guide's two faces. Only the guide re-renders — the month it shows comes
    from `state.calendar`, which nothing here touches. */
+/* A SEGMENTED CONTROL CANNOT TOGGLE. The two faces used to hang off one icon
+   button that flipped `guideCal`, and a flip is the right verb for one button
+   with two states. It is the wrong one the moment there are two halves: press
+   the half that is already lit and a toggle turns it OFF, which from a
+   segmented control reads as the control breaking — you asked for Checklist
+   while on Checklist and landed on Month. So the halves SET rather than flip,
+   and pressing the live one is a no-op that never reaches a render.
+   `toggleGuideCal` stays because `_doFinalSubmit` and the keyboard path still
+   mean "flip"; it is now a thin wrapper over the same setter, so the
+   month-offset rule below lives in exactly one place. */
+function setGuideFace(which) {
+  const wantCal = which === 'cal';
+  if (!!state.guideCal === wantCal) return;   // already there — nothing changed
+  _applyGuideFace(wantCal);
+}
+
 function toggleGuideCal() {
-  state.guideCal = !state.guideCal;
+  _applyGuideFace(!state.guideCal);
+}
+
+function _applyGuideFace(toCal) {
+  state.guideCal = toCal;
   /* OPENING IT LANDS ON NOW. `calendar.monthOffset` starts at 1, because the
      Calendar TAB is a planning surface and opens on next month — but this face
      is a glance, and a glance that opens on a month with no "today" in it is
@@ -3833,6 +3854,51 @@ function smFakeStoreInsights(on = true) {
    The 2px slack in each comparison is for fractional scroll heights — a body at
    999.4 of 1000 never satisfies a strict equality and the bottom fade would
    never clear. Re-armed after every render (renderStepModal). */
+/* THE PINNED NAV'S "WE DID IT" — a MOMENT plus a state, and they are two
+   different mechanisms on purpose.
+
+   The state is `.spp-pinned-bar.is-complete`, derived in `_sppPinnedNav`
+   (render.js) from the sections themselves, so it is exactly as true as they
+   are. It shows as a quiet green EDGE, not a green fill: the pills' resting
+   contrast was tuned against the container's white 15%, and tinting that fill
+   green would pull the ground out from under all eight of them. `.submit-ready`
+   and the cancel hold already say a state this way — the border carries it —
+   which makes this one idea in three places rather than a third invention.
+
+   The moment is `.is-celebrating`, and it CANNOT be derived, which is the whole
+   reason this function exists. A render knows "everything is done"; it cannot
+   tell that from "you re-opened a step that was already done", and a bar that
+   sweeps green every time you open the modal is a bar whose sweep means
+   nothing. So the flank is detected here, after the paint, against what was
+   last seen — the same shape `_impPostRender` uses to tell a grade that ROSE
+   from a grade that was merely redrawn, down to the `undefined` guard that
+   stops the very first paint from counting as a rise. Someone who opens a
+   finished step gets the green edge and no sweep, which is correct: they did
+   not just do anything.
+
+   Keyed by platform, because two previews can be open across a session and
+   finishing Mac must not spend Steam's celebration. */
+const _sppLastComplete = {};
+function _sppCelebrate() {
+  const bar = document.querySelector('.spp-pinned-bar');
+  if (!bar) return;
+  /* The pid is read off the row's own handler rather than threaded through four
+     callers — the pills already name it, and one source beats a parameter that
+     can be passed wrong. */
+  const pid = document.querySelector('.spp-pin')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+  if (!pid) return;
+  const now  = bar.classList.contains('is-complete');
+  const prev = _sppLastComplete[pid];
+  _sppLastComplete[pid] = now;
+  if (prev === undefined || !now || prev) return;   // first paint, not done, or already was
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  /* Stripped on `animationend` so the class is only ever on during the sweep —
+     left behind, the next render would inherit a finished animation and the
+     element would be permanently mid-celebration. */
+  bar.classList.add('is-celebrating');
+  bar.addEventListener('animationend', () => bar.classList.remove('is-celebrating'), { once: true });
+}
+
 function _smModalFades() {
   const wrap = document.getElementById('step-modal-body-wrap');
   const body = document.getElementById('step-modal-body');

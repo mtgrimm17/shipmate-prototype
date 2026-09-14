@@ -1469,16 +1469,13 @@ function renderProjectBar() {
     /* THE SLOT FIRST, THEN THE POOL — because there are two ways an icon gets
        into Shipmate and only one of them used to reach this chip.
 
-       state.uploads.appIcon is set by the dedicated icon uploader. But the
-       asset library's drop well takes ANY file and classifies it, so a
-       developer who drops their icon in there has unmistakably "added an icon
-       in Assets" — the tool even labels it Icon — while appIcon stays empty
-       and the chip kept showing its hole. Falling back to the pool's own icon
-       makes the two doors lead to the same place. The slot still wins when it
-       is set: that one was chosen for this job deliberately. */
-    const icon = state.uploads?.appIcon
-      || (typeof smPool === 'function' && smPool().find(a => a.kind === 'icon')) || null;
-    const src = icon ? (icon.src || _screenshotSrc(icon)) : '';
+       This chip is where that was worked out, and it is no longer where it
+       LIVES: the same fallback, written in place here, stayed false on the five
+       store previews for as long as it existed, which is how a rule ends up
+       true on one surface and wrong on five. It is `smAppIcon` / `smAppIconSrc`
+       in assets.js now — see their note for the argument — and this reads it
+       like everyone else. */
+    const src = typeof smAppIconSrc === 'function' ? smAppIconSrc() : '';
     selIcon.classList.toggle('empty', !src);
     selIcon.innerHTML = src ? `<img src="${src}" alt="">` : '';
   }
@@ -1629,10 +1626,15 @@ function shippyDistNotes() {
 
 function shippyAssetsNotes() {
   const shots = state.uploads.screenshots.length;
+  /* `smAppIcon`, not the slot — the guide was the loudest consumer of the
+     one-door bug: drop an icon in the asset library and it went on telling you
+     to "Upload an app icon", pointing at a job already done. A checklist that
+     nags about finished work is worse than one that is merely incomplete. */
+  const icon = typeof smAppIcon === 'function' ? smAppIcon() : state.uploads.appIcon;
   return smItem(shots > 0,
         shots ? `Screenshots <i>${shots}</i>` : smGo('Add screenshots', 2, '#ob-q-screenshots'), 'shots')
-    + smItem(!!state.uploads.appIcon,
-        state.uploads.appIcon ? 'App icon' : smGo('Upload an app icon', 2, '#ob-q-screenshots'), 'icon');
+    + smItem(!!icon,
+        icon ? 'App icon' : smGo('Upload an app icon', 2, '#ob-q-screenshots'), 'icon');
 }
 
 /* Broadcast and Performance have no checklist logic in this repo yet, so the
@@ -3506,7 +3508,7 @@ function renderGuide() {
   /* The Calendar tab hands this column to its own checklist: the guide's job
      there is the calendar's items, not a tab's setup tasks. Shippy still hangs
      off the top so the column doesn't change character. */
-  if (view === 'calendar' && !state.guideCollapsed) {
+  if (view === 'calendar') {
     el.classList.remove('is-collapsed');
     el.innerHTML = `${shippyLayersHTML()}${buildCalChecklist()}`;
     mountShippy(el);
@@ -3517,21 +3519,20 @@ function renderGuide() {
   const group = _chkGroups().find(g => g.view === view);
   const items = group ? group.items : [];
   const done = items.filter(i => i.done).length;
-  const collapsed = !!state.guideCollapsed;
-  el.classList.toggle('is-collapsed', collapsed);
 
-  // Collapsed: a one-icon-wide progress rail — a vertical run of status dots.
-  if (collapsed) {
-    const dots = items.map(i =>
-      `<button class="guide-mini-dot${i.done ? ' is-done' : ''}" title="${i.label}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">${i.done ? GUIDE_CHECK_SVG : ''}</button>`).join('');
-    el.innerHTML = `
-      <div class="guide-card guide-card--mini">
-        <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Expand guide" title="Expand guide">${GUIDE_CHEV_SVG('left')}</button>
-        <div class="guide-mini-dots">${dots}</div>
-      </div>`;
-    return;
-  }
-
+  /* THE GUIDE NO LONGER COLLAPSES. There was a chevron top-right and a
+     one-icon-wide rail of status dots behind it, and the whole feature hung
+     off that one button: `toggleGuide` had exactly two callers, the chevron on
+     this face and the chevron on the rail, and nothing else ever wrote
+     `guideCollapsed`. So removing the chevron removed the only door in — the
+     rail could still render but nothing could ever ask it to, and its own
+     expand arrow would have sat in a view no one could reach.
+     It went whole rather than half: an unreachable branch left behind is the
+     same debt the dev bar was deleted to avoid. `state.guideCollapsed`,
+     `toggleGuide`, `GUIDE_CHEV_SVG` and the `.guide-card--mini` /
+     `.guide-mini-*` rules all went with it. The `is-collapsed` class is still
+     REMOVED above and below, defensively, because a stale one on a persisted
+     DOM node would hide the column outright. */
   // The current task = the first one not yet done (purple ring, per §4).
   const currentIdx = items.findIndex(i => !i.done);
   const tasks = items.map((i, idx) => {
@@ -3552,11 +3553,33 @@ function renderGuide() {
   el.innerHTML = `
     ${shippyLayersHTML()}
     <div class="guide-card${onCal ? ' guide-card--cal' : ''}">
-      <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">${GUIDE_CHEV_SVG('right')}</button>
-      <button class="guide-cal-btn${onCal ? ' is-on' : ''}" onclick="toggleGuideCal()"
-              aria-label="${onCal ? 'Back to the checklist' : 'Show the month'}"
-              title="${onCal ? 'Back to the checklist' : 'Show the month'}">${onCal ? GUIDE_LIST_SVG : SM_CAL_SVG}</button>
       <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
+      ${/* A REAL SEGMENTED CONTROL, and TWO ICONS is what lets it stay in the
+            header. It was one 26px icon button that flipped the face, which is
+            the shape for "do a thing", not for "pick which of two things you
+            are looking at" — the card has two faces and only one of them was
+            ever named.
+
+            Two icons rather than two words, and the width is why. The inner
+            column is 254 and the eyebrow is 16px uppercase mono, so "SHIPPY
+            GUIDE" eats ~115 of it. Labelled halves did not fit that row —
+            built and measured, they needed a row of their own at 124px a half
+            and cost ~34px of card height on BOTH faces. Two 26px icon halves
+            make a 60px track that sits in the corner the old single button had,
+            so the control gets its second state for free.
+
+            Each half carries its own title/aria-label, because an icon that is
+            one of two states has nothing else to say what it is. */''}
+      <div class="guide-faces" role="tablist">
+        <button type="button" class="guide-face guide-face--list${onCal ? '' : ' is-on'}" role="tab"
+                aria-selected="${onCal ? 'false' : 'true'}"
+                aria-label="Checklist" title="Checklist"
+                onclick="setGuideFace('list')">${GUIDE_LIST_SVG}</button>
+        <button type="button" class="guide-face guide-face--cal${onCal ? ' is-on' : ''}" role="tab"
+                aria-selected="${onCal ? 'true' : 'false'}"
+                aria-label="Month" title="Month"
+                onclick="setGuideFace('cal')">${SM_CAL_SVG}</button>
+      </div>
       ${onCal ? buildGuideMiniCal() : `
       <div class="guide-title">${t('hero.' + view + '.title') || hero.title || ''}</div>
       <div class="guide-sub">${t('hero.' + view + '.sub') || hero.sub || ''}</div>
@@ -3571,15 +3594,13 @@ function renderGuide() {
    twin anywhere, so it is drawn here, filled rather than stroked to match. */
 const GUIDE_LIST_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 5.6h2.1v2.1H4V5.6Zm4.6 0H20v2.1H8.6V5.6ZM4 10.95h2.1v2.1H4v-2.1Zm4.6 0H20v2.1H8.6v-2.1ZM4 16.3h2.1v2.1H4v-2.1Zm4.6 0H20v2.1H8.6v-2.1Z"/></svg>`;
 
-/* THE COLLAPSE CHEVRON IS A GLYPH, NOT A CHARACTER. It was the text `›` / `‹`,
-   and a text character sits on a BASELINE: centring it in a 26px flex box
-   centres its line box, not its ink, so it rode a pixel or two high and no
-   amount of line-height fixed it across faces. An SVG path is geometry — the
-   viewBox centre IS the ink's centre — so it lands dead centre by definition,
-   and it takes the same stroke as every other chrome glyph. */
-const GUIDE_CHEV_SVG = (dir) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="${
-    dir === 'left' ? '15 6 9 12 15 18' : '9 6 15 12 9 18'}"/></svg>`;
+/* `GUIDE_CHEV_SVG` went with the collapse feature. Its one lesson is kept
+   because it applies to every glyph in this app's chrome: a chevron must be a
+   PATH, not the text `›`. A character sits on a baseline, so centring it in a
+   flex box centres its line box and not its ink, and it rides a pixel or two
+   high at every size; an SVG's viewBox centre IS the ink's centre. The day
+   panel's fold chevron (`_guideCalDayPanel`) is drawn that way for the same
+   reason. */
 
 /* ── THE GUIDE'S MONTH ───────────────────────────────────────────────────────
    A month at a glance in a 254px column: the numbers, and a dot under the days
@@ -5513,6 +5534,11 @@ function renderStepModal() {
      the modal's innerHTML, so the previous scroller (and its listener) is gone.
      See _smModalFades in app.js. */
   if (typeof _smModalFades === 'function') requestAnimationFrame(_smModalFades);
+
+  /* Same reason, one floor up: the pinned nav's green sweep fires on the EDGE
+     from "something outstanding" to "nothing outstanding", and an edge can only
+     be seen by comparing two renders. See _sppCelebrate (app.js). */
+  if (typeof _sppCelebrate === 'function') requestAnimationFrame(_sppCelebrate);
 
   // Mac App Store's own Description clamps to exactly 4 rows via native
   // -webkit-line-clamp (buildMacStorePreviewSection, above) — whether that
@@ -7733,6 +7759,123 @@ function _sppIsFocused(pid, elements, id) {
 // ever disappears, since navigation should always reach every interactive
 // element on the preview. The `if (!elements.length)` guard below is just
 // defensive now.
+/* ── THE PINNED SECTION NAV ───────────────────────────────────────────────────
+   The Mac preview's navigator, and the replacement for `_sppFooterNav` below on
+   that one surface. The footer was a PREV / CURRENT / NEXT stepper: it could
+   only say where you were and offer the two places either side of it, so
+   reaching Data privacy from Title meant pressing next seven times, and the
+   seven names in between were never on screen at once. A pinned row of pills is
+   the whole map — every section addressable in one press, and the page's own
+   order printed along the top of it.
+
+   PRESSING ONE IS `setStorePreviewFocus`, NOT A NEW SCROLLER. That function
+   already moves focus AND scrolls `[data-spp-el="<id>"]` into view (app.js), so
+   the pills need no travel code of their own — which is what keeps this from
+   becoming a second navigation model that can disagree with the first. The
+   footer's arrows called the same function; only the shape of the control
+   changed.
+
+   `short` where a label is a sentence — see the note on ALL_ELEMENTS. */
+function _sppPinnedNav(pid, elements) {
+  if (!elements.length) return '';
+  const cur = elements[_sppFocusIndex(pid, elements)]?.id;
+  /* THE `|` BETWEEN THEM IS `.app-subnav`'s, NOT A NEW IDEA. Eight transparent
+     labels 6px apart read as one run-on line of words — the same problem the
+     Game Details sub-nav (Basic info | Languages | Distribution | Assets) had
+     and already answered, and the two rows are the same kind of object: a nav
+     whose resting items draw nothing and whose selected one is the only filled
+     pill. So this borrows the answer rather than inventing a second one.
+     Three things come with it and all three are load-bearing:
+     - The bar is HIDDEN, NEVER REMOVED (`visibility`, `.is-off`), beside the
+       lit pill and — from CSS, since hover is not a render — beside a hovered
+       one. Dropping it from the DOM was what used to let a selected pill and
+       its hovered neighbour meet; keeping its box means the row never reflows.
+     - It is a real glyph, so it is the GAP TOO: `.spp-pinned-row` goes to
+       `gap: 0` and the pills' own 12px of padding does the spacing. Left at 6
+       the row would have paid 6 + glyph + 6 seven times and started
+       overflowing, which on a nav whose whole argument is "every section in one
+       press" would have pushed Data privacy off the end.
+     - It takes THIS row's type (11.5px), not the sub-nav's 14 — the same
+       object at the size the thing it separates is drawn at. */
+  const sep = off => `<span class="spp-pin-sep${off ? ' is-off' : ''}" aria-hidden="true">|</span>`;
+  /* EVERY PILL WEARS A DISC — THE PENDING ONE UNTIL THERE IS A CHECK TO PUT IN
+     IT. This is the platform card's scheme wholesale (`.ios-step-num`, plus
+     `.is-done`), and taking the whole scheme rather than half of it is what
+     fixes the shape the first version had.
+
+     That version reserved the slot and hid the mark with `visibility`, which
+     kept the row's geometry constant — the real requirement, since a mark that
+     appears on completion makes its pill wider and in a row of eight the pill
+     you were about to press moves the moment you answer a different one. But an
+     invisible box reads as a HOLE: seven pills with a gap where something
+     obviously belongs. The pending disc occupies that box for real and costs
+     nothing extra, because the geometry was already being paid for.
+
+     It is also the card's own argument, applied one surface over: a soft disc
+     turning green is the SAME OBJECT changing colour, where a blank becoming a
+     disc is a change of kind. The card dropped its empty ring for exactly this.
+
+     SO THE DISC NOW MEANS "NOTHING OUTSTANDING HERE", AND THAT FLIPPED WHAT
+     ACHIEVEMENTS GETS. Under the hidden-slot version the mark meant "you
+     finished this", so Achievements — `required: false, done: true`
+     permanently, because there is nothing in it to finish — was deliberately
+     left blank rather than wear an unearned medal among blanks. With a disc on
+     every pill that reasoning inverts: withholding the green would leave one
+     section permanently pending, an item that can never complete, which reads
+     as a fault rather than as an exemption. Nothing is outstanding there, so it
+     is green. The BAR's own `is-complete` still counts required sections only,
+     so the aggregate claim is unchanged.
+
+     IT SITS BEFORE THE LABEL, and that is not a preference — it is what makes
+     the pill the same object as the rows it borrows the disc from. The platform
+     card's step rows and the guide's checklist both put the disc first and the
+     name after it; trailing the label made this the only place in the app where
+     the same mark came second, so the pills read as labels-with-a-badge rather
+     than as checklist items. Leading it also puts every label in the row on one
+     left edge inside its own pill, done or not.
+
+     ONE CLASS, NOT A SECOND GLYPH. Wearing `.ios-step-num` means the green, the
+     dark `#0F2A1A` check, the pending fill and the 38.3% ink ratio are the
+     card's and cannot drift from it. Only the SIZE is local: `--pico` is
+     overridden to 15px inside the pill, the documented lever for that disc, and
+     it reaches nothing else from in here — the card's own `--pico` and the text
+     column it governs are untouched. The pending disc carries NO NUMBER, unlike
+     the card's: there the digit is the step's position in a sequence you work
+     through, and these eight are a map you enter at any point.
+
+     GREEN IS RIGHT HERE and it is worth saying why, because the submitted
+     card's read-only list argues the opposite. There, every row is finished by
+     definition, so a column of green discs is news to nobody and the ticks go
+     white. Here the list is MIXED — that is the entire point of the mark — so
+     green is doing exactly what the colour rule reserves it for: marking one
+     finished thing against others that are not. */
+  const disc = on => `<span class="spp-pin-tick ios-step-num${on ? ' is-done' : ''}" aria-hidden="true">${on ? smCheckSVG() : ''}</span>`;
+  const pills = elements.map((e, i) => `${i ? sep(e.id === cur || elements[i - 1].id === cur) : ''}
+    <button type="button" class="spp-pin${e.id === cur ? ' is-on' : ''}"
+            onclick="setStorePreviewFocus('${pid}','${e.id}')"
+            title="${escHtml(e.label)}">${disc(e.done)}${escHtml(e.short || e.label)}</button>`).join('');
+  /* THE BAR ITSELF SAYS WHEN THERE IS NOTHING LEFT. `is-complete` is derived,
+     never stored — every required section done — so it is as true as the
+     sections are and it goes away by itself if you empty a field. The
+     CELEBRATION (a one-shot sweep) is NOT decided here: a render cannot tell
+     "you just finished" from "you re-opened a step that was already finished",
+     and a modal that throws confetti every time you look at it is a modal that
+     has stopped meaning anything. That edge is detected after the paint, by
+     `_sppCelebrate` (app.js), exactly the way `_impPostRender` tells a grade
+     that ROSE from a grade that was merely redrawn. */
+  const allRequiredDone = elements.every(e => !e.required || e.done);
+  /* TWO BOXES. `.cr-pinned`'s third was a sticky opaque strip so the page could
+     not show through the gap between a floating container's rounded edge and
+     the scrollport — and nothing scrolls under this bar any more, so
+     `.spp-pinned` is just the row's padding. See the CSS for the rest. */
+  return `
+    <div class="spp-pinned">
+      <div class="spp-pinned-bar${allRequiredDone ? ' is-complete' : ''}">
+        <div class="spp-pinned-row">${pills}</div>
+      </div>
+    </div>`;
+}
+
 function _sppFooterNav(pid, elements) {
   if (!elements.length) return '';
   const idx     = _sppFocusIndex(pid, elements);
@@ -7759,7 +7902,12 @@ function buildStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
   const a     = state.iosSubmitAnswers;
-  const icon  = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon  = smAppIcon();
   const pid   = state.stepModal?.platformId || 'ios';
 
   // Use the screenshots selected in the Select Screenshots step,
@@ -8005,7 +8153,7 @@ function buildStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
+    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -8495,8 +8643,15 @@ function _macSppLangDropdownHTML() {
     warning: _masLangHasOverLimitField(l),
   }));
   const previewLang = _masEffectivePreviewLang();
+  /* `auto`, NOT A FIXED WIDTH — the last piece of `.rel-track`'s ghost-trigger
+     treatment, which this switcher now wears (see its rules in style.css). The
+     card's track picker shrink-wraps to the track's name; at a fixed 150px this
+     one spent that much of the modal's header on the word "English", with the
+     label stretched across 102 of it. A control in chrome takes the room its
+     value needs and no more. The panel still opens right-aligned, so nothing
+     about where it lands changes. */
   return `<div class="ias-locs-lang-group">
-            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
+            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', 'auto', 'right')}
           </div>`;
 }
 
@@ -8505,7 +8660,12 @@ function buildMacStorePreviewSection() {
   const ups   = state.uploads;
   const a     = state.macSubmitAnswers;                        // Business (hasIAP, iapProducts) — Mac App Store's own
   const sh    = _appStoreAnswers('macos', 'collectsData');      // Content Rating + Privacy — shared with the App Store (state.iosSubmitAnswers)
-  const icon  = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon  = smAppIcon();
   const pid   = 'macos';
 
   // Use the screenshots selected in the Select Screenshots step,
@@ -8700,7 +8860,7 @@ function buildMacStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
+    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -8820,15 +8980,21 @@ function buildMacStorePreviewSection() {
   // All eight focusable elements, top-down/left-to-right — see the twin
   // definition's own comment in buildStorePreviewSection above (What's New
   // used to be a ninth entry, hidden along with its section by request).
+  /* `short` is only for the pinned nav's pills, and only the two entries that
+     need it have one. `label` is a sentence because the footer navigator it was
+     written for printed it beside an arrow ("Answer Data Collection Questions"
+     reads fine as "next: …"); a pill is a NAME, and a pill wide enough to hold
+     a sentence stops being one. Everything else already had a name, so it has
+     no `short` rather than a copy of its own label — one string per fact. */
   const ALL_ELEMENTS = [
     { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
     { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw },
     { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
     { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
-    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone },
+    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone,  short: 'Screenshots' },
     { id: 'description',  label: 'Description',                       required: true,  done: descDone },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
   ];
   // Additive glow class for any focusable element — see the twin
   // definition's own comment in buildStorePreviewSection above.
@@ -8968,8 +9134,21 @@ function buildMacStorePreviewSection() {
         <div class="ias-section-divider"></div>`;
 
   return `
+    ${/* ABOVE THE SHELL, NOT INSIDE THE SCROLLER — it spans the whole modal.
+          It began as the first child of `.mac-spp-main` and stuck to its top,
+          which made it the width of the store column and left it floating OVER
+          the page as that page ran underneath. Two things were wrong with that
+          and only one of them was visible: a nav that indexes the whole step
+          was drawn inside one of the step's two panes, and an opaque strip
+          sliding over the product page reads as a sheet laid on top of it
+          rather than as the modal's own chrome.
+          Out here it is a sibling of `.mac-spp-shell` inside the flex column
+          `.submit-modal-mac-spp .ios-step-body-content` already is, so it takes
+          its natural height and the shell takes the rest — and it needs no
+          `sticky` at all, because nothing scrolls past it any more. */''}
+    ${_sppPinnedNav(pid, ALL_ELEMENTS)}
     <div class="mac-spp-shell">
-      ${_buildMacSppSidebar()}
+      ${_buildMacSppSidebar(titleRaw)}
       <div class="mac-spp-main">
       <div class="ias-device-wrap">
       <!-- "Mac App Store Preview" badge, "Reflects your submission data" note,
@@ -9136,8 +9315,12 @@ function buildMacStorePreviewSection() {
     </div><!-- /ias-device-wrap -->
       </div><!-- /mac-spp-main -->
     </div><!-- /mac-spp-shell -->
-
-    ${_sppFooterNav(pid, ALL_ELEMENTS)}
+    ${/* NO FOOTER HERE ANY MORE — `_sppPinnedNav` at the top of the scroller
+          replaced it. The two cannot both stand: they drive the same
+          `storePreviewFocus`, so a press in one silently moves the other, and
+          the modal would carry two navigators for one list. The footer is still
+          the navigator on the iOS and Mac Full previews, which have not been
+          re-cut. */''}
   `;
 }
 
@@ -9149,43 +9332,138 @@ function buildMacStorePreviewSection() {
    make buildMacStorePreviewSection's Product Page Preview read as "the
    App Store app on a Mac" rather than the in-browser store page. Scoped
    entirely to its own .mac-spp-* classes (style.css). */
-function _buildMacSppSidebar() {
-  const navIcon = d => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none">${d}</svg>`;
-  const ICONS = {
-    discover: '<path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13Z" stroke="currentColor" stroke-width="1.3"/><path d="M10.2 5.8L6.6 7.3 5.1 10.9l3.6-1.5 1.5-3.6Z" fill="currentColor"/>',
-    arcade:   '<rect x="1.5" y="4.5" width="13" height="8" rx="3" stroke="currentColor" stroke-width="1.3"/><circle cx="5.2" cy="8.5" r="0.9" fill="currentColor"/><circle cx="11.2" cy="7.3" r="0.9" fill="currentColor"/><circle cx="11.2" cy="9.7" r="0.9" fill="currentColor"/>',
-    create:   '<path d="M2 12.5l1-3.3 7-7 2.3 2.3-7 7-3.3 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
-    work:     '<rect x="1.5" y="4.5" width="13" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5" stroke="currentColor" stroke-width="1.3"/>',
-    play:     '<path d="M3.5 2.5v11l9-5.5-9-5.5Z" fill="currentColor"/>',
-    develop:  '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
-    categories: '<rect x="1.7" y="1.7" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.1" y="1.7" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.7" y="9.1" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.1" y="9.1" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/>',
-    updates:  '<path d="M8 1.8a6.2 6.2 0 105.2 2.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13.3 1.8v3h-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+function _buildMacSppSidebar(gameTitle) {
+  /* THE GLYPHS ARE THE REAL APP'S, and six of the eight are now the EXACT
+     art rather than a redraw of it — Jaco exported Discover (star), Create
+     (paintbrush), Work (paper plane), Develop (hammer), Categories (grid) and
+     Updates (download arrow) straight from the source, so those six stopped
+     being approximations. Play (rocket) and Arcade (joystick) are still my
+     redraws and are the only two left to replace.
+
+     THAT MAKES THIS COLUMN TWO FAMILIES FOR NOW, and the split is temporary,
+     not a design. The exact art is FILLED — outline shapes drawn as filled
+     paths with their own counters, the way SF Symbols are authored — where the
+     two redraws are 1.3px strokes on a 16-unit box. Both read as outlines at
+     14px, which is the only thing that matters here; a filled mark in this
+     column would read as the selected one, and these do not, because the fill
+     only ever paints the outline itself.
+
+     EVERY GLYPH IS ON THE SAME 16-UNIT BOX, exported art included. The source
+     files are 128-unit canvases carrying a `matrix(4.01085, …)` of their own,
+     so the export's matrix is multiplied by 0.125 (scale 4.01085/8 = 0.501356,
+     translations /8) and baked into the `<g>`. One viewBox for all eight is
+     what lets one CSS rule size them; two canvases would have them bobbing
+     against each other the way the platform marks did before SM_TILE_MARKS.
+
+     `fill-rule` is carried over per glyph rather than left to the default:
+     hammer.svg is authored evenodd and the other five nonzero, and the hammer
+     loses its claw's holes at nonzero. */
+  const navIconStroke = d => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none"
+    stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  /* `overflow: visible` because the exported art really does reach the edges —
+     the hammer's ink measures 0 → 16 on the box exactly, so at the default
+     `hidden` its outermost antialiased pixel is the one being clipped. Nothing
+     here is meant to be cropped by its own canvas. */
+  const navIconFill = g => `<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" style="overflow:visible">${g}</svg>`;
+  // The exported six — filled, on the shared 16-unit box (see above).
+  const ICONS_EXACT = {
+    discover: '<g transform="matrix(0.501356,0,0,0.501356,-0.581163,3.34455)"><path d="M8.203,22.865C8.472,23.073 8.776,23.145 9.115,23.079C9.453,23.014 9.822,22.839 10.221,22.552L17.109,17.487L24.01,22.552C24.41,22.839 24.779,23.014 25.117,23.079C25.456,23.145 25.76,23.073 26.029,22.865C26.298,22.665 26.461,22.396 26.517,22.057C26.573,21.719 26.519,21.315 26.354,20.846L23.633,12.747L30.586,7.747C30.994,7.461 31.276,7.166 31.432,6.862C31.589,6.558 31.615,6.246 31.51,5.924C31.406,5.612 31.202,5.378 30.898,5.221C30.595,5.065 30.191,4.991 29.688,5L21.159,5.052L18.568,-3.086C18.411,-3.563 18.214,-3.924 17.975,-4.167C17.737,-4.41 17.448,-4.531 17.109,-4.531C16.78,-4.531 16.495,-4.41 16.257,-4.167C16.018,-3.924 15.82,-3.563 15.664,-3.086L13.073,5.052L4.544,5C4.041,4.991 3.637,5.065 3.333,5.221C3.03,5.378 2.826,5.612 2.721,5.924C2.617,6.246 2.643,6.558 2.799,6.862C2.956,7.166 3.238,7.461 3.646,7.747L10.599,12.747L7.878,20.846C7.713,21.315 7.658,21.719 7.715,22.057C7.771,22.396 7.934,22.665 8.203,22.865ZM10.078,20.286C10.061,20.269 10.061,20.23 10.078,20.169L12.669,12.721C12.73,12.556 12.758,12.4 12.754,12.253C12.75,12.105 12.708,11.968 12.63,11.842C12.552,11.717 12.439,11.602 12.292,11.497L5.807,7.018C5.747,6.984 5.725,6.949 5.742,6.914C5.751,6.888 5.79,6.875 5.859,6.875L13.737,7.018C14.006,7.027 14.227,6.973 14.401,6.855C14.575,6.738 14.701,6.545 14.779,6.276L17.044,-1.263C17.062,-1.332 17.083,-1.367 17.109,-1.367C17.144,-1.367 17.17,-1.332 17.188,-1.263L19.453,6.276C19.531,6.545 19.657,6.738 19.831,6.855C20.004,6.973 20.226,7.027 20.495,7.018L28.372,6.875C28.442,6.875 28.481,6.888 28.49,6.914C28.507,6.949 28.485,6.984 28.424,7.018L21.94,11.497C21.793,11.602 21.68,11.717 21.602,11.842C21.523,11.968 21.482,12.105 21.478,12.253C21.474,12.4 21.502,12.556 21.563,12.721L24.154,20.169C24.162,20.23 24.162,20.269 24.154,20.286C24.136,20.313 24.097,20.304 24.036,20.26L17.773,15.482C17.565,15.317 17.346,15.234 17.116,15.234C16.886,15.234 16.667,15.317 16.458,15.482L10.195,20.26C10.135,20.304 10.095,20.313 10.078,20.286Z"/></g>',
+
+    create: '<g transform="matrix(0.501356,0,0,0.501356,-0.442501,2.867688)"><path d="M4.635,24.063C5.72,25.156 6.866,25.707 8.073,25.716C9.28,25.725 10.417,25.195 11.484,24.128C11.884,23.737 12.281,23.238 12.676,22.63C13.071,22.023 13.459,21.382 13.841,20.71C14.223,20.037 14.59,19.405 14.941,18.815C15.293,18.225 15.625,17.747 15.938,17.383L18.711,20.169C19.214,20.681 19.755,20.94 20.332,20.944C20.909,20.948 21.445,20.703 21.94,20.208L23.62,18.516C24.115,18.012 24.362,17.478 24.362,16.914C24.362,16.35 24.102,15.812 23.581,15.299L13.411,5.117C12.899,4.605 12.359,4.347 11.79,4.342C11.222,4.338 10.686,4.583 10.182,5.078L8.503,6.771C8.008,7.266 7.76,7.799 7.76,8.372C7.76,8.945 8.016,9.488 8.529,10L11.315,12.773C10.951,13.077 10.473,13.405 9.883,13.757C9.293,14.108 8.663,14.477 7.995,14.863C7.326,15.25 6.688,15.64 6.081,16.035C5.473,16.43 4.974,16.823 4.583,17.214C3.516,18.281 2.986,19.418 2.995,20.625C3.003,21.832 3.55,22.977 4.635,24.063ZM10.313,7.93L11.367,6.901C11.541,6.727 11.717,6.638 11.895,6.634C12.072,6.63 12.244,6.714 12.409,6.888L21.823,16.289C22.161,16.636 22.153,16.988 21.797,17.344L20.781,18.372C20.425,18.754 20.069,18.759 19.714,18.385L16.602,15.26C16.359,15.017 16.092,14.907 15.801,14.928C15.51,14.95 15.226,15.095 14.948,15.365C14.696,15.616 14.397,16.037 14.049,16.628C13.702,17.218 13.32,17.886 12.904,18.633C12.487,19.379 12.042,20.117 11.569,20.846C11.096,21.576 10.599,22.196 10.078,22.708C9.453,23.342 8.783,23.657 8.066,23.652C7.35,23.648 6.667,23.325 6.016,22.682C5.373,22.04 5.05,21.359 5.046,20.638C5.041,19.918 5.356,19.245 5.99,18.62C6.502,18.108 7.122,17.613 7.852,17.135C8.581,16.658 9.319,16.211 10.065,15.794C10.812,15.378 11.482,14.998 12.077,14.655C12.671,14.312 13.095,14.015 13.346,13.763C13.607,13.485 13.75,13.199 13.776,12.904C13.802,12.609 13.694,12.344 13.451,12.109L10.313,8.984C9.957,8.628 9.957,8.277 10.313,7.93ZM8.008,22.331C8.451,22.331 8.828,22.172 9.141,21.855C9.453,21.539 9.609,21.159 9.609,20.716C9.609,20.273 9.453,19.896 9.141,19.583C8.828,19.271 8.451,19.115 8.008,19.115C7.565,19.115 7.185,19.271 6.868,19.583C6.552,19.896 6.393,20.273 6.393,20.716C6.393,21.159 6.552,21.539 6.868,21.855C7.185,22.172 7.565,22.331 8.008,22.331ZM23.438,16.589L29.622,10.404C30.343,9.683 30.697,8.913 30.684,8.092C30.671,7.272 30.295,6.489 29.557,5.742L19.336,-4.492C18.989,-4.831 18.6,-5.054 18.171,-5.163C17.741,-5.271 17.316,-5.269 16.895,-5.156C16.474,-5.043 16.102,-4.822 15.781,-4.492C15.46,-4.162 15.239,-3.733 15.117,-3.203C14.874,-2.153 14.668,-1.265 14.499,-0.54C14.329,0.184 14.169,0.805 14.017,1.322C13.865,1.838 13.698,2.307 13.516,2.728C13.333,3.149 13.112,3.572 12.852,3.997C12.591,4.423 12.261,4.913 11.862,5.469L13.359,6.966C13.932,6.22 14.39,5.54 14.733,4.928C15.076,4.316 15.362,3.689 15.592,3.047C15.822,2.405 16.046,1.673 16.263,0.853C16.48,0.033 16.745,-0.959 17.057,-2.122C17.118,-2.348 17.211,-2.515 17.337,-2.624C17.463,-2.732 17.604,-2.78 17.76,-2.767C17.917,-2.754 18.069,-2.674 18.216,-2.526L27.969,7.214C28.273,7.517 28.424,7.839 28.424,8.177C28.424,8.516 28.286,8.824 28.008,9.102L21.979,15.13L23.438,16.589ZM21.38,9.167C21.554,9.34 21.886,9.358 22.376,9.219C22.867,9.08 23.422,8.843 24.043,8.509C24.664,8.175 25.26,7.793 25.833,7.363C26.406,6.934 26.858,6.51 27.188,6.094L24.323,3.242C24.201,4.397 23.869,5.408 23.327,6.276C22.784,7.144 22.148,7.943 21.419,8.672C21.237,8.845 21.224,9.01 21.38,9.167Z"/></g>',
+
+    work: '<g transform="matrix(0.501356,0,0,0.501356,0.163039,2.500087)"><path d="M18.294,24.609C18.763,24.609 19.167,24.423 19.505,24.049C19.844,23.676 20.135,23.177 20.378,22.552L28.906,0.273C29.019,-0.03 29.108,-0.313 29.173,-0.573C29.238,-0.833 29.271,-1.076 29.271,-1.302C29.271,-1.727 29.149,-2.062 28.906,-2.305C28.663,-2.548 28.329,-2.669 27.904,-2.669C27.687,-2.669 27.446,-2.637 27.181,-2.572C26.916,-2.507 26.632,-2.418 26.328,-2.305L3.932,6.276C3.385,6.484 2.925,6.758 2.552,7.096C2.179,7.435 1.992,7.839 1.992,8.307C1.992,8.906 2.196,9.338 2.604,9.603C3.012,9.868 3.529,10.095 4.154,10.286L13.555,13.047L16.289,22.331C16.48,22.982 16.71,23.524 16.979,23.958C17.248,24.392 17.687,24.609 18.294,24.609ZM14.141,11.068L5.156,8.32C5.052,8.294 4.98,8.264 4.941,8.229C4.902,8.194 4.883,8.155 4.883,8.112C4.883,8.069 4.9,8.027 4.935,7.988C4.97,7.949 5.035,7.912 5.13,7.878L22.734,1.211C23.255,1.011 23.765,0.792 24.264,0.553C24.763,0.315 25.256,0.082 25.742,-0.143C25.308,0.204 24.848,0.577 24.362,0.977C23.876,1.376 23.455,1.753 23.099,2.109L14.141,11.068ZM18.503,21.745C18.451,21.745 18.409,21.721 18.379,21.673C18.349,21.625 18.316,21.549 18.281,21.445L15.534,12.461L24.492,3.503C24.848,3.147 25.228,2.721 25.632,2.227C26.035,1.732 26.411,1.263 26.758,0.82C26.532,1.315 26.298,1.814 26.055,2.318C25.812,2.821 25.59,3.338 25.391,3.867L18.724,21.471C18.689,21.567 18.655,21.636 18.62,21.68C18.585,21.723 18.546,21.745 18.503,21.745Z"/></g>',
+
+    develop: '<g transform="matrix(0.501356,0,0,0.501356,-1.501963,2.948113)" fill-rule="evenodd"><path d="M18.815,4.554C18.792,4.488 18.773,4.422 18.757,4.355C18.657,3.943 18.72,3.459 18.945,2.904L19.727,0.964C18.772,0.339 17.795,0.007 16.797,-0.033C15.799,-0.072 14.813,0.022 13.841,0.247C13.407,0.352 13.04,0.343 12.741,0.221C12.441,0.1 12.214,-0.082 12.057,-0.326C11.901,-0.586 11.84,-0.89 11.875,-1.237C11.91,-1.584 12.066,-1.892 12.344,-2.161C13.307,-3.125 14.377,-3.85 15.553,-4.336C16.73,-4.822 17.954,-5.054 19.225,-5.033C20.497,-5.011 21.76,-4.724 23.014,-4.173C24.269,-3.622 25.451,-2.795 26.563,-1.693L29.492,1.224C29.883,1.615 30.139,1.973 30.26,2.298C30.382,2.624 30.399,2.973 30.313,3.346L29.987,4.844L30.846,5.69L31.615,5.625C31.936,5.599 32.233,5.645 32.507,5.762C32.78,5.879 33.073,6.098 33.385,6.419L34.414,7.435C34.735,7.756 34.9,8.101 34.909,8.47C34.918,8.839 34.766,9.18 34.453,9.492L30.573,13.385C30.26,13.698 29.915,13.848 29.538,13.835C29.16,13.822 28.811,13.655 28.49,13.333L27.474,12.344C27.153,12.023 26.938,11.723 26.829,11.445C26.721,11.168 26.68,10.864 26.706,10.534L26.758,9.792L25.872,8.893L24.453,9.154C24.08,9.223 23.741,9.232 23.438,9.18C23.394,9.172 23.35,9.162 23.306,9.149L9.753,24.089C9.136,24.774 8.509,25.139 7.871,25.182C7.233,25.226 6.628,24.957 6.055,24.375L3.789,22.096C3.216,21.515 2.954,20.907 3.001,20.273C3.049,19.64 3.403,19.019 4.063,18.411L18.815,4.554ZM21.887,7.988L19.933,6.018L5.521,19.583C5.252,19.826 5.098,20.067 5.059,20.306C5.02,20.545 5.156,20.82 5.469,21.133L7.031,22.682C7.344,22.995 7.619,23.134 7.858,23.099C8.097,23.064 8.333,22.912 8.568,22.643L21.887,7.988ZM14.336,-1.667C14.249,-1.597 14.221,-1.53 14.251,-1.465C14.282,-1.4 14.349,-1.38 14.453,-1.406C15.807,-1.806 17.135,-1.819 18.438,-1.445C19.74,-1.072 20.911,-0.399 21.953,0.573L20.781,3.359C20.677,3.602 20.636,3.796 20.658,3.939C20.679,4.082 20.777,4.232 20.951,4.388L23.62,7.057C23.785,7.214 23.93,7.307 24.056,7.337C24.182,7.368 24.353,7.361 24.57,7.318L26.602,6.979L28.594,8.958L28.503,10.26C28.494,10.434 28.507,10.564 28.542,10.651C28.576,10.738 28.659,10.846 28.789,10.977L29.557,11.745L32.813,8.49L32.044,7.721C31.914,7.591 31.806,7.511 31.719,7.48C31.632,7.45 31.506,7.439 31.341,7.448L30.026,7.526L28.021,5.547L28.451,3.568C28.503,3.342 28.509,3.155 28.47,3.008C28.431,2.86 28.333,2.708 28.177,2.552L24.935,-0.664C24.197,-1.411 23.383,-1.992 22.493,-2.409C21.604,-2.826 20.686,-3.079 19.74,-3.171C18.793,-3.262 17.858,-3.181 16.934,-2.93C16.009,-2.678 15.143,-2.257 14.336,-1.667Z"/></g>',
+
+    categories: '<g transform="matrix(0.501356,0,0,0.501356,0.326241,2.872187)"><path d="M5.807,9.154L11.745,9.154C12.569,9.154 13.19,8.943 13.607,8.522C14.023,8.101 14.232,7.461 14.232,6.602L14.232,0.781C14.232,-0.078 14.023,-0.716 13.607,-1.133C13.19,-1.549 12.569,-1.758 11.745,-1.758L5.807,-1.758C4.983,-1.758 4.362,-1.549 3.945,-1.133C3.529,-0.716 3.32,-0.078 3.32,0.781L3.32,6.602C3.32,7.461 3.529,8.101 3.945,8.522C4.362,8.943 4.983,9.154 5.807,9.154ZM5.833,7.318C5.608,7.318 5.438,7.257 5.326,7.135C5.213,7.014 5.156,6.836 5.156,6.602L5.156,0.781C5.156,0.547 5.213,0.371 5.326,0.254C5.438,0.137 5.608,0.078 5.833,0.078L11.706,0.078C11.931,0.078 12.103,0.137 12.22,0.254C12.337,0.371 12.396,0.547 12.396,0.781L12.396,6.602C12.396,6.836 12.337,7.014 12.22,7.135C12.103,7.257 11.931,7.318 11.706,7.318L5.833,7.318ZM18.88,9.154L24.805,9.154C25.629,9.154 26.25,8.943 26.667,8.522C27.083,8.101 27.292,7.461 27.292,6.602L27.292,0.781C27.292,-0.078 27.083,-0.716 26.667,-1.133C26.25,-1.549 25.629,-1.758 24.805,-1.758L18.88,-1.758C18.047,-1.758 17.422,-1.549 17.005,-1.133C16.589,-0.716 16.38,-0.078 16.38,0.781L16.38,6.602C16.38,7.461 16.589,8.101 17.005,8.522C17.422,8.943 18.047,9.154 18.88,9.154ZM18.906,7.318C18.672,7.318 18.498,7.257 18.385,7.135C18.273,7.014 18.216,6.836 18.216,6.602L18.216,0.781C18.216,0.547 18.273,0.371 18.385,0.254C18.498,0.137 18.672,0.078 18.906,0.078L24.779,0.078C25.013,0.078 25.184,0.137 25.293,0.254C25.401,0.371 25.456,0.547 25.456,0.781L25.456,6.602C25.456,6.836 25.401,7.014 25.293,7.135C25.184,7.257 25.013,7.318 24.779,7.318L18.906,7.318ZM5.807,22.214L11.745,22.214C12.569,22.214 13.19,22.005 13.607,21.589C14.023,21.172 14.232,20.534 14.232,19.674L14.232,13.841C14.232,12.99 14.023,12.355 13.607,11.934C13.19,11.513 12.569,11.302 11.745,11.302L5.807,11.302C4.983,11.302 4.362,11.513 3.945,11.934C3.529,12.355 3.32,12.99 3.32,13.841L3.32,19.674C3.32,20.534 3.529,21.172 3.945,21.589C4.362,22.005 4.983,22.214 5.807,22.214ZM5.833,20.378C5.608,20.378 5.438,20.319 5.326,20.202C5.213,20.085 5.156,19.909 5.156,19.674L5.156,13.854C5.156,13.611 5.213,13.431 5.326,13.314C5.438,13.197 5.608,13.138 5.833,13.138L11.706,13.138C11.931,13.138 12.103,13.197 12.22,13.314C12.337,13.431 12.396,13.611 12.396,13.854L12.396,19.674C12.396,19.909 12.337,20.085 12.22,20.202C12.103,20.319 11.931,20.378 11.706,20.378L5.833,20.378ZM18.88,22.214L24.805,22.214C25.629,22.214 26.25,22.005 26.667,21.589C27.083,21.172 27.292,20.534 27.292,19.674L27.292,13.841C27.292,12.99 27.083,12.355 26.667,11.934C26.25,11.513 25.629,11.302 24.805,11.302L18.88,11.302C18.047,11.302 17.422,11.513 17.005,11.934C16.589,12.355 16.38,12.99 16.38,13.841L16.38,19.674C16.38,20.534 16.589,21.172 17.005,21.589C17.422,22.005 18.047,22.214 18.88,22.214ZM18.906,20.378C18.672,20.378 18.498,20.319 18.385,20.202C18.273,20.085 18.216,19.909 18.216,19.674L18.216,13.854C18.216,13.611 18.273,13.431 18.385,13.314C18.498,13.197 18.672,13.138 18.906,13.138L24.779,13.138C25.013,13.138 25.184,13.197 25.293,13.314C25.401,13.431 25.456,13.611 25.456,13.854L25.456,19.674C25.456,19.909 25.401,20.085 25.293,20.202C25.184,20.319 25.013,20.378 24.779,20.378L18.906,20.378Z"/></g>',
+
+    updates: '<g transform="matrix(0.501356,0,0,0.501356,0.541667,3.041925)"><path d="M7.409,23.945L22.344,23.945C23.707,23.945 24.729,23.607 25.41,22.93C26.092,22.253 26.432,21.246 26.432,19.909L26.432,6.914C26.432,5.577 26.092,4.57 25.41,3.893C24.729,3.216 23.707,2.878 22.344,2.878L18.424,2.878L18.424,4.974L22.305,4.974C22.947,4.974 23.446,5.148 23.802,5.495C24.158,5.842 24.336,6.354 24.336,7.031L24.336,19.792C24.336,20.469 24.158,20.981 23.802,21.328C23.446,21.675 22.947,21.849 22.305,21.849L7.435,21.849C6.784,21.849 6.285,21.675 5.938,21.328C5.59,20.981 5.417,20.469 5.417,19.792L5.417,7.031C5.417,6.354 5.59,5.842 5.938,5.495C6.285,5.148 6.784,4.974 7.435,4.974L11.328,4.974L11.328,2.878L7.409,2.878C6.046,2.878 5.024,3.214 4.342,3.887C3.661,4.559 3.32,5.569 3.32,6.914L3.32,19.909C3.32,21.254 3.661,22.263 4.342,22.936C5.024,23.609 6.046,23.945 7.409,23.945ZM14.87,15.378C15.009,15.378 15.137,15.354 15.254,15.306C15.371,15.258 15.495,15.169 15.625,15.039L20.026,10.781C20.234,10.582 20.339,10.356 20.339,10.104C20.339,9.835 20.247,9.616 20.065,9.447C19.883,9.277 19.657,9.193 19.388,9.193C19.102,9.193 18.867,9.297 18.685,9.505L16.706,11.602L15.833,12.526L15.911,10.573L15.911,-3.151C15.911,-3.429 15.809,-3.668 15.605,-3.867C15.401,-4.067 15.156,-4.167 14.87,-4.167C14.592,-4.167 14.351,-4.067 14.147,-3.867C13.943,-3.668 13.841,-3.429 13.841,-3.151L13.841,10.573L13.919,12.526L13.034,11.602L11.068,9.505C10.885,9.297 10.647,9.193 10.352,9.193C10.074,9.193 9.848,9.277 9.674,9.447C9.501,9.616 9.414,9.835 9.414,10.104C9.414,10.356 9.514,10.582 9.714,10.781L14.115,15.039C14.253,15.169 14.382,15.258 14.499,15.306C14.616,15.354 14.74,15.378 14.87,15.378Z"/></g>',
   };
-  const item = (key, label, current) => `
-    <div class="mac-spp-nav-item${current ? ' is-current' : ''}">
-      ${navIcon(ICONS[key])}
+  // Still mine, still stroked: Jaco has not exported these two yet.
+  const ICONS_DRAWN = {
+    arcade:   '<circle cx="8" cy="4.3" r="1.9"/><path d="M8 6.2v4.1"/><path d="M4.4 10.6c-1.1.35-1.8.9-1.8 1.5 0 1.05 2.42 1.9 5.4 1.9s5.4-.85 5.4-1.9c0-.6-.7-1.15-1.8-1.5"/>',
+    play:     '<path d="M8 1.7c2.25 1.75 3.5 4.3 3.5 7.05L9.95 11.3H6.05L4.5 8.75C4.5 6 5.75 3.45 8 1.7Z"/><circle cx="8" cy="6.2" r="1.15"/><path d="M6.1 11.6 4.3 14l2.45-.75M9.9 11.6 11.7 14l-2.45-.75"/>',
+  };
+  const navIcon = key => ICONS_EXACT[key] ? navIconFill(ICONS_EXACT[key]) : navIconStroke(ICONS_DRAWN[key]);
+  /* NO ROW IS CURRENT, and the highlight was removed rather than moved. This
+     sidebar is decorative chrome around a PRODUCT PAGE, and a product page is
+     not any of the eight destinations in it — lighting "Discover" claimed you
+     had navigated somewhere you had not, on the one surface in this modal whose
+     whole job is to say "this is your game's page". In the real app those rows
+     are unselected while a product page is open, for the same reason.
+     The `current` parameter and `.mac-spp-nav-item.is-current`'s rules went
+     with it: a state nothing can ever set is a control waiting to be turned
+     back on, which is why the dev bar was deleted rather than defaulted off. */
+  const item = (key, label) => `
+    <div class="mac-spp-nav-item">
+      ${navIcon(key)}
       <span>${label}</span>
     </div>`;
   return `
     <div class="mac-spp-sidebar">
-      <div class="mac-spp-search">
-        <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="6.8" cy="6.8" r="4.8" stroke="currentColor" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        <span>Search</span>
+      ${/* THE TRAFFIC LIGHTS, and I argued against these once. When the sidebar
+            was first nailed against the reference I left them out on the
+            grounds that they are WINDOW chrome rather than sidebar — true of
+            the object, wrong about this drawing. Everything else in this column
+            exists to say "you are looking at the Mac App Store app", and those
+            three dots are the single most recognisable thing on a macOS window;
+            without them the column reads as a web sidebar that happens to list
+            Apple's sections. They are the cheapest fidelity in the whole
+            preview.
+            They are DEAD, and deliberately so: no hover, no `cursor: pointer`,
+            no handlers. A control that looks pressable and does nothing is
+            worse than a picture of one, and this is a picture — `aria-hidden`
+            so it is not announced as anything either. Apple's own colours,
+            which is why they are literals rather than tokens: they belong to
+            macOS, not to this app's palette, and repointing them at
+            `--alert-*` / green would have quietly made them mean something. */''}
+      <div class="mac-spp-lights" aria-hidden="true">
+        <span class="mac-spp-light mac-spp-light--close"></span>
+        <span class="mac-spp-light mac-spp-light--min"></span>
+        <span class="mac-spp-light mac-spp-light--max"></span>
       </div>
-      ${item('discover', 'Discover', true)}
-      ${item('arcade', 'Arcade', false)}
-      ${item('create', 'Create', false)}
-      ${item('work', 'Work', false)}
-      ${item('play', 'Play', false)}
-      ${item('develop', 'Develop', false)}
-      <div class="mac-spp-nav-divider"></div>
-      ${item('categories', 'Categories', false)}
-      ${item('updates', 'Updates', false)}
+      ${/* THE FIELD HOLDS THE GAME'S NAME, not the word "Search". It is the one
+            line of this fake chrome that can tell the truth about YOUR
+            submission, and it costs nothing to: you are looking at your game's
+            product page, so the way you got here was by searching for it. A
+            literal "Search" beside a page that is unmistakably one game's is the
+            only part of the sidebar still describing a generic App Store.
+            It falls back to "Search" when there is no title yet — an empty
+            field is what an untouched one looks like, and inventing a
+            placeholder game name there would put a second fake title on a
+            screen whose real one is right beside it, already saying "Your Game
+            Title". `is-query` is what tells the two apart: a real query is
+            ink, a prompt is placeholder grey. */''}
+      <div class="mac-spp-search${gameTitle ? ' is-query' : ''}">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="6.8" cy="6.8" r="4.8" stroke="currentColor" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>${escHtml(gameTitle || 'Search')}</span>
+      </div>
+      ${item('discover', 'Discover')}
+      ${item('arcade', 'Arcade')}
+      ${item('create', 'Create')}
+      ${item('work', 'Work')}
+      ${item('play', 'Play')}
+      ${/* NO DIVIDER before Categories. There was one, and the real app has
+            nothing there — the eight items are one list at one rhythm. A rule
+            across a column this narrow also reads as a section break the app
+            never makes. */''}
+      ${item('develop', 'Develop')}
+      ${item('categories', 'Categories')}
+      ${item('updates', 'Updates')}
+      ${/* THE ACCOUNT ROW IS A PERSON, not a menu item. The real one is a round
+            photo and the account holder's name, which is why it reads as "you"
+            at the bottom of a list of places — it was a generic person glyph in
+            a rounded square labelled "Account", which is a ninth nav item
+            wearing a different shape.
+            The name is seeded the way every other fake value in this prototype
+            is (My Game, Pixel Forge, Your Company): there is no account model
+            to read it from yet. When one exists, this is the one line to
+            change. */''}
       <div class="mac-spp-account">
         <div class="mac-spp-account-avatar">
-          <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="8" cy="5.6" r="2.6" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 13.2c0-2.5 2.3-4.2 5.2-4.2s5.2 1.7 5.2 4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none"><circle cx="8" cy="6" r="2.7" fill="currentColor"/><path d="M2.4 14.6c0-2.9 2.5-4.9 5.6-4.9s5.6 2 5.6 4.9" fill="currentColor"/></svg>
         </div>
-        <span class="mac-spp-account-label">Account</span>
+        <span class="mac-spp-account-label">Jacobo Abril</span>
       </div>
     </div>`;
 }
@@ -12934,7 +13212,12 @@ function buildMacFullStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
   const a     = state.macFullSubmitAnswers;                    // unified answers — Content Rating, Privacy, Business, and IAP all live here (no shared/own split, unlike Mac App Store's own)
-  const icon  = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon  = smAppIcon();
   const pid   = 'macos_full';
 
   // Use the screenshots selected in the Select Screenshots step,
@@ -13134,7 +13417,7 @@ function buildMacFullStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
+    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -14817,14 +15100,19 @@ function buildAndroidStorePreviewSection() {
   const pid  = 'android';
   const fd   = state.formData;
   const ups  = state.uploads;
-  const icon = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon = smAppIcon();
   const shots = ups.screenshots || [];
   const title = escHtml(fd.title || 'Your Game Title');
   const descRaw = fd.description || '';
   const descShort = escHtml(descRaw.slice(0, 120) + (descRaw.length > 120 ? '…' : ''));
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
+    ? `<img src="${smAppIconSrc()}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
     : `<div style="width:60px;height:60px;border-radius:14px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px;">Icon</div>`;
 
   // Mark as seen
@@ -15761,7 +16049,12 @@ function buildSteamStorePreviewSection() {
   const pid  = 'steam';
   const fd   = state.formData;
   const ups  = state.uploads;
-  const icon = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon = smAppIcon();
   const shots = ups.screenshots || [];
   const title = escHtml(fd.title || 'Your Game Title');
   const descRaw = fd.description || '';
@@ -15769,7 +16062,7 @@ function buildSteamStorePreviewSection() {
   const topGenres = state.steamSubmitAnswers.topGenres.slice(0, 2).join(', ') || 'Game';
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
+    ? `<img src="${smAppIconSrc()}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
     : `<div style="width:108px;height:50px;border-radius:4px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:9px;">Capsule</div>`;
 
   state.steamSubmitAnswers.storePreviewSeen = true;

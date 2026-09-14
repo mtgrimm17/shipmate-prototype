@@ -3044,69 +3044,106 @@ body.viewing-splash .app-subnav { display: none; }
 /* Collapsed the card is 52px wide — a bloom that size would swamp it. */
 .app-guide.is-collapsed::after { display: none; }
 
-/* Horizontal collapse toggle */
-.guide-collapse-btn {
-  position: absolute; right: 14px;
-  /* Centred on the eyebrow's line rather than on the card's padding: the card's
-     14px top padding, plus half the difference between that 19.2px line box
-     (16px x 1.2) and this 22px button. */
-  top: calc(14px + (19.2px - 26px) / 2);
-  width: 26px; height: 26px; padding: 0;
-  display: flex; align-items: center; justify-content: center;
-  /* Bare until hover, like every other micro-button in the app — see the note
-     on .guide-cal-btn, which is its neighbour and its twin. Same 26/16 pair,
-     and no colour change on hover for the same reason. */
-  background: transparent; border: none;
-  border-radius: 7px;
-  color: var(--purple); cursor: pointer; line-height: 1;
-  transition: background .12s;
-}
-.guide-collapse-btn svg { width: 16px; height: 16px; display: block; }
-.guide-collapse-btn:hover { background: rgba(159, 104, 240, .22); }
+/* `.guide-collapse-btn` is gone with the collapse feature — the chevron was the
+   only door into the rail, so the whole thing went rather than leaving a branch
+   nothing could reach. The one number it owned survives in `.guide-faces`
+   below: `top: calc(14px + (19.2px - 32px) / 2)` centres a chrome control on
+   the eyebrow's 19.2px line box (16px × 1.2) rather than on the card's padding,
+   which is what stops it riding high. */
 
-/* THE MONTH TOGGLE SITS BESIDE THE COLLAPSE, not under it: same 22px box, same
-   fill, same radius, 6px apart — two pieces of card chrome reading as one pair.
-   Its `right` is derived (14 + 22 + 6) so moving the collapse button moves this
-   one with it, and its `top` is the same expression rather than a copy of the
-   number that expression computes to. */
-/* NO STROKE ON A MICRO-BUTTON. Nothing else in the app outlines one — the
-   platform card's gear (`.active-card-settings`) and every modal's × (
-   `.task-modal-close`) are both `border: none` on a transparent ground, bare
-   until the pointer arrives and then a soft fill. These two sat in the corner
-   of a card wearing a 1px violet outline and a permanent fill, which made the
-   guide's chrome the loudest thing on a surface whose job is to be read.
-   The hue stays violet because it is the guide's own; only the outline and the
-   resting fill go. */
-/* THE HOVER BOX IS 26, THE GLYPH IS 16. Two sizes, two jobs: the box is a
-   target and wants to be comfortably bigger than the ink it holds, the glyph
-   is the ink. Both were 22/13-14, which made the target tight and the mark
-   small. Every offset below is derived from the box, so moving 26 moves the
-   pair — `right` is `card padding + box + gap`, `top` centres the box on the
-   eyebrow's 19.2px line. */
-.guide-cal-btn {
-  position: absolute; right: calc(14px + 26px + 4px);
-  top: calc(14px + (19.2px - 26px) / 2);
+/* `.guide-cal-btn` — the 26px icon button that used to sit beside the collapse
+   chevron and flip the card to its month — is GONE with the markup that used
+   it. Its two good ideas outlived it and are both written down where they now
+   apply: no stroke on a micro-button (the note on .guide-collapse-btn above),
+   and pressed is the one state that earns a resting fill (the segmented
+   control below, which kept its exact violet). */
+
+/* ── THE CARD'S TWO FACES, AS A SEGMENTED CONTROL ─────────────────────────
+   The same language as Content Rating's Unanswered/All (`.cr-toggle-bar`): a
+   filled dark TRACK with the picked half lifted out of it, no separator down
+   the middle, and nested radii. It is not the same CSS, because that control
+   is 32px tall to match the answer pills it sits above and this one lives in a
+   254px card — so the numbers are re-derived at this scale rather than
+   inherited and then fought with.
+
+   A GROOVE, NOT A PANEL. Black at 22% cuts the track INTO the guide's violet
+   ground, which is what a segmented control is: a well with one half raised
+   out of it. A lighter track would sit ON the card and the halves would read
+   as two buttons side by side, which is exactly the reading the separator-less
+   shape is trying to avoid.
+
+   THE RADII NEST: 7 on a half, plus the track's 3px of padding = 10 on the
+   track. Concentric, so the corners do not look bent — the same rule the CR
+   bar follows at 13/16/23.
+
+   IT IS THE ONLY THING IN THE CORNER NOW, AND IT SITS THE SAME DISTANCE FROM
+   BOTH EDGES IT TOUCHES. Two 26px halves plus the track's 2px gap and 3px of
+   padding a side make a 60px box, and it is tucked into the card's top-right
+   corner — so the gap above it and the gap beside it are the same relationship
+   and should be the same number.
+
+   `--gf-inset` IS THAT NUMBER, WRITTEN ONCE. It is what the top inset already
+   had to be: the card's 14px of top padding, plus half the difference between
+   the eyebrow's 19.2px line box (16px × 1.2) and this 32px track — which is
+   what centres the control on the eyebrow's line rather than on the padding,
+   and is why it does not ride high. Feeding the same value to `right` makes the
+   two gaps equal BY CONSTRUCTION: change the track's height or the eyebrow's
+   size and they move together instead of one of them going stale.
+
+   Its `right` was `14 + 26 + 4` while it had to clear the collapse chevron, and
+   then 18 to sit on the card's text column. Neither is this: 18 lined its edge
+   up with the eyebrow's, which is the right instinct for a box with a visible
+   fill, but it left the corner reading as though the control were pinned to one
+   edge and floating off the other. */
+.guide-faces {
+  position: absolute;
+  --gf-inset: calc(14px + (19.2px - 32px) / 2);
+  top: var(--gf-inset);
+  right: var(--gf-inset);
+  display: flex; gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .22);
+}
+.guide-face {
   width: 26px; height: 26px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: transparent; border: none;
-  border-radius: 7px;
-  color: var(--purple); cursor: pointer; line-height: 1;
-  transition: background .15s;
+  border: none; border-radius: 7px;
+  background: transparent; cursor: pointer; line-height: 1;
+  /* The unpicked half is the guide's violet at half strength, not a grey: the
+     two halves are the same kind of thing and only one of them is current, so
+     the difference between them is how LIT it is, not what it is made of. */
+  color: rgba(201, 166, 255, .55);
+  transition: background .13s, color .13s;
 }
-.guide-cal-btn svg { width: 16px; height: 16px; display: block; }
-/* THE INK DOES NOT CHANGE COLOUR ON HOVER. Violet IS the guide's colour; going
-   white on approach makes the pointer a second state the icon has to carry,
-   and the fill appearing underneath already says "this is a target". */
-.guide-cal-btn:hover { background: rgba(159, 104, 240, .22); }
-/* On the month face the button is the way back, so it reads as pressed — and
-   pressed is the ONE state that earns a resting fill. */
-.guide-cal-btn.is-on { background: rgba(159, 104, 240, .26); }
+/* TWO SIZES FOR TWO GLYPHS, and it is not a fudge: the list mark is strokes
+   with air between them and the calendar mark is a filled block, so at one
+   size the filled one reads heavier. 16 and 15 put the same amount of ink on
+   each half — the same reason the old single button sized its calendar at 14
+   against a stroked box's 13. */
+.guide-face svg { display: block; }
+.guide-face--list svg { width: 16px; height: 16px; }
+.guide-face--cal  svg { width: 15px; height: 15px; }
+.guide-face:hover { color: rgba(201, 166, 255, .85); }
+/* Pressed is the one state that earns a resting fill — the sentence the single
+   icon button lived by, and the exact violet it used. */
+.guide-face.is-on {
+  background: rgba(159, 104, 240, .26);
+  color: #fff;
+  cursor: default;
+}
 
 /* ── The guide's month ─────────────────────────────────────────────────────
    254px of inner width over seven columns is 36.3 a cell, which is enough for
    two digits and a dot and nothing else. Everything here is sized off that. */
 .gcal { margin-top: 22px; }
-.gcal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* 15, not 10. The month name and its arrows are one object and the table below
+   is another, and at 10 the S/M/T/W row sat close enough to the month to read
+   as a second line of the header rather than as the top edge of the grid. The
+   extra 5 lands on THIS margin rather than on `.gcal`'s own `margin-top`, so
+   the month name does not move — only the table it labels starts lower, and
+   everything below (the grid, the day panel) comes with it. */
+.gcal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
 .gcal-month {
   font-family: var(--mono); font-size: 13px; font-weight: 500;
   color: var(--text); letter-spacing: 0;
@@ -3371,23 +3408,8 @@ body.viewing-splash .app-subnav { display: none; }
    + 22 button + 14 gap + 1px border. That also puts the button's centre at 26px,
    dead centre of the card, so the dots below line up under it on their own. */
 .app-guide.is-collapsed { width: 52px; }
-/* The button is NOT re-flowed when the card collapses: it keeps the expanded
-   card's absolute placement, so it doesn't move a pixel between the two states.
-   That works because the column's right edge stays put — .app-content is the
-   flexible one and simply widens to take up what the guide gives back.
-   48.6px of top padding = where the button ends (12.6 + 22) plus the same 14px
-   gap it has to the sides, so the dots clear it on the same rhythm. */
-.guide-card--mini { align-items: center; padding: 48.6px 0 14px; gap: 0; }
-.guide-mini-dots { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-/* Same two states as .gd-task-box, so collapsing the guide doesn't recolour it */
-.guide-mini-dot {
-  width: 16px; height: 16px; border-radius: 50%; border: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 800; color: var(--guide-bg);
-  background: var(--guide-mark-dim); padding: 0; cursor: pointer; transition: background .12s, transform .1s;
-}
-.guide-mini-dot:hover { transform: scale(1.12); }
-.guide-mini-dot.is-done { background: var(--guide-mark); }
+/* `.guide-card--mini` and the `.guide-mini-*` rail went with the collapse
+   chevron that was the only way to reach them. */
 /* Eyebrow and title are the same size in the mockup — 16px mono caps. The title
    is white, the eyebrow purple; that's the whole difference between them. */
 .guide-eyebrow {
@@ -3446,7 +3468,6 @@ body.viewing-splash .app-subnav { display: none; }
    the same weight relative to the mark, which is what keeps a 16px dot from
    looking like a different symbol. */
 .gd-task-box svg,
-.guide-mini-dot svg,
 .mcal-task-box svg { width: 100%; height: 100%; display: block; }
 .gd-task-box { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--guide-mark-dim); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: var(--guide-bg); }
 /* NO RING on the next task. A ring around a disc reads as "you are here", and
@@ -8098,9 +8119,29 @@ textarea.loc-review-field.ias-inline-input {
    staying put while only .mac-spp-main scrolls internally (its own
    overflow-y:auto, below), rather than the whole page (including the
    sidebar) scrolling together the way it did before. */
-.mac-spp-shell { display: flex; gap: 20px; flex: 1; min-height: 0; }
+/* `--spp-page-top` is where the store page's own top edge lands inside
+   `.mac-spp-main`, and it is now a single term because the nav moved out from
+   under it. While `.spp-pinned` was the scroller's first child it pushed the
+   page down by its whole height and left the sidebar — which starts at the
+   shell's top — that much too high, so this variable had to add the strip's
+   paddings and its pill back up. Out here the nav sits above BOTH columns and
+   the only thing still displacing the page is `.ias-device-wrap`'s own 4px of
+   top padding. Keep it written as the box it comes from: if that padding moves,
+   this is the one term to edit. */
+.mac-spp-shell {
+  display: flex; gap: 20px; flex: 1; min-height: 0;
+  --spp-page-top: 4px;
+}
+/* THE SIDEBAR STARTS WHERE THE PAGE STARTS. It used to start at the shell's
+   top, which was right while the page did too — the pinned nav then pushed the
+   page down 67px and left the two top edges out of line by exactly that, with
+   the sidebar floating above a store page that began well below it. It keeps
+   stretching to the bottom (no height of its own, `align-items: stretch`), so
+   it still runs the full depth the way the real app's sidebar does; only its
+   top moved. */
 .mac-spp-sidebar {
   flex-shrink: 0; width: 176px;
+  margin-top: var(--spp-page-top);
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -8109,33 +8150,91 @@ textarea.loc-review-field.ias-inline-input {
   font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
   overflow: hidden;
 }
+/* A PILL, NOT A ROUNDED BOX. The real field is fully round-ended and a clear
+   step lighter than the column it sits in — at a 7px radius on `--panel-3` it
+   read as a form input dropped into a sidebar rather than as the App Store's
+   own search. The margin below it is bigger than the gap between nav items
+   because the real one separates the field from the list rather than joining
+   it: measured off the reference, the field-to-first-item gap is about half
+   again the item pitch. */
+/* THE TRAFFIC LIGHTS. Apple's own colours as literals on purpose — they belong
+   to macOS, not to this app's palette, and pointing them at `--alert-*` or the
+   done green would quietly have made them mean something here. 11px rather than
+   the real 12, and 7px apart rather than 8: this column is 176 wide against a
+   real window's hundreds, so the trio is scaled to the drawing it sits in.
+   Dead by construction — no hover, no pointer, no handler — because a control
+   that looks pressable and does nothing is worse than a picture of one. */
+.mac-spp-lights {
+  display: flex; gap: 7px;
+  margin: 0 2px 12px;
+}
+.mac-spp-light { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.mac-spp-light--close { background: #FF5F57; }
+.mac-spp-light--min   { background: #FEBC2E; }
+.mac-spp-light--max   { background: #28C840; }
+/* SHORTER THAN IT WAS. At 7px of vertical padding the field came out 30 tall —
+   the height of a real control in this app, which is what it looked like:
+   something to press, sitting above eight rows that are not. The reference's is
+   visibly shallower than it is wide-cornered, so the padding drops to 4 and the
+   box to ~24, close enough to the nav rows' own 28 that the whole column reads
+   as one rhythm. Horizontal padding stays 11 — it is what keeps the magnifier
+   off the pill's curve. */
 .mac-spp-search {
-  display: flex; align-items: center; gap: 6px;
-  background: var(--panel-3); border-radius: 7px;
-  padding: 6px 9px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(255, 255, 255, .08); border-radius: 999px;
+  padding: 4px 11px; margin-bottom: 16px;
   color: var(--text-faint); font-size: 12px;
 }
 .mac-spp-search svg { flex-shrink: 0; }
+/* THE FIELD HOLDS A REAL QUERY when the game has a title, so it stops being a
+   prompt and becomes text somebody typed — `--text` rather than `--text-faint`.
+   Same field, two registers, exactly as an input's placeholder differs from its
+   value; leaving it faint would have the title read as another grey suggestion
+   on a sidebar already full of them. It ellipsises because the title is capped
+   at 30 characters and this column is 176 wide: long ones must trail off, never
+   push the magnifier out or wrap the field to two lines. */
+.mac-spp-search.is-query { color: var(--text); }
+.mac-spp-search span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mac-spp-nav-item {
   display: flex; align-items: center; gap: 9px;
   padding: 6px 8px; border-radius: 6px;
   font-size: 12.5px; font-weight: 500; color: var(--text-dim);
 }
-.mac-spp-nav-item svg { flex-shrink: 0; opacity: 0.75; }
-.mac-spp-nav-item.is-current { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--text); }
-.mac-spp-nav-item.is-current svg { opacity: 1; color: var(--blue); }
-.mac-spp-nav-divider { height: 1px; background: var(--border); margin: 8px 4px; }
+/* The glyphs are outlines and read lighter than the label beside them, so they
+   are NOT dimmed further — the label is what carries the row's weight. */
+.mac-spp-nav-item svg { flex-shrink: 0; }
+/* `.is-current`'s two rules are GONE, not left dormant. Nothing can set that
+   class any more — the sidebar draws no selection at all, because a product
+   page is not one of the eight destinations listed here (see the note on
+   `item()` in render.js). A rule whose only trigger has been removed is a
+   control waiting to be turned back on, which is the argument the dev bar was
+   deleted under. */
+/* `.mac-spp-nav-divider` is gone with the markup — the real sidebar rules no
+   line between Develop and Categories, and a rule across a 176px column reads
+   as a section break the app never makes. */
+
+/* NO RULE ABOVE THE ACCOUNT EITHER, for the same reason: in the real app it is
+   simply the last thing in the column, separated by the empty space the list
+   does not fill. `margin-top: auto` is what puts it there, and that is the
+   whole separation. */
 .mac-spp-account {
-  margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px;
+  margin-top: auto;
+  display: flex; align-items: center; gap: 9px;
 }
+/* A PHOTO'S SHAPE. The real row is a round portrait, so the avatar is filled
+   and light rather than a hairline glyph in a grey disc — at 26px a stroked
+   person on a near-black fill read as an empty slot waiting for an image. */
 .mac-spp-account-avatar {
-  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-  background: var(--border-hover);
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255, 255, 255, .14);
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-faint);
+  color: rgba(255, 255, 255, .55);
+  overflow: hidden;
 }
-.mac-spp-account-label { font-size: 12px; color: var(--text-dim); font-weight: 500; }
+.mac-spp-account-avatar svg { display: block; margin-top: 3px; }
+/* The name is a PERSON, so it takes the same ink as a nav label rather than the
+   dimmer tone a caption would. */
+.mac-spp-account-label { font-size: 12.5px; color: var(--text); font-weight: 500; }
 
 .mac-spp-main {
   flex: 1; min-width: 0; min-height: 0;
@@ -8715,6 +8814,63 @@ textarea.loc-review-field.ias-inline-input {
    circled, bordered × is a control drawn at rest, and closing is the one action
    in the modal nobody needs pointed out. Applies to every modal's ×, which is
    the point — they were three different closers. */
+/* ── THE PREVIEW'S LANGUAGE SWITCHER IS CHROME, NOT AN ANSWER ─────────────────
+   `.loc-primary-pill` in the Mac Product Page Preview's modal header, and the
+   fix is `.rel-track`'s wholesale — a third treatment for this component was
+   not needed, because the situation is the one that rule was written for.
+
+   It was the loudest thing in the header, and the diagnosis is sharper than
+   "too heavy": it wore `--pill-on-bg` / `--pill-on-color`, the SELECTION blue,
+   which in this app means *you confirmed this* (see "violet proposes, blue
+   confirms"). In Localization that is exactly right — the primary language is a
+   declaration your submission carries, chosen inside a form, and the pill there
+   is untouched. Here the same control picks which language you are LOOKING at.
+   It is a lens, not an answer; nothing about the submission changes when you
+   move it. Blue was making a claim the control cannot make, and doing it in the
+   brightest colour available, two inches from the modal's title.
+
+   So it becomes the GHOST TRIGGER: no fill and no ring at rest, both arriving
+   on hover. And the hover box is deliberately the box of the thing standing
+   beside it — 30px tall, 8px radius, a flat grey fill, no stroke — which is
+   `.task-modal-close`'s own geometry, one sibling away. They are the same kind
+   of object, a control living in the modal's chrome rather than in its form,
+   and two of them inventing separate boxes is the only reason they would look
+   like two different things.
+
+   White, never blue, per the rule. The label drops to `--text-dim` and comes up
+   to `--text` on approach, so the chevron is what says "this opens" at rest.
+   Scoped to `.submit-modal-header-actions` — the component keeps its blue
+   everywhere else, exactly as `.rel-track` scopes its own copy. */
+.submit-modal-header-actions .loc-primary-pill {
+  height: 30px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  transition: background .15s, color .15s;
+  /* Shrink-wrapped, the third half of the `.rel-track` copy. The component
+     defaults to `width: 100%` for the form it was built for; in chrome it takes
+     the room its value needs. The wrap's own width comes from the `swSelect`
+     call, now `auto` — see `_macSppLangDropdownHTML`. */
+  width: auto;
+}
+/* `.loc-primary-name` is `flex: 1` so a chosen value fills its field and the
+   chevron sits hard right. With nothing to fill, that stretch is what kept the
+   word floating in an oversized box, so the name goes back to its own width and
+   the 8px gap does the spacing. Exactly `.rel-track .sw-select-wrap`'s intent,
+   one level further in. */
+.submit-modal-header-actions .loc-primary-name { flex: none; }
+/* NO RING, EVER — the shared masked `::after`, switched off rather than deleted
+   so Localization's copy of the same pill keeps the one it wears. `.rel-track`
+   does this with the identical line. */
+.submit-modal-header-actions .loc-primary-pill::after { display: none; }
+/* One fill for hover AND open: there is no second value to borrow for an open
+   state, and the panel appearing is feedback enough. */
+.submit-modal-header-actions .loc-primary-pill:hover,
+.submit-modal-header-actions .loc-primary-wrap.is-open .loc-primary-pill {
+  background: var(--surface-hover, rgba(255, 255, 255, .06));
+  color: var(--text);
+}
+
 .task-modal-close {
   width: 30px; height: 30px;
   border: none;
@@ -10309,7 +10465,304 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    stay reserved (that is the whole point), so the bar is styled down instead:
    no track, a thin translucent thumb inset from the edge by a transparent
    border. Copied from .main, which made this trade first. */
-.submit-modal-scroll::-webkit-scrollbar,
+.submit-modal-scroll::-webkit-scrollbar { width: 11px; }
+/* ── THE SECTION NAV ──────────────────────────────────────────────────────
+   IT IS NOT PINNED ANY MORE, AND THE NAME IS ALL THAT IS LEFT OF THAT. It was
+   `.cr-pinned`'s mechanics — sticky to the top of `.mac-spp-main`, opaque so
+   the store page stopped existing at its edge. Both facts followed from where
+   it sat: inside the scroller, which is the right-hand pane only. So it was
+   the width of the store column, not of the step, and the page ran under it —
+   an opaque strip sliding over a product page reads as a sheet laid on top of
+   the thing rather than as the modal's own chrome.
+
+   It is a sibling of `.mac-spp-shell` now (see buildStorePreviewSection), one
+   row of the flex column the step body already is: full modal width, above the
+   sidebar and the page both, with nothing passing beneath it. `position` and
+   the opaque `background` are therefore GONE rather than kept "just in case" —
+   a sticky offset on an element nothing scrolls past is a claim that is no
+   longer true, and the next person to read it would have to prove it wrong.
+
+   `flex: none` because the column's other child is `flex: 1`: the bar is its
+   own height and the shell takes everything left.
+
+   IT SCROLLS SIDEWAYS RATHER THAN WRAPPING. Eight pills will not always fit,
+   and a nav that wraps to two lines changes its own height — which moves the
+   page under the pointer the moment a label gets longer in another language.
+   One line, always, and the overflow is a scroll nobody has to notice.
+   `scrollbar-width: none` because a 4px-tall scrollbar under a row of pills
+   reads as damage, not as an affordance. */
+.spp-pinned {
+  flex: none;
+  padding: 10px 0 9px;
+}
+/* THE FLOATING CONTAINER, and it is `.cr-pinned-bar`'s, not a new object: the
+   same white 15% fill, the same 1px ring drawn INSIDE it rather than as a
+   border, and radii that nest. A border would clip the background to the border
+   box and draw the ring a pixel inside it — two curves that cannot stay
+   concentric, which is what read as a doubled, blurry stroke on the Content
+   Rating bar before it was changed.
+   The radius is `--field-radius + 8`, not that bar's `+10`: its own padding is
+   8 and the pills inside are at `--field-radius`, so outer = inner + the gap
+   between them. The CR bar's inner track is at +3, which is why its outer is
+   +10. Same rule, different arithmetic — copying the 18 would have bent the
+   corners here. */
+.spp-pinned-bar {
+  padding: 8px;
+  border: 0;
+  border-radius: calc(var(--field-radius) + 8px);
+  /* WHITE 12%, DOWN FROM `.cr-pinned-bar`'s 15% — this is the one value where
+     the two bars deliberately part company, and the number below it has to move
+     with it. 15 over `--panel` composited to rgb(55); 12 lands at rgb(48).
+     Everything the container is the ground for was checked and holds
+     proportionally: the lit pill's step goes 30 → 31, the separator stays ~46%
+     of the way from the container to the pill's label, the pending well
+     −12.2 → −10.6. The `is-complete` green is the exception — see its note. */
+  background: rgba(255, 255, 255, .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+  /* For the celebration sweep, which is a `::after` that travels the bar's
+     width and must be cut off by its rounded corners. */
+  position: relative; overflow: hidden;
+  transition: background .25s ease, box-shadow .25s ease;
+}
+/* NOTHING LEFT TO DO — THE WHOLE BAR GOES GREEN, FILL INCLUDED.
+
+   It shipped as the EDGE only, on the argument that the pills' resting contrast
+   was measured against this container's white 15% and tinting the fill would
+   move the ground under all eight of them. The argument was right about the
+   risk and wrong about the conclusion: it is answered by holding the
+   LUMINANCE, not by refusing to touch the fill. Too quiet to be the point of
+   the thing — the bar is supposed to say "we did it".
+
+   SO THE ALPHA IS COMPUTED, NOT PICKED, AND IT IS SOLVED AGAINST THE RESTING
+   FILL ABOVE — THE TWO MOVE TOGETHER OR THE BAR CHANGES BRIGHTNESS WHEN IT
+   COMPLETES. White at .12 over `--panel` (20,20,20) composites to rgb(48.2);
+   matching that in perceived light with `#31DC80` means solving
+   `20 + 157α = 48.2` (the 157 is the green's channel deltas through the
+   0.2126 / 0.7152 / 0.0722 luma weights), which gives **α = .18**. The bar
+   changes hue and keeps its brightness, so every pill on it — transparent at
+   rest, the chip's white 15% when lit — keeps exactly the relationship it was
+   tuned for.
+
+   IF EITHER NUMBER MOVES, REDO THE LINE. It was `.15 → α .22` until the resting
+   fill came down a notch; both were re-solved rather than nudged, which is the
+   same discipline as the grade tabs' fills. Eyeballing a new alpha here is what
+   would put a visible brightness step on completion.
+
+   The ring goes with it rather than staying the lone signal, so the two are one
+   statement. `.submit-ready` and the cancel hold still make the border-carries-
+   a-state case elsewhere; this one simply has a fill worth using too. */
+.spp-pinned-bar.is-complete {
+  background: rgba(49, 220, 128, .18);
+  box-shadow: inset 0 0 0 1px rgba(49, 220, 128, .45);
+}
+/* THE SWEEP IS A MOMENT, SO IT TRAVELS AND LEAVES. The cancel hold's bar is the
+   other sweep in this app and it is the opposite kind of thing: it FILLS, flat
+   and even, because it is a clock and has to say how much of the hold is done.
+   This one measures nothing — it is a specular pass, a light crossing a
+   surface — which is exactly the case where a gradient is right rather than
+   dishonest: soft at both edges so it reads as a highlight moving over the bar
+   and not as a green block sliding in from the left.
+   One pass, 900ms, and `_sppCelebrate` strips the class on `animationend`. */
+.spp-pinned-bar.is-celebrating::after {
+  content: ''; position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg,
+    rgba(49, 220, 128, 0)   0%,
+    rgba(49, 220, 128, .28) 45%,
+    rgba(49, 220, 128, .28) 55%,
+    rgba(49, 220, 128, 0)   100%);
+  animation: sppCompleteSweep 900ms cubic-bezier(.3, 0, .2, 1) forwards;
+}
+@keyframes sppCompleteSweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spp-pinned-bar.is-celebrating::after { animation: none; display: none; }
+}
+/* `gap: 0` because the `|` between the pills IS the gap — same trade
+   `.app-subnav` makes, and see `_sppPinnedNav`'s note for why it had to be
+   made here too (at 6 the row started overflowing and lost its last pill). */
+/* THE SLACK GOES INSIDE THE ROW, NOT AT ITS ENDS — `space-between`, so the bar's
+   own 8px of padding is the ONLY margin on all four sides.
+
+   Two wrong answers came first and each fixed half of it. The row is the full
+   width of the container's padding box and the eight pills do not fill it:
+   measured, 15px left over. Left alone it all piled up after the last pill —
+   first pill 8 inside the bar, last pill 23 from the other edge, one number on
+   the left and a different one on the right. `center` then split it, 15.5 and
+   15.5, which is symmetric and still wrong: the bar pads 8 top and bottom, so
+   the pills sat nearly twice as far from the side walls as from the ceiling.
+   A container with one inset is a container with one inset.
+
+   `space-between` pushes the first and last pills flush against the padding box
+   and shares the 15px among the 14 gaps between the 15 items — about 1.1px
+   each, which against the pills' own 12px of padding is invisible. Every edge
+   is 8 and nothing has a number to maintain.
+
+   IT NEEDS NO `safe`. With negative free space `space-between` behaves as
+   `flex-start` by spec, so an overflowing row still starts at its left edge and
+   the first pill stays reachable — the exact case `safe center` had to be
+   spelled out for. */
+.spp-pinned-row {
+  display: flex; gap: 0;
+  align-items: center;
+  justify-content: space-between;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+}
+/* `.app-subtab-sep`'s rule, at this row's own type size — and RE-TUNED FOR THIS
+   GROUND the same way the pills below it were, for the same reason. That rule is
+   `--text-faint` at 50%, which is right on the near-black the Game Details
+   sub-nav sits on: #555 at half over #141414 composites to about rgb(52) against
+   a rgb(20) ground. Copied verbatim onto this container it vanished — the
+   container is white 15% over `--panel`, so the bar came out rgb(70) on
+   rgb(55). Contrast is measured against what a thing SITS ON. It is one white
+   alpha now instead of a colour and an opacity (one lever, not two), landing at
+   about rgb(105): a third of the way from the container to the pill's own
+   rgb(160) label, which is the relationship the original had.
+   `visibility`, never `display` — the box stays so the row cannot reflow when
+   the selection or the pointer moves. */
+.spp-pin-sep {
+  color: rgba(255, 255, 255, .25);
+  font-family: var(--mono); font-size: 11.5px;
+  user-select: none; flex: none;
+}
+.spp-pin-sep.is-off { visibility: hidden; }
+/* Both bars beside a HOVERED pill go too, and this has to be CSS: hover is not
+   a render, so the renderer can only hide the two beside the SELECTED pill.
+   The one after is a sibling combinator; the one before needs `:has()`. */
+.spp-pin:hover + .spp-pin-sep,
+.spp-pin-sep:has(+ .spp-pin:hover) { visibility: hidden; }
+.spp-pinned-row::-webkit-scrollbar { display: none; }
+/* `flex: none` or a long label gets squeezed instead of scrolling — the row is
+   allowed to overflow, the pills are not allowed to shrink. */
+/* THE PILLS WERE RE-TUNED WHEN THE CONTAINER ARRIVED, and they had to be. They
+   were white 6% resting and white 15% lit, which works on the panel's near-black
+   — but the container IS white 15% over `--panel`, so it composites to about
+   rgb(55,55,55): a 6% pill on it all but vanished, and the lit one matched its
+   own background exactly. Contrast is measured against what a thing SITS ON,
+   not against the surface two layers down.
+   So resting is transparent — the container is the ground, and a fill on every
+   pill would make eight boxes inside a box — and the lit one goes to 24%, far
+   enough above the container to read as lifted out of it. */
+.spp-pin {
+  flex: none;
+  height: 28px; padding: 0 12px;
+  border: none; border-radius: var(--field-radius);
+  background: transparent;
+  color: var(--text-dim); cursor: pointer;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: 0;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+  /* A FLEX LINE, because the disc's slot has to hold its width — as inline
+     content the label and the mark would both collapse to their ink. */
+  display: inline-flex; align-items: center;
+  /* And POSITIONED, because that is what the shared selected-state ring hangs
+     off: see `.spp-pin.is-on` below and the big `::after` selector list at the
+     end of this file. */
+  position: relative;
+}
+.spp-pin:hover { background: rgba(255, 255, 255, .10); color: var(--text); }
+/* EVERY PILL WEARS A DISC — the pending one until there is a check to put in
+   it, which is the platform card's whole scheme rather than half of it.
+
+   The first version reserved this box and hid the mark with `visibility`. That
+   kept the row's geometry constant, which is the real requirement (a mark that
+   appears on completion makes its pill wider, and in a row of eight the pill
+   you were about to press moves the moment you answer a different one) — but an
+   invisible box reads as a HOLE, a gap where something obviously belongs. The
+   pending disc fills it for real and costs nothing more, because that geometry
+   was already being paid for. It is also the card's own argument one surface
+   over: a soft disc turning green is the same object changing colour, where a
+   blank becoming a disc is a change of kind.
+
+   NOTHING HERE REPAINTS IT. `.ios-step-num` carries the pending fill, the
+   green, the dark `#0F2A1A` check and the 38.3% ink ratio; wearing the class is
+   what keeps all four from drifting. Everything below is size and position.
+
+   `--pico` IS THE LEVER, and that is the documented way to size that disc. It
+   is set on the pill's slot, so it reaches this one element: the platform
+   card's own `--pico` — and the whole text column derived from it — is
+   untouched. 15px against the pill's 28 leaves the disc reading as a mark
+   beside a label rather than as a control in its own right.
+
+   IT LEADS THE LABEL (`margin-right`), because the rows it borrows the disc
+   from do — the platform card's steps and the guide's checklist are both
+   disc-then-name. Trailing it made this the one place in the app where that
+   mark came second, and the pills read as labels wearing a badge instead of as
+   checklist items. */
+.spp-pin-tick {
+  --pico: 15px;
+  margin-right: 6px;
+}
+/* THE PENDING DISC IS A WELL HERE, NOT A PALE BUMP — the one value this slot
+   overrides, and the override is forced by the ground rather than chosen.
+
+   `.ios-step-num`'s pending fill is white 7%, tuned for the platform card's
+   near-black: there it composites to rgb(36.5) on rgb(20), a 16.5-point step,
+   AND it holds a NUMBER at white 42%. Its job on the card is to be a legible
+   container for a digit, so the step can be modest — the ink inside is what you
+   read. This slot is EMPTY, so the disc's own edge is the only thing there is
+   to see, and on the bar's lighter ground (the container at rgb(55)) white 7%
+   lands at rgb(69): a 14-point pale bump with nothing in it.
+
+   DARK CHANGES WHAT THE MARK MEANS, which is the real argument — a recessed
+   well reads as "an empty socket, something goes here", where a faint raised
+   disc reads as "there is a pale thing here". The app already owns that
+   vocabulary: the guide's segmented control is a groove at black 22% with the
+   picked half lifted out of it. So the number is BORROWED from that groove
+   rather than invented — rgb(43) on rgb(55), −12, and the green discs land
+   against sockets instead of against smudges.
+
+   AND THE VALUE CANNOT BE SHARED, which is what makes this a forced divergence
+   rather than a second dialect: black 22% over the card's `#141414` composites
+   to rgb(15.6), DARKER than its own ground and invisible. The two surfaces are
+   35 points apart, so one alpha cannot serve both. Everything else about the
+   disc is still the card's — the green, the `#0F2A1A` check, the 38.3% ink
+   ratio — and only `:not(.is-done)` is touched, so the done state is untouched
+   by construction. (Two classes, so it outranks `.ios-step-num`'s one; the
+   done rule is two as well and keeps winning where it applies.) */
+.spp-pin-tick:not(.is-done) { background: rgba(0, 0, 0, .22); }
+/* THE SELECTED PILL IS THE APP'S CHIP, NOT A LOCAL ONE — the translucent
+   `--chip-fill` plus the masked gradient stroke that every other selected thing
+   in this app wears (`.app-subtab`, the onboarding pills, the yes/no answers,
+   the project chip). It shipped as a bare white 24% wash, which was the right
+   VALUE against this container and the wrong OBJECT: the one selected pill in
+   the app drawn without the stroke that says "selected" everywhere else.
+   It joins the shared `::after` selector list at the end of this file rather
+   than redrawing the gradient here — that file's own note is explicit that a
+   shared selector list is the only way "the same stroke" survives the next
+   change, and a second copy of the geometry is how two of them start to
+   disagree.
+
+   `--pill-bw: 0px` because `.spp-pin` declares `border: none`: with no border
+   the padding box already IS the border box, so the ring's inset is 0. Same
+   case as the project chip, and getting this wrong is what used to paint fill
+   on both sides of the ring.
+
+   THE FILL CAME DOWN FROM 24% TO THE TOKEN'S 15%, AND THAT IS ONLY SAFE
+   BECAUSE THE STROKE ARRIVED WITH IT. 24 was set when the wash carried the
+   whole job alone against a container that is itself white 15% — the same
+   trade `.app-subtab.is-on` made when it went from 20 to the shared 15 ("the
+   stroke does half of it" is written there too), and the same argument the
+   Content Rating bar's own half settled by asking what it sits ON. Here that
+   is the container at white 15% over `--panel`, rgb(55), so a 15% pill
+   composites to about rgb(85): a 30-point step, plus an edge. Measured below.
+   The one you are on is still lifted with LIGHT, not with a hue — this row is a
+   locator, not a status, and the page's own glow says what is finished. */
+.spp-pin.is-on {
+  --pill-bw: 0px;
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
+  background: var(--chip-fill);
+  color: #fff;
+}
+/* The selected pill answers to hover too, from its own higher floor — it needs
+   its own rule rather than riding `.spp-pin:hover`, which is weaker and would
+   be overridden by `.is-on` above. Exactly how `.app-subtab.is-on:hover` is
+   written, for the same reason. */
+.spp-pin.is-on:hover { background: var(--chip-fill-hover); }
+
 .mac-spp-main::-webkit-scrollbar { width: 11px; }
 .submit-modal-scroll::-webkit-scrollbar-track,
 .mac-spp-main::-webkit-scrollbar-track { background: transparent; }
@@ -16607,6 +17060,7 @@ body.viewing-splash #app-guide { display: none; }
 .project-selector-wrap #projectSelector::after,
 .bar-nav-btn .ic.cover::after,
 .profile-avatar::after,
+.spp-pin.is-on::after,
 .loc-primary-pill::after {
   /* AGAINST THE BORDER BOX, NOT THE PADDING BOX — which is the whole of what
      was wrong. An absolutely positioned box resolves `inset` against its

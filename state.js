@@ -2969,7 +2969,6 @@ const state = {
   contentQ: { status: {} },
 
   // Shippy Guide collapse (horizontal): false = full card, true = mini progress rail
-  guideCollapsed: false,
 
   /* Shippy Guide face: false = the tab's checklist, true = the month.
      It is the same month the Calendar tab is showing — the mini grid reads
