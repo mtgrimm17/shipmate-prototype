@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.33**
+Current version: **v6.34**
 
 ---
 
@@ -2300,7 +2300,7 @@ same number on the same afternoon, and the local repo had no idea because its
 only thing that makes "the next number" a fact rather than an assumption. This
 work went out as v6.32 for that reason, not v6.29.
 
-Current version: **v6.33** → next is **v6.34**, then **v6.35**, etc. (v6.29 –
+Current version: **v6.34** → next is **v6.35**, then **v6.36**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, shipped in parallel.)
 
 Update the version in **three places**:

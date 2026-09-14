@@ -1059,6 +1059,69 @@ function makeEmptyPlatformSteps() {
 // list (buildIOSActiveCard, platformStepCount, _paintStepRow,
 // updateIOSCard) must use this instead of the raw PLATFORMS[pid].steps so
 // the step disappears/reappears and renumbers consistently everywhere.
+/* ── WHAT A STORE TAKES AS A BUILD ───────────────────────────────────────────
+   In state.js, which loads before everything that reads it, because the accept
+   list was written twice — once on the Improve step's binary chip and once on
+   the build pill — and two copies of a validation rule is the shape this file
+   keeps a section about. They already agreed; they had no mechanism to go on
+   agreeing.
+
+   The lists are the stores' own, and the Mac one is the one people trip on:
+   Apple takes a signed **.pkg** for Mac App Store distribution. A `.app` and an
+   `.xcarchive` are directory BUNDLES, not files — a browser file input cannot
+   accept either, whatever we put in this list — and an `.ipa` is iOS. That is
+   the whole reason `note` exists: without it the control silently refuses three
+   things a Mac developer would reasonably try first and explains none of them. */
+/* `hint` IS AN INSTRUCTION, NOT A FORMAT LIST. "Accepts PKG or ZIP" tells you
+   what the control will swallow; "Export a signed .pkg from Xcode" tells you
+   what to go and do, which is the actual question someone staring at an empty
+   Upload Build has. It names the TOOL only where one extension is the real
+   answer — Apple's two stores both want a signed .pkg or .ipa out of Xcode, so
+   Xcode is named; Android and Steam accept a genuine either/or produced by any
+   number of pipelines, so naming one would be wrong more often than right.
+   `accept` stays the full list: what we recommend and what we permit are two
+   different things, and the file dialog should keep permitting both. */
+const SM_BUILD_ACCEPT = {
+  ios:        { accept: '.ipa',      hint: 'Export a signed .ipa from Xcode',
+                note: '.app and .xcarchive are folders, not files.' },
+  macos:      { accept: '.pkg,.zip', hint: 'Export a signed .pkg from Xcode',
+                note: '.app and .xcarchive are folders, not files.' },
+  macos_full: { accept: '.pkg,.zip', hint: 'Export a signed .pkg from Xcode',
+                note: '.app and .xcarchive are folders, not files.' },
+  android:    { accept: '.apk,.aab', hint: 'Upload an .aab or .apk' },
+  steam:      { accept: '.exe,.zip', hint: 'Upload an .exe or .zip' },
+};
+const SM_BUILD_ACCEPT_DEFAULT = { accept: '.exe,.zip', hint: 'Upload an .exe or .zip' };
+
+function smBuildAccept(pid) { return SM_BUILD_ACCEPT[pid] || SM_BUILD_ACCEPT_DEFAULT; }
+
+/* IS UPLOAD BUILD FINISHED? — one answer, five callers.
+
+   It was written out five times, once per platform's isXxxSectionComplete, as
+   "there is a build and it is not still being analysed". Identical copies, so
+   they agreed; no mechanism to keep agreeing, which is the shape this file has
+   a section about.
+
+   AND A BUILD WITH NO DESTINATION IS NOT A FINISHED STEP. Shape 4 moved the
+   track picker into the release block precisely so choosing a destination sits
+   beside the build it routes — and v6.29 folded that block into Upload Build's
+   own body, so the step now literally contains the question. Answering "which
+   build" and leaving "where does it go" blank is half a step, and it used to
+   count as a whole one: the disc went green, the tab's dash went green, and the
+   only thing that still knew a track was missing was submitStepClick's third
+   gate, discovered at the very end by pressing Submit and being refused.
+
+   Platforms with no PLATFORM_TRACKS entry (Web, the consoles) are finished as
+   soon as the binary is in — there is no destination to choose, and requiring
+   one would deadlock them. */
+function _uploadBuildComplete(pid) {
+  if (!state.platformBuilds?.[pid]) return false;
+  if (state.platformBuildProcessing?.[pid]) return false;
+  const tracks = (typeof PLATFORM_TRACKS !== 'undefined') ? PLATFORM_TRACKS[pid] : null;
+  if (!tracks || !tracks.length) return true;
+  return !!(state.selectedTracks || {})[pid];
+}
+
 function _visiblePlatformSteps(pid) {
   const p = PLATFORMS[pid];
   if (!p) return [];
@@ -1066,6 +1129,42 @@ function _visiblePlatformSteps(pid) {
     return p.steps.filter(s => s.id !== 'localizations');
   }
   return p.steps;
+}
+
+/* THE SELECTED SUBMISSION TAB, HEALED ON EVERY READ.
+
+   `state.submission.tab` is a platform id and platform ids come and go —
+   deactivatePlatform can remove the one you are looking at, and switching
+   project rebuilds activePlatforms wholesale. A stale id there renders an empty
+   pane under a strip of tabs that all look fine, which is the failure mode this
+   exists to make impossible: every read validates against activePlatforms and
+   falls back to the first active platform in PLATFORM_ORDER.
+
+   It does NOT write back. A getter that repairs state is a getter that mutates
+   during render, which this codebase separates on purpose (render reads, app.js
+   writes) — and there is nothing to persist anyway, since the same fallback
+   runs again on the next read. selectPlatformTab (app.js) is the only writer. */
+function submissionTab() {
+  const t = state.submission?.tab;
+  if (t && state.activePlatforms.has(t)) return t;
+  return PLATFORM_ORDER.find(pid => state.activePlatforms.has(pid)) || null;
+}
+
+/* The steps a pane draws, for ANY platform, in one expression.
+
+   The four card builders each walked their own list and they had drifted into
+   three shapes: ios/macos/macos_full through _visiblePlatformSteps (so a hidden
+   'localizations' renumbers the rest), android/steam straight off
+   PLATFORMS[pid].steps, and the generic builder off p.steps with an
+   `isSubmit` filter because only egs/psn/xbox/nintendo/web carry that entry.
+
+   All three are the same list once you say it properly: visible steps, minus
+   the submit row, which every builder appends separately through
+   buildSubmitStepCard. _visiblePlatformSteps already returns p.steps untouched
+   for the platforms with no conditional step, so it is safe for all of them —
+   the filter is what the generic arm was really doing. */
+function _paneSteps(pid) {
+  return _visiblePlatformSteps(pid).filter(s => !s.isSubmit);
 }
 
 function platformStepCount(platformId) {
@@ -1372,6 +1471,14 @@ function makeBlankIOSAnswers() {
     horrorFear:             null,
     substancesAlcohol:      null,
     // Content Rating — Step 3: Medical or Wellness (pre-populated for most games)
+    /* THE ONLY TWO CONTENT-RATING QUESTIONS THAT SHIP PRE-ANSWERED, and they
+       are Shipmate's answers, not the developer's. Every other question in
+       IOS_CR_CATEGORIES starts null. Left as-is they read as work someone had
+       already done — which, before _platformAIClass was inverted, painted them
+       the SELECTION BLUE that means "you confirmed this", on two legal
+       declarations nobody had looked at. They now render violet like any other
+       answer Shipmate provides. If either default goes away, nothing else has
+       to change: violet follows "not humanConfirmed", not this line. */
     medicalTreatment:       'none',
     healthWellness:         'no',
     // Content Rating — Step 4: Sexuality or Nudity (intensity)
@@ -1552,9 +1659,7 @@ function computeIOSSectionRisk(sectionId) {
 
 function isIOSSectionComplete(sectionId) {
   // Upload Build step is complete when a build is uploaded and not processing
-  if (sectionId === 'uploadBuild') {
-    return !!(state.platformBuilds?.ios) && !state.platformBuildProcessing?.ios;
-  }
+  if (sectionId === 'uploadBuild') return _uploadBuildComplete('ios');
 
   // Screenshots (now embedded inside storePreview flow). Optional-once-present:
   // the preview pre-populates from the Game Details screenshots and those already
@@ -1711,9 +1816,7 @@ function computeMacSectionRisk(sectionId) {
 }
 
 function isMacSectionComplete(sectionId) {
-  if (sectionId === 'uploadBuild') {
-    return !!(state.platformBuilds?.macos) && !state.platformBuildProcessing?.macos;
-  }
+  if (sectionId === 'uploadBuild') return _uploadBuildComplete('macos');
 
   if (sectionId === 'screenshots') {
     // Optional-once-present, same as iOS — the preview shows Game Details
@@ -1841,9 +1944,7 @@ function computeMacFullSectionRisk(sectionId) {
 function isMacFullSectionComplete(sectionId) {
   const a = state.macFullSubmitAnswers;
 
-  if (sectionId === 'uploadBuild') {
-    return !!(state.platformBuilds?.macos_full) && !state.platformBuildProcessing?.macos_full;
-  }
+  if (sectionId === 'uploadBuild') return _uploadBuildComplete('macos_full');
 
   if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
 
@@ -2067,9 +2168,7 @@ function androidCqProgress() {
 }
 
 function isAndroidSectionComplete(sectionId) {
-  if (sectionId === 'uploadBuild') {
-    return !!(state.platformBuilds?.android) && !state.platformBuildProcessing?.android;
-  }
+  if (sectionId === 'uploadBuild') return _uploadBuildComplete('android');
 
   if (sectionId === 'screenshots') {
     const ps = state.platformScreenshots?.android;
@@ -2932,8 +3031,30 @@ const state = {
   // Performance dashboard (live-game analytics) — mock data for now.
   performance: { period: '30d', section: 'dashboard' },
 
-  // Submission: single column of platform cards + a toggleable "+ Add platform" picker
-  submission: { addOpen: false },
+  /* Submission: ONE platform at a time — a strip of platform tabs over a single
+     pane, where the steps expand inline instead of opening the step modal.
+
+       addOpen   the "+ Add platform" picker, unchanged from the card grid
+       tab       which platform's pane is showing. NEVER read directly — go
+                 through submissionTab(), which heals a stale id (the selected
+                 platform can be deactivated, or the project switched) rather
+                 than leaving the pane blank.
+       openStep  { [pid]: stepId } — the ONE expanded section per platform.
+                 Per-platform rather than global so moving between tabs does not
+                 fold up what you were reading; one at a time within a tab
+                 because the pane is otherwise taller than a screen.
+       layout    'inline' (steps expand in the pane) or 'modal' (steps open
+                 the step modal, as they did before v6.29). THE WAY BACK: the
+                 modal shell, openStepModal and every step body builder are
+                 untouched, so flipping this reverts the interaction without
+                 reverting the tab strip. Set it with smSubmitLayout() from the
+                 console — see that function (app.js) for why there is no UI.
+       settings  a platform id while the pane is showing that platform's
+                 account face instead of its steps, null otherwise. The gear
+                 sets it, the back arrow clears it. It is NOT platformFace:
+                 that one drives the card's own flip, which the pane has no
+                 reverse to perform. */
+  submission: { addOpen: false, tab: null, openStep: {}, settings: null, layout: 'inline' },
 
   // Marketing tab subsections: 'announce' | 'website' | 'press' | 'influencers'
   marketing: { section: 'announce' },
@@ -4391,9 +4512,7 @@ function makeBlankSteamAnswers() {
 }
 
 function isSteamSectionComplete(sectionId) {
-  if (sectionId === 'uploadBuild') {
-    return !!(state.platformBuilds?.steam) && !state.platformBuildProcessing?.steam;
-  }
+  if (sectionId === 'uploadBuild') return _uploadBuildComplete('steam');
 
   if (sectionId === 'screenshots') {
     const ps = state.platformScreenshots?.steam;

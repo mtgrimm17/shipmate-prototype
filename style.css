@@ -13404,8 +13404,16 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
 .prv-group-row:hover .prv-group-chev { color: var(--text-dim); }
 
 /* Data rows */
+/* THE NAME IS THE CONTROL, SO THE NAME CARRIES THE AFFORDANCE.
+   The whole <tr> used to take the click, which meant the purpose checkboxes
+   each needed an `event.stopPropagation()` just to avoid also flipping the
+   entire row out from under themselves — and a row-wide cursor:pointer
+   promised that every cell did something. The row is now a container; only
+   .prv-type-name toggles, and only it looks like it does. The row keeps its
+   hover, because highlighting the line you are reading across a wide matrix is
+   still worth doing. */
 .prv-data-row {
-  cursor: pointer;
+  cursor: default;
   transition: background 0.1s;
 }
 .prv-data-row:hover { background: var(--panel-2); }
@@ -13423,8 +13431,10 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   font-size: 12px;
   color: var(--text-faint);
   font-weight: 400;
+  cursor: pointer;
   transition: color 0.12s, font-weight 0.12s;
 }
+.prv-type-name:hover { color: var(--text); }
 .prv-data-row.is-on .prv-type-name {
   color: var(--text);
   font-weight: 600;
@@ -18650,4 +18660,521 @@ body.sm-picker-open { overflow: hidden; }
 }
 .mkt-web-back:hover { color: var(--text); border-color: var(--text-faint); }
 .mkt-web-back svg { display: block; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE SUBMISSION TAB — a strip of platform tabs over one pane (v6.29)
+
+   Structure only, on purpose: every row, disc, tick, question and answer pill
+   inside the pane is the class it has always been, so Content Rating and the
+   rest look exactly as they did in the modal. What is new here is the strip,
+   the joint between a tab and the pane, and the fold.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* FOUR TABS PLUS THE ADD TAB, IN WHATEVER WIDTH THE PANE HAS.
+
+   A fixed 236px was right about tabs not resizing with how many siblings they
+   have, and wrong about the number: four of them plus the add tab overran the
+   content column and slid under the Shippy Guide. The width is derived instead
+   — the row, minus the add tab, minus the four gaps, over four — so it is still
+   STATIC with respect to platform count (one platform's tab is the same size as
+   each of four) and DYNAMIC with respect to the space actually available.
+
+   Five or more platforms will overflow this row on purpose; a way to reach them
+   is a separate decision and not one to pre-empt with a squeeze that would make
+   four look wrong to buy room for a sixth. */
+.sub-tabs {
+  --sub-add-w: 64px;
+  --sub-tab-gap: 8px;
+  display: flex;
+  align-items: stretch;
+  gap: var(--sub-tab-gap);
+  margin-bottom: -1px;          /* the selected tab's bottom edge IS the pane's top edge */
+  position: relative;
+  z-index: 1;
+}
+
+/* A tab is a card that has given up its body. Same fill, same 1px edge, same
+   radius as .active-card — because it is the same object seen collapsed, and
+   the pane below is the one that got expanded. */
+.sub-tab {
+  /* A FIXED BOX, NOT A SHARE OF THE ROW. `flex: 1 1 0` made one platform's tab
+     span the whole width and four platforms' tabs a quarter each, so the same
+     object changed size according to how many siblings it had — and adding a
+     platform resized every tab already on screen. A folder tab is a fixed
+     thing; the strip gets longer, the tabs do not get thinner. */
+  flex: none;
+  width: calc((100% - var(--sub-add-w) - 4 * var(--sub-tab-gap)) / 4);
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: var(--panel-radius, 12px) var(--panel-radius, 12px) 0 0;
+  padding: 12px 14px 10px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.sub-tab:hover { background: var(--surface-hover, rgba(255, 255, 255, .06)); }
+
+/* THE SELECTED TAB HAS NO BOTTOM EDGE. That is the whole join: the tab and the
+   pane stop being two boxes and become one surface with a notch in its top.
+   Drawn by removing the line rather than by covering it — a strip of panel
+   colour laid over a border is a thing that has to be kept the same width as
+   the thing underneath it forever. */
+/* SELECTION CHANGES LIGHT, NEVER GEOMETRY. Nothing here may add or remove a
+   border, a padding or a font-weight that reflows — the mark, the name and the
+   dashes must sit on exactly the same pixels selected or not, or the strip
+   twitches as the pointer moves along it. The bottom edge going transparent is
+   the one exception and it costs no space: the border box is still 1px there,
+   it simply stops painting, which is what joins the tab to the pane. */
+.sub-tab.is-on {
+  background: var(--panel-2, var(--panel));
+  border-bottom-color: transparent;
+  cursor: default;
+}
+.sub-tab.is-on:hover { background: var(--panel-2, var(--panel)); }
+
+/* THE HEAD ROW IS 30px WHETHER OR NOT THE BUTTONS ARE IN IT.
+
+   This is what was dropping the selected tab a pixel or two: the gear and the
+   power are 30px controls, the mark and the 13px label are about 22, so the row
+   grew when the buttons appeared and pushed the dashes — and everything above
+   them — down. Nothing was moving horizontally, which is why it read as a
+   settle rather than a jump. A floor equal to the tallest thing the row can
+   hold means the geometry is the same in both states and only the ink changes. */
+.sub-tab-head { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 30px; }
+
+/* --pico, the same token the step discs and the card's logo slot read, so the
+   mark on a tab and the discs in the pane below it stay one column of circles
+   at one size. The glyph overflows its slot by the computed margin, exactly as
+   .active-card-icon does. */
+.sub-tab-mark {
+  width: var(--pico, 22px);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sub-tab-mark svg,
+.sub-tab-mark img {
+  width: var(--plogo, 26px);
+  height: auto;
+  margin: 0 calc((var(--pico, 22px) - var(--plogo, 26px)) / 2);
+}
+
+.sub-tab-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* NOT --pname. That token is the platform's name on a CARD, where it is the
+     heading of the whole object; here it is a tab label with a gear beside it
+     and four siblings, and at 19px it was the loudest thing on the screen. */
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color .15s;
+}
+/* Weight and brightness carry the selection. Both are safe here in a way a
+   padding or a border change would not be: they repaint the label inside a box
+   whose size is now fixed, so nothing around them can move. */
+.sub-tab.is-on .sub-tab-name { color: var(--text); font-weight: 600; }
+
+/* The gear and the power keep the micro-button pattern: no stroke, no resting
+   fill, a soft fill on approach. Same objects as the card's header actions,
+   because they are those objects. */
+.sub-tab-acts { display: flex; align-items: center; gap: 2px; flex: none; }
+/* THE BOX GOES WITH THE BUTTONS, and that does NOT reintroduce the twitch the
+   reserved box was written to stop.
+
+   That twitch was the platform's NAME MOVING — and it cannot, because the name
+   starts after the mark and the mark does not move. What the reserved box
+   actually cost was width: "Mac App Store" was ellipsised to "Mac…" on the
+   selected tab and stayed ellipsised on the three where the buttons were
+   invisible, so a tab held less of its own name than it had room for. Reclaiming
+   the space changes how much of the label is DRAWN, not where it begins. */
+.sub-tab-acts.is-off { display: none; }
+
+/* ── The dashes ───────────────────────────────────────────────────────────
+   One per step, Submit included, greens collected on the left. 3px tall like
+   .cw-dot (the Connect wizard's progress, the only other place this app draws
+   a progress run) rather than a new height for the same idea. */
+/* ONE DASH IS ONE SIZE. They were `flex: 1`, so a five-step platform drew five
+   fat dashes and a six-step one drew six thinner ones across the same width —
+   the segment silently meant a different amount of work per tab, which is the
+   one thing a progress strip must not do. Fixed width: more steps is a longer
+   run, and `flex-start` keeps every run starting on the same left edge. */
+.sub-tab-dashes { display: flex; gap: 4px; margin-top: 10px; justify-content: flex-start; }
+.sub-dash {
+  height: 3px;
+  /* One basis for every dash on every tab, so a segment always means one step.
+     It may SHRINK when a nine-step platform outruns its tab — shrinking equally
+     keeps them all the same as each other, which is the property that matters —
+     but it never grows to fill the row, which is what made five fat dashes and
+     six thin ones mean the same thing. */
+  flex: 0 1 22px;
+  min-width: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .14);
+  transition: background .2s ease;
+}
+.sub-dash.is-done { background: #31DC80; }
+
+/* The add button is the tab strip's own square, and it wears the dashed edge
+   .dash-add-banner used to — same invitation, a quarter of the width. */
+/* IT IS A TAB, AND IT KEEPS A TAB'S SHAPE WHETHER OR NOT IT IS THE ONE OPEN.
+   Rounded at the top, square at the bottom, always — exactly like the four
+   platform tabs beside it. It went to an all-round rectangle for a version on
+   the grounds that square bottom corners looked odd sitting on the pane, and
+   that was solving the wrong problem: the oddity was that the shape CHANGED
+   with state. A tab that reshapes itself when selected is a different object
+   appearing in the same slot. Selection is colour and border here, the same as
+   everywhere else in this strip. */
+.sub-tab-add {
+  flex: none;
+  width: var(--sub-add-w, 64px);
+  align-self: stretch;
+  background: transparent;
+  border: 1.5px dashed rgba(255, 255, 255, .18);
+  border-radius: var(--panel-radius, 12px) var(--panel-radius, 12px) 0 0;
+  color: var(--text-faint);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.sub-tab-add:hover {
+  border-color: rgba(255, 255, 255, .34);
+  color: var(--text);
+  background: var(--surface-hover, rgba(255, 255, 255, .06));
+}
+/* Open: the violet it wears in the design, and no bottom edge — the same one
+   change a selected platform tab makes, which is what joins it to the pane. No
+   radius change, because the shape does not move. */
+.sub-tab-add.is-open {
+  background: var(--panel-2, var(--panel));
+  border-color: rgba(159, 104, 240, .55);
+  border-bottom-color: transparent;
+  color: var(--text);
+}
+
+/* ── The pane ─────────────────────────────────────────────────────────────── */
+.sub-pane-wrap { position: relative; }
+
+/* .active-card already brings the fill, the 1px edge and the 20px padding. The
+   only change is the corner the selected tab is sitting on. */
+/* THE STEP LIST IS THE PANE. THERE IS NO BOX AROUND THE BOX.
+
+   `.active-card` brings a fill, a 1px edge and 20px of padding — right for a
+   card with a header and prose in it, and wrong for a pane whose entire content
+   is a bordered list. Together they drew TWO boundaries with a band of ground
+   between them: the pane's edge, a gap, then each row's edge. Dropping the
+   padding to 10 shrank the band without removing it, because the second border
+   was the real problem, not its distance from the first.
+
+   So the pane keeps no border, no fill and no padding, and the rows' own edges
+   become the outline of the list. A row's left border sits on the left edge of
+   the content column and its right border on the right — one line each, where
+   there were two. */
+.sub-pane {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.sub-pane-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: var(--panel-radius, 12px);
+}
+
+/* ── The fold ─────────────────────────────────────────────────────────────── */
+
+/* IT IS `.sub-step-list`, NOT `.sub-steps` — AND THAT IS NOT A STYLE CHOICE.
+
+   `.sub-steps` was already taken, by the SUBMITTED card's read-only list
+   (buildSubmittedCard → _submittedSteps). That list carries a deliberate rule
+   draining the green out of its ticks — every row there is complete by
+   definition, so a column of green discs is news to nobody — and by reusing
+   the name, this live pane inherited it: completed steps drew the pending
+   disc's soft white fill with a 60% white tick instead of the green check.
+   The markup was right the whole time; one selector two surfaces wide was
+   quietly repainting it.
+
+   EVERY STEP IS ITS OWN BOX NOW, not a row in a flush list.
+
+   The list inherited `.ios-step-card`'s hairline `::before` dividers, which is
+   right on a platform card where the rows are a compact summary. Here a row can
+   OPEN, and a divider cannot say where an open row ends and the next begins —
+   so the four steps read as one long strip with something spilling out of the
+   middle of it. A real edge per row draws the containment the accordion needs.
+   The dividers are switched off rather than fought with. */
+/* NO GAP BETWEEN ROWS. At 8px the separations were wider than the hairline the
+   design draws and the rows read as five detached slabs with the card's ground
+   showing through in bands between them — "large gray areas" rather than a
+   list. Adjacent, each with its own 1px edge, the shared edges collapse into
+   single lines and the stack reads as one object again. */
+.sub-step-list { margin: 0; display: flex; flex-direction: column; gap: 0; }
+.sub-step-list .ios-step-card::before,
+.sub-step-list .ios-step-card + .ios-step-card::before,
+.sub-step-body + .ios-step-card::before { display: none; }
+/* Square the body's own bottom unless it really does end the list. */
+.sub-step-list > .sub-step-body:not(:last-child) { border-radius: 0; }
+
+/* A BORDER, NOT A BLOCK. The fill was `var(--panel)` — a lighter grey laid on
+   the pane — so each row announced itself as a raised card. The design's rows
+   are the pane's own ground with an edge drawn round them: the border does the
+   containing and the row stays part of the surface it is on. Corners square
+   where rows meet, rounded at the two ends of the run, so the stack is one
+   shape rather than five. */
+.sub-step-list {
+  /* One number for the edge, read by the rows AND by the open body beneath
+     them — they are one outline and a half-pixel disagreement between them
+     shows as a step in the line down the side of the list. */
+  --sub-edge: 1.5px;
+  --sub-edge-color: rgba(255, 255, 255, .12);
+}
+.sub-step-list .ios-step-card {
+  border: var(--sub-edge) solid var(--sub-edge-color);
+  border-radius: 0;
+  background: transparent;
+  margin-top: calc(var(--sub-edge) * -1);   /* collapse the shared edge to one line */
+}
+/* THE TOP OF THE LIST IS SQUARE, because it is not the top of anything — the
+   folder tabs sit on it. A radius there would round the list away from the
+   selected tab's own square bottom corners and leave a notch between two
+   things that are meant to be one continuous surface. The BOTTOM still rounds:
+   that really is where the pane ends. */
+.sub-step-list > .ios-step-card:first-child { margin-top: 0; border-radius: 0; }
+.sub-step-list > .ios-step-card:last-child  { border-radius: 0 0 10px 10px; }
+.sub-step-list > .ios-step-card:only-child  { border-radius: 0 0 10px 10px; }
+.sub-step-list .ios-step-card:hover { background: rgba(255, 255, 255, .04); }
+/* A hovered or open row has to paint OVER its neighbours' edges, or the
+   collapsed -1px seam shows through the fill as a line across the row. */
+.sub-step-list .ios-step-card:hover,
+.sub-step-list .sub-row.is-open { position: relative; z-index: 1; }
+
+/* READY TO SUBMIT LIGHTS THE SUBMIT ROW, NOT THE WHOLE LIST.
+
+   A ring around everything says "this platform is ready", which is true and
+   useless — you are looking at the platform, and the four rows inside the ring
+   are the ones that are already done. What the state is actually for is
+   pointing at the ONE thing left to press. On the row, the same green edge is a
+   destination; around the list it was a border celebrating its own contents.
+
+   Same pair `.active-card.submit-ready` uses — 0.55 on the edge plus a 0.12
+   ring just outside — so "the border is carrying a state" stays one idea. It
+   is z-indexed over its neighbours because the rows collapse their shared
+   edges: without it the row above paints its own grey line over the green. */
+.sub-pane.submit-ready .sub-step-list .submit-step-card {
+  position: relative;
+  z-index: 2;
+  border-color: rgba(49, 220, 128, .55);
+  box-shadow: 0 0 0 1px rgba(49, 220, 128, .12);
+}
+
+/* An open row is the heading of the box under it, so the two are one object:
+   the row keeps its lit fill, loses its bottom corners and closes the seam. */
+.sub-row.is-open {
+  background: rgba(255, 255, 255, .04);
+  border-bottom-color: transparent;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* THE OPEN STEP'S NUMBER GOES AMBER, and it is a ring rather than a fill.
+
+   Everywhere else in this app the disc is a soft filled circle whose FILL
+   carries its state — that rule exists so "done" is the same object changing
+   colour rather than a change of kind. This is the one place it is inverted on
+   purpose, because the claim is different: done and risk are facts ABOUT a
+   step, where this is only "you are in here", a locator that must not read as
+   a fourth status. A ring is the quietest thing that can say it, and amber is
+   already the app's word for the row that wants you. `is-done` still wins —
+   a finished section you have re-opened stays green, because being finished
+   outranks being looked at. */
+.sub-row.is-open .ios-step-num:not(.is-done) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #FFB86B;
+  color: #FFB86B;
+}
+
+/* The count on the open row. Amber, pushed to the far right, and it never
+   competes with the chevron for the corner — margin-left:auto puts every
+   trailing element in its own slot. */
+.sub-row-count {
+  margin-left: auto;
+  flex: none;
+  font-size: 13px;
+  color: #FFB86B;
+  white-space: nowrap;
+}
+
+/* The chevron POINTS when the section is shut and turns DOWN when it is open —
+   90°, the same quarter turn every disclosure in the app makes. It inherits
+   SM_STEP_CHEVRON, so there is no second arrow glyph to keep in step. */
+.sub-row-chev {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  transition: transform .18s ease;
+}
+.sub-row-chev.is-open { transform: rotate(90deg); }
+
+/* ── The darker box ───────────────────────────────────────────────────────
+   Recessed, edged, and capped. See _subStepRow's note for why it exists; the
+   two numbers here are the whole of its behaviour.
+
+   `--sub-body-max` is what keeps the steps below an open one on screen. It is
+   deliberately a vh so it tracks the window rather than a fixed guess, with a
+   px floor so a short window still shows a few rows of whatever is inside.
+
+   The box IS the scrollport, which is what makes Content Rating's `.cr-pinned`
+   stick to its top with no change to that bar at all. */
+.sub-step-body {
+  --sub-body-max: max(280px, 52vh);
+  margin: calc(var(--sub-edge, 1.5px) * -1) 0 0;   /* sit on the row's own bottom edge */
+  padding: 14px 16px 16px;
+  background: rgba(0, 0, 0, .22);
+  border: var(--sub-edge, 1.5px) solid var(--sub-edge-color, rgba(255, 255, 255, .12));
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  max-height: var(--sub-body-max);
+  overflow-y: auto;
+  overscroll-behavior: contain;      /* the page does not scroll on past its end */
+  animation: subBodyIn .22s cubic-bezier(.22, .61, .36, 1);
+}
+
+/* The one body that neither caps nor clips — see _subStepRow's note. Lifted
+   above its neighbours so the track panel paints OVER the steps below rather
+   than behind them: the rows carry z-index 1 on hover and the submit row 2 when
+   it is ready, so this has to clear both. */
+.sub-step-body--free {
+  max-height: none;
+  overflow: visible;
+  position: relative;
+  z-index: 3;
+}
+
+/* The scrollbar is `.main`'s, styled down the same way — 11px, no track, the
+   thumb inset by a transparent border — so a step that scrolls does not
+   introduce a second kind of scrollbar to the app. */
+.sub-step-body::-webkit-scrollbar { width: 11px; }
+.sub-step-body::-webkit-scrollbar-track { background: transparent; }
+.sub-step-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .13);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+.sub-step-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, .26); background-clip: content-box;
+}
+
+/* The bar bleeds -24 out of the step modal's scroller and pays it back as
+   padding, which is the right arithmetic there and the wrong one here: this box
+   has its own 16px and the bar would hang 8px past both its edges. Neutralised
+   rather than restyled — every measured thing about it (the 15% fill, the inset
+   ring, the nested radii, the two lines) is untouched. */
+.sub-step-body .cr-pinned { margin-left: 0; margin-right: 0; }
+
+/* ── The flip ─────────────────────────────────────────────────────────────
+   The card's own three-phase sequence, applied to this box. The classes and
+   the durations are `.is-flip-exit` / `.is-flip-enter`'s, so the pane and the
+   modal turn over by the same numbers — see openStorePreviewSection.
+
+   `perspective` is on the box itself rather than a parent: the parent is the
+   step list, and a perspective there would put every row in the same 3D scene
+   and tilt them as a group. `backface-visibility: hidden` stops the half-turned
+   face showing its own reverse through itself, and the box keeps its own
+   `overflow-y: auto`, so a tall sub-section still scrolls inside the rectangle
+   it landed in rather than growing it. */
+.sub-step-body.is-flip-exit,
+.sub-step-body.is-flip-enter {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  perspective: 1200px;
+}
+.sub-step-body.is-flip-exit  { animation: subFlipExit  .16s ease-in both; }
+.sub-step-body.is-flip-enter { animation: subFlipEnter .30s cubic-bezier(.22,.61,.36,1) both; }
+
+@keyframes subFlipExit {
+  from { transform: perspective(1200px) rotateY(0deg);   opacity: 1; }
+  to   { transform: perspective(1200px) rotateY(-90deg); opacity: 0; }
+}
+@keyframes subFlipEnter {
+  from { transform: perspective(1200px) rotateY(90deg);  opacity: 0; }
+  to   { transform: perspective(1200px) rotateY(0deg);   opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-step-body.is-flip-exit,
+  .sub-step-body.is-flip-enter { animation: none; }
+}
+
+/* The back arrow inside a flipped body. Same object as the settings pane's,
+   with the bleed that puts it on the body's own text column. */
+.sub-flip-head { margin: 0 0 10px -6px; }
+.sub-back--flip { margin-bottom: 0; }
+
+@keyframes subBodyIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-step-body { animation: none; }
+}
+
+/* Upload Build's body is the build dropdown and the release block that
+   describes what it uploaded. The block carried a top margin for sitting under
+   a card header; here it follows a control, so the gap is the body's. */
+.sub-upload-body { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+/* What the store takes, on the button's own row — said before the file dialog
+   opens rather than by the dialog silently refusing to select things. It is
+   informational, so it wears a text colour and not amber: nothing here needs
+   you yet, it is telling you what will work. */
+/* UNDER THE BUTTON, NOT BESIDE IT. On the row it competed with the pill's own
+   label for the same horizontal line — two pieces of text at the same height,
+   one of which is a control — and at Android's and Steam's longer wording it
+   wrapped anyway. Stacked, the instruction reads as belonging to the button
+   above it, which is what it is. */
+.sub-upload-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.sub-upload-hint-types { font-size: 12px; color: var(--text-dim); }
+.sub-upload-body .card-release-block { margin: 0; }
+
+/* ── Settings in the pane ─────────────────────────────────────────────────
+   The way back out. It is a micro-button by the app's own rule — no stroke, no
+   resting fill, a soft fill on approach — but it carries WORDS, because a bare
+   chevron at the top of a full-width pane has nothing beside it to say what it
+   returns to. */
+/* The settings pane is the exception and keeps the card: it holds a form and a
+   paragraph, which is what .active-card's padding was written for. */
+.sub-pane--settings {
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: var(--panel-radius, 12px);
+  border-top-left-radius: 0;
+  background: var(--panel-2, var(--panel));
+  padding: 20px;
+}
+
+.sub-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px 0 6px;
+  margin-bottom: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.sub-back svg { width: 16px; height: 16px; flex: none; }
+.sub-back:hover { background: var(--surface-hover, rgba(255, 255, 255, .06)); color: var(--text); }
+
 

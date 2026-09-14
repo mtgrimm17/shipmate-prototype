@@ -4240,8 +4240,11 @@ function renderDashboard() {
   const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
   const addOpen  = !!(state.submission && state.submission.addOpen);
 
-  // Every activated platform, stacked in a single column.
-  const cards = active.map(pid => buildActiveCard(pid)).join('');
+  /* ONE platform's pane, not every platform's card. buildActiveCard and the
+     four builders under it are still here and still correct — they are what
+     the step modal path and _cacheStepsFaceHeight still measure against — but
+     the Submission tab no longer draws a grid of them. See buildSubmissionTabs. */
+  const tab = submissionTab();
 
   // Always-present "+ Add platform" banner; clicking it reveals the picker.
   // COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo — declared further below,
@@ -4288,15 +4291,417 @@ function renderDashboard() {
 
   el.innerHTML = `
     <div class="sec-solo">
-      <div class="dash-column">
-        ${cards}
-        <button class="dash-add-banner${addOpen ? ' is-open' : ''}" onclick="toggleAddPlatform()">
-          <span class="dash-add-banner-plus">+</span><span>Add platform</span>
-        </button>
+      ${buildSubmissionTabs(active)}
+      <div class="sub-pane-wrap">
         ${picker}
+        ${buildSubmissionPane(tab)}
       </div>
     </div>`;
 }
+
+/* ── THE PLATFORM TAB STRIP ──────────────────────────────────────────────────
+   One platform at a time, where there used to be a grid of cards.
+
+   The card grid was `repeat(auto-fill, minmax(360px, 1fr))`, so at any real
+   width it wrapped into two or three columns of platforms side by side. That
+   is the right shape for a STATUS board and the wrong one for a form: the step
+   content that now opens inside a pane was capped at the step modal's 680px
+   and had nowhere to go, and four platforms' worth of steps competing for the
+   eye is four times the chrome around whichever one you are actually filling
+   in. A tab per platform spends the width on the work instead.
+
+   The tab is a DIV, not a BUTTON, and that is forced rather than stylistic:
+   it holds the gear, which is itself a button, and buttons cannot nest. Same
+   trap the guide's day-panel rows hit — see "Treat the panel as the only
+   surface there is" in CLAUDE.md. role/tabindex/aria put the semantics back. */
+function buildSubmissionTabs(active) {
+  /* NOTHING IS LIT WHILE THE PICKER IS UP. submissionTab() falls back to the
+     first active platform on every read, which is what stops the pane ever
+     going blank — but with the picker open there IS no pane, and a lit tab over
+     an empty surface claims a platform is showing when the add list is. The
+     fallback is right for the pane and wrong for the strip, so the strip asks
+     the raw value here rather than the healed one. */
+  const sel = state.submission?.addOpen ? null : submissionTab();
+  const tabs = active.map(pid => {
+    const isOn = pid === sel;
+    /* THE GEAR AND THE POWER RIDE THE SELECTED TAB ONLY. They act on one
+       platform, and a strip of four tabs each carrying two live controls is
+       eight targets around a pane that concerns one of them. The selected tab
+       is the only one whose platform is on screen, so it is the only one where
+       "settings" and "switch this off" have an unambiguous subject.
+       A submitted platform gets neither: its own card carries the cancel-hold
+       and its gear (buildSubmittedCard → _platformHeadActions(pid,'submitted')),
+       and deactivating a platform whose build a store is currently holding is
+       the question _cancelSubBtn's note says nobody is asking. */
+    /* THE CONTROLS ARE ALWAYS IN THE MARKUP, and only their VISIBILITY changes.
+       They used to be rendered on the selected tab alone, which meant the name
+       beside them had a different amount of room depending on selection — so
+       picking a tab shifted its own label, and the strip twitched as you moved
+       along it. A tab must be the same shape whether or not it is the one you
+       are on; emphasis is fill and ink, never position. `visibility` keeps the
+       box (and therefore the layout) while taking the buttons off screen and
+       out of the tab order. */
+    const submitted = !!state.platformFlipped?.[pid];
+    const actsLive  = isOn && !submitted;
+    const acts = `<span class="sub-tab-acts${actsLive ? '' : ' is-off'}"${actsLive ? '' : ' aria-hidden="true"'}>
+           ${_gearBtn(`platformGearFromTab('${pid}')`,
+              isPlatformConnected(pid) ? 'Account settings' : 'Connect account to publish',
+              false, !isPlatformConnected(pid))}
+           ${_powerBtn(pid)}
+         </span>`;
+    return `
+      <div class="sub-tab${isOn ? ' is-on' : ''}" id="sub-tab-${pid}"
+           role="tab" tabindex="0" aria-selected="${isOn}"
+           onclick="selectPlatformTab('${pid}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectPlatformTab('${pid}')}">
+        <div class="sub-tab-head">
+          <div class="sub-tab-mark">${smMarkFor(pid, 20) || platformIcon(pid, 20, 'white')}</div>
+          <div class="sub-tab-name">${platLabel(pid)}</div>
+          ${acts}
+        </div>
+        ${_subTabDashes(pid)}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="sub-tabs" role="tablist">
+      ${tabs}
+      <button class="sub-tab-add${state.submission?.addOpen ? ' is-open' : ''}" type="button"
+              onclick="toggleAddPlatform()"
+              title="Add platform" aria-label="Add platform">+</button>
+    </div>`;
+}
+
+/* ONE DASH PER STEP, GREEN ONES FIRST — so the strip under a tab's name is a
+   progress bar whose segments happen to be countable.
+
+   It is NOT a per-step status readout: dash 3 does not stand for step 3. The
+   finished ones are collected on the left and the outstanding ones on the
+   right, which is the one arrangement that can be read at a glance from across
+   a strip of four tabs. Reading which PARTICULAR step is outstanding is the
+   pane's job, and the pane is one click away.
+
+   The count includes Submit, because the platform is not done until the build
+   has gone — every card builder already appends that row separately through
+   buildSubmitStepCard, so it is added here the same way rather than trusted to
+   be in the steps array (only egs/psn/xbox/nintendo/web carry an isSubmit
+   entry, which _paneSteps strips precisely so this stays one rule). */
+function _subTabDashes(pid) {
+  const steps      = _paneSteps(pid);
+  const done       = steps.filter(s => _paneComplete(pid, s.id)).length;
+  const submitDone = !!state.platformFlipped?.[pid]
+                  || state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+  const total = steps.length + 1;
+  const green = done + (submitDone ? 1 : 0);
+  const dashes = Array.from({ length: total }, (_, i) =>
+    `<span class="sub-dash${i < green ? ' is-done' : ''}"></span>`).join('');
+  return `<div class="sub-tab-dashes" aria-label="${green} of ${total} steps complete">${dashes}</div>`;
+}
+
+/* ── THE PANE ────────────────────────────────────────────────────────────────
+   Whatever the selected platform's card used to be, minus the header (the tab
+   carries the platform's identity now) — so a submitted platform's pane is
+   buildSubmittedCard, untouched. Everything measured about that face in v6.26
+   (the four phases, the cancel-hold sweep, the read-only step list, Release
+   This Version as the last thing in the card) applies to a card, and it is
+   still a card; it has simply stopped being one of four in a grid.
+
+   It keeps the id `active-card-<pid>`, and that is load-bearing rather than
+   inherited by accident: submitStepClick's spotlight, _smSpotlight,
+   _doFinalSubmit's height animation and cancelSubmission all find the card by
+   that id. Renaming it here would have meant rewriting five handlers to gain
+   nothing. */
+function buildSubmissionPane(pid) {
+  /* THE PICKER REPLACES THE PANE, it does not sit on top of it. Pressing "+"
+     is a question about which platform to add, and leaving the platform you
+     were filling in expanded underneath made the picker read as a popover over
+     work you were still doing — two surfaces asking for attention, one of them
+     stale. Collapsing everything is what makes the press feel like a move to a
+     different place rather than an interruption. */
+  if (state.submission?.addOpen) return '';
+  if (!pid) {
+    return `<div class="sub-pane-empty">No platforms yet — add one to start a submission.</div>`;
+  }
+
+  /* SETTINGS OPEN IN THE PANE, with a way back — not in a modal.
+     The account face was a modal for one version and it was the wrong box: a
+     modal is for something you do INSTEAD of the page, and connecting a store
+     is part of the submission, read against the steps it unblocks. The pane is
+     where that belongs, and the back arrow says the steps are still there.
+     The exception is the portal SIGN-IN (openAscLogin → buildAscLoginModal),
+     which stays a modal on purpose — it is a drawing of a DIFFERENT WEBSITE
+     opening, and a browser window inside the pane would claim Shipmate was
+     hosting appstoreconnect.apple.com. */
+  if (state.submission?.settings === pid) return buildPlatformSettingsPane(pid);
+
+  if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
+
+  const steps      = _paneSteps(pid);
+  const counts     = platformStepCount(pid);
+  const locked     = !counts.allRequired;
+  const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+  const openId     = state.submission?.openStep?.[pid] || null;
+
+  const rows = steps.map((step, i) => _subStepRow(pid, step, i, openId)).join('');
+  const submitRow = buildSubmitStepCard(pid, steps.length, locked, submitDone);
+
+  /* ONE `.ios-step-cards` PARENT for the steps AND the submit row, exactly as
+     every card builder does it: the divider between rows is an adjacent-sibling
+     rule, so splitting them leaves no line where the list meets Submit. */
+  return `
+    <div class="active-card sub-pane${!locked ? ' submit-ready' : ''}" id="active-card-${pid}">
+      <div class="ios-step-cards sub-step-list">${rows}${submitRow}</div>
+    </div>`;
+}
+
+/* The account face, in the pane, behind a back arrow. Both bodies are the
+   card's own (_accountSettingsHTML / _connectFaceHTML) — this only supplies the
+   box and the way out.
+
+   The arrow carries WORDS as well as a glyph. A bare chevron at the top of a
+   full-width pane has nothing beside it to say what it goes back to, where on a
+   modal the × is unambiguous because there is only one thing to dismiss. */
+function buildPlatformSettingsPane(pid) {
+  const cfg  = platformLoginConfig(pid);
+  const auth = state.platformAuth?.[pid];
+  const body = auth?.loggedIn
+    ? _accountSettingsHTML(pid, cfg, auth.username || '')
+    : _connectFaceHTML(pid, cfg);
+  return `
+    <div class="active-card sub-pane sub-pane--settings" id="active-card-${pid}">
+      <button class="sub-back" type="button" onclick="closePlatformSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        <span>Back to steps</span>
+      </button>
+      <div class="platform-account-body">${body}</div>
+    </div>`;
+}
+
+/* HOW MANY QUESTIONS THIS STEP IS STILL ASKING, or null when the step is not
+   the kind of thing that counts.
+
+   It is the same reduce `buildContentRatingSection` runs for its own pinned
+   line (crUnanswered), against the same IOS_CR_CATEGORIES and the same
+   _getLiveAnswer — deliberately not a second definition of "answered", because
+   the row and the bar inside it would then be able to disagree in front of you.
+
+   Steam and Google Play draw their Content Rating from their own question sets
+   (buildSteamContentRatingSection / buildAndroidContentRatingSection) with no
+   shared constant to count, so they return null and the row simply prints
+   nothing rather than a number that might be wrong. */
+function _stepUnansweredCount(pid, stepId) {
+  if (stepId !== 'contentRating') return null;
+  if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return null;
+  if (typeof IOS_CR_CATEGORIES === 'undefined' || typeof _getLiveAnswer !== 'function') return null;
+  return IOS_CR_CATEGORIES.reduce((sum, cat) =>
+    sum + cat.questions.filter(q => {
+      const v = _getLiveAnswer(pid, q.id);
+      return v === undefined || v === null || v === '';
+    }).length, 0);
+}
+
+/* A STEP ROW AND, WHEN IT IS THE OPEN ONE, ITS BODY UNDER IT.
+
+   The row itself is the card's `.ios-step-card` unchanged — same disc, same
+   tick, same two columns at 21 and 55, same risk dot, same numbering off the
+   row's position among the visible steps. Only the chevron and the click
+   differ: it rotates instead of pointing, and it expands instead of opening a
+   modal. Keeping the class means _paintStepRow, updateIOSCard and
+   submitStepClick's "shake what is outstanding" all still find these rows, and
+   the completed-step promotion rule (name goes white, never dimmed) comes free.
+
+   `dot-<pid>-<stepId>` is on the disc for every platform now. It was on the
+   generic builder's rows only, so _paintStepRow — the function CLAUDE.md says
+   to go through rather than setting is-done/is-complete by hand — silently did
+   nothing on App Store, Google Play and Steam rows. */
+function _subStepRow(pid, step, i, openId) {
+  const isOpen   = openId === step.id;
+  const done     = _paneComplete(pid, step.id);
+  const numClass = 'ios-step-num' + (done ? ' is-done' : '');
+  /* NO STATUS DOT ON A PANE ROW. The card's rows carry one — an amber or red
+     pip from the App Store questionnaire's risk scoring — and next to the
+     "N unanswered" count it was a second, coarser reading of the same fact,
+     three pixels away from a number that says it exactly. The count is the
+     better instrument, so the dot goes rather than the two competing.
+     _paneRisk stays; it is the card's, and the card still draws it. */
+  const riskDot  = '';
+  const binProc  = !!(state.platformBuildProcessing?.[pid]);
+  const trailing = (step.id === 'improveSubmission' && binProc)
+    ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
+    : `<span class="sub-row-chev${isOpen ? ' is-open' : ''}">${SM_STEP_CHEVRON}</span>`;
+
+  /* THE COUNT IS PRINTED ON THE OPEN ROW ONLY, and that is a deliberate
+     restraint rather than an oversight. On every row at once it becomes a
+     column of numbers competing with the discs that already say what is done;
+     on the row you have opened it is the heading of the thing underneath it —
+     "this is what is left in HERE" — read against the questions it is sitting
+     on top of. Amber, because it is the app's one word for *this needs you*. */
+  const unanswered = isOpen ? _stepUnansweredCount(pid, step.id) : null;
+  const countEl = (unanswered > 0)
+    ? `<span class="sub-row-count">${unanswered} unanswered</span>` : '';
+
+  /* THE WAY BACK TO MODALS IS ONE FLAG, and it lives on the row's click.
+     In 'modal' the row opens openStepModal exactly as the platform cards always
+     did and no body is rendered under it; everything else about the pane — the
+     tab strip, the dashes, the release block in Upload Build — stays. That is
+     the point of putting the switch here rather than at renderDashboard: the
+     layout work and the interaction are separable, so abandoning the inline
+     interaction does not cost the rest of it. */
+  const modalMode = state.submission?.layout === 'modal';
+  const openFn = modalMode ? 'openStepModal' : 'toggleStepSection';
+
+  const row = `
+    <div class="ios-step-card sub-row${done ? ' is-complete' : ''}${isOpen ? ' is-open' : ''}"
+         id="${pid}-step-card-${step.id}"
+         role="button" tabindex="0" aria-expanded="${isOpen}"
+         onclick="${openFn}('${pid}','${step.id}')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${openFn}('${pid}','${step.id}')}">
+      <div class="${numClass}" id="dot-${pid}-${step.id}">${done ? smCheckSVG(20) : i + 1}</div>
+      <div class="ios-step-info">
+        <div class="ios-step-name">${stepLabel(pid, step)}</div>
+      </div>
+      ${countEl}
+      ${riskDot}
+      ${trailing}
+    </div>`;
+
+  if (!isOpen || modalMode) return row;
+
+  /* UPLOAD BUILD'S BODY DOES NOT CLIP, and it is the only one that must not.
+
+     The cap plus `overflow-y: auto` is what keeps a long step from pushing the
+     rows below it off screen — right for twenty-two questions, wrong for a box
+     containing a POPOVER. The track picker's panel is `position: absolute`
+     (.loc-dropdown), so inside a scroller it does not overlay anything: it
+     extends the scrollable area instead, and the options end up below the fold
+     of a 280px box, reachable only by scrolling to them. That is the opposite
+     of what a dropdown is for.
+
+     This body is a pill, a line of text and the release block — comfortably
+     under the cap on its own — so lifting the cap costs nothing and lets the
+     panel do what it was drawn to do. Scoped to this one step rather than
+     relaxed for all of them: Content Rating genuinely needs the scroller. */
+  const bodyMod = (step.id === 'uploadBuild') ? ' sub-step-body--free' : '';
+  return row + `
+    <div class="sub-step-body${bodyMod}" id="sub-step-body">${_subStepBodyInner(pid, step.id)}</div>`;
+}
+
+/* THE BODY, ON ITS OWN, so a repaint can replace it without rebuilding the tab
+   strip and the four rows around it.
+
+   That split is the fix for two bugs that looked unrelated and were the same
+   one. Every answer handler in the app calls reRenderStepModal, which in the
+   pane was calling renderDashboard — a full innerHTML of the whole Submission
+   tab for one pill press. The tabs, the dashes and every step row were thrown
+   away and rebuilt, which is the FLASH; and the new `.sub-step-body` came back
+   with scrollTop 0, which is the JUMP TO THE TOP thirty questions down. Neither
+   was a CSS problem and no amount of transition would have hidden either.
+
+   Now the only node that changes is the one whose contents actually did. */
+function _subStepBodyInner(pid, stepId) {
+  const inf = state.submission?.infer?.[pid] || {};
+  const banner = (inf.status === 'error') ? `
+    <div class="ai-banner ai-banner-error">
+      <span class="ai-banner-icon">⚠</span>
+      <div class="ai-banner-text"><strong>Analysis failed:</strong> ${inf.error || 'Unknown error'}</div>
+      <button class="ai-autofill-btn" onclick="_retryInferenceInline('${pid}','${stepId}')">Retry</button>
+    </div>` : '';
+
+  /* UPLOAD BUILD IS THE ONE STEP WHOSE BODY IS NOT _stepBodyFor's.
+     It never had a modal — it drew its build dropdown inline on the row — and
+     the release block (VERSION / BUILD / TRACK and the destination chip) has
+     come down here to join it. The two facts belong together: the block
+     describes the build this step uploads, and the chip routes it. */
+  if (stepId === 'uploadBuild') {
+    /* THE STEP SAYS WHAT IT TAKES, BEFORE YOU PICK A FILE. The pill opened a
+       file dialog filtered to the store's formats and said nothing about them,
+       so trying the wrong thing — a .app or an .xcarchive on Mac, an .ipa
+       because it is the Apple one you know — came back as the picker simply
+       refusing to select it, with no error to read. A control that silently
+       declines is worse than one that explains first. */
+    /* BESIDE THE BUTTON, ON ONE LINE. It was a stacked pair under the pill —
+       the formats, then a sentence about Xcode — which gave a single control
+       two lines of apparatus and made the note read as a warning about
+       something having gone wrong. The formats are what you need BEFORE you
+       press, so they sit where your eye already is: on the button's own row.
+       The Xcode sentence survives as the row's title, where it is available to
+       anyone who stalls on it without being printed at everyone. */
+    const fmt = smBuildAccept(pid);
+    const uploadRow = `
+      <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
+        ${buildBuildDropdown(pid)}
+        <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
+      </div>`;
+    return banner
+      + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
+      + _localSaveNote(pid);
+  }
+
+  /* THE FLIP HAPPENS HERE NOW, not in a modal hoisted over the pane.
+
+     Product Page Preview's sub-sections (Screenshots, Business Questions, Data
+     Collection…) are a second level INSIDE the step, and for one version they
+     opened the step modal on top of the pane — an interim answer, taken because
+     the level had nowhere obvious to go. It has somewhere: the body rectangle
+     itself. The same `is-flip-exit` / `is-flip-enter` pair the card has always
+     used turns this box over, so the sub-section arrives in the same rectangle
+     at the same size, one level down rather than one surface up.
+
+     The back arrow is unconditional while flipped. On the modal the × was
+     ambiguous enough to need replacing with an arrow (see renderStepModal's
+     note); here there is no × at all, so the arrow is the ONLY way back and
+     must never be conditional on which target you are in. */
+  const flipTarget = _subFlipTarget(pid, stepId);
+  const backBar = flipTarget ? `
+    <div class="sub-flip-head">
+      <button class="sub-back sub-back--flip" type="button"
+              onclick="closeStorePreviewSection('${pid}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        <span>${SM_FLIP_LABELS[flipTarget] || 'Back'}</span>
+      </button>
+    </div>` : '';
+
+  return banner + backBar
+    + `<div class="ios-step-body-content">${_stepBodyFor(pid, stepId, flipTarget, inf.status)}</div>`
+    + _localSaveNote(pid);
+}
+
+/* Which sub-section this step is currently turned over to, or null.
+   Scoped to the steps that actually HAVE a flip layer — `storePreviewFlipTarget`
+   is keyed by platform rather than by step (only one was ever open at a time in
+   the modal), so without this test a target left over from Product Page Preview
+   would try to draw itself inside Content Rating. */
+function _subFlipTarget(pid, stepId) {
+  const flippable = stepId === 'storePreview' || stepId === 'storePreviewPrototype' || stepId === 'gameCenter';
+  return flippable ? (state.storePreviewFlipTarget?.[pid] || null) : null;
+}
+
+/* ── THE DARKER BOX ───────────────────────────────────────────────────────
+   Every expanded step gets the same one (see .sub-step-body in style.css), and
+   it does two jobs at once.
+
+   It SEPARATES: a step body dropped straight into the list is twenty-two
+   question rows wearing the same ground as the four step rows around them, so
+   the list stops looking like a list the moment anything opens. A recessed
+   panel with its own edge says "this is inside that row" without a heading
+   having to say it.
+
+   And it SCROLLS. `--sub-body-max` caps how far a section can push the steps
+   below it down the page — the whole argument for expanding in place rather
+   than opening a modal is that the other steps stay visible, and a body that
+   runs to three screens throws that away. Past the cap the box scrolls itself
+   and the list underneath never moves.
+
+   Content Rating needs nothing added for its filter to work here: `.cr-pinned`
+   is already the FIRST thing buildContentRatingSection returns and it is
+   `position: sticky`, so making this box the scroller is what pins the
+   Unanswered / All toggle to the top of it. That bar is untouched. */
 
 /* THE RELEASE BLOCK — two lines under the platform card's header.
 
@@ -4564,7 +4969,15 @@ function _platformHeadActions(pid, face) {
        the alert: an unconnected account is a problem you can still fix while
        you are working, and a nag about it after the build has gone is pointing
        at a door that has already closed. */
-    gear = _gearBtn(`platformGearFromSteps('${pid}')`,
+    /* ONE DOOR TO THE ACCOUNT, and since v6.29 it is a modal rather than the
+       back of a card. The submitted card is the last surface still drawing this
+       gear (the steps face's own went up to the tab strip), and it wanted the
+       same thing it always did — a way to the account — so it gets the same way
+       everyone else now has. platformGearFromSteps survives for the card path
+       that _cacheStepsFaceHeight and buildActiveCard still exercise; it is no
+       longer what this button calls, because from a pane there is no reverse to
+       turn to. */
+    gear = _gearBtn(`platformGearFromTab('${pid}')`,
       connected ? 'Account settings' : 'Connect account to publish',
       false, !connected && face === 'steps');
   } else {
@@ -4650,8 +5063,16 @@ function _connectFaceHTML(pid, cfg) {
 
 // URL shown in the simulated browser chrome of the sign-in modal.
 function connectPortalUrl(pid) {
-  return ({ ios: 'appstoreconnect.apple.com', steam: 'partner.steamgames.com', android: 'play.google.com/console' })[pid]
-    || 'developer.portal';
+  /* macos and macos_full are App Store Connect too — they were missing, so the
+     simulated browser's URL bar read "developer.portal" on the one screen whose
+     entire job is to look like the real site. */
+  return ({
+    ios: 'appstoreconnect.apple.com',
+    macos: 'appstoreconnect.apple.com',
+    macos_full: 'appstoreconnect.apple.com',
+    steam: 'partner.steamgames.com',
+    android: 'play.google.com/console',
+  })[pid] || 'developer.portal';
 }
 
 /* Larger, browser-framed sign-in modal — simulates signing in on the real portal
@@ -4671,20 +5092,34 @@ function buildAscLoginModal() {
     </div>`;
 }
 
-// Platform-themed sign-in page rendered inside the browser frame.
+/* Platform-themed sign-in page rendered inside the browser frame.
+
+   PID TRAVELS ALL THE WAY TO THE SUBMIT, and it used to be dropped right here.
+   `_appleSigninPage` took only `cfg` and wrote `ascLoginSubmit('ios')` as a
+   literal, which was invisible while the App Store was the only Apple platform
+   that reached it. Mac App Store falls into the same branch: signing in set
+   `connectStage.ios = 'confirm'` and re-rendered the iOS card, so
+   `connectStage.macos` never moved off 'signin' — and because connectInstall
+   had already set `extensionInstalled`, `_connectStage('macos')` kept returning
+   'signin' forever. That is the loop: sign in, land back on "Sign in via
+   extension", repeat, with the confirm stage unreachable.
+
+   Steam's copy had the same literal and was only ever reached with 'steam', so
+   it was latent rather than live; it takes `pid` too now, because the next
+   store that shares a sign-in page should not have to rediscover this. */
 function _signinPageHTML(pid, cfg) {
-  if (pid === 'steam')   return _steamSigninPage(cfg);
+  if (pid === 'steam')   return _steamSigninPage(pid, cfg);
   if (pid === 'android') return _googleSigninPage(cfg);
-  return _appleSigninPage(cfg);
+  return _appleSigninPage(pid, cfg);
 }
 
-function _appleSigninPage(cfg) {
+function _appleSigninPage(pid, cfg) {
   const logo = `<svg width="34" height="34" viewBox="0 0 24 24" fill="#111"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`;
   return `
     <div class="signin-page sp-apple">
       <div class="sp-logo">${logo}</div>
       <div class="sp-title">Sign in to ${escHtml(cfg.portal)}</div>
-      <form class="sp-form" onsubmit="ascLoginSubmit('ios');return false;">
+      <form class="sp-form" onsubmit="ascLoginSubmit('${pid}');return false;">
         <input class="sp-input" id="asc-user" type="text" placeholder="Apple Account" autocomplete="off" spellcheck="false">
         <input class="sp-input" id="asc-pass" type="password" placeholder="Password" autocomplete="off">
         <input class="sp-input" id="asc-2fa" type="text" placeholder="Verification code" autocomplete="off">
@@ -4695,14 +5130,14 @@ function _appleSigninPage(cfg) {
     </div>`;
 }
 
-function _steamSigninPage(cfg) {
+function _steamSigninPage(pid, cfg) {
   const logo = `<svg width="42" height="42" viewBox="0 0 24 24" fill="#fff"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>`;
   return `
     <div class="signin-page sp-steam">
       <div class="sp-logo">${logo}</div>
       <div class="sp-title">Sign in</div>
       <div class="sp-sub">Sign in with account name</div>
-      <form class="sp-form" onsubmit="ascLoginSubmit('steam');return false;">
+      <form class="sp-form" onsubmit="ascLoginSubmit('${pid}');return false;">
         <input class="sp-input" id="asc-user" type="text" placeholder="Account name" autocomplete="off" spellcheck="false">
         <input class="sp-input" id="asc-pass" type="password" placeholder="Password" autocomplete="off">
         <input class="sp-input" id="asc-2fa" type="text" placeholder="Steam Guard code" autocomplete="off">
@@ -5022,6 +5457,33 @@ function _appStoreSectionRisk(pid, sectionId) {
   return pid === 'macos' ? computeMacSectionRisk(sectionId) : computeIOSSectionRisk(sectionId);
 }
 
+/* ── ONE COMPLETION ANSWER AND ONE RISK ANSWER, FOR EVERY PLATFORM ───────────
+   The same two questions were being asked in five places each — the four card
+   builders, renderStepModal's own `complete`, and updateIOSCard — as five
+   separate chains of ternaries over the same platform ids. They agreed, but
+   only because nobody had changed one of them; adding the inline pane would
+   have made it six, which is the point at which "they agree" stops being worth
+   betting on. Both dispatchers below are lifted verbatim from the chain that
+   renderStepModal already carried, so no platform's answer changes.
+
+   Risk is NONE where a platform has no risk scoring of its own: the generic
+   builder's note is explicit that Web and the consoles have no equivalent of
+   the App Store questionnaire's scoring, so a row with nothing to say says
+   nothing. Returning a string rather than null keeps every caller on one shape. */
+function _paneComplete(pid, stepId) {
+  if (pid === 'android')    return isAndroidSectionComplete(stepId);
+  if (pid === 'steam')      return isSteamSectionComplete(stepId);
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') return _appStoreSectionComplete(pid, stepId);
+  return state.platformStepStatus?.[pid]?.[stepId] === 'complete';
+}
+
+function _paneRisk(pid, stepId) {
+  if (pid === 'android') return computeAndroidSectionRisk(stepId);
+  if (pid === 'steam')   return computeSteamSectionRisk(stepId);
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') return _appStoreSectionRisk(pid, stepId);
+  return 'NONE';
+}
+
 function buildIOSActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
@@ -5312,6 +5774,116 @@ function _countInferenceAnswers(platformId, stepId) {
 
 /* ── Step Modal (iOS per-step) ───────────────────────── */
 
+/* THE SUB-SECTION NAMES, ONE DEFINITION.
+
+   These were a `const` inside renderStepModal, which was fine while the modal
+   was the only thing that could be flipped. The inline pane flips too now — it
+   prints the same name beside its back arrow — and a second copy of a label
+   table is the exact shape this file keeps a section about ("One definition per
+   symbol"): the copies do not break, they drift, and nobody diffs them. */
+const SM_FLIP_LABELS = {
+  content:       'Content Questions',
+  business:      'Business Questions',
+  data:          'Data Collection Questions',
+  screenshots:   'Screenshots',
+  siteInfo:      'Site Details',
+  webFactsheet:  'About',
+  webDescription:'Description',
+  webMedia:      'Media',
+  webKeyArt:     'Key Art',
+  steamAssets:   'Select Steam Assets',
+  tags:          'Tags',
+  technical:     'Technical',
+  languages:     'Languages',
+  info:          'Info',
+  localization:  'Localization Review',
+  iapLocalizations: 'IAP Localizations',
+  achievementLocalizations: 'Achievement Localizations',
+  appInformation: 'App Information',
+};
+
+/* ── THE STEP BODY DISPATCHER ────────────────────────────────────────────────
+   Lifted out of renderStepModal in v6.29, verbatim, when the Submission tab
+   stopped opening steps in a modal and started expanding them in place. Both
+   surfaces now ask this one function what a step's body is.
+
+   It is a function rather than a copy for the reason written all over this
+   file: a body list duplicated across two render paths is a list that drifts,
+   and this one is 50 lines of platform-by-step branching that nobody would
+   diff. The inline pane would otherwise have had to know that Steam's preview
+   step is `storePreviewPrototype` while everyone else's is `storePreview`,
+   that macos_full re-uses three generic builders and has its own for the rest,
+   and that Game Center is reachable but is not in any steps array.
+
+   The two loading screens stay INSIDE it. They are what the body IS while a
+   call is in flight, not chrome around it — the inline pane wants the same
+   "Shipmate is working…" in the same place the modal put it. */
+function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
+  let body = '';
+  if (inferenceStatus === 'loading') {
+    const msgs = _getInferenceMsgs(platformId, stepId);
+    body = _infLoadingScreen('Shipmate is working…', msgs);
+  } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
+    const iaMsgs = [
+      'Comparing store page to best in class…',
+      'Reviewing assets to maximize conversion…',
+      'Analyzing binary to gauge compliance risk…',
+      'Preparing your personalized report…',
+    ];
+    body = _infLoadingScreen('Generating Report Card…', iaMsgs);
+  } else if (platformId === 'android') {
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
+    // Legacy / questionnaire kept for backward-compat
+    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
+    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
+    else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
+    else if (stepId === 'business')           body = buildAndroidBusinessSection();
+  } else if (platformId === 'steam') {
+    if (stepId === 'storePreviewPrototype')   body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
+    // Legacy / questionnaire kept for backward-compat
+    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
+    else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
+    else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
+    else if (stepId === 'technical')          body = buildSteamTechnicalSection();
+  } else if (platformId === 'web') {
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
+  } else if (platformId === 'macos_full') {
+    // Mac App Store Full — organized by App Store Connect section (see
+    // PLATFORMS.macos_full.steps, state.js). contentRating/privacy/
+    // improveSubmission reuse the same generic builders every other
+    // platform's App-Store-style step already calls (buildContentRatingSection/
+    // buildPrivacySection/buildImproveSubmissionSection all resolve via pid
+    // already); every other step gets its own dedicated builder below,
+    // since none of them have a real ios/macos equivalent to reuse.
+    if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
+    else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
+    else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
+    else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
+    else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
+    else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
+    else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
+    else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
+  } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
+  else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
+  else if (stepId === 'localizations' && platformId === 'macos') body = buildMacLocalizationsSection();
+  else if (stepId === 'localizations' && platformId === 'ios') body = buildIosLocalizationsSection();
+  else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
+  else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
+  else if (stepId === 'distribution')         body = buildDistributionSection();
+  // iOS legacy / questionnaire kept for backward-compat
+  else if (stepId === 'questionnaire')        body = buildQuestionnaireSection(platformId);
+  else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
+  else if (stepId === 'contentRating')        body = buildContentRatingSection(platformId);
+  else if (stepId === 'privacy')              body = buildPrivacySection(platformId);
+  else if (stepId === 'business')             body = buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
+  return body;
+}
+
 function renderStepModal() {
   const modal = document.getElementById('submit-modal');
   if (!modal) return;
@@ -5404,26 +5976,7 @@ function renderStepModal() {
   const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full')))
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
-  const FLIP_LABELS = {
-    content:       'Content Questions',
-    business:      'Business Questions',
-    data:          'Data Collection Questions',
-    screenshots:   'Screenshots',
-    siteInfo:      'Site Details',
-    webFactsheet:  'About',
-    webDescription:'Description',
-    webMedia:      'Media',
-    webKeyArt:     'Key Art',
-    steamAssets:   'Select Steam Assets',
-    tags:          'Tags',
-    technical:     'Technical',
-    languages:     'Languages',
-    info:          'Info',
-    localization:  'Localization Review',
-    iapLocalizations: 'IAP Localizations',
-    achievementLocalizations: 'Achievement Localizations',
-    appInformation: 'App Information',
-  };
+  const FLIP_LABELS = SM_FLIP_LABELS;
   const isFlipped = !!flipTarget;
   // Game Center (macos, ios, and now macos_full too) is not one of
   // PLATFORMS.macos.steps/PLATFORMS.ios.steps/PLATFORMS.macos_full.steps at
@@ -5436,76 +5989,9 @@ function renderStepModal() {
     ? (FLIP_LABELS[flipTarget] || step?.label)
     : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
-  // Step body
-  let body = '';
-  if (inferenceStatus === 'loading') {
-    const msgs = _getInferenceMsgs(platformId, stepId);
-    body = _infLoadingScreen('Shipmate is working…', msgs);
-  } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
-    const iaMsgs = [
-      'Comparing store page to best in class…',
-      'Reviewing assets to maximize conversion…',
-      'Analyzing binary to gauge compliance risk…',
-      'Preparing your personalized report…',
-    ];
-    body = _infLoadingScreen('Generating Report Card…', iaMsgs);
-  } else if (platformId === 'android') {
-    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-    // Legacy / questionnaire kept for backward-compat
-    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
-    else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
-    else if (stepId === 'business')           body = buildAndroidBusinessSection();
-  } else if (platformId === 'steam') {
-    if (stepId === 'storePreviewPrototype')   body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-    // Legacy / questionnaire kept for backward-compat
-    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
-    else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
-    else if (stepId === 'technical')          body = buildSteamTechnicalSection();
-  } else if (platformId === 'web') {
-    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
-  } else if (platformId === 'macos_full') {
-    // Mac App Store Full — organized by App Store Connect section (see
-    // PLATFORMS.macos_full.steps, state.js). contentRating/privacy/
-    // improveSubmission reuse the same generic builders every other
-    // platform's App-Store-style step already calls (buildContentRatingSection/
-    // buildPrivacySection/buildImproveSubmissionSection all resolve via pid
-    // already); every other step gets its own dedicated builder below,
-    // since none of them have a real ios/macos equivalent to reuse.
-    if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
-    else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
-    else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
-    else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
-    else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
-    else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
-    else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
-    else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-  } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
-  else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
-  else if (stepId === 'localizations' && platformId === 'macos') body = buildMacLocalizationsSection();
-  else if (stepId === 'localizations' && platformId === 'ios') body = buildIosLocalizationsSection();
-  else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
-  else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
-  else if (stepId === 'distribution')         body = buildDistributionSection();
-  // iOS legacy / questionnaire kept for backward-compat
-  else if (stepId === 'questionnaire')        body = buildQuestionnaireSection(platformId);
-  else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
-  else if (stepId === 'contentRating')        body = buildContentRatingSection(platformId);
-  else if (stepId === 'privacy')              body = buildPrivacySection(platformId);
-  else if (stepId === 'business')             body = buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
-
-  const complete = platformId === 'android'    ? isAndroidSectionComplete(stepId)
-               : platformId === 'steam'        ? isSteamSectionComplete(stepId)
-               : platformId === 'web'          ? (state.platformStepStatus?.web?.[stepId] === 'complete')
-               : platformId === 'macos'        ? isMacSectionComplete(stepId)
-               : platformId === 'macos_full'   ? isMacFullSectionComplete(stepId)
-               : isIOSSectionComplete(stepId);
+  // Step body — one dispatcher, shared with the inline Submission pane.
+  const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
+  const complete = _paneComplete(platformId, stepId);
 
   /* GOING BACK IS NOT CLOSING, and the header used to offer only the second.
      A flipped panel is one level INSIDE the Store Preview — you got here by
@@ -7571,10 +8057,8 @@ function buildImproveSubmissionSection(platformId) {
      inert. It now opens the same file picker the pill below does — the input
      is its own (a second id would clash with the pill's) and lands in the same
      handleBuildUpload, so there is one upload path however you reach it. */
-  const binAccept = platformId === 'ios' ? '.ipa'
-                  : (platformId === 'macos' || platformId === 'macos_full') ? '.pkg,.zip'
-                  : platformId === 'android' ? '.apk,.aab'
-                  : '.exe,.zip';
+  // SM_BUILD_ACCEPT (state.js) — one list, read by both upload controls.
+  const binAccept = smBuildAccept(platformId).accept;
   const binChipInput = `iv-binfile-input-${platformId}`;
   const UPLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex:none"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>';
 
@@ -7641,11 +8125,25 @@ function buildImproveSubmissionSection(platformId) {
            <button type="button" class="imp-cta" data-imp-act="apply" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>
          </div>`;
 
+    /* THE BUTTONS SIT ABOVE THE PANEL THEY OPEN, and that is the whole point:
+       "View fix" must not move when the fix appears.
+
+       Underneath, the snippet pushed the row down by its own height — so the
+       control you had just pressed was no longer where your pointer was, and
+       closing it again meant hunting for a button that had walked off. On a
+       disclosure the second press is the likeliest next thing you do, which is
+       the same argument the submitted card's "See what you sent" toggle was
+       moved above its list for.
+
+       "Got it" comes along for the ride, and that is right too: both are
+       actions on the FINDING, and the snippet is evidence underneath them.
+       A panel growing below a fixed row is content arriving; a row sliding
+       down ahead of it is the page rearranging itself. */
     binBody = `
       <div class="iv-titlerow"><div class="iv-title">${escHtml(cur.title)}</div></div>
       <div class="imp-problem">${escHtml(cur.body)}</div>
-      ${fixPanel}
-      ${actions}`;
+      ${actions}
+      ${fixPanel}`;
 
     if (typeof _improveCollapsed === 'function' && _improveCollapsed('binary', binAllDone)) {
       binCardCls = 'iv-card-binary iv-card-collapsed';
@@ -8311,7 +8809,16 @@ function buildStorePreviewSection() {
   // required question inside it has been answered, so a section pre-filled
   // from onboarding data never silently shows as complete without a review.
   const seenSections    = state.storePreviewSectionSeen?.ios || {};
-  const contentDone     = !!(seenSections.content && isIOSSectionComplete('contentRating'));
+  /* DONE IS DONE, WHEREVER YOU DID IT.
+     This required `seenSections.content` — a flag written in exactly ONE place,
+     buildStorePreviewFlipSection, i.e. only when the sub-section is opened FROM
+     this preview. Answering Content Rating in its own step, which is where the
+     Submission tab now puts it, left the item un-ticked and, because the
+     header's Age cell is gated on the same value, hid the rating the
+     questionnaire had just assigned. macos_full, Android and Steam already
+     read completion directly (see their own contentDone lines); these two were
+     the outliers. */
+  const contentDone     = isIOSSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
   const dataDone        = !!(seenSections.data && isIOSSectionComplete('privacy'));
   const screenshotsDone = !!(seenSections.screenshots && isIOSSectionComplete('screenshots'));
@@ -9033,7 +9540,8 @@ function buildMacStorePreviewSection() {
   // answered, so a section pre-filled from onboarding data never silently
   // shows as complete without a review.
   const seenSections    = state.storePreviewSectionSeen?.macos || {};
-  const contentDone     = !!(seenSections.content && isMacSectionComplete('contentRating'));
+  // See buildStorePreviewSection's note — same gate, same reason.
+  const contentDone     = isMacSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isMacSectionComplete('business'));
   const dataDone        = !!(seenSections.data && isMacSectionComplete('privacy'));
   const screenshotsDone = !!(seenSections.screenshots && isMacSectionComplete('screenshots'));
@@ -10710,11 +11218,41 @@ function _getLiveAnswer(platformId, qid) {
  * and the current value matches `val` (if provided).
  * Pass val=undefined to skip the value check (e.g. Steam caller already checks externally).
  */
+/* VIOLET IS "THE USER DID NOT ANSWER THIS", AND THAT IS THE TEST — not "an
+   inference wrote this".
+
+   It used to require a meta entry: `if (!meta || meta.humanConfirmed) return ''`.
+   So an answer was only violet if some writer had remembered to stamp
+   provenance alongside it, and anything Shipmate put in WITHOUT stamping came
+   out wearing the selection blue — which in this app means *you confirmed
+   this*. That is the worst direction for the mistake to run: the one colour
+   that says a human approved a legal declaration, on a declaration no human
+   ever looked at. It also made correctness depend on every present and future
+   write path remembering a second line.
+
+   Inverted, the rule is the one Mark stated and it needs no bookkeeping: an
+   answer is YOURS only if `humanConfirmed` says you made it. Everything else
+   with a value — inferred, defaulted to "no"/"none" because the model could
+   not confirm anything (see the prompt's own instruction, claude.js), seeded,
+   or written by some path that forgets to stamp — is Shipmate's, and says so.
+   It now fails safe: the failure mode is "review this", never "you signed it".
+
+   ONE THING IT DELIBERATELY DOES NOT CHANGE: the pinned line's count still
+   counts `confidence` (buildContentRatingSection). That line claims Shipmate
+   INFERRED n answers, which is a narrower and more specific claim than "you
+   did not answer these" — a value defaulted for want of evidence was not
+   inferred from anything. So the paint and the count are no longer the same
+   test, and CLAUDE.md's note saying they are is now out of date. */
 function _platformAIClass(platformId, qid, val) {
   const meta = _getAnswerMeta(platformId, qid);
-  if (!meta || meta.humanConfirmed) return '';
+  if (meta && meta.humanConfirmed) return '';
+
+  const ans = _getLiveAnswer(platformId, qid);
+  // No answer at all is not Shipmate's work — an empty row stays neutral.
+  const hasAnswer = Array.isArray(ans) ? ans.length > 0 : (ans !== null && ans !== undefined && ans !== '');
+  if (!hasAnswer) return '';
+
   if (val !== undefined) {
-    const ans   = _getLiveAnswer(platformId, qid);
     const match = Array.isArray(ans) ? ans.includes(val) : ans === val;
     if (!match) return '';
   }
@@ -11155,9 +11693,9 @@ function buildPrivacyMatrix(a, pid = 'ios') {
           </td>`;
         }).join('');
         bodyHtml += `
-          <tr class="prv-data-row ${isOn ? 'is-on' : ''}" onclick="togglePrivacyDataType('${t.id}')">
+          <tr class="prv-data-row ${isOn ? 'is-on' : ''}">
             <td class="prv-type-cell">
-              <span class="prv-type-name tooltip-anchor" data-tip="${t.desc}">${t.label}</span>
+              <span class="prv-type-name tooltip-anchor" onclick="togglePrivacyDataType('${t.id}')" data-tip="${t.desc}">${t.label}</span>
             </td>
             ${purposeCells}
             ${metaCells}
@@ -15481,9 +16019,9 @@ function buildAndroidDataMatrix(a) {
         }).join('');
 
         bodyHtml += `
-          <tr class="prv-data-row ${isOn ? 'is-on' : ''}" onclick="toggleAndroidDataType('${t.id}')">
+          <tr class="prv-data-row ${isOn ? 'is-on' : ''}">
             <td class="prv-type-cell">
-              <span class="prv-type-name tooltip-anchor" data-tip="${t.desc}">${t.label}</span>
+              <span class="prv-type-name tooltip-anchor" onclick="toggleAndroidDataType('${t.id}')" data-tip="${t.desc}">${t.label}</span>
             </td>
             ${usageCells}
             ${purposeCells}
@@ -17192,11 +17730,8 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
 function buildBuildDropdown(pid, inModal) {
   const build      = state.platformBuilds?.[pid] || null;
   const processing = !!(state.platformBuildProcessing?.[pid]);
-  const accept     = pid === 'ios'        ? '.ipa'
-                   : pid === 'macos'      ? '.pkg,.zip'
-                   : pid === 'macos_full' ? '.pkg,.zip'
-                   : pid === 'android'    ? '.apk,.aab'
-                   :                        '.exe,.zip';
+  const fmt        = smBuildAccept(pid);          // SM_BUILD_ACCEPT, state.js
+  const accept     = fmt.accept;
   // Unique file input id — avoid clash between card header and modal instances
   const inputId    = inModal ? `build-file-modal-${pid}` : `build-file-${pid}`;
   const uploadSVG  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -17215,7 +17750,7 @@ function buildBuildDropdown(pid, inModal) {
   const noBuild = !build;
   return `
     <div class="build-pill ${noBuild ? 'no-build' : 'has-build'}"
-         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${noBuild ? 'Upload build' : 'Change build'}">
+         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${noBuild ? 'Upload build' : 'Change build'} — accepts ${escHtml(fmt.accept.split(',').join(' or '))}">
       <input type="file" id="${inputId}" accept="${accept}" hidden
              onchange="handleBuildUpload('${pid}', this.files)">
       ${noBuild ? uploadSVG : checkSVG}

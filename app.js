@@ -299,7 +299,319 @@ function perfSetPeriod(id) { state.performance.period = id; renderPerformance();
 /* §6 — Analysis section folders + Submission platform folders */
 function perfSetSection(id) { state.performance.section = id; renderPerformance(); renderSubnav(); }
 /* Submission: toggle the "+ Add platform" picker at the bottom of the column. */
-function toggleAddPlatform() { state.submission.addOpen = !state.submission.addOpen; renderDashboard(); }
+/* OPENING THE PICKER CLOSES EVERYTHING ELSE. The pane it replaces is
+   suppressed in buildSubmissionPane; what has to happen HERE is the state
+   behind it — no tab lit, no section expanded, no settings face — so that
+   closing the picker again does not spring the old pane back open with a
+   half-read step inside it. Adding a platform (activatePlatform) is what
+   selects the next tab, so the strip is never left with nothing chosen for
+   longer than the picker is up. */
+function toggleAddPlatform() {
+  state.submission.addOpen = !state.submission.addOpen;
+  if (state.submission.addOpen) {
+    state.submission.tab      = null;
+    state.submission.settings = null;
+    state.submission.openStep = {};
+  }
+  renderDashboard();
+}
+
+/* ═══ THE SUBMISSION PANE (v6.29) ════════════════════════════════════════════
+   The steps stopped opening a modal and started expanding where they are.
+   openStepModal and the whole .submit-modal shell are still here and still
+   work — the Product Page Preview's sub-sections deliberately still use them
+   (see openStorePreviewSection below) — but nothing in the pane reaches them.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+function selectPlatformTab(pid) {
+  if (!state.activePlatforms.has(pid)) return;
+  if (state.submission.tab === pid && !state.submission.addOpen) return;   // SET, not toggle — see setGuideFace
+  state.submission.tab = pid;
+  state.stepModal = null;
+  /* Settings belong to the platform you were on. Moving to another tab and
+     finding its steps replaced by an account face you opened somewhere else
+     is the pane remembering a detour you had already left. */
+  state.submission.settings = null;
+  /* The picker is about "which platform do I add", which is not the question
+     you are asking the instant you pick one to work on. */
+  state.submission.addOpen = false;
+  scrollContentToTop();
+  renderDashboard();
+}
+
+/* ONE SECTION OPEN AT A TIME, and the opened header travels to the top.
+
+   Both halves matter and the second is why the first is bearable. A step body
+   is routinely taller than the viewport (Content Rating is 22 questions), so
+   leaving several open would put the row you pressed anywhere on a page metres
+   long. Collapsing the last one and bringing the new header to the top of the
+   scrollport means the thing you just asked for is always in the same place.
+
+   Pressing the OPEN section closes it. There is no separate close control and
+   there is no footer button: every answer handler already writes straight to
+   state as it is made, so a section has nothing left to "save" by the time you
+   fold it. What collapsing does record is stepSaveAttempted — the flag that
+   lets a risk dot appear on a row you have actually visited — which is the one
+   piece of bookkeeping closeStepModal was doing that had to come with it. */
+async function toggleStepSection(pid, stepId) {
+  // Honour the layout flag even when something calls this directly (the submit
+  // gate opens Upload Build this way), so there is one behaviour per mode.
+  if (state.submission?.layout === 'modal') return openStepModal(pid, stepId);
+  if (!state.submission.openStep) state.submission.openStep = {};
+  const wasOpen = state.submission.openStep[pid] === stepId;
+
+  // Closing (either by pressing this row again, or by opening another one)
+  // counts as having visited whatever was open.
+  const prev = state.submission.openStep[pid];
+  if (prev) {
+    if (!state.stepSaveAttempted) state.stepSaveAttempted = new Set();
+    state.stepSaveAttempted.add(`${pid}-${prev}`);
+  }
+
+  if (wasOpen) {
+    state.submission.openStep[pid] = null;
+    state.stepModal = null;
+    _renderSubPane(pid);
+    return;
+  }
+
+  state.submission.openStep[pid] = stepId;
+
+  /* `state.stepModal` IS "WHICH STEP AM I IN", NOT "IS A MODAL OPEN" — and the
+     pane has to keep it current even though it opens no modal.
+
+     Twenty-one handlers across app.js and render.js resolve the platform they
+     are writing to as `state.stepModal?.platformId || 'ios'`. That was true
+     enough while a step could only be reached through the modal. With the pane
+     leaving it null, every one of them silently fell back to 'ios' — so
+     answering a question on Mac App Store wrote into the App Store's answers —
+     and togglePrivacyPreset, the one with no fallback, got `undefined` and did
+     nothing at all, which is why Data Collection could not be finished from a
+     preset while the Data Types table still worked by hand.
+
+     Setting it here is the same move as the pane keeping the card's
+     `active-card-<pid>` id: one assignment at the boundary, instead of
+     rewriting twenty-one call sites to ask a new question. Cleared on collapse
+     so nothing reads a step that is no longer open. */
+  state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
+
+  /* Everything openStepModal does on the way in, minus the overlay. These are
+     one-time seeds and "seen" gates, not chrome: skipping them would leave
+     Mac's listing unseeded and would stop Localizations and Product Page
+     Preview ever counting as visited, which is half of what makes them
+     complete (isIOSSectionComplete / isMacSectionComplete, state.js). */
+  if (stepId === 'storePreview' || stepId === 'storePreviewPrototype') {
+    if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = {};
+    state.storePreviewFlipTarget[pid] = null;
+    if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
+    state.storePreviewFocus[pid] = null;
+  }
+  if (pid === 'android') seedOnboardingToAndroid();
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+    seedOnboardingToIOS(pid);
+    if (pid === 'macos')      seedMacAppStoreListing();
+    if (pid === 'macos_full') seedMacFullAppStoreListing();
+  }
+  if (stepId === 'storePreview') {
+    if (pid === 'web' && state.platformStepStatus?.web) state.platformStepStatus.web.storePreview = 'complete';
+    else if (pid === 'macos')      state.macStorePreviewSeen     = true;
+    else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
+    else if (pid === 'ios')        state.iosStorePreviewSeen     = true;
+  }
+  if (stepId === 'localizations') {
+    if (pid === 'macos')           state.macLocalizationsSeen     = true;
+    else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
+    else                           state.iosLocalizationsSeen     = true;
+  }
+
+  const step = PLATFORMS[pid].steps.find(s => s.id === stepId);
+  if (!state.submission.infer) state.submission.infer = {};
+  state.submission.infer[pid] = { step: stepId, status: null, error: null };
+
+  if (step?.hasInference && CLAUDE_API_KEY) {
+    state.submission.infer[pid].status = 'loading';
+    _renderSubPane(pid, true);
+    try {
+      delete state.platformInferenceCache['unified:questionnaire'];
+      await runInference(pid, stepId);
+      state.submission.infer[pid].status = 'done';
+      _postInferenceSetup(stepId);
+    } catch (err) {
+      state.submission.infer[pid].status = 'error';
+      state.submission.infer[pid].error  = err.message === 'NO_KEY' ? 'No API key set.' : err.message;
+    }
+    _renderSubPane(pid);
+    return;
+  }
+
+  _renderSubPane(pid, true);
+  if (stepId === 'improveSubmission') _autoRunImproveSubmission(pid);
+}
+
+/* THE ESCAPE HATCH FROM THE INLINE PANE.
+
+     smSubmitLayout('modal')   steps open the step modal again
+     smSubmitLayout('inline')  steps expand in the pane (default)
+     smSubmitLayout()          reports which is active
+
+   Console-only, like smCardState and smReviewVariant, and for the reason the
+   dev bar was deleted under: a switch on screen is how a comparison control
+   quietly becomes part of the app. Nothing about the modal path was removed to
+   build the pane — openStepModal, the .submit-modal shell and every step body
+   builder are the same functions both surfaces call — so this really does
+   revert the interaction rather than re-implementing it. It also collapses any
+   open section on the way, or the pane would keep drawing a body no row can
+   close. */
+function smSubmitLayout(mode) {
+  if (mode !== 'modal' && mode !== 'inline') return state.submission.layout || 'inline';
+  state.submission.layout = mode;
+  state.submission.openStep = {};
+  state.stepModal = null;
+  renderDashboard();
+  return 'submission layout: ' + mode;
+}
+
+function _retryInferenceInline(pid, stepId) {
+  if (!state.submission.openStep) state.submission.openStep = {};
+  state.submission.openStep[pid] = null;   // force toggleStepSection to re-open
+  toggleStepSection(pid, stepId);
+}
+
+/* Repaint the pane and, on the render that OPENS a section, bring its header to
+   the top of the scrollport.
+
+   The scroll is deliberately not `scrollIntoView`: the app scrolls inside
+   `main.main`, and scrollIntoView on a nested scroller also nudges every
+   ancestor, which on this layout drags the sticky guide column. Measuring the
+   row against the scroller and setting scrollTop moves exactly one thing.
+   16px of air above it so the header is not welded to the scrollport's edge. */
+/* THE PAGE DOES NOT MOVE WHEN A SECTION OPENS.
+
+   It used to bring the opened header to the top of the scrollport, on the
+   argument that a long body could otherwise leave the row you pressed anywhere
+   on the page. That argument is already answered by `--sub-body-max`: the box
+   caps itself and scrolls internally, so nothing below an open section gets
+   pushed off screen and there is nothing to chase. What the scroll added on top
+   of that was a surface moving under the pointer immediately after a click —
+   and because it ran against a list whose height was changing in the same
+   frame, it landed short and read as a twitch rather than as travel.
+
+   Kept as a parameter that now does nothing rather than removed from the four
+   call sites: the argument above is worth being able to reverse in one place if
+   a long step ever does outgrow the cap. */
+function _renderSubPane(pid, _scrollToOpen) {
+  renderDashboard();
+}
+
+/* Repaint ONLY the open step's body, in place.
+
+   This is what every answer handler in the app reaches through
+   reRenderStepModal while the pane is the surface on screen. It returns false
+   when there is nothing of its kind to repaint, so that function can fall
+   through to the modal path unchanged.
+
+   Three things are restored by hand because innerHTML throws them away, and all
+   three were real bugs: the box's own scrollTop (answering question 30 snapped
+   you to question 1), and the two nested scrollers the modal already had to
+   learn about — the Data Types matrix and the Mac preview's page column. */
+function _repaintSubStepBody() {
+  const pid    = submissionTab();
+  const stepId = pid && state.submission?.openStep?.[pid];
+  const bodyEl = document.getElementById('sub-step-body');
+  if (!pid || !stepId || !bodyEl) return false;
+
+  const bodyT = bodyEl.scrollTop;
+  const pm    = bodyEl.querySelector('.prv-matrix-wrap');
+  const pmT   = pm ? pm.scrollTop : null;
+  const mm    = bodyEl.querySelector('.mac-spp-main');
+  const mmT   = mm ? mm.scrollTop : null;
+
+  bodyEl.innerHTML = _subStepBodyInner(pid, stepId);
+
+  bodyEl.scrollTop = bodyT;
+  if (pmT !== null) { const n = bodyEl.querySelector('.prv-matrix-wrap'); if (n) n.scrollTop = pmT; }
+  if (mmT !== null) { const n = bodyEl.querySelector('.mac-spp-main');    if (n) n.scrollTop = mmT; }
+
+  _syncSubRowAndDashes(pid, stepId);
+  return true;
+}
+
+/* The two things OUTSIDE the body that an answer can still change: the row's
+   own disc (a step can complete on the pill you just pressed) and the tab's
+   progress dashes. Painted directly rather than by re-rendering, because
+   re-rendering the strip is exactly the flash this split exists to remove.
+   The disc goes through _paintStepRow, per CLAUDE.md — the two class systems
+   are inverted and setting is-done/is-complete by hand is how they drift. */
+function _syncSubRowAndDashes(pid, stepId) {
+  if (typeof _paneComplete === 'function' && typeof _paintStepRow === 'function') {
+    _paintStepRow(pid, stepId, _paneComplete(pid, stepId));
+  }
+
+  const countEl = document.querySelector(`#${pid}-step-card-${stepId} .sub-row-count`);
+  const n = (typeof _stepUnansweredCount === 'function') ? _stepUnansweredCount(pid, stepId) : null;
+  if (countEl) {
+    if (n > 0) countEl.textContent = `${n} unanswered`;
+    else countEl.remove();
+  }
+
+  const dashes = document.querySelectorAll(`#sub-tab-${pid} .sub-dash`);
+  if (dashes.length) {
+    const steps = _paneSteps(pid);
+    const done  = steps.filter(s => _paneComplete(pid, s.id)).length
+                + ((state.platformFlipped?.[pid] || state.platformStepStatus?.[pid]?.['submit'] === 'complete') ? 1 : 0);
+    dashes.forEach((d, i) => d.classList.toggle('is-done', i < done));
+  }
+
+  const card = document.getElementById('active-card-' + pid);
+  if (card) {
+    const counts = platformStepCount(pid);
+    card.classList.toggle('submit-ready', !!counts.allRequired);
+    const submitRow = document.getElementById(`${pid}-step-card-submit`);
+    if (submitRow) submitRow.classList.toggle('submit-step-locked', !counts.allRequired);
+  }
+}
+
+/* THE TAB'S GEAR OPENS THE CONNECT MODAL, it does not turn anything over.
+   On a card the gear flipped to the account face, which is a face of that
+   card; a tab has no reverse. The account face's own two bodies are reused
+   verbatim — settings when the platform is connected, the three-stage connect
+   flow when it is not — so there is no third description of "your account on
+   this store" to keep in sync. */
+/* THE GEAR SWAPS THE PANE, it does not open a modal.
+
+   It was a modal for one version and the box was wrong. A modal is the shape
+   for something you do INSTEAD of the page under it; connecting a store is part
+   of the submission and is read against the steps it unblocks — Submit is
+   locked until it is done, and gate 1 of submitStepClick points at this very
+   button. Putting it in the pane keeps it on the same surface as the thing it
+   is a prerequisite for, and the back arrow says the steps have not gone
+   anywhere.
+
+   The portal SIGN-IN stays a modal, and that distinction is the point rather
+   than an inconsistency: openAscLogin draws a browser window with a URL bar and
+   somebody else's site inside it (buildAscLoginModal). A separate window is
+   exactly what it is depicting, and depicting it inside the pane would have
+   Shipmate appearing to host appstoreconnect.apple.com. */
+function platformGearFromTab(pid) {
+  if (!state.activePlatforms.has(pid)) return;
+  state.submission.tab      = pid;
+  state.submission.settings = pid;
+  state.stepModal = null;
+  /* Collapse whatever step was open. It is not on screen any more, and coming
+     back to a section you cannot see re-expanded is the pane deciding for you
+     where you had got to. */
+  if (state.submission.openStep) state.submission.openStep[pid] = null;
+  scrollContentToTop();
+  renderDashboard();
+}
+
+function closePlatformSettings() {
+  const pid = state.submission?.settings;
+  state.submission.settings = null;
+  if (pid) _setPlatformFace(pid, 'steps');
+  scrollContentToTop();
+  renderDashboard();
+}
 function perfOpen(portal) { bcToast(`${portal} — connect the account to pull live figures. (Mock data shown for now.)`); }
 function perfJump(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
@@ -2197,6 +2509,11 @@ function closeStepModal() {
      set by the one entry point that should lock (openSubmittedStep) and
      dropped by every exit, so no path can leave a modal locked behind it. */
   state.stepModalReadOnly = null;
+  /* Same reasoning for the pane's hoist flag: it is set by the one entry point
+     that hoists (openStorePreviewSection) and has to be dropped by EVERY exit,
+     or closing with the × instead of the back arrow leaves the next sub-section
+     believing it was opened from a pane that has since moved on. */
+  if (state.submission) state.submission.flipFromPane = null;
   // Record that this step has been saved/attempted at least once
   // (drives red-dot visibility and required-field alert visibility)
   const sm = state.stepModal;
@@ -2439,6 +2756,22 @@ function reRenderStepModal() {
       return;
     }
   }
+  /* THE SUBMISSION PANE IS THE THIRD PLACE A STEP BODY CAN BE, and this is the
+     one hook that has to know it. Every answer handler in the app — four
+     platforms, a dozen builders, hundreds of call sites — repaints by calling
+     this function, so teaching it about the inline pane is what let the pane
+     exist without touching any of them. The alternative was a second repaint
+     function and a rule about which to call, which is the shape that guarantees
+     one of the two goes stale.
+
+     Guarded on the overlay being hidden: while a Product Page Preview
+     sub-section is open the modal really is the surface on screen, and it must
+     keep the repaint. Nested scrollers get the same capture/restore the modal's
+     do — a Data Types table or a Mac preview that snaps to the top on every
+     keystroke is the bug this pattern already exists to prevent. */
+  const overlayOpen = !document.getElementById('submit-overlay')?.classList.contains('hidden');
+  if (!overlayOpen && state.activeView === 'dashboard' && _repaintSubStepBody()) return;
+
   const bodyEl   = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
   // The Data Types table (buildPrivacyMatrix) scrolls independently of the
@@ -4074,7 +4407,14 @@ function submitStepClick(pid) {
      not what for, and a tooltip alone is easy to miss when your eye is on the
      row you just pressed at the other end of the card. */
   if (!connected) {
-    const gear = card?.querySelector('.active-card-settings');
+    /* THE GEAR MOVED TO THE TAB, so the shake follows it there. It is still the
+       same answer — point at where linking happens rather than withhold the
+       click — but the gear is no longer inside `card`, and a querySelector that
+       quietly returns null would have turned this gate back into the dead
+       control it was written to replace. Falls back to the card's own gear,
+       which is where a submitted card still keeps one. */
+    const gear = document.querySelector(`#sub-tab-${pid} .active-card-settings`)
+              || card?.querySelector('.active-card-settings');
     _smShake(gear, 'pulse');
     window.smTipAt?.(gear, t('card.connect_account') || 'Connect account');
     return;
@@ -4103,9 +4443,26 @@ function submitStepClick(pid) {
      Nothing is preselected, here or anywhere — the destination is a decision,
      and a silent default would make it on your behalf. */
   if (!isWeb && !(state.selectedTracks || {})[pid]) {
-    const chip = card?.querySelector('.submit-track-pick');
-    _smSpotlight(card, [chip]);
-    _smShake?.(chip, 'nudge');
+    /* THE CHIP CAN NOW BE FOLDED AWAY, which shape 4 never had to consider.
+       The release block came down into Upload Build's body when the steps went
+       inline, so the picker this gate spotlights is only in the DOM while that
+       section is expanded — and a spotlight on nothing is exactly the dead
+       press this gate exists to prevent. So it opens the section first and
+       spotlights on the next frame, once the chip is really there. Uncollapsed
+       already, it behaves as it always did. */
+    const spotlightChip = () => {
+      const c = document.getElementById('active-card-' + pid);
+      const chip = c?.querySelector('.submit-track-pick');
+      if (!chip) return;
+      _smSpotlight(c, [chip]);
+      _smShake?.(chip, 'nudge');
+    };
+    if (state.submission?.openStep?.[pid] !== 'uploadBuild') {
+      Promise.resolve(toggleStepSection(pid, 'uploadBuild'))
+        .then(() => requestAnimationFrame(spotlightChip));
+    } else {
+      spotlightChip();
+    }
     return;
   }
 
@@ -4365,6 +4722,13 @@ function activatePlatform(platformId) {
     const proj = state.projects.find(p => p.id === state.activeProjectId);
     if (proj && typeof ensureBuildState === 'function') ensureBuildState(proj);
   }
+  /* SELECT WHAT YOU JUST ADDED. Adding a platform from the picker is a stated
+     intention to work on it, and leaving the pane on the previous tab answers
+     a question nobody asked — the new tab would appear in the strip and
+     nothing else would change, which reads as the press having failed.
+     Also closes the picker: it has done its job. */
+  state.submission.tab     = platformId;
+  state.submission.addOpen = false;
   renderDashboard();
   // Shippy's platform item lives in the Details view, which renderDashboard()
   // never touches. Without this the checklist stays stale until something
@@ -4379,6 +4743,12 @@ function deactivatePlatform(platformId) {
   state.activePlatforms.delete(platformId);
   // Reset the transient face (keep platformAuth so sign-in persists).
   if (state.platformFace) delete state.platformFace[platformId];
+  /* Switching a platform off while looking at it leaves the tab pointing at
+     nothing. submissionTab() falls back on every read, so the pane is never
+     blank either way — this just makes the state say what the screen shows
+     rather than leaving a dead id behind for the next reader to puzzle over. */
+  if (state.submission?.tab === platformId) state.submission.tab = null;
+  if (state.submission?.openStep) delete state.submission.openStep[platformId];
   renderDashboard();
   updateObSectionStates();   // same reason as activatePlatform
 }
@@ -4556,14 +4926,38 @@ function connectAdd(pid) {
 }
 
 // Re-render a single active card in place (no flip animation).
+/* THE ACCOUNT FACE IS A MODAL NOW, so the connect flow's own repaints have to
+   land there and not on the pane.
+
+   Every stage of that flow (install → sign in → add, plus sign-out and the
+   linked-app picker) ends by calling this, and it used to swap `#active-card-<pid>`
+   for a freshly built card. That id now belongs to the SUBMISSION PANE, so the
+   un-patched version would quietly replace a pane full of expanded inline steps
+   with a platform card whose rows reopen the modal — the old surface growing
+   back out of the new one, mid-flow, with no way to tell which you were looking
+   at. Going through platformGearFromTab means the modal rebuilds from exactly
+   the state the flow has just written, which is what the card face used to get. */
 function _rerenderPlatformCard(pid) {
-  const card = document.getElementById('active-card-' + pid);
-  if (card) card.outerHTML = buildActiveCard(pid);
-  else renderDashboard();
+  renderDashboard();
 }
 
 // Flip a card to the target face. dir = 1 / -1 sets the rotation direction.
 function _flipPlatformCard(pid, toFace, dir) {
+  /* THERE IS NO CARD TO TURN OVER IN THE PANE. A flip means "the other side of
+     this card" — the gear's one job on the card face — and in the Submission
+     tab the account face has stopped being a face: it is what the pane SHOWS
+     while `submission.settings` names a platform. Reaching here from there
+     (signing in, or finishing the connect flow) would rotate the pane itself on
+     its Y axis, because the pane inherited the card's id. So finishing the flow
+     just swaps the pane back: the thing the flip was announcing — you are
+     connected now — is already true, and the steps are where you were going. */
+  if (state.submission?.settings === pid) {
+    _setPlatformFace(pid, 'steps');
+    if (toFace === 'steps') { closePlatformSettings(); return; }
+    renderDashboard();
+    return;
+  }
+
   const outDeg = 90 * dir;
   const inDeg  = -90 * dir;
   const card   = document.getElementById('active-card-' + pid);
@@ -17388,18 +17782,44 @@ function handleBuildUpload(pid, files) {
   }, 10000);
 }
 
-// Re-render just the active platform card to reflect build/processing state changes
+/* Re-render the build/processing state after an upload.
+
+   THE SUBMISSION PANE OWNS `active-card-<pid>` NOW, and this function used to
+   assume that id could only ever be a platform CARD. It replaced whatever it
+   found with buildIOSActiveCard — so uploading a build swapped the pane out for
+   the old card mid-flow: a second "Mac App Store" header appeared under the
+   tabs, the release block jumped up out of Upload Build, and every step row
+   went back to opening the step modal. Nothing had been reverted; one line had
+   redrawn the wrong surface over the right one.
+
+   Same trap `_rerenderPlatformCard` was fixed for. It is worth stating why the
+   id is shared at all rather than "fixing" that instead: submitStepClick's
+   spotlight, _smSpotlight, _doFinalSubmit's height animation and
+   cancelSubmission all find their target by it, and renaming it for the pane
+   would have meant rewriting five handlers to gain nothing. The cost is that
+   any code reaching for that id has to ask WHICH surface it got — so it is
+   asked here, by the class the pane wears. */
 function _refreshBuildUI(pid) {
   const card = document.getElementById('active-card-' + pid);
-  if (card) {
-    if (pid === 'ios')             card.outerHTML = buildIOSActiveCard(pid);
-    else if (pid === 'macos')      card.outerHTML = buildIOSActiveCard(pid);
-    else if (pid === 'macos_full') card.outerHTML = buildIOSActiveCard(pid);
-    else if (pid === 'android')    card.outerHTML = buildAndroidActiveCard(pid);
-    else if (pid === 'steam')      card.outerHTML = buildSteamActiveCard(pid);
-  } else {
+
+  if (!card || card.classList.contains('sub-pane')) {
+    /* A FULL RENDER, deliberately, even though _repaintSubStepBody exists.
+       An upload changes more than the body it happened in: the Improve row
+       grows a spinner, Upload Build's disc goes green, the tab's dashes move
+       and Submit may unlock. Repainting only the body would leave four of
+       those stale, and branching on which to do would be two code paths for
+       one event. The body here is a pill and a release block — no scroll
+       position and no half-typed text to lose — so the cheap thing and the
+       correct thing are the same thing. */
     renderDashboard();
+    return;
   }
+
+  if (pid === 'ios')             card.outerHTML = buildIOSActiveCard(pid);
+  else if (pid === 'macos')      card.outerHTML = buildIOSActiveCard(pid);
+  else if (pid === 'macos_full') card.outerHTML = buildIOSActiveCard(pid);
+  else if (pid === 'android')    card.outerHTML = buildAndroidActiveCard(pid);
+  else if (pid === 'steam')      card.outerHTML = buildSteamActiveCard(pid);
 }
 
 /* ── Binary findings navigation ─────────────────────────────────────────────── */
@@ -17419,13 +17839,46 @@ function _binDone(pid) {
   return state.binFindingDone[pid];
 }
 
+/* "GOT IT" NOW WALKS THE QUEUE, instead of acknowledging one and stopping.
+
+   It used to resolve the current finding and leave the card sitting on it,
+   showing "Mark unresolved" — so getting through four findings meant four
+   presses on Got it plus four on the carousel, alternating, and the carousel
+   dot is a 28px circle. The batch is a queue you are working through; the
+   control that says you are done with one should hand you the next.
+
+   The target is the next UNRESOLVED finding FORWARD from the one just
+   acknowledged, wrapping — deliberately the same rule `_impQueueResolve`
+   already uses to decide which circle to glint, so the card now travels to
+   exactly the dot that was being pointed at. Answering #3 with #1 still open
+   goes to #4, because the eye is already at #3; #1 is picked up on the wrap.
+
+   When nothing is left the index stays where it is and the batch collapses to
+   its all-clear on the next render (binAllDone, render.js) — there is no next
+   finding to go to, and jumping to a resolved one to say so would be worse
+   than standing still. */
 function acknowledgeBinFinding(pid) {
   const i = state.binFindingIdx?.[pid] || 0;
   _impQueueResolve('.imp-binary-batch', i);
-  _binDone(pid).add(i);
+  const done = _binDone(pid);
+  done.add(i);
   _clearImproveCollapsed('binary');
   if (!state.binFindingFixExpanded) state.binFindingFixExpanded = {};
+  // The next finding opens SHUT. Carrying the previous one's expanded panel
+  // over would show a code snippet belonging to the thing you just finished.
   state.binFindingFixExpanded[pid] = false;
+
+  const findings = (typeof BIN_FINDINGS !== 'undefined') ? (BIN_FINDINGS[pid] || BIN_FINDINGS.ios) : [];
+  const n = findings.length;
+  for (let k = 1; k <= n; k++) {
+    const j = (i + k) % n;
+    if (!done.has(j)) {
+      if (!state.binFindingIdx) state.binFindingIdx = {};
+      state.binFindingIdx[pid] = j;
+      break;
+    }
+  }
+
   reRenderStepModal();
 }
 
@@ -17575,7 +18028,6 @@ async function openStorePreviewSection(pid, target) {
      page you were reading happened to be scrolled to. */
   if (typeof scrollContentToTop === 'function') scrollContentToTop();
 
-  const modal = document.getElementById('submit-modal');
   // Business Questions never actually shows AI-inferred answers today (no
   // ai-badge/ai-confident treatment on any hasIAP/export-compliance field),
   // so re-running the shared "unified questionnaire" inference and taking
@@ -17590,6 +18042,61 @@ async function openStorePreviewSection(pid, target) {
   const needsInference = (target === 'content')
     && CLAUDE_API_KEY
     && !state.platformInferenceCache?.['unified:questionnaire'];
+
+  /* THE BODY RECTANGLE IS WHAT TURNS OVER, not a modal hoisted above it.
+
+     For one version a sub-section popped the step modal on top of the pane —
+     an interim, taken because this second level of navigation had nowhere
+     obvious to go once the step itself went inline. It has somewhere: the box
+     the step is already drawing in. The sub-section arrives in the SAME
+     rectangle at the SAME size, which is what makes it read as one level down
+     inside Product Page Preview rather than as a different surface.
+
+     The animation is the card's own three-phase sequence, unchanged and
+     untouched — `is-flip-exit` for 160ms, render, `is-flip-enter` for 300ms.
+     It is applied to `#sub-step-body` here and to `#submit-modal` below, so
+     both surfaces flip by the same numbers and there is no second curve to
+     drift. Everything past this block is the modal path, still used whenever
+     the modal really is the surface on screen. */
+  const paneBody = document.getElementById('sub-step-body');
+  const paneIsSurface = document.getElementById('submit-overlay')?.classList.contains('hidden') && !!paneBody;
+  if (paneIsSurface) {
+    paneBody.classList.add('is-flip-exit');
+    await new Promise(r => setTimeout(r, 160));
+    paneBody.classList.remove('is-flip-exit');
+
+    if (needsInference) {
+      if (!state.submission.infer) state.submission.infer = {};
+      state.submission.infer[pid] = { ...(state.submission.infer[pid] || {}), status: 'loading' };
+    }
+    _repaintSubStepBody();
+
+    const after = document.getElementById('sub-step-body');
+    if (after) {
+      after.scrollTop = 0;          // the panel starts at ITS top, not the page's offset
+      after.classList.add('is-flip-enter');
+      setTimeout(() => after.classList.remove('is-flip-enter'), 300);
+    }
+
+    if (needsInference) {
+      const t0 = Date.now();
+      try {
+        delete state.platformInferenceCache['unified:questionnaire'];
+        await runInference(pid, 'questionnaire');
+        state.submission.infer[pid].status = 'done';
+        _postInferenceSetup('questionnaire');
+      } catch (err) {
+        state.submission.infer[pid].status = 'error';
+        state.submission.infer[pid].error  = err.message === 'NO_KEY' ? 'No API key set.' : err.message;
+      }
+      const elapsed = Date.now() - t0;
+      if (elapsed < 2000) await new Promise(r => setTimeout(r, 2000 - elapsed));
+      _repaintSubStepBody();
+    }
+    return;
+  }
+
+  const modal = document.getElementById('submit-modal');
 
   // PHASE 1: flip-exit (card rotates away)
   if (modal) {
@@ -17643,6 +18150,26 @@ async function openSteamHeaderCapsuleSection() {
 function closeStorePreviewSection(pid) {
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
   if (typeof scrollContentToTop === 'function') scrollContentToTop();
+
+  /* GOING BACK TURNS THE SAME RECTANGLE THE OTHER WAY. The reverse of the
+     press, by the same numbers, which is what makes the flip legible as "one
+     level down and back" rather than as two different transitions that happen
+     to be adjacent. */
+  const paneBody = document.getElementById('sub-step-body');
+  if (document.getElementById('submit-overlay')?.classList.contains('hidden') && paneBody) {
+    paneBody.classList.add('is-flip-exit');
+    setTimeout(() => {
+      state.storePreviewFlipTarget[pid] = null;
+      _repaintSubStepBody();
+      const after = document.getElementById('sub-step-body');
+      if (!after) return;
+      after.scrollTop = 0;
+      after.classList.remove('is-flip-exit');
+      after.classList.add('is-flip-enter');
+      setTimeout(() => after.classList.remove('is-flip-enter'), 300);
+    }, 160);
+    return;
+  }
 
   const modal = document.getElementById('submit-modal');
   if (modal) {
