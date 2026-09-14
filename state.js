@@ -3100,6 +3100,16 @@ const state = {
   // focused element gets addressed elsewhere in the app.
   storePreviewFocus:        { ios: null, macos: null },
 
+  // Game Details → Distribution's countries list (buildObCountryChips,
+  // render.js): which of the two header columns it's currently sorted by
+  // within each of the selected/unselected groups. 'name' = alphabetical
+  // (the default); 'gamers' = by approximate gamer count, biggest first.
+  // Set by clicking "Market" or "Gamers (approx.)" (setObDistSort, app.js).
+  // Page-level UI state, not per-project data — same reasoning as
+  // storePreviewFocus just above: it resets on reload rather than being
+  // saved onto the project, and switching projects doesn't carry it over.
+  obDistCountrySort:         'name',
+
   // Web self-distribution site — editable fields shown in the Preview Website
   // step, organized in "Edit site details" into four groups: Factsheet,
   // Description, Media, About. Preview renders four always-visible main

@@ -4822,6 +4822,22 @@ function _refreshCountryListInPlace() {
   wrap.innerHTML = buildObCountryChips(wasExpanded);
 }
 
+// Clicking "Market" or "Gamers (approx.)" in the countries list header
+// (buildObCountryChips, render.js). Both sort within the same
+// selected-float-to-top grouping that list already has — this only
+// changes the order WITHIN each of those two groups, never which group a
+// country falls into. Re-clicking the column that's already active is a
+// no-op rather than a reverse-sort toggle — neither column was asked to
+// support descending/ascending, just the one ordering each already reads
+// naturally in (A→Z, biggest markets first). Reuses
+// _refreshCountryListInPlace's own expand-state-preserving rebuild so
+// sorting never collapses an open list, same as toggling a country.
+function setObDistSort(mode) {
+  if (state.obDistCountrySort === mode) return;
+  state.obDistCountrySort = mode;
+  _refreshCountryListInPlace();
+}
+
 function _refreshObDistSection() {
   renderObDistMap();
   updateObCountryList();

@@ -1750,6 +1750,17 @@ body {
 .ob-dist-col-market { flex: 0 0 auto; }
 .ob-dist-col-count  { text-align: right; display: inline-flex; align-items: center; gap: 4px; }
 
+/* Both header cells double as sort toggles now (setObDistSort, app.js) —
+   .is-active marks whichever one last drove the sort (color only; no
+   arrow glyph, since neither direction is reversible — see setObDistSort's
+   own comment on why re-clicking the active one is a no-op rather than a
+   flip). Same --text/--text-dim pairing this file uses elsewhere for an
+   "active label vs. quiet label" contrast (e.g. .ob-tab), so this reads as
+   consistent with the rest of the app rather than a one-off. */
+.ob-dist-col-sort { cursor: pointer; transition: color 0.12s; user-select: none; }
+.ob-dist-col-sort:hover { color: var(--text); }
+.ob-dist-col-sort.is-active { color: var(--text); }
+
 /* .ob-dist-table-toggle/.ob-market-chevron used to live here — the header
    itself was clickable, with its own chevron, and collapsed/expanded the
    whole Market section a level above the "Show N more markets" button
