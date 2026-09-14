@@ -1925,6 +1925,15 @@ async function openStepModal(pid, stepId) {
   if (stepId === 'storePreview') {
     if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = {};
     state.storePreviewFlipTarget[pid] = null;
+    // Also clear any explicit footer-nav focus choice (setStorePreviewFocus)
+    // left over from the last time this preview was open. Un-cleared, the
+    // footer would reopen wherever the user last clicked to (done, optional,
+    // or otherwise) instead of where they actually need to pick back up.
+    // With it null, _sppFocusIndex's own fallback (render.js) takes over on
+    // the very next render and lands on the earliest required-and-not-done
+    // element, exactly like opening the preview for the first time would.
+    if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
+    state.storePreviewFocus[pid] = null;
   }
 
   if (pid === 'web') {

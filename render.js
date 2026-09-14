@@ -7236,17 +7236,20 @@ function _iasAllPreviewLangCodes() {
    only — Mac App Store Full and Android/Steam's own preview builders keep
    their original always-pulsing "Next required" footer, out of scope here)
    ──
-   Nine focusable elements total, always in this same top-down/left-to-right
+   Eight focusable elements total, always in this same top-down/left-to-right
    order: Title, Subtitle, Business (the GET button), Content, Adjust
-   Screenshots, Description, Achievements, What's New, Answer Data
-   Collection Questions — matching the order they actually appear in the
-   preview (header → meta strip → screenshots → description → Game
-   Center → What's New → privacy). Seven of these are REQUIRED (every one
-   except Achievements/What's New); the two optional ones have no
-   completion concept of their own; they're just as fully navigable but
-   never block or drive the default focus below. Exactly one element is
-   ever "in focus" at a time, and the footer's prev/next navigator
-   (_sppFooterNav) always walks the complete, unfiltered nine-element list
+   Screenshots, Description, Achievements, Answer Data Collection Questions
+   — matching the order they actually appear in the preview (header → meta
+   strip → screenshots → description → Game Center → privacy). What's New
+   used to sit between Achievements and Answer Data Collection Questions
+   here too, until its whole section was hidden (by request) — see that
+   section's own removed-comment, further down, for why; it no longer
+   exists anywhere in this list or on the page. Seven of these are REQUIRED
+   (every one except Achievements); the one optional element has no
+   completion concept of its own; it's just as fully navigable but never
+   blocks or drives the default focus below. Exactly one element is ever
+   "in focus" at a time, and the footer's prev/next navigator
+   (_sppFooterNav) always walks the complete, unfiltered eight-element list
    — nothing ever drops out of it, whether done, required, or optional.
 
    The focused element's glow is one of three colors, all layered on top of
@@ -7254,7 +7257,7 @@ function _iasAllPreviewLangCodes() {
    style.css):
      - is-spp-focused       (yellow/orange) — required, not yet done
      - is-spp-focused-done  (green)         — required, already done
-     - is-spp-focused-optional (purple)     — Achievements/What's New
+     - is-spp-focused-optional (gray)       — Achievements
    A required, not-yet-done element that ISN'T the one in focus instead gets
    a static, duller glow box (is-spp-static, style.css). An already-done
    required element or an optional element that ISN'T focused gets neither
@@ -7582,13 +7585,19 @@ function buildStorePreviewSection() {
         </svg>
       </div>`;
 
-  // Show all selected shots (no cap) — scroll container handles overflow
+  // Show all selected shots (no cap) — scroll container handles overflow.
+  // Each frame (placeholder or real) is its own click target straight to
+  // the Screenshots section — Adjust Screenshots' own button below this
+  // carousel is hidden now (by request), so the shots themselves are the
+  // only way in; see .ias-shots-scroll's own data-spp-el/glow class,
+  // screenshotsArea below, for where the "required, not done" ring that
+  // button used to carry now lives instead.
   const shotHtml = shots.length > 0
     ? shots.map(s =>
-        `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
+        `<div class="ias-shot-frame" onclick="openStorePreviewSection('${pid}','screenshots')"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
-        `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
+        `<div class="ias-shot-frame ias-shot-empty" onclick="openStorePreviewSection('${pid}','screenshots')"><span>${lbl}</span></div>`
       ).join('');
 
   const _infoRowHtml = r => `
@@ -7673,13 +7682,16 @@ function buildStorePreviewSection() {
     </button>`;
   }
 
-  // All nine focusable elements, top-down/left-to-right — drives both the
+  // All eight focusable elements, top-down/left-to-right — drives both the
   // focus glow (_sppIsFocused, below) and the footer's prev/next navigator
   // (_sppFooterNav), which now always walks this same complete list
-  // unfiltered. Achievements/What's New are marked `required: false` and a
-  // fixed `done: true` — the latter purely so _sppFocusIndex's own
-  // first-not-done fallback scan skips over them and never parks default
-  // focus on an optional element; it plays no other role, since optional
+  // unfiltered. What's New used to be a ninth entry here, between
+  // Achievements and Answer Data Collection Questions — removed along with
+  // its section (hidden by request; see the removed ias-wn-section markup's
+  // own former spot, further down). Achievements is marked `required: false`
+  // and a fixed `done: true` — the latter purely so _sppFocusIndex's own
+  // first-not-done fallback scan skips over it and never parks default
+  // focus on the optional element; it plays no other role, since optional
   // elements have no real completion state of their own.
   const ALL_ELEMENTS = [
     { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
@@ -7689,7 +7701,6 @@ function buildStorePreviewSection() {
     { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone },
     { id: 'description',  label: 'Description',                       required: true,  done: descDone },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'whatsnew',     label: "What's New",                        required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone },
   ];
   // Additive glow class for any focusable element (required or optional).
@@ -7760,25 +7771,37 @@ function buildStorePreviewSection() {
     </div>`;
 
   // Screenshots area — always show shots; full-width Select/Edit button below
+  // Adjust Screenshots' own button (below the carousel) is hidden now, by
+  // request — the shots themselves are the click target instead (see
+  // shotHtml, above), so the "required, not done" glow ring that button
+  // used to carry moves onto the carousel container itself.
   const screenshotsArea = `
-    <div class="ias-shots-scroll">${shotHtml}</div>
+    <div class="ias-shots-scroll${_sppGlowCls('screenshots')}" data-spp-el="screenshots">${shotHtml}</div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
       <span>iPhone, iPad</span>
-    </div>
-    <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone, _sppGlowCls('screenshots'))}
     </div>`;
 
-  // Privacy section
+  // Privacy section. Once done, App Privacy replaces the Answer Data
+  // Collection Questions button with its own real nutrition-label preview —
+  // but that swap used to drop the click entirely, with nothing here to
+  // send the developer back to Data Collection Questions to revise an
+  // answer. Wrapped in one clickable block now (ias-privacy-block), same
+  // "done elements stay editable" convention _sppBtn's own done state
+  // already follows for every other required element. Also picks up the
+  // data-spp-el/glow-class pairing this branch never had — data's own focus
+  // ring silently had nowhere to render before, on the rare occasion it was
+  // both done and in focus.
   const privacySection = dataDone
-    ? `<div class="ias-section-head-row">
-         <span class="ias-section-head">App Privacy</span>
-         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-       </div>
-       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
-       ${privacyHtml}
-       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
+    ? `<div class="ias-privacy-block${_sppGlowCls('data')}" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+         <div class="ias-section-head-row">
+           <span class="ias-section-head">App Privacy</span>
+           <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+         </div>
+         <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+         ${privacyHtml}
+         <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>
+       </div>`
     : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
 
   // Achievements widget — App Store (ios) only (this builder is also reused,
@@ -7908,24 +7931,15 @@ function buildStorePreviewSection() {
         <div class="ias-section-divider"></div>
 
         ${achievementsHtml}
-
-        <!-- ── What's New ── -->
-        <div class="ias-section ias-wn-section${_sppGlowCls('whatsnew')}" data-spp-el="whatsnew">
-          <div class="ias-section-head-row">
-            <span class="ias-section-head">What's New</span>
-            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="ias-wn-version">Version ${version}</div>
-          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
-               onclick="startIasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
-          ${notesStatusHtml}
-          <div class="ias-wn-edit-hint">
-            <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
-            Click to edit
-          </div>
-        </div>
-
-        <div class="ias-section-divider"></div>
+        <!-- What's New is hidden here, by request — was between Achievements
+             and App Privacy; achievementsHtml's own trailing divider (above)
+             is what now separates Achievements from Privacy directly. Its
+             own markup, the releaseNotes field it edited, and Localization
+             Review's own copy of the same field (LOC_REVIEW_FIELDS, below —
+             already unreachable from here anyway, since its own opener, the
+             preview's "Localizations" button, is hidden by an earlier
+             request too) are all untouched; only this inline section's
+             presence on the page is gone. -->
 
         <!-- ── App Privacy (or Data Collection button) ── -->
         <div class="ias-section">
@@ -8266,13 +8280,19 @@ function buildMacStorePreviewSection() {
         </svg>
       </div>`;
 
-  // Show all selected shots (no cap) — scroll container handles overflow
+  // Show all selected shots (no cap) — scroll container handles overflow.
+  // Each frame (placeholder or real) is its own click target straight to
+  // the Screenshots section — Adjust Screenshots' own button below this
+  // carousel is hidden now (by request), so the shots themselves are the
+  // only way in; see .ias-shots-scroll's own data-spp-el/glow class,
+  // screenshotsArea below, for where the "required, not done" ring that
+  // button used to carry now lives instead.
   const shotHtml = shots.length > 0
     ? shots.map(s =>
-        `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
+        `<div class="ias-shot-frame" onclick="openStorePreviewSection('${pid}','screenshots')"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
-        `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
+        `<div class="ias-shot-frame ias-shot-empty" onclick="openStorePreviewSection('${pid}','screenshots')"><span>${lbl}</span></div>`
       ).join('');
 
   // Grid cell — label (with an optional chevron, for the fields the native
@@ -8369,8 +8389,9 @@ function buildMacStorePreviewSection() {
     </button>`;
   }
 
-  // All nine focusable elements, top-down/left-to-right — see the twin
-  // definition's own comment in buildStorePreviewSection above.
+  // All eight focusable elements, top-down/left-to-right — see the twin
+  // definition's own comment in buildStorePreviewSection above (What's New
+  // used to be a ninth entry, hidden along with its section by request).
   const ALL_ELEMENTS = [
     { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
     { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw },
@@ -8379,7 +8400,6 @@ function buildMacStorePreviewSection() {
     { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone },
     { id: 'description',  label: 'Description',                       required: true,  done: descDone },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'whatsnew',     label: "What's New",                        required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone },
   ];
   // Additive glow class for any focusable element — see the twin
@@ -8440,24 +8460,36 @@ function buildMacStorePreviewSection() {
       <div class="ias-meta-top">—</div>
     </div>`;
 
+  // Adjust Screenshots' own button (below the carousel) is hidden now, by
+  // request — the shots themselves are the click target instead (see
+  // shotHtml, above), so the "required, not done" glow ring that button
+  // used to carry moves onto the carousel container itself.
   const screenshotsArea = `
-    <div class="ias-shots-scroll mac-spp-shots-scroll">${shotHtml}</div>
+    <div class="ias-shots-scroll mac-spp-shots-scroll${_sppGlowCls('screenshots')}" data-spp-el="screenshots">${shotHtml}</div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5v7H3v-7Z" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 15.5h17l-1 1.2a1 1 0 0 1-.78.3H3.28a1 1 0 0 1-.78-.3l-1-1.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
       <span>Mac</span>
-    </div>
-    <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone, _sppGlowCls('screenshots'))}
     </div>`;
 
+  // Once done, App Privacy replaces the Answer Data Collection Questions
+  // button with its own real nutrition-label preview — but that swap used to
+  // drop the click entirely, with nothing here to send the developer back to
+  // Data Collection Questions to revise an answer. Wrapped in one clickable
+  // block now (ias-privacy-block), same "done elements stay editable"
+  // convention _sppBtn's own done state already follows for every other
+  // required element. Also picks up the data-spp-el/glow-class pairing this
+  // branch never had — data's own focus ring silently had nowhere to render
+  // before, on the rare occasion it was both done and in focus.
   const privacySection = dataDone
-    ? `<div class="ias-section-head-row">
-         <span class="ias-section-head">App Privacy</span>
-         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-       </div>
-       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
-       ${privacyHtml}
-       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
+    ? `<div class="ias-privacy-block${_sppGlowCls('data')}" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+         <div class="ias-section-head-row">
+           <span class="ias-section-head">App Privacy</span>
+           <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+         </div>
+         <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+         ${privacyHtml}
+         <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>
+       </div>`
     : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
 
   // Achievements — a Game Center widget preview, mirroring the real App
@@ -8637,24 +8669,15 @@ function buildMacStorePreviewSection() {
         <div class="ias-section-divider"></div>
 
         ${achievementsHtml}
-
-        <!-- ── What's New ── -->
-        <div class="ias-section ias-wn-section${_sppGlowCls('whatsnew')}" data-spp-el="whatsnew">
-          <div class="ias-section-head-row">
-            <span class="ias-section-head">What's New</span>
-            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="ias-wn-version">Version ${version}</div>
-          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
-               onclick="startMasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
-          ${notesStatusHtml}
-          <div class="ias-wn-edit-hint">
-            <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
-            Click to edit
-          </div>
-        </div>
-
-        <div class="ias-section-divider"></div>
+        <!-- What's New is hidden here, by request — was between Achievements
+             and App Privacy; achievementsHtml's own trailing divider (above)
+             is what now separates Achievements from Privacy directly. Its
+             own markup, the releaseNotes field it edited, and Localization
+             Review's own copy of the same field (LOC_REVIEW_FIELDS, iOS
+             builder — already unreachable from here anyway, since its own
+             opener, the preview's "Localizations" button, is hidden by an
+             earlier request too) are all untouched; only this inline
+             section's presence on the page is gone. -->
 
         <!-- ── App Privacy (or Data Collection button) ── -->
         <div class="ias-section">
