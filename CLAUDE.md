@@ -2295,10 +2295,36 @@ about behaviour that "should" already be fixed.
 bump above was taken mid-session as v6.28 → v6.29 — while Mark was shipping his
 own **v6.29, v6.30 and v6.31** from the Distribution side. Two people minted the
 same number on the same afternoon, and the local repo had no idea because its
-`origin/main` was a day stale. The rule that follows: **fetch before you bump.**
-`git fetch origin && git log --oneline -1 origin/main` costs a second and is the
-only thing that makes "the next number" a fact rather than an assumption. This
-work went out as v6.32 for that reason, not v6.29.
+`origin/main` was a day stale. This work went out as v6.32 for that reason, not
+v6.29.
+
+**THE FETCH IS FOR WHOEVER WRITES THE NUMBER INTO THE FILES, NOT FOR WHOEVER
+RUNS `ship.sh`.** That distinction was missing for a version and the note
+quietly became a chore for the wrong person. The workflow at the terminal is
+unchanged and is still exactly one command:
+
+```bash
+./ship.sh "v6.xx — description of change"
+```
+
+`ship.sh` already pulls and rebases; nothing needs to be run before it. The
+collision risk belongs to the step BEFORE that — choosing the number, which
+happens hours earlier, in a session that may be holding a stale `origin/main`.
+When Claude is the one choosing, Claude cannot check: **it is barred from every
+git command in this repo** (see Git Workflow). So it either asks, or it picks
+and accepts the conflict.
+
+**AND THE CONFLICT IS A REAL BACKSTOP, WHICH IS WHY PICKING BLIND IS SAFE
+ENOUGH.** A duplicated number cannot publish quietly: both sides edit the same
+fifteen version lines, so `ship.sh`'s rebase conflicts on `index.html` and
+`splash.html` *every* time. There is no path where new bytes go live under a
+number already taken — the failure this section exists to prevent is caught by
+construction. The cost of tripping it is one paste of the conflict and one pass
+to resolve it (see "`ship.sh` REBASES" below), not a bad publish.
+
+So: no extra step at the terminal. A fetch is worth it only when someone who
+CAN run git is picking the number and happens to know the other side has been
+shipping that day.
 
 Current version: **v6.35** → next is **v6.36**, then **v6.37**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, shipped in parallel.)
