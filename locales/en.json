@@ -171,7 +171,7 @@
   "ob.dist.preset.selected_languages": "Selected languages",
   "ob.dist.preset.minimize_reg": "Minimize regulation",
   "ob.dist.preset.custom": "Custom",
-  "ob.dist.excluded": "Excluded",
+  "ob.dist.excluded": "Regulation:",
   "cr.inferred_banner": "Shipmate inferred {count} out of {total} responses. Click {allPill} to review before submitting.",
   "ob.section.localization": "Languages",
   "ob.field.lang_search.placeholder": "Search languages…",

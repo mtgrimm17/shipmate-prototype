@@ -554,9 +554,10 @@ const OB_REG_TIPS = {
    this needs revisiting; every reader of "does this country have a
    tooltip" goes through regTip() below, so hiding it here is the one place
    that needs to change — that includes the Minimize Regulation preset's own
-   country list (_obCountriesForPreset, app.js) and its "Excluded" chips
-   (buildObExcludedChips below), which both read regTip() rather than
-   OB_REG_TIPS directly for exactly this reason. */
+   country list (_obCountriesForPreset, app.js) and the "Regulation:" chips
+   (buildObExcludedChips below, shown for several presets now — see its own
+   comment), which both read regTip() rather than OB_REG_TIPS directly for
+   exactly this reason. */
 const OB_REG_TIP_HIDDEN = new Set(['KR', 'BR', 'AU', 'JP', 'DE']);
 
 /** Regulatory tip: prefers locale key, falls back to OB_REG_TIPS const.
@@ -572,8 +573,8 @@ function regTip(code) {
 
 /* The "?" tooltip icon + anchor a country's regulatory tip renders as,
    shared by the Market list's own rows (buildObCountryChips) and the
-   Minimize Regulation preset's "Excluded" chips (buildObExcludedChips) so
-   the two never drift into looking or behaving differently. Returns ''
+   "Regulation:" chips (buildObExcludedChips) so the two never drift into
+   looking or behaving differently. Returns ''
    when the country has no (visible) tip. `event.stopPropagation()` keeps a
    click on the "?" from also toggling the country the icon sits inside. */
 function _obRegTipIconHtml(code, isOn) {
@@ -781,14 +782,36 @@ function _legacyScenarioWidget_unused() {
     </div>`;
 }
 
-/* ── Country row list ── first 10 always visible, rest collapsible ── */
-function buildObCountryChips() {
+/* ── Country row list ── one list, one collapse toggle ──────────────────
+   Used to be two nested collapses: the header (toggleObMarketSection)
+   hid/showed everything, and a "Show N more markets" button inside THAT
+   hid/showed just the countries past the first 10. Collapsed by request to
+   one control — the "Show N more markets" button now toggles the ENTIRE
+   list by itself and lives outside the thing it toggles (ob-dist-list-
+   controls, below), so it's never hidden along with it the way it used to
+   be as part of the body it sat inside. N is always IOS_COUNTRIES.length
+   now (every country, not just the ones past 10) — there's no longer a
+   separate "first 10" tier for it to describe. */
+function buildObCountryChips(forceExpanded) {
   const fd         = state.formData;
   const selected   = new Set(fd.selectedCountries || []);
   const maxGamers  = IOS_COUNTRIES[0]?.gamers || 1;
-  const extraCount = Math.max(0, IOS_COUNTRIES.length - 10);
+  const totalCount = IOS_COUNTRIES.length;
 
-  const buildRow = (c, i) => {
+  // Selected countries float to the top, each half sorted A→Z — replaces
+  // IOS_COUNTRIES' own built-in order (biggest gamer population first,
+  // state.js), which only ever mattered here for deciding which 10
+  // countries were "the top 10" shown before the list had one unified
+  // toggle. A fresh sorted copy, not an in-place IOS_COUNTRIES.sort() —
+  // that array's own order is still the source the market map/other
+  // readers key off of gamer count for.
+  const sortedCountries = [...IOS_COUNTRIES].sort((a, b) => {
+    const aOn = selected.has(a.code), bOn = selected.has(b.code);
+    if (aOn !== bOn) return aOn ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const buildRow = (c) => {
     const isOn   = selected.has(c.code);
     const barPct = Math.round((c.gamers / maxGamers) * 100);
     return `
@@ -805,74 +828,99 @@ function buildObCountryChips() {
       </div>`;
   };
 
-  const topRows   = IOS_COUNTRIES.slice(0, 10).map(buildRow).join('');
-  const extraRows = IOS_COUNTRIES.slice(10).map(buildRow).join('');
+  const allRows = sortedCountries.map(buildRow).join('');
 
-  // The whole Market section (this function's entire return value, below the
-  // header) collapses behind the header by default — by request, so picking
-  // a preset doesn't immediately dump 190+ country rows into view. Clicking
-  // the header (toggleObMarketSection, app.js) expands/collapses it, same
-  // hidden-class mechanism as the "Show N more markets" sub-toggle just below
-  // it. Only exception: the Custom preset defaults it OPEN, since picking
-  // Custom is itself a request to go manually pick countries — collapsed by
-  // default there would just make the user re-open it immediately.
-  const marketDefaultOpen = fd.distributionPreset === 'custom';
+  // Collapsed by default — by request, so picking a preset doesn't
+  // immediately dump 55 country rows into view — except the Custom preset,
+  // which still opens it by default since picking Custom is itself a
+  // request to go manually pick countries. `forceExpanded` overrides this:
+  // _refreshCountryListInPlace (app.js) passes the list's CURRENT expanded
+  // state through it when rebuilding after a country toggle, so clicking a
+  // country never snaps an already-open list shut again.
+  const listOpen = typeof forceExpanded === 'boolean' ? forceExpanded : (fd.distributionPreset === 'custom');
+
+  const selectedCount = selected.size;
+  // Blue "Y selected" text next to the expand button — always visible once
+  // at least one country is picked, regardless of the list's own expanded/
+  // collapsed state (unlike the old "N selected ↓" badge this replaces,
+  // which only ever counted — and only ever showed for — countries selected
+  // among the below-the-fold "extra" rows). Rendered either way (never
+  // omitted outright) so _refreshCountryListInPlace can toggle `hidden`
+  // rather than needing to know how to re-insert it.
+  const selectedBadge = `<span class="ob-dist-selected-badge${selectedCount > 0 ? '' : ' hidden'}" id="ob-dist-selected-badge">${selectedCount} selected</span>`;
 
   return `
-    <div class="ob-dist-table-header ob-dist-table-toggle" id="ob-market-toggle-header"
-         onclick="toggleObMarketSection()">
+    <div class="ob-dist-table-header" id="ob-market-toggle-header">
       <span class="ob-dist-col-market">Market</span>
-      <span class="ob-dist-col-count">Gamers (approx) <span class="ob-market-chevron" id="ob-market-chevron">${marketDefaultOpen ? _chevUp : _chevDown}</span></span>
+      <span class="ob-dist-col-count">Gamers (approx)</span>
     </div>
-    <div class="ob-dist-market-body${marketDefaultOpen ? '' : ' hidden'}" id="ob-dist-market-body">
-      <div class="ob-dist-country-list" id="ob-dist-country-list">${topRows}</div>
-      ${extraCount > 0 ? (() => {
-        const hiddenSelected = IOS_COUNTRIES.slice(10).filter(c => selected.has(c.code)).length;
-        const badge = hiddenSelected > 0
-          ? `<span class="ob-dist-hidden-badge" title="${hiddenSelected} selected market${hiddenSelected > 1 ? 's' : ''} below — expand to review">${hiddenSelected} selected ↓</span>`
-          : '';
-        return `
-      <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
-        ${_chevDown} Show ${extraCount} more markets${badge}
-      </button>
-      <div class="ob-dist-country-list hidden" id="ob-dist-country-list-extra">${extraRows}</div>`;
-      })() : ''}
+    <div class="ob-dist-market-body" id="ob-dist-market-body">
+      <div class="ob-dist-list-controls">
+        <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
+          ${listOpen ? `${_chevUp} Show fewer markets` : `${_chevDown} Show ${totalCount} more markets`}
+        </button>
+        ${selectedBadge}
+      </div>
+      <div class="ob-dist-country-list${listOpen ? '' : ' hidden'}" id="ob-dist-country-list">${allRows}</div>
     </div>`;
 }
 
 /* ── Legacy alias ── */
 function buildObCountryList() { return buildObCountryChips(); }
 
-/* ── "Excluded" chips — Minimize Regulation preset only ──────────────────
-   Minimize Regulation's whole premise is "leave out every country with a
-   regulatory tooltip" (_obCountriesForPreset, app.js), which means the
-   moment it's picked, those countries drop out of view down in the Market
-   list below — exactly the ones a developer choosing this preset most
-   needs to be able to glance back at and reconsider. Surfaced right under
-   the preset pills instead, using the SAME clickable chip + tooltip pieces
-   the Market rows use (_obRegTipIconHtml, toggleObCountry) so reading a
-   tip and toggling a country both work identically in either place — laid
-   out in a wrapping horizontal row rather than the Market list's one-per-
-   row layout, since there's no gamer-count bar to make a full row worth
-   here and the whole point is scanning the set at a glance.
+/* ── "Regulation:" chips — visibility/contents depend on the active preset
+   ─────────────────────────────────────────────────────────────────────
+   Renamed from "Excluded" (by request) — that label only ever made sense
+   for Minimize Regulation, the one preset whose whole premise is leaving
+   these countries out. Now shown for three different reasons depending on
+   which distribution preset is active, keyed directly off
+   state.formData.distributionPreset (no more _minRegBase flag — that
+   existed only to keep this block on-screen through a Custom deviation
+   FROM Minimize Regulation specifically, which is now moot: Custom shows
+   the full list unconditionally, same as Minimize Regulation does, so
+   there's no longer a special case to track):
 
-   Always lists every tooltip-bearing country, regardless of whether the
-   user has already clicked one back on — an excluded country that vanished
-   the moment you un-excluded it would give you no way to reconsider a
-   second time (by request). `is-on` still marks which ones are currently
-   part of the selection, matching the Market list's own chips. */
+     - Everywhere / Minimize Regulation / Custom: these three have no
+       language-driven filtering logic of their own to lean on (Everywhere
+       and Custom can include or exclude any country by hand; Minimize
+       Regulation's own selection IS "every non-regulated country"), so
+       this shows the FULL set of regulated countries, `is-on` marking
+       which ones are currently part of the selection — same as this
+       block's old unconditional behavior, just no longer gated on having
+       specifically arrived via Minimize Regulation.
+     - English only / Selected languages / "{lang} only": these three
+       build their country list purely from language match
+       (_obCountriesForPreset, app.js) with no manual review step — so
+       this only ever shows the countries that happen to be BOTH regulated
+       AND already part of that language-matched selection (every chip
+       renders is-on, since by construction none of the others are ever in
+       it), and only appears at all if that intersection is non-empty.
+       Surfacing every OTHER regulated country here too would flag
+       countries the preset never intended to include in the first place.
+     - No preset chosen yet (null): nothing to show a regulation list
+       against — hidden, same as before.
+
+   Uses the SAME clickable chip + tooltip pieces the Market rows use
+   (_obRegTipIconHtml, toggleObCountry) so reading a tip and toggling a
+   country both work identically in either place — laid out in a wrapping
+   horizontal row rather than the Market list's one-per-row layout, since
+   there's no gamer-count bar to make a full row worth here and the whole
+   point is scanning the set at a glance. */
 function buildObExcludedChips() {
-  // _minRegBase (app.js: setObDistPreset, toggleObCountry), not a direct
-  // distributionPreset === 'minimize_regulation' check — the whole point of
-  // this list is to stay put while the user clicks countries back on/off
-  // to review them, and doing that snaps distributionPreset to 'custom'
-  // the moment the selection no longer matches the preset exactly. A check
-  // against distributionPreset itself would make the list vanish after the
-  // very first click, which defeats "review, then decide" for every
-  // country after the first.
-  if (!state.formData._minRegBase) return '';
+  const preset   = state.formData.distributionPreset;
   const selected = new Set(state.formData.selectedCountries || []);
-  const excluded = IOS_COUNTRIES.filter(c => regTip(c.code));
+
+  const ALWAYS_FULL_LIST = new Set(['everywhere', 'minimize_regulation', 'custom']);
+  const LANGUAGE_DRIVEN  = new Set(['english_only', 'primary_lang_only', 'selected_languages']);
+
+  let excluded;
+  if (ALWAYS_FULL_LIST.has(preset)) {
+    excluded = IOS_COUNTRIES.filter(c => regTip(c.code));
+  } else if (LANGUAGE_DRIVEN.has(preset)) {
+    excluded = IOS_COUNTRIES.filter(c => regTip(c.code) && selected.has(c.code));
+  } else {
+    return '';
+  }
   if (!excluded.length) return '';
 
   const chips = excluded.map(c => {
@@ -886,7 +934,7 @@ function buildObExcludedChips() {
 
   return `
     <div class="ob-dist-excluded" id="ob-dist-excluded-block">
-      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Excluded'}</div>
+      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Regulation:'}</div>
       <div class="ob-dist-excluded-list">${chips}</div>
     </div>`;
 }

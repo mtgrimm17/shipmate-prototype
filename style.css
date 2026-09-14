@@ -1750,12 +1750,12 @@ body {
 .ob-dist-col-market { flex: 0 0 auto; }
 .ob-dist-col-count  { text-align: right; display: inline-flex; align-items: center; gap: 4px; }
 
-/* Whole Market section collapses behind this header by default — see
-   toggleObMarketSection (app.js) and buildObCountryChips' own note
-   (render.js) for why. */
-.ob-dist-table-toggle { cursor: pointer; user-select: none; }
-.ob-market-chevron { display: inline-flex; color: var(--text-faint); }
-.ob-market-chevron svg { display: block; }
+/* .ob-dist-table-toggle/.ob-market-chevron used to live here — the header
+   itself was clickable, with its own chevron, and collapsed/expanded the
+   whole Market section a level above the "Show N more markets" button
+   further down. Removed along with that chevron (by request): the header
+   is a plain label row now, and .ob-dist-expand-btn (below) is the only
+   expand/collapse control this list has. */
 
 /* ─── Distribution country rows ─────────────────────── */
 
@@ -1901,6 +1901,21 @@ body {
   color: var(--pill-on-color-hover);
 }
 
+/* Wraps .ob-dist-expand-btn + .ob-dist-selected-badge as siblings — the
+   badge used to render INSIDE the button (appended straight onto its own
+   innerHTML), which meant toggleObDistExpand's own innerHTML rewrite
+   (app.js) silently wiped it out on every click. Now that the badge has to
+   stay visible through every expand/collapse click (by request), it can't
+   be inside the element that click rewrites — this row is what used to be
+   just the button's own border-top/centering, now shared by both. */
+.ob-dist-list-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--border);
+}
 .ob-dist-expand-btn {
   display: flex;
   align-items: center;
@@ -1908,15 +1923,11 @@ body {
   font-size: 12px;
   color: var(--text-dim);
   cursor: pointer;
-  padding: 8px 0;
+  padding: 0;
   background: none;
   border: none;
-  border-top: 1px dashed var(--border);
   font-family: inherit;
-  width: 100%;
-  justify-content: center;
   transition: color 0.15s;
-  margin-top: 0;
 }
 .ob-dist-expand-btn:hover { color: var(--text); }
 
@@ -14116,11 +14127,17 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   vertical-align: middle;
 }
 
-/* Below-fold selected countries badge */
-.ob-dist-hidden-badge {
+/* Total-selected-countries badge, next to "Show N more markets"
+   (.ob-dist-list-controls, above). Renamed from .ob-dist-hidden-badge — it
+   used to count only the selected countries scrolled below the fold (hence
+   the old name and its "↓" arrow); now that the whole list sorts
+   selected-first and this badge stays visible through every expand/
+   collapse (by request), "hidden" no longer describes what it's counting.
+   Spacing comes from .ob-dist-list-controls' own gap now, not a margin
+   here — it's a flex sibling of the button, not appended inside it. */
+.ob-dist-selected-badge {
   display: inline-flex;
   align-items: center;
-  margin-left: 8px;
   padding: 1px 7px;
   border-radius: 10px;
   font-size: 10px;

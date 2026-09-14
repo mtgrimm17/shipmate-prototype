@@ -4759,14 +4759,6 @@ function setObDistPreset(preset) {
     }
     // 'custom' keeps whatever countries are currently selected
   }
-  // Minimize Regulation's "Excluded" chips (buildObExcludedChips, render.js)
-  // stay on screen through a Custom deviation FROM this preset — see
-  // toggleObCountry's own note on _minRegBase below — but landing here on
-  // any OTHER explicit pill click (including re-clicking Minimize
-  // Regulation off, or Custom's own pill) is a deliberate move away from
-  // reviewing it, so this is the one place that always sets the flag
-  // outright rather than only ever clearing it.
-  state.formData._minRegBase = state.formData.distributionPreset === 'minimize_regulation';
   _refreshObDistSection();
   if (typeof renderGuide === 'function') renderGuide();   // "Select target countries" reacts live
 }
@@ -4792,22 +4784,15 @@ function toggleObCountry(code) {
   const namedPresets = ['everywhere', 'english_only', 'minimize_regulation', 'primary_lang_only', 'selected_languages'];
   const matched = namedPresets.find(p => _selectionMatchesPreset(p));
   state.formData.distributionPreset = matched || 'custom';
-  // The Excluded chips stay up through a Custom deviation FROM Minimize
-  // Regulation — by request, so clicking one excluded country back on
-  // doesn't take away the list you'd use to reconsider a second one. Only
-  // clear the flag when the selection snaps to a DIFFERENT concrete named
-  // preset (a genuine change of intent, e.g. it now happens to match
-  // "English only" instead); landing on 'custom' (matched is falsy) leaves
-  // it exactly as it was.
-  if (matched) state.formData._minRegBase = (matched === 'minimize_regulation');
 
   // Update map + lang list; update chips in-place to preserve expand state
   renderObDistMap();
   updateObLangListWrap();
   _refreshCountryListInPlace();
-  // Toggling a country can flip _minRegBase (above) — a full rebuild, since
-  // the whole "Excluded" block needs to appear/disappear, not just re-mark
-  // a chip.
+  // Toggling a country can change which preset it snapped to (above) —
+  // buildObExcludedChips (render.js) reads distributionPreset directly now,
+  // so a full rebuild here is what picks that up; there's no separate flag
+  // left to keep in sync.
   updateObExcludedSection();
   // Refresh preset pills
   document.querySelectorAll('.ob-preset-pill[data-preset]').forEach(btn => {
@@ -4819,18 +4804,22 @@ function toggleObCountry(code) {
   if (typeof renderGuide === 'function') renderGuide();
 }
 
+// No longer a plain in-place class toggle. The countries list now sorts
+// selected-first (buildObCountryChips, render.js), so toggling a country
+// can change its own position in the list (a newly-selected country in the
+// bottom half needs to jump to the top, alphabetically, not just re-mark
+// itself where it already sits) — something re-marking classes on the
+// existing DOM nodes can't do. Falls back to a full rebuild via
+// buildObCountryChips instead, but reads the list's CURRENT expanded/
+// collapsed state first and forces the rebuild to match it (forceExpanded),
+// so clicking a country never snaps an already-open list shut — the one
+// thing the old in-place approach existed to protect in the first place.
 function _refreshCountryListInPlace() {
-  // Update row states in-place without collapsing the extra list
-  const selected = new Set(state.formData.selectedCountries || []);
-  document.querySelectorAll('.ob-dist-row[data-code]').forEach(row => {
-    const code = row.dataset.code;
-    const isOn = selected.has(code);
-    row.classList.toggle('is-on', isOn);
-    const chip = row.querySelector('.ob-dist-row-chip');
-    if (chip) chip.classList.toggle('is-on', isOn);
-    const tipIcon = row.querySelector('.tooltip-icon');
-    if (tipIcon) tipIcon.classList.toggle('is-warned', isOn);
-  });
+  const wrap = document.getElementById('ob-country-list-wrap');
+  if (!wrap) return;
+  const list = document.getElementById('ob-dist-country-list');
+  const wasExpanded = list ? !list.classList.contains('hidden') : false;
+  wrap.innerHTML = buildObCountryChips(wasExpanded);
 }
 
 function _refreshObDistSection() {
@@ -4862,11 +4851,9 @@ function updateObCountryList() {
   if (el) el.innerHTML = buildObCountryChips();
 }
 
-// The Minimize Regulation preset's "Excluded" chips (buildObExcludedChips,
-// render.js) — a full rebuild rather than the Market list's in-place class
-// toggling (_refreshCountryListInPlace), since there's no expand/collapse
-// state here worth preserving and the whole block also needs to appear or
-// disappear as the preset itself changes, not just re-mark which chips are on.
+// The "Regulation:" chips (buildObExcludedChips, render.js) — always a full
+// rebuild, since which countries show here (and whether the block shows at
+// all) depends on the active preset, not just which chips are on.
 function updateObExcludedSection() {
   const el = document.getElementById('ob-dist-excluded-wrap');
   if (el) el.innerHTML = buildObExcludedChips();
@@ -16385,33 +16372,26 @@ function setCQSingle(qid, optIdx) {
 // Multi-select checkbox toggle
 /* ── Country chip expand/collapse ────────────────────── */
 
-// Collapses/expands the whole Market section (buildObCountryChips, render.js)
-// behind its own header — separate from, and a level above, toggleObDistExpand
-// below (which only reveals the markets past the first 10, and only once this
-// outer section is already open). Defaults collapsed unless the Custom preset
-// is selected (see buildObCountryChips' own marketDefaultOpen note) — this
-// function only handles the user's own manual toggling after that.
-function toggleObMarketSection() {
-  const body    = document.getElementById('ob-dist-market-body');
-  const chevron = document.getElementById('ob-market-chevron');
-  if (!body) return;
-  const nowHidden = body.classList.toggle('hidden');
-  if (chevron) chevron.innerHTML = nowHidden ? _chevDown : _chevUp;
-}
-
+// toggleObMarketSection used to live here — the header's own click handler,
+// collapsing/expanding the whole Market section a level above
+// toggleObDistExpand below. Removed along with the header's chevron (by
+// request): toggleObDistExpand is now the ONLY expand/collapse control for
+// this list, so a second one layered on top of it had nothing left to do
+// that the first didn't already cover.
 function toggleObDistExpand(btn) {
-  const extraList = document.getElementById('ob-dist-country-list-extra');
-  if (!extraList) return;
-  const extraCount = IOS_COUNTRIES.length - 10;
+  const list = document.getElementById('ob-dist-country-list');
+  if (!list) return;
+  const totalCount = IOS_COUNTRIES.length;
   const chevD = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
   const chevU = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
-  const nowHidden = extraList.classList.toggle('hidden');
+  const nowHidden = list.classList.toggle('hidden');
   if (nowHidden) {
     // Collapsed — show the expand prompt and scroll button into view
-    btn.innerHTML = `${chevD} Show ${extraCount} more markets`;
+    btn.innerHTML = `${chevD} Show ${totalCount} more markets`;
     btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } else {
-    // Expanded
+    // Expanded — the whole list, not just the markets past the first 10;
+    // there's no longer a separate tier of "extra" rows to describe by count.
     btn.innerHTML = `${chevU} Show fewer markets`;
   }
 }
