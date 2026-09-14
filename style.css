@@ -1751,23 +1751,26 @@ body {
 .ob-dist-col-count  { text-align: right; display: inline-flex; align-items: center; gap: 4px; }
 
 /* Both header cells double as sort toggles now (setObDistSort, app.js) —
-   .is-active marks whichever one last drove the sort (color only; no
-   arrow glyph, since neither direction is reversible — see setObDistSort's
-   own comment on why re-clicking the active one is a no-op rather than a
-   flip). Same --text/--text-dim pairing this file uses elsewhere for an
-   "active label vs. quiet label" contrast (e.g. .ob-tab), so this reads as
-   consistent with the rest of the app rather than a one-off. */
+   .is-active marks whichever one is driving the current sort (color only —
+   the direction itself is carried by the glyph, .ob-dist-sort-icon below,
+   not by anything here). Re-clicking the active column flips its own
+   direction; clicking the other one switches to it. Same --text/--text-dim
+   pairing this file uses elsewhere for an "active label vs. quiet label"
+   contrast (e.g. .ob-tab), so this reads as consistent with the rest of
+   the app rather than a one-off. */
 .ob-dist-col-sort { cursor: pointer; transition: color 0.12s; user-select: none; }
 .ob-dist-col-sort:hover { color: var(--text); }
 .ob-dist-col-sort.is-active { color: var(--text); }
 
-/* Sort-hint glyph on each column label (_sortIcon, render.js) — a plain
-   affordance cue ("this can be clicked") rather than a direction/active
-   indicator, so it doesn't change with .is-active the way the label color
-   does. currentColor makes it track the label's own color automatically;
-   the dimmer opacity at rest keeps it from reading as a third piece of
-   text next to a two-word label, brightening to match on hover/active
-   same as the label itself does. */
+/* Sort glyph on each column label (_sortIcon/_sortIconAsc/_sortIconDesc,
+   render.js) — the INACTIVE column shows the neutral up/down _sortIcon
+   hint ("this can be clicked"), the ACTIVE one shows a single chevron
+   pointing whichever way it's currently sorted, swapped in place by
+   render.js itself (_sortIconFor) rather than by anything here. currentColor
+   makes it track the label's own color automatically; the dimmer opacity
+   at rest keeps it from reading as a third piece of text next to a
+   two-word label, brightening to match on hover/active same as the label
+   itself does — same treatment either way, hint or direction arrow. */
 .ob-dist-sort-icon { display: inline-flex; opacity: 0.5; transition: opacity 0.12s; }
 .ob-dist-col-sort:hover .ob-dist-sort-icon,
 .ob-dist-col-sort.is-active .ob-dist-sort-icon { opacity: 0.9; }
@@ -2186,9 +2189,11 @@ body.viewing-splash .app-subnav { display: none; }
      weight applies to every item, selected or not, so nothing changes width
      when the selection moves. */
   font-family: var(--mono); font-size: 14px; font-weight: 600;
-  /* `none`, not `capitalize`: GD_SUBS already reads "Basic info", "Content
-     rating" — sentence case, one capital. `capitalize` would put one on every
-     word ("Basic Info"). */
+  /* `none`, not `capitalize`/`uppercase`: GD_SUBS' own labels ("Basic Info",
+     "Languages", "Distribution", "Assets") are already cased exactly as they
+     should display, so this row just passes them through rather than
+     re-deriving a casing that would have to keep matching whatever the
+     labels happen to be. */
   text-transform: none; letter-spacing: 0;
   color: rgba(255, 255, 255, .5); white-space: nowrap;
   transition: color .12s, border-color .12s, background .12s;
@@ -15824,6 +15829,16 @@ body.is-splash .ai-disclaimer { display: none; }
    flex item of the button, and flex items are blockified. */
 .bar-nav .bar-nav-btn .lbl { text-transform: lowercase; }
 .bar-nav .bar-nav-btn .lbl::first-letter { text-transform: uppercase; }
+
+/* #nav-details IS THE ONE EXCEPTION: its label is two words ("Game Details"),
+   and the sentence-case rule above only capitalises the very first letter of
+   the whole string — it has no notion of word boundaries — so it was
+   quietly downcasing this one tab to "Game details" while every other tab
+   (all single words) came out looking correct either way. By request this
+   tab keeps its label exactly as locale.js provides it, title case and all,
+   instead of teaching the generic rule about word boundaries just for the
+   one label that currently has more than one. */
+#nav-details .lbl { text-transform: none; }
 
 /* Icon-only tab (Calendar). The 132px min-width exists so the labelled tabs all
    occupy the same span; a tab with no label must opt out of it or it sits there

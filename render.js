@@ -597,6 +597,16 @@ const _chevUp   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" s
 // hover/active same as the label does.
 const _sortIcon = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 3 17 9"/><polyline points="7 15 12 21 17 15"/></svg>`;
 
+// Single-chevron variants of _sortIcon, shown on whichever column is
+// currently driving the sort (buildObCountryChips's _sortIconFor) in place
+// of the neutral up/down hint — up = ascending (A→Z / smallest gamer count
+// first), down = descending (Z→A / biggest first). Same viewBox, size,
+// stroke and vertical centering as _sortIcon itself (each is just one of
+// its two chevrons, not redrawn from scratch), so toggling a column's
+// direction swaps the glyph in place with no size/position jump.
+const _sortIconAsc  = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 15 12 9 17 15"/></svg>`;
+const _sortIconDesc = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 15 17 9"/></svg>`;
+
 // Windows OS-compatibility glyph (Steam's own purchase-area icon row shows
 // this next to the Apple glyph — platformIcon('macos', size) — when a title
 // supports macOS). Not one of Shipmate's own submission platforms, so it
@@ -809,16 +819,21 @@ function buildObCountryChips(forceExpanded) {
   const totalCount = IOS_COUNTRIES.length;
 
   // Selected countries float to the top; each half is then sorted by
-  // whichever column was last clicked (state.obDistCountrySort — 'name'
-  // A→Z, the default, or 'gamers' biggest-first, setObDistSort/app.js). A
-  // fresh sorted copy, not an in-place IOS_COUNTRIES.sort() — that array's
-  // own order is still the source the market map/other readers key off of
-  // gamer count for.
-  const sortBy = state.obDistCountrySort === 'gamers' ? 'gamers' : 'name';
+  // whichever column was last clicked, in whichever direction it's
+  // currently set to (state.obDistCountrySort = {by, dir}; toggled by
+  // setObDistSort/app.js — clicking the active column flips dir, clicking
+  // the other one switches by and resets dir to that column's own
+  // default). A fresh sorted copy, not an in-place IOS_COUNTRIES.sort() —
+  // that array's own order is still the source the market map/other
+  // readers key off of gamer count for.
+  const sortState = state.obDistCountrySort || { by: 'name', dir: 'asc' };
+  const sortBy  = sortState.by === 'gamers' ? 'gamers' : 'name';
+  const sortDir = sortState.dir === 'desc' ? 'desc' : 'asc';
   const sortedCountries = [...IOS_COUNTRIES].sort((a, b) => {
     const aOn = selected.has(a.code), bOn = selected.has(b.code);
     if (aOn !== bOn) return aOn ? -1 : 1;
-    return sortBy === 'gamers' ? (b.gamers - a.gamers) : a.name.localeCompare(b.name);
+    if (sortBy === 'gamers') return sortDir === 'desc' ? (b.gamers - a.gamers) : (a.gamers - b.gamers);
+    return sortDir === 'desc' ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
   });
 
   const buildRow = (c) => {
@@ -864,8 +879,11 @@ function buildObCountryChips(forceExpanded) {
   // WITHIN each of those two groups. .is-active marks whichever one drove
   // the current sort, matching this pattern's own use elsewhere (e.g. the
   // active preset pill) rather than inventing a new "which column" cue.
-  // _sortIcon on each label is a plain affordance hint (this column can be
-  // clicked to sort) — not tied to which one is active.
+  // Each header's icon reflects its own state: the active column shows a
+  // single chevron pointing the way it's currently sorted (up = ascending,
+  // down = descending) — clicking it again flips both the order and the
+  // chevron — while the inactive column keeps the neutral up/down _sortIcon
+  // hint, since it isn't sorted in either direction right now.
   //
   // The expand/collapse control + selected-count badge (.ob-dist-list-
   // controls) used to sit in their own row below a dashed divider; by
@@ -873,16 +891,17 @@ function buildObCountryChips(forceExpanded) {
   // labels — .ob-dist-table-header's own space-between spreads the three
   // items (label / controls / label) the same way it used to spread two,
   // so this is a one-line change in layout, not a new one.
+  const _sortIconFor = (col) => sortBy === col ? (sortDir === 'desc' ? _sortIconDesc : _sortIconAsc) : _sortIcon;
   return `
     <div class="ob-dist-table-header" id="ob-market-toggle-header">
-      <span class="ob-dist-col-market ob-dist-col-sort${sortBy === 'name' ? ' is-active' : ''}" onclick="setObDistSort('name')">Market<span class="ob-dist-sort-icon">${_sortIcon}</span></span>
+      <span class="ob-dist-col-market ob-dist-col-sort${sortBy === 'name' ? ' is-active' : ''}" onclick="setObDistSort('name')">Market<span class="ob-dist-sort-icon">${_sortIconFor('name')}</span></span>
       <div class="ob-dist-list-controls">
         <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
           ${listOpen ? `${_chevUp} Show fewer markets` : `${_chevDown} Show ${totalCount} more markets`}
         </button>
         ${selectedBadge}
       </div>
-      <span class="ob-dist-col-count ob-dist-col-sort${sortBy === 'gamers' ? ' is-active' : ''}" onclick="setObDistSort('gamers')">Gamers (approx.)<span class="ob-dist-sort-icon">${_sortIcon}</span></span>
+      <span class="ob-dist-col-count ob-dist-col-sort${sortBy === 'gamers' ? ' is-active' : ''}" onclick="setObDistSort('gamers')">Gamers (approx.)<span class="ob-dist-sort-icon">${_sortIconFor('gamers')}</span></span>
     </div>
     <div class="ob-dist-market-body" id="ob-dist-market-body">
       <div class="ob-dist-country-list${listOpen ? '' : ' hidden'}" id="ob-dist-country-list">${allRows}</div>
@@ -2410,11 +2429,11 @@ function buildGdBox(idx, mod, inner) {
    no Continue button). Assets moved to its own tab. */
 /* ── Game Details tab: sub-tabs (Game Details / Distribution / Localization / Assets) ── */
 const GD_SUBS = [
-  { id: 'gamedetails',  label: 'Basic info' },
+  { id: 'gamedetails',  label: 'Basic Info' },
   { id: 'localization', label: 'Languages' },
   { id: 'distribution', label: 'Distribution' },
   { id: 'assets',       label: 'Assets' },
-  // Order is Basic info -> Languages -> Distribution -> Assets, by request:
+  // Order is Basic Info -> Languages -> Distribution -> Assets, by request:
   // Languages moved before Distribution so its presets (which read the
   // primary/supported languages chosen here) come after they're filled in.
   // Content rating moved out of Game Details — it now lives as a dedicated step
@@ -2466,7 +2485,7 @@ function renderDetails() {
   renderProjectBar();
   let section = (state.details && state.details.section) || 'gamedetails';
   // Content rating was removed from Game Details; normalize any stale/removed
-  // section (e.g. a saved 'content') back to Basic info so the tab never blanks.
+  // section (e.g. a saved 'content') back to Basic Info so the tab never blanks.
   if (!GD_SUBS.some(s => s.id === section)) {
     section = 'gamedetails';
     if (state.details) state.details.section = section;
@@ -7853,7 +7872,7 @@ function _sppPinnedNav(pid, elements) {
   const cur = elements[_sppFocusIndex(pid, elements)]?.id;
   /* THE `|` BETWEEN THEM IS `.app-subnav`'s, NOT A NEW IDEA. Eight transparent
      labels 6px apart read as one run-on line of words — the same problem the
-     Game Details sub-nav (Basic info | Languages | Distribution | Assets) had
+     Game Details sub-nav (Basic Info | Languages | Distribution | Assets) had
      and already answered, and the two rows are the same kind of object: a nav
      whose resting items draw nothing and whose selected one is the only filled
      pill. So this borrows the answer rather than inventing a second one.

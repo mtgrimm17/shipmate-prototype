@@ -4826,15 +4826,21 @@ function _refreshCountryListInPlace() {
 // (buildObCountryChips, render.js). Both sort within the same
 // selected-float-to-top grouping that list already has — this only
 // changes the order WITHIN each of those two groups, never which group a
-// country falls into. Re-clicking the column that's already active is a
-// no-op rather than a reverse-sort toggle — neither column was asked to
-// support descending/ascending, just the one ordering each already reads
-// naturally in (A→Z, biggest markets first). Reuses
+// country falls into.
+//
+// Re-clicking the column that's already active flips its direction —
+// Market toggles A→Z / Z→A, Gamers (approx.) toggles biggest-first /
+// smallest-first — rather than being a no-op. Clicking the OTHER column
+// switches to it and resets dir to that column's own natural starting
+// point (Market starts A→Z, Gamers starts biggest-first), so switching
+// columns never lands on a direction the user didn't ask for. Reuses
 // _refreshCountryListInPlace's own expand-state-preserving rebuild so
 // sorting never collapses an open list, same as toggling a country.
 function setObDistSort(mode) {
-  if (state.obDistCountrySort === mode) return;
-  state.obDistCountrySort = mode;
+  const cur = state.obDistCountrySort || { by: 'name', dir: 'asc' };
+  state.obDistCountrySort = (cur.by === mode)
+    ? { by: mode, dir: cur.dir === 'desc' ? 'asc' : 'desc' }
+    : { by: mode, dir: mode === 'gamers' ? 'desc' : 'asc' };
   _refreshCountryListInPlace();
 }
 
