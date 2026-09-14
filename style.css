@@ -6458,6 +6458,29 @@ body.viewing-splash .app-subnav { display: none; }
   border-radius: 8px;
   padding: 4px;
   margin: -4px;
+  transition: box-shadow 0.12s;
+}
+/* GET's own hover highlight. Only ever used wrapping the App Store/Mac App
+   Store Product Page Preview's own interactive GET button (both call sites
+   grepped — Mac App Store Full's own GET has neither this wrapper nor
+   .ias-get-btn--interactive, so this rule can't reach it unscoped). Goes on
+   the wrapper rather than .ias-get-btn--interactive itself for the same
+   reason the required-element ring above does — box-shadow on this
+   rectangular wrapper reads as a clean, evenly-balanced box, where the same
+   ring straight on the pill-shaped button underneath would hug its rounded
+   silhouette instead. Hovering the button also hovers this wrapper (CSS
+   :hover applies to ancestors of whatever the pointer is actually over), so
+   no extra selector is needed to catch it. Same brighter gray as this
+   preview's other hover/glow accents this round (is-spp-focused-optional,
+   .ias-shot-frame:hover — see their own comments). */
+.spp-get-glow-wrap:hover {
+  /* !important: needed to beat is-spp-static/is-spp-focused's own
+     !important box-shadow (above) when Business isn't done yet and this
+     wrapper is carrying one of those rings — otherwise hovering a
+     not-yet-focused GET button would show no change at all, since a
+     plain box-shadow declaration can never outrank an !important one
+     regardless of selector specificity or source order. */
+  box-shadow: 0 0 0 2px rgba(160,160,160,0.4) !important;
 }
 /* Business's own static ring used to be a bigger/stronger override here
    (3px @ 0.14 alpha vs. the shared .is-spp-static default's 2px @ 0.06)
@@ -7232,12 +7255,29 @@ textarea.loc-review-field.ias-inline-input {
 /* Wraps the whole "done" App Privacy card (privacySection, render.js) as one
    click target back to Data Collection Questions — same "done elements stay
    editable" idiom as .ias-meta-cell--seen/.spp-section-btn--done elsewhere
-   on this preview, including their own rgba(52,199,89,…) green hover tint.
-   No extra padding of its own: .ias-section's existing 16px inset already
-   clears is-spp-focused-done/is-spp-focused-optional's 7px ring spread with
-   room to spare, unlike Achievements' own flush-edge special case above. */
-.ias-privacy-block { cursor: pointer; border-radius: 10px; }
-.ias-privacy-block:hover { background: rgba(52,199,89,0.08); }
+   on this preview, but its own hover tint is gray (var(--panel-3)) rather
+   than their green — matching the majority "action" hover on this preview
+   (.ias-achv-section/.ias-meta-cell--action/.spp-section-btn/
+   .ias-info-section all hover gray too; --seen/--done's green is the
+   minority pattern here, not the one this box should follow) and, more to
+   the point, matching this preview's other glow ring outside the
+   orange/green required-progress pair: is-spp-focused-optional's own gray.
+   Border-radius bumped from 10px to 12px to match Achievements' own
+   (.ias-achv-section, below) exactly, since that's the explicit visual
+   reference for this box. Padding was zero before — the hover/glow box
+   hugged its own content (the nutrition-label preview, footer text) with
+   nothing between them and the box edge. 14px 10px matches Achievements'
+   own final (page-scoped) padding one-for-one; unlike Achievements this
+   box isn't flush against .ias-page's edge (it already sits inside its own
+   outer .ias-section wrapper — see privacySection's call site, render.js),
+   so it needs no compensating margin/edge trick to go with it. */
+.ias-privacy-block {
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 14px 10px;
+  transition: background 0.12s;
+}
+.ias-privacy-block:hover { background: var(--panel-3); }
 
 /* ── App Store-style App Privacy card ── */
 .ias-pp-card {
@@ -7389,11 +7429,13 @@ textarea.loc-review-field.ias-inline-input {
        checkmark/hover (#34c759 / rgba(52,199,89,…)) elsewhere on this file.
      - is-spp-focused-optional — Achievements (What's New is hidden — see
        that section's own comment, further down), which has no "done" state
-       of its own: gray ring (spp-focus-pulse-gray), the same #242424/
-       --panel-3 the placeholder screenshots use for their own empty-state
-       fill (.ias-shot-frame, above) — a deliberately quiet color for the
-       one glow on this preview that's never asking you to finish anything,
-       replacing the purple ring this used to be.
+       of its own: gray ring (spp-focus-pulse-gray), --text-dim's own
+       #a0a0a0 — a light, clearly-visible gray (this used to match the
+       placeholder screenshots' own dark #242424/--panel-3 fill, but that
+       read as barely-there against the page; --text-dim is already used
+       elsewhere on this file for secondary text, so it stays a "quiet"
+       color relative to the orange/green rings without disappearing),
+       replacing the purple ring this used to be before that.
    All three (plus is-spp-static) use !important, the same way
    .spp-section-btn--done already does two rules below, since each must
    beat the plain base class it's layered onto regardless of stylesheet
@@ -7427,8 +7469,8 @@ textarea.loc-review-field.ias-inline-input {
   animation: spp-focus-pulse-green 1.6s ease-in-out infinite !important;
 }
 @keyframes spp-focus-pulse-gray {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(36,36,36,0.7); }
-  50%       { box-shadow: 0 0 0 7px rgba(36,36,36,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(160,160,160,0.7); }
+  50%       { box-shadow: 0 0 0 7px rgba(160,160,160,0); }
 }
 .is-spp-focused-optional {
   animation: spp-focus-pulse-gray 1.6s ease-in-out infinite !important;
@@ -7453,9 +7495,26 @@ textarea.loc-review-field.ias-inline-input {
 /* Each shot (placeholder or real — shotHtml, render.js) carries its own
    onclick straight to the Screenshots section now, so the pointer cursor
    goes on the frames themselves, not the scroll container around them —
-   the row's own padding/gaps between shots aren't clickable. */
+   the row's own padding/gaps between shots aren't clickable. Individually
+   hover-highlighted too, for the same reason: a real uploaded screenshot's
+   <img> covers the frame edge-to-edge, so a background tint (this
+   preview's usual hover language, .ias-achv-section/.spp-section-btn/etc.)
+   would be invisible on any shot that already has a photo in it — only the
+   empty ("Gameplay"/"Menu") placeholders, whose text sits on the frame's
+   own var(--panel-3) fill, would ever show it. A border + ring reads on
+   both: --border-hover brightens the frame's existing 1px border (visible
+   even under a photo, since it's outside the image), and the ring reuses
+   is-spp-focused-optional's own brighter gray (rgba(160,160,160,…) —
+   see that keyframe, below) at hover strength instead of full pulse
+   intensity, tying this preview's "you can click this" and "this needs
+   attention" grays to the same color. */
 .ios-spp-page .ias-shot-frame, .mac-spp-page .ias-shot-frame {
   cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.ios-spp-page .ias-shot-frame:hover, .mac-spp-page .ias-shot-frame:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 0 0 2px rgba(160,160,160,0.4);
 }
 /* Achievements sits flush against .ias-page's own left/right edges (its
    16px padding is theirs, not extra clearance from .ias-page's boundary) —
