@@ -2465,16 +2465,36 @@ function reRenderStepModal() {
   const macMainEl = document.querySelector('.mac-spp-main');
   const macMainScrollTop = macMainEl ? macMainEl.scrollTop : null;
   renderStepModal();
-  const newBodyEl = document.getElementById('step-modal-body');
-  if (newBodyEl) newBodyEl.scrollTop = scrollTop;
-  if (matrixScrollTop !== null) {
-    const newMatrixEl = document.querySelector('.prv-matrix-wrap');
-    if (newMatrixEl) newMatrixEl.scrollTop = matrixScrollTop;
-  }
-  if (macMainScrollTop !== null) {
-    const newMacMainEl = document.querySelector('.mac-spp-main');
-    if (newMacMainEl) newMacMainEl.scrollTop = macMainScrollTop;
-  }
+  /* EVERY RESTORE BELOW FLUSHES LAYOUT FIRST, AND WITHOUT THAT LINE THE RESTORE
+     SILENTLY BECOMES ZERO. `renderStepModal` has just replaced this element with
+     a brand-new node whose children have been parsed but NOT laid out, so its
+     `scrollHeight` is still its `clientHeight` — it has no overflow yet — and a
+     `scrollTop` assignment is CLAMPED to that maximum, which is 0. The write
+     does not throw and does not warn; it just lands on 0.
+
+     Reading `scrollHeight` forces the pending layout, and after that the same
+     assignment sticks. `void` because the value is not wanted, only the flush.
+
+     This was found through the Mac preview's pinned nav. Pressing a pill calls
+     `setStorePreviewFocus`, which re-renders and then smooth-scrolls the target
+     into view one frame later — and from the bottom of the page, clicking Title
+     teleported to the top with no motion at all. The travel was innocent: the
+     scroller had already been snapped to 0 here, so there was nothing left for
+     the animation to cross. Measured on a clean load, real mouse: 5ms after the
+     click the scroller read 0, and the smooth scroll was a no-op.
+
+     It also hid from every probe, which is the part worth remembering. Reading
+     `scrollTop` in a console check IS a layout flush, so any attempt to watch
+     the bug made the restore start working — it measured 466 → 466 by hand and
+     466 → 0 when nobody was looking. Trust a trace taken with no reads in it. */
+  const restoreScroll = (el, top) => {
+    if (!el || top == null) return;
+    void el.scrollHeight;
+    el.scrollTop = top;
+  };
+  restoreScroll(document.getElementById('step-modal-body'), scrollTop);
+  restoreScroll(document.querySelector('.prv-matrix-wrap'), matrixScrollTop);
+  restoreScroll(document.querySelector('.mac-spp-main'), macMainScrollTop);
 }
 
 // ── Deferred step-modal re-render for background auto-translate updates ──
@@ -3578,6 +3598,13 @@ function _smShake(el, kind, delay) {
    is a filter over a subtree: dim the container and the lit row inside it can
    never climb back out. */
 let _spotTimer = null;
+/* The host the spotlight is currently running on. `_smSpotlight` serves two
+   surfaces now — a platform card and the Mac preview's shell — and they can be
+   on screen at once (the step modal opens over the dashboard). Without this,
+   starting one while the other was running cleared only the NEW host's marks
+   and left `is-spotlight` on the old one for good, because the shared timer had
+   just been cancelled. One variable, and a host can always be put back. */
+let _spotHost = null;
 /* DEV TOOL — hold a loading screen open so it can actually be looked at.
    The keys are injected at deploy time, so locally every inference fails in
    about a second and the loader is gone before you can judge it. Open a step
@@ -3931,6 +3958,35 @@ function _smModalFades() {
   };
   body.addEventListener('scroll', () => update(false), { passive: true });
   update(true);
+
+  /* THE MAC PREVIEW HAS A SECOND SCROLLER, AND IT GETS ARMED HERE FOR THE SAME
+     REASON THE FIRST ONE DOES. `.mac-spp-main` is where that step actually
+     scrolls (this modal's own body is `overflow: hidden` there — see the note
+     above), so its top fade needs the same treatment: re-armed after EVERY
+     render, because the modal is rebuilt with innerHTML and the previous
+     scroller's listener goes with it.
+     TWO CLASSES, ONE PER END — and this note used to say one, on the claim that
+     "the page ends in the footer's own space and nothing is cut there". That was
+     asserted, not measured, and measuring it proved it false: 464px still below
+     the fold, a section sitting hard on the scrollport's bottom edge, and 12px
+     between that edge and the footer. So the bottom gets the mirrored fade.
+
+     BOTH ARE STATED POSITIVELY (`is-scrolled` / `is-scrollable-down`) rather
+     than as `at-top` / `at-bottom`, so the resting state at each end needs no
+     class at all — which is what stops a freshly rendered scroller from flashing
+     a fade for one frame before this runs. Each one is only on while there is
+     really content that way: a fade with nothing behind it is a shadow claiming
+     content that is not there. */
+  const spp = document.querySelector('.mac-spp-main');
+  if (spp) {
+    const sppUpdate = () => {
+      spp.classList.toggle('is-scrolled', spp.scrollTop > 2);
+      spp.classList.toggle('is-scrollable-down',
+        spp.scrollTop + spp.clientHeight < spp.scrollHeight - 2);
+    };
+    spp.addEventListener('scroll', sppUpdate, { passive: true });
+    sppUpdate();
+  }
 }
 
 function _smSpotlight(card, targets, ms) {
@@ -3938,9 +3994,14 @@ function _smSpotlight(card, targets, ms) {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
   clearTimeout(_spotTimer);
+  if (_spotHost && _spotHost !== card) {
+    _spotHost.classList.remove('is-spotlight');
+    _spotHost.querySelectorAll('.is-spotlit').forEach(el => el.classList.remove('is-spotlit'));
+  }
   card.querySelectorAll('.is-spotlit').forEach(el => el.classList.remove('is-spotlit'));
   targets.forEach(el => el && el.classList.add('is-spotlit'));
   card.classList.add('is-spotlight');
+  _spotHost = card;
 
   _spotTimer = setTimeout(() => {
     card.classList.remove('is-spotlight');
@@ -3950,6 +4011,48 @@ function _smSpotlight(card, targets, ms) {
     setTimeout(() => card.querySelectorAll('.is-spotlit')
       .forEach(el => el.classList.remove('is-spotlit')), 260);
   }, ms || 1100);
+}
+
+/* THE PINNED NAV SPOTLIGHTS WHERE IT LANDED YOU, and it is the platform card's
+   own mechanism rather than a second one — `_smSpotlight` above, with the Mac
+   preview's shell standing in for the card.
+
+   Why this surface earns it: the pills are a MAP of eight sections and a press
+   can move you past six of them. Arriving somewhere you did not travel through
+   leaves you looking for the thing you asked for, and the page's own "needs
+   attention" glow cannot answer that — it marks what is unfinished, which is a
+   different question from where you just landed. Dimming everything else says
+   "here" in the one register the page was not already using.
+
+   THE DIM STARTS WITH THE TRAVEL, NOT ON ARRIVAL. It is what carries the eye
+   across the scroll; lit on arrival it would read as a second event happening
+   to you after the first.
+
+   SO THE DURATION IS THE TRAVEL PLUS A BEAT, AND BOTH HALVES ARE NOW KNOWN.
+   It was 1600 — 515ms, the longest travel the browser's own smooth scroll
+   happened to take, plus the card's 1100 — and that was a guess wearing a
+   measurement's clothes, because the browser's duration was never ours to
+   know. `_smScrollCentre` fixed the travel at 420, so this is simply
+   `420 + 480`: the trip, then under half a second of "here it is". **900.**
+   A locator has to get out of the way faster than the card's 1100, which is
+   explaining a prerequisite and can afford to wait; asked twice to be quieter,
+   this is the half of it that is time rather than light.
+
+   AND IT DOES NOT LOCK THE POINTER, where the card's spotlight does. That one
+   is explaining a PREREQUISITE — a dimmed row that still opens its step invites
+   you to act on the thing being de-emphasised. This one is a locator, and you
+   are free to go anywhere; freezing the page for 1.6s because you pressed a
+   navigation pill would punish the gesture. The pills themselves stay live and
+   undimmed for the same reason: they sit outside the shell, so the class cannot
+   reach them, and a navigator that greys itself out after one press reads as
+   refusing the next one.
+
+   iOS keeps the footer stepper and gets none of this on purpose: PREV / NEXT
+   moves you exactly one section, so you already know where you arrived. */
+function _sppSpotlight(target) {
+  const shell = target && target.closest('.mac-spp-shell');
+  if (!shell) return;
+  _smSpotlight(shell, [target], 900);
 }
 
 /* THE SUBMIT ROW'S ONE HANDLER. Every press of the row lands here, whether or
@@ -8328,15 +8431,69 @@ function _masPropagateAllFields() {
    (not hover- or hidden-counter) feedback, per Apple's real form. */
 const IAS_FIELD_CHAR_LIMITS = { title: 30, subtitle: 30, description: 4000, releaseNotes: 4000 };
 
+/* THE EDITOR IS MOUNTED INSIDE THE FIELD, NOT IN PLACE OF IT — and that is the
+   whole reason clicking Title no longer shoves the product page down.
+
+   The old mount was `el.replaceWith(input)` plus the counter row inserted as
+   the input's next SIBLING, and it moved the page three separate ways at once,
+   measured on the Mac preview: the counter row arrived as a brand-new line
+   (+19.4px), the input's 1px border made its box taller than the text it
+   replaced (+2px), and — the sneaky one — `.ias-inline-input`'s `margin`
+   SHORTHAND wiped whatever margin the field's own class had set, so the
+   subtitle lost its −5px top margin the moment it became an input. Editing the
+   title moved everything below it 21.6px; editing the subtitle, 41px.
+
+   Keeping the field element and putting the editor inside it fixes all three by
+   construction rather than by three separate corrections: the box that holds
+   the text is the same box either way, so it cannot change size; the field's
+   margins are still the field's; and the counter is no longer in the sibling
+   chain at all, which is also what kills the five `:has()` clearance rules in
+   style.css that existed solely to reach PAST it (see the note there).
+
+   Nothing has to be un-mounted: committing calls reRenderStepModal(), which
+   rebuilds the whole body from state. `ias-editable` STAYS, so the field keeps
+   its own hover and its onclick — re-clicking a field that is already open just
+   re-focuses its input (the guard at the top of both callers).
+
+   AND `ias-placeholder` STAYS TOO, WHICH IS NOT AN OVERSIGHT. Stripping it was
+   the first version and it moved the subtitle 14px UP the moment you clicked
+   it: an empty field's clearance rule
+   (`.ias-app-name:has(+ .ias-app-subtitle.ias-placeholder)`, style.css) stopped
+   matching, so the gap it was holding open collapsed. The class is what the
+   layout reads to mean "this field is still empty", and clicking into a field
+   does not fill it — that only happens on commit, when the whole body is
+   rebuilt and the class is recomputed from the real value. Only the PULSE has
+   to go, and it goes in CSS (`.ias-editing { animation: none }`), which is the
+   one thing about `ias-placeholder` that is wrong under a live input.
+
+   SINGLE-LINE FIELDS ONLY. Description and What's New stay on `replaceWith`:
+   their host is `.mac-spp-desc-clamp`, a `-webkit-line-clamp` box living in the
+   `.mac-spp-desc-flex` grid, and nesting a textarea inside a clamped box clamps
+   the textarea. There is also no "beside" to put a counter in next to a
+   four-row textarea, which is the layout this unlocks for Title/Subtitle. */
+function _iasMountInlineEditor(host, input, counterRow) {
+  host.classList.add('ias-editing');
+  host.textContent = '';
+  host.append(input, counterRow);
+}
+
 function startIasInlineEdit(field, el, ev) {
   if (ev) ev.stopPropagation();
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing (multiline path)
+  const openInput = el.querySelector(':scope > .ias-inline-input');
+  if (openInput) { openInput.focus(); return; }                    // already editing (nested path)
 
   const lang = _iasEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const limit = IAS_FIELD_CHAR_LIMITS[field];
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
-  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  // Only the REPLACING editor needs the field's own classes — it stands where
+  // the field stood, so it has to carry its font and its box. The nested one
+  // sits INSIDE that field and inherits both; copying them there would apply
+  // the same padding and margin twice.
+  if (isMultiline) {
+    input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  }
   input.classList.add('ias-inline-input');
   if (isMultiline) {
     input.rows = 4;
@@ -8379,8 +8536,12 @@ function startIasInlineEdit(field, el, ev) {
     });
   }
 
-  el.replaceWith(input);
-  input.insertAdjacentElement('afterend', counterRow);
+  if (isMultiline) {
+    el.replaceWith(input);
+    input.insertAdjacentElement('afterend', counterRow);
+  } else {
+    _iasMountInlineEditor(el, input, counterRow);
+  }
   updateCounter();
   input.focus();
   input.select();
@@ -8394,13 +8555,19 @@ function startIasInlineEdit(field, el, ev) {
 // App Store's own copy.
 function startMasInlineEdit(field, el, ev) {
   if (ev) ev.stopPropagation();
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing (multiline path)
+  const openInput = el.querySelector(':scope > .ias-inline-input');
+  if (openInput) { openInput.focus(); return; }                    // already editing (nested path)
 
   const lang = _masEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const limit = IAS_FIELD_CHAR_LIMITS[field];
   const input = document.createElement(isMultiline ? 'textarea' : 'input');
-  input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  // See startIasInlineEdit — the nested editor inherits the field's font and
+  // box; copying its classes in would double the padding and the margin.
+  if (isMultiline) {
+    input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+  }
   input.classList.add('ias-inline-input');
   if (isMultiline) {
     input.rows = 4;
@@ -8438,6 +8605,13 @@ function startMasInlineEdit(field, el, ev) {
     });
   }
 
+  if (!isMultiline) {
+    _iasMountInlineEditor(el, input, counterRow);
+    updateCounter();
+    input.focus();
+    input.select();
+    return;
+  }
   el.replaceWith(input);
   // Description's display box (#mas-desc-text) lives inside the
   // .mac-spp-desc-flex grid alongside the "more"/"less" chip (see
@@ -17290,19 +17464,96 @@ function toggleBinFindingFix(pid) {
 // the Product Page Preview itself — unlike openStorePreviewSection below,
 // this never flips to a sub-section, it only moves which required element
 // carries the animated "needs attention" glow.
+/* THE TRAVEL IS ANIMATED BY HAND, AND `scrollIntoView` IS THE THING IT
+   REPLACES — read this before putting that call back.
+
+   It looked like the obvious tool: one line, and it finds the scrolling
+   ancestor for you. Finding it *for you* is exactly the problem. Which box a
+   browser decides to scroll, and whether it honours `behavior: 'smooth'` on a
+   NESTED scroller, is per-engine — and this surface has two boxes stacked (the
+   modal's own `.submit-modal-scroll`, `overflow: hidden` on the Mac face, and
+   `.mac-spp-main` inside it). In Chrome it picked the inner one and animated:
+   measured 466 → 2 in eleven interpolated steps, every time. **In Safari the
+   same press moved the page and left the scrollbar where it was** — the classic
+   signature of the other box having been scrolled, or of the smooth behaviour
+   being dropped. Chrome-only measurement kept saying the code was fine, because
+   in Chrome it was.
+
+   So this names its own scroller, computes its own target and writes
+   `scrollTop` frame by frame. That removes three engine differences at once:
+   nothing else can be chosen to scroll, no engine's smooth implementation is
+   involved, and any scrollbar follows because the position really is changing
+   every frame. `prefers-reduced-motion` jumps instead, which is the one case
+   where an instant landing is correct.
+
+   A user gesture wins: a wheel, a touch or a key aborts the animation where it
+   stands, rather than fighting whoever grabbed the scroller. */
+function _smNearestScroller(el) {
+  for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return n;
+  }
+  return null;
+}
+
+let _smScrollAnim = null;
+function _smScrollCentre(el) {
+  const sc = _smNearestScroller(el);
+  if (!sc) return;
+
+  const from = sc.scrollTop;
+  const max  = Math.max(0, sc.scrollHeight - sc.clientHeight);
+  // Where the element sits relative to the scrollport, turned into the scrollTop
+  // that would centre it — clamped, so a target near either end simply lands at
+  // the end rather than asking for a position that does not exist.
+  const delta = (el.getBoundingClientRect().top - sc.getBoundingClientRect().top)
+              - (sc.clientHeight - el.getBoundingClientRect().height) / 2;
+  const to = Math.max(0, Math.min(max, Math.round(from + delta)));
+
+  if (_smScrollAnim) { cancelAnimationFrame(_smScrollAnim.raf); _smScrollAnim.stop(); }
+  if (Math.abs(to - from) < 1) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { sc.scrollTop = to; return; }
+
+  /* 420ms is the card's own advance duration (`.is-advancing`, _doFinalSubmit),
+     borrowed rather than picked so two travels in one app do not run at two
+     speeds. The curve is the app's sine — the same shape `cubic-bezier(.37,0,
+     .63,1)` draws for the carousel's glint — written here as its closed form. */
+  const DUR = 420;
+  const t0 = performance.now();
+  const stop = () => {
+    sc.removeEventListener('wheel', stop);
+    sc.removeEventListener('touchstart', stop);
+    sc.removeEventListener('keydown', stop);
+    _smScrollAnim = null;
+  };
+  sc.addEventListener('wheel', stop, { passive: true, once: true });
+  sc.addEventListener('touchstart', stop, { passive: true, once: true });
+  sc.addEventListener('keydown', stop, { once: true });
+
+  const step = (now) => {
+    if (!_smScrollAnim) return;                       // a gesture took over
+    const t = Math.min(1, (now - t0) / DUR);
+    sc.scrollTop = from + (to - from) * (0.5 - Math.cos(Math.PI * t) / 2);
+    if (t < 1) _smScrollAnim.raf = requestAnimationFrame(step);
+    else stop();
+  };
+  _smScrollAnim = { raf: requestAnimationFrame(step), stop };
+}
+
 function setStorePreviewFocus(pid, elementId) {
   if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
   state.storePreviewFocus[pid] = elementId;
   reRenderStepModal();
-  // Whenever focus shifts, re-center the newly-focused element in whichever
-  // pane scrolls it (the step modal body on iOS, .mac-spp-main on Mac App
-  // Store — scrollIntoView finds the right one on its own either way),
-  // every time — not just when it was off-screen. data-spp-el (render.js)
-  // marks each of the six required elements' real DOM node with its own id,
-  // the same one passed in here.
+  // Whenever focus shifts, re-centre the newly-focused element in the pane that
+  // scrolls it — the step modal body on iOS, .mac-spp-main on Mac App Store —
+  // every time, not just when it was off-screen. data-spp-el (render.js) marks
+  // each required element's real DOM node with the id passed in here.
   requestAnimationFrame(() => {
     const el = document.querySelector(`[data-spp-el="${elementId}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) _smScrollCentre(el);
+    // …and dim everything that is not it, for the length of the trip plus a
+    // beat. See _sppSpotlight — Mac preview only, and it is a no-op elsewhere.
+    _sppSpotlight(el);
   });
 }
 

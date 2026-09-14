@@ -3,6 +3,13 @@
    ============================================================ */
 
 :root {
+  /* The width every styled scrollbar in this app is drawn at. It is a TOKEN
+     rather than three literals because one consumer has to subtract it: the Mac
+     preview's scroller bleeds its box 24px right and pays the same 24 back as
+     padding, and the bar now lives inside that padding — so the content column
+     only lands back under the pinned bar if the pay-back is `24 − this`. Three
+     hard-coded 11s and one hard-coded 13 is a relationship nobody can see. */
+  --sm-bar:       11px;
   --bg:           #0a0a0a;
   --panel:        #141414;
   --panel-2:      #1c1c1c;
@@ -2126,14 +2133,49 @@ body {
   overflow-y: scroll;
   min-height: 0;
   scrollbar-gutter: stable;
-  scrollbar-color: rgba(255, 255, 255, .13) transparent;   /* Firefox */
+  /* No `scrollbar-color` — see the ::-webkit-scrollbar note below. */
+}
+
+/* ── `scrollbar-color` IS NOT A FIREFOX-ONLY HINT, AND BELIEVING IT WAS COST AN
+   AFTERNOON ────────────────────────────────────────────────────────────────
+   Three scrollers here carried `scrollbar-color: rgba(255,255,255,.13)
+   transparent` with a comment claiming it was for Firefox — `.main`,
+   `.submit-modal-scroll` and
+   `.mac-spp-main`. In Chrome that property is not ignored and it is not
+   additive: **specifying it switches the element to the standard scrollbar
+   path, which makes every `::-webkit-scrollbar` rule below inert**, and on
+   macOS the standard bar is the OVERLAY one.
+
+   Measured on `.mac-spp-main`, one line apart:
+     with `scrollbar-color` as authored  →  offsetWidth − clientWidth = 0
+     with `scrollbar-color: auto`        →  offsetWidth − clientWidth = 11
+
+   So the 11px bar this file carefully styles had never once been drawn on those
+   three elements, and `scrollbar-gutter: stable` reserved nothing because there
+   was nothing to reserve. The v6.17 note that says "this browser's scrollbars
+   are overlay" had the symptom right and the cause backwards: they were overlay
+   BECAUSE THIS FILE ASKED FOR THEM TO BE.
+
+   AND AN OVERLAY BAR DOES NOT FOLLOW A PROGRAMMATIC SCROLL. That is the bug it
+   was reported as: wheel to the bottom of the Mac preview (the thumb appears),
+   press a pill in the pinned nav, and the page travels while the thumb sits
+   where you left it and fades out — "me lleva al sitio pero la barra no se
+   mueve". The travel was correct the whole time and measured so; the thing that
+   was stuck was the only thing you can see.
+
+   Firefox still gets the styling, but only where the webkit pseudo-elements do
+   not exist, so the two cannot collide again. */
+@supports not selector(::-webkit-scrollbar) {
+  .main,
+  .submit-modal-scroll,
+  .mac-spp-main { scrollbar-color: rgba(255, 255, 255, .13) transparent; }
 }
 /* Forcing the track on means macOS stops using its overlay scrollbar and paints
    the system one — a wide grey slab down the edge of the page. Since the width
    has to stay reserved (that's what stops the sideways jump), the bar is styled
    down instead: no track at all, and a thin translucent thumb inset from the
    edge by a transparent border. */
-.main::-webkit-scrollbar { width: 11px; }
+.main::-webkit-scrollbar { width: var(--sm-bar); }
 .main::-webkit-scrollbar-track { background: transparent; }
 .main::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, .13);
@@ -5663,6 +5705,52 @@ body.viewing-splash .app-subnav { display: none; }
    still opens its step invites you to act on the thing being de-emphasised. */
 .active-card.is-spotlight .ios-step-card:not(.is-spotlit) { pointer-events: none; }
 
+/* ── The same spotlight, on the Mac preview's pinned nav ───────────────────
+   `_sppSpotlight` (app.js) puts `is-spotlight` on `.mac-spp-shell` when a pill
+   is pressed, so the dim reaches BOTH columns — the fake sidebar and the store
+   page — while leaving the pill row itself alone, because that row is the
+   shell's sibling rather than its child. The reasoning for all three of those
+   is written at the function; this is only the paint.
+
+   THE LEAF GROUPS ARE THE PAGE'S OWN DIRECT CHILDREN, and `:not(:has())` is
+   doing the same job it does on the card: only four of the eight targets ARE a
+   direct child (Screenshots and Achievements), the other four sit inside one
+   (title / subtitle / business share `.ias-header`, content is in the meta
+   strip, description and data privacy each in an `.ias-section`). Dimming a
+   container that holds the lit thing would put it behind the same filter — the
+   trap the card's note spells out — so a child that contains the mark stays at
+   full and the mark simply reads as the section you landed in. */
+/* THE DIM IS .5, AND IT GOT HERE BY BEING TOLD TWICE IT WAS TOO STRONG.
+   .18 first — the platform card's number, which is right THERE because that
+   card is explaining a PREREQUISITE: those rows are in your way, and .18 is
+   close enough to gone to say so. Here the rest of the page is still perfectly
+   true, it is just not what you asked for, so .18 read as switched off. Then
+   .35, borrowed from the submitted card's cancel hold ("what stays at .35 is
+   only what remains TRUE while the bar runs") — the right sentence, still a
+   shade too dark for a thing you are meant to keep reading past.
+   .5 is a judgement rather than a borrow, and worth saying so plainly: half is
+   simply where a page stops looking switched off. The RELATIONSHIP is what to
+   preserve if it moves again — the marked section at full, everything else
+   clearly behind it, and the sidebar a further step back (below). */
+.mac-spp-shell.is-spotlight .mac-spp-page > *:not(.is-spotlit):not(:has(.is-spotlit)) {
+  opacity: .5;
+}
+/* THE SIDEBAR DIMS PROPORTIONALLY, NOT TO THE SAME NUMBER. It already rests at
+   `opacity: .42` because it is a picture rather than content. Sent to the page's
+   own value it would arrive at exactly the page's level — the decorative column
+   ending up as loud as the real store copy, which is the relationship this whole
+   preview is built to avoid. .42 × .35 = .147, so .15: it recedes by the same
+   FACTOR the page does and keeps its place in the order. Re-derive it if the
+   page's number moves again: `.42 × .5 = .21`. */
+.mac-spp-shell.is-spotlight .mac-spp-sidebar { opacity: .21; }
+/* On the elements themselves, not only on the dimmed state, so the page goes
+   down and comes back on one curve. Matches the card's .22s exactly — two
+   surfaces borrowing one mechanism should not travel at two speeds. */
+.mac-spp-page > *,
+.mac-spp-sidebar {
+  transition: opacity .22s ease;
+}
+
 
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -6962,51 +7050,39 @@ body.viewing-splash .app-subnav { display: none; }
    in that gap. Open up extra clearance under Title whenever either field
    still needs the pulse — filled-in fields keep the original tight,
    App-Store-style spacing untouched. The third selector covers Title being
-   actively edited (temporarily an <input>, so it loses the .ias-placeholder
-   class) while Subtitle is still empty and pulsing. */
+   actively edited while Subtitle is still empty and pulsing — which used to
+   need its own selector, and no longer does: see the note below. */
 .ias-app-name.ias-placeholder,
-.ias-app-name:has(+ .ias-app-subtitle.ias-placeholder),
-.ias-inline-input:has(+ .ias-app-subtitle.ias-placeholder) {
+.ias-app-name:has(+ .ias-app-subtitle.ias-placeholder) {
   margin-bottom: 14px;
 }
 
-/* Same pulse-overlap problem, one more sibling arrangement: while Title is
-   being actively edited AND over its character limit, its
-   .ias-char-counter-row (app.js) is inserted as the input's real next
-   sibling, pushing Subtitle back to being the counter row's sibling instead
-   of the input's — so the rule above's :has(+ .ias-app-subtitle.ias-placeholder)
-   on .ias-inline-input can't reach it. Mirror the same clearance, anchored
-   on the counter row. */
-.ias-char-counter-row:has(+ .ias-app-subtitle.ias-placeholder) {
-  margin-bottom: 14px;
-}
+/* FOUR RULES USED TO LIVE HERE AND THREE OF THEM WERE PATCHES FOR A MOUNT
+   THAT IS GONE. Worth reading before adding a fifth.
 
-/* Same collapsed-gap problem, different trigger: if Title and Subtitle are
-   BOTH over their character limit at once, each now carries a real 1px
-   is-over-limit border (unlike the box-shadow pulse ring above), and those
-   two borders sit right in that same collapsed gap — with no clearance
-   they draw flush against each other, merging into what looks like one
-   continuous red block instead of two separately-outlined fields. Unlike
-   the pulse rule, this only needs to trigger when BOTH fields are over
-   limit — a single over-limit field has nothing to collide with, since an
-   under-limit sibling's border is simply transparent. */
+   They all said one thing — "open the same 14px of clearance under Title" —
+   and existed in four copies because the OLD editor replaced the field with an
+   `<input>` and then wedged its `.ias-char-counter-row` between that input and
+   Subtitle. So Title stopped being `.ias-app-name`, Subtitle stopped being the
+   input's sibling, and every `:has(+ …)` in this family had to be written again
+   for each arrangement: anchored on the input, anchored on the counter row,
+   anchored on the counter row while over-limit.
+
+   `_iasMountInlineEditor` (app.js) mounts the editor INSIDE the field now, so
+   Title is `.ias-app-name` and Subtitle is its next sibling in every state
+   there is — editing or not, over limit or not. One rule covers all of them,
+   and the only thing it has to reach for is the `is-over-limit` flag, which
+   lives on the input rather than on the field while a field is open.
+
+   What it is for: Title and Subtitle sit in a slightly NEGATIVE gap at rest
+   (measured −2px: Title's +3 bottom margin collapsing with Subtitle's −5 top),
+   which is invisible until either field draws an edge — the pulse ring on an
+   empty field, or the red over-limit ring — at which point the two edges touch
+   and read as one merged block. A single over-limit field has nothing to
+   collide with, so the over-limit half only triggers when BOTH are. */
 .ias-app-name.is-over-limit:has(+ .ias-app-subtitle.is-over-limit),
-.ias-inline-input.is-over-limit:has(+ .ias-app-subtitle.is-over-limit) {
-  margin-bottom: 14px;
-}
-
-/* Same collapsed-gap problem, one more trigger: Title over its limit (real
-   red border) sitting directly above Subtitle while Subtitle itself is
-   being actively edited. Subtitle is then temporarily an <input> — it's
-   lost its .ias-app-subtitle class entirely, so none of the
-   :has(+ .ias-app-subtitle...) selectors above can see it, regardless of
-   Title's own state. .ias-inline-input always carries a real 1px border
-   (blue while under limit, red once over), so it collides with Title's
-   red border in that same collapsed gap exactly like the both-over-limit
-   case above. This only needs to key off Title's own is-over-limit — the
-   editing Subtitle already always has a visible border of its own, unlike
-   an untouched Subtitle's transparent one. */
-.ias-app-name.is-over-limit:has(+ .ias-inline-input) {
+.ias-app-name:has(.ias-inline-input.is-over-limit):has(+ .ias-app-subtitle.is-over-limit),
+.ias-app-name.is-over-limit:has(+ .ias-app-subtitle:is(.ias-editing, .is-over-limit)) {
   margin-bottom: 14px;
 }
 .ias-inline-input {
@@ -7043,18 +7119,106 @@ body.viewing-splash .app-subnav { display: none; }
 .ias-char-error { color: var(--magenta); }
 .ias-char-count.is-over { color: var(--magenta); }
 
-/* Same collapsed-gap family as the two rules above, but for a third sibling
-   arrangement: while Title is actively being edited, its ias-char-counter-row
-   (app.js) is inserted as the input's real next sibling, pushing Subtitle
-   back to being the counter row's next sibling instead of the input's. The
-   both-over-limit rule above never sees that case (its :has(+ ...) can't
-   reach past the counter row), so Title's "Must be less than X characters."
-   text was landing flush against an over-limit Subtitle box with no gap.
-   Mirror the same both-over-limit condition, anchored on the counter row
-   instead of the input. */
-.ias-inline-input.is-over-limit + .ias-char-counter-row:has(+ .ias-app-subtitle.is-over-limit) {
-  margin-bottom: 14px;
+/* ── THE COUNTER SITS BESIDE A ONE-LINE FIELD, NOT UNDER IT ──────────────
+   A field being edited is `.ias-editing` (`_iasMountInlineEditor`, app.js): the
+   field element stays where it is and becomes a row holding its own input and
+   its own counter. So this is the layout of a box that ALREADY EXISTS at that
+   size, which is the whole point — the product page cannot move, because
+   nothing is inserted into it and nothing is taken out.
+
+   Under it, the counter row cost 19.4px of page every time you clicked a field.
+   That is fine in a form and wrong here: this is a drawing of the Mac App
+   Store, the counter is editor chrome rather than part of the drawing, and
+   chrome must not push the drawing around. Beside it, the row is exactly as
+   tall as the field, so the cost is zero.
+
+   THE RESERVED COLUMN IS MEASURED, NOT PICKED — AND IT IS SIZED FOR THE WORST
+   CASE, NOT THE TYPICAL ONE. It holds "Must be less than 30 characters." (148.3
+   at 11px in this face) + an 8px gap + the count. The first pass sized the
+   count from a two-digit overshoot and landed on 172 — and measured, the real
+   row came to 172.0 EXACTLY, so the sentence wrapped to a second line and the
+   page moved 12.6px the instant you crossed the limit. Same bug as before, one
+   state further in. The count is sized from a FOUR-character overshoot instead
+   (`-970`, ~31px — paste a paragraph into a 30-character field and that is what
+   you get): 148.3 + 8 + 31 = 187.3, rounded up to 188, the next multiple of the
+   4px everything else in this row is spaced on.
+
+   And the sentence is `nowrap` with an ellipsis, which is the belt to that
+   braces: past some absurd overshoot the count outgrows even this, and a
+   sentence that gets shortened is a far better failure than a row that gets
+   taller — the row's height is the one thing on this surface that must never
+   change.
+
+   Reserved rather than fitted (`flex: 0 0`, not `auto`) for the same reason the
+   pinned nav's pills reserve their disc: a column that grows when the error
+   appears would shrink the input you are typing in at the exact moment you
+   cross the limit. The count stays pinned to the row's right edge in both
+   states — the counter row's own `space-between` does that — so it reads as the
+   right edge of the field either way.
+
+   That leaves the input ~394px on a 594px column, more room than 30 characters
+   of a 21px title need. If a field's limit ever grows past what fits, this is
+   the number to re-measure. */
+.ias-editing {
+  display: flex; align-items: center; gap: 12px;
 }
+/* An empty field keeps its `ias-placeholder` class while it is open — the
+   layout reads that class to mean "still empty", and clicking into a field does
+   not fill it (see `_iasMountInlineEditor`, app.js). Only the pulse has to stop:
+   a ring breathing 5px out of a box that now holds a focused input reads as a
+   fault, and it is already saying what the edit ring is saying. */
+.ias-editing { animation: none; }
+/* The field clips its own text with `overflow: hidden` + ellipsis; the editor
+   must not be clipped, and does not need to be — the input's negative margins
+   put its box exactly on the field's padding box, so nothing actually
+   overflows. Stated anyway, because a future padding change here would clip
+   the ring silently. */
+.ias-editing { overflow: visible; }
+/* THE NESTED EDITOR'S RING IS AN OUTLINE, NOT A BORDER, AND THAT IS A LAYOUT
+   DECISION. This one stands inside a box that is already on screen at its final
+   size, so anything it adds to its own height comes straight out of the page.
+   The padding and the negative margin were written for that and cancel exactly;
+   the 1px border was not, and its 2px were a third of the jump Title used to
+   make.
+
+   AN OUTLINE, AND NOT A BOX-SHADOW, WHICH WAS TRIED FIRST AND BROKE THE
+   DESCRIPTION. An inset box-shadow also costs no layout, but `box-shadow` is a
+   single property and half the things edited here already spend it: the
+   description's box carries the preview's amber "needs attention" glow, and an
+   empty field's pulse ANIMATES it. Whichever rule won, one of the two marks
+   vanished — measured, the description's blue ring was simply gone. `outline`
+   is a property nothing else here uses, `outline-offset: -1px` puts it exactly
+   where the border was on the same radius, and it makes the ring the real focus
+   ring rather than a look-alike drawn beside `outline: none`.
+
+   SCOPED TO `.ias-editing`, AND THE SHARED RULE IS LEFT ALONE ON PURPOSE. The
+   same trade is wrong one surface over: in a Localization Review card the
+   element being replaced has a real 1px border of its own, so the bordered
+   editor is exactly its height and a borderless one measures 1.9px short —
+   swapping it there would have introduced the very jump this is removing here.
+   Same reason `line-height: inherit` is scoped: it makes the input size itself
+   off the line box of the text it covers instead of off the font's own metrics
+   (`font: inherit` does not reliably carry it into a form control), which is
+   what this row needs and not what a standalone field wants. */
+.ias-editing > .ias-inline-input {
+  flex: 1 1 auto; min-width: 0; width: auto;
+  line-height: inherit;
+  border: none;
+  outline: 1px solid #0a84ff; outline-offset: -1px;
+}
+.ias-editing > .ias-inline-input.is-over-limit {
+  outline-color: var(--magenta); background: var(--magenta-soft);
+}
+.ias-editing > .ias-char-counter-row {
+  flex: 0 0 188px;
+  width: auto; margin: 0;
+  align-items: center;
+}
+.ias-editing > .ias-char-counter-row > .ias-char-error {
+  min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ias-editing > .ias-char-counter-row > .ias-char-count { flex: none; }
 
 /* ── Localization Review (buildLocalizationReviewSection, render.js) ──
    Opened via the App Store Product Page Preview's "All Locs" button. Each
@@ -8189,6 +8353,23 @@ textarea.loc-review-field.ias-inline-input {
   display: flex; flex-direction: column; gap: 2px;
   font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
   overflow: hidden;
+  /* DIMMED AS ONE OBJECT, and `opacity` on the whole column is the right lever
+     here for once. The usual rule in this app is the opposite — dim by COLOUR,
+     never by opacity, because an opacity paints a thing through gauze and
+     composites it to a muddier version of whatever it was (see the submitted
+     card's ticks). That rule is about CONTENT, where the muddied colour still
+     has to mean something. This column is a PICTURE: eight rows nobody can
+     press, a dead search field and three dots that do nothing. There is no
+     state in it to misread, so there is nothing for a composite to corrupt.
+     One lever also beats four — the labels, the glyphs, the panel and its
+     border all recede together and keep their relationships to each other,
+     where dimming each by hand is four numbers that will drift apart.
+     0.42 because the column has to stay legible as chrome while losing the
+     argument with the store page beside it: the labels land near rgb(79) on
+     the modal's rgb(20), against the page's own body text well above that.
+     It shipped at .55 and came down a notch by eye — the floor is legibility
+     of the LABELS, since the glyphs are outlines and give out first. */
+  opacity: .42;
 }
 /* A PILL, NOT A ROUNDED BOX. The real field is fully round-ended and a clear
    step lighter than the column it sits in — at a 7px radius on `--panel-3` it
@@ -8261,20 +8442,135 @@ textarea.loc-review-field.ias-inline-input {
   margin-top: auto;
   display: flex; align-items: center; gap: 9px;
 }
-/* A PHOTO'S SHAPE. The real row is a round portrait, so the avatar is filled
-   and light rather than a hairline glyph in a grey disc — at 26px a stroked
-   person on a near-black fill read as an empty slot waiting for an image. */
+/* A PHOTO'S SHAPE, AND NOW AN EMPTY ONE. The real row is a round portrait; this
+   is a portrait with no photo in it, which is a plain disc — not a little
+   figure. The person glyph went because a picture OF a person beside a person's
+   NAME says the same thing twice, and the drawing is the half that carries no
+   information.
+   The fill goes .14 → .20 to pay for it. That .14 was chosen while a glyph sat
+   on top and only had to be a ground for it; alone it reads as a hole rather
+   than as a deliberate blank, which is the exact failure the old stroked
+   version had and the reason it was filled in the first place. At .20 over the
+   sidebar's `--panel-2` it is unmistakably an object.
+   `overflow: hidden` stays so a real `<img>` can be dropped in later and be
+   clipped to the circle without another rule. */
 .mac-spp-account-avatar {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-  background: rgba(255, 255, 255, .14);
-  display: flex; align-items: center; justify-content: center;
-  color: rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .20);
   overflow: hidden;
 }
-.mac-spp-account-avatar svg { display: block; margin-top: 3px; }
+.mac-spp-account-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* The name is a PERSON, so it takes the same ink as a nav label rather than the
    dimmer tone a caption would. */
 .mac-spp-account-label { font-size: 12.5px; color: var(--text); font-weight: 500; }
+
+/* THE PAGE DISSOLVES AT THE TOP INSTEAD OF BEING CUT — `.cr-pinned::after`'s
+   fade, re-hung on the surface that actually scrolls here.
+
+   The Content Rating bar hangs its fade off its own bottom edge, because there
+   the bar is sticky INSIDE the scroller and the rows pass under it. This bar
+   sits outside the shell entirely (see `_sppPinnedNav`), so an `::after` on it
+   would also lie across the top of the SIDEBAR, which does not scroll. The
+   fade belongs to the column that moves.
+
+   A STICKY `::before` ON THE SCROLLER, which costs no markup and no geometry.
+   As the first in-flow child it would push the page down 36px, so the negative
+   `margin-bottom` gives that space straight back — measured, the page still
+   starts at the scrollport's top + `.ias-device-wrap`'s own 4px, exactly where
+   it did before. Being sticky rather than absolute is what keeps it at the
+   scrollport's edge: an absolutely positioned child of a scroll container is
+   laid out against the padding box and scrolls away with the content.
+
+   THE COLOUR IS THIS SURFACE'S GROUND, NOT THAT BAR'S. `.cr-pinned::after`
+   fades to `rgba(20,20,20,…)` because its scroller sits on the modal's
+   `--panel`. The store page is `--panel-2`, rgb(28), so the stops are re-solved
+   in 28 — otherwise the page's top strip would darken toward a colour that is
+   nowhere on this surface and read as a drop shadow. Everything else is copied
+   exactly: 36px (a fade has to be longer than the thing crossing it) with the
+   midpoint at 55% so the top half stays close to the ground and the ending is
+   the gentle part.
+
+   AND IT IS ONLY THERE WHILE SOMETHING IS ABOVE. At `scrollTop` 0 there is
+   nothing to dissolve, and a fade over the page's own header is a shadow
+   claiming content that is not there. The default is therefore OFF and
+   `_smModalFades` (app.js) adds `.is-scrolled` — inverted on purpose, so a
+   freshly rendered scroller at the top never flashes a fade for one frame
+   before the class lands.
+
+   IT REACHES FULL OPACITY AND IT RAMPS EVENLY, which is the difference from
+   the bar it was copied from. `.cr-pinned::after` tops out at 0.96 and spends
+   more than half its drop in its first 20px — front-loaded, because there it
+   only has to kill a 34px row sliding under an already-opaque strip. Here
+   there is no opaque strip: this fade IS the whole boundary, so a top that
+   never quite reaches the ground colour leaves the cut faintly visible
+   underneath it, and a front-loaded ramp reads as a smudge with a hard edge
+   above it rather than as a dissolve. So it starts at a true 1.0 — exactly
+   `--panel`, so the content stops existing rather than dimming — and the
+   stops are spread across eight steps instead of five. 48px rather than 36
+   for the same reason: the span is the dissolve now, not a softener on top of
+   one.
+
+   THE COLOUR FOLLOWS THE GROUND, AND THE GROUND MOVED. It was solved in
+   `rgb(28)` while the page carried its own `--panel-2` container; that
+   container is gone (see `.mac-spp-page` below), so the surface under this is
+   the modal's `--panel` and the stops are re-solved in 20. Leaving 28 here
+   would paint a strip LIGHTER than what it covers, which is a glow, not a
+   fade. */
+.mac-spp-main::before {
+  content: ''; display: block;
+  position: sticky; top: 0; z-index: 3;
+  height: 48px; margin-bottom: -48px;
+  pointer-events: none;
+  opacity: 0; transition: opacity .15s;
+  background: linear-gradient(to bottom,
+    rgba(20, 20, 20, 1)    0%,
+    rgba(20, 20, 20, 0.98) 12%,
+    rgba(20, 20, 20, 0.88) 26%,
+    rgba(20, 20, 20, 0.68) 42%,
+    rgba(20, 20, 20, 0.44) 58%,
+    rgba(20, 20, 20, 0.22) 74%,
+    rgba(20, 20, 20, 0.08) 88%,
+    rgba(20, 20, 20, 0)    100%);
+}
+.mac-spp-main.is-scrolled::before { opacity: 1; }
+
+/* AND IT DISSOLVES AT THE BOTTOM TOO. This shipped with only the top fade, on a
+   claim written here and never measured: "the page ends in the footer's own
+   space and nothing is cut there". Measured, it is cut — with 464px still below
+   the fold an `.ias-achv-section` sits hard on the scrollport's bottom edge, and
+   only 12px separate that edge from the modal's footer, far too little for
+   anything to absorb the cut. A column that dissolves at one end and is
+   guillotined at the other says the boundary is real at the top and an accident
+   at the bottom.
+
+   IT IS THE TOP FADE MIRRORED, not a second design: same 48px, same eight stops,
+   same `--panel` ground, read bottom-up. Sticky again for the same load-bearing
+   reason — an absolutely positioned child of a scroll container is laid out
+   against the padding box and scrolls away with the content — and as the LAST
+   in-flow child a negative `margin-top` gives back the space it would otherwise
+   add below the page.
+
+   TWO CLASSES AFTER ALL, and the second one is the same argument as the first:
+   a fade at the very end of the scroll claims content that is not there, exactly
+   as one at `scrollTop` 0 does. `_smModalFades` adds `.is-scrollable-down` only
+   while something is still below. */
+.mac-spp-main::after {
+  content: ''; display: block;
+  position: sticky; bottom: 0; z-index: 3;
+  height: 48px; margin-top: -48px;
+  pointer-events: none;
+  opacity: 0; transition: opacity .15s;
+  background: linear-gradient(to top,
+    rgba(20, 20, 20, 1)    0%,
+    rgba(20, 20, 20, 0.98) 12%,
+    rgba(20, 20, 20, 0.88) 26%,
+    rgba(20, 20, 20, 0.68) 42%,
+    rgba(20, 20, 20, 0.44) 58%,
+    rgba(20, 20, 20, 0.22) 74%,
+    rgba(20, 20, 20, 0.08) 88%,
+    rgba(20, 20, 20, 0)    100%);
+}
+.mac-spp-main.is-scrollable-down::after { opacity: 1; }
 
 .mac-spp-main {
   flex: 1; min-width: 0; min-height: 0;
@@ -8283,13 +8579,94 @@ textarea.loc-review-field.ias-inline-input {
      have jumped when a screenshot or a longer description pushed it over. */
   overflow-y: scroll; overflow-x: hidden;
   scrollbar-gutter: stable;
-  scrollbar-color: rgba(255, 255, 255, .13) transparent;   /* Firefox */
-  padding-bottom: 4px;
+  /* `scrollbar-color` IS NOT HERE, AND THAT IS THE FIX — see the note at the
+     ::-webkit-scrollbar block near the end of this file. In Chrome it is not a
+     Firefox-only hint: setting it switches the engine to the standard scrollbar
+     path, which on macOS is the OVERLAY bar, and silently kills every
+     ::-webkit-scrollbar rule this file writes. */
+  /* THE SCROLLBAR MOVES OUT OF THE PAGE, AND THE PAGE DOES NOT MOVE WITH IT.
+     `bleed and pay back`, the same two-line trick `.cr-pinned` uses: the
+     scroller's BOX grows 12px to the right on a negative margin, and 12px of
+     padding hands that space straight back to the content. So the page keeps
+     its width and its right edge on the body's content column — flush under the
+     pinned bar above it — while the scrollbar, which paints at the scroller's
+     own padding-box edge, lands 12px further out in the modal's gutter.
+
+     It only became visible when the page lost its container: a scrollbar
+     sitting on a card's edge reads as the card's, and the same scrollbar with
+     no card under it reads as a line drawn through the page. Note that
+     `scrollbar-gutter: stable` reserves NOTHING here — this browser's
+     scrollbars are overlay (`offsetWidth - clientWidth` measures 0), which is
+     why the lane could not simply be widened.
+
+     24 IS NOT A GUESS — IT IS `.submit-modal-scroll`'s OWN SIDE PADDING, and
+     that is the whole point. Every other step scrolls on that element, whose
+     box reaches the modal's inner edge while its 24px of padding holds the
+     content column 24 short of it; its scrollbar therefore paints on the
+     modal's edge. Paying back exactly 24 here puts this scroller's right edge
+     on that same line, so the Mac preview's bar and Content Rating's are at one
+     x rather than two. A first pass used 12 — half the gutter, eyeballed — and
+     it was a third position for a thing the app already places. */
+  margin-right: -24px;
+  /* THE PAY-BACK IS 24 MINUS THE BAR, NOT 24. The bleed grows this box 24px to
+     the right so the scrollbar paints on the modal's edge, and the padding
+     hands that space back to the content — but the bar is drawn INSIDE the
+     padding box, so it eats `--sm-bar` of whatever is paid back. At a flat 24
+     the store page ended 11px short of the pinned bar it is supposed to sit
+     flush under; measured 11.0, the bar's width to the pixel.
+     It went unseen for as long as the bar was an overlay one taking 0px (see
+     the `scrollbar-color` note), which is why this arrives with that fix and
+     not before. Written as the subtraction rather than as 13 so the two cannot
+     drift: change `--sm-bar` and this follows. */
+  padding-right: calc(24px - var(--sm-bar));
+  /* NO `padding-bottom` HERE, AND THE BOTTOM FADE IS WHY. A sticky element
+     cannot leave its CONTAINING BLOCK, which for a child of this scroller is
+     its CONTENT box — so a `padding-bottom: 4px` (which is what this carried,
+     the tail matching `.ias-device-wrap`'s own 4px of top padding) stopped
+     `::after` 4px short of the scrollport and left a hairline of un-faded page
+     between the gradient and the footer's opaque edge. Measured with a probe:
+     exactly 4.0px, the padding to the pixel.
+     The tail air is not gone, it MOVED onto the content it belongs to (see
+     `.mac-spp-main > .ias-device-wrap` below), so `scrollHeight` is unchanged
+     and the fade now rests flush. Anything added to this box's bottom padding
+     later will push the fade up again by the same amount. */
 }
+
+/* The scroller's old `padding-bottom`, re-hung on the child so the sticky fade
+   can reach the scrollport's edge. Symmetric with this element's own 4px of
+   padding-top, and scoped to the Mac preview so iOS and Mac Full are untouched. */
+.mac-spp-main > .ias-device-wrap { padding-bottom: 4px; }
 
 /* Header/icon get a modest bump inside the wider Mac preview only — the
    existing .ias-header/.ias-icon rules (shared with iOS/Mac Full) are
    left exactly as they were. */
+/* THE PAGE WEARS NO CONTAINER OF ITS OWN, and this is FIDELITY rather than
+   tidying. `.ias-page` gives every preview a `--panel-2` fill, a 1px border and
+   a 16px radius — a card. In the real Mac App Store the product page FILLS THE
+   WINDOW beside the sidebar; it does not sit in a rounded box. That card was a
+   Shipmate invention, and it also made this a panel inside a panel, since the
+   modal already is one.
+
+   THE SIDEBAR KEEPS ITS BOX ON PURPOSE. Dropping both was the tidier-looking
+   option and it is the wrong one: the two columns are not the same kind of
+   thing. The sidebar is a fixed rail that never moves, and its edge is what
+   says so; the page is the surface that scrolls under the pills. Giving the
+   rail a box and the page none is the real app's own arrangement.
+
+   SCOPED TO `.mac-spp-page`. iOS and Mac Full share `.ias-page` and are
+   deliberately untouched — their previews are drawn as a device showing a page,
+   where a card edge is exactly right. Two surfaces, one class, one override.
+
+   Two things this drags with it, both already handled: the top fade's stops are
+   re-solved in `--panel` (see `.mac-spp-main::before`), and the page's inner
+   boxes — the screenshot frames at `rgb(36)` — now sit on rgb(20) rather than
+   rgb(28) and read a step heavier. Left as they are for now; if they ever get
+   re-tuned, that is the ground to measure against. */
+.mac-spp-page {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+}
 .mac-spp-page .ias-header { padding: 22px 22px 14px; gap: 18px; }
 .mac-spp-page .ias-icon, .mac-spp-page .ias-icon-empty { width: 96px; height: 96px; border-radius: 21px; }
 .mac-spp-page .ias-app-name { font-size: 21px; }
@@ -10347,6 +10724,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-mac-spp .submit-modal-scroll {
   display: flex; flex-direction: column;
   overflow: hidden;
+  /* AND THE GUTTER HAS TO GO WITH THE OVERFLOW. `scrollbar-gutter: stable` is
+     inherited from `.submit-modal-scroll` above, and `overflow: hidden` does
+     NOT switch it off — a hidden box is still a scroll container by spec, so
+     the gutter stays reserved. On this face it reserved 11px of permanently
+     empty lane down the modal's right edge, holding the store page that much
+     short of the pinned bar above it, for a bar that can never appear because
+     there is nothing here to scroll.
+     It cost nothing while `scrollbar-color` was forcing overlay scrollbars
+     (they reserve 0), which is exactly why it went unnoticed for so long: two
+     wrongs measuring zero. Killing the colour exposed it the same minute. */
+  scrollbar-gutter: auto;
 }
 .submit-modal.submit-modal-mac-spp .ios-step-body-content {
   flex: 1; min-height: 0;
@@ -10496,7 +10884,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
      further up): that surface hands its scrolling to .mac-spp-main. */
   overflow-y: scroll; overflow-x: hidden;
   scrollbar-gutter: stable;
-  scrollbar-color: rgba(255, 255, 255, .13) transparent;   /* Firefox */
+  /* No `scrollbar-color` — see the ::-webkit-scrollbar note below. */
   padding: var(--sm-body-pad-top) 24px 4px;
   min-height: 0;
 }
@@ -10505,7 +10893,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    stay reserved (that is the whole point), so the bar is styled down instead:
    no track, a thin translucent thumb inset from the edge by a transparent
    border. Copied from .main, which made this trade first. */
-.submit-modal-scroll::-webkit-scrollbar { width: 11px; }
+.submit-modal-scroll::-webkit-scrollbar { width: var(--sm-bar); }
 /* ── THE SECTION NAV ──────────────────────────────────────────────────────
    IT IS NOT PINNED ANY MORE, AND THE NAME IS ALL THAT IS LEFT OF THAT. It was
    `.cr-pinned`'s mechanics — sticky to the top of `.mac-spp-main`, opaque so
@@ -10803,7 +11191,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    written, for the same reason. */
 .spp-pin.is-on:hover { background: var(--chip-fill-hover); }
 
-.mac-spp-main::-webkit-scrollbar { width: 11px; }
+.mac-spp-main::-webkit-scrollbar { width: var(--sm-bar); }
 .submit-modal-scroll::-webkit-scrollbar-track,
 .mac-spp-main::-webkit-scrollbar-track { background: transparent; }
 .submit-modal-scroll::-webkit-scrollbar-thumb,

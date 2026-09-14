@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.28**
+Current version: **v6.32**
 
 ---
 
@@ -1637,6 +1637,84 @@ is the line to edit. The sidebar still keeps no height of its own, so it
 stretches to the bottom the way the real app's does. Measured: sidebar top 247,
 page top 247, 0 apart.
 
+**PRESSING A PILL SPOTLIGHTS WHERE IT LANDED YOU**, and it is the platform
+card's own `_smSpotlight` rather than a second mechanism — `_sppSpotlight`
+(app.js) just hands it `.mac-spp-shell` in place of a card.
+
+Why this surface earns it: the pills are a MAP of eight sections and one press
+can move you past six of them. Arriving somewhere you did not travel through
+leaves you hunting for the thing you asked for, and the page's own amber glow
+cannot answer that — it marks what is UNFINISHED, a different question from
+where you just landed. Two marks, two questions, no competition: the spotlight
+says which part of the page, the glow says which field inside it.
+
+Three ways it deliberately differs from the card's:
+
+- **The dim starts with the TRAVEL, not on arrival.** It is what carries the eye
+  across the scroll; lit on arrival it would read as a second event happening to
+  you after the first. Which is why the duration is not the card's 1100 — the
+  longest travel on this page measured 515ms, so **1600** guarantees a full beat
+  of "here it is" after you land, whatever the distance.
+- **It does not lock the pointer**, where the card's does. That one is
+  explaining a PREREQUISITE, so a dimmed row that still opens its step invites
+  you to act on the thing being de-emphasised. This one is a locator and you are
+  free to go anywhere; freezing the page for 1.6s because you pressed a
+  navigation pill would punish the gesture.
+- **The pills stay lit and live**, because they are the shell's SIBLING and the
+  class cannot reach them. A navigator that greys itself out after one press
+  reads as refusing the next one.
+
+**The leaf groups are the page's own direct children**, and `:not(:has())` does
+the same job it does on the card: only two of the eight targets ARE a direct
+child (Screenshots, Achievements) — the other six sit inside one, with title /
+subtitle / business sharing `.ias-header` and content inside the meta strip. A
+child that CONTAINS the mark stays at full, so what lights up is the section you
+landed in rather than the field. Dimming five of six cells in one metadata row
+to point at the sixth is fussier than the glow already sitting on it.
+
+**THE DIM IS .35, NOT THE CARD'S .18, AND THE NUMBER IS BORROWED RATHER THAN
+SOFTENED BY EYE.** It shipped at the card's .18 and that was too strong: the
+card is explaining a PREREQUISITE — those rows are in your way, and .18 is close
+enough to gone to say so — where this is a locator. The rest of the page is
+still perfectly true, it is just not what you asked for, and at .18 it read as
+switched off rather than as stepped back. **.35 is the value this app already
+uses for exactly that claim**: the submitted card's cancel hold, whose note
+reads "what stays at .35 is only what remains TRUE while the bar runs". Same
+sentence, different surface.
+
+**The sidebar dims proportionally, not to the same number.** It rests at
+`opacity: .42` because it is a picture; sent to the page's own value it would
+arrive at exactly the page's level, the decorative column ending up as loud as
+the real store copy — the relationship this whole preview exists to avoid.
+`.42 × .35 = .147`, so **.15**: it recedes by the same FACTOR and keeps its
+place in the order. Re-derive it if the page's number moves again.
+
+`_smSpotlight` gained a `_spotHost` while it was there. Two surfaces can now be
+on screen at once (the step modal opens over the dashboard), and starting one
+while the other ran cleared only the NEW host's marks while the shared timer had
+just been cancelled — leaving `is-spotlight` on the old host permanently.
+
+Measured pressing Content from the bottom: the meta strip holding it at
+`opacity 1`, the other ten children at `.35`, the sidebar `.42 → .15`, every
+pill still at 1 and `pointer-events: auto`; after the window, zero children
+dimmed, the sidebar back at .42 and no `.is-spotlit` left anywhere. Switching
+pills mid-spotlight leaves exactly one mark.
+
+**The travel is animated BY HAND — see "The travel is ours, not the browser's"**,
+which is also where the reason lives. Short version: `scrollIntoView` picks its
+own scroller and implements `behavior: 'smooth'` its own way, and this surface
+has two boxes stacked, so Chrome and Safari did not agree. `_smScrollCentre`
+names the scroller and writes `scrollTop` frame by frame instead.
+
+Things that still produce an instant landing, worth ruling out before touching
+the travel code: a `scrollTop` written before layout (see "A scroll restore must
+flush layout first"), `prefers-reduced-motion` (deliberate — it also switches
+this spotlight off), and a stale cache, since `?v=` is the only cache key these
+files have.
+
+**iOS keeps the footer stepper and gets none of this on purpose:** PREV / NEXT
+moves you exactly one section, so you already know where you arrived.
+
 ### The Mac sidebar's glyphs are the real art now
 
 `_buildMacSppSidebar()` (render.js). **Six of the eight are Jaco's exported
@@ -1673,6 +1751,21 @@ Measured ink (w × h in the 16-unit box): Discover 14.5 × 13.85, Create 13.88 �
 11.59 × 14.09 — the variation is the art's own optical balance (a diagonal hammer
 has a bigger box than a grid) and is left alone. My two placeholders are visibly
 lighter at 10.8 and 7.4 wide, which is the tell that they are still placeholders.
+
+**THE AVATAR IS AN EMPTY DISC AND THE NAME IS GENERIC.** The row carried a
+person glyph inside the circle and the literal name "Jacobo Abril". Both went,
+for different reasons. The glyph, because a picture OF a person sitting beside a
+person's NAME says the same thing twice and the drawing is the half carrying no
+information — an account with no photo is a plain disc, here and in the real
+app. Its fill goes .14 → .20 to pay for that: the lower value was chosen while a
+glyph sat on top and only had to be a ground for it, and alone it read as a hole
+rather than a deliberate blank, which is the exact failure the original stroked
+version had. `overflow: hidden` stays so a real `<img>` drops in later and clips
+to the circle with no second rule.
+The name, because it was the one value on that screen that was true about a
+real person rather than about the prototype. "Developer" is seeded the way every
+other fake value here is (My Game, Pixel Forge, Your Company). There is still no
+account model to read it from; when one exists, that is the one line to change.
 
 **NO ROW IS CURRENT, and the highlight was removed rather than moved.** This
 sidebar is decorative chrome around a PRODUCT PAGE, and a product page is not
@@ -1738,6 +1831,395 @@ and radius as the × and centred with it, 20px apart. The panel still opens
 right-aligned; open still lights the same 6% fill; Localization's copy still
 measures `rgba(0,154,255,.35)` with its ring `block`.
 
+**THE PAGE DISSOLVES AT BOTH ENDS INSTEAD OF BEING CUT.** The store column
+scrolls 464px under a bar that is no longer inside it, and there was no fade at
+all: the modal's own top fade sits at opacity 0 on this face (its wrap is
+`overflow: hidden` here, so `_smModalFades` reads it as unscrollable), and the
+page was chopped dead on the bar's bottom edge.
+
+It is `.cr-pinned::after`'s fade, re-hung on the surface that actually moves.
+That bar hangs its fade off its own bottom edge because it is sticky INSIDE the
+scroller; this one sits outside the shell, so an `::after` on it would also lie
+across the top of the SIDEBAR, which does not scroll. **The fade belongs to the
+column that moves.**
+
+**A sticky `::before` on the scroller**, which costs no markup and no geometry —
+no need to know the sidebar's width or the shell's gap. As the first in-flow
+child it would push the page down 36px, so a negative `margin-bottom` gives that
+space straight back (measured: the page still starts at the scrollport's top +
+`.ias-device-wrap`'s own 4px, exactly where it did before). Sticky rather than
+absolute is the load-bearing part: an absolutely positioned child of a scroll
+container is laid out against the padding box and scrolls away with the content.
+
+**The colour follows the ground, and the ground MOVED.** It was solved in
+rgb(28) while the page still carried its own `--panel-2` container; that
+container is gone (below), so what sits under this fade is the modal's
+`--panel` and the stops are re-solved in 20. Leaving 28 would paint a strip
+LIGHTER than what it covers — a glow, not a fade.
+
+**It reaches full opacity and it ramps EVENLY, which is where it stops copying
+`.cr-pinned::after`.** That bar tops out at 0.96 and spends more than half its
+drop in its first 20px — front-loaded, because there it only has to kill a 34px
+row sliding under an already-opaque strip. Here there is no opaque strip: this
+fade IS the whole boundary. A top that never quite reaches the ground colour
+leaves the cut faintly visible underneath it, and a front-loaded ramp reads as a
+smudge with a hard edge above it rather than as a dissolve. So it starts at a
+true 1.0 — exactly `--panel`, so content stops existing rather than dimming —
+across eight stops instead of five, over **48px** rather than 36: the span is
+the dissolve now, not a softener laid on top of one.
+
+**It is only there while something is above it**, which the CR bar does not
+bother with (it is opaque and always has rows under it). At `scrollTop` 0 a fade
+over the page's own header is a shadow claiming content that is not there. The
+default is OFF and `_smModalFades` adds `.is-scrolled` — inverted on purpose, so
+a freshly rendered scroller at the top never flashes a fade for one frame before
+the class lands.
+
+**AND THE BOTTOM GETS THE SAME FADE, WHICH IT DID NOT FOR ONE VERSION.** This
+column shipped with only the top one, on a line written in the CSS and in this
+file and never measured: *"there is no bottom fade on this column — the page ends
+in the footer's own space and nothing is cut there."* Measured, it is cut. With
+464px still below the fold an `.ias-achv-section` sat hard on the scrollport's
+bottom edge, and only **12px** separate that edge from the modal's footer — far
+too little for anything to absorb it. A column that dissolves at one end and is
+guillotined at the other says the boundary is real at the top and an accident at
+the bottom.
+
+It is the top fade **mirrored**, not a second design: `.mac-spp-main::after`,
+sticky at `bottom: 0`, same 48px, the same eight stops in `--panel`, read
+bottom-up, and `margin-top: -48px` giving back the space it would otherwise add
+below the page as the last in-flow child. Sticky for the same load-bearing reason
+as the top one — an absolutely positioned child of a scroll container is laid out
+against the padding box and scrolls away with the content.
+
+So it is **two classes after all**, and the second rests on the first's own
+argument: a fade at the very end of the scroll claims content that is not there
+exactly as one at `scrollTop` 0 does. `_smModalFades` adds `.is-scrollable-down`
+only while `scrollTop + clientHeight < scrollHeight - 2`. Both are stated
+positively rather than as `at-top` / `at-bottom`, so the resting state at each end
+needs no class at all. Measured across a full scroll: top 0 / bottom 1 at the
+start, both 1 in the middle, top 1 / bottom 0 at the end, `pointer-events: none`,
+and `scrollHeight` **identical** with the pseudo-element and with it disabled —
+the negative margin costs zero layout.
+
+**AND `.mac-spp-main` CARRIES NO `padding-bottom`, WHICH IS A CONSTRAINT OF THAT
+FADE AND NOT A TIDY-UP.** A sticky element cannot leave its **containing block**,
+and for a child of this scroller that is the scroller's CONTENT box — not its
+scrollport. The 4px of bottom padding this element used to carry (the tail
+matching `.ias-device-wrap`'s own 4px of padding-top) therefore held `::after`
+4px short of the scrollport, leaving a hairline of un-faded page between the
+gradient and the footer's opaque edge. Measured with a sticky probe: **exactly
+4.0px**, the padding to the pixel — the kind of thing that looks like a
+half-pixel rounding bug and is arithmetic.
+
+The tail air did not go, it **moved onto the content it belongs to**
+(`.mac-spp-main > .ias-device-wrap { padding-bottom: 4px }`, scoped so iOS and
+Mac Full are untouched), so the page still ends with the same air and
+`scrollHeight` is unchanged — verified at 4px exactly, with the rule on and off.
+The rule to carry forward: **anything added to this scroller's bottom padding
+pushes the fade up by that amount.** Put tail space on the child.
+
+**`_smModalFades` arms it, and that is not an arbitrary home.** Pressing a pill
+calls `setStorePreviewFocus` → `reRenderStepModal()`, which rebuilds the modal
+with innerHTML and takes the old scroller's listener with it — the exact reason
+that function already re-arms after every render. Verified across three pill
+presses: Description → `scrollTop` 169 with the fade on, Data privacy → 455 on,
+Title → 0 with the fade off again, target in view and the right pill lit every
+time, and the class correctly re-armed on the new node each round.
+
+**THE PAGE WEARS NO CONTAINER OF ITS OWN, and that is FIDELITY rather than
+tidying.** `.ias-page` gives every preview a `--panel-2` fill, a 1px border and
+a 16px radius — a card. In the real Mac App Store the product page FILLS THE
+WINDOW beside the sidebar; it does not sit in a rounded box. That card was a
+Shipmate invention, and it also made this a panel inside a panel, since the
+modal already is one.
+
+**The sidebar KEEPS its box, and dropping both was the wrong tidier-looking
+option.** The two columns are not the same kind of thing: the sidebar is a fixed
+rail that never moves and its edge is what says so, while the page is the
+surface that scrolls under the pills. A rail with a box and a page without one
+is the real app's own arrangement. Verified: the sidebar holds `rgb(28)` fill,
+`rgb(42)` border, 12px radius and does not move a pixel while the page scrolls
+300.
+
+**Scoped to `.mac-spp-page`.** iOS and Mac Full share `.ias-page` and are
+deliberately untouched — those previews are drawn as a device showing a page,
+where a card edge is exactly right. Verified both still measure `rgb(28)` with
+a `rgb(42)` border at 16px radius.
+
+Two things it drags with it, both handled: the top fade's stops are re-solved in
+`--panel` (above), and the page's inner boxes — the screenshot frames at
+`rgb(36)` — now sit on rgb(20) rather than rgb(28) and read a step heavier. Left
+as they are; if they are ever re-tuned, that is the ground to measure against.
+
+**THE SCROLLBAR MOVED OUT OF THE PAGE, AND THE PAGE DID NOT MOVE WITH IT.**
+`margin-right: -24px` + `padding-right: 24px` on `.mac-spp-main` — bleed and pay
+back, the same two-line trick `.cr-pinned` uses on its own scroller. The
+scroller's BOX grows 24px to the right; the padding hands that space straight
+back to the content. So the page keeps its 754 width with its right edge on the
+body's content column at 1220.5 — flush under the pinned bar, verified to 0.6px
+— while the scrollbar, which paints at the scroller's padding-box edge, moves
+out to the modal's own edge.
+
+**24 IS NOT A GUESS — it is `.submit-modal-scroll`'s own side padding**, which
+is what makes this land where the app already puts a scrollbar rather than at a
+third position. Every other step scrolls on that element: its box reaches the
+modal's inner edge while its 24px of padding holds the content column 24 short,
+so its bar paints on the modal's edge. Paying back exactly 24 here reproduces
+that. Verified by measuring the INSET from each scroller's right edge to its own
+modal's — Content Rating 1px, the Mac preview 1px. (Absolute x cannot match:
+those modals are 680 and 1000 wide. A first pass used 12, half the gutter,
+eyeballed — and put the bar somewhere neither modal uses.)
+
+**It only became visible when the page lost its container.** A scrollbar sitting
+on a card's edge reads as that card's; the same scrollbar with no card under it
+reads as a line drawn through the page — a leftover of a box that is no longer
+there.
+
+**THE PAY-BACK IS `24px − var(--sm-bar)`, NOT 24.** The bar is drawn INSIDE the
+padding box, so it eats its own width out of whatever the padding hands back. At
+a flat 24 the store page ended 11px short of the pinned bar it is supposed to sit
+flush under — measured 11.0, the bar's width to the pixel. Written as the
+subtraction rather than as 13 so the two cannot drift.
+
+That correction only became possible once the bar was real. **An earlier version
+of this note said "`scrollbar-gutter: stable` reserves NOTHING here — this
+browser's scrollbars are overlay", and that was the symptom mistaken for the
+cause**: they were overlay because this app's own CSS was asking for it. See
+"`scrollbar-color` is not a Firefox-only hint" below. With that removed the lane
+really is reserved (`offsetWidth − clientWidth = 11`), the page is flush again
+(measured 0.0 against the pinned bar, page still 754 wide) and the bar still sits
+1px inside the modal's edge, exactly where it was designed to.
+
+**THE SIDEBAR IS DIMMED AS ONE OBJECT, and `opacity` is the right lever here for
+once.** This app's rule is the opposite — dim by COLOUR, never by opacity,
+because an opacity paints a thing through gauze and composites it to a muddier
+version of whatever it was (see the submitted card's ticks). That rule is about
+CONTENT, where the muddied colour still has to mean something. This column is a
+PICTURE: eight rows nobody can press, a dead search field, three dots that do
+nothing. There is no state in it to misread, so there is nothing for a composite
+to corrupt. One lever also beats four — labels, glyphs, panel and border recede
+together and keep their relationships, where dimming each by hand is four
+numbers that will drift. `opacity: .42`, which puts the labels near rgb(79) on
+the modal's rgb(20): legible as chrome, and no longer arguing with the store
+page beside it.
+
+### Editing a field must not move the page
+
+`_iasMountInlineEditor` (app.js) and `.ias-editing` (style.css). Clicking Title
+in a Product Page Preview used to shove everything under it down 21.6px, and
+clicking Subtitle 41px. Three separate causes, stacked, all measured:
+
+- **The counter row was INSERTED** as a brand-new line under the field: +19.4px.
+- **The input's 1px border** made its box taller than the text it replaced: +2px.
+- **`.ias-inline-input`'s `margin` SHORTHAND wiped the field's own margins** — so
+  the subtitle lost its −5px top margin the instant it became an input. That is
+  the sneaky one, and the reason Subtitle moved twice as far as Title.
+
+**THE EDITOR IS MOUNTED INSIDE THE FIELD NOW, NOT IN PLACE OF IT**, and that
+answers all three by construction rather than with three corrections. The field
+element stays in the DOM and becomes a flex row holding its own input and its
+own counter. The box that holds the text is the same box either way, so it
+cannot change size; the field's margins are still the field's; and the counter
+is not in the sibling chain at all.
+
+**That last part deleted three CSS rules.** Five `:has()` rules had grown up
+around this file's own mount: the old editor replaced the field (so Title
+stopped being `.ias-app-name`) and wedged the counter between it and Subtitle
+(so Subtitle stopped being its sibling), and every clearance rule had to be
+rewritten for each arrangement — anchored on the input, on the counter row, on
+the counter row while over-limit. They all said the same thing. One rule covers
+every state now.
+
+**THE COUNTER SITS BESIDE A ONE-LINE FIELD, NOT UNDER IT** — Jaco's call, and
+the right one: there is room to the right, and this is a DRAWING of the Mac App
+Store, where the counter is editor chrome rather than part of the drawing.
+Chrome must not push the drawing around.
+
+**Its column is reserved and MEASURED, and the first measurement was wrong in a
+way worth repeating.** It holds "Must be less than 30 characters." (148.3 at
+11px) + an 8px gap + the count. Sizing the count from a two-digit overshoot gave
+172 — and the real row then measured **172.0 exactly**, so the sentence wrapped
+and the page moved 12.6px the moment you crossed the limit. Same bug, one state
+further in. Sized from a four-character overshoot (`-970`: paste a paragraph
+into a 30-character field) it is 148.3 + 8 + 31 = 187.3 → **188**, the next
+multiple of the 4px this row is spaced on. The sentence is `nowrap` with an
+ellipsis as the belt to that braces: past some absurd overshoot a shortened
+sentence is a far better failure than a taller row.
+
+Reserved (`flex: 0 0`) rather than fitted, for the pinned nav's reason: a column
+that grows when the error appears would shrink the input you are typing in at
+the exact moment you cross the limit.
+
+**The ring is an OUTLINE, and a box-shadow was tried first and broke the
+description.** An inset box-shadow costs no layout either, but `box-shadow` is
+one property and half the things edited here already spend it — the
+description's box carries the preview's amber glow, and an empty field's pulse
+*animates* it. Whichever rule won, one mark vanished; measured, the
+description's blue ring was simply gone. `outline` + `outline-offset: -1px`
+draws in the same place on the same radius, collides with nothing, and makes the
+ring the real focus ring instead of a look-alike beside `outline: none`.
+
+**SCOPED TO `.ias-editing`; the shared `.ias-inline-input` rule is untouched on
+purpose.** The same trade is wrong one surface over: a Localization Review
+card's field has a real 1px border of its own, so the bordered editor is exactly
+its height and a borderless one measures 1.9px short — swapping it there would
+have introduced the very jump this removes here. Verified: the shared rule still
+computes `1px solid rgb(10,132,255)` with `outline: none`, so Loc Review and IAP
+are bit-for-bit as they were.
+
+**`ias-placeholder` STAYS ON while a field is open**, which stripping it taught
+the hard way: the subtitle jumped 14px *up* on click, because the empty-field
+clearance rule stopped matching. The class is what the layout reads to mean
+"still empty", and clicking a field does not fill it — that happens on commit,
+when the body is rebuilt and the class is recomputed from the real value. Only
+the pulse has to go, and it goes in CSS (`.ias-editing { animation: none }`).
+
+**SINGLE-LINE FIELDS ONLY.** Description and What's New stay on `replaceWith`:
+their host is a `-webkit-line-clamp` box inside the `.mac-spp-desc-flex` grid,
+and nesting a textarea in a clamped box clamps the textarea. There is also no
+"beside" next to a four-row textarea. Editing the description still opens the
+page by 31.4px — a multiline box genuinely has to grow, which is a different
+thing from a one-line field moving for no reason, but it is the case left open.
+
+Measured on both previews, empty and filled, under limit and over: Title and
+Subtitle move **0.0px** on click, on going over the limit, and on blur — and the
+text itself lands on the same x it was drawn at (604.5 → 604.5).
+
+### The travel is ours, not the browser's
+
+### AND EVERY MEASUREMENT IN THIS FILE WAS TAKEN IN ONE ENGINE
+
+Read that heading first, because it is the expensive half. Claude measures in a
+Chromium pane. **Jaco develops in Safari.** Nobody said so for two sessions, and
+a scroll bug he could see on every single press was un-reproducible here on every
+single press — sixteen trips, all smooth, all measured. Three separate "fixes"
+shipped against Chrome-only evidence before the word *Safari* appeared and
+explained all of it at once.
+
+So: when a report and a measurement disagree flatly, **ask which browser before
+writing a line of code**. And prefer a mechanism with no per-engine behaviour to
+one that has to be verified in an engine you cannot drive.
+
+`_smScrollCentre` (app.js) is that preference applied. It replaced
+`el.scrollIntoView({ behavior: 'smooth', block: 'center' })`, which looked like
+the obvious tool — one line, and it finds the scrolling ancestor for you.
+**Finding it for you is the problem.** Which box an engine decides to scroll, and
+whether it honours `smooth` on a NESTED scroller, is per-engine, and this surface
+stacks two: the modal's `.submit-modal-scroll` (`overflow: hidden` on the Mac
+face — still a scroll container) and `.mac-spp-main` inside it. Chrome picked the
+inner one and animated it, measured 466 → 2 in eleven interpolated steps. Safari
+moved the page and left the scrollbar where it was — the signature of the other
+box having been scrolled, or of the smooth behaviour being dropped.
+
+It now names its own scroller (`_smNearestScroller`, the nearest ancestor that
+really overflows), computes the `scrollTop` that centres the target, clamps it to
+the scrollable range, and writes it frame by frame. That removes three engine
+differences in one move: nothing else can be chosen to scroll, no engine's smooth
+implementation is involved, and any scrollbar follows because the position really
+is changing every frame.
+
+- **420ms** is the card's own advance duration (`.is-advancing`), borrowed rather
+  than picked so two travels in one app do not run at two speeds.
+- The curve is the app's sine — the shape `cubic-bezier(.37,0,.63,1)` draws for
+  the carousel glint — written as its closed form, `0.5 − cos(πt)/2`.
+- **A user gesture wins.** A wheel, touch or key aborts the animation where it
+  stands rather than fighting whoever grabbed the scroller. Verified: interrupted
+  at 82, settled at 82.
+- `prefers-reduced-motion` jumps instead, the one case where an instant landing
+  is right.
+
+Verified in Chromium across all sixteen trips (eight targets from the top, eight
+from the bottom): every trip with real distance takes 12 interpolated steps, none
+jumps, and the no-op cases correctly do nothing. iOS's own scroller — the modal
+body — travels 0 → 512 and 671 → 0 on the same twelve. **Safari is unverified
+from here and has to be checked by hand**; that is the honest state of it.
+
+### `scrollbar-color` is not a Firefox-only hint
+
+Three scrollers carried `scrollbar-color: rgba(255,255,255,.13) transparent`
+with a comment saying it was for Firefox — `.main`, `.submit-modal-scroll` and
+`.mac-spp-main`. **In Chrome that property is neither ignored nor additive:
+specifying it switches the element to the standard scrollbar path, which makes
+every `::-webkit-scrollbar` rule in this file inert on that element, and on
+macOS the standard bar is the OVERLAY one.**
+
+Measured on `.mac-spp-main`, one line apart:
+
+| | `offsetWidth − clientWidth` |
+|---|---|
+| `scrollbar-color` as authored | **0** |
+| `scrollbar-color: auto` | **11** |
+
+So the 11px bar this file carefully styles had never once been drawn on those
+three elements, and `scrollbar-gutter: stable` reserved nothing because there was
+nothing to reserve. Firefox keeps the styling through
+`@supports not selector(::-webkit-scrollbar)`, where the two cannot collide.
+
+**AN OVERLAY BAR DOES NOT FOLLOW A PROGRAMMATIC SCROLL, and that is the bug it
+was reported as.** Wheel to the bottom of the Mac preview (the thumb appears),
+press a pill in the pinned nav, and the page travels while the thumb sits where
+you left it and fades — *"me lleva al sitio pero la barra no se mueve"*. Two
+sessions went into the travel code looking for a teleport that was not there:
+`scrollTop` was measured animating 466 → 2 in eleven interpolated steps every
+single time. **The thing that was stuck was the only thing you can see.** When a
+report and a measurement disagree this flatly, suspect that they are about two
+different objects.
+
+**Killing it exposed a second bug the same minute, and the two had been hiding
+each other.** `.submit-modal-mac-spp .submit-modal-scroll` is `overflow: hidden`
+— it hands scrolling to `.mac-spp-main` — but it still inherited
+`scrollbar-gutter: stable`, and **`overflow: hidden` does not switch that off**:
+a hidden box is still a scroll container, so the gutter stays reserved. With
+overlay bars that reserved 0px and nobody noticed; with real ones it became 11px
+of permanently empty lane down the modal's right edge, for a bar that can never
+appear because there is nothing there to scroll — a second, dead track beside the
+live one. `scrollbar-gutter: auto` on that override kills it (measured 11 → 0).
+
+Two wrongs that both measured zero is why this survived so long. The width is a
+token now (`--sm-bar`), because one consumer has to subtract it — see the Mac
+preview's bleed.
+
+Verified after: dead gutter 0, live bar 11, thumb 369px tall travelling 269px top
+to bottom, page flush under the pinned bar at 0.0 and still 754 wide, bar 1px
+inside the modal edge, Content Rating's own `.cr-pinned` bleed still landing on
+its rows' column to the pixel (bar right 963, row right 963), and the dashboard's
+`.main` reserving its lane with no horizontal overflow.
+
+### A scroll restore must flush layout first
+
+`reRenderStepModal` (app.js) captures three scroll positions before the render
+and puts them back after it. **All three assignments were silently landing on
+zero**, and the one-line reason is worth carrying: `renderStepModal` has just
+replaced the element with a brand-new node whose children are parsed but NOT
+laid out, so its `scrollHeight` still equals its `clientHeight` — it has no
+overflow yet — and a `scrollTop` assignment is **clamped to that maximum, which
+is 0**. The write does not throw and does not warn. Reading `scrollHeight` first
+forces the pending layout and the same assignment then sticks.
+
+**It surfaced as "the nav doesn't scroll".** From the bottom of the Mac preview,
+pressing Title teleported to the top with no motion. The travel was innocent:
+`setStorePreviewFocus` re-renders and then smooth-scrolls the target into view
+one frame later, but the scroller had already been snapped to 0 here, so there
+was nothing left for the animation to cross. Measured on a clean load with a
+real mouse: **5ms after the click the scroller read 0**, and the `scrollIntoView`
+was a no-op. After the flush: 466 at 16ms, moving at 33ms, thirty interpolated
+steps, 0 at 515ms.
+
+**AND IT HID FROM EVERY PROBE, WHICH IS THE PART TO REMEMBER.** Reading
+`scrollTop` from the console *is* a layout flush, so any attempt to watch the bug
+repaired it — by hand it measured 466 → 466, and 466 → 0 the moment nobody was
+looking. Three instrumented runs in a row "proved" the code was fine. Only a
+trace with no reads inside the click's own turn caught it. If a scroll bug will
+not reproduce under measurement, suspect the measurement.
+
+The three restores now go through one `restoreScroll(el, top)` helper rather than
+three copies, so the flush cannot be present in two of them and missing in the
+third. Verified after the fix: the Mac preview's pinned nav animates in both
+directions, iOS's footer nav does too (671 → 0 in thirteen steps, 0 → 512 back),
+Content Rating holds 420 across answering a question, and committing an inline
+edit while scrolled to 300 leaves you at 300.
+
 ### The icon has two doors
 
 `smAppIcon()` / `smAppIconSrc()` in assets.js, and they exist because the answer
@@ -1799,7 +2281,27 @@ Bump **once per publish**, not once per edit — a batch of changes that ships
 together is one version. (v5.36→v5.48 burned twelve numbers by bumping on every
 tweak; the cost is only cosmetic, but it makes the history unreadable.)
 
-Current version: **v6.28** → next is **v6.29**, then **v6.30**, etc.
+**ONE EXCEPTION: A CACHE THAT HAS ALREADY DIVERGED.** `?v=` is not decoration,
+it is the only cache key these files have. A long session of edits under one
+unpublished number means a browser that loaded the app early is still holding
+those bytes while the files on disk have moved on — and the symptoms are
+indistinguishable from real bugs. That is exactly how an afternoon went: a scroll
+teleport that had been fixed and measured kept being reported, because the tab
+reporting it was running the pre-fix `app.js`. If the file changed and anyone has
+loaded the old one, bump. Test with a hard reload before concluding anything
+about behaviour that "should" already be fixed.
+
+**BUT THE NUMBER IS A SHARED RESOURCE, AND THAT EXCEPTION COLLIDED WITH IT.** The
+bump above was taken mid-session as v6.28 → v6.29 — while Mark was shipping his
+own **v6.29, v6.30 and v6.31** from the Distribution side. Two people minted the
+same number on the same afternoon, and the local repo had no idea because its
+`origin/main` was a day stale. The rule that follows: **fetch before you bump.**
+`git fetch origin && git log --oneline -1 origin/main` costs a second and is the
+only thing that makes "the next number" a fact rather than an assumption. This
+work went out as v6.32 for that reason, not v6.29.
+
+Current version: **v6.32** → next is **v6.33**, then **v6.34**, etc. (v6.29 –
+v6.31 are Mark's Distribution work, shipped in parallel.)
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
@@ -1892,8 +2394,11 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   `overflow-y: scroll` + `scrollbar-gutter: stable` with the thumb styled down
   (11px, no track, transparent border) the way `.main` does it — the lane is
   reserved whether or not there is a thumb, so a card growing by a line no
-  longer reflows the step sideways. Invisible where scrollbars overlay, which
-  is why the bug looked intermittent.
+  longer reflows the step sideways. **And it only started actually doing that in
+  v6.32**: until then a `scrollbar-color` on those same three elements had Chrome
+  drawing overlay bars, so the reserved lane was 0px and every
+  `::-webkit-scrollbar` rule was inert. See "`scrollbar-color` is not a
+  Firefox-only hint".
 - **Mac App Store preview for the demo** — adapt it to how the real Mac App
   Store looks. macOS already exists as a platform (`macos` / `macos_full`), and
   `SM_REQS.macos` in assets.js already carries Apple's numbers: icon 1024×1024

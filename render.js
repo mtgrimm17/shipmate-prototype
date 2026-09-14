@@ -9546,15 +9546,24 @@ function _buildMacSppSidebar(gameTitle) {
             at the bottom of a list of places — it was a generic person glyph in
             a rounded square labelled "Account", which is a ninth nav item
             wearing a different shape.
-            The name is seeded the way every other fake value in this prototype
-            is (My Game, Pixel Forge, Your Company): there is no account model
-            to read it from yet. When one exists, this is the one line to
-            change. */''}
+
+            THE AVATAR IS EMPTY, and the person glyph inside it is GONE. It was
+            there to stop a bare disc reading as a hole, which was the right
+            worry and the wrong fix: a little figure is a PICTURE OF a person,
+            so the row ended up saying "someone" twice — once in the drawing and
+            once in the name beside it. A plain disc is what an account with no
+            photo actually looks like, here and in the real app. Its fill went
+            up a step to carry that on its own (see the CSS).
+
+            THE NAME IS GENERIC. It read "Jacobo Abril", which is a real person
+            in a mock — the one value on this screen that was true about
+            somebody rather than about the prototype. "Developer" is seeded the
+            way every other fake value here is (My Game, Pixel Forge, Your
+            Company). There is no account model to read it from yet; when one
+            exists, this is the one line to change. */''}
       <div class="mac-spp-account">
-        <div class="mac-spp-account-avatar">
-          <svg viewBox="0 0 16 16" width="16" height="16" fill="none"><circle cx="8" cy="6" r="2.7" fill="currentColor"/><path d="M2.4 14.6c0-2.9 2.5-4.9 5.6-4.9s5.6 2 5.6 4.9" fill="currentColor"/></svg>
-        </div>
-        <span class="mac-spp-account-label">Jacobo Abril</span>
+        <div class="mac-spp-account-avatar"></div>
+        <span class="mac-spp-account-label">Developer</span>
       </div>
     </div>`;
 }
