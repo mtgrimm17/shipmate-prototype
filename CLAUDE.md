@@ -762,6 +762,22 @@ Three things the sweep learned by being wrong first:
   bar looked like it was fading out exactly where it was still filling — it
   described its own progress twice and disagreed with itself. One even
   `rgba(255,59,120,.22)`.
+- **The card's EDGE goes red with it, and the numbers are borrowed rather than
+  picked.** `.submit-ready` is the only other state in this app that colours a
+  card's border, and it does it with `0.55` on the border plus a `0.12` ring
+  just outside; this is that same pair in the sweep's `#ff3b78`, so "the border
+  is carrying a state" is one idea in two places instead of two inventions. It
+  is deliberately NOT part of the timer — the sweep measures the hold and must
+  stay the only thing that does, so the edge arrives at once and holds, saying
+  only which state you are in. No transition had to be written: `.active-card`
+  already carries `transition: border-color .15s`, which eases it in on the
+  press and back out on an early release. The selector is
+  `.active-card.submitted-card.is-cancelling`, three classes on purpose —
+  `.active-card:hover` also sets a border-color and the pointer is by definition
+  on the card during a hold, so at two classes each the two rules tie and only
+  source order decides. Measured: rest `rgba(255,255,255,.08)` / no ring, held
+  `rgba(255,59,120,.55)` with `0 0 0 1px rgba(255,59,120,.12)`, released back to
+  rest with the card still submitted.
 - **Three things GO, they do not dim** — the wait estimate and both links.
   "Usually 3 days" answers a question you stopped asking the moment you started
   withdrawing, and it sits on the same line as the word that replaced it. "Quiet

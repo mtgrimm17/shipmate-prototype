@@ -14843,6 +14843,27 @@ body.is-splash .ai-disclaimer { display: none; }
   animation: subCancelSweep var(--cancel-hold, 1400ms) linear forwards;
 }
 @keyframes subCancelSweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* THE EDGE GOES RED TOO, and the numbers are not picked — `.submit-ready` is
+   the only other state in this app that colours a card's border, and it does it
+   with `0.55` on the border plus a `0.12` ring just outside. This is that same
+   pair in the sweep's own `#ff3b78`, so "the card's border is carrying a state"
+   looks like one idea rather than two.
+
+   It is NOT part of the timer. The sweep measures the hold and must stay the
+   only thing that does; the border simply says which state you are in, so it
+   arrives at once and holds — and `.active-card` already carries
+   `transition: border-color .15s`, which eases it in on the press and back out
+   on an early release with nothing extra to write.
+
+   THREE CLASSES ON PURPOSE. `.active-card:hover` also sets a border-color, and
+   during a hold the pointer is by definition on the card; at two classes each
+   the two rules tie and only source order decides, which in a file this long is
+   not a thing to rely on. `.active-card.submitted-card.is-cancelling` outranks
+   the hover outright. */
+.active-card.submitted-card.is-cancelling {
+  border-color: rgba(255, 59, 120, .55);
+  box-shadow: 0 0 0 1px rgba(255, 59, 120, .12);
+}
 /* NO BLINK. It was a hard step-blink on the word, and two things were wrong
    with it: a blinking label reads as a fault indicator rather than as a
    countdown, and it competed with the sweep — the sweep is already the clock,
