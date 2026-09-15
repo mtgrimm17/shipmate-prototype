@@ -3078,8 +3078,23 @@ let _stepModalPointerDown     = false;
 let _stepModalScrollingUntil  = 0;
 let _stepModalRerenderPending = false;
 
+/* AN OPEN INLINE EDITOR IS A LIVE INTERACTION (v6.40), and adding it here is
+   what makes "click straight from one field to another" one click instead of
+   two. The whole point of this guard is "do not rebuild the modal under the
+   user's hands", and a caret sitting in an input is exactly that — it was only
+   ever missing because the pointer flag happened to cover the common case.
+
+   The test is `:focus`, NOT merely mounted, and that distinction is the whole
+   rule: an editor commits on `blur`, so at the moment its commit asks for a
+   render the input is still in the DOM. Keyed on presence this would never
+   render again — the editor that is closing would keep vetoing the render that
+   closes it. Keyed on focus, a closing editor has already lost it and the
+   render goes through, while an editor that is OPENING has just taken it and
+   the render waits. */
 function _stepModalInteractionActive() {
-  return _stepModalPointerDown || Date.now() < _stepModalScrollingUntil;
+  return _stepModalPointerDown
+      || Date.now() < _stepModalScrollingUntil
+      || !!document.querySelector('.ias-inline-input:focus');
 }
 
 function _flushPendingStepModalRerender() {
@@ -3145,13 +3160,34 @@ function _deferredRerenderStepModal() {
   document.addEventListener('pointerdown', e => {
     if (inModal(e.target)) _stepModalPointerDown = true;
   }, true);
+  /* THE FLUSH WAITS FOR THE CLICK, AND THAT IS ONE LINE AGAINST A WHOLE CLASS
+     OF "IT TAKES TWO CLICKS" (v6.40). Jaco: *"si entro a editar algo y toco
+     cualquier otro pill de arriba, no me lleva directamente a esa zona,
+     necesito 2 clicks."*
+
+     `pointerup` fires BEFORE `click`. Flushed synchronously here, a render that
+     had been correctly deferred out of the press then lands in the one gap
+     where it does the most damage: between up and click. `click` is only
+     dispatched when the down and the up share a target, and the target has just
+     been replaced by innerHTML — so no click is generated at all, and every
+     control in the modal silently eats the first press that follows an edit.
+     The pinned pills are where it shows, because pressing one is the natural
+     thing to do straight after typing.
+
+     `setTimeout(…, 0)` puts the flush in the next task, after the click has
+     been delivered to the live node. The gesture flags are still cleared
+     immediately — only the repaint moves — so nothing else can mistake the
+     pointer for still being down. Cheap, and it fixes the pills, the footer,
+     the language picker and anything added later, rather than teaching each
+     control its own workaround. */
+  const flushAfterClick = () => setTimeout(_flushPendingStepModalRerender, 0);
   document.addEventListener('pointerup', () => {
     _stepModalPointerDown = false;
-    _flushPendingStepModalRerender();
+    flushAfterClick();
   }, true);
   document.addEventListener('pointercancel', () => {
     _stepModalPointerDown = false;
-    _flushPendingStepModalRerender();
+    flushAfterClick();
   }, true);
   // 'scroll' doesn't bubble, but a capture-phase listener on document still
   // sees it fire (on its way down) for any scrollable element inside the
@@ -4509,6 +4545,167 @@ function _sppCelebrate() {
      element would be permanently mid-celebration. */
   bar.classList.add('is-celebrating');
   bar.addEventListener('animationend', () => bar.classList.remove('is-celebrating'), { once: true });
+}
+
+/* ── TWO CONFIRMATIONS, AND THEY ANSWER DIFFERENT QUESTIONS ──────────────
+   Both are Jaco's, lifted from the questionnaire prototype:
+   1. *"nice animation of glimmering green on input text once I leave the field
+      (as a confirmation, at least the first time I do)"*
+   2. *"nice animation when I come back from a flipped modal and some
+      information is put in place (content age rating or data privacy) —
+      there's a little animation that's kinda celebratory"*
+
+   THE SPLIT BETWEEN THEM IS NOT DECORATIVE, it is what stops them being two
+   marks for one fact. A text field you type in place confirms ITSELF: you are
+   looking at the words, and the sweep says "that is now saved". An element you
+   set SOMEWHERE ELSE has the opposite problem — you were on another screen when
+   it changed, so when the page comes back there is no reason to look at the one
+   box that is different. One confirms; the other locates. So the sweep is for
+   the three text fields and the pop is for the four that open a step, and no
+   element can ever get both. */
+
+/* ── 1. THE COMMIT SWEEP ─────────────────────────────────────────────────
+   `.flash-char` + `charToOwn`, the prototype's own: each letter starts green
+   and fades to its real colour on a left-to-right stagger.
+
+   IT IS AN OVERLAY OVER THE INPUT, AND THE FIRST VERSION WAS NOT. Painting the
+   DISPLAY element after the commit is the obvious shape — by then the field is
+   a plain box again and can host per-char spans, which costs no cloned metrics
+   at all — and it does not work, for a reason worth keeping: **the render that
+   turns the editor back into a display element is DEFERRED, and can be deferred
+   indefinitely.** `_stepModalInteractionActive` vetoes a rebuild while any
+   inline editor holds focus, so the single most ordinary gesture here — leaving
+   Title by clicking straight into Subtitle — commits Title and then renders
+   nothing until Subtitle is done too. Measured: the title committed, the title
+   element still held its editor, and zero `.flash-char` were ever created. A
+   confirmation that waits for an unrelated event is not a confirmation.
+
+   So it is the reference's own approach: a `position: fixed` box, pixel-matched
+   to the input, carrying the text as spans for ~600ms and removing itself. It
+   is tied to nothing — not to a render, not to the element surviving, not to
+   what the user does next — which is exactly the property the queued version
+   lacked. The cost, knowingly: the metrics are copied, so a field whose padding
+   or font changes needs this checked. That is why it copies rather than
+   guesses — every value comes off `getComputedStyle` of the real input. */
+function _masCommitGlimmer(input) {
+  if (!input) return;
+  const val = input.value;
+  if (!val || !val.trim()) return;                  // nothing committed to confirm
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  if (input._masGlimmering) return;                 // blur and click can both fire
+  input._masGlimmering = true;
+
+  const SWEEP = 280, FADE = 320;
+  const px = v => parseFloat(v) || 0;
+  const r = input.getBoundingClientRect();
+  const s = getComputedStyle(input);
+  const isArea = input.tagName === 'TEXTAREA';
+  /* The overlay renders from the top, so a textarea scrolled down would sweep
+     text that is not where the user left it. Pinning the real field to the top
+     first means the two agree. */
+  input.scrollTop = 0;
+
+  const fx = document.createElement('div');
+  fx.setAttribute('aria-hidden', 'true');
+  Object.assign(fx.style, {
+    position: 'fixed', left: r.left + 'px', top: r.top + 'px',
+    width: r.width + 'px', height: r.height + 'px', margin: '0',
+    boxSizing: 'border-box',
+    paddingTop: s.paddingTop, paddingRight: s.paddingRight,
+    paddingBottom: s.paddingBottom, paddingLeft: s.paddingLeft,
+    borderWidth: s.borderTopWidth, borderStyle: 'solid', borderColor: 'transparent',
+    borderRadius: s.borderRadius,
+    fontFamily: s.fontFamily, fontSize: s.fontSize, fontWeight: s.fontWeight,
+    fontStyle: s.fontStyle, letterSpacing: s.letterSpacing, textAlign: s.textAlign,
+    /* A single-line input centres its text in the box no matter what its
+       line-height says, so the overlay has to be told the box's own height
+       instead; a textarea really does lay out on its line-height. */
+    lineHeight: isArea ? s.lineHeight
+      : (r.height - px(s.borderTopWidth) - px(s.borderBottomWidth)
+         - px(s.paddingTop) - px(s.paddingBottom)) + 'px',
+    color: s.color, background: s.backgroundColor,
+    /* `overflow-wrap` is copied for the same reason the description's own rule
+       states it: the UA gives a textarea `break-word` and a div `normal`, and
+       an overlay that wraps differently from the field under it is a paragraph
+       that jumps at the moment it is meant to reassure. */
+    whiteSpace: isArea ? 'pre-wrap' : 'pre',
+    overflowWrap: s.overflowWrap, wordBreak: s.wordBreak,
+    overflow: 'hidden', pointerEvents: 'none', zIndex: '9999',
+  });
+
+  const chars = Array.from(val), n = chars.length;
+  chars.forEach((ch, i) => {
+    if (ch === '\n') { fx.appendChild(document.createElement('br')); return; }
+    const sp = document.createElement('span');
+    sp.className = 'flash-char';
+    sp.textContent = ch;
+    sp.style.animationDelay = Math.round((i / Math.max(1, n - 1)) * SWEEP) + 'ms';
+    fx.appendChild(sp);
+  });
+  document.body.appendChild(fx);
+  setTimeout(() => { fx.remove(); input._masGlimmering = false; }, SWEEP + FADE + 80);
+}
+
+/* ── 2. THE RETURN POP ───────────────────────────────────────────────────
+   `.spp-just-changed`, the prototype's `storeJustChanged`: the element that
+   just gained a value lifts 3% with a green ring while a 9999px shadow dims
+   everything around it, then eases back.
+
+   IT IS THE SAME FLANK TEST AS `_sppCelebrate` ABOVE, one level finer. That one
+   asks "did the WHOLE bar just complete"; this asks "did THIS element just fill
+   in", per target, against what was last seen. The `undefined` guard is the
+   same and does the same job: opening a step that was already answered is not
+   an event, so a first paint never pops.
+
+   ONLY THE FOUR THAT OPEN A STEP. Title, subtitle and description are excluded
+   by construction — they get the sweep above, and an element that both swept
+   and popped would be saying one thing twice in two vocabularies. Achievements
+   is excluded too: it is permanently done, so it can never have a flank, and a
+   test that can only ever be false is a line to delete rather than write.
+
+   THE DIM IS PART OF THE ELEMENT'S OWN SHADOW, not a separate scrim, which is
+   what makes it free: no overlay node to insert, position, and remove, and
+   nothing that can be left behind if a render lands mid-animation. It is
+   clipped by `.ias-page`'s own `overflow: hidden`, so it darkens the store page
+   and stops at its edge instead of covering the modal. */
+const SPP_POP_TARGETS = ['content', 'business', 'data', 'screenshots'];
+const _sppLastFilled = {};
+function _sppJustChanged() {
+  const page = document.querySelector('.mac-spp-page');
+  if (!page) return;
+  const pid = document.querySelector('.spp-pin')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+  if (!pid) return;
+  const seen = _sppLastFilled[pid] || (_sppLastFilled[pid] = {});
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  SPP_POP_TARGETS.forEach(id => {
+    const el = page.querySelector(`[data-spp-el="${id}"]`);
+    if (!el) return;
+    /* "Filled" is read off the page rather than out of the state, so this
+       cannot disagree with what is actually drawn — the same reason
+       `_sppCelebrate` reads the bar's own class instead of recomputing it.
+       Each target says so in its own way and all four already did before this
+       function existed: an answered cell wears `--seen`, privacy swaps element
+       for `.ias-privacy-block` without `--ask`, screenshots take
+       `is-shots-done`, and Business stops saying "Set price". */
+    let filled;
+    if (id === 'content')          filled = el.classList.contains('ias-meta-cell--seen');
+    else if (id === 'data')        filled = !el.classList.contains('ias-privacy-block--ask');
+    else if (id === 'screenshots') filled = !!el.closest('.mac-spp-shots-row.is-shots-done');
+    else                           filled = el.textContent.trim() !== 'Set price';
+
+    const prev = seen[id];
+    seen[id] = filled;
+    if (prev === undefined || !filled || prev || reduce) return;
+
+    /* The cell's mark is its `::after` well, so the pop has to land on the box
+       that PAINTS — on Content the cell itself draws nothing. Every other
+       target is its own painted box. */
+    const mark = id === 'screenshots' ? el.closest('.mac-spp-shots-row') : el;
+    mark.classList.add('spp-just-changed');
+    mark.addEventListener('animationend',
+      () => mark.classList.remove('spp-just-changed'), { once: true });
+  });
 }
 
 function _smModalFades() {
@@ -9136,15 +9333,47 @@ function _masBlankLocalizedText() {
 // independent in state.macAppStoreListing.
 const MAS_SHARED_LISTING_FIELDS = new Set(['title', 'subtitle']);
 
+/* AN EMPTY MAC FIELD STILL FOLLOWS GAME DETAILS, AND THAT IS A BUG FIX RATHER
+   THAN A CHANGE OF MIND ABOUT INDEPENDENCE. Jaco: *"cuando pongo una
+   descripción en game details, no se manda a la store page."*
+
+   `seedMacAppStoreListing` copies Game Details' values the first time the Mac
+   App Store platform is activated and is a deliberate no-op ever after — seed
+   once, then fully independent, so Mac's Description can differ from the App
+   Store's. That is right, and it was **seeding the wrong moment**: you add the
+   platform before you have written a word, so the copy it freezes is `''`, and
+   from then on the preview is independent of a field that has never had a
+   value. Typing the description in Game Details afterwards reached iOS (which
+   reads `formData` live) and could not reach Mac at all. Reproduced: with
+   `formData.description` set to a real sentence, `_masFieldValue` returned `""`
+   and the page still drew its placeholder.
+
+   **So the fall-back is what "independent" has to mean while nothing has
+   diverged.** An empty Mac value is not a decision, it is the absence of one —
+   the moment you edit the field HERE, `_masSetFieldValue` writes the Mac copy
+   and this fall-back stops applying by itself, with no flag to keep in sync.
+   That is the same shape as `smAppIcon`'s two doors: the dedicated slot wins
+   when it is set, and until then the shared source answers.
+
+   Known edge, and it is the cheaper one: deliberately CLEARING Mac's own
+   description resurrects Game Details' rather than showing an empty field. A
+   preview permanently blank because of when you happened to press a toggle is
+   worse than a cleared field re-inheriting, and the first is what people
+   actually hit.
+
+   Title and Subtitle never had this — `MAS_SHARED_LISTING_FIELDS` routes them
+   straight to `_iasFieldValue` — so this only ever reaches `description` and
+   `releaseNotes`. */
 function _masFieldValue(field, lang) {
   if (MAS_SHARED_LISTING_FIELDS.has(field)) return _iasFieldValue(field, lang);
   const fd = state.formData;
   const ml = state.macAppStoreListing;
   if (!ml) return ''; // not yet seeded (Mac App Store not activated) — nothing to show
   const primary = fd.primaryLanguage || 'en';
-  if (lang === primary) return ml[field] || '';
+  if (lang === primary) return ml[field] || fd[field] || '';
   const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
-  return (entry && entry[field]) || '';
+  const fdEntry = fd.localizedStoreText && fd.localizedStoreText[lang];
+  return (entry && entry[field]) || (fdEntry && fdEntry[field]) || '';
 }
 
 function _masLangHasOverLimitField(lang) {
@@ -9534,11 +9763,36 @@ function startIasInlineEdit(field, el, ev) {
 // Mac App Store's own Title/Subtitle/Description/What's New in its Product
 // Page Preview (buildMacStorePreviewSection, render.js) never touches the
 // App Store's own copy.
+/* MOUNTED ON `pointerdown`, NOT `click` (v6.40, Mac preview's three fields).
+   The deferral in `commit` below is half the one-click fix; this is the other
+   half, and the reason is a matter of ORDER. `_flushPendingStepModalRerender`
+   runs on `pointerup` — i.e. BEFORE `click` — so a render deferred out of the
+   press would still fire between up and click and detach the target all over
+   again. Opening on the DOWN edge means the new editor already holds focus by
+   the time that flush is reached, and `_stepModalInteractionActive` (which now
+   knows about a focused editor) keeps the render pending until this field is
+   itself done.
+
+   `preventDefault` only on the pointer path: the browser's own default for
+   mousedown is to begin a selection and move focus, which would fight the
+   `input.focus()` this function is about to make. Guarded by `ev.type` so the
+   iOS/Mac Full builders — still on `onclick`, deliberately untouched — behave
+   exactly as they did. */
 function startMasInlineEdit(field, el, ev) {
   if (ev) ev.stopPropagation();
+  if (ev && ev.type === 'pointerdown') ev.preventDefault();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing (multiline path)
   const openInput = el.querySelector(':scope > .ias-inline-input');
   if (openInput) { openInput.focus(); return; }                    // already editing (nested path)
+
+  /* The pinned bar follows you here — see `_sppFocusHere`. The field names and
+     the bar's element ids are the same strings ('title' / 'subtitle' /
+     'description'), which is why this is one line and not a map: both come from
+     `ALL_ELEMENTS`. It is deliberately BEFORE the editor is built, so the pill
+     is already lit on the frame the input appears, and it is a DOM touch rather
+     than a render precisely because the next thing this function does is mount
+     a node that a render would destroy. */
+  _sppFocusHere('macos', field);
 
   const lang = _masEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
@@ -9572,11 +9826,60 @@ function startMasInlineEdit(field, el, ev) {
     countEl.classList.toggle('is-over', isOver);
     errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
     input.classList.toggle('is-over-limit', isOver);
+    /* ONE BOX OVER THE LIMIT TOO. Jaco: *"si me paso de caracteres se genera un
+       nuevo recuadro rojo dentro, no debería, debería ser el recuadro general
+       del input field."*
+
+       This is the blue focus ring's bug in its other colour, and it survived
+       that fix because the two states are flagged in different places: the
+       BLUE is a selector on the host (`:focus-within`), while over-limit is a
+       class, and the class was only ever written onto the INPUT — which on
+       this surface is the borderless thing nested inside the well. So the
+       magenta had nowhere to land but the input's own box, and drew the second
+       rectangle the whole well note exists to prevent.
+
+       The host carries it now, so the stroke is one property through four
+       states — `.14` at rest, `.24` on approach, blue live, magenta over — and
+       the input keeps drawing nothing (style.css switches its outline and fill
+       off under `.mac-spp-page`). It is also what the DISPLAY element already
+       wore between edits (`descOverLimit` and friends put `is-over-limit` on
+       the field in the builder), so the flagged box is now the same box before,
+       during and after editing rather than two different rectangles.
+
+       Single-line only: a multiline field REPLACES its element, so `el` is
+       detached by now and its textarea IS the well, already flagged above. */
+    if (!isMultiline) el.classList.toggle('is-over-limit', isOver);
   };
 
+  /* THE COMMIT MUST NOT RENDER INSIDE THE GESTURE THAT CAUSED IT (v6.40).
+     Jaco: *"creo que ahora necesito 2 clics para ir de un sitio a otro."*
+
+     It was `reRenderStepModal()`, synchronously, on `blur`. So pressing on a
+     second field ran: mousedown → focus leaves the first input → blur → commit
+     → the whole modal rebuilt with innerHTML **mid-press** → the element the
+     mousedown had targeted is now detached → `mouseup` lands on its
+     replacement → and a `click` only fires when down and up share a target, so
+     **no click event is ever created**. The first press was not swallowed; it
+     never became a click. The second one worked because by then nothing needed
+     committing.
+
+     `_deferredRerenderStepModal` is the machinery that already exists for
+     exactly this, and with the guard above knowing about a focused editor it
+     now covers the case. The value is still written SYNCHRONOUSLY — only the
+     repaint waits — so nothing can read a stale answer in between. */
+  /* What the field held when the editor opened — the sweep confirms a CHANGE,
+     so opening a field and leaving it alone must stay silent. Read through
+     `_masFieldValue` rather than off `input.value` at mount, so the Game
+     Details fall-back (an empty Mac value answering with the shared one) counts
+     as the same text and tabbing through does not "confirm" it. */
+  const valueAtOpen = _masFieldValue(field, lang);
   const commit = () => {
+    const changed = input.value !== valueAtOpen;
     _masSetFieldValue(field, lang, input.value);
-    reRenderStepModal();
+    /* Before the render is asked for, not after: the overlay measures the input
+       and the input is still on screen at this instant. */
+    if (changed) _masCommitGlimmer(input);
+    _deferredRerenderStepModal();
   };
   input.addEventListener('blur', commit);
   input.addEventListener('input', updateCounter);
@@ -11269,8 +11572,42 @@ function _updateMasDescMoreBtn() {
     btn.style.visibility = 'visible';
     return;
   }
-  const isTruncated = el.scrollHeight > el.clientHeight + 1;
+  /* THE CLAMP IS ON THE INNER SPAN, SO THE TRUNCATION TEST IS TOO. On the box
+     it asked whether the text overflowed the WELL'S FLOOR (104px) rather than
+     whether it overflowed three lines — two different questions that happened
+     to agree while the box was doing the cropping. See the clamp's own note in
+     style.css: a grid item is blockified, so `-webkit-line-clamp` never ran
+     there at all. */
+  const inner = el.querySelector('.ias-desc-text-inner') || el;
+  const isTruncated = inner.scrollHeight > inner.clientHeight + 1;
   btn.style.visibility = isTruncated ? 'visible' : 'hidden';
+}
+
+/* Mac Product Page Preview — the screenshot carousel's two chevrons.
+
+   AN ARROW POINTING AT NOTHING IS A CONTROL THAT LIES, which is the whole of
+   this: at rest there is nothing to the left, and at the end nothing to the
+   right. It reads the scroller's real position rather than counting frames,
+   so a set of two (no overflow at all) correctly shows neither.
+
+   HIDDEN, NEVER REMOVED — `visibility` through `.is-off`, the same rule the
+   pinned nav's separators are written under. The NEXT chevron takes a real
+   40px lane out of the row and the frame arithmetic is solved against it
+   (style.css), so dropping it from the DOM would widen the frames and re-admit
+   the sliver the lane exists to kill. The PREV one is an overlay and costs no
+   layout either way; it is hidden the same way only so the two behave alike.
+
+   1px of slack on each end: `scrollLeft` is fractional on a scaled pane, so an
+   exact comparison flickers the chevron on and off across a smooth scroll. */
+function _macShotsArrows(scroller) {
+  if (!scroller) return;
+  const strip = scroller.parentNode;
+  if (!strip) return;
+  const prev = strip.querySelector('.mac-spp-shots-prev');
+  const next = strip.querySelector('.mac-spp-shots-next');
+  const max  = scroller.scrollWidth - scroller.clientWidth;
+  if (prev) prev.classList.toggle('is-off', scroller.scrollLeft <= 1);
+  if (next) next.classList.toggle('is-off', scroller.scrollLeft >= max - 1);
 }
 
 /* Aligns the visual bottom of Mac App Store's Description text (its actual
@@ -11320,9 +11657,16 @@ function _alignMasDescTextBottom(el) {
   // past a later line's top (sub-pixel), which would otherwise make a
   // mostly-cropped line look "visible" by a top-only check and throw the
   // measured ink bottom off by a full line.
+  /* AND THE CROP IS THE INNER SPAN'S, NOT THE BOX'S. The lines are clipped by
+     the clamp on `.ias-desc-text-inner` (style.css), which stops well short of
+     the well's own 104px floor — tested against the BOX, every line inside that
+     floor counted as visible and the chip was aligned to a line the clamp had
+     already thrown away. The delta is still measured to the BOX's bottom,
+     because that is what the grid row is sized from. */
+  const clipBottom = Math.min(boxRect.bottom, inner.getBoundingClientRect().bottom);
   let lastVisibleBottom = null;
   for (const r of rects) {
-    if (r.bottom <= boxRect.bottom + 1) {
+    if (r.bottom <= clipBottom + 1) {
       lastVisibleBottom = lastVisibleBottom === null ? r.bottom : Math.max(lastVisibleBottom, r.bottom);
     }
   }
@@ -18633,6 +18977,50 @@ function _smScrollCentre(el) {
   const delta = (el.getBoundingClientRect().top - sc.getBoundingClientRect().top)
               - (sc.clientHeight - el.getBoundingClientRect().height) / 2;
   _smScrollTo(sc, Math.max(0, Math.min(max, Math.round(from + delta))));
+}
+
+/* THE BAR FOLLOWS YOU INTO A FIELD, AND IT DOES NOT RENDER TO DO IT (v6.40).
+   Jaco: *"que el field en el que esté se updatee en el top container de pills,
+   que sirva como tracker y como dónde estoy."*
+
+   Focus only ever moved one way: pressing a pill set it. Clicking straight into
+   Title left the bar pointing wherever it had been, so the row was a locator
+   that only knew about its own presses — right when you press it, stale the
+   moment you touch the page it indexes. With the pill lit by both doors the bar
+   answers both questions at once: the DISC says what is finished, the lit PILL
+   says where you are.
+
+   **It touches the DOM, it does not render**, and that is a hard requirement
+   rather than an optimisation: `setStorePreviewFocus` calls
+   `reRenderStepModal()`, which rebuilds the modal with innerHTML — and the
+   thing that just happened is that an inline editor was mounted INTO one of
+   those fields. A render here would destroy the input on the frame it was
+   created, take the caret with it, and scroll the page as well. Same argument
+   as `gcalWaitHover`: a change of where-you-are is not a change of state.
+
+   So it writes the one state field and moves two class names. The separator
+   rule has to be reproduced exactly rather than approximated, because the row
+   must not reflow: `.spp-pin-sep` k sits between pills k and k+1 and is hidden
+   when either of them is the lit one — hidden, never removed (see
+   `_sppPinnedNav`). Nothing else about the bar can change from here; a pill's
+   DISC is derived from the section's data and is none of this function's
+   business.
+
+   The state write is what makes it survive: the next real render — committing
+   the edit — recomputes `cur` from `state.storePreviewFocus` and lights the
+   same pill, so the bar does not snap back the moment you press Enter. */
+function _sppFocusHere(pid, elementId) {
+  if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
+  if (state.storePreviewFocus[pid] === elementId) return;
+  state.storePreviewFocus[pid] = elementId;
+  const row = document.querySelector('.spp-pinned-row');
+  if (!row) return; // iOS and Mac Full carry the footer stepper, not this bar
+  const pills = [...row.querySelectorAll('.spp-pin')];
+  const seps  = [...row.querySelectorAll('.spp-pin-sep')];
+  const cur = pills.findIndex(p => p.dataset.sppPin === elementId);
+  if (cur === -1) return;
+  pills.forEach((p, i) => p.classList.toggle('is-on', i === cur));
+  seps.forEach((s, k) => s.classList.toggle('is-off', k === cur - 1 || k === cur));
 }
 
 function setStorePreviewFocus(pid, elementId) {

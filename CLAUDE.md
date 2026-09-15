@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.39**
+Current version: **v6.40**
 
 ---
 
@@ -2562,6 +2562,34 @@ child that CONTAINS the mark stays at full, so what lights up is the section you
 landed in rather than the field. Dimming five of six cells in one metadata row
 to point at the sixth is fussier than the glow already sitting on it.
 
+**EXCEPT THE HEADER, WHICH HOLDS THREE TARGETS AND THEREFORE GOES ONE LEVEL
+DEEPER.** Jaco: *"cuando doy a business, el title y el subtitle no se dimean."*
+
+The paragraph above is right for the five groups holding ONE target each — the
+mark reads as the section you landed in, and there is nothing inside it to
+disambiguate. `.ias-header` holds **three**: Title, Subtitle and Business are
+three separate pills in the nav and three separate rows of the same box. So
+pressing any one of them lit all three, and the one place on this page where
+the locator actually has a choice to make was the one place it said nothing.
+
+It is **the same rule applied one level in**, not a second mechanism — a child
+that IS the mark or CONTAINS it stays, everything beside it takes the page's own
+`.5`. Two selectors, because the header is two levels (the icon is
+`.ias-header`'s child, the three targets are `.ias-header-meta`'s) and Business
+sits two boxes further down inside `.mac-spp-get-row`, which is what the
+`:has()` is for. **It does not compound**: the header is never dimmed (it
+contains the mark), so its children land at a flat .5 like every other group.
+
+The meta strip is deliberately NOT given the same treatment — Content is the
+only target in it, so the original argument stands unchanged.
+
+Measured, with the transition extended to the three new levels so they travel on
+the same curve: **Business** → title .5, subtitle .5, icon .5, get-row 1, header
+1, strip .5, shots .5, sidebar .21. **Title** → title 1, subtitle .5, get-row
+.5, icon .5. **Subtitle** → the mirror. **Content** → the whole header .5 and
+the strip 1, unchanged. Everything back to 1 / .42 after the window with no
+`.is-spotlit` left.
+
 **THE DIM IS .35, NOT THE CARD'S .18, AND THE NUMBER IS BORROWED RATHER THAN
 SOFTENED BY EYE.** It shipped at the card's .18 and that was too strong: the
 card is explaining a PREREQUISITE — those rows are in your way, and .18 is close
@@ -2894,6 +2922,1385 @@ numbers that will drift. `opacity: .42`, which puts the labels near rgb(79) on
 the modal's rgb(20): legible as chrome, and no longer arguing with the store
 page beside it.
 
+### An editable field wears a well (v6.40)
+
+The answer to the brief's *"no queda claro qué campos son editables"*, and the
+first thing the inventory found is that the diagnosis in that brief was
+backwards. It had been filed as a volume complaint — *"los recuadros de colores
+son demasiado llamativos"*. Measured, the page was the opposite of loud.
+
+**THE AMBER WAS NOT LOUD, IT WAS UNREADABLE — AND THE PULSE NEVER RAN AT ALL.**
+`.is-spp-static` is `box-shadow: 0 0 0 2px rgba(255,149,0,0.06)`. This page's
+ground is `--panel` #141414 (`.mac-spp-page` sets `background: transparent`, so
+`.ias-page`'s `--panel-2` is not what anything here sits on), and 6% orange over
+that composites to about **#1f1a14: eleven points of luminance**. Meanwhile
+`ias-meta-pulse` and `spp-pulse` — the two animations this file's own comments
+describe as how an empty field announces itself — are **dead code on this
+surface**: every element carrying one also carries a `_sppGlowCls` class whose
+`animation` is `!important`, so nothing on the Mac preview has ever pulsed.
+
+**AND A FILLED FIELD DREW NOTHING.** `.ias-editable` reduces to `border: 1px
+solid transparent; border-radius: 4px`. So a completed title was
+indistinguishable from the drawing around it and the only affordance left was
+hover — and **hover is not a resting mark**: in a still screenshot the page said
+nothing about what could be clicked. Four ring vocabularies (amber static, amber
+pulse, green pulse, gray pulse) all answering *where are you / what is left*, and
+zero answering *what can I press*.
+
+**SO THE TWO CHANGES HAD TO LAND TOGETHER**, which is the shape of this whole
+entry: the amber could only leave once something else carried "this is yours to
+edit", and the well could only be introduced once the amber stopped being the
+page's only mark. Jaco: *"como si fueran input fields como ya los tenemos en el
+game details… un recuadro más oscuro que el fondo del modal, con stroke
+blanquecino, alrededor de las áreas editables."*
+
+**DARKER, WHICH INVERTS GAME DETAILS ON PURPOSE.** `.ob-form .form-input` is
+`rgba(102,97,122,.16)` over #141414 → ~#212024, one step UP from its ground. This
+goes down, and the precedent is this file's own: the pinned nav's pending disc is
+`rgba(0,0,0,.22)` because *"a recessed well reads as an empty socket, something
+goes here, where a faint raised disc reads as there is a pale thing here"*. An
+empty field is a socket; a filled one is still a place your text lives rather
+than part of the store page.
+
+**Every value already existed in the app** — none of this is a new dialect:
+
+- the fill is **`--bg` (#0a0a0a)**, which is what the base `.form-input` rule
+  already uses for an input background. Ten points below the page's #141414.
+- the stroke is **`rgba(255,255,255,.14)`, hovering to `.24`** — those are
+  `.ob-form .form-input.is-complete`'s own two values, i.e. exactly what a Game
+  Details field wears once it holds real content.
+- the radius is **`--field-radius`** (8), not the 4 `.ias-editable` used while
+  the box was invisible.
+
+**A stroke is allowed here and that needed a licence**, because this app spent
+three versions removing them. It is the guide's add row: *"an input is not a
+micro-button — it has to show where you can type before you go near it"* (the
+field kept its border in the same change that stripped the `+` beside it). A
+control that fills on hover can afford to be bare; a field cannot, because being
+findable before you approach it is the entire job.
+
+**IT COSTS NO LAYOUT, which is what makes it free rather than a trade.**
+`.ias-editable` already reserved its box with matching negative margins
+(`margin: -2px -4px; padding: 2px 4px`), so the padding can grow to a real
+field's padding as long as the margin grows 1:1 — `-4px -10px` / `4px 10px`.
+Measured: the text lands on the same x and y it was drawn at.
+
+**AND IT EXPOSED A JUMP THAT PREDATES IT BY A LONG WAY.**
+`.ias-app-name.ias-placeholder { margin-bottom: 14px }` gives Title clearance
+**only while one of the pair is empty**. Filled, it falls back to
+`.ias-editable`'s negative margin, so the gap goes 14 → −4 and **the whole page
+rises 18px the moment you commit a title**. Invisible while neither box drew
+anything; not invisible now, since at −4 the two wells overlap. The Mac preview
+takes the 14 unconditionally (`.ias-page.mac-spp-page .ias-app-name`, three
+classes so the tie with the conditional pair is settled by specificity rather
+than by source order). **The point is the invariance, not the 14** — and note
+what it completes: "Editing a field must not move the page" fixed the moment the
+editor MOUNTS and left the moment it COMMITS still moving. Measured 10px of clear
+air between the wells and a 0px page shift, identical empty and filled.
+
+**THE WELL DOES NOT INVERT WHEN YOU OPEN IT.** `.ias-inline-input` fills with
+`--panel-3` (#242424) — a value picked when the field it replaced drew nothing,
+so "lighter than the page" was the only way to say *live*. Over a well that reads
+as the box changing KIND on click, the failure the step disc was rebuilt to
+avoid. It keeps `--bg`; only the stroke moves, `.14` → the blue. **Both mounts
+needed covering because there are two**: Title/Subtitle mount the input INSIDE
+the field, so the input goes `transparent` and the parent's well shows through;
+Description still REPLACES its element (a textarea in a clamped box cannot be
+nested), so the textarea carries the well itself — **including its box**, since
+the className copy drops `ias-editable` and it fell back to the shared −2/4,
+measured as a 2px drop on click. 0 after.
+
+**AND THE BLUE MOVED ONTO THE WELL, BECAUSE THE WELL CREATED A SECOND BOX.**
+Jaco: *"¿por qué se crea dentro del input field otro input field azul?"* —
+`.ias-inline-input` draws its own blue ring plus a `--panel-3` fill, and that was
+RIGHT for as long as the element it replaced drew nothing: the ring was the only
+box on screen, so it read as the field. Put a well under it and the same ring is
+a second box inside the first — two concentric strokes, and of two different
+widths, because the well also holds the character counter and the input does not.
+
+So `.mac-spp-page .ias-editing:not(.is-over-limit)` takes `#0a84ff` on its own
+border and the input draws **nothing**: no border, no outline, no fill. The box
+you clicked is the box you type in, and the stroke is one property through three
+states — `.14` at rest, `.24` on approach, blue when live. That also stops the
+blue being a look-alike focus ring beside `outline: none` and makes it the
+field's own edge changing colour, which is this app's idiom everywhere else (the
+step disc, the submit row, the cancel hold's border). `:not(.is-over-limit)`
+because the magenta already paints the host and an error outranks a focus —
+without it the two rules tie and source order would hand it the blue.
+
+Description needed none of this: it still REPLACES its element, so its textarea
+IS the well, carries the blue on its own border and was a single box already.
+
+**AND THEN THE FOCUS MARK WENT TOO — three colours to one to NONE.**
+`is-spp-focused` / `-done` / `-optional` painted amber / green / gray for one
+event, encoding DONE-ness in a mark whose only job is *the nav sent you here*.
+Collapsing them into one neutral pulse was the first fix and it lasted a version.
+Jaco: *"no entiendo los halos constantes."*
+
+**The count is the argument, not the colour.** "You are here" was being said
+three times on this page: the pinned pill stays lit, `_sppSpotlight` dims the
+whole page around where you landed for 1.6s, and then a halo pulsed on the
+element for as long as it held focus. And the third was the weakest kind — it
+never stopped, which is the sentence this file already used to kill the Submit
+row's orange ring two versions earlier: *a nudge that repeats forever is not
+pointing at anything*. A locator still flashing a minute after you arrived has
+stopped being about arriving.
+
+`_sppGlowCls` is **deleted from the Mac builder**, not left returning `''` — a
+helper that can only produce the empty string is a switched-off control — along
+with its ten call sites and `.is-spp-focused-here`'s rule. The iOS twin is
+untouched and still returns all five. `_sppIsFocused` stays: the pinned bar reads
+it to light its pill, which is where "where you are" now lives, once.
+
+**DELETING IT BROUGHT TWO AMBER PULSES BACK TO LIFE, and this is the trap worth
+carrying out of the whole change.** `ias-meta-pulse` (the Content cell) and
+`spp-pulse` (the Data privacy button) were measured as dead code on this page —
+they never ran, in any state, ever. But the REASON they never ran was the
+`!important` on the classes being deleted: every element carrying a pulse also
+carried a `_sppGlowCls` class that overrode `animation`. **The suppressor was
+load-bearing.** Remove it and the amber this page had just been cleared of
+appears for the first time in its life, on the two elements nobody was looking
+at. They are switched off explicitly now, scoped to `.mac-spp-page`, and not
+deleted, because iOS runs both and is correct.
+
+The general form: **before deleting a rule, ask whether anything is surviving
+only because that rule was standing on it.** "Dead code" verified by measurement
+is dead only under the conditions it was measured in.
+
+**One more, and `node --check` does not catch it.** A comment inside a template
+literal must contain no backticks. One backtick in the `spp-get-glow-wrap` note
+ended the string and turned the next word into an identifier — the page rendered
+empty with `ReferenceError: get is not defined`, while the file still parsed
+clean. Hunt the backtick, not the identifier.
+
+Verified: zero amber elements and zero running animations anywhere on the page
+in any state, wells at `rgb(10,10,10)` with `rgba(255,255,255,.14)` at radius 8,
+the well going `rgb(10,132,255)` on click with the input at `border: none /
+outline: none / transparent`, 10px between Title and Subtitle empty AND filled,
+page shift 0 on commit, and 0px movement on opening Title and Description.
+
+**THE PINNED BAR FOLLOWS YOU INTO A FIELD.** Jaco: *"que el field en el que
+esté se updatee en el top container de pills, que sirva como tracker y como
+dónde estoy."* Focus only ever moved one way — pressing a pill set it — so the
+row knew about its own presses and nothing else: right when you pressed it,
+stale the moment you touched the page it indexes. With both doors lighting the
+pill the bar answers two questions at once, the DISC saying what is finished and
+the lit PILL saying where you are.
+
+`_sppFocusHere(pid, id)` (app.js) writes the one state field and moves two class
+names. **It touches the DOM, it does not render**, and that is a requirement
+rather than an optimisation: `setStorePreviewFocus` re-renders, and the thing
+that just happened is that an editor was mounted into one of those fields — a
+render would destroy the input on the frame it was created and take the caret
+with it. Same argument as `gcalWaitHover`: where-you-are is not a state change.
+The separator rule is reproduced exactly (`.spp-pin-sep` k hides when pill k or
+k+1 is lit) so the row cannot reflow; `data-spp-pin` on the button is what makes
+it a lookup rather than parsing the `onclick` string, the same move `data-iso`
+made on the calendar cell. The state write is what makes it survive the next
+real render.
+
+**AND THEN IT TOOK TWO CLICKS TO GO ANYWHERE — ONE CAUSE, THREE PLACES.**
+Jaco, twice: *"creo que ahora necesito 2 clics para ir de un sitio a otro"* and
+*"si entro a editar algo y toco cualquier otro pill de arriba, necesito 2
+clicks."*
+
+**A `click` event only exists when the down and the up share a target.** The
+editor committed on `blur` with a synchronous `reRenderStepModal()`, so pressing
+a second field ran: mousedown → focus leaves the first input → blur → commit →
+the whole modal rebuilt with innerHTML **mid-press** → the element the mousedown
+targeted is detached → mouseup lands on its replacement → **no click is ever
+generated**. The first press was not swallowed; it never became a click. The
+second worked because by then nothing needed committing.
+
+Three edits, and each one closes a gap the previous one opens:
+
+- **`_stepModalInteractionActive` now counts a FOCUSED inline editor.** That
+  guard exists to stop the modal being rebuilt under the user's hands, and a
+  caret in an input is exactly that — it was only ever missing because the
+  pointer flag happened to cover the common case. The test is `:focus`, not
+  merely mounted, and that is load-bearing: an editor commits on `blur`, so at
+  the moment its commit asks for a render its input is still in the DOM. Keyed
+  on presence it would veto the render that closes it, forever.
+- **`commit` calls `_deferredRerenderStepModal()`.** The value is still written
+  synchronously — only the repaint waits — so nothing can read a stale answer.
+- **The three Mac fields mount on `pointerdown`, not `click`**, because
+  `_flushPendingStepModalRerender` runs on `pointerup`, i.e. BEFORE `click`: a
+  render deferred out of the press would otherwise fire in the gap between up
+  and click and detach the target all over again. Opening on the DOWN edge means
+  the new editor holds focus by the time that flush is reached. `preventDefault`
+  only on the pointer path, or the browser's own mousedown default fights the
+  `input.focus()` that follows. iOS and Mac Full stay on `onclick`, untouched.
+
+**And the flush itself now waits for the click** — `setTimeout(…, 0)` on
+pointerup/pointercancel, the gesture flags still cleared immediately. That is one
+line against a whole class of "it takes two clicks": it fixes the pills, the
+footer, the language picker and anything added later, rather than teaching each
+control its own workaround. The pills are where it showed because pressing one is
+the natural thing to do straight after typing.
+
+Verified with REAL pointer clicks (synthetic `MouseEvent`s cannot reproduce any
+of this — they never move focus, so the blur path never runs and everything
+looks fine): Title → Subtitle → Description, one click each, every value kept and
+the pill following; and from inside the Title editor, one click on the Data
+privacy pill lights it, travels `scrollTop` 0 → 468, writes the focus and leaves
+zero editors behind.
+
+**One more thing the wells exposed: two fields blue at once.** Committing fires
+the blur handler, but the render that REMOVES the node is deliberately deferred —
+so clicking Description then Title left the description's textarea in the DOM,
+committed, unfocused and still wearing the focus colour. The blue is tied to
+`:focus-within` now rather than to being mounted, so a stale node falls back to
+the resting well by itself with no clean-up pass to forget. (`:focus-within`
+rather than `:has(> .ias-inline-input:focus)` — the `:has()` form measured NOT
+matching with that very input as `document.activeElement` and a verified direct
+child. Don't swap it back.)
+
+**AND CONTENT WEARS THE WELL TOO — THE LINE WAS IN THE WRONG PLACE.** This entry
+first shipped with the three text fields marked and the four other click targets
+bare, on the argument that a well means *type here* and those four open another
+step. Jaco: *"¿cómo podemos hacer el mismo tratamiento con la sección de Content?
+¿Sería posible que le rodease como un input field, clicable?"*
+
+**A well means *this value is yours to set*.** How you set it — typing, or
+opening a step — is a SECOND question, and the drawing already answers it: that
+cell carries a pencil (`.ias-meta-action-icon`). So the same well, with the
+pencil still saying "it opens elsewhere" — two facts, two marks, no second
+vocabulary invented for the difference.
+
+**It is an `::after`, not the cell's own box**, for two reasons either of which
+decides it. The cell is `flex: 1 1 0%` in a strip of six with 1px
+`.ias-meta-divider`s between them and no padding of its own, so anything drawn
+on the cell runs edge to edge and eats the dividers. And a fill plus a border on
+one box is the pair this file has refused twice, so the ring is INSET, the way
+`.cr-pinned-bar` and `.spp-pinned-bar` draw theirs. `inset: 0 5px` is the whole
+geometry — full cell height against the divider's 28, 5px in at each side so the
+dividers keep their air — and it costs zero layout, because a pseudo-element
+cannot move a flex item. That is the same guarantee the text fields get from
+their margin/padding pair, reached differently because this box had no padding
+to trade. Measured: every cell width and the strip's height identical before and
+after. The children need `position: relative; z-index: 1`, or the positioned
+`::after` paints over them — the trap the calendar's wait band hit with its
+digit.
+
+The hover is the stroke, `.14 → .24`, the fields' own. The cell's `--panel-3`
+hover fill is switched off here (it drew a second, squarer box around the well)
+and `.ias-meta-cell--seen`'s green hover with it — that green was the only thing
+saying "already answered" on approach, and the pinned bar's disc says it
+permanently.
+
+**THE STRIP BREATHES, IS RULED ONCE, AND THE SHOTS SHOW A WHOLE PAIR.** Three of
+Jaco's, and the first two are the same argument as everything above.
+
+*"Gana más espacio vertical de la franja de tiles."* 8px of vertical padding was
+set when these cells were flat text; they are a band of objects now, and that
+needs air around the band rather than around the words. 14, and it is the one
+number — the cells have no padding of their own. Measured 48.6 → 59.6.
+
+*"Quita la divisoria horizontal de debajo de las tiles."* **The strip is a
+boundary, not a box.** Two rules 48px apart made it a bordered band floating in
+the page; the real store rules above and lets the screenshots start on space.
+Same argument twice already in this file — the step modal's section headers lost
+theirs because position says it, the Submit row lost its divider because the
+fill was already a boundary. The TOP rule stays: it separates the strip from the
+header and nothing else draws that.
+
+*"Fuerza a que se vean 2 imágenes, no 2 y pico, con una flecha lateral."* A
+carousel that cuts its third item mid-frame reports its own overflow rather than
+your screenshots.
+
+**The arrow is the scroller's SIBLING** (a `.mac-spp-shots-row` flex parent), not
+its last child: inside, it would scroll away with the shots; beside it, its 40px
+come out of the row. And the frame width is DERIVED — `calc((100% - 16px) / 2)`
+with `aspect-ratio: 16/10`, Apple's own Mac screenshot ratio (`SM_REQS.macos`,
+2880×1800) — rather than the `336px` / `height: 210px` literals it happened to
+equal at this modal width.
+
+**Three wrong answers first, and each was a different wrong model of the box:**
+
+1. **`padding-right` does not reserve anything from overflow.** Overflow content
+   paints across the whole PADDING box, so the 40px lane just moved the sliver
+   into it. That is why the arrow had to leave the scroller entirely.
+2. **`(100% - gap) / 2` fits the PAIR, and the pair is not what has to fit.** The
+   next frame starts one gap later, i.e. one gap INSIDE the viewport. What must
+   fit is the pair *plus the gap that follows it* — hence `- 16px`, two gaps.
+3. **The left padding was a GHOST.** This scroller rests at `scrollLeft: 16`
+   (restored, not authored), so its 16px of left padding was already scrolled out
+   of view and the first frame sat flush anyway — while `100%` still resolved
+   against a content box the scroll had cancelled. Every calculation was one gap
+   out for that reason alone. With it gone the resting position really is 0 and
+   nothing moved on screen: it was drawn flush before and is flush now.
+
+Measured after: resting `scrollLeft` 0, viewport 720, frames 352 at 0 / 360 /
+720 — the pair ends at 712 and the third starts at 720, **0px visible** — ratio
+1.600, and the chevron advances to 352, `scrollWidth − clientWidth` exactly.
+
+**Three targets are still bare, and they are not one question.** Business is
+already a solid blue GET button and Screenshots already draw their own 1px
+frames — both are visibly objects, so a well would be a second box on something
+that has one. **Data privacy is the real remaining case**: `.spp-section-btn`
+when unanswered and `.ias-privacy-block` when done are both bare, and both are
+full-width blocks rather than a cell, so the same well at that size is a
+different shape and wants deciding rather than copying.
+
+**THE CONTENT WELL IS TWICE THE CELL, AND THE STRIP'S PADDING IS THE OTHER HALF
+OF THAT NUMBER.** Jaco: *"que el content well sea más alto, como el doble y un
+poco más ancho, para que claramente sea un field."*
+
+At `inset: 0 5px` it was exactly the cell — 28.6 tall, the height of the two
+lines inside it. That is the size of a LABEL. Every other field on this page has
+air between its text and its own edge (`.ias-editable` pays 4px top and bottom
+on top of the line it wraps); this one was shrink-wrapped to its content, so it
+read as a rule drawn round a caption rather than as somewhere a value lives.
+
+`inset: -14px 2px` → **56.6 tall**, 28.6 + 28, against the cell's own 28.6. All
+28 of those are free: it is still an `::after`, so the well grows INTO the
+strip's padding and moves nothing. **The strip's padding is what pays**, 14 →
+**18** — not a second decision but the same one, since the 4px it gains is
+exactly the clearance between the well's new top edge and the rule above it.
+The relationship to keep: the well's clearance is `padding − 14`.
+
+`2px` rather than 5 is the "poco más ancho", and the divider spends it.
+`.ias-meta-divider` carries `margin: 0 4px`, so the air between the well and the
+divider beside it was 4 + 5 = 9 against the well's own 8px radius — the corner
+curve was smaller than the gap it sat in. At 2 it is 6, verified both sides.
+
+**The dividers do NOT grow with it.** They separate the row's cells, which are
+still 28.6 of text; the well is one cell's field and a different kind of object.
+A 57px divider would make the strip a table with ruled columns — the "bordered
+band" the bottom rule was removed for, rebuilt vertically.
+
+**AND EVERY TILE IS NOW THE SAME WIDTH, WHICH THE WELL IS WHAT FORCED.** Jaco:
+*"todas las tiles (separación entre divisiones) tienen que medir lo mismo, que
+no sean variables."* `.ias-meta-cell-wide` gave Category `flex: 1.4` against
+everyone else's `1`, so the row was 106.7 / 106.7 / **149.4** / 106.7 / 106.7 /
+106.7 — one column 40% wider than the five beside it, and the dividers therefore
+at six different distances from each other.
+
+That is right on a row of plain text, where a cell only has to be as wide as the
+word it holds, and **wrong the moment one of them wears a well**: a field 40%
+narrower than its neighbour reads as a different KIND of box rather than as the
+same box holding less. A metadata strip is a rhythm — the dividers are what you
+actually see, and evenly spaced they read as one ruled band.
+
+`flex: 1` on all six, scoped to `.mac-spp-page` (iOS and Mac Full share the
+class, are drawn as a device showing a page, and have no well in the row). It
+costs Category nothing anyone will notice, because five columns get WIDER:
+measured **113.83 / 113.84 × 6**, divider-to-divider 122.83 across the board,
+nothing ellipsised, strip still 67.6 and the well now 109.8 wide.
+
+**AND THE LABEL IS A LABEL — IT NEEDED AIR UNDER IT.** Jaco: *"espacia un poco
+más el content del lápiz, y el ratings de la raya — los titulillos de las tiles
+y el texto de debajo. Y haz los titulillos un pelín más grandes y bold."*
+
+`.ias-meta-label-top` was `.ias-meta-bot`'s look flipped upside down — 9px,
+`--text-faint`, normal weight, 2px of margin — and that is the giveaway: it was
+copied from a CAPTION, which sits below its value, where 2px is right precisely
+because a caption belongs to the thing above it. Here the label comes FIRST and
+names what follows, so 2px glued RATINGS to its own dash and CONTENT to its
+pencil: two lines reading as one lump rather than as a name and a value.
+
+**6px, and the gap is the half doing the work** — the guide's wait list's own
+lesson going 3 → 7 ("rows this short are told apart by the air between them long
+before they are told apart by their size").
+
+9 → **10px at 600**, which is as far as it can go. The VALUE under it is 12px/700
+in `--text-dim`, so the label has to stay smaller and fainter or the cell has two
+headlines; what keeps the hierarchy at 10/600 is the COLOUR, `--text-faint`
+against `--text-dim`, which is this file's own rule that colour carries the
+emphasis and weight only rides along.
+
+It costs height, and that is fine **because the well is derived from it**: the
+cell grows, the strip's padding does not move, and `inset: -14px` keeps the well
+exactly 28px taller than whatever the cell measures. One number moves and
+everything hanging off it follows — cell 28.6 → **34**, strip 67.6 → **73**, well
+56.6 → **62**, clearance still 6, the six columns still 113.8 each, and the
+`::after` still costing nothing (identical widths and strip height with it
+disabled). Scoped to `.mac-spp-page`; iOS verified still 9px / 400 / 2px.
+
+Measured: strip 59.6 → 67.6, cell still 28.6, **every cell width identical with
+the `::after` on and disabled** (106.7 / 106.7 / 149.4 / 106.7 / 106.7 / 106.7)
+and the page the same height to the hundredth — zero layout, as promised. Well
+6px from each divider, 6 clear of the top rule and 5 of the strip's bottom edge,
+hover still `.14 → .24` with the cell's own fill staying transparent.
+
+**AND THE BLUE PILL ASKS BEFORE IT REPORTS.** Jaco: *"que el GET sea quizás un
+'set price'."* GET is the store's own word for a free app and it is TRUE once
+somebody has said the app is free — but this preview cannot tell "free" from
+"nobody has set a price", because `isFree` is derived from an empty string as
+much as from a zero. So until Business is answered the one required element
+still wearing the store's voice while it is really asking a question says what
+it wants: **Set price**. After, it is the store's own `GET` / `$4.99`.
+
+That is the order every other field on this page already follows — what is empty
+says so, what is answered shows the answer — and `businessDone` is the same gate
+the pinned bar's disc reads, so the two cannot disagree. It is a LABEL, not a
+second control: same button, same handler, same target, same `title`. The pill
+has no fixed width (`.ias-get-btn` is padding + `white-space: nowrap`), so the
+longer string costs nothing: 63.3 → 92.7. Verified in all three states — unset →
+"Set price", answered and free → "GET", answered at 4.99 → "$4.99".
+
+**AND THE AMBER CAME BACK A THIRD TIME, ON `.ias-placeholder`.** Same trap as
+`ias-meta-pulse` and `spp-pulse` above, one selector further out and missed by
+the sweep that "verified" it: `.ias-placeholder` also carries `animation:
+ias-meta-pulse 2s infinite`, also invisible only because every empty field used
+to carry a `_sppGlowCls` class. With that gone the three empty fields — Title,
+Subtitle, Description — were pulsing an amber ring on the page this whole entry
+cleared of amber. Measured over one cycle: `rgba(255,149,0,.35)` at 0px
+spreading to `.067` at 4.07px, every two seconds, on all three.
+
+It is added to the Mac-scoped `animation: none` list. **And the note above it
+was wrong** — it claimed "zero amber elements and zero running animations
+anywhere on the page in any state", from a sweep that queried the selectors it
+had just edited rather than the page. Sweep the whole subtree. Verified now on a
+cold load: zero elements with an animation, zero with an amber shadow or fill,
+`.ias-app-name`'s `box-shadow` at `none`, and iOS untouched (its own glow system
+still runs `spp-focus-pulse` on the focused field).
+
+**THE DESCRIPTION IS A FIELD WITH A FLOOR, AND A LINE-CLAMP BOX WILL NOT GIVE
+YOU ONE.** Jaco: *"el cajetín de descripción tendría que tener mínimo 100 de
+altura."* It was shrink-wrapped to its text — 30.8 tall on the placeholder's one
+line, in a section 101 tall, so **60px of the box below it was empty page**: a
+caption with a rule round it, and the emptiness reading as section rather than
+as field.
+
+**The one-line version does not work, and this is the trap to carry.** A
+`-webkit-line-clamp` box **refuses to contribute a min-height to layout**:
+measured, it painted 100px tall and the engine wrote itself a
+`margin-bottom: -75.46px` so its MARGIN box still matched its line boxes — the
+section stayed 95 and the field hung 15px through the divider. Stretching it
+instead is worse: given a `1fr` grid track it came out **179.5 tall with a −75px
+bottom margin**, and in another arrangement 185 / −85. The engine is not laying
+it out, it is cancelling you.
+
+So the height is carried by `.mac-spp-desc-row`, a plain flex row that behaves,
+and the well is sized to match: `min-height: 100px` on the row, `104px` on the
+clamp — **the +4 is derived**, since `.ias-editable` pays its box in negative
+margins and the well already starts 4px above the column, so ending on the
+column's bottom edge costs exactly that overhang.
+
+**AND THE GAP TO THE DIVIDER IS 48px, NOT ZERO.** This shipped flush first, from
+*"llegar hasta la divisoria horizontal que lo separa de achievements"*, and Jaco
+corrected it against the real Mac App Store the same minute: *"miento, SIEMPRE
+tiene que mantener 48px de distancia."* The reference is unambiguous — the
+description ends, then a clear band, then the rule — and the band does not change
+with the text, so it is `padding-bottom` on the section rather than anything
+derived from the field. Because the well is exactly the column + its own 4,
+`rowHeight + padding − wellHeight + 4` collapses to `padding`: **one number in
+the CSS is one number on screen.** Measured 48.00.
+
+**AND THE RAIL IS A STACK, NOT A SPREAD.** Jaco: *"20px de separación de altura
+entre developer, website y support, y ese pack, alineado con el top de
+description input box."* The first pass left it alone on the grounds that
+`space-between` already bottom-aligned it — **and the floor is what invalidated
+that**. `space-between` was written when the column's height WAS the
+description's four clamped rows, so spreading three links across it put Developer
+on the first line and Support on the last by construction: the native page's own
+arrangement, read off a box that fitted its text. With a 100px floor the column
+no longer tracks the text at all, so the spread stopped meaning anything and just
+pushed the links as far apart as the floor happened to be. A set of links is a
+STACK with a rhythm, not a thing distributed across a box.
+
+`flex-start` + a real **20px** gap, hanging from the top — and the pack's
+`margin-top: -4px` is **the well's overhang for the third time**: the
+description's painted top edge sits 4px above the row both columns start on, so
+anything that lines up with that field's EDGE has to account for the 4, because
+the edge is not where the layout thinks it is. Same number as the clamp's +4,
+same reason. Measured: gaps 20.02 / 20.03, pack top on the well's top edge to
+**0.00**.
+
+**AND DATA PRIVACY WEARS THE WELL, WHICH CLOSES THE LAST OF THE FOUR.** Jaco:
+*"el answer data collection debería estar también en un pocillo como el de
+Content."* It was left open with a real question attached — both of its states
+are FULL-WIDTH BLOCKS rather than a cell, so "the same well at that size is a
+different shape and wants deciding rather than copying". Decided: **the size is
+not what a well means.** It means *this value is yours to set*, and that is as
+true of a 720px block as of a 114px cell; the two were answering the identical
+question differently only because one of them happened to be narrow.
+
+It goes on the element's OWN box rather than an `::after` — Content needed the
+pseudo-element because that cell is a flex sibling of 1px dividers with no
+padding to trade, and these two are plain blocks that already carry their own.
+The ring is still INSET, for the standing reason. Both states take it
+(`.spp-section-btn` unanswered, `.ias-privacy-block` answered), their `--panel-3`
+hover fills are switched off (a fill under a well is a second, squarer box) and
+`.spp-section-btn`'s `translateY(-1px)` lift goes with them: a field does not hop
+when you approach it, and nothing else on this page moves on hover.
+`.spp-section-btn--done` keeps its green — it is iOS's and Mac Full's state,
+unreachable here.
+
+**OVER THE LIMIT IS ONE BOX TOO, AND IT IS THE BLUE'S BUG IN ANOTHER COLOUR.**
+Jaco: *"si me paso de caracteres se genera un nuevo recuadro rojo dentro, no
+debería, debería ser el recuadro general del input field."*
+
+It survived the focus fix because **the two states are flagged in different
+places**: blue is a SELECTOR on the host (`:focus-within`), over-limit is a CLASS
+and the class was only ever written onto the input — the borderless thing nested
+inside the well. So the magenta had nowhere to land but the input's own box and
+drew the exact second rectangle the well note exists to prevent.
+
+`startMasInlineEdit` writes it onto the host as well now (single-line only — a
+multiline field replaces its element, so its textarea IS the well and was already
+one box). **The stroke is one property through four states: `.14` at rest, `.24`
+on approach, `#0a84ff` live, `--magenta` over.** The fill never leaves `--bg`,
+which is why the shared rule's `--magenta-soft` is overridden rather than
+inherited — a well that changes colour AND kind is the second-box argument one
+more time. It also means the flagged box is the same box before, during and after
+editing, where the display element already wore `is-over-limit` between edits.
+
+**AND THE COUNT IS THE WHOLE MESSAGE.** Jaco: *"que no ponga 'must be less
+than…', es suficiente con mostrar un número rojo en negativo."* "Must be less
+than 30 characters." was 148px of prose restating in words what `-4` in magenta
+says in two characters — and the count was already magenta on its own, so the
+pair was one fact said twice with the louder half being the one that reads
+slower. Hidden in CSS rather than removed from the JS: `.ias-char-error` is the
+same node Localization Review, IAP and the iOS preview all build, and it says the
+right thing on a real form; this is the one surface that is a DRAWING of a store.
+One node with no rule is cheaper than a fifth call site to keep in sync.
+
+**It pays back 152px of the field**: the reserved column was measured for
+sentence + gap + count (148.3 + 8 + 31 → 188) and now only has to hold a
+four-character overshoot, 31 → **36**, the next multiple of 4. Still RESERVED
+rather than fitted, for the reason the 188 was — a column that grows when the
+error appears would shrink the input you are typing in at the exact moment you
+cross the limit. Measured: sentence `display: none`, count `-20` in
+`rgb(255,59,118)`, column 36, host magenta, input `outline: none` on a
+transparent fill.
+
+**AND A FILLED FIELD RECEDES.** Jaco: *"cuando algo ya está relleno, ¿debería
+bajar la intensidad del input field?"* Yes, and this file's own socket argument
+is why: the well exists to say *this value is yours to set*, which is urgent
+while the box is empty and merely true once it is not. An empty field has nothing
+but its edge; a filled one is read by its CONTENT and the edge only has to say
+where the content ends. Same reason the pinned nav's pending disc is a recessed
+socket and its done state is a solid mark — **the mark is for what is
+outstanding** runs through this whole surface.
+
+`.14 → .08`, a halving rather than a new value, with hover still `.24` on both so
+approaching either brings it fully back. `.ias-placeholder` is the test and it is
+the right one: the builder recomputes it from state on every render, and it
+deliberately STAYS ON while a field is open, so opening an empty field neither
+brightens nor dims it — it just goes blue. Content takes the same step through
+`.ias-meta-cell--seen` and Data privacy gets it for free (its two states are two
+different elements), so "answered recedes" is one idea across all five fields
+rather than a text-field special case. Measured: empty `.14`, filled `.08`, hover
+`.24`, over-limit magenta.
+
+**One process note, because it cost a round trip.** The `is-over-limit` fix
+measured as not working while the file on disk was correct — the pane was running
+a **cached `app.js`**, since `?v=` had not moved and this is all one unpublished
+version. `startMasInlineEdit.toString()` is what caught it (the running function
+did not contain the line). Before concluding that an edit did not work, check the
+running code, not the file.
+
+**AND THE DESCRIPTION STOPS REORGANISING THE PAGE — TWO CAUSES, BOTH MEASURED.**
+Jaco: *"¿por qué cambia la caja de descripción al entrar y salir y mueve las
+cosas? No debería y es molesto. Mete el número de caracteres en el top right
+corner del input field. Pero no reorganices las cosas cada vez que salgo y entro
+de un field."*
+
+This is "Editing a field must not move the page" arriving at the ONE field that
+note deliberately left open, and there were two independent movers:
+
+1. **The counter was a grid ROW.** `grid-row: 2` — a track that only exists while
+   you are editing — so clicking the description grew the flex 100 → **115.4**,
+   the section 162 → 177.4 and the page 1193.2 → 1208.6. Exactly 15.4, the
+   counter's own height. It is `position: absolute` now, in the grid's own
+   positioning context, and **both offsets are derived**: `right: 40px` is the
+   chip column (32) + the column-gap (8), which lands on column 1's right edge,
+   and `top: 2px` is the well's −4 overhang plus 6 of air. `pointer-events: none`,
+   because a click landing on a readout instead of in the text you are editing is
+   the worst kind of near-miss.
+2. **`width: 100%` on the textarea, which is subtler and was the other half.** An
+   explicit 100% is a RESOLVED length, so the well's `margin: -4px -10px` then
+   SHIFTS that fixed box 10px left instead of widening it — measured, the field
+   went **544 → 524 and moved left 10** the instant you clicked it. The display
+   box has no explicit width, so its auto fill takes the grid area and the
+   negative margins extend it 10 each side. `width: auto` makes the textarea do
+   the same. (The shared `.ias-inline-input` keeps its 100%: Loc Review and IAP
+   have no overhang to reckon with.)
+
+Verified across rest → editing → rest: page **1193.24** every time, section 162,
+row 100, box **104 × 544 at left 447 / top 509.68** — identical to the
+hundredth — with the count 10px inside the field's right border and 6 below its
+top, and zero editors or counters left behind on exit.
+
+The cost, knowingly: with a long first line the count overlays the text. It is
+34.7px wide, it exists only while you are typing, and the alternative — reserving
+a `padding-right` on the textarea — would rewrap the text between reading and
+editing, which is the same complaint in a smaller box.
+
+**AND A DESCRIPTION TYPED IN GAME DETAILS NEVER REACHED THE MAC PREVIEW.** Jaco:
+*"cuando pongo una descripción en game details, no se manda a la store page."*
+
+`seedMacAppStoreListing` copies Game Details' values the first time the Mac App
+Store platform is activated and is a deliberate no-op ever after — seed once,
+then fully independent, so Mac's Description can differ from the App Store's.
+That design is right and it was **seeding the wrong moment**: you add the
+platform before you have written a word, so the copy it freezes is `''`, and from
+then on the preview is independent of a field that has never had a value. iOS was
+fine throughout because `_iasFieldValue` reads `formData` live; only Mac has its
+own bucket. Reproduced: `formData.description` set to a real sentence,
+`_masFieldValue` returning `""`, the page still drawing its placeholder.
+
+**The fix is what "independent" has to mean while nothing has diverged**: an
+empty Mac value is not a decision, it is the absence of one, so `_masFieldValue`
+falls back to Game Details — and the moment you edit the field HERE,
+`_masSetFieldValue` writes the Mac copy and the fall-back stops applying by
+itself, with no flag to keep in sync. Same shape as `smAppIcon`'s two doors: the
+dedicated slot wins when it is set, and until then the shared source answers.
+
+Known edge, and it is the cheaper one: deliberately CLEARING Mac's description
+resurrects Game Details' rather than showing an empty field. A preview
+permanently blank because of when you happened to press a toggle is worse, and
+the first is what people actually hit. Title and Subtitle never had this —
+`MAS_SHARED_LISTING_FIELDS` routes them straight to `_iasFieldValue` — so this
+reaches only `description` and `releaseNotes`.
+
+Verified end to end: seeded `""`, Game Details' sentence drawn on the page with
+the placeholder class gone and the Description pill's disc green; then
+`_masSetFieldValue` to a Mac-only string → the page shows the Mac one and
+`formData.description` is untouched.
+
+**AND ACHIEVEMENTS WEARS ONE TOO, ON ONE LEFT EDGE WITH EVERYTHING ELSE.** Jaco:
+*"¿tan difícil es que alrededor de achievements me crees el mismo tipo de
+pocillo? Y quiero que todos los pocillos estén bien alineados a la izquierda, de
+forma que coincidan los screenshots, el input de descripción, el pocillo de
+achievements, el pozo de answer data collection."*
+
+The well itself is the easy half — Achievements is a target like any other
+(`data-spp-el`, its own `onclick`) and takes the receded `.08`, because its pill
+disc is permanently green and "answered recedes" must agree with that rather
+than contradict it.
+
+**THE ALIGNMENT WAS THE REAL WORK, AND THERE WERE THREE COLUMNS.** Measured
+before: screenshots **441**, description well **447**, Data privacy **457** — and
+each arrived honestly, which is why nobody had noticed:
+
+- **441** is `.ias-device-wrap`'s edge plus the page's 1px border. The shots row
+  is not inside an `.ias-section` at all, so that is where it sits.
+- **457** is `.ias-section`'s CONTENT column — the section's box is at 441 with
+  `padding: 14px 16px`.
+- **447** is the description well's painted edge: 457 pulled back by
+  `.ias-editable`'s own −10 overhang. Achievements' box was there too, from a
+  `margin: 0 6px`.
+
+**441 wins because it is the only one that is a real edge** — the page's — and
+because the screenshots are the widest objects on the surface, so they are what
+the eye measures the column against. One statement applied four ways: **every
+well pulls out exactly the padding standing between it and that edge.**
+
+- `.ias-achv-section` → `margin: 0`, padding back to 16. That `0 6px` / `14px
+  10px` pair was written to give `is-spp-focused-optional`'s 7px outward ring
+  room to clear `.ias-page`'s `overflow: hidden` — **and that ring no longer
+  exists here**, since v6.40 deleted `_sppGlowCls` from the Mac builder. So the
+  margin has no consumer left on this surface, and 0/16 puts the box on the edge
+  with its content unmoved. iOS keeps the 6/10 and its rings. It needs
+  `.ias-page.mac-spp-page` to win: the old rule is `.mac-spp-page
+  .ias-achv-section` too, same specificity and LATER in the file.
+- Data privacy → `margin-inline: -16px`, the section's own side padding.
+- the description well → `-16` / `16` instead of `-10` / `10`, so the box reaches
+  the edge while its TEXT stays on 457: the padding grows by the same 6 the
+  margin does, which is the entire reason `.ias-editable` pays its box that way.
+  The counter's offset follows — `40 − 16 + 10` = **34**, keeping the same 10px
+  inset it had against an overhang that changed.
+
+**And the `width: 100%` trap turned up a THIRD time in one session.** The privacy
+BUTTON could not take `width: auto` like the block beside it: a form control
+shrinks to fit at auto (measured **282.4** instead of 752) and its authored 100%
+is a resolved length that negative margins merely SHIFT. So it states
+`calc(100% + 32px)` — the two 16s it is pulling out. Same shape as the
+description textarea's shift and the counter row's, on a third element.
+
+Measured after: screenshots, description well, Achievements and Data privacy all
+on **one left edge**, identical to the tenth.
+
+**AND THEN A WELL NEEDED CLEARANCE FROM A DIVIDER, WHICH IS THE SAME CHANGE ONE
+AXIS OVER.** Jaco: *"¿hay alguna forma de que siempre dejes al menos 15px entre
+los recuadros de pozo y las líneas divisorias? Veo por ejemplo el caso de
+achievements, que está tocando tanto arriba como abajo con su línea divisoria."*
+
+Measured, Achievements ran from one divider's bottom edge to the next one's top:
+**0.0 above, 0.0 below.** And it always had — `margin: 0 6px` was zero vertically
+long before v6.40, and the `0`/`16` the alignment pass replaced it with kept the
+zero. **The geometry was already wrong and the well is what made it legible**,
+which is this whole entry's pattern for the fourth time.
+
+**THE ASYMMETRY IS WHERE THE SECTION'S PADDING LANDS, and it decides the fix.**
+Every other well sits INSIDE an `.ias-section`, so that section's 14px of
+vertical padding falls OUTSIDE the well and is its clearance. Achievements IS the
+section (`.ias-section.ias-achv-section`), so its padding falls INSIDE its own
+well and buys it nothing. So this could not be fixed by touching padding — it is
+a MARGIN, and Achievements is the only object on the page that needs one.
+
+**16, not 15.** He asked for a floor and the clearance everywhere else was 14 —
+already under it — so the number had to move regardless, and once it moves it
+should be ONE number rather than "14 here, 15 there". 16 is `.ias-section`'s own
+side padding, already on this page, so a well's clearance from a divider is now
+the same number as its text's inset from the page's edge. One token
+(`--spp-well-gap`), and every well reads it.
+
+Two things that came out with it:
+
+- **The description keeps its 48 below**, which is not an exception but the
+  store's own measurement (*"SIEMPRE tiene que mantener 48px de distancia"*). It
+  takes the 16 on TOP like everything else. Written as `:not(:has(…))` on the
+  blanket rule plus an explicit `padding-top` on the description section's own,
+  rather than a `padding-block` a later rule has to undo — the two selectors tie
+  at three classes, so source order would otherwise decide whether 16 or 48 won.
+- **`.spp-section-btn`'s stray `margin-bottom: 8px` goes**, scoped here. It made
+  Data privacy measure **22 below against 14 above** — one control with two
+  different clearances, from a margin written when nothing below it drew a box.
+
+Measured after: Achievements **16.0 / 16.0**, Data privacy **16.0 / 16.0**,
+description 16 above and **48.0** below, all four wells still on 441.
+
+**AND THE HEADER'S FIELDS JOINED THE CONTENT WELL'S COLUMN.** Jaco: *"¿podemos
+alinear título y subtítulo para que sus input fields estén alineados a su
+izquierda con el content pocillo? ¿Y que el set price ocupe el ancho exacto de
+content pocillo de debajo?"*
+
+Measured before: the Content well's painted edge at **577.8**, Set price's box at
+**577**, and the Title/Subtitle wells at **567** — a full 10.8 left of the other
+two. It is `.ias-editable`'s overhang: `margin: -4px -10px; padding: 4px 10px`
+grows the box 10 outward and pads 10 back, so the TEXT stays put and the WELL
+hangs left.
+
+**WHAT MOVES IS THE WELL, AND THE TEXT GOES WITH IT — that is the decision to
+argue with first.** There is no arrangement where the well's edge lands on 577
+and its text also stays on 577: a well needs horizontal padding or its stroke
+touches the first letter. So either the boxes align and the title's text shifts
+10px right, or the text holds and the boxes stay ragged.
+
+The boxes win, on this file's own rule taken one step on: **once a field wears a
+well, the well IS the object the layout spaces.** The header's 18px gap was
+landing on the title's TEXT while the well hung into it, leaving **8px** of real
+air between the icon and a painted box — the gap read as half what it was
+authored as. `margin-inline: 0` puts the well on 577 and hands the icon its full
+18 back (measured 18.0 icon → well). The relationship the store drawing is
+faithful to is icon → title, and with the title drawn as a box that is icon →
+well, which is now correct for the first time.
+
+**SET PRICE TAKES THE WELL'S WIDTH, DERIVED RATHER THAN TYPED.** The Content well
+is one metadata tile inset 2px a side, and a tile is the strip's content width
+shared six ways — all three terms already in the CSS, so `--spp-tile` /
+`--spp-well-w` restate nothing. The strip's side padding, the divider's margin
+and the well's own `inset` are rewritten to read the same tokens, so there is one
+source rather than two copies to drift. 92.7 → **109.83** against the well's
+109.84.
+
+**`cqw` AND NOT `100%`, AND THE FIRST ATTEMPT IS THE REASON.** A custom property
+holding a percentage is substituted as a TOKEN and resolved where it is USED, not
+where it is declared — so `width: var(--spp-well-w)` on Set price measured its
+"tile" against the 594px get-row it sits in rather than the 752px page, and the
+button came out **36**. There is no percentage that can mean "the page" from
+inside the header; a container unit is the only thing that does. `.mac-spp-page`
+takes `container-type: inline-size` — inline-size and not `size`, so only the
+width is contained and the page's height still grows with its content, which
+everything on this surface depends on. Verified after: the page still 1227 tall
+and scrolling, the shots carousel still 352-wide frames at 0 / 360 / 720 with the
+third exactly at the viewport edge, both sticky fades intact.
+
+**THE ONE HONEST GAP: 0.83px.** Set price and the title wells land on **577** —
+page edge + 22 of header padding + a 96 icon + an 18 gap, every term fixed —
+while the Content well lands on **577.83**, because a tile is 683/6 and the
+remainder falls there. Constant (the modal is a fixed 1000), below anything that
+reads, and not closable without hard-coding a sub-pixel: the two columns are
+built from different arithmetic and only this modal width makes them nearly
+agree. Don't chase it.
+
+**AND VERIFYING IT FOUND A REGRESSION THE ALIGNMENT PASS HAD SHIPPED.** Clicking
+Description moved the field **6px right** — 441 at rest, 447 while editing.
+`.mac-spp-page textarea.mac-spp-desc-clamp` is (0,2,1) and so is
+`.mac-spp-page textarea.ias-inline-input`, which declares `margin: -4px -10px`
+and is LATER in the file, so the tie went to the 10 while the display `<div>`
+had moved to −16. **The check that signed that change off measured the RESTING
+box only** — the note above says "identical to the tenth" about four left edges
+and never opened one of them.
+
+`.ias-inline-input` added to the selector makes it (0,3,1) and settles it by
+weight. It also fixed the counter for free: `right: 34px` was derived for a −16
+overhang and had been landing on a −10 box, measuring **4px** inside the field's
+right border instead of its designed 10. Both 10 now.
+
+**Third specificity tie of this shape on this surface** (after
+`.ias-achv-section`'s margin and `.ias-app-name`'s). The rule this leaves: when
+two rules on one surface both want a box, give the newer one an extra class
+rather than trusting its position in the file.
+
+Measured across rest → editing → rest: description **441 × 556** and page
+**1227.24** at every sample, title and subtitle wells on 577 throughout, and
+iOS / Mac Full verified bit-for-bit untouched (Achievements still `0 6px` /
+`14px 10px`, `.ias-section` still `14px 16px`, `.ias-editable` still `-2px -4px`,
+GET still shrink-wrapped at 63.3, strip still `8px 12px`).
+
+**AND THE DESCRIPTION REALLY DID STILL RESIZE — IT WAS THE LINE BREAKER, NOT THE
+BOX.** Jaco, a third time: *"sigo viendo que al entrar y salir del DESCRIPTION
+input box, cambia su tamaño."*
+
+**TWO PASSES HAD MEASURED THE BOX AND BOTH CAME BACK CLEAN, because the box is
+not what changes.** Measured across the swap: 104 × 556 at 441 / 767.18, page
+1227.24, section 164, row 100 — identical to the hundredth in both states, which
+is exactly what the previous two notes proudly report. What changes is the
+**TEXT**: the paragraph re-wraps, words jump between lines, and the block visibly
+changes shape while its box sits perfectly still.
+
+**One computed property out of twenty-six differs, and it is the UA's.** Diffing
+family, size, weight, style, stretch, letter-spacing, word-spacing, line-height,
+indent, transform, white-space, word-break, hyphens, kerning, feature settings,
+variant, rendering, direction, writing-mode, tab-size, align, synthesis, optical
+sizing and variation settings across the DIV → TEXTAREA swap leaves exactly one:
+**`overflow-wrap`, `normal` on the div and `break-word` on the textarea.** No
+author rule sets it — Chrome's UA stylesheet ships it on `<textarea>`. A
+different line breaker is enough on its own.
+
+`normal` on both, stated on the pair rule, because the DIV is the drawing: the
+store renders a paragraph and the editor conforms to it. `word-break: break-word`
+(`.ias-desc-text`) already stops a long unbroken word overflowing, so nothing is
+lost.
+
+**The rule this leaves: when one element REPLACES another, diff every computed
+TEXT property across the swap, not just the geometry.** A UA default on the
+replacement appears nowhere in this file and nowhere in the cascade — it is
+invisible to every kind of search except a diff of the two computed styles.
+Verified after: `overflow-wrap: normal` in both states, box and page identical
+across rest → editing → rest at a pinned scroll.
+
+**AND THE COUNT SITS ON THE FIELD'S EDGE.** Jaco: *"pon los numéricos en el edge
+derecho tío, a 5px de distancia si quieres."* Two things held it off, and only
+one of them was the number. The row is `justify-content: space-between`, written
+when it held the error sentence AND the count; with the sentence `display: none`
+on this surface that leaves ONE child, and space-between then behaves as
+flex-start — so the number hugged the LEFT of its own reserved 36px column and
+measured **32.9px** from the border. `flex-end` is what that rule meant once the
+sentence left. The remaining 11 is the field's own `border 1 + padding 10`, so
+the row is pulled 6, written as the subtraction. Measured **5.0** on Title,
+Subtitle and Description alike.
+
+**APP PRIVACY IS THE SECTION'S NAME, NOT ITS ANSWERED STATE.** Jaco: *"el
+pocillo de answer data collection podría tener el mismo título 'App Privacy' que
+tiene Achievements, así queda aún más fiel a la tienda."*
+
+The DONE arm already carried that heading and the ASK arm was a bare `_sppBtn` —
+so the one section whose name the real product page always prints went unnamed
+for exactly as long as it was unanswered, and **renamed itself the moment you
+filled it in**. The store says App Privacy before you have read a word of it, the
+same way it says Achievements over a card with nothing completed.
+
+Both arms are `.ias-privacy-block` now — one object, one heading, two bodies —
+with `--ask` carrying the difference (the outstanding `.14` against the answered
+`.08`, since the free ride that "two states are two different elements" gave
+"answered recedes" is gone). The wrapper is the target, so there is one pressable
+box and one `data-spp-el="data"` rather than two, and the ask row is a plain
+`<div>` rather than `_sppBtn`'s `<button>`. `_sppBtn` itself is untouched —
+screenshots use it, and so do iOS and Mac Full for this same element.
+
+**AND THE SHOTS WEAR A WELL, WHICH REVERSES A LINE THIS FILE DREW.** Jaco: *"los
+screenshots deberían tener un pocillo alrededor, para indicar que hay que
+clicarlos y revisarlos."* The earlier pass left them bare on the argument that
+they "already draw their own 1px frames, so a well would be a second box on
+something that has one". **That read the frames as the OBJECT and they are the
+VALUE** — a well says *this is yours to set*, and the frames are what is
+currently set, exactly as the title's text is what the title's well contains.
+The pencil-and-well pair on Content had already settled this.
+
+The padding is **8px, the scroller's own `gap`**, so the air around the pair
+equals the air between them and the carousel reads as one evenly spaced group
+rather than two pictures with a frame near them. It is the only number the shots
+give up: the frames are `(100% − 16px) / 2` of whatever box they get, so they
+simply come in by the padding — 352 → **344**, the "sliiightly smaller" that was
+offered. The well goes on the ROW rather than the scroller so it spans 441 → 1193
+like every other well instead of stopping 32px short, which puts the chevron
+inside it (right: it drives this carousel), and the chevron gives up its `-8px`
+pull, since a control hanging over its own container's edge is the one thing this
+box is drawn to deny. `data-spp-el` stays on the scroller — the spotlight's
+`:not(:has())` keeps a group lit when it CONTAINS the mark.
+
+Measured: all four wells on **441 and 1193**, Achievements and Data privacy
+16 / 16 clear of their dividers, the description 48 below.
+
+**TWO CONFIRMATIONS, AND THE SPLIT BETWEEN THEM IS WHAT STOPS THEM COLLIDING.**
+Both are Jaco's, ported from the questionnaire prototype: *"nice animation of
+glimmering green on input text once I leave the field"* and *"nice animation when
+I come back from a flipped modal and some information is put in place."*
+
+**A text field you type in place confirms ITSELF** — you are looking at the
+words, and the sweep says "that is saved". **An element you set somewhere else
+has the opposite problem**: you were on another screen when it changed, so when
+the page returns there is no reason to look at the one box that is different. One
+confirms, the other locates. So the sweep is for the three text fields, the pop
+is for the four that open a step, and no element can ever get both.
+
+**The sweep is `.flash-char` / `charToOwn`** — each letter starts green and fades
+to its own colour on a left-to-right stagger. `forwards`, and 100% IS `inherit`,
+because the overlay is removed a moment later and anything else would jump: the
+pinned bar's one-shot glint has the same rule.
+
+**IT IS AN OVERLAY, AND THE FIRST VERSION WAS NOT — this is the useful half.**
+Painting the DISPLAY element after the commit is the obvious shape, costs no
+cloned metrics at all, and does not work: **the render that turns the editor back
+into a display element is DEFERRED and can be deferred indefinitely.**
+`_stepModalInteractionActive` vetoes a rebuild while any inline editor holds
+focus, so the most ordinary gesture on this page — leaving Title by clicking
+straight into Subtitle — commits Title and then renders nothing until Subtitle is
+done too. Measured: the title committed, its element still held an editor, and
+zero `.flash-char` were ever created. **A confirmation that waits on an unrelated
+event is not a confirmation.** So it is the reference's `position: fixed` box,
+pixel-matched to the input, tied to nothing — not to a render, not to the element
+surviving, not to what you do next. The metrics are copied, which is the cost:
+every value comes off `getComputedStyle` of the real input, `overflow-wrap`
+included, for the reason two paragraphs up.
+
+**The pop is `.spp-just-changed` / `storeJustChanged`**, and the idea that makes
+it cheap is the **9999px shadow**: the element dims everything around it from its
+OWN box, so there is no scrim node to insert, position and remove, and nothing
+can be left behind if a render lands mid-animation. `.ias-page`'s `overflow:
+hidden` clips it to the store page. `z-index: 30` over `position: relative`,
+because a static element has no stacking position at all — the same trap the
+SUBMITTING… line hit. The hold at 32–58% is the point: it arrives, WAITS long
+enough to be read, and leaves.
+
+**It is `_sppCelebrate`'s flank test one level finer** — that one asks "did the
+whole bar just complete", this asks "did THIS element just fill in", per target,
+against what was last seen, with the same `undefined` guard so a first paint
+never pops. **"Filled" is read off the PAGE, not out of the state**, for
+`_sppCelebrate`'s own reason: each target already says so in its own way
+(`--seen`, `--ask`, `is-shots-done`, and Business no longer saying "Set price"),
+so this cannot disagree with what is drawn. Content's mark is its `::after`, so
+the ring rides along there — the cell itself paints nothing.
+
+Verified: baseline render no pop; the render that fills it → `sppJustChanged`
+running, `z-index: 30`, the dim present, scale interpolating 1 → 1.013 and the
+ring easing white → green; a re-render while already answered → **no second
+pop**; the sweep firing on a real commit (10 spans, `rgb(49,220,128)`, the
+overlay on the input's own box to the pixel), silent when nothing changed, and
+zero nodes left behind after either. iOS and Mac Full verified untouched — no
+shots padding or ring, no privacy ring, counter still `space-between` at margin 0.
+
+**One process note.** The browser pane serves a CACHED `render.js` / `app.js`
+past a `?bust=` on the PAGE — `?v=` is the only cache key those tags have, and
+this batch has not bumped it. A hard reload did not clear it either; what did was
+fetching each file with a unique query and re-evaluating it. Worth knowing before
+concluding an edit did not work: **check the running function's source, not the
+file**, which this file already says and which cost a round trip again here.
+(One artifact of that harness: `let` / `const` at the top level of an indirect
+`eval` do NOT become global bindings, so a probe reading one gets
+`is not defined` while the functions closing over it work perfectly.)
+
+**AND THE PRICE IS TWO OBJECTS WEARING ONE BUTTON.** Jaco: *"cuando complete el
+pricing, la pill de precio se sizee correctamente de ancho como sería una real de
+Apple, y quede alineada por su izquierda con el texto de título y subtítulo."*
+
+The tile width was right for "Set price" and wrong for "GET", and the reason is
+that they are not the same thing. **Unanswered, this is the page's fourth editor
+FIELD** and should measure like one — the width of the Content well below it,
+which is exactly what the earlier pass asked for. **Answered, it stops being a
+question and becomes the store's own PILL**, and Apple's pill is as wide as the
+word in it; a 110px "GET" is a field with a label in it, not a price.
+
+**THE WIDTH AND THE COLUMN MOVE TOGETHER, and the column is the tell that this is
+one change rather than two.** A field belongs on the WELL column (with every
+other well's painted edge) because that is where fields line up; a pill belongs
+on the TEXT column, with the title and subtitle it sits under, because that is
+where the store's own content lines up. The 10 between them is `.ias-editable`'s
+own padding — the same overhang that put the wells on their column in the first
+place — so `margin-left: 10px` is that number paid back rather than a new one.
+Measured: unanswered "Set price" **109.8 wide on the well column**, answered
+"GET" **65.1 wide with its left edge on the title's text to 0.00**.
+
+**AND THE SUBTITLE CAME UP 5.** Jaco: *"sube el subtítulo y su input field 5px
+hacia arriba, más pegado al título."* The pair is one object — a name and its
+line — and 10px of clear air between two painted wells had them reading as two
+stacked fields. `-9px` is `.ias-editable`'s own −4 overhang plus the 5, written
+as the sum so the overhang stays visible in the number. It lands on the FIELD
+rather than on an editing state, so the box is in the same place whether you are
+reading it or typing in it — verified identical across rest → editing → rest —
+and the price pill comes up with it, which is the stack tightening rather than a
+second change.
+
+**APP PRIVACY AND ACHIEVEMENTS ARE THE SAME OBJECT AND NOW MEASURE LIKE IT.**
+Jaco: *"que App Privacy tenga el mismo tamaño y colocación que achievements, si
+es necesario quita el lápiz… y alinea ese chunk de texto a la izquierda con App
+Privacy y Achievements."*
+
+They differed in exactly two ways and both were invisible until the wells put the
+two boxes on one edge: `.ias-privacy-block` pads **10** horizontally against
+`.ias-achv-section`'s **16**, so their contents sat on columns 6px apart; and
+`.ias-section-head` is **15px** against `.ias-achv-title`'s **20px**, so one
+section name was smaller than the other on a page where both are names the store
+prints. Neither was a decision — privacy was built as a generic `.ias-section`
+head and Achievements as its own thing.
+
+**The pencil was the third thing pushing that text off the column.** It arrived
+with `_sppBtn`'s three-slot line, where an icon leads because the whole row IS
+the control. Here the row sits under a heading inside a well that is already the
+control, so the icon only bought a 24px indent. **Content keeps its pencil for
+the opposite reason**: that cell has no heading and no room for one, so the
+pencil is the only thing saying the value opens elsewhere. Measured after: both
+blocks `14px 16px`, both titles 20px, and the two titles and the ask text all on
+**17**.
+
+**THE SHOTS WELL SAYS WHAT IT WANTS, AND THE ARROW WAITS ITS TURN.** Jaco: *"el
+pocillo de screenshots debería marcarse de alguna forma en este caso, como por
+encima de los screenshots, y quitar la flecha de scroll lateral hasta que no los
+hayan revisado."*
+
+Both halves are about the unreviewed state and they are one idea. This is the
+only well with nothing to read: Achievements and App Privacy are named by the
+STORE, so their own headings mark them, while the real product page never titles
+its screenshots — there is no store word to borrow and an invented 20px heading
+would be Shipmate writing on the drawing. So it gets the ASK instead, the same
+two lines App Privacy uses while it is unanswered — the editor talking rather
+than the store — and like that one it leaves once answered. Fourth application of
+"answered recedes".
+
+**The arrow is gated on the same flag, and that is the half worth arguing.** A
+carousel that offers to page before you have looked at what is on screen invites
+you to skim past the thing you were asked to check; once reviewed, paging is
+exactly what you want. The prompt and the chevron are two faces of one state and
+can never both be on. The row becomes the well and a new `.mac-spp-shots-strip`
+takes the flex line it used to be, so the scroller's `flex: 1` and the chevron's
+40px lane are untouched and the ask simply sits above them.
+
+**AND AN ANSWERED WELL NEARLY REJOINS THE PAGE.** Jaco: *"quizás cuando algo ya
+está rellenado y completo, el fondo del pocillo debería bajar al color del fondo
+de la store, quizás un pelín más oscuro pero casi imperceptible."*
+
+This is "answered recedes" arriving at the FILL, which is the half the halved
+stroke left behind. The well is a socket — `--bg` #0a0a0a, ten points BELOW the
+page's `--panel` #141414 — and a socket is a thing waiting to be filled. Once it
+IS filled that depth claims something untrue: the value is in, the box is read by
+its content, and a dark cut-out under finished copy makes the store page look
+like a form.
+
+**NOT flush with the page, which is the "pelín" doing real work.** At exactly
+`--panel` the box would be gone, and an editable field has to stay findable
+before you approach it — the licence this whole entry rests on. One step of depth
+plus the `.08` ring is enough to say "still a field" and quiet enough to stop
+saying "empty".
+
+**rgb(18) is a FIFTH of the way back down from the page toward the socket**,
+`20 − (20 − 10) × 0.2` — derived so it moves if either ground does, and written
+as the literal because `color-mix` is the kind of per-engine behaviour this file
+prefers to avoid. Two points against the page, under the floor anything on this
+surface reads at; ten against the empty well, which is the contrast that matters.
+
+Two tokens (`--spp-well-fill` / `--spp-well-fill-done`) and five consumers, so
+the two states are one idea rather than five copies. Three details:
+
+- **Hover returns the socket** on all five, alongside the stroke's `.24`. Fill
+  and edge recede together or they say two different things about one box.
+- **A field you are IN is a socket again**, whatever it holds — the depth is the
+  page saying "the text goes here", which is true at exactly the moment you are
+  putting text there. On `:focus-within` rather than the editor's class, so the
+  stale committed textarea the deferred render has not removed yet falls out of
+  it by itself. Same reason the blue is tied there.
+- **Achievements is born answered** — its pill disc is permanently green — so it
+  takes the receded fill from the start rather than sitting in a socket that can
+  never be filled.
+
+Measured: all three answered wells at `rgb(18,18,18)` with `.08` rings, the two
+outstanding ones (privacy's ask arm, the unreviewed shots) at `rgb(10,10,10)`
+with `.14`, and iOS / Mac Full verified untouched — no fills anywhere, privacy
+still `14px 10px` with a 15px head, Achievements still `0 6px`, GET still
+shrink-wrapped, the subtitle still on `.ias-editable`'s plain −2.
+
+**AND THE ICON CARRIES ITS OWN CLEARANCE.** Jaco: *"puedes bajar la pill de
+precio como 20px. La distancia entre el icono y la primera línea divisoria
+horizontal de las tiles debe ser 30px, así que pushea todo ese content hacia
+abajo como 15px cuando muevas la pill."*
+
+Measured before, icon bottom → the strip's top rule was **15.9**, so his ~15 was
+exactly the shortfall. **But the two halves are not independent, and that is the
+whole of this.** The header is `align-items: flex-start` with the icon at 96 and
+the meta column at 97.9, so **the meta column is what sets the header's
+height** — barely, by 1.9. Drop the pill 20 and the meta becomes 117.9, the
+header grows 20 with it, and the gap reaches **35.9 on its own**. Pushing
+anything further down would overshoot; the padding would have to come DOWN to
+8.1 to land on 30 — and 8.1 is a number derived from the meta column's exact
+height, so the title's font, the subtitle's margin or the pill's own size would
+each silently break it.
+
+**SO THE CONSTRAINT IS STATED ON THE THING IT IS MEASURED FROM.** The gap he
+named starts at the ICON's bottom edge, so the icon reserves it
+(`margin-bottom: 30px`) and the header's `padding-bottom` goes to 0, since it
+was only ever standing in for this. The header's content box is then
+`max(icon + 30, meta)`, which makes 30 a **floor** rather than a coincidence:
+exact while the meta column is shorter than 126, growing with the meta beyond
+that rather than being eaten by it. Nothing in the header's type or spacing can
+break it, the pill's own 20 included. Measured 30.00 in both Business states.
+
+**TWO SPECIFICITY TIES, BOTH THIS FILE'S STANDING LESSON.**
+`.mac-spp-page .ias-header` ties with the `padding: 22px 22px 14px` shorthand
+further down and lost on source order, so the 14 is edited in that rule rather
+than overridden; `.mac-spp-page .mac-spp-get-row` ties with
+`.mac-spp-get-row.is-spp-done`, so the new rule carries `.ias-page` as a third
+class. Fifth and sixth of this shape on this surface.
+
+**AND `is-spp-done`'s OWN SPLIT COLLAPSES HERE, which the tie is what exposed.**
+That rule drops an ANSWERED row from 20 → 8, *"only ever there to clear that
+glow"* in its own words — and **the glow was deleted from the Mac builder in
+v6.40**, so the larger value has had no consumer on this surface for a while and
+the pill was silently sitting at two different heights depending on an invisible
+ring. One number for both states here (the tight 8 the reference screenshot
+shows, plus his 20); iOS and Mac Full keep the split and their rings. Same shape
+as Achievements' `margin: 0 6px`, which was also a clearance for a ring that had
+stopped existing.
+
+**One CSS trap worth carrying, and it cost a round trip.** A second `*/` left
+mid-comment ended it early, so the prose after it became an invalid SELECTOR —
+and the parser, recovering, **swallowed the next rule whole**: the icon's
+`margin-bottom` was in the file, absent from the CSSOM, and everything else
+around it applied normally. `node --check`'s equivalent here is counting `/*`
+against `*/` (balanced — the stray one was a duplicate, not an orphan), so the
+test that actually catches it is querying the CSSOM for the selector you just
+wrote. Same family as the backtick-in-a-template-literal note above: a
+delimiter mistake that parses clean and deletes one rule silently.
+
+**THE FRAMES ARE NOT THE BUTTON — THE WELL IS.** Jaco: *"el adjust screenshots
+text está extraño, y es raro que me dejes acceder seleccionado cada uno de los
+screenshots, debería haber como una capilla de opacidad por encima de los
+screenshots (pocillo) que actúe como un pulsador único."*
+
+Every frame carried its own `onclick`, so a two-shot carousel was six press
+targets and picking one screenshot looked like it meant something. It does not:
+the step you land in adjusts the whole SET. The row takes the click now, the
+frames take none, and the veil is **paint** — `pointer-events: none` — so there
+is no arrangement in which a single frame can be aimed at.
+
+**The two-line ask went with them**, and it is the same argument the pencil's
+was: that object belongs to App Privacy, where it sits in a block with nothing
+else in it. Floating above two pictures it was a caption nobody asked for,
+saying in words what a wash says by covering the thing it is about.
+
+- **`inset: 0` on the STRIP, not on the scroller.** The scroller is a `flex: 1`
+  sibling of a 40px lane, so an overlay sized to it would have to know that
+  number. The chevron is lifted over the wash instead (`z-index: 3`), one line
+  against an arithmetic that would need re-solving every time the lane moved —
+  and it carries `event.stopPropagation()`, or paging would open the step.
+- **Answered recedes, a fifth time.** Unreviewed the veil rests visible and
+  carries the label; reviewed it rests at `opacity: 0` and returns lighter on
+  hover. One property between the two states, so they cannot drift into two
+  designs.
+
+**AND THE CAROUSEL GAINED A LEFT ARROW THAT COULD NOT COPY THE RIGHT ONE.**
+Jaco: *"igual que tenemos flecha hacia la derecha, tenemos flecha a la izquierda
+cuando la necesitamos."*
+
+The next chevron takes its 40px OUT of the row — that is the whole reason the
+third frame stopped peeking, and the frame width is solved against it. **A
+mirrored lane on the left would push the pair 40px right, off the column the
+shots had just been aligned to.** So this one is an overlay on a dark disc
+(`rgba(10,10,10,.60)`), read against a screenshot rather than against the well,
+costing no layout at all.
+
+`_macShotsArrows` (app.js) toggles both off the scroller's real position,
+because **an arrow pointing at nothing is a control that lies** — at rest there
+is nothing to the left, at the end nothing to the right, and a set of two shows
+neither. `visibility`, never `display`: dropping the NEXT one from the DOM would
+widen the frames and re-admit the sliver its lane exists to kill. 1px of slack
+at each end, since `scrollLeft` is fractional on a scaled pane and an exact
+comparison flickers across a smooth scroll. Re-armed after every render, the
+`_smModalFades` shape — `reRenderStepModal` restores this scroller's position,
+so "at the start" is not safe to assume.
+
+**AND THE SHOTS START ON THE DESCRIPTION'S OWN TEXT LINE.** Jaco: *"los
+screenshots tienen que estar alineados en su izquierda con la misma línea que
+marca el cuerpo de la description."*
+
+Two columns run down this page: every well's painted edge on 441 and every
+well's TEXT on 457. The shots well was correctly on 441 and its 8px of padding
+put the first frame on 449 — eight short of the description's body and of every
+other line of copy. The left padding is `.ias-section`'s own 16 now, so this is
+the one box on the page with asymmetric padding: 16 on the left because its
+content is COPY-ALIGNED, 8 on the other three because that is the scroller's
+`gap` and the air around the pair has to match the air between them.
+
+**The `+1` is not a fudge.** `.ias-editable` carries `border: 1px solid
+transparent`, so the description's copy really starts one pixel further in than
+the section's padding says — measured, a flat 16 put the frames on 496.5 against
+the text's 497.5. Written as `calc(1px + 16px)` so the term stays visible.
+Measured after: **497.5 / 497.5**, and the well still 480.5 → 1232.5 with every
+other well.
+
+**AND THE CLAMP HAD NEVER RUN — THREE LINES WAS NOT THE BUG, `display` WAS.**
+Jaco: *"después de las 3 líneas, si pones puntos suspensivos, no me dejes ver la
+4ª línea, sino que la quites."*
+
+He was describing a HARD CROP and that is exactly what it was. Measured,
+`#mas-desc-text`'s computed `display` is **`flow-root`, not `-webkit-box`**: a
+GRID ITEM IS BLOCKIFIED, and this box became one when the description was
+rebuilt as a two-column grid. So `-webkit-line-clamp` has been inert on that
+element ever since — what looked like a clamp was `overflow: hidden` cutting at
+the well's own `min-height: 104`, which is why a fifth line sat half-sliced
+under the fourth and **there was never an ellipsis at all**.
+
+Nothing on the box could have fixed it. The clamp moves to
+`.ias-desc-text-inner`, the span the builder already wraps the text in, which is
+an ordinary child and keeps the display it is given. The WELL stays the outer
+box, so the 104px floor, the stroke and the fill are untouched: the field is
+still ≥100 tall and the TEXT inside it is three lines and a real ellipsis.
+
+**Two measurements had to follow it down**, and both had been asking the wrong
+question while agreeing with the right answer by accident:
+
+- `_updateMasDescMoreBtn` tested `el.scrollHeight > el.clientHeight`, i.e.
+  whether the text overflowed the WELL'S FLOOR rather than three lines. On the
+  inner span it measured 62 against 104 and the chip went permanently hidden.
+- `_alignMasDescTextBottom` clipped its line rects against the BOX's bottom, so
+  every line inside the floor counted as visible and the chip aligned to a line
+  the clamp had already thrown away. It takes `min(box, inner)` now; the delta
+  is still measured to the box, because that is what the grid row is sized from.
+
+**The rule this leaves: when a clamp stops clamping, read the computed `display`
+before touching the line count.** Both numbers here (3 and 104) were fine. A
+computed value that nothing in the cascade sets is the one kind of bug a search
+of this file cannot find — same family as the `<textarea>`'s UA
+`overflow-wrap`.
+
+**AND THE CHIP FOLLOWS THE ELLIPSIS INSTEAD OF SITTING ON THE BOX.** Jaco: *"el
+more/less está ahora mismo tocando la caja, quizás debería estar después de los
+3 puntos suspensivos."* Measured it was worse than touching: the well bleeds
+`-16` past column 1 while the grid's `column-gap` is 8, so the chip's left edge
+sat **8px INSIDE the well's stroke**.
+
+It moves into column 1 with `justify-self: end`, landing where the TEXT ends —
+and **the 40px lane stays EMPTY, which is the part to read before tidying it
+away.** That track (32 + 8) is what holds the well's right edge on the wells'
+column: the well is `container right − 40 + 16`. Collapse the grid to one track
+and the well grows 40px past every other well on the page. The lane is no longer
+the chip's column, it is the geometry the well's bleed is solved against.
+
+**The backdrop is what makes "after the ellipsis" honest** — a clamped line is
+filled to its right edge, so without one the label lands on the last glyphs. It
+fades in over 12px from the well's own fill through **one token**
+(`--spp-desc-bg`) declared on the row and switched by the same conditions that
+switch the well underneath it. Verified: rest `rgb(18,18,18)` on both, editing
+`rgb(10,10,10)` on both — the chip cannot be caught on the wrong ground.
+
+**AND THE PILL CAME UP 5, WHICH IS WHAT KEEPS 18 EXACT.** Jaco: *"puedes subir
+la pill unos 5px, porfa, pero que la distancia con respecto al inicio de la
+línea divisoria de las tiles sea 18px."*
+
+30 → 18 on the icon and 20 → 15 on the pill, and the second half is not a
+separate request. The header is `max(icon + gap, meta)`: at the pill's old +20
+the meta column measures 117.9, taller than `96 + 18 = 114`, so asking for 18
+alone would have left the meta deciding the header and the gap landing at 21.9.
+Raising the pill 5 takes the meta to 112.9 and hands the decision back to the
+icon by 1.1px. **Measured 18.00.**
+
+The cost, stated rather than hidden: 18 is still a FLOOR by construction, but
+the margin between the two columns is now 1.1px rather than 12, so a bigger
+title will start growing this gap. That is the correct failure and not a silent
+one.
+
+**AND THEN 5 EACH WAY AGAIN — THE PILL'S OWN 5 HAD BEEN SWALLOWED.** Jaco: *"se
+te ha olvidado lo de subir la pill de precio unos 5px y bajar a su vez el resto
+de contenido como 5px más."*
+
+It had not been skipped. The pill really did come up 5 — and the same change took
+the icon's clearance 30 → 18, so the strip came UP 12 in the same paint and a
+5px move in the other direction was invisible inside it. **A change measured
+against something that moved with it cannot be seen.** What he was reading is the
+air between the PILL and the rule, and that had gone the wrong way: measured
+**1.1px**, the meta column ending all but flush on the divider.
+
+Both numbers move again, 5 each, opposite directions — the pill to `8 + 10`, the
+icon's clearance to 23 — and the pill → rule air goes **1.1 → 11.11**. That gap
+is what this pair is really tuning, and it is the one nobody had named yet.
+
+**The cost contradicts the 18 he asked for and is stated rather than hidden:**
+icon → rule is now **23**. It cannot be both, because they are the same edge —
+"lower the content 5" and "keep the icon 18 clear" are one 5px pulling two ways.
+The mechanism is unchanged and so is its guarantee: the constraint still sits on
+the ICON (`max(icon + 23, meta)`, meta 107.9), exact by 11.1px of margin rather
+than 1.1, so a longer title has more room before it starts growing the gap.
+
+**GAME CENTER IS A SUB-PANEL, AND IT WAS THE LAST MODAL SAYING OTHERWISE.**
+Jaco: *"Achievements es el único modal que no sigue el mismo patrón de flecha
+para volver atrás… tiene un Done que cierra todo, la tienda incluida, y eso no
+está bien."*
+
+The back arrow was written against `isFlipped`, and that test names the
+MECHANISM rather than the fact it was reasoning from — **that you arrived from
+somewhere, and back is not closed**. Game Center reaches the same situation by a
+different road: it is in no platform's `steps` at all, so the Achievements card
+on the Product Page Preview is its ONLY door. That makes "where back goes"
+derivable rather than guessed, and it makes the × and the Done exactly as wrong
+here as they were there — one level down, the most obvious control in the corner
+threw away the store page you were reading, and the footer button did the same
+while claiming to be finished.
+
+So the chrome follows the SITUATION: `isSubPanel = isFlipped || cameFromPreview`
+is what the header and the footer read. Nothing about the flip changes — the
+title still comes from `step?.label` (not a `FLIP_LABELS` entry), the body is
+still Game Center's own builder, and a flipped panel is untouched. Back is
+`openStepModal(pid,'storePreview')`, the same call the Achievements card makes in
+the other direction, so the two presses are one gesture and its reverse rather
+than two code paths that can disagree.
+
+Verified on all three platforms that have it: macos / ios / macos_full each show
+the arrow, no ×, **Save & Return**, and both controls pointing at their own
+`storePreview`; pressing back lands on Product Page Preview with its own × and
+Save & Close; and a plain step (Content Rating) is untouched — no arrow, × and
+Save & Close as before.
+
+**AND THE PER-FRAME HOVER RING WENT WITH THE PER-FRAME CLICK.** Jaco: *"quita el
+ring blanco cuando hovereo sobre cada screenshot particular."*
+
+Same change as the frames losing their `onclick`, arriving one paint later: a
+hover mark says *this is the thing you would press*, and on this surface the
+thing you press is the WELL. Two press affordances inside one button is the
+"two marks on one object" this page has refused all afternoon — and this one
+pointed at the wrong object, lighting one picture while the veil lights the whole
+strip. Scoped to `.mac-spp-page`; iOS and Mac Full keep the ring, where the
+frames really are the target.
+
+The CURSOR is deliberately NOT removed — `cursor: inherit` hands it back from the
+row, so the pointer is continuous across the well instead of appearing only over
+the pictures. Verified `box-shadow: none` on a Mac frame and its `onclick` gone,
+with iOS's own frame still carrying both.
+
+**AND THE DESCRIPTION IS THREE LINES WHETHER OR NOT YOU ARE IN IT.** Jaco: *"haz
+que mida las 3 líneas de altura cuando no está editado también, así queda mejor
+cuando sólo muestra las 3 líneas."*
+
+The 100px floor was measured when the clamp was four lines AND NOT CLAMPING (the
+`display: flow-root` bug above): the box was cropping by height, so a floor near
+its own content read as the field's size. With the clamp really running at three,
+62.4px of text sat in a 94px content box — **38px of empty well under finished
+copy**, which is the "caption with a rule round it" that floor was introduced to
+fix, arriving from the other side.
+
+So the floor stops being a number and becomes the CONTENT: three lines, which is
+also what a truncated description is by construction. Measured **72.4 empty and
+72.4 full** — the field does not change size when you write in it, which is the
+property worth having.
+
+`--spp-desc-3` is the one place the type appears and it must track
+`.ias-desc-text` (13px / 1.6). A token rather than `3lh`, because `lh` resolves
+against each element's OWN line-height and the ROW is a flex box that does not
+inherit the paragraph's. The row takes `+6` and the clamp `+10`: the 4 between
+them is `.ias-editable`'s overhang, kept so "the gap IS the padding" stays true,
+and the 10 is the clamp's `4 + 4` of padding plus its two 1px borders.
+
+**ONE CONSEQUENCE TO DECIDE ON, MEASURED RATHER THAN HIDDEN: the two columns no
+longer end together.** The Developer / Website / Support rail is three items at
+his own 20px gaps — **93.19 tall** — and the description is now 64.4. So the rail
+is the taller column, the section is sized by it, and the 48 is exact **from the
+rail** (measured 48.00) while the description's own bottom reads **68.79** from
+the rule. Nothing is wrong: the store's 48 is a band under the section's content
+and that is where it is. But if the band under the DESCRIPTION is what the
+reference measures, the lever is the rail's 20px gap, not this floor — the two
+requests (three lines, and 20px between the links) cannot both end on one line.
+
+Measured across the whole batch: all four wells on **480.5 / 1232.5**,
+description 48.0 below its own section's edge, first frame and description copy
+both on **497.5**, icon → strip rule **18.00**, Set price 109.8 on the well
+column, arrows hidden/visible correctly at rest, mid-scroll and at the end, the
+veil at 1 unreviewed and 0 reviewed, zero `onclick` on any frame — and iOS /
+Mac Full verified untouched (per-frame handlers intact, no veil, no prev arrow,
+Achievements still `0 6px` / `14px 10px`, `.ias-section` still `14px 16px`).
+
 ### Editing a field must not move the page
 
 `_iasMountInlineEditor` (app.js) and `.ias-editing` (style.css). Clicking Title
@@ -3216,8 +4623,15 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.39** → next is **v6.40**, then **v6.41**, etc. (v6.29 –
+Current version: **v6.40** → next is **v6.41**, then **v6.42**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, shipped in parallel.)
+
+**This batch ships as v6.40, which had been minted by EDITING and never served.**
+It was briefly written up to v6.41 and put back — the same move as the v6.62 →
+v6.39 renumber above, and safe for the same one reason: live is v6.39 and nothing
+has ever been cached under 6.40, so the key still only goes UP. Bump once per
+publish; the number that was already sitting in the files unpublished IS the one
+this publish takes.
 
 **THE NUMBER WENT BACKWARDS ONCE, ON PURPOSE — v6.62 → v6.39.** Live sat at
 v6.38 while the working copy had been edited up to v6.62: twenty-three numbers
@@ -3548,6 +4962,17 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   edges are allowed to go quiet. The Mac preview is the place to solve it: it
   is the one whose whole argument is that the page is a DRAWING of a store with
   editor chrome laid over it, and this is exactly the seam between the two.
+
+  **THE AFFORDANCE HALF LANDED IN v6.40 — see "An editable field wears a well".**
+  The resting mark exists now (a `--bg` well with a white-14% stroke on every
+  `.ias-editable`), the amber left the Mac preview entirely, and focus went from
+  three colours to one. Two things that section leaves open and this brief should
+  pick up: the **four non-text click targets** (Content, Screenshots, Business,
+  Data privacy) now draw nothing at rest, which is a silence rather than a
+  decision; and the **volume pass itself is still unstarted** — the inventory
+  found the previews were too QUIET, not too loud, so whatever is genuinely
+  shouting is somewhere else and has not been listed yet. Start that inventory on
+  a different surface than this one.
 - **Make the Submit button celebratory.** This is the debt shape 4 took on
   deliberately: the destination moved out of the Submit row precisely so Submit
   could be "reduced to the single confident act" — and then it was left looking

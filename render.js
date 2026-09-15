@@ -6597,17 +6597,47 @@ function renderStepModal() {
 
      Un-flipped, the × is right and stays: there is no level to go back to,
      and closing IS the way out. */
+  /* GAME CENTER IS A SUB-PANEL TOO, AND IT WAS THE ONE THAT SAID OTHERWISE.
+     Jaco: *"Achievements es el único modal que no sigue el mismo patrón de
+     flecha para volver atrás… tiene un Done que cierra todo, la tienda incluida,
+     y eso no está bien."*
+
+     The paragraph above is written against `isFlipped`, and that test is about
+     the MECHANISM (a flip inside one step) rather than about the fact it was
+     reasoning from — **that you got here from somewhere, and back is not
+     closed.** Game Center arrives at the same place by a different road: it is
+     not in any platform's `steps` at all (see PLATFORMS.macos/ios/macos_full),
+     so the Achievements card on the Product Page Preview is its ONLY door. That
+     makes "where back goes" derivable rather than guessed, and it makes the ×
+     and the Done exactly as wrong here as they were there — one level down, the
+     most obvious control in the corner threw away the store page you were
+     reading, and the footer button did it too while claiming to be finished.
+
+     So the chrome follows the SITUATION, not the mechanism: `isSubPanel` is what
+     the header and footer read now. Nothing about the flip changes — the title
+     still comes from `step?.label`, the body is still Game Center's own builder,
+     and a flipped panel is untouched. */
+  const cameFromPreview = stepId === 'gameCenter'
+    && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full');
+  const isSubPanel = isFlipped || cameFromPreview;
+
   const returnAction = flipTarget === 'iapLocalizations'
     // IAP Locs is reached FROM Business Questions rather than from the Store
     // Preview itself, so back means Business Questions — see the note on the
     // footer button below.
     ? `openStorePreviewSection('${platformId}','business')`
-    : `closeStorePreviewSection('${platformId}')`;
+    : cameFromPreview
+      // Not a flip: Game Center is its own step modal, opened over the preview
+      // by the Achievements card. Back is that card's own step, re-opened the
+      // same way it opened this one — symmetric, so the two presses are one
+      // gesture and its reverse.
+      ? `openStepModal('${platformId}','storePreview')`
+      : `closeStorePreviewSection('${platformId}')`;
 
   modal.innerHTML = `
     <div class="submit-modal-header" style="border-top-color:${p.color};">
       <div class="submit-modal-title-row">
-        ${isFlipped ? `
+        ${isSubPanel ? `
         <button class="submit-modal-back" onclick="${returnAction}"
                 title="Back" aria-label="Back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -6626,7 +6656,7 @@ function renderStepModal() {
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
-      ${isFlipped ? '' : `
+      ${isSubPanel ? '' : `
       <div class="submit-modal-header-actions">
         <!-- The Mac App Store Product Page Preview's language switcher only
              — its own request, see _macSppLangDropdownHTML. iOS and Mac Full
@@ -6659,7 +6689,7 @@ function renderStepModal() {
     <div class="submit-modal-footer">
       ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
-      ${isFlipped
+      ${isSubPanel
         // IAP Locs is reached FROM Business Questions (the "IAP Locs" button
         // on the IAP Products row, buildIapSection) rather than from the
         // un-flipped Store Preview itself, so its own "Save & Return" flips
@@ -6706,6 +6736,13 @@ function renderStepModal() {
      be seen by comparing two renders. See _sppCelebrate (app.js). */
   if (typeof _sppCelebrate === 'function') requestAnimationFrame(_sppCelebrate);
 
+  /* And the same argument one level finer: the return pop diffs each element
+     against what it last looked like, so it can only run after a paint. Its
+     twin — the commit sweep — is deliberately NOT here: it fires at commit time
+     from an overlay, because the render it would otherwise wait for is deferred
+     and can be deferred indefinitely. See `_masCommitGlimmer` (app.js). */
+  if (typeof _sppJustChanged === 'function') requestAnimationFrame(_sppJustChanged);
+
   // Mac App Store's own Description clamps to exactly 4 rows via native
   // -webkit-line-clamp (buildMacStorePreviewSection, above) — whether that
   // actually truncated anything (and so whether the "more" chip should
@@ -6714,6 +6751,16 @@ function renderStepModal() {
   // "un-flipped Mac App Store Product Page Preview", the only place
   // #mas-desc-text exists — see _updateMasDescMoreBtn's own comment, app.js.
   if (isMacSpp) requestAnimationFrame(() => _updateMasDescMoreBtn());
+
+  /* The carousel's two chevrons say whether there is anything that way, which
+     only the laid-out scroller knows — and `reRenderStepModal` restores this
+     scroller's position, so "at the start" is not a safe assumption after a
+     render either. Same rearm-after-every-render shape as the fades above. */
+  if (isMacSpp && typeof _macShotsArrows === 'function') {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.mac-spp-shots-scroll').forEach(_macShotsArrows);
+    });
+  }
 
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
@@ -9056,9 +9103,14 @@ function _sppPinnedNav(pid, elements) {
      finished thing against others that are not. */
   const disc = on => `<span class="spp-pin-tick ios-step-num${on ? ' is-done' : ''}" aria-hidden="true">${on ? smCheckSVG() : ''}</span>`;
   const pills = elements.map((e, i) => `${i ? sep(e.id === cur || elements[i - 1].id === cur) : ''}
-    <button type="button" class="spp-pin${e.id === cur ? ' is-on' : ''}"
+    <button type="button" class="spp-pin${e.id === cur ? ' is-on' : ''}" data-spp-pin="${e.id}"
             onclick="setStorePreviewFocus('${pid}','${e.id}')"
             title="${escHtml(e.label)}">${disc(e.done)}${escHtml(e.short || e.label)}</button>`).join('');
+  /* `data-spp-pin` is what lets `_sppFocusHere` (app.js) light a pill without a
+     render when you click straight into a field on the page. The id is already
+     in the `onclick` string a character later; putting it in an attribute is
+     the difference between a lookup and parsing a handler — the same move
+     `data-iso` made on the calendar's band cell. */
   /* THE BAR ITSELF SAYS WHEN THERE IS NOTHING LEFT. `is-complete` is derived,
      never stored — every required section done — so it is as true as the
      sections are and it goes away by itself if you empty a field. The
@@ -10089,12 +10141,17 @@ function buildMacStorePreviewSection() {
   // only way in; see .ias-shots-scroll's own data-spp-el/glow class,
   // screenshotsArea below, for where the "required, not done" ring that
   // button used to carry now lives instead.
+  // THE FRAMES ARE NOT THE BUTTON — THE WELL IS. Each frame carried its own
+  // onclick, so the carousel read as six separate targets and selecting one
+  // screenshot looked like it meant something. It does not: the step you land
+  // in adjusts the whole set. One veil over the strip, one press. (iOS and Mac
+  // Full keep their per-frame handlers — they have no well and no veil.)
   const shotHtml = shots.length > 0
     ? shots.map(s =>
-        `<div class="ias-shot-frame" onclick="openStorePreviewSection('${pid}','screenshots')"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
+        `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
-        `<div class="ias-shot-frame ias-shot-empty" onclick="openStorePreviewSection('${pid}','screenshots')"><span>${lbl}</span></div>`
+        `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
       ).join('');
 
   // Grid cell — label (with an optional chevron, for the fields the native
@@ -10159,6 +10216,21 @@ function buildMacStorePreviewSection() {
   // See buildStorePreviewSection's note — same gate, same reason.
   const contentDone     = isMacSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isMacSectionComplete('business'));
+  /* THE BUTTON ASKS BEFORE IT REPORTS. Jaco: "que el GET sea quizás un 'set
+     price'." GET is the store's own word for a free app, and it is TRUE the
+     moment somebody has actually said the app is free — but this preview
+     cannot tell "free" from "nobody has set a price yet", because isFree is
+     derived from an empty string as much as from a zero. Until Business is
+     answered the blue pill is the one required element on this page still
+     wearing the store's voice while it is really asking a question, and it
+     is the only place the price can be set from. So it says what it wants
+     ("Set price") until that step is done, and the store's own GET / $4.99
+     after — the same order every other field on this page follows, where
+     what is empty says so and what is answered shows the answer.
+     It is a LABEL, not a second control: the same button, the same handler,
+     the same target. The pill has no fixed width (.ias-get-btn is padding +
+     white-space: nowrap), so the longer string costs nothing. */
+  const getLabel        = businessDone ? price : 'Set price';
   const dataDone        = !!(seenSections.data && isMacSectionComplete('privacy'));
   const screenshotsDone = !!(seenSections.screenshots && isMacSectionComplete('screenshots'));
   // Description is a plain text field, same as Title/Subtitle — done once it
@@ -10211,23 +10283,58 @@ function buildMacStorePreviewSection() {
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
   ];
-  // Additive glow class for any focusable element — see the twin
-  // definition's own comment in buildStorePreviewSection above.
-  const _sppGlowCls = id => {
-    const el = ALL_ELEMENTS.find(e => e.id === id);
-    if (!el) return '';
-    const focused = _sppIsFocused(pid, ALL_ELEMENTS, id);
-    if (!el.required) return focused ? ' is-spp-focused-optional' : '';
-    if (!focused) return el.done ? '' : ' is-spp-static';
-    return el.done ? ' is-spp-focused-done' : ' is-spp-focused';
-  };
+  /* NO AMBER ON THIS PAGE, AND FOCUS IS ONE MARK RATHER THAN THREE.
+     The iOS twin of this function (buildStorePreviewSection above) still
+     returns the full five-class set and is deliberately untouched; this is
+     the Mac preview only.
+
+     What went, and why each was answering the wrong question:
+
+     - `is-spp-static`, the amber ring every unfinished element wore, was
+       `rgba(255,149,0,0.06)` at 2px. Over this page's ground — `--panel`
+       #141414, since `.mac-spp-page` sets `background: transparent` — that
+       composites to about #1f1a14: eleven points of luminance. It was not
+       LOUD, it was unreadable, which is the opposite diagnosis from the one
+       the brief started with. And with every editable field now wearing a
+       well of its own (`.mac-spp-page .ias-editable`, style.css), the
+       question it was asking has a better answer: the field says "you can
+       type here" at rest, and what is still EMPTY says so by being empty.
+     - `is-spp-focused` / `-done` / `-optional` were three colours for one
+       fact. Amber/green/gray encoded DONE-ness in a mark whose whole job is
+       "the nav sent you here" — a locator, not a status, exactly as the
+       pinned bar's own note says of itself.
+
+     THEN THE FOCUS MARK WENT TOO, AND THE COUNT IS THE ARGUMENT. Collapsing
+     three rings into one neutral one was still one ring too many: "you are
+     here" was already being said THREE times on this surface — the pinned
+     pill stays lit, `_sppSpotlight` dims the whole page around where you
+     landed for 1.6s, and then a halo pulsed on the element for as long as it
+     held focus. Jaco: *"no entiendo los halos constantes."*
+
+     And the third of those was the weakest kind: it never stopped. This file
+     killed an identical one two versions ago — "a nudge that repeats forever
+     is not pointing at anything" (the Submit row's orange pulse) — and the
+     same sentence applies verbatim. A locator that is still flashing a minute
+     after you arrived has stopped being about arriving.
+
+     So `_sppGlowCls` is DELETED rather than left returning '': a helper that
+     can only produce the empty string is a switched-off control, which is the
+     argument the dev bar was removed under. Its ten call sites went with it.
+     `_sppIsFocused` stays — the pinned bar still reads it to light its pill,
+     which is where "where you are" now lives, once.
+
+     Two amber keyframes (`ias-meta-pulse`, `spp-pulse`) are still declared
+     in style.css for the iOS surface. On THIS page they were dead code
+     before this change and remain so: every element carrying them also
+     carried a class above whose `animation` was `!important`. Measured, not
+     assumed — nothing on the Mac preview has ever pulsed. */
 
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-label-top ias-meta-bot--action">Content</div>
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
@@ -10273,8 +10380,118 @@ function buildMacStorePreviewSection() {
   // request — the shots themselves are the click target instead (see
   // shotHtml, above), so the "required, not done" glow ring that button
   // used to carry moves onto the carousel container itself.
+  /* THE ARROW IS THE SCROLLER'S SIBLING, NOT ITS LAST CHILD, and that is what
+     makes exactly two screenshots fit. Inside the scroller it would scroll away
+     with the shots; beside it, it takes its 40px out of the row and the
+     scroller's content box lands on exactly `2 × frame + gap`, so there is no
+     third frame peeking. The frame width is DERIVED from that box in CSS rather
+     than being the 336px literal it happened to equal — see
+     `.mac-spp-shots-scroll .ias-shot-frame`.
+
+     It scrolls by one page rather than one frame: the row shows two and the
+     real store's chevron advances the pair. `scrollBy` with `behavior: smooth`
+     is safe here in a way `scrollIntoView` was not — there is no ambiguity
+     about WHICH box scrolls, which is the whole reason `_smScrollCentre` had to
+     be hand-written (see "The travel is ours, not the browser's"). */
+  /* AND THERE IS A LEFT ONE, WHICH THE RIGHT ONE'S OWN LANE FORBIDS IT TO COPY.
+     Jaco: *"igual que tenemos flecha hacia la derecha en los screenshots,
+     tenemos flecha a la izquierda cuando la necesitamos."*
+
+     The next chevron takes its 40px OUT of the row — that is the whole reason
+     the third frame stopped peeking (see the frame arithmetic in style.css).
+     A mirrored lane on the left would push the pair 40px right, off the column
+     the shots were just aligned to. So this one is an OVERLAY: absolutely
+     positioned over the strip's left edge, on a dark disc so it reads over a
+     screenshot, costing no layout at all.
+
+     It is also the one arrow that can be WRONG: at rest there is nothing to the
+     left, and an arrow pointing at nothing is a control that lies. Both are
+     toggled by `_macShotsArrows` (app.js) off the scroller's real position —
+     hidden, never removed, so the row cannot reflow under the pointer. */
+  const shotsPrev = `
+    <button type="button" class="mac-spp-shots-prev is-off" aria-label="Previous screenshots"
+            onclick="event.stopPropagation(); const s=this.parentNode.querySelector('.mac-spp-shots-scroll'); s.scrollBy({left: -s.clientWidth, behavior: 'smooth'});">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+        <path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>`;
+  const shotsArrow = `
+    <button type="button" class="mac-spp-shots-next" aria-label="Next screenshots"
+            onclick="event.stopPropagation(); const s=this.parentNode.querySelector('.mac-spp-shots-scroll'); s.scrollBy({left: s.clientWidth, behavior: 'smooth'});">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+        <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>`;
+  // THE SHOTS WEAR A WELL TOO. Jaco: *"creo que los screenshots deberían tener
+  // un pocillo alrededor, para indicar que hay que clicarlos y revisarlos. Si
+  // necesitas hacer su preview un pelín más pequeña para que el pocillo quede
+  // alineado a la izquierda con el resto, hazlo."*
+  //
+  // The earlier pass left these bare on the argument that the frames "already
+  // draw their own 1px frames, so a well would be a second box on something
+  // that has one". That was reading the frames as the OBJECT, and they are not
+  // — they are the VALUE. A well says *this is yours to set*, and the frames
+  // are what is currently set, exactly as the title's text is what the title's
+  // well contains. The pencil-and-well pair on Content settled this same
+  // question once already.
+  //
+  // It goes on the ROW, not the scroller, so the box spans 441 → 1193 like
+  // every other well rather than stopping 32px short where the scroller ends.
+  // The chevron therefore sits INSIDE it, which is right: it drives this
+  // carousel and belongs to it. `data-spp-el` stays on the scroller — the
+  // spotlight's `:not(:has())` keeps a group lit when it CONTAINS the mark, so
+  // moving it would change what lights up.
+  // AND THE WELL SAYS WHAT IT WANTS, ABOVE THE SHOTS. Jaco: *"el pocillo de
+  // screenshots debería marcarse de alguna forma en este caso, como por encima
+  // de los screenshots, y quitar la flecha de scroll lateral hasta que no los
+  // hayan revisado."*
+  //
+  // Both halves are about the UNREVIEWED state and they are one idea: this is
+  // the only well with nothing to read. Achievements and App Privacy are named
+  // by the STORE, so their own headings mark them; the real product page never
+  // titles its screenshots, so there is no store word to borrow and an invented
+  // 20px heading would be Shipmate writing on the drawing. What it gets instead
+  // is the ASK — the same two lines App Privacy uses while it is unanswered,
+  // the editor talking rather than the store — and like that one it leaves when
+  // it has been answered. "Answered recedes" is the same rule a fourth time.
+  //
+  // THE ARROW IS GATED ON THE SAME FLAG, and that is the half worth arguing.
+  // A carousel that offers to page before you have looked at what is on screen
+  // invites you to skim past the thing you were asked to check; once reviewed,
+  // paging is exactly what you want. So the prompt and the chevron are the two
+  // faces of one state and can never both be on.
+  //
+  // AND THE ASK BECAME A VEIL (Jaco: *"el adjust screenshots text está extraño,
+  // y es raro que me dejes acceder seleccionado cada uno de los screenshots,
+  // debería haber como una capilla de opacidad por encima de los screenshots
+  // (pocillo) que actúe como un pulsador único que me lleva a la zona de
+  // cambiar los screenshots."*).
+  //
+  // The two-line ask was App Privacy's object borrowed onto a surface that
+  // could not hold it: there it sits in a block with nothing else in it, here
+  // it floated above two pictures as a caption nobody had asked for — and it
+  // said in words what the veil says by covering the thing it is about.
+  //
+  // ONE PRESS TARGET IS THE WHOLE POINT. The ROW takes the onclick now, and the
+  // veil is PAINT (`pointer-events: none`) laid over the strip, so there is no
+  // arrangement in which a single frame can be aimed at. The chevron is the one
+  // live child inside it and it stops the event, or paging would open the step.
+  //
+  // It is also "answered recedes" a fifth time: unreviewed the veil rests
+  // visible and carries the label, reviewed it rests at 0 and only returns on
+  // hover — the shots are the value once you have looked at them, and a wash
+  // over finished work is the page telling you something it already told you.
   const screenshotsArea = `
-    <div class="ias-shots-scroll mac-spp-shots-scroll${_sppGlowCls('screenshots')}" data-spp-el="screenshots">${shotHtml}</div>
+    <div class="mac-spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
+         onclick="openStorePreviewSection('${pid}','screenshots')"
+         title="Adjust Screenshots">
+      <div class="mac-spp-shots-strip">
+        <div class="ias-shots-scroll mac-spp-shots-scroll" data-spp-el="screenshots"
+             onscroll="if (typeof _macShotsArrows === 'function') _macShotsArrows(this);">${shotHtml}</div>
+        <div class="mac-spp-shots-veil"><span class="mac-spp-shots-veil-label">Adjust Screenshots</span></div>
+        ${screenshotsDone ? shotsPrev + shotsArrow : ''}
+      </div>
+    </div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5v7H3v-7Z" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 15.5h17l-1 1.2a1 1 0 0 1-.78.3H3.28a1 1 0 0 1-.78-.3l-1-1.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
       <span>Mac</span>
@@ -10289,17 +10506,46 @@ function buildMacStorePreviewSection() {
   // required element. Also picks up the data-spp-el/glow-class pairing this
   // branch never had — data's own focus ring silently had nowhere to render
   // before, on the rare occasion it was both done and in focus.
-  const privacySection = dataDone
-    ? `<div class="ias-privacy-block${_sppGlowCls('data')}" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+  // THE SECTION IS CALLED "APP PRIVACY" WHETHER OR NOT IT IS ANSWERED. Jaco:
+  // *"el pocillo de answer data collection podría tener el mismo título 'App
+  // Privacy' que tiene Achievements, así queda aún más fiel a la tienda."*
+  //
+  // The DONE arm already carried that heading; the ASK arm was a bare
+  // `_sppBtn` — so the one section on the page whose name the store always
+  // prints went unnamed for exactly as long as it was unanswered, and it
+  // renamed itself to "App Privacy" the moment you filled it in. A section's
+  // NAME is not a state: the real product page says App Privacy before you
+  // have read a word of it, the same way it says Achievements over a card with
+  // nothing completed in it.
+  //
+  // So both arms are `.ias-privacy-block` now — one object, one heading, two
+  // bodies — and the `--ask` modifier is what carries the difference (the
+  // outstanding `.14` ring against the answered `.08`, per "answered
+  // recedes"). The WRAPPER is the target: `data-spp-el` / the click / the well
+  // live on it exactly as they do on the done arm, and the row inside is a
+  // plain `<div>` rather than `_sppBtn`'s `<button>`, so there is one pressable
+  // box and one `data-spp-el="data"` in the document rather than two.
+  // `_sppBtn` is untouched — screenshots still use it, and so do iOS and Mac
+  // Full for this same element.
+  const privacyHead = `
          <div class="ias-section-head-row">
            <span class="ias-section-head">App Privacy</span>
            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-         </div>
+         </div>`;
+  const privacySection = dataDone
+    ? `<div class="ias-privacy-block" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+         ${privacyHead}
          <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
          ${privacyHtml}
          <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>
        </div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
+    : `<div class="ias-privacy-block ias-privacy-block--ask" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Answer Data Collection Questions">
+         ${privacyHead}
+         <div class="ias-privacy-ask">
+           <div class="spp-section-btn-title">Answer Data Collection Questions</div>
+           <div class="spp-section-btn-sub">Complete your App Privacy disclosure</div>
+         </div>
+       </div>`;
 
   // Achievements — a Game Center widget preview, mirroring the real App
   // Store product page's own "GAME CENTER / Achievements" card. Always
@@ -10326,7 +10572,7 @@ function buildMacStorePreviewSection() {
   // "chosen" achievement to name-drop.
   const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.saved);
   const achievementsHtml = `
-        <div class="ias-section ias-achv-section${_sppGlowCls('achievements')}" data-spp-el="achievements" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
+        <div class="ias-section ias-achv-section" data-spp-el="achievements" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
           <div class="ias-achv-card">
@@ -10378,10 +10624,10 @@ function buildMacStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
-                 onclick="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
-                 onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
+                 onpointerdown="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
+                 onpointerdown="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             <!-- GET sits beneath the title/subtitle stack, not beside it as a
                  separate header-cta column — matches the native macOS App
@@ -10393,17 +10639,23 @@ function buildMacStorePreviewSection() {
                  only, matching the native app's own product page) rather
                  than under the title/subtitle stack — see mac-spp-get-row's
                  own comment, style.css, for the row's layout. Get is also
-                 this preview's own "Business" required element — it glows
-                 (_sppGlowCls('business')) until Business Questions has been
-                 opened and answered, same as every other required element,
-                 replacing the meta strip's old separate Business cell
-                 below. Once Business is done, is-spp-done drops the extra
-                 margin-top (only there to clear the glow this button no
-                 longer has) back down to the reference layout's own tight
+                 this preview's own "Business" required element, replacing the
+                 meta strip's old separate Business cell below. It USED to
+                 glow until Business Questions had been answered; that mark is
+                 gone with every other ring on this page (v6.40 — see
+                 _sppGlowCls's deletion note above), so .spp-get-glow-wrap
+                 now only reserves the box. NOTE: no backticks in this
+                 comment — it lives inside a template literal, and one
+                 backtick here ends the string and turns the next word into
+                 an identifier ("ReferenceError: get is not defined", which
+                 node --check does not catch because it still parses).
+                 Once Business is done, is-spp-done
+                 drops the extra margin-top (only there to clear the glow this
+                 button no longer has) back down to the reference layout's own tight
                  spacing — see mac-spp-get-row's own rule, style.css. -->
             <div class="mac-spp-get-row${businessDone ? ' is-spp-done' : ''}">
-              <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
-                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              <span class="spp-get-glow-wrap">
+                <button class="ias-get-btn ias-get-btn--interactive${businessDone ? ' is-priced' : ''}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${getLabel}</button>
               </span>
               ${isFree && iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
@@ -10468,8 +10720,8 @@ function buildMacStorePreviewSection() {
                    actually visible, once the browser confirms the text
                    overflows 4 rows. -->
               <div class="mac-spp-desc-flex" id="mas-desc-flex">
-                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${_sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
-                     onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
+                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
+                     onpointerdown="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
                 <button type="button" class="ias-more-btn mac-spp-desc-more" id="mas-desc-more-btn" style="visibility:hidden;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button>
               </div>
               ${descStatusHtml}
