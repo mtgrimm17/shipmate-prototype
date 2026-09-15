@@ -2535,6 +2535,37 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   **not** affected — checked, their base rules carry no `animation`. Only
   `.submit-modal` has an entrance animation to clobber. Anything that gives one
   of them a base `animation` later inherits this bug.
+- **TWO PRESENTATIONS BEHIND ONE FLAG, AND IT HAS TO EXPIRE.** `submission.layout`
+  ('inline' | 'modal') now picks between the tab strip + inline pane (v6.29–v6.37,
+  Mark's, and the default) and the platform-card grid + step modals that preceded
+  it. v6.38 added two things to a flag that had neither: a way to SET it
+  (`?layout=modal`, remembered in `localStorage` under `sm.layout` — the hook sits
+  under the `state` literal in state.js) and the other half of what it claims to
+  switch (the card grid, in `renderDashboard`; it only moved the row's click
+  before).
+
+  Nothing was reconstructed from memory. Both times the pattern was the same and
+  it is worth recognising again: `dash-column` appeared **0 times in render.js and
+  4 in style.css**, `dash-add-banner` **0 and 6** — markup deleted, design intact.
+  The builders were never touched either, as the comment above `submissionTab()`
+  says in Mark's own words: *"buildActiveCard and the four builders under it are
+  still here and still correct"*. So the arm is a call site and a wrapper, not a
+  fork of the rendering.
+
+  **The default is untouched by construction.** With no `?layout=` and nothing
+  stored, neither the hook nor the branch does anything, so the live site is
+  exactly what it was. That is what made it safe to add without waiting.
+
+  **AND IT IS A DECISION AID, NOT AN ARCHITECTURE.** Two presentations of the same
+  surface is a real tax: every future change to the submission tab has to be
+  thought about twice, and the arm nobody is looking at is the one that silently
+  rots — the add banner was unreachable in the card arm for its first ten minutes
+  precisely because the control that opens the picker lives in the tab strip. That
+  is the failure mode, and it will recur. So this exists to let two people look at
+  both and choose. **When the choice is made, the loser comes out** — the arm, the
+  flag, the hook and this note, the way the dev bar was deleted rather than left
+  switched off. If it is still here in a month, that is the bug.
+
 - Steam's tile mark measures 98.96% of the shared canvas against 90.84% for
   every other logo — its own export, left as authored. One line to bring it
   in line if wanted.

@@ -4289,7 +4289,71 @@ function renderDashboard() {
         : `<div class="dash-empty-desc">Every available platform is already activated.</div>`}
     </div>` : '';
 
-  el.innerHTML = `
+  /* THE FLAG NOW COVERS THE PRESENTATION, NOT JUST THE ROW'S CLICK.
+
+     `submission.layout === 'modal'` started life switching one thing: whether a
+     step row opened `openStepModal` or expanded in place (see the note at
+     `const modalMode` in the step row builder). That is half of what changed —
+     the other half is THIS, the grid of platform cards the tab strip replaced —
+     and splitting them left the flag unable to do the job it was put there for.
+     Asking for the old presentation and getting the old interaction inside the
+     new layout answers a question nobody asked.
+
+     So 'modal' means "the presentation before the tab strip", whole. Nothing
+     here is a reconstruction: `buildActiveCard` and the four builders under it
+     are, in the words of the comment thirty lines up, "still here and still
+     correct" — and `.active-card`'s 73 rules and `.dash-column`'s 4 never left
+     style.css. The only thing that had been deleted was the wrapper that called
+     them, which is why `dash-column` appears 0 times in this file and 4 times in
+     the stylesheet. This puts that one line back.
+
+     **THE DEFAULT IS STILL 'inline' AND STILL MARK'S.** With no `?layout=` and
+     nothing in localStorage this branch is never taken, so the live site is
+     untouched by construction — see the hook in state.js. This is a way to LOOK
+     at the other one, which is the whole point of having a flag.
+
+     The picker rides along in both arms: "+ Add platform" is not part of either
+     presentation's argument and removing it from one would make that arm a
+     worse version of the app rather than an older one. */
+  const modalMode = state.submission?.layout === 'modal';
+
+  /* AND THE GRID NEEDS ITS OWN DOOR TO THE PICKER.
+
+     `addOpen` is toggled by `toggleAddPlatform()`, and in the tab-strip
+     presentation the only thing that calls it is the `+` square at the end of
+     the strip (`.sub-tab-add`, in buildSubmissionTabs). This arm does not draw
+     the strip — so without a control of its own, `addOpen` could never become
+     true here and "+ Add platform" was simply unreachable, which is exactly how
+     it was reported.
+
+     The banner is the same story as `dash-column` one comment up: `.dash-add-banner`
+     has SIX live rules in style.css and zero uses in this file, so what was
+     deleted was the markup and not the design. Reinstated verbatim against
+     those rules — the dashed edge, the `is-open` state, the `+` in its own span
+     because the rule spaces two flex children by 9px. Mark's own note beside
+     `.sub-tab-add` names it as the thing that square replaced: "the dashed edge
+     .dash-add-banner used to — same invitation, a quarter of the width."
+
+     It sits AFTER the cards, which is a judgement rather than a recovered fact:
+     the markup that would have said so is gone, and the CSS only pins it to the
+     full width of the grid (`grid-column: 1 / -1`), not to an end. Cards first
+     then "add another" is the ordinary shape of an add affordance in a grid. If
+     it belongs above, it is a one-line move. */
+  const addBanner = `
+    <button class="dash-add-banner${addOpen ? ' is-open' : ''}" type="button"
+            onclick="toggleAddPlatform()" aria-expanded="${addOpen}"
+            title="Add platform" aria-label="Add platform">
+      <span class="dash-add-banner-plus">+</span>Add platform
+    </button>`;
+
+  el.innerHTML = modalMode ? `
+    <div class="sec-solo">
+      <div class="dash-column">
+        ${active.map(pid => buildActiveCard(pid)).join('')}
+        ${addBanner}
+        ${picker}
+      </div>
+    </div>` : `
     <div class="sec-solo">
       ${buildSubmissionTabs(active)}
       <div class="sub-pane-wrap">

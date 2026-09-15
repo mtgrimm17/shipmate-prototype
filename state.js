@@ -4298,6 +4298,36 @@ const state = {
   showHighlights: false,
 };
 
+/* THE LAYOUT FLAG NEEDS A WAY TO BE FLIPPED, AND IT DID NOT HAVE ONE.
+
+   `submission.layout` ('inline' | 'modal') is the switch on the step row's
+   click — see the note in render.js, at `const modalMode`. It shipped with no
+   way to set it: no parameter, no setting, nothing. The only way to see the
+   other presentation was to edit the literal above, which means the flag could
+   not do the one job it was put there for — letting us look at both and decide.
+
+   So: `?layout=modal` on the URL sets it and REMEMBERS it, `?layout=inline`
+   sets it back. Nothing else changes.
+
+   **THE DEFAULT IS UNTOUCHED.** With no parameter and nothing stored this
+   block does nothing at all, so what ships and what anyone sees on the live
+   site is exactly the literal above — 'inline'. This cannot change the
+   published default by accident; it can only be opted into, per browser.
+
+   It is stored rather than read fresh each time because the alternative is
+   carrying the query string through every reload of a working day. `sm.` and
+   the try/catch are the house style (see app.js's own localStorage line):
+   private browsing throws on both get and set, and a preference for which
+   layout you are LOOKING at is never worth an exception. */
+(() => {
+  try {
+    const q = new URLSearchParams(location.search).get('layout');
+    if (q === 'modal' || q === 'inline') localStorage.setItem('sm.layout', q);
+    const saved = localStorage.getItem('sm.layout');
+    if (saved === 'modal' || saved === 'inline') state.submission.layout = saved;
+  } catch (_) {}
+})();
+
 /* ══════════════════════════════════════════════════════
    STEAM SUBMISSION
    ══════════════════════════════════════════════════════ */
