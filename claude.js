@@ -1856,9 +1856,31 @@ async function inferAllQuestionnaires() {
    every other one and the next open really does re-infer. */
 function _inferenceSignature() {
   try {
+    /* THE SIGNATURE MUST NOT CONTAIN THIS CALL'S OWN OUTPUT, and the first
+       version did — which made it self-invalidating and left the symptom
+       exactly where it started.
+
+       It was `buildSharedContext()`, the whole shared half of the prompt. That
+       string EMBEDS the questionnaire answers (`state.cqAnswers` and
+       `_extractPlatformContext` over every active platform) — and answers are
+       what this inference WRITES. So finishing Content Rating changed the
+       signature away from the one just stored, and the next open saw a miss and
+       re-ran. Answering the questions by hand did it too. A cache keyed on
+       something the cached operation modifies can never hit twice.
+
+       So the key is the DEVELOPER-SUPPLIED input only: what the game is, and
+       which stores are being asked. Those are the things that genuinely change
+       what the model should say, and none of them is written by the model.
+
+       The cost, stated: filling ANOTHER platform's questionnaire by hand no
+       longer re-triggers, even though it does slightly change the prompt. That
+       is a second-order effect, and buying it back costs the whole guard.
+       Adding a platform still re-triggers — activePlatforms is in here, and
+       that is the case that actually matters. */
+    const fd    = state.formData || {};
     const plats = [...state.activePlatforms].sort().join(',');
     const shots = (state.uploads?.screenshots || []).length;
-    return `${plats}|${shots}|${buildSharedContext()}`;
+    return [plats, shots, fd.title || '', fd.genre || '', fd.description || ''].join('|');
   } catch (_) {
     // Never let a signature failure BLOCK inference — fall back to a value that
     // can never match, so the call runs rather than being wrongly skipped.

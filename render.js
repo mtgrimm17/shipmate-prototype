@@ -7983,7 +7983,21 @@ function buildImproveSubmissionSection(platformId) {
        text it wrote is the real store copy. Folding that away the instant you
        choose hides the thing you are most likely to want to reread.
        The header toggle still works, so it can be parked by hand. */
-    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', false)) {
+    /* STORE PAGE AUTO-COLLAPSES NOW, and this reverses the rule written above.
+
+       That rule was right about the FACT and wrong about the consequence: an
+       accepted fix really does stay editable through its pencil, so answering
+       one is not the end of it. But the three batches are also a REPORT CARD,
+       and a card that stays open for ever while the two beside it fold is a
+       report you can never finish reading — the grades never line up because
+       one panel is always a screen tall.
+
+       Reaching the end of the queue is a real event and deserves to be marked
+       like the other two. What the old note was protecting is still protected:
+       collapsing is not deleting. The header toggle reopens it, the carousel
+       still lists every suggestion, and pressing a circle opens the batch on
+       that item with its pencil intact. */
+    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', spAllAnswered)) {
       spCardCls = 'iv-card-collapsed';
       /* THE LINE IS EARNED, NOT A CONSEQUENCE OF BEING SHUT. Collapsing happens
          for two different reasons — the work finished, or you parked it — and
@@ -7991,7 +8005,12 @@ function buildImproveSubmissionSection(platformId) {
          suggestions still open, it said everything was fine about work nobody
          had done. Parked, it shows its header and nothing else, which is the
          honest shape for "not now". */
-      spBody = spAllAnswered ? `<div class="iv-strong-line">Your store page is looking good</div>` : '';
+      /* "INCORPORATED", not "looking good". The three end-cards are read side by
+         side, so they say the same KIND of thing in the same grammar: what you
+         did with the batch, not how the batch turned out. The grade already
+         reports quality; a line that also praises it says one thing twice and
+         leaves the three panels making three different claims. */
+      spBody = spAllAnswered ? `<div class="iv-strong-line">Store page suggestions incorporated</div>` : '';
       spHeadRight = _carousel(spAll.map(it => it.status === 'open' ? 'open' : 'reviewed'), -1, i => `selectStoreFix(${i})`);
     }
   }
@@ -8031,8 +8050,14 @@ function buildImproveSubmissionSection(platformId) {
          suggestions still open, it said everything was fine about work nobody
          had done. Parked, it shows its header and nothing else, which is the
          honest shape for "not now". */
+    /* One line for both outcomes. It used to split — "<language> added" when
+       accepted, "Localization handled" when declined — which reads as two
+       different kinds of ending in a row of three that must match. Confirming
+       your intended localizations is what happened either way; whether that
+       meant adding one is the grade's business, and the grade still falls when
+       you decline (locAccepted ? 'A' : locGrade, below). */
     locBody = locDone
-      ? `<div class="iv-strong-line">${locAccepted ? escHtml(langName) + ' added' : 'Localization handled'}</div>`
+      ? `<div class="iv-strong-line">Intended localizations confirmed</div>`
       : '';
   } else {
     const undoLoc = locDone
@@ -8181,7 +8206,9 @@ function buildImproveSubmissionSection(platformId) {
          the batch on that finding, which then offers its own button.
          The reference pairs the line and the button in one row, and that row is
          right for a resolved finding you are looking at; it is not the summary. */
-      binBody = binAllDone ? `<div class="iv-strong-line">Your binary is looking good</div>` : '';
+      // "Considered" rather than "fixed": Got it is an acknowledgement, not a
+      // repair — the finding is still in the binary. Same grammar as the other two.
+      binBody = binAllDone ? `<div class="iv-strong-line">Binary recommendations considered</div>` : '';
       binHeadRight = _carousel(findings.map((_, i) => binDone.has(i) ? 'reviewed' : 'open'), -1, i => `selectBinFinding('${platformId}',${i})`);
     }
   }
@@ -18013,11 +18040,27 @@ function buildSubmittedCard(pid, flipData) {
 
   return `
     <div class="active-card submitted-card ${phaseCls}" id="active-card-${pid}">
-      ${platformCardHead(pid, 'submitted')}
+      ${/* THE STATE IS THE HEADER NOW, and the platform's name is gone from it.
+
+            This card used to open with platformCardHead — the mark, the store's
+            name, the gear and the withdraw button — which was right while it was
+            one of four cards in a grid and its own header was the only thing
+            saying which store you were looking at. In the pane it is the SECOND
+            time that is said in two inches: the folder tab above it carries the
+            same mark and the same name, and it is lit.
+
+            So the row keeps its two buttons and gives its identity slot to the
+            one fact this face exists to report. It also puts the two faces back
+            in agreement — the steps face has no header either — which is what
+            `.is-advancing`'s "the header and the release block are identical
+            across both faces, so neither is faded" was always resting on. */''}
+      <div class="sub-head">
+        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>
+        ${_platformHeadActions(pid, 'submitted')}
+      </div>
       ${buildReleaseBlock(pid)}
       ${variant === 1 ? `<div class="sub-segbar">${segs}</div>` : ''}
       <div class="sub-state">
-        <span class="sub-state-line">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>
         ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
               `!isYours && !isBad`, which let it survive into `live` — so a
               build that was finished, distributed and on sale still said

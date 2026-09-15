@@ -18720,6 +18720,26 @@ body.sm-picker-open { overflow: hidden; }
    Drawn by removing the line rather than by covering it — a strip of panel
    colour laid over a border is a thing that has to be kept the same width as
    the thing underneath it forever. */
+/* UNSELECTED TABS STEP BACK, and that is the half that was missing. The
+   selected tab was marked only by a fill and a missing bottom edge, which is a
+   difference you have to look for. Dimming the other tabs makes the lit one the
+   only thing at full strength in the strip — one lever, `opacity`, which is
+   safe here for the Mac sidebar's reason: a tab is a LABEL and a progress run,
+   with no state inside it that a composite could corrupt. .62 rather than
+   lower, because those dashes still have to be readable at a glance. */
+.sub-tab:not(.is-on) { opacity: .62; transition: opacity .12s; }
+.sub-tab:not(.is-on):hover { opacity: .85; }
+
+/* And the selected tab's own edge brightens, continuing into the pane's first
+   row so the two read as ONE outline rather than as two boxes that happen to
+   touch. Brighter, never thicker: weight is geometry and geometry must not
+   change with selection (see the head-row note below). */
+.sub-tab.is-on { border-color: rgba(255, 255, 255, .22); }
+.sub-tabs:has(.sub-tab.is-on) ~ .sub-pane-wrap .sub-step-list > .ios-step-card:first-child,
+.sub-tabs:has(.sub-tab.is-on) ~ .sub-pane-wrap > .submitted-card {
+  border-top-color: rgba(255, 255, 255, .22);
+}
+
 /* SELECTION CHANGES LIGHT, NEVER GEOMETRY. Nothing here may add or remove a
    border, a padding or a font-weight that reflows — the mark, the name and the
    dashes must sit on exactly the same pixels selected or not, or the strip
@@ -18882,6 +18902,41 @@ body.sm-picker-open { overflow: hidden; }
   padding: 0;
 }
 
+/* THREE COLLAPSED BATCHES ARE A REPORT CARD, so they have to be one height.
+
+   Each end-card holds a header and a single line, but the three headers carry
+   different furniture — Binary has its file chip, Store Page and Binary have
+   carousels, Localization has neither — so left to their content they settled
+   at three heights and the grade letters beside them stopped lining up, which
+   is the whole thing the collapsed row is for. A floor, not a fixed height:
+   nothing is clipped if a line ever wraps. */
+.improve-v2 .iv-card-collapsed { min-height: 86px; }
+.improve-v2 .iv-card-collapsed .iv-strong-line { margin-top: 2px; }
+
+/* The submitted card's header row: the state on the left, its two controls on
+   the right. `.active-card-actions` is reused unchanged, so the gear and the
+   withdraw button keep the exact box they have everywhere else. */
+.sub-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.sub-head-state { flex: 1 1 auto; min-width: 0; }
+.sub-head .active-card-actions { flex: none; }
+/* The old state row keeps the wait note and loses its now-duplicated label. */
+.submitted-card .sub-state:empty { display: none; }
+
+/* THE SUBMITTED CARD IS THE PANE'S CONTENT, so it takes the pane's corners.
+   buildSubmittedCard returns a plain `.active-card`, which carries the card
+   radius — right when it was one of four in a grid, wrong now that the folder
+   tabs sit on its top edge. Square at the top for the same reason the step
+   list is, rounded at the bottom because that really is where the pane ends. */
+.sub-pane-wrap > .submitted-card {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .sub-pane-empty {
   padding: 40px 20px;
   text-align: center;
@@ -19037,7 +19092,15 @@ body.sm-picker-open { overflow: hidden; }
 .sub-step-body {
   --sub-body-max: max(280px, 52vh);
   margin: calc(var(--sub-edge, 1.5px) * -1) 0 0;   /* sit on the row's own bottom edge */
-  padding: 14px 16px 16px;
+  /* NO padding-bottom — the tail air lives on the content instead (below).
+     A sticky child cannot leave its CONTAINING BLOCK, and for a child of this
+     scroller that is the scroller's CONTENT box, not its scrollport. So the
+     16px this used to carry held the scroll cue 16px short of the bottom and
+     the gradient floated above the edge it is supposed to be dissolving into.
+     The `.mac-spp-main` fade learned the same thing, to the pixel; the rule
+     that came out of it is: anything added to this scroller's bottom padding
+     pushes the fade up by that amount, so put tail space on the child. */
+  padding: 14px 16px 0;
   background: rgba(0, 0, 0, .22);
   border: var(--sub-edge, 1.5px) solid var(--sub-edge-color, rgba(255, 255, 255, .12));
   border-top: none;
@@ -19071,7 +19134,10 @@ body.sm-picker-open { overflow: hidden; }
   bottom: 0;
   z-index: 2;
   height: 64px;
-  margin: -64px -16px -16px;
+  /* -64 top gives its own height back so it adds nothing to scrollHeight; the
+     sides cancel the body's 16px so the fade spans the full width. There is no
+     bottom term any more — see the padding note above. */
+  margin: -64px -16px 0;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -19164,6 +19230,11 @@ body.sm-picker-open { overflow: hidden; }
    rather than restyled — every measured thing about it (the 15% fill, the inset
    ring, the nested radii, the two lines) is untouched. */
 .sub-step-body .cr-pinned { margin-left: 0; margin-right: 0; }
+/* The tail the scroller gave up. On the content, so the page still ends with
+   the same air and the cue still reaches the floor. */
+.sub-step-body > .ios-step-body-content:last-child,
+.sub-step-body > .local-save-note:last-child { margin-bottom: 16px; }
+.sub-step-body > .sub-scroll-cue { margin-top: calc(-64px - 16px); }
 
 /* ── The flip ─────────────────────────────────────────────────────────────
    The card's own three-phase sequence, applied to this box. The classes and
