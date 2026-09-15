@@ -432,7 +432,13 @@ async function toggleStepSection(pid, stepId) {
     state.submission.infer[pid].status = 'loading';
     _renderSubPane(pid, true);
     try {
-      delete state.platformInferenceCache['unified:questionnaire'];
+      /* NO `delete` HERE. runInference caches on the prompt's own signature
+         (claude.js) and returns instantly when the input has not changed, which
+         is exactly what "collapsing and reopening must not re-infer" needs.
+         Clearing the key first — which this did, on a comment about re-running
+         to pick up the latest knowledge — defeated that guard every single
+         time. The signature already answers "has anything changed"; an explicit
+         Retry (_retryInference) is the one path that still forces a re-run. */
       await runInference(pid, stepId);
       state.submission.infer[pid].status = 'done';
       _postInferenceSetup(stepId);
@@ -2468,8 +2474,6 @@ async function openStepModal(pid, stepId) {
       state.stepModal.inferenceStatus = 'loading';
       renderStepModal();
       try {
-        // Unified call: delete shared cache key so all platforms re-run together
-        delete state.platformInferenceCache['unified:questionnaire'];
         await runInference(pid, stepId);
         state.stepModal.inferenceStatus = 'done';
         _postInferenceSetup(stepId);
@@ -2495,8 +2499,6 @@ async function openStepModal(pid, stepId) {
       state.stepModal.inferenceStatus = 'loading';
       renderStepModal();
       try {
-        // Unified call: delete shared cache key so all platforms re-run together
-        delete state.platformInferenceCache['unified:questionnaire'];
         await runInference(pid, stepId);
         state.stepModal.inferenceStatus = 'done';
         _postInferenceSetup(stepId);
@@ -2547,8 +2549,6 @@ async function openStepModal(pid, stepId) {
     state.stepModal.inferenceStatus = 'loading';
     renderStepModal();
     try {
-      // Unified call: delete shared cache key so all platforms re-run together
-      delete state.platformInferenceCache['unified:questionnaire'];
       await runInference(pid, stepId);
       state.stepModal.inferenceStatus = 'done';
       _postInferenceSetup(stepId);
@@ -2805,6 +2805,26 @@ function toggleIOSSection(sectionId) {
 /* ── iOS Submit Modal — answer handlers ──────────────── */
 
 // Re-render the step modal body while preserving scroll position
+/* REPAINT THE STEP, WHEREVER IT IS — and call THIS, never `renderStepModal`.
+
+   `renderStepModal` (render.js) paints `#submit-modal` and returns immediately
+   if that element is not there. Since v6.29 a step is usually NOT there: it is
+   expanded inline in the Submission pane, in `#sub-step-body`. So every app.js
+   caller that meant "show what just changed" was painting a surface nobody was
+   looking at, and the symptom was a section that simply never updated.
+
+   Improve Your Submission had it worst, because its whole pipeline repaints
+   this way: the Store Page analysis really did complete and really did write
+   `state.storePageInsights.issues`, and the pane went on showing the failure it
+   had rendered before the fetch resolved. Its Retry button reset the state and
+   re-fired both calls correctly — and painted nothing, twice. What "fixed" it
+   was pressing Got it in the Binary batch, because `acknowledgeBinFinding` is
+   one of the few handlers that already called reRenderStepModal: it rebuilt the
+   pane from state that had been correct for some time.
+
+   22 call sites were swapped in v6.36. The only ones left on the bare function
+   are openStepModal's own per-platform paints (there the modal genuinely IS the
+   surface) and the fallback below. */
 function reRenderStepModal() {
   // The Content rating questionnaire also lives inline in the Game Details pane
   // (not just the legacy step modal). When it's showing there, re-render just
@@ -4021,7 +4041,7 @@ function smPreviewLoader(which = 'report') {
     state.storePageInsights = { loading: true };
     state.improveSubmissionAnalysis = { loading: true };
   }
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* DEV TOOL — stand in for a successful inference, so the states that only
@@ -4072,7 +4092,7 @@ function smFakeInference(pid = 'macos', fraction = 0.66) {
     state.stepModal.inferenceStatus = 'done';
     state.stepModal.inferenceError  = null;
   }
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* DEV TOOL — a plausible Store Page analysis, so Improve's suggestion boxes can
@@ -4239,7 +4259,7 @@ function smAdvancePhase(pid) {
 }
 
 function smFakeStoreInsights(on = true) {
-  if (!on) { state.storePageInsights = null; renderStepModal(); return; }
+  if (!on) { state.storePageInsights = null; reRenderStepModal(); return; }
   state.storePageInsights = {
     grade: 'B',
     issues: [
@@ -4258,7 +4278,7 @@ function smFakeStoreInsights(on = true) {
      so leaving the failed analysis in place kept "Analysis failed" on screen
      over a perfectly good set of suggestions. */
   state.improveSubmissionAnalysis = { grade: 'B' };
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* ── Step modal: the body dissolves instead of being cut by a line ─────────
@@ -7779,7 +7799,7 @@ function _parseAnalysisArray(text) {
 async function runImproveSubmissionAnalysis(platformId) {
   if (!CLAUDE_API_KEY) {
     state.improveSubmissionAnalysis = { error: 'No API key configured.' };
-    renderStepModal(); return;
+    reRenderStepModal(); return;
   }
 
   const ups  = state.uploads;
@@ -7789,7 +7809,7 @@ async function runImproveSubmissionAnalysis(platformId) {
   // If no images are available, Claude evaluates text only and notes missing assets.
 
   state.improveSubmissionAnalysis = { loading: true };
-  renderStepModal();
+  reRenderStepModal();
 
   // Helper: strip data-URL prefix → bare base64 + media type
   function parseDataUrl(dataUrl) {
@@ -7919,7 +7939,7 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
   } catch (err) {
     state.improveSubmissionAnalysis = { error: 'Analysis failed: ' + err.message };
   }
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* ── Store Page AI Insights ("Fix it" button) ──────────────── */
@@ -7927,10 +7947,10 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
 async function runStorePageInsights() {
   if (!CLAUDE_API_KEY) {
     state.storePageInsights = { error: 'No API key configured.' };
-    renderStepModal(); return;
+    reRenderStepModal(); return;
   }
   state.storePageInsights = { loading: true };
-  renderStepModal();
+  reRenderStepModal();
 
   const fd    = state.formData;
   const title = fd.title || '(no title)';
@@ -8000,7 +8020,7 @@ Aim for 3 wherever the listing supports it — a title, a subtitle and a descrip
   } catch (err) {
     state.storePageInsights = { error: 'Analysis failed: ' + err.message };
   }
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* Build the merged store-page suggestion list (max 5) from current analysis state.
@@ -8081,7 +8101,7 @@ function _autoRunImproveSubmission(pid) {
   if (needsSP) state.storePageInsights        = { loading: true };
   if (needsAI) state.improveSubmissionAnalysis = { loading: true };
 
-  renderStepModal(); // show loading screen immediately
+  reRenderStepModal(); // show loading screen immediately
 
   if (needsSP) runStorePageInsights();
   if (needsAI) runImproveSubmissionAnalysis(pid);
@@ -11996,19 +12016,57 @@ function setMasIapLocField(field) {
   if (state.masIapLocMode === 'review') _masIapLocSyncBackTranslations(_masIapLocEffectiveIapId());
 }
 
-/* ANSWERING NO LONGER MOVES YOU. All three of these used to reset the index to
-   0 afterwards, because the answered item vanished from the list and 0 was the
-   next unanswered one. With the list intact, staying put is the correct
-   behaviour: you pressed a box on the card you were reading, and the card
-   should show you what you just chose. The carousel is how you move. */
+/* ANSWERING MOVES YOU ON — and this reverses a rule that was right once.
+
+   The original note said: "all three used to reset the index to 0, because the
+   answered item vanished and 0 was the next unanswered one. With the list
+   intact, staying put is correct — you pressed a box on the card you were
+   reading." The half that was wrong is what "moving" meant then. Resetting to
+   ZERO is not moving on, it is being thrown back to the top of a list you had
+   worked down; no wonder staying put beat it.
+
+   Going to the NEXT UNRESOLVED item, forward and wrapping, is neither. It is
+   the same rule Binary's "Got it" follows (`acknowledgeBinFinding`) and the same
+   one `_impQueueResolve` already uses to decide which circle to glint — so the
+   card now travels to exactly the dot that was being pointed at, instead of
+   pointing at one and sitting on another.
+
+   `_impCommitFixEdit` is deliberately NOT in this list. The pencil edits an
+   answer you already gave; it is not a new answer, it does not queue a resolve,
+   and it must not move you off the text you are typing into. */
+
+/* The next unresolved store item after `from`, wrapping — or `from` itself if
+   nothing is left open. Written against `_mergedStoreItems()` re-read AFTER the
+   write, because a store item's status is DERIVED (from acceptedFixes /
+   dismissedFixes) rather than stored: there is no Set to add to first, the way
+   Binary has. Guards on an empty list, which `_selectedStoreIdx` can report as
+   -1 and Binary has no equivalent of. */
+function _advanceStoreFix(from) {
+  const items = _mergedStoreItems();
+  const n = items.length;
+  if (!n || from < 0) return;
+  for (let k = 1; k <= n; k++) {
+    const j = (from + k) % n;
+    if (items[j].status === 'open') {
+      if (!state.improveIdx) state.improveIdx = {};
+      state.improveIdx.storePage = j;
+      return;
+    }
+  }
+  /* Nothing open left. Stay where you are: jumping to an already-answered item
+     to announce that you are finished is worse than standing still, and the
+     batch's own all-clear line says it properly. */
+}
 
 /* Accept the Shipmate-suggested fix for the selected item */
 function applyStorePageFix() {
   const cur = _selectedStoreItem();
   if (!cur?.fixedValue || cur.type !== 'sp') return;
-  _impQueueResolve('.imp-split-batch', _selectedStoreIdx());
+  const i = _selectedStoreIdx();
+  _impQueueResolve('.imp-split-batch', i);
   _applyFieldValue(cur.field, cur.fixedValue);
-  renderStepModal();
+  _advanceStoreFix(i);
+  reRenderStepModal();
 }
 
 /* The carousel index the Store Page card is pointing at, clamped the way
@@ -12026,9 +12084,11 @@ function acceptEditedFix() {
   if (!textarea) return;
   const cur = _selectedStoreItem();
   if (!cur?.field) return;
-  _impQueueResolve('.imp-split-batch', _selectedStoreIdx());
+  const i = _selectedStoreIdx();
+  _impQueueResolve('.imp-split-batch', i);
   _applyFieldValue(cur.field, textarea.value.trim());
-  renderStepModal();
+  _advanceStoreFix(i);
+  reRenderStepModal();
 }
 
 /* Keep what is there, WITHOUT applying and without improving the grade.
@@ -12038,9 +12098,11 @@ function keepExistingFix() {
   if (!state.dismissedFixes) state.dismissedFixes = new Set();
   const cur = _selectedStoreItem();
   if (!cur) return;
-  _impQueueResolve('.imp-split-batch', _selectedStoreIdx());
+  const i = _selectedStoreIdx();
+  _impQueueResolve('.imp-split-batch', i);
   state.dismissedFixes.add(cur.title + '||' + (cur.field || ''));
-  renderStepModal();
+  _advanceStoreFix(i);
+  reRenderStepModal();
 }
 
 /* Put a suggestion back to unanswered — the carousel's tabs need a way back,
@@ -12055,7 +12117,7 @@ function resetStoreFix(idx) {
   if (!cur) return;
   state.dismissedFixes?.delete(cur.title + '||' + (cur.field || ''));
   if (cur.field && state.acceptedFixes) delete state.acceptedFixes[cur.field];
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* Carousel: point the Store Page card at suggestion `i`.
@@ -12074,7 +12136,7 @@ function selectStoreFix(i) {
   /* Store Page has no auto-collapse (see the note in buildImproveSubmissionSection),
      so "open it if it is shut" only ever undoes a manual collapse. */
   if (_improveCollapsed('storePage', false)) _setImproveCollapsed('storePage', false);
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* COLLAPSE IS AN OVERRIDE, NOT A DERIVED VALUE — three states, and the third
@@ -12100,7 +12162,7 @@ function _clearImproveCollapsed(which) {
 }
 function toggleImproveBatch(which, allAnswered) {
   _setImproveCollapsed(which, !_improveCollapsed(which, !!allAnswered));
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* ── Improve Your Submission: the three presentation behaviours ────────────
@@ -12247,7 +12309,7 @@ function _impCommitFixEdit(ed) {
   if (!field || !value) return;
   if (state.acceptedFixes?.[field] === value) return;   // nothing changed
   _applyFieldValue(field, value);
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* THE SAVE BUTTON SAVES. It used to only blur and leave the writing to a
@@ -12305,7 +12367,7 @@ function impCopyCode(btn) {
 function answerLocalizationRec(accepted) {
   state.improveLocAnswered = accepted ? 'accepted' : 'dismissed';
   _clearImproveCollapsed('loc');   // hand the batch back to its "done → collapse" default
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* Put the proposal back to unanswered. It is the only undo in this batch and it
@@ -12314,7 +12376,7 @@ function answerLocalizationRec(accepted) {
 function resetLocalizationRec() {
   state.improveLocAnswered = null;
   _clearImproveCollapsed('loc');
-  renderStepModal();
+  reRenderStepModal();
 }
 
 /* Called when user edits the suggestion textarea — changes button label */
@@ -17350,7 +17412,7 @@ function reRenderAndroidStepModal() {
   }
   const bodyEl = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
-  renderStepModal();
+  reRenderStepModal();
   const newBodyEl = document.getElementById('step-modal-body');
   if (newBodyEl) newBodyEl.scrollTop = scrollTop;
 }
@@ -17538,7 +17600,7 @@ function reRenderSteamStepModal() {
   }
   const bodyEl = document.getElementById('step-modal-body');
   const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
-  renderStepModal();
+  reRenderStepModal();
   const newBodyEl = document.getElementById('step-modal-body');
   if (newBodyEl) newBodyEl.scrollTop = scrollTop;
 }
@@ -18154,7 +18216,8 @@ async function openStorePreviewSection(pid, target) {
     if (needsInference) {
       const t0 = Date.now();
       try {
-        delete state.platformInferenceCache['unified:questionnaire'];
+        // The `needsInference` gate above already asked the cache; deleting the
+        // key here made that question meaningless. See runInference (claude.js).
         await runInference(pid, 'questionnaire');
         state.submission.infer[pid].status = 'done';
         _postInferenceSetup('questionnaire');
@@ -18195,7 +18258,7 @@ async function openStorePreviewSection(pid, target) {
   if (needsInference) {
     const startTime = Date.now();
     try {
-      delete state.platformInferenceCache['unified:questionnaire'];
+      // Same as above — `needsInference` already consulted the cache.
       await runInference(pid, 'questionnaire');
       state.stepModal.inferenceStatus = 'done';
       _postInferenceSetup('questionnaire');

@@ -1832,6 +1832,40 @@ async function inferAllQuestionnaires() {
 
 /* ── Public dispatcher ───────────────────────────────────────── */
 
+/* WHAT THE CACHE STORES IS THE INPUT, NOT A BOOLEAN.
+
+   It held `true`, which can only answer "has this ever run" — and the honest
+   answer to "should it run again" is "only if the prompt would differ". Every
+   caller papered over that by DELETING the key immediately before calling, on
+   a comment about re-running "to use latest accumulated knowledge". So the
+   guard never once fired: collapsing Content Rating and reopening it sat you
+   through the full loading screen again for a call whose input had not changed
+   by one character.
+
+   The signature IS the prompt's own shared half — `buildSharedContext()`,
+   the exact string every questionnaire request is built on — plus the two
+   things outside it that change the request: which platforms are being asked
+   for (they select the schemas, see buildUnifiedInferencePrompt) and how many
+   screenshots go in the payload. Comparing the real input beats maintaining a
+   list of fields that invalidate it; a new field added to the context is
+   covered the day it is added, where a hand-kept list would silently miss it.
+
+   That also answers "what if another platform's questionnaire was filled in":
+   per-platform answers are IN buildSharedContext (`_extractPlatformContext`
+   over activePlatforms), so answering one platform changes the signature for
+   every other one and the next open really does re-infer. */
+function _inferenceSignature() {
+  try {
+    const plats = [...state.activePlatforms].sort().join(',');
+    const shots = (state.uploads?.screenshots || []).length;
+    return `${plats}|${shots}|${buildSharedContext()}`;
+  } catch (_) {
+    // Never let a signature failure BLOCK inference — fall back to a value that
+    // can never match, so the call runs rather than being wrongly skipped.
+    return 'sig-error:' + Date.now();
+  }
+}
+
 async function runInference(pid, stepId) {
   if (!CLAUDE_API_KEY) throw new Error('NO_KEY');
 
@@ -1841,9 +1875,12 @@ async function runInference(pid, stepId) {
   // so opening Content Rating and later Improve Your Submission never re-runs it).
   if (stepId === 'questionnaire' || stepId === 'contentRating') {
     const uKey = 'unified:questionnaire';
-    if (state.platformInferenceCache[uKey]) return; // already ran
+    const sig  = _inferenceSignature();
+    if (state.platformInferenceCache[uKey] === sig) return;   // same input, same answers
     await inferAllQuestionnaires();
-    state.platformInferenceCache[uKey] = true;
+    // Written only on success — a throw leaves the key alone, so a failed call
+    // stays retryable rather than caching itself as done.
+    state.platformInferenceCache[uKey] = sig;
     return;
   }
 
