@@ -11583,33 +11583,6 @@ function _updateMasDescMoreBtn() {
   btn.style.visibility = isTruncated ? 'visible' : 'hidden';
 }
 
-/* Mac Product Page Preview — the screenshot carousel's two chevrons.
-
-   AN ARROW POINTING AT NOTHING IS A CONTROL THAT LIES, which is the whole of
-   this: at rest there is nothing to the left, and at the end nothing to the
-   right. It reads the scroller's real position rather than counting frames,
-   so a set of two (no overflow at all) correctly shows neither.
-
-   HIDDEN, NEVER REMOVED — `visibility` through `.is-off`, the same rule the
-   pinned nav's separators are written under. The NEXT chevron takes a real
-   40px lane out of the row and the frame arithmetic is solved against it
-   (style.css), so dropping it from the DOM would widen the frames and re-admit
-   the sliver the lane exists to kill. The PREV one is an overlay and costs no
-   layout either way; it is hidden the same way only so the two behave alike.
-
-   1px of slack on each end: `scrollLeft` is fractional on a scaled pane, so an
-   exact comparison flickers the chevron on and off across a smooth scroll. */
-function _macShotsArrows(scroller) {
-  if (!scroller) return;
-  const strip = scroller.parentNode;
-  if (!strip) return;
-  const prev = strip.querySelector('.mac-spp-shots-prev');
-  const next = strip.querySelector('.mac-spp-shots-next');
-  const max  = scroller.scrollWidth - scroller.clientWidth;
-  if (prev) prev.classList.toggle('is-off', scroller.scrollLeft <= 1);
-  if (next) next.classList.toggle('is-off', scroller.scrollLeft >= max - 1);
-}
-
 /* Aligns the visual bottom of Mac App Store's Description text (its actual
    glyph ink, not #mas-desc-text's own line-box bottom edge) with the
    "more"/"less" chip beside it (mac-spp-desc-more, grid-aligned to this
@@ -13270,174 +13243,570 @@ function _screenshotSrc(s) {
 }
 
 /* ══════════════════════════════════════════════════════
-   SCREENSHOT CROP PREVIEW — inline drag-and-drop editor
-   ══════════════════════════════════════════════════════ */
+   THE SCREENSHOTS EDITOR — order, remove, crop
+   ══════════════════════════════════════════════════════
+   The live half of `buildScreenshotsSection` (render.js), where the reasons
+   for the shape are written. This file does the four things the markup cannot:
+   solve the frame against the box the browser actually laid out, drag the
+   picture inside it, drag the thumbnails past each other, and bake the result.
 
-// Persists across renderStepModal() calls (not in state — UI-only ephemeral)
-var _shotCropState = {}; // { [pid]: { shotId, src, name, aspect } }
+   WHAT IT REPLACED, and why none of it survives: `_shotCropState` was a
+   PREVIEW. It positioned a dashed frame over an image and let you drag the
+   image under it — and then wrote nothing anywhere, so the crop you spent a
+   minute on existed until the next render and never reached the store. Pan was
+   stored in CSS pixels of an <img> whose size was whatever the layout gave it,
+   which is not a quantity that can be turned into a crop of the original. The
+   aspect buttons named iPhone devices on every platform, Mac included.
 
-function shotDragStart(event, pid, shotId) {
-  event.dataTransfer.setData('text/plain', JSON.stringify({ pid, shotId }));
-  event.dataTransfer.effectAllowed = 'copy';
-}
+   NON-DESTRUCTIVE, WHICH IS WHAT MAKES RESET HONEST. The original bytes are
+   never touched: `crops[id]` holds the transform AND a baked preview, and the
+   editor always re-loads the ORIGINAL and re-applies the transform. Clearing
+   the entry is therefore a real revert rather than a second crop back. */
 
-function shotDragOver(event, pid) {
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'copy';
-  const zone = document.getElementById('shot-edit-zone-' + pid);
-  if (zone) zone.classList.add('dragover');
-}
-
-function shotDragLeave(event, pid) {
-  // Only remove class if leaving the zone itself (not a child element)
-  if (!event.currentTarget.contains(event.relatedTarget)) {
-    const zone = document.getElementById('shot-edit-zone-' + pid);
-    if (zone) zone.classList.remove('dragover');
-  }
-}
-
-function shotDrop(event, pid) {
-  event.preventDefault();
-  const zone = document.getElementById('shot-edit-zone-' + pid);
-  if (zone) zone.classList.remove('dragover');
-
-  let data;
-  try { data = JSON.parse(event.dataTransfer.getData('text/plain')); } catch (e) { return; }
-  if (!data || data.pid !== pid) return;
-
-  const shots = state.uploads?.screenshots || [];
-  const shot  = shots.find(s => s.id === data.shotId);
-  if (!shot) return;
-
-  const prevShotId = _shotCropState[pid]?.shotId;
-  if (!_shotCropState[pid]) _shotCropState[pid] = {};
-  _shotCropState[pid].shotId = data.shotId;
-  _shotCropState[pid].src    = _screenshotSrc(shot);
-  _shotCropState[pid].name   = shot.name;
-  // Reset aspect and pan position whenever a different shot is dropped
-  if (prevShotId !== data.shotId) {
-    _shotCropState[pid].aspect = 'auto';
-    _shotCropState[pid].panX   = 0;
-    _shotCropState[pid].panY   = 0;
-  }
-  _renderShotEditZone(pid);
-}
-
-function shotEditClose(pid) {
-  if (_shotCropState[pid]) _shotCropState[pid].shotId = null;
-  _renderShotEditZone(pid);
-}
-
-function setShotAspect(pid, aspect) {
-  if (!_shotCropState[pid]) _shotCropState[pid] = {};
-  _shotCropState[pid].aspect = aspect;
-  _renderShotEditZone(pid);
-}
-
-/* ── Screenshot image pan/drag ── */
-var _shotPanActive = null; // { pid, startX, startY, origPanX, origPanY }
-
-function shotPanStart(event, pid) {
-  if (event.button !== 0) return; // left-click only
-  const cs = _shotCropState[pid];
-  if (!cs?.shotId) return;
-  event.preventDefault();
-  _shotPanActive = {
-    pid,
-    startX: event.clientX, startY: event.clientY,
-    origPanX: cs.panX || 0, origPanY: cs.panY || 0,
-  };
-  const wrap = document.getElementById('shot-edit-wrap-' + pid);
-  if (wrap) wrap.style.cursor = 'grabbing';
-  document.addEventListener('mousemove', _onShotPanMove, { passive: false });
-  document.addEventListener('mouseup',   _onShotPanEnd);
-}
-
-function _onShotPanMove(event) {
-  if (!_shotPanActive) return;
-  const { pid, startX, startY, origPanX, origPanY } = _shotPanActive;
-  const cs = _shotCropState[pid];
-  if (!cs) return;
-  cs.panX = origPanX + (event.clientX - startX);
-  cs.panY = origPanY + (event.clientY - startY);
-  // Update transform directly — no full re-render needed for smooth dragging
-  const img = document.getElementById('shot-edit-img-' + pid);
-  if (img) img.style.transform = `translate(${cs.panX}px,${cs.panY}px)`;
-}
-
-function _onShotPanEnd() {
-  if (!_shotPanActive) return;
-  const { pid } = _shotPanActive;
-  _shotPanActive = null;
-  document.removeEventListener('mousemove', _onShotPanMove);
-  document.removeEventListener('mouseup',   _onShotPanEnd);
-  const wrap = document.getElementById('shot-edit-wrap-' + pid);
-  if (wrap) wrap.style.cursor = 'grab';
-}
-
-function _renderShotEditZone(pid) {
-  const zone = document.getElementById('shot-edit-zone-' + pid);
-  if (!zone) return;
-  zone.innerHTML = _buildShotEditZoneHtml(pid);
-  // rAF ensures the crop frame updates even when the image is cached and onload doesn't re-fire
-  requestAnimationFrame(() => _updateShotCropFrame(pid));
-}
-
-// Portrait width/height ratios for iOS App Store devices
-const IOS_DEVICE_PORTRAIT_RATIOS = {
-  '6.7" iPhone': 1290 / 2796,   // ≈ 0.4613
-  '5.5" iPhone': 9 / 16,         // = 0.5625
-  'iPad 13"':    2064 / 2752,    // ≈ 0.75
+/* Ephemeral, like the `_shotCropState` it replaces and for the same reason —
+   which screenshot you have open is where the pointer is, not something the
+   submission carries. The TRANSFORM lives in state (platformScreenshots[pid]
+   .crops); this is the working copy while it is being dragged. */
+var _shotEd = {
+  pid: null, shotId: null,
+  z: 1, tx: 0, ty: 0,          // zoom, and pan in CANVAS pixels
+  img: null, natW: 0, natH: 0, // the decoded original
+  FW: 0, FH: 0,                // the crop frame, measured
+  dirty: false,
 };
 
-// Called by img onload to position the crop frame overlay
-function _updateShotCropFrame(pid) {
-  const cs = _shotCropState[pid];
-  if (!cs || !cs.aspect) return;
+function _shotEdPs(pid) {
+  if (!state.platformScreenshots) state.platformScreenshots = {};
+  if (!state.platformScreenshots[pid]) state.platformScreenshots[pid] = { selected: [], custom: [] };
+  const ps = state.platformScreenshots[pid];
+  if (!ps.order)   ps.order   = [];
+  if (!ps.removed) ps.removed = [];
+  if (!ps.crops)   ps.crops   = {};
+  return ps;
+}
 
-  const img   = document.getElementById('shot-edit-img-' + pid);
-  const frame = document.getElementById('shot-crop-frame-' + pid);
-  if (!img || !frame) return;
+/* The ORIGINAL entry for an id, from either pool — the editor must never read
+   the cropped copy `platformStoreShots` hands out, or a second crop would
+   compound on the first and Reset would revert to the last bake. */
+function _shotEdOriginal(pid, shotId) {
+  const ps = _shotEdPs(pid);
+  return (ps.custom || []).find(s => s.id === shotId)
+      || (state.uploads?.screenshots || []).find(s => s.id === shotId)
+      || null;
+}
 
-  // Auto-detect: default to 6.7" iPhone (handled in render for button UI)
-  if (cs.aspect === 'auto') {
-    cs.aspect = '6.7" iPhone';
-    _renderShotEditZone(pid);
+/* ── Arming, after every render ───────────────────────────────────────────
+   The step modal is rebuilt with innerHTML, so every listener here goes with
+   it — the same contract `_smModalFades` is written under, and the reason this
+   is called from renderStepModal's own post-paint block rather than wired once.
+
+   IT ALSO SOLVES THE GEOMETRY, because the stage's width is the modal's and a
+   builder cannot know it. Everything downstream (the frame, the cover scale,
+   the pan clamp) is derived from one measurement taken here. */
+function _shotEdArm() {
+  const root = document.querySelector('.shot-ed[data-shot-ed-pid]');
+  if (!root) { _shotEd.shotId = null; _shotEd.img = null; return; }
+  const pid = root.dataset.shotEdPid;
+  if (_shotEd.pid !== pid) { _shotEd.pid = pid; _shotEd.shotId = null; }
+
+  _shotEdWireStrip(root, pid);
+
+  const stage = document.getElementById('shot-ed-stage');
+  if (!stage || stage.classList.contains('is-empty')) { _shotEd.shotId = null; return; }
+
+  // Which one the markup drew as selected — the builder already resolved the
+  // fallback, so reading it back beats recomputing it here.
+  const selEl = root.querySelector('.shot-thumb.is-selected');
+  const shotId = selEl?.dataset.shotThumb || null;
+  if (!shotId) return;
+
+  _shotEdWireStage(pid);
+
+  /* THE BOX IS RESERVED BEFORE ANY IMAGE EXISTS, and that is a fix rather than
+     an optimisation. Jaco: *"la primera vez que se abre el modal de los
+     screenshots, la preview es cuadrada."*
+
+     The geometry used to be solved only inside the image's `onload`, so until
+     the bytes decoded the canvas carried NO height at all — measured, a stage
+     0px tall for every frame of the wait, and **0 forever** on a screenshot
+     that fails to load (an IGDB url through the proxy, offline). The window is
+     invisible with local data URLs, which is why every measurement in the last
+     pass came back clean: they decode before the next frame. It is the whole
+     load on anything remote.
+
+     The RATIO is a fact about the STORE, not about the picture — it comes off
+     `SM_REQS` and needs no image — so the box can be solved now and is. The
+     only thing the image adds is the rotation flip on a store whose row is
+     marked `rot: true`, so `_shotEdLoad` re-applies afterwards and the box
+     changes only when the picture really is the other way up. Mac never flips.
+
+     Same preference this file states for the travel code: a mechanism with no
+     timing behaviour over one that has to be verified at the right moment. */
+  const g = _shotEdGeometry(pid, null);
+  if (g) _shotEdApplyGeometry(g);
+
+  _shotEdWatchWidth(pid);
+  _shotEdLoad(pid, shotId);
+}
+
+/* THE STAGE'S WIDTH IS NOT SETTLED WHEN THE EDITOR IS ARMED, AND NO TIMER CAN
+   KNOW WHEN IT IS. Jaco, twice: *"la primera vez que se abre el modal de los
+   screenshots, la preview es cuadrada"*, then *"solo cuando selecciono un
+   segundo screenshot se cambia a la reso correcta."*
+
+   Reserving the box before the image loads (above) fixed the case it was
+   measured against and not his, because the real path in is the FLIP: the
+   Screenshots step is reached by pressing the well inside the Mac Product Page
+   Preview, whose modal is **1000px wide** and animates down to 680 as the
+   sub-panel turns over. Sampled every frame through that transition, the stage
+   reads **939 → 918 → 872 → … → 619 over about twenty frames**. Arming on the
+   first of those solved the frame at 939 × 587 and pinned it in inline pixels;
+   the modal then shrank to 619 around it and left a frame overflowing its own
+   stage, of which 619 × 587 is visible — ratio 1.05, which is what "completely
+   square" was. Picking a second screenshot re-armed it against a settled 619,
+   which is exactly the half of his report that names the cause.
+
+   **SO THE ANSWER IS NOT TO WAIT FOR THE WIDTH, IT IS TO STOP ASSUMING IT
+   HOLDS.** `transitionend` would be a guess about which property and which
+   element, and this file's standing preference is a mechanism with no
+   per-engine behaviour over one that has to be verified in an engine nobody
+   can drive. A `ResizeObserver` makes the geometry a FUNCTION of the width
+   rather than a snapshot of it, so the flip, a window resize and any layout
+   change this surface gains later are all one case that needs no timing at all.
+
+   It cannot loop: what the re-solve writes is the canvas's HEIGHT and the
+   frame's box, never the stage's width, and the guard makes a repeat of the
+   same width a no-op anyway. */
+function _shotEdWatchWidth(pid) {
+  const stage = document.getElementById('shot-ed-stage');
+  if (!stage || stage._shotEdRO || typeof ResizeObserver !== 'function') return;
+  stage._shotEdRO = new ResizeObserver(() => {
+    const w = Math.round(stage.clientWidth);
+    if (!w || w === stage._shotEdLastW) return;
+    stage._shotEdLastW = w;
+    /* The orientation is remembered from the decoded image rather than
+       re-derived, so a re-solve mid-flight cannot flip a portrait store's frame
+       back to its default while the picture is still loading. */
+    const geo = _shotEdGeometry(pid, _shotEd.landscape);
+    if (!geo) return;
+    _shotEdApplyGeometry(geo);
+    _shotEdLayout();
+  });
+  stage._shotEdRO.observe(stage);
+  stage._shotEdLastW = Math.round(stage.clientWidth);
+}
+
+/* ── The stage ────────────────────────────────────────────────────────────
+   THE FRAME IS THE FULL WIDTH WHEN THE STORE'S SHAPE IS LANDSCAPE, which is
+   Jaco's *"la preview ocupando todo el ancho del modal"* taken literally: for
+   Mac (16:10) the crop frame IS the canvas, there is no dimmed context, and
+   the mask is dropped rather than drawn round a box with nothing outside it.
+
+   A PORTRAIT STORE CANNOT DO THAT, and the reference prototype's answer is
+   taken whole: the canvas stays a landscape band at the full width and the
+   frame is a narrower vertical selection centred in it, with everything
+   outside dimmed by one `0 0 0 9999px` shadow — no scrim element to insert,
+   position and remove. The band is the width over 1.96, the reference's own
+   632 × 322 proportion, so a phone screenshot is edited against the same
+   amount of context there as here. */
+function _shotEdGeometry(pid, landscape) {
+  const stage = document.getElementById('shot-ed-stage');
+  const CW = Math.round(stage ? stage.clientWidth : 0);
+  if (!CW) return null;
+  const r = (typeof _shotEdRatio === 'function') ? _shotEdRatio(pid, landscape) : 16 / 10;
+  if (r >= 1) {
+    const FW = CW, FH = Math.round(CW / r);
+    return { CW, CH: FH, FW, FH, full: true };
+  }
+  const CH = Math.round(CW / 1.96);
+  const FH = CH, FW = Math.round(CH * r);
+  return { CW, CH, FW, FH, full: false };
+}
+
+function _shotEdWireStage(pid) {
+  const canvas = document.getElementById('shot-ed-canvas');
+  if (!canvas || canvas._shotEdWired) return;
+  canvas._shotEdWired = true;
+
+  let dragging = false, lastX = 0, lastY = 0;
+  canvas.addEventListener('pointerdown', e => {
+    if (!_shotEd.img) return;
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    canvas.classList.add('is-grabbing', 'is-active');
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    _shotEd.tx += (e.clientX - lastX); _shotEd.ty += (e.clientY - lastY);
+    lastX = e.clientX; lastY = e.clientY;
+    _shotEd.dirty = true; _shotEdLayout();
+  });
+  const end = e => {
+    if (!dragging) return;
+    dragging = false;
+    canvas.classList.remove('is-grabbing');
+    setTimeout(() => canvas.classList.remove('is-active'), 500);
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+
+  /* `passive: false` because the wheel has to be prevented — without it the
+     step modal scrolls under the pointer while the picture zooms, which is two
+     things happening for one gesture. */
+  canvas.addEventListener('wheel', e => {
+    if (!_shotEd.img) return;
+    e.preventDefault();
+    _shotEdSetZoom(_shotEd.z - e.deltaY * 0.0016);
+    canvas.classList.add('is-active');
+    clearTimeout(canvas._wheelT);
+    canvas._wheelT = setTimeout(() => canvas.classList.remove('is-active'), 500);
+  }, { passive: false });
+
+  const zoom = document.getElementById('shot-ed-zoom');
+  if (zoom) zoom.addEventListener('input', () => _shotEdSetZoom(parseFloat(zoom.value), true));
+
+  const reset = document.getElementById('shot-ed-reset');
+  if (reset) reset.addEventListener('click', () => _shotEdReset());
+}
+
+function _shotEdSetZoom(z, fromSlider) {
+  _shotEd.z = Math.max(1, Math.min(4, z || 1));
+  const el = document.getElementById('shot-ed-zoom');
+  if (el && !fromSlider) el.value = _shotEd.z;
+  _shotEd.dirty = true;
+  _shotEdLayout();
+}
+
+function _shotEdLoad(pid, shotId) {
+  const orig = _shotEdOriginal(pid, shotId);
+  if (!orig) return;
+  const src = _screenshotSrc(orig);
+  if (!src) return;
+
+  const saved = _shotEdPs(pid).crops[shotId] || {};
+  _shotEd.pid = pid; _shotEd.shotId = shotId;
+  _shotEd.z = saved.z || 1; _shotEd.tx = saved.tx || 0; _shotEd.ty = saved.ty || 0;
+  _shotEd.dirty = false; _shotEd.img = null;
+
+  const zoom = document.getElementById('shot-ed-zoom');
+  if (zoom) zoom.value = _shotEd.z;
+
+  const img = new Image();
+  img.onload = () => {
+    if (_shotEd.shotId !== shotId) return;   // selection changed while decoding
+    _shotEd.img = img; _shotEd.natW = img.naturalWidth; _shotEd.natH = img.naturalHeight;
+    /* Remembered, not just used — `_shotEdWatchWidth` re-solves the box on
+       every width change and has no picture of its own to ask. */
+    _shotEd.landscape = img.naturalWidth > img.naturalHeight;
+    const g = _shotEdGeometry(pid, _shotEd.landscape);
+    if (!g) return;
+    _shotEdApplyGeometry(g);
+    const el = document.getElementById('shot-ed-img');
+    if (el) el.src = src;
+    _shotEdLayout();
+  };
+  img.src = src;
+}
+
+function _shotEdApplyGeometry(g) {
+  _shotEd.FW = g.FW; _shotEd.FH = g.FH; _shotEd.CW = g.CW; _shotEd.CH = g.CH;
+  const canvas = document.getElementById('shot-ed-canvas');
+  const frame  = document.getElementById('shot-ed-frame');
+  if (canvas) canvas.style.height = g.CH + 'px';
+  if (frame) {
+    frame.style.width  = g.FW + 'px';
+    frame.style.height = g.FH + 'px';
+    frame.style.left   = ((g.CW - g.FW) / 2) + 'px';
+    frame.style.top    = ((g.CH - g.FH) / 2) + 'px';
+    frame.classList.toggle('is-full', !!g.full);
+  }
+}
+
+/* The image is laid out in CANVAS pixels and the frame is centred in the
+   canvas, so the crop arithmetic below is the same in both arrangements.
+
+   THE PAN IS CLAMPED AGAINST THE FRAME, NOT THE CANVAS. The canvas may
+   legitimately show dimmed margin either side of a portrait frame; the FRAME
+   is what gets exported, so it is the box the picture has to keep covered. */
+function _shotEdLayout() {
+  const el = document.getElementById('shot-ed-img');
+  if (!el || !_shotEd.natW || !_shotEd.FW) return;
+  const s0 = Math.max(_shotEd.FW / _shotEd.natW, _shotEd.FH / _shotEd.natH);
+  const s  = s0 * _shotEd.z;
+  const dispW = _shotEd.natW * s, dispH = _shotEd.natH * s;
+  const maxX = Math.max(0, (dispW - _shotEd.FW) / 2);
+  const maxY = Math.max(0, (dispH - _shotEd.FH) / 2);
+  _shotEd.tx = Math.max(-maxX, Math.min(maxX, _shotEd.tx));
+  _shotEd.ty = Math.max(-maxY, Math.min(maxY, _shotEd.ty));
+  el.style.width  = dispW + 'px';
+  el.style.height = dispH + 'px';
+  el.style.left   = (_shotEd.CW / 2 + _shotEd.tx - dispW / 2) + 'px';
+  el.style.top    = (_shotEd.CH / 2 + _shotEd.ty - dispH / 2) + 'px';
+  _shotEdLiveThumb();
+  _shotEdScheduleCommit();
+}
+
+/* ── Committing ───────────────────────────────────────────────────────────
+   AUTO-SAVE, BECAUSE THERE IS NOTHING FOR AN APPLY BUTTON TO MEAN. Every other
+   field on this journey writes as you leave it; a crop that needed confirming
+   would be the one thing here you could lose by closing the modal. It bakes a
+   third of a second after you stop moving — long enough that a drag is one
+   write rather than sixty. */
+var _shotEdCommitT = 0;
+function _shotEdScheduleCommit() {
+  clearTimeout(_shotEdCommitT);
+  _shotEdCommitT = setTimeout(() => { if (_shotEd.dirty) _shotEdCommit(); }, 350);
+}
+
+function _shotEdBake() {
+  if (!_shotEd.img || !_shotEd.natW || !_shotEd.FW) return null;
+  const s0 = Math.max(_shotEd.FW / _shotEd.natW, _shotEd.FH / _shotEd.natH);
+  const s  = s0 * _shotEd.z;
+  const left = _shotEd.FW / 2 + _shotEd.tx - (_shotEd.natW * s) / 2;
+  const top  = _shotEd.FH / 2 + _shotEd.ty - (_shotEd.natH * s) / 2;
+  const sx = -left / s, sy = -top / s, cw = _shotEd.FW / s, ch = _shotEd.FH / s;
+  /* Exported at the SOURCE's resolution, not the stage's, capped at 1400 on the
+     long edge — the stage is however wide the modal happens to be, and baking
+     at that size would make a screenshot's quality a function of the window. */
+  let ow = cw, oh = ch;
+  const cap = 1400, longest = Math.max(ow, oh);
+  if (longest > cap) { const k = cap / longest; ow *= k; oh *= k; }
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(ow)); c.height = Math.max(1, Math.round(oh));
+  try {
+    c.getContext('2d').drawImage(_shotEd.img, sx, sy, cw, ch, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.92);
+  } catch (_) {
+    /* A remote screenshot (IGDB through the proxy) taints the canvas, so the
+       bake throws and there is no dataURL to store. The transform is still
+       saved, so the crop survives and re-applies here; only the store's own
+       thumbnail keeps the uncropped picture. Stated rather than swallowed:
+       this is the one case where the preview and the editor disagree. */
+    return null;
+  }
+}
+
+function _shotEdCommit() {
+  if (!_shotEd.dirty || !_shotEd.shotId) return;
+  const ps = _shotEdPs(_shotEd.pid);
+  ps.crops[_shotEd.shotId] = {
+    z: _shotEd.z, tx: _shotEd.tx, ty: _shotEd.ty,
+    url: _shotEdBake() || undefined,
+  };
+  _shotEd.dirty = false;
+  /* The STRIP and the store row both read the crop, and the step modal is not
+     rebuilt here — a render mid-drag would take the canvas out from under the
+     pointer. The thumbnail is already live (`_shotEdLiveThumb`); the dashboard
+     behind the modal is what needs repainting. */
+  renderDashboard();
+}
+
+function _shotEdReset() {
+  if (!_shotEd.shotId) return;
+  const ps = _shotEdPs(_shotEd.pid);
+  delete ps.crops[_shotEd.shotId];
+  _shotEd.z = 1; _shotEd.tx = 0; _shotEd.ty = 0; _shotEd.dirty = false;
+  const zoom = document.getElementById('shot-ed-zoom');
+  if (zoom) zoom.value = 1;
+  _shotEdLayout();
+  _shotEdLiveThumb(true);
+  renderDashboard();
+}
+
+/* The selected thumbnail shows the crop as it is being made, throttled to one
+   paint per frame so a drag stays smooth. It is the same arithmetic as the
+   bake at a 200px cap — the thumbnail IS the export, seen small. */
+var _shotEdThumbRAF = 0;
+function _shotEdLiveThumb(force) {
+  const el = document.querySelector('.shot-thumb.is-selected img');
+  if (!el || !_shotEd.img) return;
+  if (force) {
+    const orig = _shotEdOriginal(_shotEd.pid, _shotEd.shotId);
+    if (orig) el.src = _screenshotSrc(orig);
     return;
   }
+  if (_shotEdThumbRAF) return;
+  _shotEdThumbRAF = requestAnimationFrame(() => {
+    _shotEdThumbRAF = 0;
+    const t = document.querySelector('.shot-thumb.is-selected img');
+    if (!t || !_shotEd.img || !_shotEd.FW) return;
+    const s0 = Math.max(_shotEd.FW / _shotEd.natW, _shotEd.FH / _shotEd.natH);
+    const s  = s0 * _shotEd.z;
+    const left = _shotEd.FW / 2 + _shotEd.tx - (_shotEd.natW * s) / 2;
+    const top  = _shotEd.FH / 2 + _shotEd.ty - (_shotEd.natH * s) / 2;
+    const cap = 200, k = cap / Math.max(_shotEd.FW, _shotEd.FH);
+    const c = document.createElement('canvas');
+    c.width  = Math.max(1, Math.round(_shotEd.FW * k));
+    c.height = Math.max(1, Math.round(_shotEd.FH * k));
+    try {
+      c.getContext('2d').drawImage(_shotEd.img, -left / s, -top / s,
+        _shotEd.FW / s, _shotEd.FH / s, 0, 0, c.width, c.height);
+      t.src = c.toDataURL('image/jpeg', 0.82);
+    } catch (_) { /* tainted — see _shotEdBake */ }
+  });
+}
 
-  if (cs.aspect === 'original') { frame.style.display = 'none'; return; }
+/* ── The strip ────────────────────────────────────────────────────────────
+   Selection, removal, add, and drag-to-reorder with live reflow: as the cursor
+   crosses a thumbnail the others slide out of the way (FLIP), so the dragged
+   one previews the slot it will land in rather than being followed by a line
+   you have to interpret. Committed to `order` on drop. */
+function _shotEdWireStrip(root, pid) {
+  const strip = document.getElementById('shot-ed-strip');
+  if (!strip) return;
 
-  // Device-specific portrait ratio — auto-flip for landscape images
-  const portraitRatio = IOS_DEVICE_PORTRAIT_RATIOS[cs.aspect];
-  const arMap = { '9:16': 9/16, '16:9': 16/9, '1:1': 1 };
-  if (portraitRatio) {
-    const isLandscape = img.naturalWidth > img.naturalHeight;
-    ar = isLandscape ? (1 / portraitRatio) : portraitRatio;
-  } else {
-    ar = arMap[cs.aspect];
+  strip.querySelectorAll('[data-shot-thumb]').forEach(t => {
+    t.addEventListener('click', e => {
+      if (e.target.closest('[data-shot-del]')) return;
+      const id = t.dataset.shotThumb;
+      if (id === _shotEd.shotId) return;
+      _shotEdCommit();                 // bake the one being left before switching
+      reRenderStepModalScreenshots(pid, id);
+    });
+    t.addEventListener('dragstart', e => {
+      _shotEdDragId = t.dataset.shotThumb;
+      t.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', _shotEdDragId); } catch (_) {}
+    });
+    t.addEventListener('dragend', () => {
+      const dropped = strip._justDropped; strip._justDropped = false;
+      _shotEdDragId = null;
+      t.classList.remove('is-dragging');
+      // Cancelled, or dropped outside: throw the preview away and redraw.
+      if (!dropped) reRenderStepModalScreenshots(pid, _shotEd.shotId);
+    });
+  });
+
+  strip.querySelectorAll('[data-shot-del]').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      shotEdRemove(pid, b.dataset.shotDel);
+    });
+  });
+
+  root.querySelectorAll('[data-shot-add]').forEach(b => {
+    b.addEventListener('click', () => {
+      const input = b.querySelector('input[type=file]') || root.querySelector('.shot-thumb-add input[type=file]');
+      if (input) input.click();
+    });
+  });
+
+  const restore = root.querySelector('[data-shot-restore]');
+  if (restore) restore.addEventListener('click', () => shotEdRestoreAll(pid));
+
+  if (!strip._reorderWired) {
+    strip._reorderWired = true;
+    strip.addEventListener('dragover', e => {
+      if (!_shotEdDragId) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      _shotEdPreviewReorder(strip, e.clientX);
+    });
+    strip.addEventListener('drop', e => {
+      if (!_shotEdDragId) return;
+      e.preventDefault();
+      strip._justDropped = true;
+      _shotEdCommitOrder(strip, pid);
+    });
   }
-  if (!ar) { frame.style.display = 'none'; return; }
+}
 
-  const dw = img.offsetWidth;
-  const dh = img.offsetHeight;
-  if (!dw || !dh) return;
+var _shotEdDragId = null;
 
-  let fw, fh;
-  if (ar < dw / dh) {
-    // Frame is portrait-ish relative to displayed image — constrain by height
-    fh = dh;
-    fw = fh * ar;
-  } else {
-    fw = dw;
-    fh = fw / ar;
+function _shotEdPreviewReorder(strip, x) {
+  const dragEl = strip.querySelector('.shot-thumb.is-dragging');
+  if (!dragEl) return;
+  const filled = [...strip.querySelectorAll('.shot-thumb[data-shot-thumb]')];
+  const others = filled.filter(t => t !== dragEl);
+  let idx = others.length;
+  for (let i = 0; i < others.length; i++) {
+    const r = others[i].getBoundingClientRect();
+    if (x < r.left + r.width / 2) { idx = i; break; }
+  }
+  const desired = others.slice(); desired.splice(idx, 0, dragEl);
+  if (desired.every((el, i) => el === filled[i])) return;   // no change
+  const anchor = strip.querySelector('.shot-thumb-add') || null;  // the + stays last
+  // FLIP: record, reorder, invert, play — the displaced ones only.
+  const first = new Map(); others.forEach(el => first.set(el, el.getBoundingClientRect().left));
+  desired.forEach(el => strip.insertBefore(el, anchor));
+  others.forEach(el => {
+    const d = first.get(el) - el.getBoundingClientRect().left;
+    if (Math.abs(d) > 0.5) {
+      el.style.transition = 'none';
+      el.style.transform = 'translateX(' + d + 'px)';
+      el.getBoundingClientRect();                      // force reflow
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1)';
+        el.style.transform = '';
+      });
+    }
+  });
+}
+
+/* THE DOM IS THE ANSWER. The preview above has already put the thumbnails in
+   the order the drop means, so this reads them back rather than recomputing an
+   index — one source for what you can see and what gets stored. */
+function _shotEdCommitOrder(strip, pid) {
+  const ids = [...strip.querySelectorAll('.shot-thumb[data-shot-thumb]')].map(t => t.dataset.shotThumb);
+  if (!ids.length) return;
+  _shotEdPs(pid).order = ids;
+  reRenderStepModalScreenshots(pid, _shotEd.shotId);
+  renderDashboard();
+}
+
+/* REMOVAL IS FROM THE LISTING, NOT FROM THE LIBRARY. Jaco: *"necesito que me
+   dejes borrarlos/ocultarlos."* The asset stays in Assets, where it was
+   uploaded and where it is shared with every other platform — taking a
+   screenshot out of the Mac listing must not delete it from the Steam one. So
+   this writes an id into `removed`, which is also what makes it undoable, and
+   the row under the strip offers exactly that. */
+function shotEdRemove(pid, shotId) {
+  const ps = _shotEdPs(pid);
+
+  /* A PLATFORM-SPECIFIC UPLOAD IS THE EXCEPTION, and it is a real one: it
+     exists nowhere but this listing, so removing it IS deleting it and there
+     is nothing for a restore to bring back. Counting it among the "N removed"
+     would offer an undo the model cannot honour. */
+  const isOwn = (ps.custom || []).some(s => s.id === shotId);
+  if (isOwn) {
+    ps.custom = ps.custom.filter(s => s.id !== shotId);
+    ps.order  = ps.order.filter(id => id !== shotId);
+    delete ps.crops[shotId];
+  } else if (!ps.removed.includes(shotId)) {
+    ps.removed.push(shotId);
+    /* IT KEEPS ITS PLACE IN `order`, which is what makes restore an undo
+       rather than a re-add. `removed` already filters it out of the listing —
+       taking it out of the sequence as well would throw away where it WAS, and
+       measured, restoring then dropped three screenshots to the end of a row
+       they had been arranged inside. An id in `order` that no longer resolves
+       is dropped by `platformStoreShots`'s own `filter(Boolean)`, so carrying
+       it costs nothing. */
   }
 
-  frame.style.display = 'block';
-  frame.style.width   = Math.round(fw) + 'px';
-  frame.style.height  = Math.round(fh) + 'px';
-  frame.style.left    = Math.round((dw - fw) / 2) + 'px';
-  frame.style.top     = Math.round((dh - fh) / 2) + 'px';
+  if (_shotEd.shotId === shotId) { _shotEd.shotId = null; _shotEd.img = null; }
+  reRenderStepModalScreenshots(pid, null);
+  renderDashboard();
+}
+
+function shotEdRestoreAll(pid) {
+  _shotEdPs(pid).removed = [];
+  reRenderStepModalScreenshots(pid, _shotEd.shotId);
+  renderDashboard();
+}
+
+/* Repaint the step's body only. `reRenderStepModal` would rebuild the whole
+   modal and is deferrable, which is wrong here for the reason the inline
+   editors already pay for: this is a direct answer to a press and the strip
+   under the pointer has to be correct on the next frame. */
+function reRenderStepModalScreenshots(pid, selectId) {
+  _shotEd.pid = pid;
+  if (selectId !== undefined) _shotEd.shotId = selectId;
+  const body = document.getElementById('step-modal-body');
+  const inner = body?.querySelector('.ios-step-body-content');
+  if (!inner) return;
+  inner.innerHTML = buildScreenshotsSection(pid);
+  requestAnimationFrame(_shotEdArm);
 }
 
 // Re-render target for the Assets tab's screenshot grid after an add/remove
@@ -19561,62 +19930,45 @@ function removeSteamKeyArtHeaderImage() {
 }
 
 /* ══════════════════════════════════════════════════════
-   SCREENSHOT STEP  (per-platform selection + uploads)
-   ══════════════════════════════════════════════════════ */
+   SCREENSHOT STEP — adding a screenshot from the editor
+   ══════════════════════════════════════════════════════
+   `togglePlatformScreenshot` and `removePlatformScreenshot` went with the grid
+   they served. Selection was that step's whole model — a checkbox per upload —
+   and the editor has no such control: what a listing HOLDS is `order` minus
+   `removed`, and pressing a thumbnail selects it for EDITING rather than for
+   inclusion. Deleted rather than left dormant, the dev bar's own argument.
 
-// Toggle selection of an onboarding screenshot for a platform
-function togglePlatformScreenshot(pid, shotId) {
-  if (!state.platformScreenshots) state.platformScreenshots = { ios:{selected:[],custom:[]}, android:{selected:[],custom:[]}, steam:{selected:[],custom:[]} };
-  const ps = state.platformScreenshots[pid];
-  const idx = ps.selected.indexOf(shotId);
-  if (idx >= 0) {
-    ps.selected.splice(idx, 1);
-  } else {
-    ps.selected.push(shotId);
-  }
-  // Re-render just the screenshot step body in the open modal
-  const body = document.getElementById('step-modal-body');
-  if (body) {
-    const inner = body.querySelector('.ios-step-body-content');
-    if (inner) inner.innerHTML = buildScreenshotsSection(pid);
-  }
-  // Also update the step card complete state
-  const cardEl = document.getElementById((pid === 'ios' ? 'ios' : pid) + '-step-card-screenshots');
-  if (cardEl) renderDash();
-}
-
-// Handle new platform-specific screenshot file uploads
+   This one survives because adding is still adding. Three things it gained:
+   it clears the id out of `removed` (a file dropped in is an inclusion, and it
+   would otherwise land straight back in the bin it had never been in), it
+   appends to `order` so the new shot lands at the END where a new one belongs,
+   and it opens it in the stage — you added it to look at it. */
 function handlePlatformScreenshotFiles(pid, files) {
   if (!files || !files.length) return;
-  if (!state.platformScreenshots) state.platformScreenshots = { ios:{selected:[],custom:[]}, android:{selected:[],custom:[]}, steam:{selected:[],custom:[]} };
-  const ps = state.platformScreenshots[pid];
-  Array.from(files).forEach(file => {
-    if (!file.type.startsWith('image/')) return;
+  const ps = _shotEdPs(pid);
+  const list = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if (!list.length) return;
+  let pending = list.length, lastId = null;
+  list.forEach(file => {
     const reader = new FileReader();
     reader.onload = ev => {
-      const id = 'pshot-' + pid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+      const id = 'pshot-' + pid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
       ps.custom = ps.custom || [];
       ps.custom.push({ id, name: file.name, dataUrl: ev.target.result });
-      // Re-render modal body
-      const body = document.getElementById('step-modal-body');
-      if (body) {
-        const inner = body.querySelector('.ios-step-body-content');
-        if (inner) inner.innerHTML = buildScreenshotsSection(pid);
+      ps.removed = (ps.removed || []).filter(x => x !== id);
+      /* Only meaningful once `order` is real — while it is empty the pool's own
+         sequence already puts a new upload last, and writing a one-id order
+         here would claim the developer had arranged the listing. */
+      if (ps.order.length) ps.order.push(id);
+      lastId = id;
+      if (--pending === 0) {
+        reRenderStepModalScreenshots(pid, lastId);
+        renderDashboard();
       }
     };
+    reader.onerror = () => { if (--pending === 0) reRenderStepModalScreenshots(pid, lastId); };
     reader.readAsDataURL(file);
   });
-}
-
-// Remove a platform-specific custom screenshot
-function removePlatformScreenshot(pid, shotId) {
-  if (!state.platformScreenshots?.[pid]) return;
-  state.platformScreenshots[pid].custom = (state.platformScreenshots[pid].custom || []).filter(s => s.id !== shotId);
-  const body = document.getElementById('step-modal-body');
-  if (body) {
-    const inner = body.querySelector('.ios-step-body-content');
-    if (inner) inner.innerHTML = buildScreenshotsSection(pid);
-  }
 }
 
 /* ============================================================================

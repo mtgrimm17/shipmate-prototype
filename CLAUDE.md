@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.40**
+Current version: **v6.41**
 
 ---
 
@@ -4293,6 +4293,66 @@ and that is where it is. But if the band under the DESCRIPTION is what the
 reference measures, the lever is the rail's 20px gap, not this floor — the two
 requests (three lines, and 20px between the links) cannot both end on one line.
 
+**BOTH CHEVRONS CAME OUT AGAIN ONE VERSION LATER (v6.41).** Jaco: *"no me
+convence las flechas del screenshot."* Deleted rather than hidden — the markup,
+`_macShotsArrows`, its render hook and both rules.
+
+**And the frame arithmetic maintained itself, which is the vindication of having
+written it as a fraction.** The note above says the NEXT chevron's 40px lane is
+"the whole reason the third frame stopped peeking", and that is true of the lane
+and NOT of the rule: `(100% − 16px) / 2` is solved against whatever box the
+scroller gets, so losing 40px of lane simply made both frames 20px wider.
+Measured after: frames **355.5** at 0 / 364 / 727 in a 727 viewport — the third
+starts exactly on the edge, 0px visible, with no number re-solved. Had that width
+still been the `336px` literal it once equalled, this removal would have put a
+sliver back.
+
+The cost, knowingly: paging is a trackpad gesture now and nothing on screen says
+there is a third screenshot. That is the trade — a chevron inside a well whose
+whole argument is ONE press was a second control inside a button.
+
+**AND THE VEIL BELONGS TO THE UNREVIEWED STATE ONLY.** Jaco: *"ni que sigas
+marcándolos una vez editados y en check — el oscuro de los screenshots me gusta
+para el previo, no después."*
+
+It shipped resting at `opacity: 0` once reviewed and returning on hover, filed
+under "answered recedes" — and that was the wrong rule for this object. Everything
+else that recedes is still DESCRIBING something once answered: a well still says
+*this value is yours to set*, so it goes quiet rather than away. The veil's whole
+sentence is *you have not looked at these yet*, which stops being true the moment
+you have — so bringing it back on approach re-asks a question that has been
+answered. It is not rendered at all when `screenshotsDone`, and the reviewed
+carousel is the screenshots at full strength, the way every other answered field
+shows its value plainly. The WELL still carries the press, its `.08` ring, its
+hover and the row's pointer.
+
+**The rule this leaves: "answered recedes" applies to marks that stay TRUE when
+answered.** A mark whose only content is the question itself does not recede, it
+leaves.
+
+**AND THE CHIP WAS EATING THE THIRD LINE — 33px OF IT, MEASURED.** Jaco: *"quiero
+que la descripción muestre realmente 3 líneas, no 2 y puntos suspensivos."*
+
+All three lines were being rendered in full; the chip sat **33px on top of the
+last one** with its gradient painting the tail out. So the previous pass's
+backdrop — "what makes after-the-ellipsis honest", faded from the well's own fill
+— was not a fix: it made the collision INVISIBLE rather than absent, which is
+exactly what "two lines and an ellipsis" looks like. **A backdrop that hides an
+overlap is a report of the bug, not a repair.**
+
+The lane is reserved on the TEXT instead (`--spp-desc-chip`, 32 for the chip plus
+10 of air, added to the clamp's own `padding-right`): the clamp is what wraps the
+paragraph, so the ellipsis lands where the chip begins BY CONSTRUCTION, at any
+width and in any language. On the PAIR rule, so the textarea wraps identically —
+`overflow-wrap`'s own requirement. The gradient and `--spp-desc-bg` are deleted
+with it.
+
+The cost, paid knowingly: the first two lines stop 42px short of the well's right
+edge too, because a padding cannot apply to the last line alone. Measured after:
+three visible lines at 445 / 460 / 456 wide, **38px of clear air** between the
+ellipsis and "more", `padding-right: 58px` identical at rest and while editing,
+box 556 wide in both.
+
 Measured across the whole batch: all four wells on **480.5 / 1232.5**,
 description 48.0 below its own section's edge, first frame and description copy
 both on **497.5**, icon → strip rule **18.00**, Set price 109.8 on the well
@@ -4300,6 +4360,380 @@ column, arrows hidden/visible correctly at rest, mid-scroll and at the end, the
 veil at 1 unreviewed and 0 reviewed, zero `onclick` on any frame — and iOS /
 Mac Full verified untouched (per-frame handlers intact, no veil, no prev arrow,
 Achievements still `0 6px` / `14px 10px`, `.ias-section` still `14px 16px`).
+
+### A listing is an ordered row of pictures (v6.41)
+
+`buildScreenshotsSection` (render.js) and the `_shotEd*` family (app.js). The
+Screenshots step stopped being a picker and became an editor. Jaco: *"ahora
+mismo se abre un modal extraño, y quiero que sea un poco diferente… 1. que se
+muestren los screenshots de la submission y que me permitas drag to order them
+as they'll look on the store. 2. que me dejes borrarlos/ocultarlos. 3. que si
+selecciono uno, me muestres la preview ocupando todo el ancho del modal y que yo
+pueda recortar y dragear dentro de la propia foto con slider/mouse wheel, y que
+se actualice para la store."*
+
+**THE OLD STEP ANSWERED A QUESTION THE ASSETS TAB HAS ALREADY ANSWERED.** It was
+a grid of every upload with a checkbox on each, plus a drop zone underneath that
+previewed a crop — so the model was SELECTION, and the three things a store
+listing actually is (a sequence, minus what you took out, cropped to the store's
+frame) could not be expressed at all. The crop zone is the sharper example: it
+positioned a dashed frame over an image, let you drag the image under it, and
+then **wrote nothing anywhere**. Pan lived in CSS pixels of an `<img>` sized by
+whatever the layout gave it, which is not a quantity that can be turned into a
+crop of the original; the aspect buttons named iPhone devices on every platform,
+Mac included. It was a drawing of an editor.
+
+**THE SHAPE IS THE REFERENCE PROTOTYPE'S** (`shipamte_fullquestionnaire.html`'s
+`.shot-editor`), and its three parts map onto his three asks one for one: a
+STRIP of thumbnails that reorders by drag and removes by its own ×, and above it
+a STAGE showing the selected one at the modal's full width, panned by dragging
+inside the picture and zoomed by slider or wheel.
+
+**IT WEARS NO CHROME OF ITS OWN**, and that is the one place it deliberately
+departs from the reference. There, the editor is a sub-panel inside a store modal
+and needs a back arrow, a Done and a "Saved" flash. Here it is a STEP, and the
+step modal already carries a header, an × and Save & Close — a second set inside
+the first is exactly what the Game Center pass had just finished removing one
+version earlier. Everything commits as it happens, so there is nothing for a Done
+to mean.
+
+#### THE MODEL: THREE FIELDS, AND ALL THREE ARE ABSENCES UNTIL YOU SAY SOMETHING
+
+`state.platformScreenshots[pid]` keeps `selected` and `custom` — the two POOLS a
+listing can draw from — and gains three fields that are about the LISTING:
+
+| | |
+|---|---|
+| `order` | ids in store order. A **preference, never a whitelist**: ids it does not name are appended in pool order, so a screenshot dropped into Assets later still appears instead of silently vanishing. |
+| `removed` | ids taken OUT. The difference between *not chosen yet* and *chosen against* — an empty `order` means untouched, where a `removed` entry is a real answer. |
+| `crops` | `{ [id]: { z, tx, ty, url } }` — the transform, plus the baked preview the store draws. |
+
+**ONE RESOLVER, FIVE READERS.** That same `selected+custom||allUploaded`
+expression was copied verbatim in five places — the iOS preview, Mac's, Mac
+Full's, the screenshots step and Steam's. `platformStoreShots(pid)` is the one
+definition now, the argument `smCheckSVG` and `smAppIcon` were lifted out under,
+and it is what let three new fields reach all five surfaces without teaching any
+of them a new model. **With nothing set it returns exactly what the copies did**,
+which is what made the swap safe.
+
+**A CROPPED SHOT IS A COPY, NOT A MUTATION**, and the spread has one non-obvious
+term. The baked preview goes on as a plain `dataUrl` with `ref` and `url`
+CLEARED, because `_screenshotSrc` resolves a library reference BEFORE it looks at
+the bytes — left in place the ref wins and the crop is never drawn. The library
+asset is untouched, so Reset is a real revert rather than a second crop back.
+
+**NON-DESTRUCTIVE IS ALSO WHY THE EDITOR NEVER READS ITS OWN OUTPUT.**
+`_shotEdOriginal` goes to the pools, not to `platformStoreShots` — handed the
+cropped copy it would compound crop on crop and Reset would revert to the last
+bake.
+
+#### THE STAGE IS MEASURED, NOT SIZED
+
+Its width is the modal's — the literal ask — so it states no width at all: it is
+a block in the step's content column and is that column by construction.
+**`_shotEdArm` solves the geometry after the paint**, the way everything else on
+these surfaces that depends on layout does, and that is also where the listeners
+are re-attached, because the step modal is rebuilt with innerHTML and takes them
+with it (`_smModalFades`'s own contract).
+
+**THE FRAME IS THE FULL WIDTH WHEN THE STORE'S SHAPE IS LANDSCAPE.** For Mac
+(16:10) the crop frame IS the canvas, so there is nothing outside it to dim and
+`.is-full` drops the mask — an outline round a box with no context in it reads as
+a stray stroke. A PORTRAIT store cannot do that, and the reference's answer is
+taken whole: the canvas stays a landscape band at the full width (`CW / 1.96`,
+its own 632 × 322 proportion) with the frame a narrower vertical selection
+centred in it, everything outside dimmed by one `0 0 0 9999px` shadow — no scrim
+node to insert, position and remove, and nothing that can be left behind if a
+render lands mid-drag.
+
+Measured on the 680px step modal: stage **619 wide** (680 − 2 border − 48 of
+scroller padding − the 11px bar), frame **619 × 387 at ratio 1.5995**, `is-full`
+with `box-shadow: none`.
+
+**ROTATION IS DERIVED, NOT A TOGGLE.** `_shotEdRatio` reads the store's own table
+(`SM_REQS[<store>]`'s first `shot: true` row) and flips it when that row is
+marked `rot: true` and the picture is the other way up. Three of the four stores
+carry that flag, so a set of landscape captures gets a landscape frame instead of
+being asked a question the pictures already answer. Mac has no `rot`: 16:10 only.
+The reference's orientation toggle is not ported.
+
+**THE PAN IS CLAMPED AGAINST THE FRAME, NOT THE CANVAS.** The canvas may
+legitimately show dimmed margin either side of a portrait frame; the FRAME is
+what gets exported, so it is the box the picture has to keep covered.
+
+**THE BAKE IS AT THE SOURCE'S RESOLUTION, capped at 1400 on the long edge** — the
+stage is however wide the modal happens to be, and baking at that size would make
+a screenshot's quality a function of the window.
+
+**AUTO-SAVE, BECAUSE THERE IS NOTHING FOR AN APPLY BUTTON TO MEAN.** Every other
+field on this journey writes as you leave it; a crop that needed confirming would
+be the one thing here you could lose by closing the modal. It bakes 350ms after
+you stop moving, so a drag is one write rather than sixty.
+
+**A REMOTE SCREENSHOT TAINTS THE CANVAS and that is stated rather than
+swallowed.** An IGDB image through the proxy makes `toDataURL` throw, so there is
+no baked preview: the TRANSFORM is still saved and re-applies in the editor, and
+only the store's own thumbnail keeps the uncropped picture. The one case where
+the two surfaces disagree.
+
+#### THE STRIP
+
+Drag-to-reorder with **live reflow** — as the cursor crosses a thumbnail the
+others slide out of the way (FLIP), so the dragged one previews the slot it will
+land in rather than being followed by a line you have to interpret. **The DOM is
+the answer on drop**: the preview has already put them in the order the drop
+means, so `_shotEdCommitOrder` reads them back instead of recomputing an index.
+One source for what you can see and what gets stored.
+
+The order badge is printed rather than left to be counted — a listing's third
+screenshot is a thing people talk about. The × is **bare until the thumbnail is
+hovered** (the calendar day panel's rule: a delete on every row, always visible,
+is a row of invitations to lose something) and red only on its own hover, so the
+colour arrives with the aim. The selected ring is the app's `#52BAFF`, meaning
+*this is the one you picked* — here, which one is OPEN, since everything in the
+strip is in the listing by definition.
+
+**REMOVAL IS FROM THE LISTING, NOT FROM THE LIBRARY.** The asset stays in Assets,
+where it is shared with every other platform — taking a screenshot out of the Mac
+listing must not delete it from the Steam one. Two consequences that both took a
+correction:
+
+- **It keeps its place in `order`.** The first version filtered the id out, and
+  measured, restoring then dropped three screenshots to the END of a row they had
+  been arranged inside. `removed` already takes it out of the listing; also
+  taking it out of the sequence throws away where it WAS, which is the only thing
+  an undo has to know. An id in `order` that no longer resolves is dropped by
+  `platformStoreShots`'s own `filter(Boolean)`, so carrying it costs nothing.
+- **A PLATFORM-SPECIFIC UPLOAD IS THE EXCEPTION, and it is a real one.** It
+  exists nowhere but this listing, so removing it IS deleting it — counting it
+  among the "N removed" would offer an undo the model cannot honour.
+
+#### TWO BUGS THIS UNCOVERED, BOTH OLDER THAN IT
+
+**`renderDash` HAS NEVER EXISTED.** The old `togglePlatformScreenshot` ended with
+`if (cardEl) renderDash();` — a call to a name that is nowhere in this codebase,
+latent because it only ran when an element with a particular id was present and
+that id is emitted by two builders this step is not one of. Six of them got
+written into the new code by copying that line, all `typeof`-guarded, all
+therefore silently doing nothing — which is how it was caught: the first probe
+threw `renderDash is not defined` from a hand call. The function is
+`renderDashboard`. **The general form: a `typeof`-guarded call to a name that
+does not exist is a switched-off feature that reports success**, and it is
+indistinguishable from a working one until something calls it unguarded.
+
+**A PLATFORM UPLOAD USED TO REPLACE THE WHOLE LISTING.** The five copies read
+`selected.length || custom.length ? [...selected, ...custom] : all`, so a
+non-empty `custom` with an empty `selected` sent it down the explicit arm and the
+library fallback switched off. Measured: with five screenshots showing and
+nothing picked, adding ONE here took the listing **from 5 to 1**. Tolerable while
+the only door was a picker where you also ticked; not tolerable once adding is a
+slot in a strip.
+
+The fix is the sentence, not the expression: **an ADDITION is not a REPLACEMENT.**
+An explicit pick still means what it always did — you named the ones you want —
+but adding a shot says nothing about the library ones, so they stay and the new
+one joins them. `removed` is the field that means "chosen against" and is now the
+only thing that takes a screenshot out. Verified across all four states:
+untouched → all five, picked → just those, added → five plus the new one, picked
+plus own → both.
+
+#### AND THE STORE ROW NOW AGREES WITH THE EDITOR
+
+`.ias-shot-img` is `height: 100%; width: auto` — the image keeps its own shape
+inside a frame that has a fixed one. On the Mac page the frame is
+`aspect-ratio: 16/10` with `overflow: hidden`, so measured: a 16:9 capture came
+out **391 wide in a 355 box** and was clipped off its right edge, and a PORTRAIT
+one came out **165** and left 190px of bare `--panel-3` inside the frame — a grey
+band in the middle of the store's own screenshot row.
+
+`object-fit: cover` is not a tidy-up of that, it is the row agreeing with the
+editor: the crop stage cover-fits at zoom 1 and exports at 16:10, so an uncropped
+shot now previews **exactly** the crop opening the editor would offer it, and a
+cropped one is already the frame's shape and is shown untouched. Before this the
+row and the editor disagreed about the same picture, which on the one surface
+whose argument is *this is a drawing of the store* is the difference between a
+preview and a guess. Scoped to `.mac-spp-page`: iOS and Mac Full are drawn as a
+DEVICE showing a page, their frames take the image's own width, and there is no
+fixed ratio for a cover to fill.
+
+**EMPTYING THE LISTING IS AN ANSWER, AND IT IS "NOT DONE".** The four
+`is*SectionComplete('screenshots')` arms read the two POOLS, which is the right
+question while the only thing you can do is pick. With removal in, a platform
+whose every screenshot had been taken out still had an upload in the pool and
+still reported complete, with nothing in the store row underneath it. They read
+`platformStoreShots` now — what the preview draws is what the tick has to agree
+with — guarded, because state.js loads before render.js.
+
+Measured across the whole batch: stage 619 on a 680 modal with the frame
+619 × 387 at 1.5995 and `is-full`; wheel → z 1.64 with the slider following, drag
+→ tx 60 / ty 40, auto-commit baking a real dataURL 350ms later; drag-to-reorder
+committing `['ss5','ss1','ss2','ss3','ss4']` with the badges renumbered and the
+resolver agreeing; remove → "4 screenshots · 1 removed" with `ss3` still in
+`order`; restore → back in place, `restoredInPlace: true`; empty listing →
+`complete: false`, empty stage, toolbar off, slider disabled; add → 5 → 6 with
+the new one selected, and deleting it a real delete with no restore offered; all
+five Mac frames 355.5 × 222.2 at 1.600 with their images filling them at `cover`;
+and iOS / Mac Full verified untouched — `object-fit: fill`, per-frame widths
+still varying with the image, per-frame handlers intact.
+
+#### THREE SMALL ONES, AND TWO WERE THE SAME MISTAKE
+
+**A VALUE THAT IS RIGHT FOR THE TARGET YOU WERE LOOKING AT IS NOT RIGHT FOR THE
+SELECTOR YOU WROTE IT ON.** Jaco: *"la pill de precio, cuando vuelvo de poner un
+precio en el modal, no es completamente redonda, pasa por unos frames de
+rectangular y queda feote."*
+
+It was not an animation at all — no frames, no easing. `.spp-just-changed`
+carried a blanket `border-radius: var(--field-radius)`, so for the whole 600ms
+of the return pop the GET pill was flatly re-shaped from its own 20px pill into
+an 8px rounded rectangle, and snapped back at `animationend`. One value, five
+targets, four different shapes: the three wells and the shots row already ARE
+`--field-radius`, so nobody could see it was being IMPOSED rather than
+inherited, and the single target that is a pill is the one it broke.
+
+The 8 was Content's — that cell paints nothing and has no radius, so the 9999px
+scrim cut a sharp-cornered hole around it. That is a fact about one target and
+it is scoped to that target now. **A pop is a light and a scale; what shape the
+light traces is the element's own business.** Third time this file has caught
+the same shape (the pending disc's fill, the separator's alpha): a number
+measured against one thing, then applied to the selector that happened to be
+open. Measured: 20px at every one of ten samples across the pop.
+
+**AND THE STAGE HAD NO BOX UNTIL AN IMAGE DECODED.** Jaco: *"la primera vez que
+se abre el modal de los screenshots, la preview es cuadrada."*
+
+The geometry was solved only inside the image's `onload`, so until the bytes
+came back the crop canvas carried no height at all — and on a screenshot that
+never loads (an IGDB url through the proxy, offline) it stayed **0 forever**.
+Measured on a remote shot: `stageH` 0 for every frame sampled and still 0 after
+1.2s.
+
+**It was invisible in every measurement the editor shipped with, and the reason
+is the test data.** A local data URL decodes before the next frame, so the box
+was always correct by the time anything looked at it. That is the same class as
+this file's own "dead code verified by measurement is dead only under the
+conditions it was measured in" — here, *correct* only under them.
+
+**The RATIO is a fact about the STORE, not about the picture.** It comes off
+`SM_REQS` and needs no image, so `_shotEdArm` solves and applies the box
+immediately; the load only re-applies it, and only changes anything on a store
+whose row is marked `rot: true` and a picture that really is the other way up.
+Mac never flips. Verified on a shot that never loads: frame 619 × 387 at ratio
+1.599 from the first frame and unchanged after 1.2s.
+
+**AND THAT FIXED THE CASE IT WAS MEASURED AGAINST, NOT HIS.** Jaco came back
+with the other half: *"la primera vez que lanzo el screenshot modal después de
+haber subido yo mis propios screenshots… el preview sigue siendo completamente
+cuadrado. Solo cuando selecciono un segundo screenshot, se cambia a la reso
+correcta."*
+
+**The real way in is the FLIP, and the flip is a moving width.** The Screenshots
+step is normally reached by pressing the well inside the Mac Product Page
+Preview — whose modal is **1000px wide** and animates down to 680 as the
+sub-panel turns over. Sampled every frame through that transition the stage
+reads **939 → 918 → 872 → 811 → … → 619 over about twenty frames**. Arming on
+the first of those solved the frame at 939 × 587 and pinned it in inline pixels;
+the modal then shrank to 619 around it, leaving a frame overflowing its own
+stage of which **619 × 587 is visible — ratio 1.05**. That is what "completely
+square" was, and picking a second screenshot re-armed it against a settled 619,
+which is the half of his report that names the cause.
+
+**SO THE FIX IS NOT TO WAIT FOR THE WIDTH, IT IS TO STOP ASSUMING IT HOLDS.**
+`transitionend` would be a guess about which property on which element, and this
+file's standing preference is a mechanism with no per-engine behaviour over one
+that has to be verified in an engine nobody can drive. `_shotEdWatchWidth` puts
+a `ResizeObserver` on the stage, so the geometry is a **function** of the width
+rather than a snapshot of it: the flip, a window resize and any layout change
+this surface gains later are one case needing no timing at all. It cannot loop —
+what a re-solve writes is the canvas's HEIGHT and the frame's box, never the
+stage's width, and a repeat of the same width is guarded to a no-op.
+
+`_shotEd.landscape` is REMEMBERED off the decoded image rather than re-derived,
+because the observer has no picture of its own to ask: without it a re-solve
+mid-flight would flip a portrait store's frame back to its default while the
+image was still loading.
+
+Measured at ratio **1.599 in all four**: after the flip (619 × 387), narrowed
+live to 459 (459 × 287), back to 619, and on the direct open. The frame never
+exceeds the stage at any sampled frame of the transition. (The ratios logged
+*during* the flip climb 0.18 → 1.60 because `getBoundingClientRect` reports the
+rotateY projection — the LAYOUT is correct throughout; that is the animation
+being seen, not the box being wrong. Measure `clientWidth`, not the rect, on
+anything mid-flip.)
+
+**AND THE PINNED BAR TELLS THE TRUTH ABOUT A BROKEN FIELD.** Jaco: *"si estando
+la tienda perfectamente completada, me da por cambiar el título o algún input
+que deje en rojo el cajetín, deberías retirar el checkmark de la pill
+correspondiente, o incluso marcarlo en rojo con un check con una x?"*
+
+Two options offered and the second is right, for a reason worth stating because
+the first sounds tidier. **Retiring the tick puts the pill back in the PENDING
+socket, and that socket already means something else** — *you have not done this
+yet*. An over-limit title is not that: you did it, and what you wrote is now
+invalid. Collapse the two and a broken section looks exactly like an untouched
+one, so the only way to find it is to open all eight pills — which is the walk
+this bar exists to save.
+
+So the disc gains a THIRD state rather than losing its second: red fill, and the
+tick becomes a cross. **One object through three values**, which is the platform
+card's own argument (an empty ring becoming a solid disc is a change of KIND; a
+soft disc going green is the same thing changing colour) — not a mark that comes
+and goes.
+
+- **RED IS FORCED, NOT CHOSEN.** The colour table gives three meanings and only
+  one fits: green done, amber *this needs you*, red WRONG. And the hue is
+  `--magenta` — the exact value the field's own well takes when it crosses the
+  limit — so the bar and the field are one fact stated twice, the relationship
+  the waits' yellow dates have with their band. Not `--alert-*`, which would be
+  a third colour for one condition.
+- **`bad` OUTRANKS `done`, and it has to.** An over-limit field is non-empty, so
+  every `done` test on this page says true about it. Stated in the JS (the
+  `disc` helper never emits both) with the CSS tie as a belt to those braces.
+- **THE GREEN BAR ANSWERS TO THE SAME FLAG.** A submission with an invalid title
+  is not finished, and `_sppCelebrate` reads `is-complete` — so without this the
+  sweep would have fired on the render that BROKE it. `bad` is tested on every
+  element rather than only the required ones: an optional section holding
+  invalid text is still invalid, where one merely left empty is fine. That is
+  exactly the distinction `required` makes and `bad` does not.
+- **ONLY THREE SECTIONS CAN CARRY IT**, and the asymmetry is real. Title,
+  Subtitle and Description are free text against a character limit, so they have
+  a way to be answered AND wrong; the other five are answered by making choices
+  in another step, where every reachable answer is legal. They read the SAME
+  `*OverLimit` booleans the fields themselves wear as `is-over-limit`, so the
+  magenta well and the red disc cannot disagree about one string.
+- **`smCrossSVG` joins `smCheckSVG` in state.js** — same 24 viewBox, same 2.2
+  stroke, same round caps. It goes in the same SLOT, so it has to be the same
+  object drawn differently rather than a second kind of badge.
+  `buildScreenshotsSection`'s thumbnail delete uses it too, for the reason that
+  function exists: seven inlined copies of the check, six of them stale.
+
+  **AND ITS EXTENT IS SOLVED AGAINST THE CHECK, IN THE RIGHT UNITS.** Jaco:
+  *"que la x del check circular mida lo mismo que el check, para que no parezcan
+  desbalanceados."* It shipped at 7.5 → 16.5 on the claim that its ink "matches
+  the check's own extent" — eyeballed from the WIDTH, and **width is the wrong
+  measure for a mark in a round disc**. The disc is a circle, so what the eye
+  compares is how far the ink reaches from the CENTRE. The check's furthest
+  point, (16.6, 8.7), sits **5.661** units from (12,12); a cross's furthest
+  points are its corners, which at 7.5 landed at √(4.5²+4.5²) = **6.364** —
+  12.4% further out. A cross is also 9 × 9 against a check that is 9.2 × 6.6, so
+  **matching them by width guarantees mismatching them by radius**. The
+  half-extent is `5.661 / √2` = 4.003, so it runs **8 → 16**; both now reach
+  5.661 (measured 5.661 / 5.657), and identical round caps extend both by the
+  same `sw/2` radially outward, so matching the path endpoints matches the
+  painted ink. Measured in a real 15px disc: ink 11.4 × 8.8 against 10.2 × 10.2,
+  same 2.2 stroke, same radius.
+
+**THE GEOMETRY THIS ROW GUARDS DOES NOT MOVE.** The disc is 15px in all three
+states and the glyph fills it at 100%, so measured across complete → broken →
+recovered the eight pill widths are identical (80 / 100 / 100 / 93 / 121 / 121 /
+128 / 128) and the row's `scrollWidth` holds at 934. That was the requirement
+the pending disc was introduced under and a third state must not spend it.
+
+Measured end to end: complete → bar `rgba(49,220,128,.18)` with its green ring,
+zero bad; title over 30 → bar back to white 12%, the Title disc `rgb(255,59,118)`
+with `rgb(46,7,19)` ink and the full cross path, 15px box and 15px glyph, the
+field's own well `rgb(255,59,118)`, tooltip "Title — over the character limit";
+title fixed → green again, zero bad, every width unchanged throughout.
 
 ### Editing a field must not move the page
 
@@ -4623,15 +5057,34 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.40** → next is **v6.41**, then **v6.42**, etc. (v6.29 –
+Current version: **v6.41** → next is **v6.42**, then **v6.43**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, shipped in parallel.)
 
-**This batch ships as v6.40, which had been minted by EDITING and never served.**
+**THE SKIP-IF-UNSURE RULE, AND THE ONE THING THAT BEATS IT: ASKING.** This
+batch was written up to v6.42 mid-session on the reasoning that v6.41 had been
+minted by editing and Claude could not tell whether it had been served — being
+barred from git, it cannot read `origin/main`. The asymmetry is real and worth
+keeping: staying on a number that is LIVE publishes new bytes under a key
+browsers have already cached, which is the diverged-cache failure this section
+exists to prevent, where skipping one burns a number this section's own first
+line calls cosmetic. **When the number's status is unknown, go up.**
+
+**But Jaco knew** — *"push this to 6.41"* — and it shipped as v6.41, put back
+across all fifteen lines. Safe for the standing reason and only that one: live
+was v6.40 and **nothing had ever been served under 6.41**, so the key still only
+went UP. Same move as the v6.62 → v6.39 renumber and the v6.41 → v6.40 one
+before it, and the third time this file records it: the rule is not "never go
+back", it is "never go back past LIVE".
+
+So the ordering to keep is: ask the person who can read `origin/main`; skip only
+when nobody can say. Guessing upward is the safe default, not the right answer.
+
+**v6.40 shipped as the number that had been minted by EDITING and never served.**
 It was briefly written up to v6.41 and put back — the same move as the v6.62 →
-v6.39 renumber above, and safe for the same one reason: live is v6.39 and nothing
-has ever been cached under 6.40, so the key still only goes UP. Bump once per
-publish; the number that was already sitting in the files unpublished IS the one
-this publish takes.
+v6.39 renumber above, and safe for the same one reason: live was v6.39 and
+nothing had ever been cached under 6.40, so the key still only went UP. Bump once
+per publish; the number already sitting in the files unpublished IS the one that
+publish takes. v6.41 is the next batch, minted after 6.40 really went live.
 
 **THE NUMBER WENT BACKWARDS ONCE, ON PURPOSE — v6.62 → v6.39.** Live sat at
 v6.38 while the working copy had been edited up to v6.62: twenty-three numbers
@@ -4909,6 +5362,15 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   **deliberate** — we removed all three, looked at it and put them back. There
   is a note in render.js; please don't tidy them away.
 - T4: Sync data type selections from natural language description (state.js task #4)
+- **The screenshots editor's open questions (v6.41).** Three things it leaves
+  deliberately, none of them blocking: a REMOTE screenshot (IGDB through the
+  proxy) taints the canvas so no preview can be baked — the transform survives
+  and only the store thumbnail shows the uncropped picture; the four
+  non-App-Store platforms (Android, Steam, Epic, PSN…) all get the same editor
+  through the same step, but only Mac's frame ratio has been looked at against
+  a real store page; and there is no way to crop a shot differently per DEVICE
+  the way the reference prototype's iPhone/iPad toggle does — `SM_REQS.ios`
+  carries two `shot` rows and this reads the first.
 - ~~The dev bar~~ — **deleted in v6.26**, all three pieces: the block in app.js,
   the `.sm-devbar` rules in style.css and the call at the top of
   `renderDashboard`. It was listed here precisely so it would not quietly become

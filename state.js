@@ -722,6 +722,42 @@ function smCheckSVG(px, sw) {
        + ` stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+/* ── AND THE CROSS, its opposite number ──────────────────────
+   Same 24 viewBox, same 2.2 stroke, same round caps — because it goes in the
+   SAME SLOT as the tick and has to read as that slot's other value rather than
+   as a second kind of mark.
+
+   **THE EXTENT IS SOLVED AGAINST THE CHECK, AND IN THE RIGHT UNITS.** Jaco:
+   *"que la x del check circular mida lo mismo que el check, para que no
+   parezcan desbalanceados."* It shipped at 7.5 → 16.5 on the claim that its ink
+   "matches the check's own extent" — which was eyeballed from the WIDTH, and
+   width is the wrong measure for a mark in a round disc.
+
+   The disc is a circle, so what the eye compares is how far the ink reaches
+   from the CENTRE. The check's own path (`M7.4 12.3 l3 3 6.2-6.6`) has three
+   points, and its furthest — (16.6, 8.7) — sits **5.661** units from (12,12).
+   A cross's furthest points are its corners, so at 7.5 → 16.5 they landed at
+   √(4.5² + 4.5²) = **6.364**: 12.4% further out, which is exactly the
+   "desbalanceado". A cross is also 9 × 9 against a check that is 9.2 × 6.6, so
+   matching the two by width guarantees mismatching them by radius.
+
+   So the half-extent is `5.661 / √2` = **4.003**, and the cross runs 8 → 16.
+   Both marks now reach 5.661 from the centre, to three decimals, and the round
+   caps extend both by the same `sw/2` radially outward — so matching the path
+   endpoints matches the painted ink too.
+
+   It exists for the pinned nav's disc, where a section that is answered but
+   INVALID cannot wear a tick and must not fall back to the empty pending
+   socket. Anything else that needs an × in a state disc should call this rather
+   than inline one, for `smCheckSVG`'s own reason: seven local copies, six of
+   them stale. */
+function smCrossSVG(px, sw) {
+  const s = px || 20;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" aria-hidden="true">`
+       + `<path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="${sw || 2.2}"`
+       + ` stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 /* THE STEP ROW'S CHEVRON, one definition, for the same reason as the check
    above: it was pasted into three card builders and left out of the fourth,
    which is how the Web card ended up with a text '›' while every other card
@@ -1666,6 +1702,16 @@ function isIOSSectionComplete(sectionId) {
   // display, so any available screenshot is sufficient to submit — the developer
   // only opens "Adjust Screenshots" if they want to curate. Not a hard gate.
   if (sectionId === 'screenshots') {
+    /* EMPTYING THE LISTING IS AN ANSWER, AND IT IS "NOT DONE". This used to
+       read the two POOLS — anything selected, anything uploaded — which is the
+       right question while the only thing a developer can do is pick. Now that
+       the Screenshots editor can take shots OUT of a listing, a platform whose
+       every screenshot has been removed still had an upload in the pool and
+       still reported complete, with nothing in the store row underneath it.
+       `platformStoreShots` is what the preview draws, so it is what the tick
+       has to agree with. Guarded because state.js loads before render.js;
+       identical to the old expression on an untouched listing. */
+    if (typeof platformStoreShots === 'function') return platformStoreShots('ios').length > 0;
     const ps = state.platformScreenshots?.ios;
     if (ps && (ps.selected.length > 0 || ps.custom.length > 0)) return true;
     return (state.uploads?.screenshots || []).length > 0;
@@ -1821,6 +1867,16 @@ function isMacSectionComplete(sectionId) {
   if (sectionId === 'screenshots') {
     // Optional-once-present, same as iOS — the preview shows Game Details
     // screenshots by default, so any available screenshot is enough to submit.
+    /* EMPTYING THE LISTING IS AN ANSWER, AND IT IS "NOT DONE". This used to
+       read the two POOLS — anything selected, anything uploaded — which is the
+       right question while the only thing a developer can do is pick. Now that
+       the Screenshots editor can take shots OUT of a listing, a platform whose
+       every screenshot has been removed still had an upload in the pool and
+       still reported complete, with nothing in the store row underneath it.
+       `platformStoreShots` is what the preview draws, so it is what the tick
+       has to agree with. Guarded because state.js loads before render.js;
+       identical to the old expression on an untouched listing. */
+    if (typeof platformStoreShots === 'function') return platformStoreShots('macos').length > 0;
     const ps = state.platformScreenshots?.macos;
     if (ps && (ps.selected.length > 0 || ps.custom.length > 0)) return true;
     return (state.uploads?.screenshots || []).length > 0;
@@ -1998,6 +2054,16 @@ function isMacFullSectionComplete(sectionId) {
   }
 
   if (sectionId === 'screenshots') {
+    /* EMPTYING THE LISTING IS AN ANSWER, AND IT IS "NOT DONE". This used to
+       read the two POOLS — anything selected, anything uploaded — which is the
+       right question while the only thing a developer can do is pick. Now that
+       the Screenshots editor can take shots OUT of a listing, a platform whose
+       every screenshot has been removed still had an upload in the pool and
+       still reported complete, with nothing in the store row underneath it.
+       `platformStoreShots` is what the preview draws, so it is what the tick
+       has to agree with. Guarded because state.js loads before render.js;
+       identical to the old expression on an untouched listing. */
+    if (typeof platformStoreShots === 'function') return platformStoreShots('macos_full').length > 0;
     const ps = state.platformScreenshots?.macos_full;
     if (ps && (ps.selected.length > 0 || ps.custom.length > 0)) return true;
     return (state.uploads?.screenshots || []).length > 0;
@@ -2171,6 +2237,11 @@ function isAndroidSectionComplete(sectionId) {
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('android');
 
   if (sectionId === 'screenshots') {
+    /* Android gates HARDER than the App Store family — Play requires its own
+       screenshots and there is no pre-populated preview to fall back on — so
+       this asks the listing, not the pool, and an empty listing is not done.
+       See the note on isIOSSectionComplete's own arm. */
+    if (typeof platformStoreShots === 'function') return platformStoreShots('android').length > 0 && !!(state.platformScreenshots?.android?.selected?.length || state.platformScreenshots?.android?.custom?.length);
     const ps = state.platformScreenshots?.android;
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
@@ -3563,14 +3634,34 @@ const state = {
   // because that index predates this and other code reads it.
   improveIdx: { storePage: 0 },
 
-  // Per-platform screenshot selections: which onboarding shots are selected,
-  // plus any platform-specific uploads
+  /* Per-platform screenshot selections: which onboarding shots are selected,
+     plus any platform-specific uploads.
+
+     THE LISTING IS A SEQUENCE, NOT A SET (v6.42). `selected` and `custom` are
+     the two POOLS a listing can draw from; the three fields beside them are
+     what the developer has said about the listing itself, and all three are
+     absences until the Screenshots editor is opened:
+
+       order   ids in store order. Ids it does not name are appended after it,
+               so a screenshot added to Assets later still shows up — the array
+               is a preference, never a whitelist.
+       removed ids taken OUT of this platform's listing. It is the difference
+               between "not chosen yet" and "chosen against": an empty `order`
+               means untouched, where a `removed` entry is a real answer. The
+               asset itself is untouched, so this is hide, not delete.
+       crops   { [id]: { z, tx, ty, url } } — the transform the developer set,
+               plus the baked preview the store draws. The ORIGINAL is never
+               modified, so clearing an entry really does revert.
+
+     Every consumer reads all five through one resolver, `platformStoreShots`
+     (render.js) — five copies of the selected+custom||all expression is what
+     it replaced. */
   platformScreenshots: {
-    ios:        { selected: [], custom: [] },
-    macos:      { selected: [], custom: [] },
-    macos_full: { selected: [], custom: [] },
-    android:    { selected: [], custom: [] },
-    steam:      { selected: [], custom: [] },
+    ios:        { selected: [], custom: [], order: [], removed: [], crops: {} },
+    macos:      { selected: [], custom: [], order: [], removed: [], crops: {} },
+    macos_full: { selected: [], custom: [], order: [], removed: [], crops: {} },
+    android:    { selected: [], custom: [], order: [], removed: [], crops: {} },
+    steam:      { selected: [], custom: [], order: [], removed: [], crops: {} },
   },
 
   // iOS step modal — which step is currently open

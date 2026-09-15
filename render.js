@@ -6743,6 +6743,12 @@ function renderStepModal() {
      and can be deferred indefinitely. See `_masCommitGlimmer` (app.js). */
   if (typeof _sppJustChanged === 'function') requestAnimationFrame(_sppJustChanged);
 
+  /* The Screenshots editor is armed here for `_smModalFades`'s reason and one
+     of its own: its listeners die with the modal's innerHTML, AND its crop
+     frame is solved against the stage's real width, which no builder can know.
+     A no-op on every other step — it looks for `.shot-ed` and leaves. */
+  if (typeof _shotEdArm === 'function') requestAnimationFrame(_shotEdArm);
+
   // Mac App Store's own Description clamps to exactly 4 rows via native
   // -webkit-line-clamp (buildMacStorePreviewSection, above) — whether that
   // actually truncated anything (and so whether the "more" chip should
@@ -6751,16 +6757,6 @@ function renderStepModal() {
   // "un-flipped Mac App Store Product Page Preview", the only place
   // #mas-desc-text exists — see _updateMasDescMoreBtn's own comment, app.js.
   if (isMacSpp) requestAnimationFrame(() => _updateMasDescMoreBtn());
-
-  /* The carousel's two chevrons say whether there is anything that way, which
-     only the laid-out scroller knows — and `reRenderStepModal` restores this
-     scroller's position, so "at the start" is not a safe assumption after a
-     render either. Same rearm-after-every-render shape as the fades above. */
-  if (isMacSpp && typeof _macShotsArrows === 'function') {
-    requestAnimationFrame(() => {
-      document.querySelectorAll('.mac-spp-shots-scroll').forEach(_macShotsArrows);
-    });
-  }
 
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
@@ -9101,11 +9097,45 @@ function _sppPinnedNav(pid, elements) {
      white. Here the list is MIXED — that is the entire point of the mark — so
      green is doing exactly what the colour rule reserves it for: marking one
      finished thing against others that are not. */
-  const disc = on => `<span class="spp-pin-tick ios-step-num${on ? ' is-done' : ''}" aria-hidden="true">${on ? smCheckSVG() : ''}</span>`;
+  /* THREE STATES, NOT TWO — AND THE THIRD IS WHY RETIRING THE TICK WAS THE
+     WEAKER OF THE TWO OPTIONS ON OFFER. Jaco: *"si estando la tienda
+     perfectamente completada, me da por cambiar el título o algún input que
+     deje en rojo el cajetín, deberías retirar el checkmark de la pill
+     correspondiente, o incluso marcarlo en rojo con un check con una x?"*
+
+     Retiring it puts the pill back in the PENDING socket, and that socket
+     already means something else: *you have not done this yet*. An over-limit
+     title is not that — you did it, and what you wrote is now invalid. Collapse
+     the two and a broken section looks exactly like an untouched one, so the
+     only way to find it is to open all eight. The bar's whole job is to save
+     that walk.
+
+     So it is his second option: the disc goes RED and the tick becomes a CROSS.
+     One object through three values rather than a mark that comes and goes —
+     the same argument the platform card's step disc was rebuilt under, where an
+     empty ring becoming a solid disc was a change of KIND and a soft disc going
+     green is the same thing changing colour. The cross sits in the tick's own
+     slot at the tick's own weight (`smCrossSVG`, state.js), so the geometry
+     this row guards so carefully does not move: the disc is 15px in all three
+     states and no pill changes width.
+
+     RED IS FORCED, not chosen. The colour table gives three meanings and this
+     is the only one that fits: green done, amber *this needs you*, red WRONG.
+     And the hue is `--magenta`, the exact value the field's own well takes when
+     it crosses the limit — the bar and the field are one fact stated in two
+     places, which is the relationship the wait's yellow date has with its band.
+
+     `bad` OUTRANKS `done`, because it has to: an over-limit field is non-empty,
+     so every `done` test on this page says true about it. That ordering is the
+     whole mechanism — see `ALL_ELEMENTS`' own note for where the flag comes
+     from and why only three sections can carry it. */
+  const disc = (on, bad) => `<span class="spp-pin-tick ios-step-num${
+    bad ? ' is-bad' : on ? ' is-done' : ''}" aria-hidden="true">${
+    bad ? smCrossSVG() : on ? smCheckSVG() : ''}</span>`;
   const pills = elements.map((e, i) => `${i ? sep(e.id === cur || elements[i - 1].id === cur) : ''}
     <button type="button" class="spp-pin${e.id === cur ? ' is-on' : ''}" data-spp-pin="${e.id}"
             onclick="setStorePreviewFocus('${pid}','${e.id}')"
-            title="${escHtml(e.label)}">${disc(e.done)}${escHtml(e.short || e.label)}</button>`).join('');
+            title="${escHtml(e.label)}${e.bad ? ' — over the character limit' : ''}">${disc(e.done, e.bad)}${escHtml(e.short || e.label)}</button>`).join('');
   /* `data-spp-pin` is what lets `_sppFocusHere` (app.js) light a pill without a
      render when you click straight into a field on the page. The id is already
      in the `onclick` string a character later; putting it in an attribute is
@@ -9120,7 +9150,15 @@ function _sppPinnedNav(pid, elements) {
      has stopped meaning anything. That edge is detected after the paint, by
      `_sppCelebrate` (app.js), exactly the way `_impPostRender` tells a grade
      that ROSE from a grade that was merely redrawn. */
-  const allRequiredDone = elements.every(e => !e.required || e.done);
+  /* AND THE GREEN BAR ANSWERS TO THE SAME FLAG. A submission with an invalid
+     title is not finished, so a bar that still went green over one would be
+     celebrating past the one thing left to fix — and `_sppCelebrate` reads this
+     class, so the sweep would fire on the render that BROKE it. `bad` is tested
+     on every element rather than only the required ones: an optional section
+     holding invalid text is still invalid, where an optional section merely
+     left empty is fine, which is exactly the distinction `required` makes and
+     `bad` does not. */
+  const allRequiredDone = elements.every(e => (!e.required || e.done) && !e.bad);
   /* TWO BOXES. `.cr-pinned`'s third was a sticky opaque strip so the page could
      not show through the gap between a floating container's rounded edge and
      the scrollport — and nothing scrolls under this bar any more, so
@@ -9167,16 +9205,11 @@ function buildStorePreviewSection() {
   const icon  = smAppIcon();
   const pid   = state.stepModal?.platformId || 'ios';
 
-  // Use the screenshots selected in the Select Screenshots step,
-  // falling back to all uploaded screenshots if none selected yet.
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const allUploaded = ups.screenshots || [];
-  const selectedIds = new Set(ps.selected);
-  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
-  const customShots = ps.custom || [];
-  const shots = selectedUploaded.length > 0 || customShots.length > 0
-    ? [...selectedUploaded, ...customShots]
-    : allUploaded; // fall back to all if none selected yet
+  /* The listing's screenshots — in the order the Screenshots editor put them,
+     minus anything removed there, with any crop already baked in. See
+     `platformStoreShots` for why this is one function and not the five copies
+     of the selected+custom||all expression it replaced. */
+  const shots = platformStoreShots(pid);
 
   const category  = escHtml(fd.genre || 'Games');
   const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
@@ -9934,16 +9967,11 @@ function buildMacStorePreviewSection() {
   const icon  = smAppIcon();
   const pid   = 'macos';
 
-  // Use the screenshots selected in the Select Screenshots step,
-  // falling back to all uploaded screenshots if none selected yet.
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const allUploaded = ups.screenshots || [];
-  const selectedIds = new Set(ps.selected);
-  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
-  const customShots = ps.custom || [];
-  const shots = selectedUploaded.length > 0 || customShots.length > 0
-    ? [...selectedUploaded, ...customShots]
-    : allUploaded; // fall back to all if none selected yet
+  /* The listing's screenshots — in the order the Screenshots editor put them,
+     minus anything removed there, with any crop already baked in. See
+     `platformStoreShots` for why this is one function and not the five copies
+     of the selected+custom||all expression it replaced. */
+  const shots = platformStoreShots(pid);
 
   const category  = escHtml(fd.genre || 'Games');
   const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
@@ -10273,13 +10301,24 @@ function buildMacStorePreviewSection() {
      reads fine as "next: …"); a pill is a NAME, and a pill wide enough to hold
      a sentence stops being one. Everything else already had a name, so it has
      no `short` rather than a copy of its own label — one string per fact. */
+  /* `bad` IS ONLY ON THE THREE SECTIONS THAT CAN HOLD INVALID CONTENT, and the
+     asymmetry is real rather than an omission. Title, Subtitle and Description
+     are free text against a character limit, so they have a way to be answered
+     AND wrong; the other five are answered by making choices in another step,
+     where every reachable answer is a legal one. There is nothing for a fourth
+     flag to say about Achievements.
+
+     They are the SAME `*OverLimit` booleans the fields themselves wear as
+     `is-over-limit` a few hundred lines down — one test, two consumers, so the
+     magenta well and the red disc cannot disagree about the same string. See
+     the `disc` helper in `_sppPinnedNav` for why this outranks `done`. */
   const ALL_ELEMENTS = [
-    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
-    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw },
+    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw,       bad: titleOverLimit },
+    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw,    bad: subtitleOverLimit },
     { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
     { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
     { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone,  short: 'Screenshots' },
-    { id: 'description',  label: 'Description',                       required: true,  done: descDone },
+    { id: 'description',  label: 'Description',                       required: true,  done: descDone,         bad: descOverLimit },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
   ];
@@ -10380,48 +10419,21 @@ function buildMacStorePreviewSection() {
   // request — the shots themselves are the click target instead (see
   // shotHtml, above), so the "required, not done" glow ring that button
   // used to carry moves onto the carousel container itself.
-  /* THE ARROW IS THE SCROLLER'S SIBLING, NOT ITS LAST CHILD, and that is what
-     makes exactly two screenshots fit. Inside the scroller it would scroll away
-     with the shots; beside it, it takes its 40px out of the row and the
-     scroller's content box lands on exactly `2 × frame + gap`, so there is no
-     third frame peeking. The frame width is DERIVED from that box in CSS rather
-     than being the 336px literal it happened to equal — see
-     `.mac-spp-shots-scroll .ias-shot-frame`.
+  /* BOTH CHEVRONS ARE GONE (Jaco: *"no me convence las flechas del
+     screenshot"*), and they are DELETED rather than hidden — the markup here,
+     `_macShotsArrows` and its render hook, and their rules in style.css.
 
-     It scrolls by one page rather than one frame: the row shows two and the
-     real store's chevron advances the pair. `scrollBy` with `behavior: smooth`
-     is safe here in a way `scrollIntoView` was not — there is no ambiguity
-     about WHICH box scrolls, which is the whole reason `_smScrollCentre` had to
-     be hand-written (see "The travel is ours, not the browser's"). */
-  /* AND THERE IS A LEFT ONE, WHICH THE RIGHT ONE'S OWN LANE FORBIDS IT TO COPY.
-     Jaco: *"igual que tenemos flecha hacia la derecha en los screenshots,
-     tenemos flecha a la izquierda cuando la necesitamos."*
+     **The frame arithmetic did not need them and maintains itself.** The width
+     is `(100% − 16px) / 2` of whatever box the scroller gets, so losing the
+     40px lane simply makes both frames 20px wider and the third still starts
+     exactly on the viewport's edge: there was never a literal to re-solve. The
+     pair still fits, nothing peeks, and the carousel is scrolled the way every
+     other horizontal strip in this app is.
 
-     The next chevron takes its 40px OUT of the row — that is the whole reason
-     the third frame stopped peeking (see the frame arithmetic in style.css).
-     A mirrored lane on the left would push the pair 40px right, off the column
-     the shots were just aligned to. So this one is an OVERLAY: absolutely
-     positioned over the strip's left edge, on a dark disc so it reads over a
-     screenshot, costing no layout at all.
-
-     It is also the one arrow that can be WRONG: at rest there is nothing to the
-     left, and an arrow pointing at nothing is a control that lies. Both are
-     toggled by `_macShotsArrows` (app.js) off the scroller's real position —
-     hidden, never removed, so the row cannot reflow under the pointer. */
-  const shotsPrev = `
-    <button type="button" class="mac-spp-shots-prev is-off" aria-label="Previous screenshots"
-            onclick="event.stopPropagation(); const s=this.parentNode.querySelector('.mac-spp-shots-scroll'); s.scrollBy({left: -s.clientWidth, behavior: 'smooth'});">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-        <path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>`;
-  const shotsArrow = `
-    <button type="button" class="mac-spp-shots-next" aria-label="Next screenshots"
-            onclick="event.stopPropagation(); const s=this.parentNode.querySelector('.mac-spp-shots-scroll'); s.scrollBy({left: s.clientWidth, behavior: 'smooth'});">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-        <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>`;
+     What it costs, knowingly: paging is a trackpad gesture now, with no control
+     saying the third screenshot is there. That is the trade — a chevron on a
+     surface whose whole well is ONE press was a second control inside a button,
+     which is the "two marks on one object" this page keeps refusing. */
   // THE SHOTS WEAR A WELL TOO. Jaco: *"creo que los screenshots deberían tener
   // un pocillo alrededor, para indicar que hay que clicarlos y revisarlos. Si
   // necesitas hacer su preview un pelín más pequeña para que el pocillo quede
@@ -10486,10 +10498,9 @@ function buildMacStorePreviewSection() {
          onclick="openStorePreviewSection('${pid}','screenshots')"
          title="Adjust Screenshots">
       <div class="mac-spp-shots-strip">
-        <div class="ias-shots-scroll mac-spp-shots-scroll" data-spp-el="screenshots"
-             onscroll="if (typeof _macShotsArrows === 'function') _macShotsArrows(this);">${shotHtml}</div>
-        <div class="mac-spp-shots-veil"><span class="mac-spp-shots-veil-label">Adjust Screenshots</span></div>
-        ${screenshotsDone ? shotsPrev + shotsArrow : ''}
+        <div class="ias-shots-scroll mac-spp-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
+        ${screenshotsDone ? '' : `
+        <div class="mac-spp-shots-veil"><span class="mac-spp-shots-veil-label">Adjust Screenshots</span></div>`}
       </div>
     </div>
     <div class="ias-device-compat">
@@ -14726,16 +14737,11 @@ function buildMacFullStorePreviewSection() {
   const icon  = smAppIcon();
   const pid   = 'macos_full';
 
-  // Use the screenshots selected in the Select Screenshots step,
-  // falling back to all uploaded screenshots if none selected yet.
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const allUploaded = ups.screenshots || [];
-  const selectedIds = new Set(ps.selected);
-  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
-  const customShots = ps.custom || [];
-  const shots = selectedUploaded.length > 0 || customShots.length > 0
-    ? [...selectedUploaded, ...customShots]
-    : allUploaded; // fall back to all if none selected yet
+  /* The listing's screenshots — in the order the Screenshots editor put them,
+     minus anything removed there, with any crop already baked in. See
+     `platformStoreShots` for why this is one function and not the five copies
+     of the selected+custom||all expression it replaced. */
+  const shots = platformStoreShots(pid);
 
   const category  = escHtml(a.category.primary || 'Games');
   const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
@@ -18627,140 +18633,223 @@ function buildBuildDropdown(pid, inModal) {
 }
 
 /* ══════════════════════════════════════════════════════
-   SCREENSHOTS STEP  (per-platform, inside step modal)
-   ══════════════════════════════════════════════════════ */
-function buildScreenshotsSection(pid) {
-  const onboardingShots = state.uploads?.screenshots || [];
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const selectedSet = new Set(ps.selected);
+   THE LISTING'S SCREENSHOTS — one resolver, five readers
+   ══════════════════════════════════════════════════════
+   Every store preview used to compute this itself, and the expression was
+   copied verbatim in FIVE places (the iOS preview, Mac's, Mac Full's, the
+   screenshots step and Steam's): selected-from-uploads plus per-platform
+   uploads, falling back to every upload while neither has been touched. One
+   definition per symbol — the same argument `smCheckSVG` and `smAppIcon` were
+   lifted out under — and now the three things the editor writes (order,
+   removals, crops) reach all five without teaching any of them a new model.
 
-  const checkMark = `<div class="shot-check">✓</div>`;
+   WITH NOTHING SET IT RETURNS EXACTLY WHAT THE COPIES DID, which is what made
+   the swap safe: an empty `order` orders nothing, an empty `removed` removes
+   nothing, and an empty `crops` leaves every entry the shape its caller has
+   always been handed.
 
-  // Onboarding screenshots row — thumbnails are draggable into the crop zone
-  let onboardingHtml;
-  if (onboardingShots.length > 0) {
-    onboardingHtml = onboardingShots.map(s => {
-      const src = _screenshotSrc(s);
-      const sel = selectedSet.has(s.id);
-      return `
-        <div class="shot-thumb${sel ? ' is-selected' : ''}"
-             draggable="true"
-             ondragstart="shotDragStart(event,'${pid}','${s.id}')"
-             onclick="togglePlatformScreenshot('${pid}','${s.id}')"
-             title="${escHtml(s.name)}">
-          <img src="${src}" alt="${escHtml(s.name)}">
-          ${sel ? checkMark : ''}
-          <div class="shot-drag-hint">drag to preview</div>
-        </div>`;
-    }).join('');
-  } else {
-    onboardingHtml = `<p class="shot-empty-msg">No screenshots in your uploads yet — add them under Assets during onboarding.</p>`;
+   A CROPPED SHOT IS A COPY, NOT A MUTATION. The baked preview is spread over
+   the entry as a plain `dataUrl` with `ref`/`url` cleared, because
+   `_screenshotSrc` resolves a library reference BEFORE it looks at the bytes —
+   left in place, the ref would win and the crop would never be drawn. The
+   asset in the library is untouched, so clearing the crop really does revert. */
+function platformStoreShots(pid) {
+  const ps          = state.platformScreenshots?.[pid] || {};
+  const allUploaded = state.uploads?.screenshots || [];
+  const custom      = ps.custom || [];
+  const selectedIds = new Set(ps.selected || []);
+  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
+
+  /* THE POOL — and the ONE place this diverges from the five copies, because
+     they had a bug the editor made reachable.
+
+     They read `selected.length || custom.length ? [...selected, ...custom] :
+     all`, i.e. a platform-specific upload switched the fallback off. Measured:
+     with five library screenshots showing and nothing picked, adding ONE shot
+     here took the listing from 5 to 1 — the other four silently gone, because
+     `custom` being non-empty sent it down the explicit arm with an empty
+     `selected`. Tolerable while the only door was a picker where you also
+     ticked; not tolerable now that adding is a slot in a strip.
+
+     A PLATFORM UPLOAD IS AN ADDITION, NOT A REPLACEMENT. An explicit PICK
+     still means what it always did — you named the ones you want — but adding
+     a shot says nothing about the library ones, so they stay and the new one
+     joins them. `removed` is the field that means "chosen against", and it is
+     the only thing that takes a screenshot out. Untouched, this is identical
+     to what the copies returned. */
+  let list = selectedUploaded.length > 0
+    ? [...selectedUploaded, ...custom]
+    : [...allUploaded, ...custom];
+
+  const removed = new Set(ps.removed || []);
+  if (removed.size) list = list.filter(s => !removed.has(s.id));
+
+  /* `order` is a PREFERENCE, not a whitelist — ids it does not mention are
+     appended in pool order, so a screenshot dropped into Assets after the
+     listing was arranged still appears instead of silently vanishing. */
+  const order = ps.order || [];
+  if (order.length) {
+    const byId  = new Map(list.map(s => [s.id, s]));
+    const named = new Set(order);
+    list = [
+      ...order.map(id => byId.get(id)).filter(Boolean),
+      ...list.filter(s => !named.has(s.id)),
+    ];
   }
 
-  // Platform-specific custom uploads
-  let customHtml = '';
-  if (ps.custom && ps.custom.length > 0) {
-    customHtml = `
-      <div class="shot-group-label">Platform-specific uploads</div>
-      <div class="shot-grid">
-        ${ps.custom.map(s => `
-          <div class="shot-thumb is-selected is-custom" title="${escHtml(s.name)}">
-            <img src="${_screenshotSrc(s)}" alt="${escHtml(s.name)}">
-            ${checkMark}
-            <button class="shot-remove" onclick="removePlatformScreenshot('${pid}','${s.id}')" title="Remove">×</button>
-          </div>`).join('')}
-      </div>`;
-  }
-
-  const total = ps.selected.length + (ps.custom?.length || 0);
-
-  // Inline crop edit zone (persists crop state across renders via _shotCropState)
-  const editZoneHtml = _buildShotEditZoneHtml(pid);
-
-  return `
-    <div class="screenshots-step">
-      <p class="shot-intro">
-        Select screenshots to include with your ${platLabel(pid)} submission.
-        ${total > 0 ? `<strong>${total} selected.</strong>` : ''}
-        <span class="shot-intro-hint">Click a screenshot to select it, or drag it down to preview the crop.</span>
-      </p>
-
-      <div class="shot-group-label">From your uploads</div>
-      <div class="shot-grid" id="shot-grid-${pid}">${onboardingHtml}</div>
-
-      ${customHtml}
-
-      <!-- Inline crop preview zone -->
-      <div class="shot-edit-zone" id="shot-edit-zone-${pid}"
-           ondragover="shotDragOver(event,'${pid}')"
-           ondragleave="shotDragLeave(event,'${pid}')"
-           ondrop="shotDrop(event,'${pid}')">
-        ${editZoneHtml}
-      </div>
-
-      <div class="shot-actions">
-        <label class="btn btn-ghost btn-sm shot-upload-btn" style="cursor:pointer;">
-          <input type="file" accept="image/*" multiple hidden
-                 onchange="handlePlatformScreenshotFiles('${pid}', this.files)">
-          + Upload New
-        </label>
-      </div>
-    </div>`;
+  const crops = ps.crops || {};
+  return list.map(s => {
+    const c = crops[s.id];
+    if (!c || !c.url) return s;
+    return { ...s, ref: null, url: null, dataUrl: c.url, _cropped: true };
+  });
 }
 
-/* Build the HTML content of the crop preview zone (called on render and on drag events) */
-function _buildShotEditZoneHtml(pid) {
-  const cs = (typeof _shotCropState !== 'undefined') ? _shotCropState[pid] : null;
-  if (!cs || !cs.shotId) {
-    return `
-      <div class="shot-edit-placeholder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="30" height="30" style="opacity:.4">
-          <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 4-5 7 7"/>
-        </svg>
-        <span>Drag a screenshot here to preview &amp; crop</span>
+/* The ratio a crop frame has to hit, read off the store's own table rather
+   than typed here — `SM_REQS[<store>]`'s first `shot: true` entry (assets.js).
+   Mac is 16:10 and says so in one place; iOS is 1320×2868 portrait.
+
+   ROTATION IS DERIVED, NOT A TOGGLE. Three of the four stores mark their
+   screenshot rows `rot: true`, meaning the same requirement accepted the other
+   way round — so a set of landscape captures gets a landscape frame instead of
+   asking the developer to answer a question the pictures already answer. Mac
+   carries no `rot`: 16:10 only, always this way up. */
+function _shotEdRatio(pid, sampleLandscape) {
+  const key  = pid === 'macos_full' ? 'macos' : pid;
+  const reqs = (typeof SM_REQS !== 'undefined' && SM_REQS[key]) || [];
+  const row  = reqs.find(r => r.shot);
+  if (!row || !row.w || !row.h) return 16 / 10;
+  let r = row.w / row.h;
+  if (row.rot && sampleLandscape != null && (r > 1) !== !!sampleLandscape) r = 1 / r;
+  return r;
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREENSHOTS STEP  (per-platform, inside step modal)
+   ══════════════════════════════════════════════════════
+   IT IS AN EDITOR, NOT A PICKER. Jaco: *"ahora mismo se abre un modal extraño,
+   y quiero que sea un poco diferente… 1. que se muestren los screenshots de la
+   submission y que me permitas drag to order them as they'll look on the
+   store. 2. que me dejes borrarlos/ocultarlos. 3. que si selecciono uno, me
+   muestres la preview ocupando todo el ancho del modal y que yo pueda recortar
+   y dragear dentro de la propia foto con slider/mouse wheel, y que se actualice
+   para la store."*
+
+   What it replaced answered a different question. It was a GRID of every
+   upload, each one a checkbox, with a drop zone underneath that previewed a
+   crop it could not apply — so the step asked "which of these do you own",
+   which the Assets tab has already answered, and the one thing a store listing
+   really is (an ordered row of pictures, cropped to the store's frame) could
+   not be expressed at all. Selection was the model; sequence, removal and crop
+   were not in it.
+
+   THE SHAPE IS THE REFERENCE PROTOTYPE'S, and the three parts map onto his
+   three numbered asks: a STRIP of thumbnails that reorders by drag and removes
+   by its own ×, and above it a STAGE showing the selected one at the modal's
+   full width, panned by dragging inside the picture and zoomed by slider or
+   wheel.
+
+   IT WEARS NO CHROME OF ITS OWN. The reference is a sub-panel inside a store
+   modal and needs a back arrow, a Done and a "Saved" status; this is a STEP,
+   and the step modal already carries a header, an × and Save & Close. A second
+   set inside the first is the thing the Game Center pass had just finished
+   removing. Everything commits as it happens, so there is nothing for a Done
+   to mean. */
+function buildScreenshotsSection(pid) {
+  const shots = platformStoreShots(pid);
+  const pool  = state.uploads?.screenshots || [];
+  const ps    = state.platformScreenshots?.[pid] || {};
+  const removedCount = (ps.removed || []).length;
+
+  /* WHICH ONE IS OPEN IS EPHEMERAL, and it lives beside the transform in
+     `_shotEd` (app.js) rather than in state, for `_shotCropState`'s own reason
+     — it is where the pointer is, not something the submission carries. The
+     builder only has to know the id, and falls back to the first shot so the
+     stage is never empty while there is something to show. */
+  const sel = (typeof _shotEd !== 'undefined' && _shotEd.pid === pid && shots.some(s => s.id === _shotEd.shotId))
+    ? _shotEd.shotId
+    : (shots[0]?.id || null);
+
+  const reqRow = (typeof SM_REQS !== 'undefined' && (SM_REQS[pid === 'macos_full' ? 'macos' : pid] || []).find(r => r.shot)) || null;
+  const reqLine = reqRow
+    ? `${reqRow.w} × ${reqRow.h}${reqRow.note ? ' — ' + escHtml(reqRow.note) : ''}`
+    : '';
+
+  /* The app's one cross (`smCrossSVG`, state.js) rather than a local pair of
+     lines — `smCheckSVG`'s own lesson, which found six stale copies of a glyph
+     that had been inlined seven times. Sized in CSS, never by the argument. */
+  const delSVG = smCrossSVG();
+  /* The pan glyph flags a shot whose own shape differs from the store's frame,
+     i.e. one that is being cover-cropped and therefore has a decision in it.
+     A shot that already fits has nothing to reposition and wears nothing. */
+  const panSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>`;
+
+  const thumbs = shots.map((s, i) => `
+    <div class="shot-thumb${s.id === sel ? ' is-selected' : ''}" data-shot-thumb="${s.id}"
+         draggable="true" title="${escHtml(s.name || 'Screenshot')}">
+      <img src="${_screenshotSrc(s)}" alt="" draggable="false">
+      ${s._cropped ? `<span class="shot-thumb-pan" title="Cropped — open to reposition">${panSVG}</span>` : ''}
+      <span class="shot-thumb-ord">${i + 1}</span>
+      <button class="shot-thumb-del" data-shot-del="${s.id}" title="Remove from this listing">${delSVG}</button>
+    </div>`).join('');
+
+  /* The + is a SLOT in the strip, not a button parked elsewhere: adding a
+     screenshot is the same kind of act as reordering one, and it lands at the
+     end, which is where a new one goes. */
+  const addSlot = `
+    <button class="shot-thumb-add" data-shot-add title="Add a screenshot">
+      <span class="shot-thumb-add-plus">+</span>
+      <input type="file" accept="image/*" multiple hidden
+             onchange="handlePlatformScreenshotFiles('${pid}', this.files)">
+    </button>`;
+
+  /* THE STAGE IS MEASURED, NOT SIZED HERE. Its width is the modal's — the
+     literal ask — so the frame can only be solved once the box exists;
+     `_shotEdArm` (app.js) does it after the paint, the way every other thing
+     on this surface that depends on layout does. The markup only has to name
+     the boxes. */
+  const stage = sel
+    ? `
+      <div class="shot-ed-stage" id="shot-ed-stage">
+        <div class="shot-ed-canvas" id="shot-ed-canvas">
+          <img class="shot-ed-img" id="shot-ed-img" alt="" draggable="false">
+          <div class="shot-ed-frame" id="shot-ed-frame"><div class="shot-ed-grid"></div></div>
+          <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
+        </div>
+      </div>`
+    : `
+      <div class="shot-ed-stage is-empty" id="shot-ed-stage">
+        <button class="shot-ed-empty" data-shot-add>
+          <span class="shot-thumb-add-plus">+</span>
+          <span>${removedCount ? 'Every screenshot has been removed from this listing' : 'Add a screenshot'}</span>
+        </button>
       </div>`;
-  }
-
-  const aspect = (cs.aspect && cs.aspect !== 'auto') ? cs.aspect : '6.7" iPhone';
-  // iOS App Store supported device aspect ratios (portrait dimensions, auto-flipped for landscape images)
-  const IOS_AR_OPTIONS = [
-    { key: 'original',    label: 'Original' },
-    { key: '6.7" iPhone', label: '6.7" iPhone' },
-    { key: '5.5" iPhone', label: '5.5" iPhone' },
-    { key: 'iPad 13"',    label: 'iPad 13"' },
-  ];
-  const arBtns = IOS_AR_OPTIONS.map(a =>
-    `<button class="shot-ar-btn${a.key === aspect ? ' active' : ''}" onclick="setShotAspect('${pid}','${a.key}')">${a.label}</button>`
-  ).join('');
-
-  const isSelected = (() => {
-    const ps = state.platformScreenshots?.[pid];
-    return ps?.selected?.includes(cs.shotId);
-  })();
-
-  const panX = cs.panX || 0;
-  const panY = cs.panY || 0;
 
   return `
-    <div class="shot-edit-active">
-      <button class="shot-edit-close" onclick="shotEditClose('${pid}')" title="Close preview">×</button>
-      <div class="shot-edit-preview-wrap" id="shot-edit-wrap-${pid}"
-           style="cursor:grab" onmousedown="shotPanStart(event,'${pid}')">
-        <img src="${cs.src}" class="shot-edit-img" id="shot-edit-img-${pid}"
-             alt="${escHtml(cs.name || '')}"
-             style="transform:translate(${panX}px,${panY}px);pointer-events:none;"
-             onload="_updateShotCropFrame('${pid}')">
-        <div class="shot-crop-frame" id="shot-crop-frame-${pid}" style="display:none;"></div>
+    <div class="shot-ed" data-shot-ed-pid="${pid}">
+      <div class="shot-ed-head">
+        <div class="shot-ed-count">${shots.length} screenshot${shots.length === 1 ? '' : 's'}${
+          removedCount ? ` · ${removedCount} removed` : ''}</div>
+        ${reqLine ? `<div class="shot-ed-req">${reqLine}</div>` : ''}
       </div>
-      <div class="shot-edit-controls">
-        <div class="shot-edit-label">${escHtml(cs.name || 'Screenshot')}</div>
-        <div class="shot-ar-btns">${arBtns}</div>
-        <button class="btn ${isSelected ? 'btn-ghost' : 'btn-primary'} btn-sm"
-                onclick="togglePlatformScreenshot('${pid}','${cs.shotId}');_renderShotEditZone('${pid}')">
-          ${isSelected ? '✓ Selected' : '+ Select screenshot'}
-        </button>
-        <button class="btn btn-ghost btn-sm" onclick="shotEditClose('${pid}')">Close</button>
+
+      ${stage}
+
+      <div class="shot-ed-toolbar${sel ? '' : ' is-off'}">
+        <div class="shot-ed-zoom">
+          <span class="shot-ed-zoom-label">Zoom</span>
+          <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
+                 min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
+        </div>
+        <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
       </div>
+
+      <div class="shot-ed-strip" id="shot-ed-strip">${thumbs}${addSlot}</div>
+
+      ${pool.length === 0 && shots.length === 0 ? `
+      <p class="shot-ed-note">No screenshots uploaded yet — add them here, or under Assets in Game Details.</p>` : ''}
+      ${removedCount ? `
+      <button class="shot-ed-restore" data-shot-restore>Restore ${removedCount} removed screenshot${removedCount === 1 ? '' : 's'}</button>` : ''}
     </div>`;
 }
 
