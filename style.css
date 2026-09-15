@@ -3218,7 +3218,22 @@ body.viewing-splash .app-subnav { display: none; }
 /* ── The guide's month ─────────────────────────────────────────────────────
    254px of inner width over seven columns is 36.3 a cell, which is enough for
    two digits and a dot and nothing else. Everything here is sized off that. */
-.gcal { margin-top: 22px; }
+/* 14, AND IT USED TO BE 22 — the number was sized for a different first child.
+   `.gcal` began with `.gcal-head`, the 13px month name: a heading, which earns
+   a heading's clearance. Since v6.52 the block opens with the lede instead, and
+   since v6.62 that is a plain row — a platform mark and a date — so 22 left the
+   list stranded in the middle of the card's chrome, adrift from the eyebrow that
+   names the face and from nothing else.
+
+   14 is the lede's own step rather than a fresh number: the gap between its rows
+   is 7, and 7 + 7 is what `.gcal-lede-go` takes to say "I am not one of these".
+   The same unit says it here, one level up — the list is not part of the card's
+   header, and one step is all that has to be said.
+
+   The segmented face-picker is not a constraint even though its box hangs 6.4px
+   lower than the eyebrow's: it is absolutely positioned at `right: 45` and the
+   list's names are on the left, so they never share a column. */
+.gcal { margin-top: 14px; }
 /* 15, not 10. The month name and its arrows are one object and the table below
    is another, and at 10 the S/M/T/W row sat close enough to the month to read
    as a second line of the header rather than as the top edge of the grid. The
@@ -3270,10 +3285,46 @@ body.viewing-splash .app-subnav { display: none; }
    rule above it, and the dots get twice that before the rule below. Content is
    25 (disc) + 3 (gap) + 4 (dots) = 32, so the numbers are derived from it — if
    the disc grows again, these two follow. */
+/* 51px AND SYMMETRIC PADDING, BECAUSE TWO FRAMES WANTED DIFFERENT THINGS.
+   The row was 46 with `padding: 4px 0 8px` — deliberately lopsided, and tuned
+   against the WEEK RULE: the note below this one derives the 8 from wanting
+   9.5px between the dots and the stroke, since a 4px dot sitting 3px off a line
+   reads as part of the line. That was right while the rule was the only frame.
+
+   The wait band is a second frame with its own opinion, and the two disagreed.
+   The cell centres its content, so unequal padding pushes that content UP
+   inside a band that is inset symmetrically (5 and 5). Measured: the day's box
+   sat **0.5px** below the band's top edge and **4.5px** above its bottom one —
+   not a frame, a stripe with the number jammed into its ceiling, which is
+   exactly how it read.
+
+   Both are satisfied by giving the row the height to hold them. The content is
+   28 (day box) + 3 (gap) + 4 (dots) = 35. For an even gap G around it inside a
+   band that keeps its 5px inset from the cell:
+
+       band = 35 + 2G        cell = band + 10        padding = 5 + G
+
+   G = 5 puts the cell at **55** and the padding at a symmetric **10** — and 5
+   is not picked either: the day box is 28 wide in a 38.3 cell, so the band
+   already clears it by 5.15 horizontally. The gap is now the same number on all
+   four sides, which is what was asked for.
+
+   The rule keeps everything it had: the dots end 10px above the stroke, where
+   they had 9.5. Nothing moved closer to anything.
+
+   **THE THREE LINES ABOVE ARE THE POINT, AND THEY HAVE ALREADY EARNED IT.**
+   The day box went 24 → 28 tall one change later (it was a lopsided rectangle;
+   see `.gcal-num`), and the row followed from 51 to 55 without anything being
+   re-eyeballed — content, band, cell and padding all fell out of the same
+   arithmetic. Change the box again and do the same thing rather than nudging
+   the height until it looks right.
+
+   The cost is 9px a row against the original 46, so **54px of card height** —
+   real, and worth restating whenever the box grows. */
 .gcal-day {
-  position: relative; height: 46px; box-sizing: border-box;
+  position: relative; height: 55px; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  background: none; border: none; padding: 4px 0 8px; cursor: pointer;
+  background: none; border: none; padding: 10px 0; cursor: pointer;
   /* .12, not the .07 it started at: the guide's ground is a dark violet, not
      the app's near-black, and white at 7% over it was a line you had to be
      told was there. Matched to the header's rule so the whole table is ruled
@@ -3292,25 +3343,212 @@ body.viewing-splash .app-subnav { display: none; }
    No box and no border — it is the card's own prose, and a panel here would
    make the month look like it had grown a notification. */
 .gcal-lede {
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: column; gap: 7px;
   margin: 0 0 12px; padding: 0 0 11px;
   border-bottom: 1px solid rgba(255,255,255,.10);
 }
+/* ── IT IS A LIST NOW, NOT A SENTENCE (v6.52) ────────────────────────────────
+   One row per wait: the store on the left, the date an answer is due on the
+   right, pushed apart so several rows read as a column of dates rather than as
+   several sentences. `space-between` and not a grid, because the two halves are
+   a name and a value and there are never more than two.
+
+   **IT HAS NO HEADING (v6.62), and `.gcal-lede-head`'s rule is deleted rather
+   than left dormant** — the argument the dev bar was removed under: a rule with
+   no consumer is a control waiting to be switched back on, and this one would
+   bring the unequal spacing back with it. It read "Answers expected", then "In
+   review", and the reason it went is in `_guideCalLede`: a heading true of only
+   the store rows is what forced Launch day to be set apart from them, first by
+   a rule and then by double the gap. Every row is a dated thing in this month
+   and they are now all 7 apart.
+
+   Each row still says what KIND it is, twice and per row rather than per group:
+   a store wears its platform mark and the wait's yellow, Launch day a green dot
+   and a green date, both straight out of `CAL_STATUS` — the same colours those
+   days wear in the grid below.
+
+   If a heading is ever wanted back, it has to be true of every row or the block
+   splits into two groups again. That is the test the last two failed. */
+/* ── THE ROWS GREW, AND THE GAP GREW MORE (v6.57) ────────────────────────────
+   11px at a 3px gap made this read as one paragraph of small print that
+   happened to have dates in it — a block, not a list. 12px/1.5 with the
+   container's gap at 7 is the same content as a column of separate facts.
+
+   The GAP is the half doing the work, and it is the one that moved further
+   (3 → 7, against 11 → 12 on the type). Rows this short are told apart by the
+   air between them long before they are told apart by their size — the same
+   reason Content Rating's question rows went to 8 with their pills at 6: two
+   rhythms that close together stop reading as one unit per row.
+
+   It costs 2 × 4px of gap + 2 × ~1.5px of line box ≈ 11px of card at two waits,
+   ~22 at four. That is the price of the list being legible at a glance, and it
+   is paid on a face that is 456.8 tall with room under the grid. */
+/* **A BUTTON, AND IT KEEPS THE ROW'S OWN BOX** (v6.58): the element changed
+   from a div so the pointer could be honest about the press, and a `<button>`
+   arrives carrying a UA background, border, padding, font and centred text —
+   every one of which would have redrawn this line. All five are reset here, so
+   the markup change costs no pixels; measured identical to the div it replaced.
+
+   The pointer is the point. The hover highlight was doing real work and
+   announcing it with nothing, which makes it a feature you find by accident;
+   a resting fill would be the other way to say so and is wrong here — eight
+   rows of chrome in a block whose whole job is to be read quietly. */
+.gcal-lede-row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  background: none; border: none; padding: 0; margin: 0; text-align: left;
+  cursor: pointer;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+}
+/* ── THE PLATFORM'S MARK, LEADING (v6.55) ────────────────────────────────────
+   The store's name is the one thing in this block you have to READ to know
+   which row is which, and every other list in the app answers that with a mark
+   before the label — the card's step rows, the guide's checklist, the pinned
+   nav's pills. Put after the name it would make this the only place that mark
+   comes second, and the row would read as a label wearing a badge.
+
+   `align-self: center` and not the row's own baseline: a replaced element in a
+   baseline-aligned row sits its BOTTOM EDGE on the baseline, which hangs a
+   square mark a couple of pixels low beside 11px text. The two pieces of text
+   keep the baseline they had; only the picture is centred against them.
+
+   The size lives here, not in the `smMarkFor` argument — the same rule
+   `.active-card-icon svg` and `.ios-step-num svg` are written under, and the
+   reason both of those exist: a literal in the call site is what went stale the
+   first time a slot moved. It also means the two platforms with no measured
+   mark, which fall through to `platformIcon`, cannot come out a different size.
+
+   The canvas is 39×37, so a square slot letterboxes and the ink is 90.84% of
+   the height by construction. It went 12 → 13 in v6.57 WITH the type (11 → 12),
+   and 13 → 15 in v6.58 with the row going full white — the slot is sized
+   against the line it leads, and it deliberately overshoots it now: a mark the
+   exact height of its label reads SMALLER than the label, because the letters
+   have no counters to lose. 15 puts ~13.6 of ink beside an 18px line. */
+.gcal-lede-mark {
+  flex: none; align-self: center;
+  width: 15px; height: 15px;
+  color: var(--text, #fff);
+}
+.gcal-lede-mark svg { display: block; width: 100%; height: 100%; }
+/* `flex: 1` is what pushes the date right, where the row used to lean on
+   `space-between`. With three children that would have spread the leftover
+   BETWEEN the mark and the name as well, prising a store away from its own
+   icon; the name absorbing it keeps the pair glued and leaves one gap. */
+/* **FULL WHITE, NOT 62%** (v6.58). The store's name is the SUBJECT of its row —
+   the thing you scan the list for — and at 62% it was being drawn in the
+   register this app reserves for supporting text, quieter than the date beside
+   it. That inverted the line: the answer date read as the headline and the
+   store it belonged to as a caption. White and the wait's yellow are now two
+   things at full strength saying two halves of one fact, which is what they
+   are. The mark goes white with it, for v6.55's reason — mark and name are one
+   half of the row and must not split. */
+.gcal-lede-store {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--text, #fff);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The date takes the wait's own yellow, so this block and the band below it are
+   one fact stated twice rather than two things that happen to be about the same
+   week. Colour is the emphasis, never weight: the face is mono and 600 at 11px
+   only thickens it. `flex: none` so a long store name ellipsises rather than
+   squeezing the one value nobody can reconstruct. */
+.gcal-lede-when { color: #FFD84D; flex: none; }
+
+/* ── LAUNCH DAY: THE ONE DATE NOBODY OWES YOU (v6.58) ────────────────────────
+   The last row of the list, and the only date on it that nobody hands you.
+
+   **IT IS SPACED LIKE EVERY OTHER ROW NOW (v6.62), and it took two goes.** It
+   had a 1px rule above it at white 7%; that went first, leaving behind the
+   distance the rule was holding — 7 of margin on top of the container's 7, so
+   14, twice the gap between stores. Jaco, looking at that: *"que las plataformas
+   y el launch day estén igual de espaciados, porque queda raro."* Right, and the
+   cause is one step further back than the gap.
+
+   **THE STEP EXISTED TO CLEAR A HEADING, NOT TO SEPARATE A KIND.** IN REVIEW sat
+   over the store rows and was false of this one, so this one had to be pushed
+   out from under it — first with a rule, then with double the gap. With the
+   heading gone (the argument is in `_guideCalLede`) there is nothing left to be
+   outside of: every row is a dated thing in this month, so every row is 7 apart
+   and the container's gap is the only spacing in the block. Both extras are
+   DELETED rather than zeroed — the margin and the `padding-top` the border
+   needed — so there is nothing left to explain.
+
+   What tells it apart is per ROW and not per group: a green dot in the mark's
+   column and a green date, against the stores' platform marks and yellow. Those
+   are `CAL_STATUS.launch` and `CAL_STATUS.waiting`, the same two colours those
+   days wear in the grid below, so the list and the month agree without a label
+   on either.
+
+   `.gcal-lede-go` keeps its 14, and that is not an inconsistency left behind: it
+   is a violet link that LEAVES rather than a dated row, so it is the one thing
+   in this block that really is a different kind of object.
+
+   `<label>` wrapping a visually-hidden `<input type="date">`, so the whole row
+   is the target and the native picker opens from the click. The input is not
+   `display: none` — that takes it out of the accessibility tree and stops it
+   receiving the click at all; it is 0×0 and clipped. */
+.gcal-lede-launch {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  cursor: pointer; position: relative;
+}
+.gcal-lede-launch-input {
+  position: absolute; width: 0; height: 0; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
+}
+/* The dot is the day's own green, through `--d` rather than a literal, so the
+   row and the box on the 29th cannot drift — `CAL_STATUS.launch` sets it in the
+   builder. 8px and round: the grid's own dot at twice the size, because here it
+   is a label's mark rather than one of four in a 38px cell.
+   It sits in the MARK's column, so the launch row's label starts on the same x
+   as every store name above it — 15px slot, 8px gap, the dot centred in it. */
+.gcal-lede-launch-dot {
+  flex: none; align-self: center;
+  width: 15px; display: flex; justify-content: center;
+}
+.gcal-lede-launch-dot::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--d, #2fdc80);
+}
+.gcal-lede-launch-label { flex: 1 1 auto; min-width: 0; color: var(--text, #fff); }
+/* The date takes the LAUNCH GREEN, exactly as a wait's date takes the wait's
+   yellow: on this block a date is always painted the colour of the thing it is
+   the date OF. That is what makes the row and the green box one statement. */
+.gcal-lede-launch-when { flex: none; color: #2fdc80; }
+/* Unset is not an error and must not be painted as one — it is `todo`'s own
+   register from the colour table, white with no hue at all, which is precisely
+   what "not done yet: information" means. The month draws no box either, so the
+   two agree by saying nothing. */
+.gcal-lede-launch.is-unset .gcal-lede-launch-when { color: rgba(255,255,255,.34); }
+.gcal-lede-launch.is-unset .gcal-lede-launch-dot::before {
+  background: none; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.34);
+}
+.gcal-lede-launch:hover .gcal-lede-launch-when { color: #7dffb4; }
+.gcal-lede-launch.is-unset:hover .gcal-lede-launch-when { color: rgba(255,255,255,.62); }
+
+/* Kept: `.gcal-lede-txt` has no live consumer since the sentence became a list.
+   Left rather than swept, because if the list ever needs a one-line fallback
+   (one wait, no room) this is the rule it had. */
 .gcal-lede-txt {
   font-family: var(--mono); font-size: 11px; line-height: 1.45;
   color: rgba(255,255,255,.62); letter-spacing: 0;
 }
-/* The date takes the wait's own yellow, so this sentence and the band below it
-   are one fact stated twice rather than two things that happen to be about the
-   same week. Not bold-as-weight — the face is mono and 600 at 11px only
-   thickens it — colour is the emphasis. */
 .gcal-lede-txt b { font-weight: 400; color: #FFD84D; }
-/* Violet, and an arrow, because it leaves. Same pair the submitted card's
-   Marketing nudge wears, for the same journey. */
+/* Violet, and an arrow, because it leaves. It is the ONLY copy of that
+   invitation in the app since v6.56 — the submitted card's `.sub-nudge` was
+   removed and this took the job, which is why it is worth keeping distinct from
+   the rows rather than tidying into them.
+
+   The top margin is DERIVED, not picked: it is ONE ROW-GAP, and the container
+   pays its own gap on top — so the link ends up 7 + 7 = 14 from the last store
+   against the 7 between stores, exactly twice as far. (Same double-payment the
+   head above had to be told about; measured 14.) Set it to whatever the gap is
+   if that spacing ever moves again — the point is the RATIO. A link flush in
+   the list reads as one more row, a store called "Line up your launch". */
 .gcal-lede-go {
   align-self: flex-start; padding: 0; background: none; border: none;
-  cursor: pointer; font-family: var(--mono); font-size: 11px;
+  cursor: pointer; font-family: var(--mono); font-size: 12px;
   color: var(--guide-mark, #9f68f0); transition: color .12s;
+  margin-top: 7px;
 }
 .gcal-lede-go:hover { color: #c9a6ff; }
 
@@ -3333,32 +3571,387 @@ body.viewing-splash .app-subnav { display: none; }
      in the app's colour for DONE, a few inches from a card calling the same
      state yellow. It is #FFD84D at 13% now: the same constant
      `.sub-seg.is-current` paints on the submitted card, so the segment and the
-     band are one statement made twice. */
-  background: rgba(255, 216, 77, .13);
+     band are one statement made twice.
+
+     **AND THE ALPHA IS .20 HERE, NOT THE .13 THAT VALUE WAS SOLVED AT.** The
+     13% was measured against the app's near-black `--panel`; this grid lives in
+     the guide, whose ground is a dark VIOLET, and violet has the one channel
+     that can cancel a yellow. Composited:
+
+       on --panel (20,20,20)   → rgb(51,45,27)   red − blue = 24
+       on the guide (27,28,43) → rgb(57,52,47)   red − blue = 10
+
+     The ground's own blue starts at 43 and the band's only pulls it UP, toward
+     77 — so at .13 the three channels arrive almost level and the band reads as
+     a grey-brown smudge rather than as the wait. Raising it to **.20** puts the
+     composite at rgb(73,66,50), a red-minus-blue of 23, which is the separation
+     it has on the surface it was tuned for. The number is solved, not nudged:
+     if either ground moves, solve it again rather than eyeballing.
+
+     This is the SAME failure the week rules on this grid already hit — they
+     went .07 → .12 for it, and the note there says a line you had to be told
+     was there. Anything borrowed onto this surface from the near-black one
+     needs re-solving, and that is now two for two.
+
+     **AND IN v6.54 IT WENT DOWN TO .10 — BELOW THE FLOOR EVERYTHING ABOVE
+     SOLVES FOR — BECAUSE THE JOB CHANGED.** Read that before restoring .20 on
+     the strength of the paragraphs above them: they are not wrong, they are
+     ABOUT A BAND THAT WAS THE ONLY MARK. When .20 was solved the stroke had to
+     carry the whole statement alone — it was the one thing on the grid saying
+     "a store has this" — so it had to survive the violet cancelling its blue.
+
+     It is not alone now. The decision day fills a 28×28 box in full `#FFD84D`
+     and every number inside the run is yellow, so the HUE is carried by the ink
+     and the band only has to be a ground under it. Composited at .10 on the
+     guide it lands at **rgb(50,47,46)** — red minus blue 3.4, which is honestly
+     not yellow any more, it is a shade. That is the trade, taken knowingly:
+     the band stops being a coloured stroke and becomes the tint that says these
+     days belong together, while the marks on top say what colour the state is.
+
+     So the rule to carry forward is not a number, it is a dependency: **this
+     alpha is only allowed this low while the ends and the digits carry the
+     hue.** Take either of those away and .10 is a grey smear with nothing to
+     explain it — re-solve to the ~.20 the paragraphs above derive. */
+  background-color: rgba(255, 216, 77, .10);
   pointer-events: none;
 }
 .gcal-day.in-span > * { position: relative; z-index: 1; }
+
+/* ── THE BAND IS ONE TONE, AND A PROGRESS SPLIT WAS TRIED AND REMOVED ──────
+   v6.45 gave the days already waited a heavier fill (.30) against the days
+   still to come (.20), so the stroke read as a bar filling toward its own end
+   with today as the seam. It shipped, it was measured, it looked fine, and it
+   came out two versions later — worth recording, because the argument against
+   it applies to anything else that tries to say "how far along" on this grid.
+
+   **A CALENDAR ALREADY SAYS WHERE TODAY IS.** Every day left of the violet box
+   is elapsed by definition of the rejilla; the split was restating in colour
+   what position states by construction, and it did it in the one cell already
+   carrying the loudest mark on the month, so the two competed.
+
+   The useful question is "how much longer", and the ends answer it better than
+   a tone ever could: since they became filled boxes (below) the end of a run is
+   a visible object and the days between are countable cells. Three squares is a
+   more precise reading than a 20→30% step in luminance, and the exact version —
+   "Day 2 of 3" — is already printed in words in the day panel.
+
+   It also cost a tone. Yellow was being asked to mean four things in one grid
+   (band pending, band spent, end box, dot), and every added tone makes the next
+   one harder to introduce. */
+
+/* ── THE ENDS ARE EVENTS, AND THEY WERE THE QUIETEST THING ON THE MONTH ────
+   A 38px band against a 4px dot: the stretch in which nothing happens was the
+   most-painted thing in the grid, and the two dated facts it runs between —
+   sent, answer due — were drawn exactly like a marketing reminder. The ink was
+   inverted against the meaning.
+
+   Fixed by raising the facts rather than lowering the state. Softening the band
+   would have made the month say LESS, and it cannot go softer anyway.
+
+   **IT IS THE BAND'S OWN EDGE, NOT A NEW ELEMENT.** A `background-image` over
+   the fill — one 4px stop of the same yellow at .70 — so the run says all three
+   things as one object: it began here, it is running, it ends here. A separate
+   mark would have been a third thing in a cell that already holds a number, a
+   dot strip and a band. Two layers when a one-day run opens and closes in the
+   same cell, which is why these are images and not a border.
+
+   The terminal hangs on `run-open` / `run-close`, never on `span-start` /
+   `span-end`: a week boundary rounds the stroke but is not an end. The 8px
+   radius still clips it, so the stub is a cap rather than a bar — which is
+   what it is. */
+/* **AND THE REMATE IS THE DAY'S OWN BOX, NOT A STUB ON THE BAND.** The first
+   version painted 4px of stronger yellow into the band's edge, and it was
+   right about the problem and too quiet to solve it: 4px in a 38px cell is
+   below the size at which anything on this grid reads. Jaco drew the answer —
+   fill the 28×28 box, which is the vocabulary this grid already speaks. Today
+   fills, launch fills, nothing wears a ring; an end is a third thing that
+   happens to one day, so it fills too.
+
+   That also puts the ends in the same REGISTER as the facts they are: the day
+   it went and the day an answer is due are the two dated events of a
+   submission, and they now look like events rather than like edges of a
+   highlighter.
+
+   **TODAY OUTRANKS THE END; THE PICKED DAY DOES NOT.** The `:not()` chain is
+   the precedence written down rather than left to the cascade — specificity
+   would hand this rule the win, since it carries three classes to
+   `.is-today`'s two, and source order could not save them.
+
+   **The picked day was in that chain for one version and it made the month
+   unreadable**, which is what looking at it showed: a run with its end day
+   selected drew THREE filled boxes in one band — yellow send, violet today,
+   violet-30% end — and the one carrying the most important date was wearing
+   the colour that means *you clicked here a moment ago*. Three marks, and only
+   two of them facts.
+
+   A dated fact outranks a transient. And the click is already reported: the
+   panel drops open underneath naming the day in words, which is the same
+   argument this file used to refuse the picked day a RING. So the selection
+   simply does not land on a run's ends, exactly as it already does not land on
+   today or on launch day.
+   The argument: violet is the ONLY thing on this month that says *you are
+   here*, while an end is said twice — by this box and by the band's rounded
+   cap, which is still there underneath. So on the two days a wait begins or
+   ends ON today, the cap carries it alone and nothing is lost that cannot be
+   read.
+
+   **ONLY THE DECISION DAY FILLS. THE SEND DAY LOST ITS BOX IN v6.53**, and the
+   note here used to end "worth revisiting if the ends turn out to need
+   separating" — this is that revisit, and it arrived as one line from Jaco:
+   *"quizás la fecha de submission no debería marcarse fuerte… al fin y al cabo,
+   oye, sin más."*
+
+   Two arguments and they point the same way. **The send day already happened
+   and cannot be acted on**, while the decision day is the one the whole band is
+   counting toward; two identical boxes presented them as equals, which is the
+   one thing they are not. And **this grid already refuses to draw a fact and a
+   guess as the same KIND of mark** — that is why `decide-` gets a hollow dot
+   and `sent-` a filled one — so giving both ends the identical 28×28 fill was
+   this rule broken at a bigger size while the 4px dots below them still kept
+   it.
+
+   Nothing real is lost. The band still BEGINS on the send day and says so with
+   its rounded cap, the filled dot under it still marks the event, and the store
+   and its dates are printed in words in the lede above. What goes is only the
+   second, louder copy of a date nobody is waiting for.
+
+   `run-open` is therefore computed and no longer emitted as a class — the
+   variable stays because `span-start`'s radius is derived from it. */
+/* ── AND IN v6.58 THE BOX CAME OFF AGAIN — IT IS A NUMBER, NOT A CHIP ────────
+   Jaco: *"no quiero aturdir."* He was right, and what changed is the COUNT, not
+   the argument. v6.47 filled the 28×24 box because one strong mark was needed
+   against a 38px band and 4px of stronger yellow could not carry it — with ONE
+   wait on the month. v6.56 fixed a bug that had been hiding every second wait's
+   terminal, so the same month now draws two filled boxes, plus today's violet,
+   plus launch's green: four solid chips in a 270px table. A weight that is
+   right once is not right four times.
+
+   **GREEN WAS ASKED FOR AND IS THE ONE ANSWER THIS CANNOT TAKE.** On this grid
+   green is `done` / `launch`, and it is the only green thing on the month; a
+   decision day is `waiting` — the store still has it. A green answer date would
+   claim the submission had finished and would collide with the one cell that
+   means exactly that, two rows down.
+
+   So the hue stays and the CONTRAST is bought inside it: the band's days step
+   back to the wait's yellow at 55% and the day an answer is due keeps it at
+   full, at 600. That is this app's own instruction — "colour is the emphasis,
+   never weight" — applied honestly, with the weight riding along rather than
+   doing the work alone: two tones of one hue, which is a comparison the eye
+   makes instantly, where 500-vs-600 at 12px on a mono face is not.
+
+   **The band's numbers going quieter is the cost, and it is small**: they were
+   full `#FFD84D` since v6.47, when they were the only yellow ink in the cell.
+   Now they are the ground the terminal is read against, which is the job the
+   band's own fill already does for the row. */
+.gcal-day.in-span.run-close:not(.is-today):not(.is-launch) .gcal-num {
+  color: #FFD84D; font-weight: 600;
+}
+/* Hover needs its own rule for `.spp-pin.is-on:hover`'s reason: the plain
+   `.gcal-day:hover .gcal-num` is weaker than this one and would never land. */
+.gcal-day.in-span.run-close:not(.is-today):not(.is-launch):hover .gcal-num {
+  color: #FFE485;
+}
+/* THE NUMBERS INSIDE A WAIT GO YELLOW. The band is no longer a highlighter
+   laid behind a table — with its ends filled it reads as one object, and the
+   days inside it belong to the submission rather than to the month. White at
+   80% sat on top of it like text that had not been told. Out-of-month days
+   keep their own big drop, below. */
+/* 55%, not full — see the terminal's own note above. These are the days the
+   wait passes THROUGH; the one it ends on is the fact, and it needs somewhere
+   to stand out from now that it no longer wears a box. */
+.gcal-day.in-span .gcal-num { color: rgba(255,216,77,.55); }
 /* Rounded where a run begins and ends, square in between, so a week of days
    reads as ONE stroke and not as five chips in a row. A row edge counts as an
    end — the band cannot flow from Saturday to Sunday. */
-.gcal-day.in-span.span-start::before { left: 3px; border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-.gcal-day.in-span.span-end::before   { right: 3px; border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+/* THE CAP IS THE RADIUS, NOT AN INSET — and the 3px it used to also carry was
+   stealing the frame on the one day you look at most.
+
+   Measured on a run's first day (which is the SEND day, so usually today or the
+   picked one): band-to-box was **2.14 left against 5.14 right**, because this
+   rule pulled the band 3px in on that side while the other three stayed where
+   the cell put them. Less than half the air, on the cell carrying the fact.
+
+   The inset was never what capped the run. The 8px radius is, and it still is:
+   the band now reaches the cell edge on every day and simply rounds where the
+   run begins or ends, so consecutive cells still butt into one continuous
+   stroke and the ends still read as ends. Measured after: 5.14 / 5.14 / 5 on
+   left, right and top, on the first day of a run exactly as in its middle. */
+.gcal-day.in-span.span-start::before { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.gcal-day.in-span.span-end::before   { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+
+/* ── POINTING AT A LEDE ROW LIGHTS THAT WAIT'S OWN DAYS (v6.57) ──────────────
+   `gcalWaitHover` (app.js) puts `is-wait-focus` on the grid and `is-wait-lit`
+   on the days of the wait under the pointer. The band cannot say whose days are
+   whose — it is a union, deliberately — and this is the one moment it has to:
+   you are pointing at ONE store's row.
+
+   **FOCUS IS THE ABSENCE OF DIMMING**, the same rule as the stripe's own
+   `.is-dim` twenty lines up, and `opacity` for the same reason it is right
+   there: what steps back is a STROKE and a date box, not content whose colour
+   has to keep meaning something. The lit run takes no hue and no ring — it
+   already wears the wait's yellow, and a second mark on it would be the "two
+   marks on one stroke" this grid has refused three times.
+
+   No transition. A hover highlight that eases in arrives after the pointer has
+   already moved on to the next row, so the month appears to lag behind the
+   list; at this size the honest version is instant.
+
+   **THE THREE CELL STATES KEEP THEIR FILL**, hence the `:not()` chain — today's
+   violet, launch's green and the picked day's box are not part of the wait
+   vocabulary and say nothing about which store is being pointed at. Violet in
+   particular is the ONLY thing on this month that says *you are here*, and a
+   hover in a list must not be able to take that away. Their band underneath
+   still dims with everything else, so the run reads correctly THROUGH them. */
+/* **IT IS TWO LAYERS, AND ONE LAYER IS WHY IT LOOKED BROKEN (fixed v6.59).**
+   The first version dimmed the un-lit days and rounded the LIT ones' own
+   `::before` — one element per cell doing both jobs. So the rounded corner on
+   the first lit day cut a notch out of the only band that cell had, and what
+   showed through the notch was the CARD, not the stroke either side of it: a
+   bite taken out of a continuous line. Jaco: *"queda como un hueco sin
+   rellenar."*
+
+   A rounded cap on a sub-range is BY DEFINITION a shape laid on something, so
+   the cell needs both. `::before` stays the band — square through the middle,
+   the union's own caps at the union's ends, dimmed along its whole length —
+   and `::after` is the bright capsule carrying the lit caps. The corner now
+   reveals the dim band, which is what is really underneath it as well as what
+   the drawing says is.
+
+   **Everything banded dims now, the lit days included**, and that is the change
+   that makes the layering work: the base has to be continuous, or the notch has
+   nothing to show. The brightness comes back on the layer above.
+
+   The cost, measured rather than hidden: a lit day is the dim band (.10 × .35)
+   plus the capsule (.10), compositing to about **.132** against a resting
+   band's .10 — three luminance points out of 255, below the floor at which
+   anything on this grid reads. Arguably right anyway: with two levels on screen
+   the lit one should not be dimmer than the stroke was before you pointed at
+   anything.
+
+   The capsule takes the band's own colour and geometry, copied from that rule
+   rather than re-derived — same inset, same z-index 0 under the cell's
+   children, same 8px. */
+.gcal-grid.is-wait-focus .gcal-day.in-span::before { opacity: .35; }
+.gcal-grid.is-wait-focus .gcal-day.in-span:not(.is-wait-lit):not(.is-today):not(.is-launch):not(.is-picked) .gcal-num {
+  opacity: .35;
+}
+.gcal-grid.is-wait-focus .gcal-day.is-wait-lit::after {
+  content: ''; position: absolute; z-index: 0;
+  left: 0; right: 0; top: 5px; bottom: 5px;
+  background-color: rgba(255, 216, 77, .10);
+  pointer-events: none;
+}
+/* **AND THE BRIGHT PIECE IS CAPPED WHERE IT REALLY BEGINS AND ENDS.** The
+   union's own `span-start` / `span-end` round the WHOLE band; the lit segment
+   inside it starts and stops somewhere else, and left square it reads as a
+   stroke cut with scissors rather than as a run of days. Same 8px the band
+   uses, so the highlight is that shape at a different length — not a second
+   one. `gcalWaitHover` decides where the caps go, week edges included. */
+.gcal-grid.is-wait-focus .gcal-day.is-wait-lit-start::after {
+  border-top-left-radius: 8px; border-bottom-left-radius: 8px;
+}
+.gcal-grid.is-wait-focus .gcal-day.is-wait-lit-end::after {
+  border-top-right-radius: 8px; border-bottom-right-radius: 8px;
+}
+/* ── THE WAIT, AS ONE RULE PER SUBMISSION ─────────────────────────────────
+   The second presentation (`state.calWaitStyle === 'stripe'`, `smWaitStyle()`).
+   Where the band is one stroke behind every wait at once, this is a lane per
+   submission under the number — which is what lets it be PRESSED: a band
+   covering three builds has nothing to point at, a lane has exactly one.
+
+   **THE HEIGHT IS DERIVED, ONCE, FOR EVERY CELL.** `--lane` is written on the
+   grid by `buildGuideMiniCal` as `n×3 + (n−1)×2`, and the cell adds a 4px gap
+   to it. Reserved on all 42 days whether or not they carry a wait, exactly as
+   the 4px dot strip already is: a day that gains one must not get taller and
+   shove its row. The cell's own arithmetic is unchanged and still the three
+   lines documented above — content, band, cell — with the lane appended to the
+   content:  55 + 4 + lane.  One lane is 62px a row, two 67, three 72, which is
+   +42 / +84 / +126 of card against the band. That cost IS the trade being
+   looked at, and it is why the lanes are capped at three. */
+.gcal-day.is-stripe {
+  height: calc(55px + 4px + var(--lane, 3px));
+  justify-content: flex-start; gap: 4px;
+}
+/* The number and its dots keep the whole press — the strips are extra targets
+   BELOW the old one, never a slice taken out of it. `flex: 1` so the block
+   holding them still centres in the space the lane did not take. */
+.gcal-day-main {
+  flex: 1; width: 100%; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.gcal-strips { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+/* Full width and no horizontal padding on the cell, so consecutive days butt
+   into one continuous rule — the band's own argument, one layer down. */
+.gcal-strip {
+  display: block; width: 100%; height: 3px; padding: 0; border: none;
+  background: var(--s, #FFD84D); cursor: pointer;
+  transition: opacity .12s;
+}
+/* A lane a day is not inside still occupies its row, or every run below it
+   would slide up on the days above it end. Nothing drawn, nothing pressable. */
+.gcal-strip.is-off { background: none; cursor: default; pointer-events: none; }
+/* Rounded where the run begins and ends. 2px, not the band's 8: a 3px rule
+   capped at 8 is a lozenge, and the cap has to read as an end rather than as a
+   shape. A row edge counts as both ends — nothing flows Saturday to Sunday. */
+.gcal-strip.is-start { border-top-left-radius: 2px; border-bottom-left-radius: 2px; }
+.gcal-strip.is-end   { border-top-right-radius: 2px; border-bottom-right-radius: 2px; }
+/* FOCUS IS THE ABSENCE OF DIMMING, not a mark of its own. Every strip is the
+   wait's yellow because colour is the STATE here as everywhere else on this
+   grid, so the focused one cannot take a hue — and a ring on a 3px rule is two
+   marks on one stroke, the argument this grid already settled for the day
+   boxes. The others step back to .35 instead, which is this app's own value
+   for "still true, just not what you asked for". */
+.gcal-strip.is-dim   { opacity: .35; }
+.gcal-strip.is-dim:hover  { opacity: .7; }
+.gcal-strip:not(.is-off):hover { filter: brightness(1.15); }
 .gcal-num {
-  font-family: var(--mono); font-size: 12px; line-height: 1;
+  /* MEDIUM, and it is a real weight rather than a synthesised one: the app
+     loads IBM Plex Mono at `wght@400;500;600;700`, so 500 is a drawn cut and
+     not the browser smearing 400. At 12px on a dark ground a regular mono digit
+     is thin enough that the table reads fainter than the rules under it; 500
+     gives the numbers back their own weight without reaching the 600 that
+     today's box and the run's end already use to mean something. */
+  font-family: var(--mono); font-size: 12px; line-height: 1; font-weight: 500;
   /* White at 80%, not --text-dim's #a0a0a0 (63%). The dim token is for text
      that names something else — a label beside a value. Here the number IS the
      content of the cell, and on the guide's violet ground 63% read as though
      the whole month were disabled. Out-of-month days keep the big drop below,
      so the contrast between in and out does the work instead. */
   color: rgba(255,255,255,.80);
-  /* A ROUNDED RECTANGLE, NOT A DISC. A circle round a two-digit number has to
-     be as wide as the number is tall and then some, so it wastes the cell's
-     width on air at the corners; 28×24 gives the digits room across and takes
-     3px of height back. It also matches the shape language of everything else
-     in this app — the step discs are the only circles, and they hold ONE
-     character. The radius is 7: the cell's rules are straight lines, and a
-     pill (radius 12) beside a ruled table reads as a tag stuck onto it. */
-  width: 28px; height: 24px; border-radius: 7px;
+  /* A ROUNDED SQUARE, AND IT WAS A LOPSIDED RECTANGLE UNTIL IT WAS MEASURED.
+     Still not a disc, for the reason that has always been here: a circle round
+     a two-digit number has to be as wide as the number is tall and then some,
+     so it spends the cell's width on air at the corners. And still radius 7 —
+     the cell's rules are straight lines, and a pill beside a ruled table reads
+     as a tag stuck onto it.
+
+     What was wrong was the HEIGHT. At 28×24 the box measured 28 × 23 live, and
+     the air around the digits came out:
+
+       horizontal, two digits (14.4 of ink)   6.8 a side
+       horizontal, one digit  (7.2 of ink)   10.4 a side
+       vertical   (16 of line box)            3.5 a side
+
+     Nearly twice as much room at the sides as above — a number pressed against
+     its own ceiling. The old note claimed the 24 "takes 3px of height back",
+     which was true about the cell and silent about the digit inside.
+
+     **28 SQUARE, so the width is the one that stays.** Going the other way (a
+     24 square) equalises the inside just as well and breaks the outside: the
+     box's clearance to the cell edge is `(38.3 − 28) / 2 = 5.15`, which is the
+     number the wait band's 5px frame was matched to. Shrink the box and that
+     frame goes lopsided instead — the same problem moved one layer out.
+
+     It cannot be exactly equal, and the reason is the ink: 14.4 wide by 16
+     tall. A square box around a taller-than-wide glyph leaves 6.8 beside it and
+     6 above. That 0.8px is the digits' own proportion and there is nothing to
+     fix about it.
+
+     One digit still gets more side air than two — 10.4 — and that is deliberate
+     rather than unsolved: sizing the box to its content would make the 5th and
+     the 15th different widths in a grid whose whole job is to be a table. */
+  width: 28px; height: 28px; border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, color .12s;
 }
@@ -3424,6 +4017,54 @@ body.viewing-splash .app-subnav { display: none; }
 .gcal-panel-fold { width: 13px; height: 13px; flex: none; color: var(--text-faint); display: block; }
 .gcal-panel-head:hover .gcal-panel-fold { color: var(--text); }
 .gcal-panel-empty { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.34); }
+/* THE WAIT LINE IS THE BAND, SAID IN WORDS, so it wears the band's own
+   `#FFD84D` — the same constant the stroke across the grid uses and the same
+   one `.sub-seg.is-current` paints on the submitted card. Three surfaces, one
+   colour, one meaning: the store has it.
+   It is NOT a row: no kind dot, no tick, no ×, and no hover. Those belong to
+   things you can change, and there is nothing to do to a wait. Which is also
+   why it carries no left padding to line up with the rows — it deliberately
+   does not sit in their column.
+   The separator is a span rather than a literal `·` in the string so it can
+   keep its own spacing without two non-breaking spaces in the copy. */
+.gcal-panel-wait {
+  font-family: var(--mono); font-size: 11px; line-height: 1.45;
+  color: #FFD84D; opacity: .8;
+}
+.gcal-wait-sep { opacity: .45; margin: 0 6px; }
+
+/* ── THE SUBMISSION YOU PRESSED ───────────────────────────────────────────
+   What a strip opens. It is the same yellow prose as the line above, with one
+   difference that earns it a box: those lines are about the DAY and this is
+   about a build, printed under a header naming a date. Without an edge the two
+   run together and the dates in it read as facts about the day you are on.
+
+   It is the quietest box this file can draw and still be one: the wait's own
+   colour at 7% with no border at all, on the 8px `--field-radius` the panel's
+   rows use. No ring, because nothing here is a control — the whole block is a
+   statement, like the wait line it replaces. */
+.gcal-focus {
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 2px 0 8px; padding: 9px 10px;
+  border-radius: 8px; background: rgba(255,216,77,.07);
+}
+.gcal-focus-head { display: flex; align-items: center; gap: 7px; }
+/* A filled square, which is `.gcal-kind`'s Submission shape — the strip you
+   pressed IS a submission, and this is the app's mark for one. */
+.gcal-focus-dot  { width: 6px; height: 6px; border-radius: 1px; background: #FFD84D; flex: none; }
+.gcal-focus-name {
+  font-family: var(--mono); font-size: 11px; color: #FFD84D; letter-spacing: .02em;
+}
+/* The state is named in the panel's own dim text, not in yellow: the colour has
+   already said it once on the dot and the name, and a third copy is just loud. */
+.gcal-focus-state {
+  font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.42);
+  text-transform: uppercase; letter-spacing: .06em; margin-left: auto;
+}
+.gcal-focus-line {
+  font-family: var(--mono); font-size: 11px; line-height: 1.45;
+  color: rgba(255,255,255,.62);
+}
 
 /* ── A row: kind · label · remove ──────────────────────────────────────────
    The row and the add field are the same three-slot shape, so the dot that
@@ -3451,6 +4092,17 @@ body.viewing-splash .app-subnav { display: none; }
   color: var(--text-dim);
 }
 .gcal-row-label:hover { color: var(--text); }
+/* **A DERIVED ROW IS A FACT, SO IT HAS NO POINTER AND NO HOVER** (v6.60). The
+   builder gives it `<span>`s instead of `<button>`s — see `_calIsDerived`
+   (render.js) — and these two lines are the only visual difference: it keeps the
+   row's box, the kind's shape and the state's colour, because all three are
+   still true about it. Anything more would be a second vocabulary for "this is
+   on the 17th", and a reader would have to learn which of two kinds of row they
+   were looking at before knowing what the date meant. `cursor: default` is
+   stated rather than inherited so a `<span>` inside a panel whose every other
+   row is pressable cannot be mistaken for one that lost its handler. */
+.gcal-row.is-static .gcal-row-label { cursor: default; }
+.gcal-row.is-static .gcal-kind      { cursor: default; }
 /* Struck through and dimmed, the way the Calendar checklist marks a done item.
    The DOT keeps its colour: what a thing is does not change by being finished. */
 .gcal-row.is-done .gcal-row-label { text-decoration: line-through; color: rgba(255,255,255,.30); }
@@ -6590,12 +7242,82 @@ body.viewing-splash .app-subnav { display: none; }
   background: rgba(255, 255, 255, .04);
   color: rgba(255, 255, 255, .26);
 }
-/* Ready: steps complete. Separator and subtle tint. Cursor/click only when track also chosen. */
+/* Ready: steps complete. Cursor/click only when track also chosen. */
+/* **READY IS A BOX, AND A BOX NEEDS NO LINE ABOVE IT (v6.62).** Jaco, three
+   times on this one boundary: *"en el top stroke hay algo extraño, raro"* →
+   *"sigo viendo el stroke curvado raro"* → *"debería desaparecer la divisoria
+   horizontal justo en el momento en el que el recuadro de submit se convierte
+   en persistent."*
+
+   Two marks came off in order, and the order is the lesson. First the
+   `border-top: 1px solid rgba(47,220,128,.25)`, because this row carries
+   `border-radius: 8px` and **a border follows the radius** — the line hooked up
+   at both ends into a rounded-box outline that stopped a third of the way down
+   each side. Then the DIVIDER, because once the row is ready its own soft green
+   fill bounds it, and a line ruling off a thing that is visibly bounded is the
+   same duplication the border was guilty of.
+
+   What is left is the fill and nothing else: `rgba(47,220,128,.04)`, which is
+   the separator, the state and the invitation in one object. The divider stays
+   for a LOCKED row (see `.submit-step-card.submit-step-ready::before` above) —
+   that one is drawn like every other row and needs the list's line to say where
+   it begins. The line's whole job is to exist until the box does. */
 .submit-step-card.submit-step-ready {
   background: rgba(47, 220, 128, 0.04);
-  border-top: 1px solid rgba(47, 220, 128, 0.25) !important;
+  border-top: none !important;
 }
-.submit-step-pulse.submit-step-ready:hover { background: rgba(255,149,0,0.06); }
+/* **THE READY ROW HOVERS GREEN, NOT WHITE (v6.62).** It was
+   `rgba(255,149,0,.06)`, the orange pulse's own hue, and it left with the pulse
+   — which put the row on the generic white 7% every pressable row in this app
+   uses. Wrong here, and Jaco caught it: *"si hovereo sobre el botón, debería
+   estar verdecillo no blanco."*
+
+   The reason is that this row is the ONE row whose resting state is already
+   coloured. It sits on `rgba(47,220,128,.04)` with a green top border because
+   it is ready to go, so a white hover does not brighten that state — it washes
+   a second, colourless fill over it, and the row goes momentarily greyer on
+   approach. A hover has to be MORE of what the thing already is.
+
+   `.10` against the resting `.04`, which is the same order of step the app's
+   other hovers take (white 7% over nothing). `!important` only because the rule
+   it overrides has one, and that one has to, for the reason written above it.
+
+   It is scoped to `.submit-step-ready`: a LOCKED submit row keeps the white,
+   because it has no green state to be more of. */
+.ios-step-card.submit-step-card.submit-step-ready:hover {
+  background: rgba(47, 220, 128, .10) !important;
+}
+/* **AND THE ROW DRAWS ONE LINE, NOT TWO (v6.62).** Jaco: *"en el top stroke hay
+   algo extraño, raro."* Measured, there were literally two 1px lines stacked at
+   the top of this row: its own `border-top: 1px solid rgba(47,220,128,.25)` and,
+   one pixel above it, the step list's divider — which is drawn as each row's own
+   `::before` at `height: 1px; background: rgba(255,255,255,.07); top: 0`.
+
+   Green line, white line, touching. Killing the DIVIDER was the first answer and
+   it fixed the wrong half: *"sigo viendo el stroke curvado raro."*
+
+   **The border is what had to go, and the radius is why.** This row carries
+   `border-radius: 8px`, and a `border-top` follows the radius — so the line
+   curled up into a hook at each end and the row wore a rounded-box outline that
+   stopped a third of the way down each side. Nothing else in this list draws a
+   border, which is exactly why nothing else did it.
+
+   **AND THEN THE DIVIDER GOES TOO, BUT ONLY WHEN THE ROW IS READY.** Jaco:
+   *"debería desaparecer la divisoria horizontal justo en el momento en el que
+   el recuadro de submit se convierte en persistent después de completar todo."*
+   Right, and it is the two-marks rule one step further in: a locked Submit row
+   is drawn like every other row and needs the list's line to say where it
+   starts, but a READY one gains a soft green box of its own — and **a box's own
+   edge is already a boundary.** Keeping the line there rules off a thing that is
+   visibly bounded, which is the same duplication the border was guilty of, just
+   quieter.
+
+   So the line's whole job is to exist until the box does. The moment every step
+   is answered the row fills and the divider leaves in the same paint, and what
+   separates Improve Your Submission from Submit is the fill — which is also the
+   thing inviting the press. `.submit-step-ready` is the one selector: locked
+   keeps the standard white divider, because it has no box to be bounded by. */
+.submit-step-card.submit-step-ready::before { display: none; }
 /* Track dropdown inside submit step */
 .submit-track-select {
   font-family: inherit;
@@ -8926,15 +9648,33 @@ textarea.loc-review-field.ias-inline-input {
   width: 100%; cursor: pointer; font-size: 14px;
 }
 
-/* ── Submit step orange pulse when ready ── */
-@keyframes submit-step-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.3); }
-  50%       { box-shadow: 0 0 0 5px rgba(255,149,0,0); }
-}
-.submit-step-pulse {
-  animation: submit-step-pulse 2s ease-in-out infinite;
-  border-radius: 8px;
-}
+/* ── THE ORANGE PULSE IS GONE (v6.62) ────────────────────────────────────────
+   `@keyframes submit-step-pulse` threw a 5px `rgba(255,149,0,.3)` ring out of
+   the Submit row every two seconds, forever, and `.submit-step-pulse.
+   submit-step-ready:hover` tinted it orange to match. Jaco: *"quita el ring
+   pulsante naranja feo."*
+
+   Three things were wrong with it and any one would have been enough:
+
+   - **THE HUE IS NOT IN THIS APP'S VOCABULARY.** `#FF9500` is Apple's orange,
+     and this palette has exactly two ambers already (`#fb923c`, `#FFB86B`) with
+     a note above saying that duplication is a problem rather than a pattern.
+     This was a third. Amber means *this needs you*; the row it was ringing is
+     the one thing on the card that is READY, which is green's job — and the row
+     already says so twice, with `.submit-step-ready`'s green tint and its green
+     top border.
+   - **A RING IS THE ONE MARK THIS APP DOES NOT USE.** The step disc dropped its
+     ring, the micro-buttons dropped their strokes, the calendar refused rings
+     three times ("NO RINGS ANYWHERE IN THIS GRID — every state is a fill").
+     This was the last one, and it was animated.
+   - **IT NEVER STOPPED.** A pulse is a nudge, and a nudge that repeats every two
+     seconds for as long as the card is open is not pointing at anything — it is
+     just the loudest object on screen. Whatever replaces it has to end.
+
+   Removed rather than switched off, both rules and the `pulseClass` that emitted
+   it (render.js), for the reason the dev bar was deleted under. What says
+   "ready" now is the row's own green, and what says "going" is the hold's fill
+   below — a state and an act, neither of them a ring. */
 
 /* ── Store preview flip animation on submit-modal ── */
 @keyframes modal-flip-exit {
@@ -15731,16 +16471,180 @@ body.is-splash .ai-disclaimer { display: none; }
 .sub-facts .rel-build { color: var(--text); }
 
 .sub-note { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
-/* The one phase with nothing to do in it is the one that points somewhere.
-   A link, not a button: it goes to a tab, it does not change anything here —
-   and a filled pill beside the phase's own action button would be two calls to
-   act where only one of them is the card's business. */
-.sub-nudge {
-  align-self: flex-start; padding: 0; background: none; border: none; cursor: pointer;
-  font-family: var(--mono); font-size: 12px; color: var(--purple);
-  transition: color .12s;
+/* `.sub-nudge` is GONE (v6.56) — rules and markup both, rather than left
+   switched off, which is this project's rule for a thing that lost its
+   argument. It was "Quiet time. Go plan your launch →", and the long version of
+   why is in `buildSubmittedCard` beside where it used to be printed: it is a
+   sentence about your TIME rather than about this build, so it belongs to the
+   calendar, and `_guideCalLede`'s own violet link now says it once instead of
+   once per platform in review. */
+
+/* ── SUBMITTING ───────────────────────────────────────────────────────────
+   A green fill crosses the card while you HOLD Submit. It is the CANCEL HOLD
+   RUN FORWARD — and as of v6.62 that is literally true rather than a
+   description: same mechanism, same duration, same undo, opposite act.
+
+   **IT WAS NOT TRUE FOR THREE VERSIONS, AND THAT IS THE LESSON HERE.** From
+   v6.39 this note claimed the fill was the cancel sweep run forward while the
+   fill was a 1100ms animation you started with a click and could not stop. So
+   the card offered a bar you could abandon for the REVERSIBLE act (withdrawing,
+   undoable by letting go) and a bar you could not for the IRREVERSIBLE one —
+   exactly backwards. Jaco: *"mantener pulsado el botón de submit ES LO QUE
+   RELLENA el contenedor."*
+
+   A prose claim of symmetry is not symmetry. If two things are one idea, the
+   mechanism has to say so; this one had matching paint over two different
+   gestures, and the paint is what kept anyone from noticing for three versions.
+
+   **THE FILL IS THE TIMER, AND NOW IT IS ALSO THE GESTURE.** Its duration comes
+   from `--submit-fill`, set in JS from `SM_SUBMIT_HOLD_MS` — which IS
+   `SM_CANCEL_HOLD_MS`, by reference — so the bar cannot finish early or late
+   relative to the act, and send and withdraw cannot teach two different hold
+   lengths. One number, four consumers.
+
+   **FLAT, NOT A GRADIENT**, for the reason written twenty lines down: a
+   gradient has a bright end and a faint one, so it describes its own progress
+   twice and disagrees with itself. This is a clock. The store preview's
+   celebration sweep is the opposite case and is allowed its gradient, because
+   it measures nothing.
+
+   **GREEN ALTHOUGH THE STATE IT LANDS ON IS GREY**, and that is the Release
+   button's argument one face earlier: `in_review` is a WAIT and wears panel
+   grey, but this is the ACT that starts it, and finishing is green everywhere
+   else in this app. The green belongs to the verb, not to the state.
+
+   **IT IS STRONGER THAN THE CANCEL SWEEP (.30 against .22), AND THAT IS NOT A
+   TASTE.** That one has to stay legible through: its note is explicit that what
+   survives at .35 is everything still TRUE while the bar runs — the dates, the
+   progress, the store's sentence — because you may let go and stay. Nothing
+   under this one survives: the steps are leaving, the box is about to close
+   over them. A wash you can read through would be claiming the list still
+   matters. This is the one number to tune if it wants to be louder or quieter.
+
+   `overflow: hidden` is scoped to the class rather than the card, so it stops
+   at the radius while it runs and cannot clip the card afterwards — the trap
+   `_doFinalSubmit`'s own close had to write down. */
+.active-card.is-submitting { overflow: hidden; }
+.active-card.is-submitting::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: rgba(47, 220, 128, .30);
+  transform-origin: left center;
+  animation: subSubmitFill var(--submit-fill, 1400ms) linear forwards;
 }
-.sub-nudge:hover { color: #fff; }
+/* A HOLD MUST NOT SELECT TEXT OR STEAL A SCROLL. Pressing a row for a second
+   and a half is exactly the gesture a browser reads as "start selecting" on a
+   pointer and as "begin panning" on a touch screen, and either one takes the
+   press away mid-fill. `touch-action: none` is what keeps the bar tied to the
+   thumb on a phone; without it the first millimetre of drift hands the gesture
+   to the scroller and the hold dies for no visible reason. */
+.submit-step-card.submit-step-ready {
+  user-select: none; -webkit-user-select: none; touch-action: none;
+}
+@keyframes subSubmitFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* **THE WORD RIDES ABOVE THE FILL, AND THAT IS THE ONE THING THIS RULE HAS TO
+   DO** (v6.61). `.is-submitting::after` is `inset: 0` at `z-index: 3` — it
+   covers the whole card — so a line left in normal flow would be read through a
+   30% green wash, which is precisely the register this app reserves for a thing
+   that is no longer the point. It is the point. `position: relative` is what
+   gives a static element a stacking position at all; the 4 puts it one above
+   the sweep.
+
+   Everything else is `.sub-state-line`'s, inherited rather than restated — 21px
+   mono at 500, the submitted card's own status line — because the whole design
+   argument is that this IS that line, arriving early. The only local value is
+   the hue, and it is the app's done green rather than a fifth phase colour:
+   `#2fdc80` is the Release button, the tick, and launch day. */
+/* **THE STEPS GO, THE BOX DOES NOT MOVE, AND THE WORD IS WRITTEN OVER THEM
+   (v6.62).** Jaco's: *"puedes hacer desaparecer los 4 pasos anteriores, sin
+   modificar el tamaño de la card, y escribir el submitting encima, así no se
+   cambia el tamaño."*
+
+   **The first version inserted the line in FLOW and it moved the button 39.1px
+   out from under your own thumb** — measured, card 376 → 415.1, the Submit row
+   461 → 496.1. On a click that is merely ugly; on a HOLD it is close to a bug,
+   because the row sliding out from under a stationary pointer fires
+   `pointerleave` and cancels the very gesture that caused it. **A control must
+   not move as a consequence of being pressed** — the same rule the submitted
+   card's disclosure toggle was rebuilt under ("the button fled from under the
+   pointer and made its second press a hunt"), one surface over.
+
+   `visibility: hidden` on the ROWS, not `display: none` and not on the list:
+   every row keeps its box, so `.ios-step-cards` keeps its height and the card is
+   the same size to the pixel. Nothing below it moves either.
+
+   **And hiding them is not a trick to make room — it is the close, started
+   early.** `_doFinalSubmit`'s whole motion is the box closing over the space the
+   steps occupied; the header and the release block survive untouched because
+   they are identical on both faces. So the hold shows you exactly that: the two
+   things that stay, the word that is arriving, and the list already gone. The
+   fill runs over all of it.
+
+   The line is PREPENDED INTO THE LIST and absolutely positioned at its top,
+   which is why there is no geometry in JS and no anchor branch. `left: 12px`
+   cancels the list's own `-12` bleed, so the word lands on 21 from the card box
+   — the card's one real text column, the same x as every step name and release
+   label. And the top of the step list is precisely where the status line sits
+   on the submitted card (head → release block → state), so the word appears
+   where it is about to live and simply stays there through the close.
+
+   `z-index: 4` puts it over the `inset: 0` fill at 3; without it the word would
+   be read through a 30% green wash, the register this app reserves for what is
+   no longer the point. It is the point. */
+/* **THE LIST'S OWN TOP LINE GOES WITH THE ROWS.** Jaco: *"la línea divisoria
+   horizontal encima del primer paso también debería desaparecer."* Right, and
+   it is a third object: the line above the FIRST row belongs to
+   `.ios-step-cards`, not to any row (see "Two card builders, one row" — it was
+   moved onto the container precisely so a row's hover could not blink it away).
+   So hiding every row left one white hairline floating over an empty box,
+   ruling off a list that was no longer there.
+
+   **AND NEITHER CAN BE ANIMATED, WHICH IS A SAFARI PRECAUTION RATHER THAN A
+   MEASUREMENT.** Jaco: *"los 4 pasos desaparecen no inmediatamente, como
+   después de empezar, y queda sloppy."* Sampled every frame in Chromium the
+   rows are `hidden` on the FIRST frame after the press — zero lag — and this
+   file's own rule covers exactly that disagreement: he develops in Safari,
+   which is unverifiable from here, so prefer a mechanism with no per-engine
+   behaviour over one that has to be checked in an engine nobody can drive.
+
+   The row carries `transition: opacity .22s`, so `opacity` is a transitionable
+   property sitting on the same element; `transition: none` and a zeroed opacity
+   alongside the `visibility` make it impossible for any engine to ease either
+   one. The list clears in the same frame as the press, by construction. */
+/* **EXCEPT THE ROW YOU ARE HOLDING (v6.62).** Jaco: *"¿crees que el botón de
+   submit debería desaparecer mientras lo pulso? Yo creo que no, porque necesito
+   saber qué estoy pulsando."* No, and the reason is stronger than visibility:
+   **it is the only row in the list that is still true.**
+
+   The four steps above are finished work being cleared away — the close started
+   early, the note below. Submit is not being cleared; it is the thing HAPPENING.
+   Hiding it made the card contradict itself, announcing an act in 21px green
+   while deleting the control performing it.
+
+   And a control that vanishes under a held thumb is worse than one that moves,
+   which this file already refused twice: a moving control makes its next press a
+   hunt, an absent one gives the gesture nothing to confirm against. On a 1.4s
+   hold you need to keep seeing that your thumb is on the right thing — the row
+   is the only evidence of that, since the fill covers the whole card and says
+   nothing about where you are pressing.
+
+   **It costs no space**, which is what makes this free rather than a trade: the
+   word is absolutely positioned at the TOP of the list, where the submitted
+   card's status line lands, and Submit is the LAST row. They never meet.
+   `:not(.submit-step-card)` is the whole change. */
+.active-card.is-submitting .ios-step-cards > .ios-step-card:not(.submit-step-card) {
+  visibility: hidden;
+  opacity: 0;
+  transition: none !important;
+}
+.active-card.is-submitting .ios-step-cards::before { visibility: hidden; }
+.active-card.is-submitting .sub-state-sending {
+  position: absolute; top: 0; left: 12px; right: 12px;
+  z-index: 4; pointer-events: none;
+}
+.active-card.is-submitting .sub-state-sending .sub-state-line { color: #2fdc80; }
+/* The EDGE needs nothing: a card that can be submitted is already wearing
+   `.submit-ready`'s green border. The border says "this can go", the fill says
+   "it is going" — two states of one colour, and the second was free. */
 
 /* ── HOLD TO CANCEL ───────────────────────────────────────────────────────
    A red sweep crosses the card for as long as the button is held, and the
@@ -15793,15 +16697,17 @@ body.is-splash .ai-disclaimer { display: none; }
    question you have stopped asking the moment you start withdrawing, and it
    sits on the same line as the word that replaced it. Everything else steps
    back rather than leaving, because it is still true. */
-/* GONE, NOT DIMMED: the estimate and both links. The estimate answers a
-   question you stopped asking the moment you started withdrawing, and the two
-   links — "Quiet time. Go plan your launch" and "Review what was submitted" —
-   are invitations to go somewhere else, offered in the middle of an act you
-   have to stay put to complete. Dimming them still leaves them there to be
-   aimed at. What stays, at .35, is only what remains TRUE while the bar runs:
-   the progress, the store's sentence, the dates. */
+/* GONE, NOT DIMMED: the estimate and the disclosure. The estimate answers a
+   question you stopped asking the moment you started withdrawing, and "See what
+   you sent" is an invitation to go somewhere else, offered in the middle of an
+   act you have to stay put to complete. Dimming them still leaves them there to
+   be aimed at. What stays, at .35, is only what remains TRUE while the bar
+   runs: the progress, the store's sentence, the dates.
+   (This listed a third selector, `.sub-nudge`, until v6.56 — the Marketing
+   link, which now lives in the guide's month instead. The rule that governs it
+   there is the lede's own: it is not part of this card, so a cancel hold has
+   nothing to hide.) */
 .submitted-card.is-cancelling .sub-state-note,
-.submitted-card.is-cancelling .sub-nudge,
 .submitted-card.is-cancelling .sub-steps-toggle { opacity: 0; pointer-events: none; }
 .submitted-card.is-cancelling .sub-segbar,
 .submitted-card.is-cancelling .sub-note,

@@ -823,12 +823,117 @@ function _applyGuideFace(toCal) {
    re-renders — nothing about the calendar's own state changes here. */
 function guideCalOpen(iso) {
   state.guideCalDay = (state.guideCalDay === iso) ? null : iso;
+  /* Opening a DAY clears the focused submission. The two are different
+     questions — "what is on the 17th" and "where is the App Store build" — and
+     a focus that survived would leave the panel answering the second one under
+     a header naming the first. */
+  state.guideCalWait = null;
   renderGuide();
   /* Put the caret where the next keystroke is most likely meant to go. Not on
      a close: focusing an input that just stopped existing throws. */
   if (state.guideCalDay) {
     requestAnimationFrame(() => document.getElementById('gcal-add-input')?.focus());
   }
+}
+
+/* PRESSING A STRIP OPENS THE DAY AND FOCUSES THE SUBMISSION — both, in one
+   press, because a strip is a fact about a day AND about a build, and arriving
+   with only half of that on screen is why a strip that merely opened the day
+   would be a second, thinner copy of the cell above it.
+
+   Pressing the same submission on the same day lets go of it, the way pressing
+   the same day again folds the panel: the gesture is its own undo. It lets go
+   of the FOCUS and keeps the day open — the panel you are reading does not
+   vanish, it goes back to describing the date. Pressing another lane, or the
+   same lane on another day, moves the focus rather than toggling it. */
+function guideCalWaitOpen(pid, iso) {
+  const same = state.guideCalWait === pid && state.guideCalDay === iso;
+  state.guideCalDay  = iso;
+  state.guideCalWait = same ? null : pid;
+  renderGuide();
+}
+
+/* ── HOVERING A LEDE ROW LIGHTS THAT WAIT'S OWN DAYS ─────────────────────────
+   The band is a UNION and cannot say whose days are whose (see `_guideCalLede`
+   and the span/due split in `buildGuideMiniCal`). The list above it names the
+   store; this is what joins the two, for exactly as long as you point at a row.
+
+   **IT TOUCHES THE DOM, IT DOES NOT RENDER.** A hover is not a state change —
+   nothing about the submission, the month or the picked day is different
+   because a pointer moved — and `renderGuide()` rebuilds this column with
+   innerHTML, which would throw away the add row's half-typed title and its
+   caret on every pass of the mouse. It is also the fastest possible way to make
+   a hover feel broken. So: two class names, added and removed.
+
+   **FOCUS IS THE ABSENCE OF DIMMING**, the rule the stripe presentation already
+   settled. Every band day is the wait's yellow because colour is the STATE on
+   this grid, so the pointed-at run cannot take a hue of its own and a ring on
+   it would be two marks on one stroke. The others step back to .35 instead —
+   this app's own value for "still true, just not what you asked for".
+
+   Nothing to mark means nothing is marked: with one wait on the month, the
+   whole band IS that wait, so `is-wait-lit` lands on every banded day and no
+   day is dimmed. The class still goes on, because the alternative is a special
+   case that only differs when it cannot be seen. */
+function gcalWaitHover(pid) {
+  const grid = document.querySelector('.gcal-grid');
+  if (!grid) return;
+
+  grid.classList.remove('is-wait-focus');
+  grid.querySelectorAll('.is-wait-lit').forEach(c =>
+    c.classList.remove('is-wait-lit', 'is-wait-lit-start', 'is-wait-lit-end'));
+  if (!pid) return;
+
+  /* Recomputed rather than cached: `_calWaits` is the same source the band, the
+     day panel and the list itself read, so a hover cannot point at a range none
+     of them agrees with. */
+  const w = (typeof _calWaits === 'function' ? _calWaits() : []).find(x => x.pid === pid);
+  if (!w) return;
+
+  const lit = new Set();
+  for (let d = new Date(w.from); d <= w.to; d = _calDay(d, 1)) lit.add(_calISO(d));
+
+  /* THE LIT PIECE GETS ITS OWN CAPS, and this is the band's own `span-start` /
+     `span-end` rule applied one layer in. The union's caps are drawn where the
+     WHOLE band begins and ends; the bright segment inside it begins and ends
+     somewhere else entirely, and left square it reads as a stroke someone cut
+     with scissors rather than as a run of days.
+
+     A ROW EDGE counts as both, for the band's reason and not by analogy: this
+     highlight cannot flow from Saturday to Sunday either, so a wait crossing a
+     week is two capsules, each capped at the line break. `i % 7` is what says
+     so — arithmetic on the grid, never on the dates.
+
+     The cells come back in grid order, so the index IS the position in the
+     week; the weekday header is not a `.gcal-day` and cannot shift it. */
+  const cells = [...grid.querySelectorAll('.gcal-day[data-iso]')];
+  cells.forEach((c, i) => {
+    if (!lit.has(c.dataset.iso)) return;
+    c.classList.add('is-wait-lit');
+    const prevLit = i % 7 !== 0 && cells[i - 1] && lit.has(cells[i - 1].dataset.iso);
+    const nextLit = i % 7 !== 6 && cells[i + 1] && lit.has(cells[i + 1].dataset.iso);
+    if (!prevLit) c.classList.add('is-wait-lit-start');
+    if (!nextLit) c.classList.add('is-wait-lit-end');
+  });
+  grid.classList.add('is-wait-focus');
+}
+
+/* THE DOOR FOR THE COMPARISON, and it is a console function for the reason the
+   dev bar was deleted: this is a decision aid with an expiry date, not a
+   feature, and a visible switch is how the first quietly becomes the second.
+   `smWaitStyle()` with no argument flips to the other presentation, so
+   comparing them is one press of Enter; `?wait=stripe` (state.js) is the same
+   choice through a reload. Both write the same `sm.wait` key, so the console
+   and the URL cannot disagree. */
+function smWaitStyle(v) {
+  const next = (v === 'band' || v === 'stripe')
+    ? v
+    : (state.calWaitStyle === 'stripe' ? 'band' : 'stripe');
+  state.calWaitStyle = next;
+  state.guideCalWait = null;          // the band has no lane to focus
+  try { localStorage.setItem('sm.wait', next); } catch (_) {}
+  renderGuide();
+  return next;
 }
 
 /* Adds to the SAME list `calDraftSave` writes (state.calendar.custom), with the
@@ -887,6 +992,13 @@ function guideCalCycleKind(key) {
 function guideCalRemove(key) {
   const it = _calFindByKey(key);
   if (!it) return;
+  /* **A DERIVED ITEM CANNOT BE HIDDEN** (v6.60) — see `_calIsDerived`
+     (render.js) for the argument. The day panel stopped drawing an × on these,
+     so nothing in the UI reaches this line; the guard is here anyway because
+     the WRITER is the only place that covers every future caller, and hiding
+     `decide-steam` would leave the band, the lede and the card all still saying
+     the submission is out while the day it lands on claimed to be empty. */
+  if (typeof _calIsDerived === 'function' && _calIsDerived(it)) return;
   const rec = _gcalCustomRec(it);
   if (rec) {
     state.calendar.custom = state.calendar.custom.filter(c => c.id !== rec.id);
@@ -1128,6 +1240,17 @@ function calDraftSave() {
 function calDraftDelete() {
   const d = state.calendar.draft;
   if (!d || d.mode !== 'edit') return;
+  /* The same guard the guide's panel got in v6.60, on the OTHER surface that can
+     write `calendar.hidden` — the Calendar tab's popover. One rule, two doors:
+     a fact read off `platformFlipped` or `formData.releaseDate` is not a record
+     this calendar owns, so it cannot be deleted from either of them. The
+     popover's delete button is still drawn here (it is generic markup with no
+     item in hand at parse time); that is the remaining half of this fix and it
+     belongs with whoever next opens that builder. */
+  if (typeof _calIsDerived === 'function') {
+    const it = typeof _calFindByKey === 'function' ? _calFindByKey(d.key) : null;
+    if (_calIsDerived(it)) { state.calendar.draft = null; _calRerender(); return; }
+  }
   if (d.custom) {
     state.calendar.custom = (state.calendar.custom || []).filter(c => c.id !== d.itemId);
   } else {
@@ -1276,6 +1399,12 @@ function setLaunchDate(v) {
   state.formData.releaseTiming = 'specific_date';
   renderChecklist();
   if (state.activeView === 'dashboard') renderDashboard();   // refresh the Platforms timeline
+  /* AND THE GUIDE, which draws this date as the month's green box and prints it
+     in the lede's own Launch day row (v6.58). `renderDashboard` does NOT rebuild
+     that column — the same trap `_doFinalSubmit` is written under — so without
+     this the date you just picked would land on the next unrelated repaint, and
+     the row you set it from would still be showing the old one. */
+  if (typeof renderGuide === 'function') renderGuide();
 }
 
 // Checklist item → jump to its tab (and Marketing sub-tab), then scroll to the field.
@@ -4115,7 +4244,21 @@ function smFakeInference(pid = 'macos', fraction = 0.66) {
    It writes the same `state.platformFlipped[pid]` the real submit writes, so
    what you are looking at is the real card, not a mock of it. */
 let _smPhaseTimer = null;
-function smCardState(pid = 'ios', phase) {
+/* The third argument is the SENT DATE, and it exists so the calendar can be
+   looked at rather than waited for. The band under the month is drawn from
+   `platformFlipped[pid].time` plus that platform's own review length, so with
+   the time pinned to "yesterday" there was exactly one band you could ever see,
+   always in the same place, always the same length. Tuning a mark you cannot
+   move is guesswork.
+
+   It is a parameter on THIS function rather than a second `smFakeSubmit`,
+   because a helper that writes the same state through its own copy of the
+   fields is how the fake and the real drift apart — the trap this file names
+   every time it comes up. One writer, one extra argument.
+
+   `T12:00:00` rather than a bare `new Date(iso)`: the bare form parses as UTC,
+   so west of Greenwich the band starts on the day BEFORE the one you typed. */
+function smCardState(pid = 'ios', phase, sentISO) {
   clearInterval(_smPhaseTimer); _smPhaseTimer = null;
   /* TAKE ME TO WHERE THE CARD IS. On a cold page the view is the landing, so
      this built the card into a dashboard nobody was looking at and read as
@@ -4147,7 +4290,7 @@ function smCardState(pid = 'ios', phase) {
       /* Backdated so "Day N of M" has somewhere to count from — a phase set
          with `time: Date.now()` always reads Day 1, which hides the counter
          bug you are most likely to be looking for. */
-      time: Date.now() - 864e5,
+      time: sentISO ? new Date(sentISO + 'T12:00:00').getTime() : Date.now() - 864e5,
       phase: ph,
     };
     /* The fake submit copies the real one's side effect, or the guide's month
@@ -4158,7 +4301,21 @@ function smCardState(pid = 'ios', phase) {
     state.calendar.monthOffset = 0;
     renderDashboard();
     if (typeof renderGuide === 'function') renderGuide();
-    console.log('[smCardState]', pid, ph, '→', storeReviewPhase(pid, ph).label);
+    /* The band's two dates are PRINTED, not left to be counted off the grid.
+       They are derived — sent date plus `OB_PLATFORM_TIMING[pid]`, ceilinged
+       the way the calendar ceilings it — so reading them back is the only way
+       to know the mark you are looking at is the one you asked for. It is also
+       the fastest way to notice the timezone trap above, if it ever returns. */
+    const f = state.platformFlipped[pid];
+    const tm = (typeof OB_PLATFORM_TIMING !== 'undefined' && (OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios)) || null;
+    let band = '';
+    if (tm && ph === 'in_review') {
+      const a = new Date(f.time);
+      const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + Math.ceil(tm.days));
+      band = ' | band ' + a.toDateString().slice(4, 10) + ' → ' + b.toDateString().slice(4, 10)
+           + ' (' + Math.ceil(tm.days) + 'd)';
+    }
+    console.log('[smCardState]', pid, ph, '→', storeReviewPhase(pid, ph).label + band);
   };
   if (phase) { set(phase); return phase; }
   let i = 0;
@@ -4188,6 +4345,21 @@ function smCardState(pid = 'ios', phase) {
    re-renders, because only then has anything actually changed. */
 const SM_CANCEL_HOLD_MS = 1400;
 let _cancelHold = null;
+
+/* The submitting fill's duration, and the ONE number behind it — the CSS reads
+   it through `--submit-fill` and the timer that commits the submission reads it
+   directly, so the bar physically cannot finish out of step with the act it is
+   measuring.
+
+   **IT IS `SM_CANCEL_HOLD_MS`, BY REFERENCE (v6.62).** It was its own 1100,
+   argued at the time as "you are watching, not deciding, and a second of
+   watching is already generous". That was true of a CLICK and is false now that
+   Submit is a hold: you are deciding, the whole point is that letting go is the
+   undo, and a gesture you must be able to abandon has to be long enough to
+   abandon. Send and withdraw are one gesture in two directions, so they take
+   one duration — written as the reference rather than as a second 1400, because
+   a card that teaches two different "hold" lengths has taught neither. */
+const SM_SUBMIT_HOLD_MS = SM_CANCEL_HOLD_MS;
 
 function cancelHoldStart(pid, btn) {
   cancelHoldEnd();
@@ -4497,7 +4669,7 @@ function submitStepClick(pid) {
               || card?.querySelector('.active-card-settings');
     _smShake(gear, 'pulse');
     window.smTipAt?.(gear, t('card.connect_account') || 'Connect account');
-    return;
+    return false;
   }
 
   /* 2 — steps outstanding. Shake the ones that are actually outstanding, which
@@ -4509,7 +4681,7 @@ function submitStepClick(pid) {
     .filter(row => !row.classList.contains('submit-step-card'));
   if (pending.length) {
     _smSpotlight(card, pending);
-    return;
+    return false;
   }
 
   /* 3 — no destination yet. The picker is the `.submit-track-pick` chip on the
@@ -4543,10 +4715,124 @@ function submitStepClick(pid) {
     } else {
       spotlightChip();
     }
-    return;
+    return false;
   }
 
-  confirmSubmit(pid);
+  /* **IT NO LONGER SUBMITS — IT REPORTS (v6.62).** This function is the three
+     gates and nothing else now, returning `true` when the press is clear and
+     `false` when it has already answered with a shake or a spotlight. The act
+     itself is `submitHoldStart` below, because Submit became a HOLD.
+
+     Keeping the gates here rather than inlining them into the hold is the
+     point: a refusal must happen on the press, instantly, whether or not you
+     go on to hold — so the hold asks this first and simply does not start. */
+  return true;
+}
+
+/* ── SUBMITTING IS A HOLD, AND THE FILL IS WHAT YOUR THUMB IS DOING ──────────
+   Jaco: *"mantener pulsado el botón de submit ES LO QUE RELLENA el
+   contenedor."* He is right, and it closes an asymmetry this file had been
+   describing without noticing.
+
+   **THE CARD ALREADY HAD THIS GESTURE, RUNNING THE OTHER WAY.** Cancelling is a
+   hold: a red sweep crosses the card for exactly as long as the button is down,
+   the status line says CANCELING SUBMISSION, and letting go is the undo. The
+   note beside it argues the whole case — "holding makes the gesture and the
+   consent the same act; there is no wrong button to land on". Every word of
+   that is true of sending, which is the same size of decision pointing forward.
+
+   The green fill has been called "the cancel hold run forward" since v6.39 and
+   it was not: it was a 1100ms animation you started with a click and could not
+   stop. So the card had a bar you could abandon for the reversible act and a
+   bar you could not for the irreversible one — exactly backwards. It also meant
+   the fill was measuring nothing. A bar that only reports elapsed time on a
+   thing already decided is a loading screen; a bar tied to a thumb is a clock
+   you are holding the hands of.
+
+   **ONE NUMBER, AND IT IS THE CANCEL HOLD'S OWN.** `SM_SUBMIT_HOLD_MS` is
+   `SM_CANCEL_HOLD_MS`, by reference rather than by a second literal — two
+   directions of one gesture must take the same time or the card teaches two
+   different "hold" lengths. This retires v6.61's argument for 1100 ("you are
+   watching, not deciding"), which was correct about a click and is wrong about
+   a hold: now you ARE deciding, and the duration has to be long enough to
+   abandon.
+
+   `--submit-fill` still carries it to the CSS from the same constant the timer
+   uses, so the bar cannot finish early or late relative to the act — the rule
+   the cancel sweep exists to demonstrate, now with two consumers each.
+
+   Three things it has to get right, all of them the cancel hold's lessons:
+
+   - **A refusal is not a hold.** The gates run on `pointerdown` and a `false`
+     ends it there, so an unconnected account still shakes the gear and an
+     outstanding step still spotlights — instantly, with no fill starting behind
+     the refusal.
+   - **Letting go anywhere cancels.** `pointerup`, `pointerleave` and
+     `pointercancel` all end it, so sliding off the row mid-hold is an undo
+     rather than a submission you cannot see the bar for.
+   - **Only a completed hold changes anything.** An early release costs one
+     class removal, one node removed and no render — `cancelHoldEnd`'s own rule,
+     because nothing has happened yet.
+
+   `prefers-reduced-motion` keeps the hold and drops only the fill: the gesture
+   is the safety, not the animation, so removing the bar must not remove the
+   second chance. */
+let _submitHold = null;
+
+function submitHoldStart(pid, row, ev) {
+  if (ev && ev.button !== undefined && ev.button !== 0) return;  // primary press only
+  submitHoldEnd();
+  if (row?.classList.contains('is-complete')) return;
+
+  if (submitStepClick(pid) !== true) return;   // a gate answered; no hold
+
+  const card = document.getElementById('active-card-' + pid);
+  if (!card) { confirmSubmit(pid); return; }
+
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  /* The word is the submitted card's own status line, borrowed rather than
+     approximated — the v6.61 argument, unchanged.
+
+     **IT GOES INSIDE THE STEP LIST, AND THAT IS WHAT KILLED THE ANCHOR BRANCH.**
+     It used to be inserted in FLOW after `:scope > .card-release-block`, falling
+     back to the header — two selectors because both layout arms exist and
+     neither has the same children. Measured, that insertion pushed the Submit
+     row 39.1px DOWN, out from under the thumb holding it (see the long note
+     beside `.is-submitting` in style.css: on a hold that is not cosmetic, it
+     cancels the gesture).
+
+     Prepending into `.ios-step-cards` and positioning it absolutely solves both
+     at once: the card cannot change size, and the list exists in every arm, so
+     there is nothing to branch on. All the geometry is in CSS — no
+     `getBoundingClientRect`, no arithmetic that could go stale. */
+  const sending = document.createElement('div');
+  sending.className = 'sub-state sub-state-sending';
+  sending.innerHTML = '<span class="sub-state-line">SUBMITTING…</span>';
+  const list = card.querySelector('.ios-step-cards');
+  if (list) list.prepend(sending);
+  else card.prepend(sending);
+
+  if (!reduced) {
+    card.style.setProperty('--submit-fill', SM_SUBMIT_HOLD_MS + 'ms');
+    card.classList.add('is-submitting');
+  }
+
+  _submitHold = { pid, card, sending };
+  _submitHold.timer = setTimeout(() => {
+    const p = _submitHold?.pid;
+    submitHoldEnd();
+    if (p) confirmSubmit(p);
+  }, SM_SUBMIT_HOLD_MS);
+}
+
+function submitHoldEnd() {
+  if (!_submitHold) return;
+  clearTimeout(_submitHold.timer);
+  _submitHold.sending?.remove();
+  _submitHold.card.classList.remove('is-submitting');
+  _submitHold.card.style.removeProperty('--submit-fill');
+  _submitHold = null;
 }
 
 /* Confirm and execute the submit from the inline step card */
@@ -4709,8 +4995,214 @@ function _doFinalSubmit(platformId, trackId) {
 
   /* No out-phase. There is nothing to animate away: the header and the release
      block survive the swap unchanged, and the steps are what the closing box is
-     removing. A fade-out here would dim the two things that did not change. */
+     removing. A fade-out here would dim the two things that did not change.
+
+     **AND THE FILL IS NOT HERE ANY MORE (v6.62).** It used to run at this point:
+     press Submit, and a 1100ms green wash crossed the card with SUBMITTING… over
+     it before the close. That whole block has moved into `submitHoldStart`,
+     because the fill is now what your THUMB is doing — Submit is a hold, the bar
+     measures the hold, and by the time this function is reached the bar has
+     already finished and the decision is made. Running it again would be the
+     card asking twice.
+
+     What is left here is the state change and the close, which is what this
+     function was before v6.39 and what it should have stayed: the beat that
+     "gives the advance something to be the end of" belongs to the gesture, not
+     to the commit. The whole argument is in `submitHoldStart` (app.js) and
+     beside `.is-submitting` (style.css).
+
+     One consequence worth stating: **the commit no longer depends on an
+     animation finishing.** The old version's note had to explain at length why
+     it used a `setTimeout` rather than `animationend` — a backgrounded tab or a
+     changed motion preference would have left the card green forever with the
+     submission never applied. There is no timer between the press and the state
+     change at all now; the hold's own timer is the only clock, and it owns both
+     the bar and the decision. Reduced motion never needed a branch here either,
+     since the hold drops only the fill and keeps the gesture. */
   _applyFlip();
+}
+
+/* ── PRESSING SUBMIT FOR REAL, WITHOUT DOING THE WORK FOR REAL (v6.61) ───────
+   `smReadyToShip('macos')` in the console, then press Submit on the card.
+
+   **IT SATISFIES THE GATES, IT DOES NOT BYPASS THEM** — and that distinction is
+   the whole reason this is worth having. `submitStepClick` refuses on three
+   counts: no account linked, steps outstanding, no track chosen. A helper that
+   jumped straight to `_doFinalSubmit` would test the animation and nothing
+   else, leaving the three refusals — the shake, the spotlight, the chip nudge —
+   unexercised in the one place they matter. This writes the same three pieces
+   of state a real afternoon would, so the button then behaves exactly as it
+   does for a developer who finished: the gates pass because they are satisfied.
+
+   **AND v6.61's VERSION DID NOT WORK. IT ANSWERED THE WRONG QUESTION, TWICE.**
+   Jaco: *"no marca los pasos anteriores como completados, y al dar a submit me
+   muestra el estado dim de lo no completado."* Measured, he was exactly right —
+   the log said "4 steps ticked" and `platformStepCount('macos')` said
+   `complete: 0`. Two separate mistakes stacked, and both are worth writing down
+   because either alone is silent:
+
+   1. **`markTaskDone` writes a status nothing reads.** `platformStepCount` has a
+      per-platform branch, and for ios / macos / macos_full / android / steam it
+      counts `is<X>SectionComplete(step)` — derived from the ANSWERS. Only the
+      remaining platforms fall through to the `platformStepStatus` default. So on
+      Mac App Store the status map this was writing has no consumer at all.
+   2. **`_paintStepRow` returned on its first line.** It looks up
+      `#dot-<pid>-<stepId>`, and only two builders emit that id
+      (render.js:5119 and 5897). The builder this card uses emits `.ios-step-num`
+      with NO id, so `document.getElementById` came back null and the function
+      returned before touching a class — no error, no warning, nothing painted.
+
+   v6.61's note theorised about ordering ("mark AFTER the render") and that was
+   a real trap but not this bug: the ordering fix cannot help a status nobody
+   reads or a paint that never runs. **A helper that reports success from its own
+   arguments rather than from the state afterwards will do this every time** —
+   which is why this one now finishes by ASKING `platformStepCount` and printing
+   what it really got, and warns if it fell short.
+
+   **So it fills the DATA, and the ticks are then real.** Each completion
+   predicate is asked for the minimum it wants — a build that is not processing
+   plus a track, every content-rating question answered, a privacy URL with
+   `collectsData: 'no'`, the two business questions, one screenshot, and the
+   "you have looked at this" flags. Nothing is painted by hand, so nothing
+   evaporates on the next render: the steps are complete because they ARE.
+
+   **The answers go through `_appStoreAnswers(pid, field)`**, the app's own
+   router, not to a bucket picked by hand. Mac App Store shares Content Rating
+   and Data Privacy with the App Store (`IOS_MAC_SHARED_ANSWER_FIELDS`) and keeps
+   Business Questions to itself, so a helper writing `state.macSubmitAnswers`
+   directly would fill three fields into a bucket nothing checks — the same class
+   of mistake as (1), one layer down.
+
+   The values are the quietest true ones: intensity `none`, yes/no `no`,
+   age `not_applicable`. This is a dev helper, and a submission it fabricates
+   should claim as little as possible about the game.
+
+   It only ever FILLS BLANKS (`??=` semantics): anything you already answered is
+   left alone, so running it over real work does not overwrite it.
+
+   The track is the platform's FIRST, not a hard-coded 'production', since the
+   list differs per store and a missing key would fail gate 3 in a way that looks
+   like the helper working.
+
+   **What it does not cover, said out loud rather than failing quietly:** Android
+   and Steam are also answer-derived, and their fillers are not written — the
+   helper says so instead of pretending. The status-based platforms (Web, PSN,
+   Xbox, Switch, Epic) really are `platformStepStatus`, so those keep
+   `markTaskDone`, which for them is the right tool.
+
+   Console-only, like `smCardState` and `smWaitStyle`, for the reason the dev bar
+   was deleted under: a visible control that fills in your submission for you is
+   a feature nobody asked for, waiting to be found. */
+
+/* A 16:10 placeholder, so the screenshot gate is satisfied by a real image
+   rather than by a shape that only looks like one. Small enough to sit in a
+   source file and correct enough that the preview draws a frame instead of a
+   broken icon. */
+const SM_STUB_SHOT = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="2880" height="1800">' +
+  '<rect width="2880" height="1800" fill="#1b1b1f"/>' +
+  '<text x="1440" y="920" font-family="monospace" font-size="120" fill="#4a4a55"' +
+  ' text-anchor="middle">PLACEHOLDER</text></svg>');
+
+function smReadyToShip(pid) {
+  if (!pid) { console.warn('smReadyToShip(pid) — e.g. smReadyToShip("macos")'); return; }
+
+  /* ACTIVATE IT FIRST, or there is no card to press. Found by measuring: the
+     helper set all three pieces of state correctly and nothing appeared,
+     because `activePlatforms` was empty and the grid draws from that. A
+     platform you have not added has no card, and a card is what this exists to
+     get you to. */
+  if (!state.activePlatforms?.has?.(pid) && !(state.activePlatforms || []).includes?.(pid)) {
+    if (typeof activatePlatform === 'function') activatePlatform(pid);
+    else state.activePlatforms?.add?.(pid);
+  }
+  (state.platformAuth || (state.platformAuth = {}))[pid] = { loggedIn: true };
+
+  /* Gate 3 asks for a DESTINATION, and nothing is preselected anywhere in this
+     app on purpose — so the helper has to choose one, and it says which. */
+  const tracks = (typeof PLATFORM_TRACKS !== 'undefined' && PLATFORM_TRACKS[pid]) || [];
+  const track  = tracks[0]?.id || tracks[0] || 'production';
+  (state.selectedTracks || (state.selectedTracks = {}))[pid] = track;
+
+  /* A BUILD THAT IS NOT STILL PROCESSING. `_uploadBuildComplete` wants all
+     three — a build, no processing flag, and the track set above. */
+  (state.platformBuilds || (state.platformBuilds = {}))[pid] ||=
+    { name: 'Game.ipa', size: 130937, buildNumber: 42, uploadedAt: Date.now() - 2 * 864e5 };
+  (state.platformBuildProcessing || (state.platformBuildProcessing = {}))[pid] = false;
+
+  const steps = (typeof _visiblePlatformSteps === 'function' ? _visiblePlatformSteps(pid) : [])
+    .filter(s => !s.isSubmit);
+
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+    /* FILL A BLANK, NEVER OVERWRITE AN ANSWER — and route every field through
+       the app's own `_appStoreAnswers`, which knows that Mac App Store shares
+       these first three groups with the App Store and keeps Business to
+       itself. */
+    const fill = (field, value) => {
+      const a = _appStoreAnswers(pid, field);
+      if (a && (a[field] === null || a[field] === undefined || a[field] === '')) a[field] = value;
+    };
+
+    IOS_INTENSITY_QUESTIONS.forEach(q => fill(q.id, 'none'));
+    IOS_CONTENT_YN_QUESTIONS.forEach(q => fill(q.id, 'no'));
+    fill('ageCategory', 'not_applicable');
+
+    fill('privacyPolicyUrl', (state.formData?.privacyUrl || '').trim() || 'https://example.com/privacy');
+    fill('collectsData', 'no');
+
+    fill('hasIAP', 'no');
+    fill('usesEncryption', 'no');
+    if (pid === 'macos_full') fill('contentRights', 'no');
+
+    /* The "you have actually looked at this" flags. They are booleans rather
+       than answers, so `fill`'s blank test does not apply — `false` is a real
+       value there, and it is precisely the one to replace. */
+    const seenAns = _appStoreAnswers(pid, 'improveSubmissionSeen');
+    if (seenAns) seenAns.improveSubmissionSeen = true;
+    state[pid === 'ios' ? 'iosLocalizationsSeen'
+       : pid === 'macos' ? 'macLocalizationsSeen'
+       : 'macFullLocalizationsSeen'] = true;
+
+    /* One screenshot. The gate is "optional once present" and reads the asset
+       pool before the per-platform selection, so the pool is where it goes. */
+    state.uploads ||= {};
+    state.uploads.screenshots ||= [];
+    if (!state.uploads.screenshots.length &&
+        !(state.platformScreenshots?.[pid]?.selected?.length) &&
+        !(state.platformScreenshots?.[pid]?.custom?.length)) {
+      state.uploads.screenshots.push({ name: 'placeholder.svg', dataUrl: SM_STUB_SHOT });
+    }
+  } else if (pid === 'android' || pid === 'steam') {
+    console.warn(`[smReadyToShip] ${pid} computes its steps from ${pid}SubmitAnswers and this helper has no filler for them yet — the card will still show them outstanding.`);
+  } else {
+    /* These platforms really are status-based (`platformStepCount`'s default
+       branch), so `markTaskDone` is the right tool for them and only them. */
+    state.platformStepStatus ||= {};
+    state.platformStepStatus[pid] ||= {};
+    steps.forEach(s => markTaskDone(pid, s.id));
+  }
+
+  if (typeof renderDashboard === 'function') renderDashboard();
+
+  /* **IT ASKS THE APP WHAT IT ACHIEVED, IT DOES NOT ASSERT IT.** The previous
+     version printed "4 steps ticked" from the length of its own loop while the
+     real count was 0 — a helper reporting its intentions back to you. This reads
+     `platformStepCount` after the render, which is the same function the card's
+     own progress bar and gate 2 read, so the line cannot be more optimistic than
+     the screen. */
+  const counts = (typeof platformStepCount === 'function') ? platformStepCount(pid) : null;
+  if (counts && !counts.allRequired) {
+    const missing = steps.filter(s => {
+      const f = pid === 'ios' ? isIOSSectionComplete
+              : pid === 'macos' ? isMacSectionComplete
+              : pid === 'macos_full' ? isMacFullSectionComplete : null;
+      return f ? !f(s.id) : false;
+    }).map(s => s.id);
+    console.warn(`[smReadyToShip] ${pid}: ${counts.complete}/${counts.total} steps complete — Submit will still refuse.`,
+                 missing.length ? `Outstanding: ${missing.join(', ')}` : '');
+    return;
+  }
+  console.log(`[smReadyToShip] ${pid}: account linked, track "${track}", ${counts ? `${counts.complete}/${counts.total}` : 'all'} steps complete. Press Submit.`);
 }
 
 // Legacy alias kept for any paths that still call finalSubmit directly.
@@ -4745,7 +5237,22 @@ function cancelSubmission(pid) {
 
   function _applyUnflip() {
     if (state.platformFlipped) delete state.platformFlipped[pid];
+    /* THE MONTH HAS TO BE TOLD, and it was the missing half of this mirror.
+       `renderDashboard` does NOT rebuild the guide column — that is written in
+       the submit path, which calls `renderGuide()` by name for exactly this
+       reason — so a cancelled submission vanished from the state and its wait
+       stayed painted on the calendar until some unrelated repaint came along.
+       The card said withdrawn and the month three inches away said the store
+       still had it.
+
+       Both sides of the wait live in `platformFlipped`, so the band, the lede
+       and the day panel's wait line all clear from this one call; there is
+       nothing per-surface to undo. The focused platform is the exception —
+       it is a pointer, not derived — and a pointer at a submission that no
+       longer exists would leave the panel empty for no stated reason. */
+    if (state.guideCalWait === pid) state.guideCalWait = null;
     renderDashboard();
+    renderGuide();
     const newCard = document.getElementById('active-card-' + pid);
     if (!newCard) return;
     const toH = newCard.offsetHeight;

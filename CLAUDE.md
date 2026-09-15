@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.37**
+Current version: **v6.39**
 
 ---
 
@@ -778,16 +778,16 @@ Three things the sweep learned by being wrong first:
   source order decides. Measured: rest `rgba(255,255,255,.08)` / no ring, held
   `rgba(255,59,120,.55)` with `0 0 0 1px rgba(255,59,120,.12)`, released back to
   rest with the card still submitted.
-- **Three things GO, they do not dim** — the wait estimate and both links.
+- **Two things GO, they do not dim** — the wait estimate and the disclosure.
   "Usually 3 days" answers a question you stopped asking the moment you started
-  withdrawing, and it sits on the same line as the word that replaced it. "Quiet
-  time. Go plan your launch" and "Review what was submitted" are invitations to
-  go somewhere else, offered in the middle of an act you have to stay put to
-  finish — dimming still leaves them there to be aimed at, so they take
-  `opacity: 0` and `pointer-events: none`. What stays at .35 is only what
-  remains TRUE while the bar runs: the progress, the store's sentence, the
-  dates. Measured through a full cycle: 1 → 0 / 0 / .35 → 1, and the card is
-  still submitted on release.
+  withdrawing, and it sits on the same line as the word that replaced it. "See
+  what you sent" is an invitation to go somewhere else, offered in the middle of
+  an act you have to stay put to finish — dimming still leaves it there to be
+  aimed at, so both take `opacity: 0` and `pointer-events: none`. What stays at
+  .35 is only what remains TRUE while the bar runs: the progress, the store's
+  sentence, the dates. Measured through a full cycle: 1 → 0 / 0 / .35 → 1, and
+  the card is still submitted on release. (It was THREE until v6.56 — the third
+  was the Marketing nudge, which has left this card; see below.)
 
 **The steps are still reachable once sent, read only.** Hiding them the moment
 they were done made the work unreachable exactly when you most want to check it:
@@ -907,6 +907,302 @@ an arrow, the card's rule for a link that leaves. It exists only while something
 is `in_review` and is **not dismissible**: it is not a notification, it is the
 state of the month you are looking at, and it leaves on its own.
 
+**EACH ROW LEADS WITH ITS PLATFORM'S MARK (v6.55).** The store's name is the one
+thing here you have to read to tell the rows apart, and every other list in this
+app answers "which one is this" with a mark before the label — the card's step
+rows, the guide's checklist, the pinned nav's pills. Trailing it would make this
+the only place that mark comes second, and the row would read as a label wearing
+a badge.
+
+Three things it is written under, all of them rules that already existed:
+
+- **`smMarkFor(w.pid)` with NO size argument**, and the 12px slot in CSS. Same
+  lesson as `.active-card-icon svg` and `.ios-step-num svg`: a literal at the
+  call site is what went stale the first time a slot moved. It also means Xbox
+  and Nintendo — which have no measured mark and fall through to `platformIcon`
+  — cannot come out a different size from the rest.
+- **`align-self: center`, not the row's baseline.** A replaced element in a
+  baseline-aligned row sits its BOTTOM EDGE on the baseline, which hangs a square
+  mark a couple of pixels low beside 11px text. The two pieces of text keep the
+  baseline they had; only the picture is centred against them.
+- **The mark takes the STORE NAME's colour, not the date's yellow.** The mark and
+  the label are one half of the row — *which store* — and the date is the other.
+  A yellow mark would split a name from its own icon and leave two of the three
+  things on the line claiming to be the value.
+
+`space-between` went with it: with three children it would have spread the
+leftover width between the mark and the name too, prising a store away from its
+own icon. The name takes `flex: 1` and pushes the date right instead — one gap,
+and the pair stays glued. Measured with two waits: mark 12×12 with 10.3–11.3 of
+ink, centred on the row to 0.00, names on one column at 20, dates flush right at
+0.0, and the row still 15.9 tall.
+
+**HOVERING A ROW LIGHTS THAT WAIT'S OWN DAYS (v6.57).** `gcalWaitHover` (app.js)
+puts `is-wait-focus` on the grid and `is-wait-lit` on the days of the wait under
+the pointer; everything else banded steps back to `.35`.
+
+**It is the question the band cannot answer, asked at the only moment it can
+be.** The band is a union on purpose and so cannot say whose days are whose;
+this list names the store and the date but not the stretch between them. Hover
+is what joins them, and the reason it is affordable where the STRIPE was not:
+the stripe answered the same question permanently and cost +42px of card per
+lane, where a transient mark costs nothing and leaves the moment you stop
+asking.
+
+Four things it is built under, three of them rules that already existed:
+
+- **FOCUS IS THE ABSENCE OF DIMMING**, and `opacity` is right here for the same
+  reason it is right on `.gcal-strip.is-dim` twenty lines up: what steps back is
+  a stroke and a date box, not content whose colour has to keep meaning
+  something. The lit run takes no hue and no ring — it already wears the wait's
+  yellow, and a second mark on it is the "two marks on one stroke" this grid has
+  now refused three times.
+- **IT TOUCHES THE DOM, IT DOES NOT RENDER.** A hover is not a state change, and
+  `renderGuide()` rebuilds this column with innerHTML — which would throw away
+  the add row's half-typed title and its caret on every pass of the mouse, and
+  is the fastest way to make a hover feel broken. Two class names, added and
+  removed. `mouseenter`/`mouseleave`, not `mouseover`/`mouseout`, which fire
+  again for every child the pointer crosses.
+- **THE LIT PIECE GETS ITS OWN CAPS** (`is-wait-lit-start` / `-end`). The
+  union's `span-start` / `span-end` round where the WHOLE band begins and ends;
+  the bright segment inside it starts somewhere else, and left square it reads
+  as a stroke cut with scissors. A row edge counts as both, for the band's own
+  reason — verified on Steam 11 → 19: caps on 11, 12 (Saturday), 13 (Sunday) and
+  19, two capsules, not one square-ended smear.
+- **AND THE CAPSULE IS A SECOND LAYER — one layer is why it looked broken
+  (fixed v6.59).** The first version dimmed the un-lit days and rounded the LIT
+  ones' own `::before`, one element per cell doing both jobs. So the rounded
+  corner cut a notch out of the only band that cell had, and what showed through
+  was the CARD, not the stroke either side of it: a bite out of a continuous
+  line. Jaco: *"queda como un hueco sin rellenar."*
+
+  A rounded cap on a sub-range is BY DEFINITION a shape laid on something, so
+  the cell needs both layers. `::before` stays the band — square through the
+  middle, the union's caps at the union's ends, **dimmed along its whole length,
+  lit days included**, which is the change that makes it work: the base has to
+  be continuous or the notch has nothing to show. `::after` is the bright
+  capsule and carries the lit caps. The corner now reveals the dim band, which
+  is what is really under it.
+
+  The cost, measured rather than hidden: a lit day is the dim band (.10 × .35)
+  plus the capsule (.10) ≈ **.132** against a resting band's .10 — three
+  luminance points out of 255, below the floor at which anything on this grid
+  reads, and arguably right: with two levels on screen the lit one should not be
+  dimmer than the stroke was before you pointed at anything. Verified with Mac
+  (14 → 17) lit: every banded `::before` at .35 keeping the UNION's caps (11
+  left, 12 right, 13 left, 19 right), `::after` present only on 14–17 at
+  `rgba(255,216,77,0.1)` with caps on 14 and 17 — and **cell 14's `::before`
+  radius is 0**, which is the fix stated as a number.
+- **Today, launch and the picked day keep their fill**, hence the `:not()`
+  chain. They are not part of the wait vocabulary and say nothing about which
+  store is being pointed at; violet in particular is the ONLY thing on this
+  month that says *you are here*, and a hover in a list must not take that away.
+  Their band underneath still dims, so the run reads correctly THROUGH them —
+  measured with Google Play (8 → 13) lit: today's band `.35`, today's number
+  still `1` on `rgb(160,120,255)`.
+
+No transition: a highlight that eases in arrives after the pointer has moved on
+to the next row, so the month appears to lag behind the list.
+
+The cost, knowingly: **there is no hover on a touch screen**, so this surface
+says less there than on a pointer. That is acceptable while it is the SECOND way
+to read a fact the list already prints in words, and would not be if anything
+load-bearing ever moved into it.
+
+`data-iso` on the band-mode cell is what makes the lookup possible — the date
+was already in the cell, inside the `onclick` string, and reading it back out of
+an attribute is the difference between a lookup and parsing a handler.
+
+**THE LIST GREW, AND THE GAP GREW MORE (v6.57).** 11px at a 3px gap read as one
+paragraph of small print that happened to have dates in it. It is 12px/1.5 with
+the container's gap at 7 — and the GAP is the half doing the work, moving 3 → 7
+against the type's 11 → 12. Rows this short are told apart by the air between
+them long before they are told apart by their size, which is the same reason
+Content Rating's question rows went to 8 with their pills at 6.
+
+**Two spacings in this block are the container's gap PAID TWICE, and both were
+wrong first.** The head and the link are flex children like every row, so their
+own margin lands ON TOP of the gap: a head margin of 10 measured **17** on
+screen, and the fix is not "10 looked too big" but that the gap was being paid
+again. The head is 2 + 7 = 9 now, which is Content Rating's own proportion for
+this object (a section header sits 10 above its first question with the
+questions 8 apart) — a label over a column is not a divider, and the register
+does the separating. The link's margin is deliberately ONE ROW-GAP, so it lands
+at 7 + 7 = 14 against the rows' 7, exactly twice as far. Set it to whatever the
+gap is if that ever moves; the point is the ratio.
+
+The mark went 12 → 13 WITH the type: the slot is sized against the line it
+leads, so leaving it behind would have made it shrink relative to its own label.
+Measured: rows 18 tall, 7 apart, head 9 clear, link 14 clear, mark 13, lede 104
+tall — about +21px of card at two waits, which is the price of the list being
+legible at a glance.
+
+**THE ROW IS A BUTTON, AND THAT IS WHAT BUYS THE POINTER (v6.58).** The hover
+above was doing real work and announcing it with nothing — a highlight you only
+find by happening to pass over the right 250×18 strip. A `cursor: pointer` says
+so, and this app does not put a pointer on something that cannot be pressed, so
+the press had to become real rather than the cursor become a lie.
+
+What it does is **the hover made permanent, not a second idea**:
+`guideCalWaitOpen` already opens a day and focuses a submission, and the day it
+opens is that wait's own decision date — the one the row prints. Hover previews,
+press pins and names it in the panel, press again lets go (that function already
+toggles). Verified: press → `guideCalDay` 2026-09-17, `guideCalWait` macos,
+`.gcal-focus` drawn; press again → wait null, focus gone, day still open.
+
+`<button type="button">` with all five UA properties reset (background, border,
+padding, margin, text-align) — a `<button>` arrives carrying every one of them
+and any one would have redrawn the line. Measured identical to the div: row 18
+tall, name on 23.
+
+**AND THE NAMES ARE FULL WHITE.** At 62% the store — the thing you scan the list
+FOR — was in the register this app reserves for supporting text, quieter than
+the date beside it, so the line read as a headline date with a caption under it.
+White and the wait's yellow are two things at full strength saying two halves of
+one fact. The mark goes white and 13 → 15 with it, for v6.55's reason (mark and
+name are one half of the row and must not split) — and it deliberately overshoots
+the line, because a mark the exact height of its label reads SMALLER than the
+label: letters have no counters to lose.
+
+**THERE IS NO HEADING (v6.62), AND REMOVING IT IS WHAT MADE THE BLOCK EVEN.**
+It went through two: "Answers expected" (a description of the DATES on the
+right, written when the dates were all this block had) and then "In review"
+(v6.59, naming the STATE once the rows had gained a mark and a full-white store
+name). Both were true of the store rows and neither was true of Launch day.
+
+**A heading over PART of a list forces the rest of it to be set apart, and that
+is the whole chain this removes.** Because IN REVIEW was false of Launch day,
+Launch day had to be pushed out from under it — first with a 1px rule (v6.58),
+then, when the rule came off, with double the gap (14 against the rows' 7). Two
+versions of a separator, both paying for a label that only covered two thirds of
+what it sat over. Jaco: *"quizás puedes quitar el IN REVIEW, y que las
+plataformas y el launch day estén igual de espaciados, porque queda raro."*
+
+With the label gone the block is one list of dated things in this month, every
+row 7 apart, and the container's gap is the only spacing in it. Measured:
+eyebrow → first row 14, three rows 18 tall at 7 apart, names on one column, the
+violet link 14 clear, lede 136 → 110.
+
+**Nothing is lost, because the rows never needed telling apart in words.** Each
+says what kind it is twice and per ROW rather than per group: a store wears its
+platform mark and a yellow date, Launch day a green dot and a green date — and
+those two hues are `CAL_STATUS.waiting` and `CAL_STATUS.launch`, the same
+colours their days wear in the grid three inches below. Colour sorts the list
+and the month agrees with it without a label on either.
+
+`.gcal-lede-head`'s rule is **deleted, not left dormant** — the dev bar's
+argument, and here specifically because a rule with no consumer would bring the
+unequal spacing back with it. `.gcal-lede-go` keeps its 14: it is a violet link
+that LEAVES, the one thing in the block that really is a different kind.
+
+**If a heading ever comes back it has to be true of every row**, or the block
+splits into two groups again. That is the test the last two failed, and it took
+three versions to state.
+
+Two candidates were rejected on vocabulary while a heading still existed, and
+they are worth keeping for whoever writes the next one. **"Pending" is taken** —
+Apple's real state is *Pending Developer Release*, the phase AFTER this one,
+which means the opposite thing (it is back with you). **"In progress" is what
+the other face means**: a submission you are still filling in is in progress;
+one that has gone is out of your hands, which is the whole reason this face
+replaces the checklist when you press Submit.
+
+**LAUNCH DAY IS A ROW OF ITS OWN (v6.58), AND THE RULE ABOVE IT CAME OFF IN
+v6.62.** Jaco's both times, and the separation is the whole design: everything
+above is a date a STORE will hand you, this is the one date you choose. In the
+list it would sit under a heading saying IN REVIEW and read as a fourth store.
+
+**IT IS SPACED LIKE EVERY OTHER ROW, AND IT TOOK TWO GOES.** The 1px rule at
+white 7% went first: the line was doing a job position already does — the same
+trade the step modal's section headers made when they lost theirs ("a line said
+'a group starts here' with a graphic element, on a surface that had just lost
+the header's and the footer's own lines; position says it more quietly") — and
+the block already ends in a `.10` boundary, so the divider made two horizontal
+rules inside 100px of a 254px column. That left behind the distance the rule was
+holding, 7 of margin on the container's 7. Looking at it, Jaco asked for the
+rest, and the cause was one step further back than the gap: **the step existed
+to clear a HEADING, not to separate a kind** (above). Both extras are deleted
+rather than zeroed — the margin, and the `padding-top` the border needed — so
+`:first-child` has nothing left to special-case and that rule went too.
+
+- **It is always there, which is why `_guideCalLede` no longer returns early on
+  an empty `waits`.** The waits come and go with the review; the launch date is
+  true about the month whether or not anything is out, and a control that
+  vanishes when you cancel your last submission is one nobody can rely on. With
+  nothing in review the block IS this row, and now that costs no rule at all:
+  one row in a list of one.
+- **A native `type="date"`, hidden inside the `<label>`** — 0×0 and clipped, not
+  `display: none`, which would take it out of the accessibility tree and stop it
+  receiving the click. Release Timing already edits this field with one
+  (`#ob-date`); a second date UI for one value is how two pickers start
+  disagreeing about what a valid date is.
+- **It writes through `setLaunchDate`, which gained `renderGuide()`.**
+  `renderDashboard` does not rebuild the guide column — the same trap
+  `_doFinalSubmit` is written under — so without it the date you just picked
+  would land on the next unrelated repaint and the row you set it from would
+  still show the old one. Verified end to end: picking Sep 25 turns the 25th
+  green in the visible month and rewrites the row in one paint.
+- **The dot and the date take `CAL_STATUS.launch` through `--d`**, not a
+  literal, so the row and the box on that day are one fact stated twice — the
+  same relationship the waits' yellow dates have with their band.
+- **Empty is a real state, and it is `todo`'s register**: *Not set* at white
+  34% with a hollow dot, and the month draws no box. Not an error, because it is
+  not one — "not done yet: information, so no hue at all" is what that line of
+  the colour table means. Verified: cleared → row says Not set, zero
+  `.is-launch` cells.
+
+**~~One thing this makes VISIBLE rather than causes~~ — FIXED IN v6.60, and it
+was the one-line fix this note predicted.** `OB_PLATFORM_TIMING` had no `macos`,
+so Mac fell through to iOS for its days AND for its label: the calendar printed
+"App Store decision expected" and this list printed "App Store" for a submission
+whose own card says Mac App Store, three inches away. With the marks in, iOS and
+Mac in review together were two identical rows — same glyph (`macos → ios` is a
+deliberate alias in `SM_TILE_MARK_ALIAS`, same mark different label) under the
+same name, with nothing on screen to tell them apart.
+
+`macos` is its own row in that table now. **The days are iOS's on purpose and
+are DUPLICATED rather than referenced** — it is the same App Store queue and the
+same 2.2-day average, and this table is data; a self-reference would be the
+first expression in it. If Apple's Mac review ever diverges, that is the one
+line that changes. `buildSubmittedCard`'s own `macos → ios` special case is dead
+weight now rather than load-bearing, and can go whenever someone is in there.
+Verified: the lede row and the day panel both say "Mac App Store", the wait's
+dates are unchanged (14 → 17), and both cards still read Steam / Mac App Store
+with "Usually 8 days" / "Usually 3 days".
+
+**THE MARKETING NUDGE LEFT THE CARD AND THE GUIDE KEEPS IT (v6.56).** "Quiet
+time. Go plan your launch →" (`.sub-nudge`) lived on the submitted card from the
+day the wait got a face, on the argument that the one phase with nothing to do
+in it is the one that should point somewhere. That is still true; what changed
+is that a better surface started saying it.
+
+**It is a sentence about YOUR TIME, not about this submission.** Everything else
+on that card is a fact about that build — the store, the version, the day an
+answer is due — and where to spend the days the wait has just freed up is the
+CALENDAR's subject. `_guideCalLede` prints it once, in the same violet with the
+same arrow, under the list of what you are waiting on, and it exists for exactly
+the span the button did.
+
+**And it multiplied.** One card said it once; three platforms in review said it
+three times on one screen, identically, while the month said it once. That is
+noise proportional to the number of platforms — the shape of a line that is in
+the wrong place rather than one that is merely repeated.
+
+The cost, knowingly: with the guide collapsed, or on the checklist face, the
+invitation is nowhere. `_doFinalSubmit` flips the guide to the month at the
+moment of sending, so it is on screen when it matters — but someone who works
+with that column folded will not see it at all. **If that bites, the fix is the
+collapsed rail, not this button coming back.**
+
+Removed rather than switched off, all three pieces: the markup in
+`buildSubmittedCard`, `.sub-nudge`'s rules, and its selector in the cancel
+hold's GONE-not-dimmed list. Verified after: zero `.sub-nudge` in the document,
+card 233.4 tall ending in "See what you sent" on `in_review` and in the Release
+button on `accepted`, and a full cancel hold still correct — red edge
+`rgba(255,59,120,.55)` with its `.12` ring, CANCELING SUBMISSION in
+`rgb(255,59,118)`, note and toggle at 0, segbar and note at .35, everything back
+and still submitted on release.
+
 **The wait note only exists during the wait.** It was gated `!isYours && !isBad`,
 which let "Usually 3 days" survive into `live` — beside READY FOR DISTRIBUTION,
 on a build that was finished and on sale. It answers "how long will this take",
@@ -1024,6 +1320,325 @@ rotates, "Back to steps" from the account face lands back on the submitted card,
 and expanding the steps afterwards grows the card to 447.3 with all four rows
 21px clear of its bottom edge.
 
+**SUBMITTING IS A HOLD, AND THE FILL IS WHAT YOUR THUMB IS DOING (v6.62).**
+Jaco: *"mantener pulsado el botón de submit ES LO QUE RELLENA el contenedor."*
+
+**THIS FILE HAD BEEN CALLING THE FILL "THE CANCEL HOLD RUN FORWARD" SINCE v6.39
+AND IT WAS NOT ONE.** Cancelling is a hold: the red sweep runs for exactly as
+long as the button is down and letting go is the undo. Submitting was a CLICK
+that started a 1100ms animation you could not stop. So the card offered a bar
+you could abandon for the reversible act — withdrawing, undoable by releasing —
+and a bar you could not for the irreversible one. Exactly backwards, for three
+versions, under a note asserting the opposite.
+
+**A prose claim of symmetry is not symmetry.** The two shared their paint and
+nothing else, and the paint is what kept anyone from noticing. If two things are
+one idea, the MECHANISM has to say so — that is the general form of this, and it
+is the same failure as `smReadyToShip`'s two notes down: a comment describing
+what the code ought to do, never checked against what it did.
+
+It also meant the bar measured nothing. A bar that reports elapsed time on a
+decision already taken is a loading screen; a bar tied to a thumb is a clock you
+are holding the hands of.
+
+`submitHoldStart` / `submitHoldEnd` (app.js) are `cancelHoldStart`'s twin:
+
+- **ONE NUMBER.** `SM_SUBMIT_HOLD_MS = SM_CANCEL_HOLD_MS`, by reference rather
+  than a second 1400 — send and withdraw are one gesture in two directions, and
+  a card teaching two different hold lengths has taught neither. v6.61's own
+  argument for 1100 ("you are watching, not deciding") was right about a click
+  and is void for a hold: you are deciding, so it has to be long enough to
+  abandon. `--submit-fill` still carries it to the CSS from that constant.
+- **A refusal is not a hold.** `submitStepClick` is now the three gates and
+  nothing else, returning `true` when clear and `false` when it has already
+  answered with a shake or a spotlight. The hold asks first and simply does not
+  start, so an unconnected account still shakes the gear on the press with no
+  fill creeping along behind the refusal.
+- **Letting go anywhere cancels** — `pointerup`, `pointerleave`,
+  `pointercancel`. Sliding off the row mid-hold is an undo rather than a
+  submission whose bar you can no longer see.
+- **Only a completed hold changes anything**: an early release costs one class
+  removal, one node removed and no render.
+- **`prefers-reduced-motion` keeps the hold and drops only the fill.** The
+  gesture is the safety; removing the bar must not remove the second chance.
+- **`user-select: none` + `touch-action: none`** on the ready row, or the
+  browser reads a 1.4s press as "start selecting" on a pointer and "begin
+  panning" on touch, and takes the gesture away mid-fill.
+
+**THE STEPS GO, THE BOX DOES NOT MOVE, AND THE WORD IS WRITTEN OVER THEM.**
+Jaco's design, and it fixed the one thing the hold got wrong on its first pass:
+*"puedes hacer desaparecer los 4 pasos anteriores, sin modificar el tamaño de la
+card, y escribir el submitting encima."*
+
+The line was inserted in FLOW after the release block, which **pushed the Submit
+row 39.1px down, out from under the thumb holding it** — measured, card
+376 → 415.1. On a click that is ugly; on a hold it is close to a bug, because a
+row sliding out from under a stationary pointer fires `pointerleave` and cancels
+the gesture that caused it. **A control must not move as a consequence of being
+pressed** — the submitted card's disclosure toggle was rebuilt under exactly that
+rule ("the button fled from under the pointer and made its second press a hunt").
+
+- `visibility: hidden` on the ROWS, not `display: none` and not on the list:
+  every row keeps its box, `.ios-step-cards` keeps its height, and the card is
+  the same size to the pixel. Verified 376 → 376 → 376 across press, release and
+  a second press, with the rows back and no node left behind.
+- **EXCEPT THE ROW YOU ARE HOLDING.** Jaco: *"¿crees que el botón de submit
+  debería desaparecer mientras lo pulso? Yo creo que no, porque necesito saber
+  qué estoy pulsando."* He is right, and the reason is stronger than visibility:
+  **Submit is the only row in the list that is still TRUE.** The four above are
+  finished work being cleared away — the close started early — while Submit is
+  not being cleared, it is the thing HAPPENING. Hiding it made the card
+  contradict itself: announcing an act in 21px green while deleting the control
+  performing it. And a control that vanishes under a held thumb is worse than
+  one that moves, which this file refused twice over: a moving control makes its
+  next press a hunt, an absent one gives the gesture nothing to confirm against,
+  and on a 1.4s hold the row is the only evidence your thumb is on the right
+  thing — the fill covers the whole card and says nothing about where you are
+  pressing. **It costs no space**, which is what makes it free rather than a
+  trade: the word is absolutely positioned at the TOP of the list and Submit is
+  the LAST row. Measured mid-hold: four rows hidden, Submit visible on its green
+  fill, card +0, and 176.9px of clear air between the word's bottom and the
+  row's top. `:not(.submit-step-card)` is the whole change.
+- **The list's own top line goes with them.** Jaco: *"la línea divisoria
+  horizontal encima del primer paso también debería desaparecer."* It is a third
+  object — the line above the FIRST row belongs to `.ios-step-cards`, not to any
+  row, moved onto the container in the first place so a row's hover could not
+  blink it away — so hiding every row left one white hairline floating over an
+  empty box, ruling off a list that was no longer there.
+- **AND NEITHER CAN BE EASED, which is a Safari precaution rather than a
+  measurement.** Jaco: *"los 4 pasos desaparecen no inmediatamente, como después
+  de empezar, y queda sloppy."* Sampled every frame in Chromium they are
+  `hidden` on the FIRST frame after the press — zero lag — so this file's own
+  rule decides it: he develops in Safari, that is unverifiable from here, and the
+  preference is always a mechanism with no per-engine behaviour over one that has
+  to be checked in an engine nobody can drive. The row carries
+  `transition: opacity .22s`, so a transitionable property is already sitting on
+  that element; `opacity: 0` and `transition: none !important` alongside the
+  `visibility` make it impossible for any engine to ease either. Out is
+  instantaneous by construction.
+- **Coming back is not**, and that asymmetry is kept rather than tidied: with
+  `is-submitting` gone the row's own `.22s` applies again, so an early release
+  eases the list back over 220ms. Instant out is decisive; a gentle return is
+  what an undo should feel like. Verified back at `opacity: 1`, visible, on the
+  frame after release.
+- **Hiding them is not a trick to make room — it is the close, started early.**
+  `_doFinalSubmit`'s motion is the box closing over the space the steps
+  occupied, with the header and release block surviving untouched because they
+  are identical on both faces. The hold now shows precisely that: the two things
+  that stay, the word arriving, the list already gone.
+- The line is **prepended into the step list and absolutely positioned at its
+  top**, which deleted the anchor branch: no `:scope > .card-release-block` /
+  header fallback, because the list exists in every layout arm. All the geometry
+  is CSS — `left: 12px` cancels the list's own `-12` bleed, so the word lands on
+  **x = 21**, the card's one real text column, measured. And the top of the step
+  list is where the status line sits on the submitted card, so the word appears
+  where it is about to live and stays there through the close.
+
+**TWO SMALLER THINGS WENT WITH IT, both Jaco's eye.**
+
+*"En el top stroke hay algo extraño, raro."* Measured: **two 1px lines stacked**
+at the top of the Submit row — its own `border-top: 1px solid rgba(47,220,128,
+.25)` and, touching it, the step list's divider, drawn as each row's `::before`
+at `height: 1px; background: rgba(255,255,255,.07)`.
+
+**Killing the divider was the first answer and it fixed the wrong half**: *"sigo
+viendo el stroke curvado raro."* The BORDER is what had to go, and the radius is
+why — this row carries `border-radius: 8px`, and **a border follows the radius**,
+so the line curled up into a hook at each end and the row wore a rounded-box
+outline that stopped a third of the way down each side. Nothing else in the list
+draws a border, which is exactly why nothing else did it.
+
+**AND THEN THE DIVIDER WENT TOO, WHICH IS THE THIRD PASS AND THE ONE THAT NAMES
+THE RULE.** Jaco: *"debería desaparecer la divisoria horizontal justo en el
+momento en el que el recuadro de submit se convierte en persistent después de
+completar todo."*
+
+It is the two-marks argument one step further in: a LOCKED Submit row is drawn
+like every other row and needs the list's line to say where it begins, but a
+READY one gains a soft green box of its own — and **a box's own edge is already a
+boundary**. Ruling a line over something visibly bounded is exactly what the
+border was guilty of, just quieter.
+
+So the line's whole job is to exist until the box does. The moment every step is
+answered the row fills and the divider leaves in the same paint, and what
+separates Improve Your Submission from Submit is the fill — which is also the
+thing inviting the press. One selector, `.submit-step-ready::before`; locked
+keeps the standard white divider, having no box to be bounded by. Measured:
+locked → divider `block` at `rgba(255,255,255,.07)`, no fill, no border; ready →
+divider `none`, fill `rgba(47,220,128,.04)`, no border, and the row above keeps
+its own line.
+
+**Three passes on one 1px boundary, and the sequence is the point**: a border
+that curved, a divider that duplicated the border, and then a divider that
+duplicated the fill. Each removal was correct and each one only became visible
+once the mark above it was gone. When a small thing keeps looking wrong after a
+fix, the fix probably uncovered the next one rather than missing.
+
+*"Si hovereo sobre el botón, debería estar verdecillo no blanco."* The orange
+hover left with the pulse, which dropped this row onto the generic white 7% every
+pressable row uses — wrong here because **this is the one row whose resting state
+is already coloured** (green 4% with a green border, because it is ready). A
+white wash over that does not brighten the state, it greys it: the row goes
+duller on approach. `rgba(47,220,128,.10)` against the resting `.04`, the same
+order of step white 7% is over nothing. Scoped to `.submit-step-ready` — a LOCKED
+row keeps the white, having no green to be more of.
+
+**`_doFinalSubmit` LOST ITS FILL BLOCK ENTIRELY**, and with it the long note
+explaining why the commit used a `setTimeout` rather than `animationend` (a
+backgrounded tab would have left the card green forever with nothing applied).
+There is no timer between the press and the state change now — the hold's own
+timer is the only clock and it owns both the bar and the decision. That function
+is back to the state change plus the close, which is what it was before v6.39;
+the beat that "gives the advance something to be the end of" belongs to the
+gesture, not to the commit.
+
+The label stays "Submit" with `title` / `aria-label` **"Hold to submit"** — the
+cancel button's own convention (`title="Hold to cancel submission"`), one
+pattern rather than two. The fill teaches the rest: a short press starts the bar
+and snaps it back, which is a safe thing to discover.
+
+Verified end to end: mid-hold the card carries `is-submitting` with SUBMITTING…
+in it; released at 400ms nothing is flipped, no `.sub-state-sending` is left and
+the card is back to `submit-ready`; held through 1400 it flips, prints
+IN REVIEW…, advances and turns the guide to the month. And the fill really is
+progressive — screenshotted at a deliberately slowed `--submit-fill`, the green
+wash covers ~55% of the card with a clean vertical edge.
+
+**One measurement trap, worth carrying.** `getAnimations({subtree: true})` and
+`getComputedStyle(card, '::after').transform` BOTH came back empty for this fill
+— zero animations, `transform: none` — while `animationName` read
+`subSubmitFill` and `animation-play-state` read `running`. The animation was
+fine; the probes are blind to pseudo-element animations in this pane. A
+screenshot settled it in one shot. Same shape as the scroll-restore bug's own
+note: when a probe and the screen disagree, suspect the probe.
+
+**THE ORANGE PULSE IS GONE (v6.62).** Jaco: *"quita el ring pulsante naranja
+feo."* `@keyframes submit-step-pulse` threw a 5px `rgba(255,149,0,.3)` ring out
+of the Submit row every two seconds, forever, with a matching orange hover.
+Three reasons, any one sufficient: the hue is **not in this palette** (`#FF9500`
+would have been a third amber beside the two this file already flags as a
+duplication problem); amber means *this needs you* and the row it ringed is the
+one that is READY, which is green's job and which `.submit-step-ready` already
+says twice with its green tint and green top border; and **a ring is the one
+mark this app does not use** — the step disc dropped its ring, the micro-buttons
+their strokes, the calendar refused rings three times. It also never stopped,
+and a nudge that repeats forever is not pointing at anything.
+
+Removed rather than switched off — the keyframes, both rules and the
+`pulseClass` that emitted it. What says "ready" is the row's green; what says
+"going" is the hold's fill.
+
+**THE SUBMITTING WORD IS THE STATUS LINE, NOT THE SUBMIT ROW (v6.61).** The
+green fill has been the cancel hold run forward since v6.39, and then said so in
+the wrong voice: `Submitting…` was written into the pressed row's own
+`.ios-step-name` — 15px, sentence case, `--text-dim`, at the bottom of the card
+— while the cancel hold says CANCELING SUBMISSION in the 21px mono status line.
+One idea, two registers, one of them a whisper. Jaco: *"mismo tamaño y posición
+que cuando pone CANCELING SUBMISSION."*
+
+It is a real `.sub-state` / `.sub-state-line` now, the submitted card's own
+markup borrowed rather than approximated, in the app's done green (`#2fdc80` —
+the Release button, the tick, launch day) because this is the act that finishes.
+Measured mid-fill: SUBMITTING… at `rgb(47,220,128)`, 21px, 500, IBM Plex Mono —
+`.sub-state-line`'s own values, inherited rather than restated.
+
+**It rides ABOVE the fill.** `.is-submitting::after` is `inset: 0` at
+`z-index: 3`, so a line left in normal flow reads through a 30% green wash — the
+register this app reserves for what is no longer the point. `position: relative`
+(a static element has no stacking position at all) plus `z-index: 4`.
+
+**THE ANCHOR IS THE HEADER, AND THE FIRST ATTEMPT PROVED IT.** It was inserted
+after `.card-release-block`, on the argument that the submitted face's order is
+head, release block, state — so the line would arrive exactly where it is about
+to live. Measured on a real steps card, its children are only
+`active-card-head` and `ios-step-cards`: **there is no release block at that
+level**, because it came down into Upload Build's body when the steps went
+inline. The fallback fired and the word landed at the BOTTOM — right type, wrong
+place, which was half the bug. The selector is `:scope > .card-release-block`
+first and `:scope > .active-card-head` second, so neither layout is the special
+case. Verified: order head → `sub-state` → steps, and zero `.sub-state-sending`
+left after the close, with the card reading IN REVIEW… in that same slot.
+
+**`smReadyToShip(pid)` PRESSES SUBMIT FOR REAL (v6.61, AND IT DID NOT WORK UNTIL
+v6.62).** `submitStepClick` refuses on three counts — no account, steps
+outstanding, no track — so the button could not be exercised from the card at all
+without doing an afternoon's work first. This **satisfies the gates rather than
+bypassing them**: jumping straight to `_doFinalSubmit` would test the animation
+and leave the three refusals (the gear shake, the step spotlight, the chip nudge)
+unexercised in the one place they matter.
+
+**v6.61's version reported success and achieved nothing**, and the way it failed
+is the more useful half of this entry. Jaco: *"no marca los pasos anteriores como
+completados, y al dar a submit me muestra el estado dim de lo no completado."*
+Measured, the log said "4 steps ticked" while `platformStepCount('macos')` said
+`complete: 0`. Two independent mistakes, stacked, each silent on its own:
+
+1. **`markTaskDone` writes a status nothing reads on this platform.**
+   `platformStepCount` branches per platform, and for **ios / macos / macos_full /
+   android / steam** it counts `is<X>SectionComplete(step)` — derived from the
+   ANSWERS. Only the remaining platforms (Web, PSN, Xbox, Switch, Epic) fall
+   through to the `platformStepStatus` default. So the map this was writing had
+   no consumer at all.
+2. **`_paintStepRow` returned on its first line.** It looks up
+   `#dot-<pid>-<stepId>`, and **only two builders emit that id** (render.js:5119
+   and 5897). The builder this card uses emits `.ios-step-num` with no id, so
+   `getElementById` came back null and the function returned before touching a
+   class. No error, no warning.
+
+**v6.61's own note theorised about ORDERING** — "mark after the render, because a
+render recomputes from `_paneComplete`" — and that trap is real but was not this
+bug: no ordering can help a status nobody reads or a paint that never runs. The
+theory was written from reading the code and never checked against
+`platformStepCount` afterwards, which is the actual mistake.
+
+**So the rule this leaves behind: a helper must report what the STATE says, not
+what its own loop did.** The old line printed the length of its `forEach`. The
+new one calls `platformStepCount` after the render — the same function the card's
+progress bar and gate 2 read — and `console.warn`s the outstanding section ids if
+it fell short, so it cannot be more optimistic than the screen.
+
+What it does now, for the App Store family:
+
+- **It fills the DATA, so the ticks are real and survive a render.** Each
+  predicate gets the minimum it wants: a build with `platformBuildProcessing`
+  false plus a track, every `IOS_INTENSITY_QUESTIONS` / `IOS_CONTENT_YN_QUESTIONS`
+  answered, `ageCategory`, a privacy URL with `collectsData: 'no'`, `hasIAP` and
+  `usesEncryption`, one screenshot in the asset pool, and the two
+  "you have looked at this" flags (`improveSubmissionSeen`, `*LocalizationsSeen`).
+  Nothing is painted by hand. v6.61's "the ticks last until the next full
+  `renderDashboard`" limit is gone with the mechanism that caused it.
+- **Every field goes through `_appStoreAnswers(pid, field)`**, the app's own
+  router, never a bucket chosen by hand — Mac App Store shares Content Rating and
+  Data Privacy with the App Store (`IOS_MAC_SHARED_ANSWER_FIELDS`) and keeps
+  Business to itself, so writing `state.macSubmitAnswers` directly would put
+  three fields where nothing checks them: mistake (1) one layer down.
+- **It only fills blanks**, so running it over real work does not overwrite it.
+  Values are the quietest true ones — intensity `none`, yes/no `no`, age
+  `not_applicable` — because a submission a helper fabricates should claim as
+  little as possible about the game.
+- **It activates the platform first.** All three pieces of state were correct and
+  nothing appeared, because `activePlatforms` was empty and the grid draws from
+  that. A platform you have not added has no card, and a card is the point.
+- **Android and Steam are named as NOT covered** rather than failing quietly:
+  they are answer-derived too and their fillers are unwritten, so the helper
+  warns.
+
+Verified from a real press on `macos`: 4/4 complete, all four rows carrying
+`is-complete` with their discs `is-done`, the submit row **not** `submit-step-locked`,
+and the click producing SUBMITTING… at `rgb(47,220,128)` / 21px for six samples
+across the 1100ms fill, then `platformFlipped.macos` written, zero
+`.sub-state-sending` left, the slot reading IN REVIEW… and the guide on the month.
+
+**One correction to v6.61's anchor note.** It said the steps card has no
+`.card-release-block` at top level. That is true in ONE layout arm and false in
+the other — measured under `layout: modal` the order is
+`active-card-head > card-release-block > sub-state > ios-step-cards`, so the
+first selector fires there and the fallback fires elsewhere. Which is exactly
+why the two-selector form is right, and why "measured once" is not the same as
+"true".
+
+Console-only, for the reason the dev bar was deleted under.
+
 **To see any of it:** `smCardState(pid)` (app.js) cycles the four phases 2.5s
 apart, `smCardState(pid, 'accepted')` holds one, `smCardState(pid, 'off')`
 returns to the steps face. It writes the same state a real submit writes, so it
@@ -1060,7 +1675,27 @@ built, measured, and needed a row of their own at 124px a half, costing ~34px of
 card height on BOTH faces (445.8 → 497.8). Two 26px icon halves make a **60×32**
 track that drops straight into the space the single button already had, so the
 control gains its second state for nothing. Measured: track at right 45, 4px
-clear of the chevron, the eyebrow's ink ending 50.8px short of it.
+clear of the chevron.
+
+**AND THE EYEBROW NAMES THE FACE, which is where those labels ended up (v6.50).**
+It said "Shippy Guide" on both faces — naming the CARD, while the two icons that
+pick between the faces went unlabelled and the one line with room to spare said
+nothing that changed. It is `guide.eyebrow.list` / `guide.eyebrow.cal` now,
+**Shippy Checklist** and **Shippy Calendar**, branched on the same `onCal` the
+body already reads.
+
+"Calendar" and not "Planner" because the app calls that surface a calendar
+everywhere else — the topbar tab, `SM_CAL_SVG`, `state.guideCal` — and a second
+noun for one object is how two names for the same thing begin. One string in the
+locales if that is ever re-argued.
+
+Measured on the real column (252 wide): CHECKLIST's ink is 153.6 and stops
+**48.8px** short of the segmented track, CALENDAR's is 144 and stops 58.4 short;
+neither wraps and the card is 456.8 tall on both faces, unchanged. **The figure
+this note used to carry — "the eyebrow's ink ending 50.8px short" — was stale**
+and would have condemned the longer name on arithmetic: it implies the track
+starts at 166 from the eyebrow's left, where it really starts at 202. Re-measure
+before trusting a gap in this row; do not subtract from the old number.
 
 **The glyphs are 16 and 15, not both 16.** The list mark is strokes with air
 between them, the calendar mark is a filled block; at one size the filled one
@@ -1173,11 +1808,184 @@ picker went neutral white, since a picker painting a colour it does not set is a
 lie you can see; and the guide grid prints **one dot per STATE**, not per kind,
 because a glance at a month asks "is anything waiting on me today".
 
+**AND THERE ARE NOW TWO WAYS TO DRAW IT — `state.calWaitStyle`, up for a
+decision.** `'band'` is everything above and still the default; `'stripe'` gives
+each submission a 3px rule of its own under the number. They answer two
+different questions and that is the whole comparison: the band answers *am I
+waiting on anything today* and deliberately collapses every wait into one
+stroke, the stripe answers *on what, and how far along* — and, because a lane
+belongs to exactly one submission, it can be PRESSED, which a band covering
+three builds never could.
+
+`smWaitStyle()` in the console flips between them and re-renders; `?wait=stripe`
+survives a reload (`sm.wait`, the same shape as `sm.layout`).
+
+Four things the stripe had to be taught, three of them the band's own lessons
+one layer down:
+
+- **The lanes are ordered ONCE for the whole month** (`_calWaitLanes`), sorted
+  by send date then platform id. A wait that picked its row from the days it
+  happens to cover would change lanes the moment another one started beside it,
+  and a run that jumps rows mid-week is not a run.
+- **Every cell reserves the whole lane block**, drawing `.gcal-strip.is-off` for
+  a lane it is not inside — the 4px dot strip's rule exactly: a day that gains a
+  wait must not get taller and shove its row.
+- **The height is derived from the same three lines the cell already used.**
+  `--lane` is written on the grid as `n×3 + (n−1)×2` and the cell is
+  `55 + 4 + lane`. Measured with two lanes: 10 / 28 / 3 / 4 / 3 / 2 / 3 / 11 =
+  67. One lane is 62 a row, two 67, three 72 — **+42 / +84 / +126 of card
+  height** against the band, which is the cost side of the trade and the reason
+  `GCAL_MAX_LANES` is 3.
+- **The cap is 2px, not the band's 8.** A 3px rule capped at 8 is a lozenge; the
+  cap has to read as an end, not as a shape. A row edge still counts as both
+  ends, for the band's reason.
+
+**FOCUS IS THE ABSENCE OF DIMMING.** Every strip is the wait's yellow because
+colour is the STATE here as everywhere on this grid, so the focused one cannot
+take a hue of its own, and a ring on a 3px rule is two marks on one stroke — the
+argument this grid already settled for the day boxes. The others step back to
+`.35`, this app's own value for "still true, just not what you asked for".
+
+**And the press has to land somewhere worth arriving at**, or a strip is a
+second, thinner copy of the cell above it. `guideCalWaitOpen(pid, iso)` opens the
+day AND focuses the submission, and the panel prints `.gcal-focus`: the store,
+both dates, and `Day N of M`. Those are the facts neither presentation can show
+— band and stripe both say "a wait covers this day" and neither can say WHOSE or
+HOW FAR. Focus is per SUBMISSION, not per day, so walking along a run keeps the
+block and only the day number changes; pressing the same lane on the same day
+lets go of it and leaves the day open, the way pressing a day folds the panel.
+
+**The cell stops being a `<button>` in stripe mode** (a `<div>` with
+`.gcal-day-main` taking the old press) because buttons cannot nest — the same
+thing the panel's three-control rows already do. Band mode's markup is untouched;
+verified 55px cells and 10 banded days after flipping back.
+
+**It expires like `submission.layout` does.** When the choice is made the loser
+comes out — the field, the hook, the arm in `buildGuideMiniCal`, the CSS and this
+note.
+
 **The band is `rgba(255,216,77,.13)`** — `#FFD84D` at 13%, the card's in-review
 yellow to the digit, so the segment and the band are one statement made twice.
 And `.gcal-dot.is-est` draws `var(--d)`, the dot's own colour, where it
 hard-coded `#4ADE80` for as long as it existed: invisible while every submission
 item was green, and a bug the moment they stopped being.
+
+**A PROGRESS SPLIT WAS TRIED AND REMOVED, and the argument generalises.** v6.45
+gave the days already waited a heavier `.30` against the `.20` of the days still
+to come, so the band read as a bar filling toward its own end with today as the
+seam. It shipped, it measured correctly, and it came out in v6.48.
+
+**A calendar already says where today is.** Every day left of the violet box is
+elapsed by construction; the split restated in COLOUR what POSITION states for
+free — and it did it in the one cell already carrying the loudest mark on the
+month, so the two competed.
+
+The question worth answering is "how much longer", and the ends answer it better
+than a tone can: since they became filled boxes the end of a run is a visible
+object and the days between are countable cells. Three squares is a more precise
+reading than a 20 → 30% step in luminance, and the exact version — `Day 2 of 3` —
+is already printed in words in the day panel.
+
+It also cost a tone. Yellow was being asked to mean four things in one grid
+(band pending, band spent, end box, dot), and every added tone makes the next one
+harder to introduce. **Anything that tries to say "how far along" on this grid
+has to clear that bar first.**
+
+**The ends are the DAY'S OWN BOX, filled (v6.47).** A 38px band against a 4px
+dot had the ink inverted against the meaning: the stretch where nothing happens
+was the loudest thing in the grid and the two dated facts it runs between were
+drawn like any marketing reminder. Fixed by raising the facts, not by softening
+the state — softening would have made the month say less, and the band cannot go
+quieter anyway.
+
+The first attempt painted 4px of stronger yellow into the band's edge, and it
+was right about the problem and too quiet to solve it: **4px in a 38px cell is
+below the size at which anything on this grid reads**, which is the same floor
+the kind-vs-colour note ran into with the 4px dot. Jaco drew the answer and it
+is the grid's own vocabulary — fill the 28×28 box. Today fills, launch fills,
+nothing wears a ring; an end is a third thing that happens to one day, so it
+fills too, in `#FFD84D` with `#2A2205` ink. **The numbers inside the band go
+yellow with it**: with its ends filled the band stops being a highlighter laid
+behind a table and reads as one object, and white-80% digits sat on it like text
+that had not been told.
+
+**AND IN v6.58 THE BOX CAME OFF AGAIN — IT IS A NUMBER, NOT A CHIP.** Jaco:
+*"no quiero aturdir."* He was right, and **what changed is the COUNT, not the
+argument**. v6.47 filled the box because one strong mark was needed against a
+38px band and 4px of stronger yellow could not carry it — with ONE wait on the
+month. v6.56 then fixed a bug that had been hiding every second wait's terminal,
+so the same month draws two filled boxes now, plus today's violet, plus launch's
+green: four solid chips in a 270px table. **A weight that is right once is not
+right four times**, and that is the shape of this whole class of mistake — the
+value was never wrong, the census was.
+
+**Green was asked for and is the one answer this cannot take.** On this grid
+green is `done` / `launch` and it is the only green thing on the month; a
+decision day is `waiting` — the store still has it. A green answer date would
+claim the submission had finished and would collide with the one cell that means
+exactly that, a row or two down.
+
+So the hue stays and the contrast is bought INSIDE it: the days a wait passes
+through step back to `rgba(255,216,77,.55)` and the day it ends on keeps the
+full `#FFD84D` at 600. That is this file's own instruction — "colour is the
+emphasis, never weight" — applied honestly, with the weight riding along rather
+than doing the work alone: two tones of one hue is a comparison the eye makes
+instantly, where 500-vs-600 at 12px on a mono face is not. Measured: band days
+`rgba(255,216,77,0.55)` / 500, both terminals `rgb(255,216,77)` / 600, no
+background on either.
+
+The cost, knowingly: the band's numbers were full yellow from v6.47, when they
+were the only yellow ink in the cell. They are the ground the terminal is read
+against now — which is the job the band's own fill already does for the row.
+
+**TODAY OUTRANKS THE END**, and launch and the picked day with it. Written as a
+`:not()` chain rather than left to source order, because this rule carries three
+classes to `.is-today`'s two and specificity would hand it the win. The
+argument: violet is the ONLY thing on this month that says *you are here*, while
+an end is said twice — by the box and by the band's rounded cap, which is still
+underneath. So on the two days a wait begins or ends on today, the cap carries
+it alone and nothing unreadable is lost.
+
+The send day and the decision day are drawn **identically**, which the rest of
+this grid would argue against — a fact and a guess are a filled dot and a hollow
+one everywhere else, and the dots under them still keep that apart. Worth
+revisiting if the two ends turn out to need separating.
+
+**`run-open` / `run-close` are NOT `span-start` / `span-end`, and running them
+off one test is the bug this nearly shipped with.** The span pair is about the
+stroke as drawn, where a row edge counts because the band cannot flow from
+Saturday to Sunday; the run pair is about the WAIT, which knows nothing about
+weeks. Shared, every Saturday the band crossed would have worn a terminal — the
+calendar claiming a submission ended there because the grid ran out of week.
+Verified on a span crossing a week: the 19th (Saturday) takes `span-end` and no
+`run-close`, the 20th `span-start` and no `run-open`, terminals only on the real
+11th and 24th.
+
+**AND A SECOND WAIT'S END USED TO VANISH INSIDE A LONGER ONE (fixed v6.56).**
+`run-close` was derived as `!span.has(tomorrow)` — off the UNION — so the box
+only ever landed where the whole band stopped. Steam out 11 → 19 with Mac out
+14 → 17 drew one filled box, on the 19th, and the month said nothing about the
+17th at all: two platforms, one answer date. Jaco spotted it from the grid.
+
+The band is a union ON PURPOSE (*am I waiting on anything today*) and the day an
+answer is due is a fact belonging to ONE submission — a union cannot hold two of
+them. So `due` is collected in the same loop that builds the span, straight off
+`_calWaits`, and `run-close` reads that set instead.
+
+**This is the `run-close` / `span-end` lesson one level further in.** That pair
+was separated because a WEEK boundary is not a wait's end; this separates them
+because ANOTHER WAIT'S SPAN is not a wait's end either. The stroke and its
+rounded caps stay the union's; the terminals are each submission's own. If a
+third thing ever wants to mark the band, ask which of the two it is about before
+reusing either test.
+
+A day where two waits are due gets ONE box — it is a mark on a DAY, and the day
+panel is what names which stores. Measured with Steam 11 → 19 and Mac 14 → 17:
+band 9 days, `run-close` on 17 and 19 (was 19 alone), `span-start` on 11 and 13,
+`span-end` on 12 and 19 — so the Saturday still caps without claiming a
+terminal. Cancelling Mac leaves the band at 9 and one terminal. A wait due
+inside the band on a Sunday (Android, sent the 8th) boxes correctly on the 13th,
+and today keeps its violet: `is-today` still outranks the end.
 
 **An estimate is drawn hollow.** `decide-<pid>` carries `isDecision`, and a day
 whose only item of a kind is a decision gets a ring instead of a filled dot
@@ -1191,8 +1999,20 @@ competing, and the one that matters reading as a selection. It is a solid
 `#2fdc80` box now, green being the app's word for done. Today and launch day can
 be the same cell; launch wins the fill (you cannot miss today, it is where you
 are) and today keeps a violet ring around the outside so the coincidence still
-shows. The launch date itself is `state.formData.releaseDate`, Mark's too,
-pre-filled to the 29th of next month.
+shows. The launch date itself is `state.formData.releaseDate`, Mark's too.
+
+**IT IS PRE-FILLED TO THE 28th OF THIS MONTH, NOT THE 29th OF NEXT (v6.60).**
+The old default was next month's, which kept every submission deadline counting
+back tidily inside that month — and put the green launch box on a month **this
+face never opens on**. The guide resets `monthOffset` to 0 on the way in,
+deliberately, because a glance that opens on a month with no "today" in it is
+the one thing it must not do. So the one date the prototype most wants you to
+see was always one page away. It went unnoticed because the Calendar TAB opens
+on next month and showed it fine.
+
+Still evergreen rather than hard-coded: past the 28th it rolls to next month's,
+so a cold open in the last two days of a month has a launch ahead of it rather
+than behind.
 
 It is a **window onto the calendar that already exists**, not a second one. It
 reads the same `state.calendar.monthOffset`, `_calItems`, `_calGridStart` and
@@ -1267,6 +2087,38 @@ again closes it, so the gesture is its own undo). The way to the full calendar
 is now a link inside that panel rather than a side effect of pointing at a
 date.
 
+**THE WAIT SPEAKS ONLY ON THE DAYS NOTHING ELSE DOES (v6.62).** `Day N of M with
+the <store>` used to print on every day of a span, the two ends included — so
+the send day read "Day 1 of 3 with the Mac App Store" directly above "Sent to
+Mac App Store", two lines in a 254px mono column differing by a tense, and four
+lines with two platforms out. Jaco: *"con poner el Sent debería valer, el 1/3 y
+1/8 me sobran bastante."*
+
+The old argument was that an EVENT and a STATE are different facts — what
+happened versus what is true — and it is a real distinction that still did not
+earn a line. Both ends already carry a dated item of their own (`sent-<pid>`,
+`decide-<pid>`), which is also what guarantees the panel is never left empty by
+this; the days in between are the ones with nothing, and they are exactly what
+the band exists to draw. So the test is the **open interval** `from < d < to`
+rather than a pair of special cases: anything that ever puts a third dated item
+on a span should drop that day too. It is per WAIT, not per day — verified on
+Mac's decision day, which prints "Mac App Store decision expected" beside "Day 3
+of 8 with the Steam Store".
+
+**And removing the duplication exposed an off-by-one that had been there the
+whole time.** `n` was `elapsed + 1`, counting CELLS, so on a 14 → 17 wait Sep 16
+read "Day 3 of 3" with a full day still to come. It was invisible precisely
+because the line it contradicted sat right above it: "Sent to…" saying Day 1 on
+the day nothing had elapsed. With both ends silent the interval is exactly the
+days that have passed, so `n` is a plain subtraction. Walked end to end: Sep 14
+the item, 15 "Day 1 of 3", 16 "Day 2 of 3", 17 the item; Steam 1 through 7 of 8,
+then its item on the 22nd. `m` is untouched — `to − from` is already
+`ceil(days)`, the same rounding the decision item uses.
+
+The cost, knowingly: the send day no longer states how LONG the wait is. That
+fact is on screen twice already — the lede prints every wait's answer date, and
+the card prints "Usually 3 days".
+
 **Treat the panel as the only surface there is** — that is the brief it was
 re-cut to, and it is what justifies the extra controls. A row is **three
 controls, not one**: the dot sets the kind, the label ticks, the × removes.
@@ -1277,6 +2129,44 @@ nothing could be removed. (A `<div>` holding three buttons, because buttons
 cannot nest.) The add row repeats the same three-slot shape, so the dot that
 says what a thing IS and the dot that says what the next thing WILL BE sit on
 one column — the kind is chosen in the same gesture as the typing.
+
+**A DERIVED ITEM IS A FACT, NOT A RECORD — AND IT CANNOT BE EDITED HERE
+(v6.60).** `sent-<pid>`, `decide-<pid>` and `launch-day` are read off OTHER
+state — the first two off `state.platformFlipped`, the third off
+`formData.releaseDate` — where everything else on this calendar is a constant or
+something somebody typed in. All three of a row's controls write to
+`state.calendar.*`, and on one of these every one of them is a lie:
+
+- the **×** writes `calendar.hidden[key]`, which hides the ROW and changes
+  nothing about the submission. The band still crosses those days, the lede
+  still lists the store, the card still says IN REVIEW — the month contradicting
+  itself on one screen. Jaco: *"no debería poder borrar los 'x platform decision
+  expected'."*
+- the **tick** writes `calendar.done[key]`. "Done" has no referent for a day a
+  store is going to answer on; the store decides that, and when it does the item
+  stops being drawn by itself.
+- the **kind dot** cycles Submission ⇄ Marketing on something that is a
+  submission by construction.
+
+So the panel draws them read-only: `<span>`s instead of `<button>`s, no ×, and
+`cursor: default`. **Nothing else changes** — same row box, same kind shape,
+same state colour, because all three are still true about it. A fact that LOOKED
+different from an item would be a second vocabulary for "this is on the 17th".
+
+`derived: true` sits on the ITEM (`_calIsDerived`), not sniffed from the key's
+prefix, because a prefix test is a second place that has to know how ids are
+spelled.
+
+**And the guard is on the WRITERS too, which is what makes it a rule rather than
+a hidden button.** `guideCalRemove` refuses a derived item even though nothing
+in the UI now reaches it, and `calDraftDelete` — the Calendar tab's popover, the
+OTHER door into `calendar.hidden` — got the same test. One rule, two doors. The
+popover still DRAWS its delete button for these (it is generic markup with no
+item in hand at parse time); that is the remaining half, and it belongs with
+whoever next opens that builder. Verified: calling `guideCalRemove` directly on
+`decide-macos@…` and `launch-day@…` leaves `calendar.hidden` untouched and both
+items still drawn, while a real custom row still shows three BUTTONs and still
+deletes.
 
 **Two kinds of item, changed in two different places**, which is why these are
 functions and not one-liners. An item you added is a record in
@@ -2326,8 +3216,29 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.37** → next is **v6.38**, then **v6.39**, etc. (v6.29 –
+Current version: **v6.39** → next is **v6.40**, then **v6.41**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, shipped in parallel.)
+
+**THE NUMBER WENT BACKWARDS ONCE, ON PURPOSE — v6.62 → v6.39.** Live sat at
+v6.38 while the working copy had been edited up to v6.62: twenty-three numbers
+minted by EDITING, none of them by publishing, which is exactly what the "bump
+once per publish" rule above exists to prevent. So the whole batch shipped as
+**one** version, v6.39, and that is the number live jumped to.
+
+Renumbering was safe for one reason and one only: **no number between 6.39 and
+6.62 had ever been served.** The version string is a cache key, so it must only
+ever go UP against what is LIVE — 6.39 > 6.38 and nothing had bytes cached
+under any of them. Had even one of those gone out, the only correct move would
+have been forward.
+
+The other half was the collision risk this section is mostly about: picking the
+next number after live is what the OTHER side will also pick. Jaco confirmed
+Mark was not shipping that day, which is the check that made 6.39 free.
+
+**The note headings below still carry their edit-time labels (v6.55, v6.58,
+v6.60, v6.62 …) and are deliberately NOT rewritten.** They are the order the
+decisions were made in, which is what makes them readable as a history; all of
+them shipped together in v6.39. Don't go looking for a live v6.55.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)

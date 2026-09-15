@@ -2778,13 +2778,27 @@ function makeBlankFormData() {
     localizationPreset:   'recommended', // recommended|primary_only|all_regions
     releaseTiming:        'specific_date',
     /* Prototype: pre-filled so the calendar, the launch countdown and the
-       Platforms timeline all have something to show on a cold open. The 29th of
-       next month — evergreen, rather than a hard-coded date that goes stale —
-       which leaves every submission deadline counting back inside that month.
-       The developer overwrites it the moment they set a real one. */
+       Platforms timeline all have something to show on a cold open. Evergreen
+       rather than a hard-coded date that goes stale — the developer overwrites
+       it the moment they set a real one.
+
+       **THE 28th OF THIS MONTH, NOT THE 29th OF NEXT (v6.60).** It was next
+       month's, which left every submission deadline counting back inside that
+       month — tidy, and it put the green launch box on a month the GUIDE never
+       opens on. That face resets `monthOffset` to 0 on the way in, deliberately,
+       because a glance that opens on a month with no "today" in it is the one
+       thing it must not do. So the one date the prototype most wants you to see
+       was always one page away. (The Calendar TAB opens on next month and still
+       shows it, which is why this went unnoticed.)
+
+       It rolls forward rather than going stale: past the 28th it is next
+       month's, so a cold open in the last two days of a month still has a
+       launch ahead of it rather than behind. */
     releaseDate:          (() => {
-      const t = new Date(), d = new Date(t.getFullYear(), t.getMonth() + 1, 29);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-29`;
+      const t = new Date();
+      const m = t.getDate() > 28 ? t.getMonth() + 1 : t.getMonth();
+      const d = new Date(t.getFullYear(), m, 28);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-28`;
     })(),
     trailerUrl:           '',
     appVersion:           '1.0',
@@ -3099,6 +3113,26 @@ const state = {
 
   // The day whose panel is open under the guide's month grid; null = closed.
   guideCalDay: null,
+
+  /* The submission whose wait is FOCUSED — a platform id, or null. Only the
+     stripe presentation can set it (the band is one stroke for every wait at
+     once and has nothing to point at), and it is what the day panel reads to
+     print that submission's own dates instead of the generic day line. */
+  guideCalWait: null,
+
+  /* HOW A REVIEW WAIT IS DRAWN ON THE MONTH — 'band' | 'stripe'.
+     Two presentations of one fact, up for a decision:
+       band   — a highlighter stroke behind the days (v6.26, the default)
+       stripe — a thin coloured rule under each day, ONE PER SUBMISSION,
+                and clickable
+     The band is a glance ("am I waiting on anything today"); the stripe is a
+     reading ("on what, and which one is this"). The stripe costs card height
+     and the band cannot be pressed — that is the trade being looked at.
+     Same rule as `submission.layout`: WHEN THE CHOICE IS MADE THE LOSER COMES
+     OUT — this field, its hook below, the arm in `buildGuideMiniCal`, the CSS
+     and the note in CLAUDE.md. A flag left behind is a second surface nobody
+     is looking at, and it rots. */
+  calWaitStyle: 'band',
 
   // The kind the panel's add row will use for the next item it creates. A key
   // of CAL_KIND; the dot in front of the field shows it.
@@ -4325,6 +4359,21 @@ const state = {
     if (q === 'modal' || q === 'inline') localStorage.setItem('sm.layout', q);
     const saved = localStorage.getItem('sm.layout');
     if (saved === 'modal' || saved === 'inline') state.submission.layout = saved;
+  } catch (_) {}
+})();
+
+/* The same door for the calendar's wait presentation — `?wait=stripe` or
+   `?wait=band`, remembered under `sm.wait`. Written as its own block rather
+   than folded into the one above so the two flags can be deleted separately,
+   which they will be: they are answering different questions and will be
+   settled on different days. `smWaitStyle()` in app.js is the console door and
+   re-renders; this one is for a reload. */
+(() => {
+  try {
+    const q = new URLSearchParams(location.search).get('wait');
+    if (q === 'band' || q === 'stripe') localStorage.setItem('sm.wait', q);
+    const saved = localStorage.getItem('sm.wait');
+    if (saved === 'band' || saved === 'stripe') state.calWaitStyle = saved;
   } catch (_) {}
 })();
 

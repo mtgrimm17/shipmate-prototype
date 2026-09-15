@@ -351,14 +351,33 @@ function buildDistributionTab() {
 
 /* ── Release Timing — platform review data & helpers ─── */
 
+/* **`macos` IS ITS OWN ROW NOW (v6.60), AND IT IS A NAMING FIX RATHER THAN A
+   TIMING ONE.** Mac had no entry, so every consumer of this table fell through
+   to `ios` — which is RIGHT about the number (it is App Store review, same
+   queue, same 2.2-day average) and wrong about the WORD. The calendar printed
+   "App Store decision expected" and the guide's lede printed "App Store" for a
+   submission whose own card says Mac App Store, three inches away. Worse with
+   both platforms out: two rows, same glyph (`macos → ios` is a deliberate alias
+   in `SM_TILE_MARK_ALIAS` — same mark, different label) under the same name,
+   and nothing on screen to tell them apart.
+
+   The days are iOS's ON PURPOSE and are duplicated rather than referenced:
+   this table is data, and a self-reference here would be the first expression
+   in it. If Apple's Mac review ever diverges from iOS's, this is the line that
+   changes and nothing else has to know.
+
+   `buildSubmittedCard` already special-cased `macos → ios` to get a number at
+   all; that fallback is now dead weight rather than load-bearing, and can go
+   whenever someone is in there. */
 const OB_PLATFORM_TIMING = {
-  ios:      { days: 2.2, color: '#60a5fa', label: 'App Store'   },
-  android:  { days: 4.3, color: '#4ade80', label: 'Google Play' },
-  steam:    { days: 7.1, color: '#38bdf8', label: 'Steam Store' },
-  egs:      { days: 3.0, color: '#e2e2e2', label: 'Epic Games'  },
-  xbox:     { days: 5.0, color: '#22c55e', label: 'Xbox'        },
-  nintendo: { days: 5.0, color: '#ef4444', label: 'Nintendo'    },
-  psn:      { days: 4.0, color: '#818cf8', label: 'PlayStation' },
+  ios:      { days: 2.2, color: '#60a5fa', label: 'App Store'     },
+  macos:    { days: 2.2, color: '#60a5fa', label: 'Mac App Store' },
+  android:  { days: 4.3, color: '#4ade80', label: 'Google Play'   },
+  steam:    { days: 7.1, color: '#38bdf8', label: 'Steam Store'   },
+  egs:      { days: 3.0, color: '#e2e2e2', label: 'Epic Games'    },
+  xbox:     { days: 5.0, color: '#22c55e', label: 'Xbox'          },
+  nintendo: { days: 5.0, color: '#ef4444', label: 'Nintendo'      },
+  psn:      { days: 4.0, color: '#818cf8', label: 'PlayStation'   },
 };
 
 function fmtDateShort(d) {
@@ -2791,6 +2810,29 @@ const _calToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t
    downstream reads it.key rather than recomputing. */
 const _calKey = it => it.date ? `${it.id}@${_calISO(it.date)}` : it.id;
 
+/* ── A DERIVED ITEM IS A FACT, NOT A RECORD (v6.60) ──────────────────────────
+   `sent-<pid>`, `decide-<pid>` and `launch-day` are read off OTHER state — the
+   first two off `state.platformFlipped`, the third off `formData.releaseDate` —
+   where everything else on this calendar is either a constant or something
+   somebody typed into it. The three controls a day-panel row carries all write
+   to `state.calendar.*`, and on one of these every one of them is a lie:
+
+   - the **×** writes `calendar.hidden[key]`, which hides the ROW and changes
+     nothing about the submission. The band still crosses those days, the lede
+     still lists the store, the card still says IN REVIEW — so the month would
+     be contradicting itself on one screen. Jaco: *"no debería poder borrar los
+     'x platform decision expected'."*
+   - the **tick** writes `calendar.done[key]`. "Done" has no meaning for a day a
+     store is going to answer on; the store decides that, and when it does the
+     item stops being drawn by itself.
+   - the **kind dot** cycles Submission ⇄ Marketing on something that is a
+     submission by construction.
+
+   So the panel draws them read-only. The flag lives on the ITEM rather than
+   being sniffed from the key's prefix, because a prefix test is a second place
+   that has to know how ids are spelled. */
+const _calIsDerived = it => !!(it && it.derived);
+
 /* Stamps the key on each item, lays any override on top, and drops the ones
    that have been removed. Generated items have no record to edit at source, so
    this is where an edit to one actually lands. */
@@ -2894,8 +2936,12 @@ function _calItems(from, to, opts = {}) {
                      : ph === 'rejected' ? 'bad'
                      : ph === 'live'     ? 'done'
                      : 'waiting';
+    /* `derived: true` — see `_calIsDerived`. These two and Launch day are read
+       off other state (`platformFlipped`, `formData.releaseDate`) rather than
+       being records anyone typed here, so the day panel draws them as facts and
+       not as editable rows. */
     push({ id: 'sent-' + pid, kind: 'submission', label: `Sent to ${label}`,
-           status: sentStatus,
+           status: sentStatus, derived: true,
            note: `Waiting on review · ~${timing.days}d`, go: { view: 'dashboard' },
            date: new Date(when.getFullYear(), when.getMonth(), when.getDate()) });
     /* The decision date is Mark's own `days` off the day it was sent — the same
@@ -2905,7 +2951,7 @@ function _calItems(from, to, opts = {}) {
        print no expected date. */
     if (ph === 'in_review') {
       push({ id: 'decide-' + pid, kind: 'submission', isDecision: true,
-             status: 'waiting',
+             status: 'waiting', derived: true,
              label: `${label} decision expected`,
              note: `Estimated from a ~${timing.days} day average review`,
              go: { view: 'dashboard' },
@@ -2914,7 +2960,7 @@ function _calItems(from, to, opts = {}) {
   });
 
   push({ id: 'launch-day', kind: 'submission', label: 'Launch day', isLaunch: true,
-         go: { view: 'dashboard' }, date: launch });
+         derived: true, go: { view: 'dashboard' }, date: launch });
 
   /* The undated ones are decorated too, because an override can have given one
      a date — dragging it onto a day does exactly that. Once it has one it stops
@@ -3644,7 +3690,19 @@ function renderGuide() {
   el.innerHTML = `
     ${shippyLayersHTML()}
     <div class="guide-card${onCal ? ' guide-card--cal' : ''}">
-      <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
+      ${/* THE EYEBROW NAMES THE FACE YOU ARE ON, and that is the label the
+            segmented control could never afford. Two words per half needed a
+            row of their own at 124px a side — ~34px of card height on BOTH
+            faces — so the halves went to icons. This puts the name back in the
+            one place the row already had room for it: the eyebrow was saying
+            "Shippy Guide" on both faces, which named the CARD and left the two
+            icons unlabelled.
+
+            "Calendar" rather than "Planner" because the app already calls that
+            surface a calendar everywhere else — the topbar tab, `SM_CAL_SVG`,
+            `state.guideCal` — and a second noun for one object is how two
+            names for the same thing start. One string either way. */''}
+      <div class="guide-eyebrow">${(onCal ? t('guide.eyebrow.cal') : t('guide.eyebrow.list')) || (onCal ? 'Shippy Calendar' : 'Shippy Checklist')}</div>
       ${/* A REAL SEGMENTED CONTROL, and TWO ICONS is what lets it stay in the
             header. It was one 26px icon button that flipped the face, which is
             the shape for "do a thing", not for "pick which of two things you
@@ -3726,14 +3784,49 @@ function buildGuideMiniCal() {
      wait left to draw. Overlapping platforms make ONE band: the question a
      glance asks is "am I waiting on anything today", not "on how many". */
   const span = new Set();
-  Object.entries(state.platformFlipped || {}).forEach(([pid, f]) => {
-    if (((f && f.phase) || 'in_review') !== 'in_review') return;
-    const t = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
-    const from = f && f.time ? new Date(f.time) : _calToday();
-    const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-    const b = _calDay(a, Math.ceil(t.days));
-    for (let d = new Date(a); d <= b; d = _calDay(d, 1)) span.add(_calISO(d));
+  /* BUT THE ENDS ARE NOT FUSED WITH IT, and running them off the union is the
+     bug this fixes (v6.56). The band is a UNION on purpose — "am I waiting on
+     anything today" — while the day an answer is due is a fact belonging to ONE
+     submission, and a union cannot hold two of them. `run-close` was derived as
+     `!span.has(tomorrow)`, so a wait whose decision day fell INSIDE a longer
+     wait simply lost its terminal: Steam out 11 → 19 with Mac out 14 → 17 drew
+     one filled box, on the 19th, and the month said nothing at all about the
+     17th. Two platforms, one answer.
+
+     This is the same lesson as `run-open`/`run-close` vs `span-start`/
+     `span-end` one level further in. That pair was separated because a WEEK
+     boundary is not a wait's end; this separates them because another wait's
+     span is not a wait's end either. The stroke is the union's; the terminals
+     are each submission's own, and they are collected here from `_calWaits`
+     directly.
+
+     A day where two waits are due gets ONE box — it is a mark on a DAY, and the
+     day panel is what names which stores. */
+  const due = new Set();
+  _calWaits().forEach(w => {
+    for (let d = new Date(w.from); d <= w.to; d = _calDay(d, 1)) span.add(_calISO(d));
+    due.add(_calISO(w.to));
   });
+
+  /* ── OR THE SAME FACT AS ONE RULE PER SUBMISSION ──────────────────────────
+     The second presentation (`state.calWaitStyle === 'stripe'`). The band above
+     answers "am I waiting on anything today" and deliberately collapses every
+     wait into one stroke; this answers "on what", by giving each submission a
+     lane of its own under the number — and, because a lane belongs to exactly
+     one submission, something to press.
+
+     THE LANES ARE ORDERED ONCE, FOR THE WHOLE MONTH, not per day. A wait that
+     picked its row from the days it happens to cover would jump lanes the
+     moment another one started or ended beside it, and a run that changes row
+     mid-week is not a run. Sorted by send date, then by platform id so the
+     order is stable across renders. */
+  const stripes = state.calWaitStyle === 'stripe';
+  const lanes   = stripes ? _calWaitLanes() : [];
+  /* The lane block is reserved for EVERY cell, present or not, or a day that
+     gains a wait gets taller and shoves its row — the same rule the 4px dot
+     strip already lives by. Height derived from the count, never typed:
+     3px a strip with 2px between them. */
+  const laneH = lanes.length ? lanes.length * 3 + (lanes.length - 1) * 2 : 0;
 
   const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const head = DOW.map(d => `<span class="gcal-dow">${d}</span>`).join('');
@@ -3767,18 +3860,85 @@ function buildGuideMiniCal() {
        read as one stroke. A ROW EDGE counts as an end: the band cannot flow
        from Saturday to Sunday, it starts again on the next line — which is what
        `i % 7` is doing here, not arithmetic on dates. */
-    const inSpan = span.has(iso);
-    const spanCls = !inSpan ? '' :
-      ' in-span'
-      + ((i % 7 === 0 || !span.has(_calISO(_calDay(d, -1)))) ? ' span-start' : '')
-      + ((i % 7 === 6 || !span.has(_calISO(_calDay(d,  1)))) ? ' span-end'   : '');
+    /* THE ROUNDED CAP AND THE TERMINAL ARE TWO DIFFERENT QUESTIONS, and running
+       them off one test is the bug this would otherwise have shipped with.
 
+       `span-start` / `span-end` are about the RUN AS DRAWN: a row edge counts,
+       because the band cannot flow from Saturday to Sunday and has to round off
+       where the line breaks. `run-open` / `run-close` are about the WAIT: the
+       day it was sent and the day an answer is due, which a week boundary knows
+       nothing about. Sharing the test would have stuck a terminal on every
+       Saturday the band crossed — the calendar claiming a submission ended
+       there because the grid ran out of week.
+
+       (An `is-waited` class rode along here for two versions, marking the days
+       already spent so the band could fill toward its end. It went in v6.48 —
+       a calendar already says where today is, and the split restated position
+       in colour. The argument is kept in style.css beside the band.)
+
+       AND `run-close` NO LONGER COMES OFF THE BAND AT ALL — see `due` above. It
+       was `!closes`-shaped, which made a second wait's decision day invisible
+       whenever a longer wait was still running through it. The cap stays the
+       union's; the terminal is the submission's. */
+    const inSpan = span.has(iso);
+    const opens  = !span.has(_calISO(_calDay(d, -1)));
+    const closes = !span.has(_calISO(_calDay(d,  1)));
+    const spanCls = (!inSpan || stripes) ? '' :
+      ' in-span'
+      + ((i % 7 === 0 || opens)  ? ' span-start' : '')
+      + ((i % 7 === 6 || closes) ? ' span-end'   : '')
+      /* `opens` still decides the rounded cap through `span-start`, but it no
+         longer emits a class: the send day stopped taking a filled box in
+         v6.53. Only the day an answer is due fills — a date already behind you
+         cannot be acted on, and this grid does not draw a fact and a guess as
+         the same kind of mark. The long version is in style.css beside the
+         rule. */
+      + (due.has(iso) ? ' run-close' : '');
+
+    const base = `gcal-day${out ? ' is-out' : ''}${iso === todayISO ? ' is-today' : ''}${launch ? ' is-launch' : ''}${iso === state.guideCalDay ? ' is-picked' : ''}`;
+    const tip  = escHtml(list.map(it => it.label).join(' · ') || '');
+
+    if (!stripes) {
+      /* `data-iso` is what lets the lede light a wait's own days on hover
+         (`gcalWaitHover`, app.js) without re-rendering the month. The date was
+         already in the cell — inside the `onclick` string — and reading it back
+         out of an attribute is the difference between a lookup and parsing a
+         handler. Band mode only: stripe mode has its own per-lane focus. */
+      cells += `
+        <button class="${base}${spanCls}" data-iso="${iso}" onclick="guideCalOpen('${iso}')" title="${tip}">
+          <span class="gcal-num">${d.getDate()}</span>
+          <span class="gcal-dots">${dots}</span>
+        </button>`;
+      continue;
+    }
+
+    /* A run's ends are its OWN dates here, not the band's set — each lane is
+       one submission, so `is-start` is the day it was sent and `is-end` the day
+       an answer is due. A row edge still counts as both, for the band's reason:
+       nothing can flow from Saturday to Sunday. */
+    const strips = lanes.map(w => {
+      if (d < w.from || d > w.to) return `<span class="gcal-strip is-off"></span>`;
+      const cls = (i % 7 === 0 || _calDay(d, -1) < w.from ? ' is-start' : '')
+                + (i % 7 === 6 || _calDay(d,  1) > w.to   ? ' is-end'   : '')
+                + (state.guideCalWait ? (state.guideCalWait === w.pid ? ' is-focus' : ' is-dim') : '');
+      return `<button class="gcal-strip${cls}" style="--s:${CAL_STATUS.waiting}"
+                      onclick="guideCalWaitOpen('${w.pid}','${iso}')"
+                      title="${escHtml(w.label)} — in review"></button>`;
+    }).join('');
+
+    /* THE CELL STOPS BEING A BUTTON, because buttons cannot nest — the same
+       thing the day panel's three-control rows already do. The number and its
+       dots keep the whole press through `.gcal-day-main`, so the day is opened
+       by exactly the same gesture and the strips are extra targets under it
+       rather than a slice taken out of the old one. */
     cells += `
-      <button class="gcal-day${out ? ' is-out' : ''}${iso === todayISO ? ' is-today' : ''}${launch ? ' is-launch' : ''}${iso === state.guideCalDay ? ' is-picked' : ''}${spanCls}"
-              onclick="guideCalOpen('${iso}')" title="${escHtml(list.map(it => it.label).join(' · ') || '')}">
-        <span class="gcal-num">${d.getDate()}</span>
-        <span class="gcal-dots">${dots}</span>
-      </button>`;
+      <div class="${base} is-stripe">
+        <button class="gcal-day-main" onclick="guideCalOpen('${iso}')" title="${tip}">
+          <span class="gcal-num">${d.getDate()}</span>
+          <span class="gcal-dots">${dots}</span>
+        </button>
+        <span class="gcal-strips">${strips}</span>
+      </div>`;
   }
 
   const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -3793,50 +3953,191 @@ function buildGuideMiniCal() {
           <button class="gcal-arrow" onclick="calShiftMonth(1)" aria-label="Next month">›</button>
         </span>
       </div>
-      <div class="gcal-grid">${head}${cells}</div>
+      <div class="gcal-grid${stripes ? ' has-lanes' : ''}" style="--lane:${laneH}px">${head}${cells}</div>
       ${_guideCalDayPanel(byDay)}
     </div>`;
 }
 
-/* ── WHY THE MONTH IS OPEN ───────────────────────────────────────────────────
+/* ── WHY THE MONTH IS OPEN, AND WHEN EACH STORE ANSWERS ──────────────────────
    Pressing Submit throws the guide onto this face (see `_doFinalSubmit`), and a
-   surface that changes under you without saying why is a glitch. This line is
-   the why: it names the store, the date an answer is expected, and the one
-   thing worth doing in the meantime.
+   surface that changes under you without saying why is a glitch. This block is
+   the why, and since v6.52 it is also the ONE PLACE THAT MAPS A STORE TO ITS
+   DATE.
+
+   **IT LISTS, IT NO LONGER SUMMARISES, and that is the correction.** It used to
+   print one sentence — "2 stores have your build. First answer expected Thu,
+   Sep 17." — which tells you how many and when the EARLIEST lands, and never
+   which is which or when the second one does. With one submission that sentence
+   was complete; with two it was a summary standing in for the thing you wanted.
+   One row per wait now, soonest first, the store on the left and its date on
+   the right.
+
+   **THE PER-PLATFORM TIMELINE WAS NEVER A GRID PROBLEM, and it cost two
+   attempts to learn that.** The stripe gave each submission its own lane and was
+   rejected for the card height it ate (+42px a lane); the progress fill gave the
+   band a filled half and came out because a calendar already says where today
+   is. Both were trying to make a GLANCE surface answer a READING question. The
+   grid's job is *am I waiting on anything today*, and it answers that by fusing
+   every wait into one stroke — deliberately. *On what, and when* is prose, and
+   this is the prose that was already here, already persistent, already printing
+   a store and a date. It only had to stop counting.
+
+   So the split is clean and neither surface pays for the other: the band costs
+   no text, the list costs no cell. And the list costs nothing new in colour
+   either — the date keeps the wait's own yellow, which is what makes this block
+   and the band below it read as one fact rather than two things about the same
+   week.
 
    It exists ONLY while something is actually in review — the phases past the
    wait have had their answer, and a line that outlives its fact is the reason
-   nobody reads the next one. It is not dismissible for the same reason: it is
-   not a notification, it is the state of the month you are looking at, and it
-   leaves on its own the moment that state ends.
+   nobody reads the next one. Not dismissible, for the same reason: it is not a
+   notification, it is the state of the month you are looking at, and it leaves
+   on its own the moment that state ends.
 
-   The date wears the wait's own yellow, so the sentence and the band under it
-   are visibly the same fact. The link is violet because it sends you somewhere
-   else, which is the card's rule for the Marketing nudge and the same journey:
-   the answer to "there is nothing to do here" is "so go do that". */
+   **No cap yet, and that is deliberate rather than overlooked.** Each row is
+   ~16px of card, so five platforms would be five rows; the honest moment to pick
+   a cap is when a real submission set has that many, not now against an invented
+   one. If it needs one, the shape to copy is the stripe's `GCAL_MAX_LANES` — a
+   number and a "+N more", not a scrollbox.
+
+   The link stays violet with an arrow, the card's rule for a link that leaves,
+   and it stays LAST: it is the answer to "there is nothing to do here", which
+   only lands once the reader knows what they are waiting on. */
 function _guideCalLede() {
-  const waits = Object.entries(state.platformFlipped || {})
-    .filter(([, f]) => ((f && f.phase) || 'in_review') === 'in_review')
-    .map(([pid, f]) => {
-      const t = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
-      const from = f && f.time ? new Date(f.time) : _calToday();
-      const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-      return { label: t.label, date: _calDay(a, Math.ceil(t.days)) };
-    })
-    .sort((a, b) => a.date - b.date);
-  if (!waits.length) return '';
+  /* `_calWaits` is the same source the band and the day panel read, so this
+     cannot disagree with them about who is waiting or until when. Sorted by the
+     decision date because the soonest answer is the one a glance wants. */
+  const waits = _calWaits().slice().sort((a, b) => a.to - b.to);
 
-  const when = waits[0].date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  /* One store is named; several are counted. "App Store, Google Play and Steam
-     have your build" is a sentence you have to parse to learn one number. */
-  const who = waits.length === 1
-    ? `${escHtml(waits[0].label)} has your build.`
-    : `${waits.length} stores have your build.`;
-  const lead = waits.length === 1 ? 'Answer expected' : 'First answer expected';
+  const fmt = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  /* ── THE HEADING IS GONE, AND WITH IT THE LAST REASON THE ROWS WERE UNEQUAL
+     (v6.62) ──────────────────────────────────────────────────────────────────
+     It said "Answers expected", then "In review" (v6.59), and both were right
+     about the rows under them and wrong about the block. Jaco: *"quizás puedes
+     quitar el IN REVIEW, y que las plataformas y el launch day estén igual de
+     espaciados, porque queda raro."*
+
+     **A heading over PART of a list forces the rest of it to be set apart.**
+     That is the whole chain this removes. IN REVIEW was true of the stores and
+     false of Launch day, so Launch day had to be pushed below it — first with a
+     rule, then (v6.62) with double the gap — and every version of that gap was
+     paying for a label that only covered two thirds of what it sat over.
+     Take the label out and the block is one list of dated things in this month,
+     evenly spaced, which is what it always was.
+
+     **Nothing is lost, because the rows never needed telling apart in words.**
+     Each already says which kind it is twice: a store wears its platform mark
+     and a yellow date, Launch day a green dot and a green date — and those two
+     hues are `CAL_STATUS.waiting` and `CAL_STATUS.launch`, the same colours
+     their days wear in the grid three inches below. Colour does the sorting the
+     heading was doing, and does it per row rather than per group.
+
+     It also buys back 19px of a 254px column — the label plus its clearance —
+     on a face whose whole argument is that it is read at a glance.
+
+     If a heading ever comes back, note what it has to clear first: it must be
+     true of EVERY row, or the block goes back to being two groups with a step
+     between them. "In review" was not, which is the fact that took three
+     versions to surface. */
+
+  /* THE MARK LEADS THE NAME, as it does on every other list in this app — the
+     card's step rows, the guide's checklist, the pinned nav's pills. A row that
+     puts it after the label makes this the one place where that is not true.
+
+     It is NOT sized by the argument (`smMarkFor(pid)` → width="100%"): the slot
+     is a span sized in CSS, which is the lesson `.active-card-icon svg` and
+     `.ios-step-num svg` are both written under. Xbox and Nintendo have no
+     measured mark yet and fall through to `platformIcon`, whose own svg is
+     sized by the same rule — so the fallback cannot come out a different size.
+
+     And it wears the store name's OWN COLOUR, not the date's yellow. The mark
+     and the label are one half of this row — which store — and the date is the
+     other. Tinting the mark yellow would split the name from its own icon and
+     make two of the three things on the line claim to be the value. */
+  /* A ROW POINTS AT ITS OWN DAYS (v6.57). The band below fuses every wait into
+     one stroke by design — that is how it answers "am I waiting on anything
+     today" — so it cannot say WHICH days are the App Store's. This list names
+     the store and the date; hovering a row is what joins the two, lighting that
+     submission's run in the grid for as long as the pointer is on it.
+
+     It is a HOVER, not a state, and that is what makes it affordable: the
+     stripe presentation answered the same question permanently and cost +42px
+     of card per lane. A transient mark costs nothing and is gone the moment you
+     stop asking. `mouseenter`/`mouseleave` rather than `mouseover`/`mouseout`,
+     which fire again for every child the pointer crosses. */
+  /* **THE ROW IS A BUTTON NOW, AND THAT IS WHAT BUYS THE POINTER (v6.58).** The
+     hover was doing real work and saying so with nothing — a highlight that
+     appears only if you happen to pass over the right 250×18 strip is a feature
+     you find by accident. A `cursor: pointer` announces it, and this app does
+     not put a pointer on something that cannot be pressed, so the press had to
+     become real rather than the cursor become a lie.
+
+     What it does is the hover MADE PERMANENT, not a second idea:
+     `guideCalWaitOpen` already opens a day and focuses a submission, and the
+     day it opens is that wait's own decision date — the one this row prints.
+     Hover previews, press pins and names it in the panel. Pressing the same row
+     again lets go, because that function already toggles.
+
+     `type="button"`, since a bare `<button>` inside anything that ever becomes
+     a form submits it. */
+  const rows = waits.map(w => `
+    <button type="button" class="gcal-lede-row"
+            onclick="guideCalWaitOpen('${w.pid}','${_calISO(w.to)}')"
+            onmouseenter="gcalWaitHover('${w.pid}')" onmouseleave="gcalWaitHover(null)">
+      <span class="gcal-lede-mark">${smMarkFor(w.pid) || platformIcon(w.pid, 15, 'white')}</span>
+      <span class="gcal-lede-store">${escHtml(w.label)}</span>
+      <span class="gcal-lede-when">${escHtml(fmt(w.to))}</span>
+    </button>`).join('');
+
+  /* ── AND THE LAUNCH DAY, WHICH IS NOT AN ANSWER ANYONE OWES YOU ─────────────
+     Jaco's, and the separation is the whole of the design. Everything above is
+     a date a STORE will hand you; this is the one date you choose. Dropped into
+     that list it would sit under a heading reading IN REVIEW and claim to be a
+     fourth store in a state it is not in — so it is a row of its own, below,
+     set apart by SPACE and no heading, because a single labelled fact does not
+     need a column name. (It had a 1px rule until v6.62; the block already ends
+     in a `.10` boundary and a second horizontal line inside it was position's
+     job drawn twice. The distance it was holding is unchanged — see
+     `.gcal-lede-launch` in style.css.)
+
+     **IT IS ALWAYS HERE, and that is why this function no longer returns early
+     on an empty `waits`.** The waits come and go with the review; the launch
+     date is true about the month whether or not anything is out, and a control
+     that vanishes when you cancel your last submission is a control nobody can
+     rely on. With nothing in review the block IS this row.
+
+     **The green is not decoration — it is the same green the cell wears**, and
+     that is the point of putting it here: the row and the box on the 29th are
+     one fact stated twice, exactly as the waits' yellow dates and their band
+     are. `CAL_STATUS.launch` rather than a literal, so a change to the table
+     moves both.
+
+     **A NATIVE `type="date"`, not a popover of our own.** The app already edits
+     this field with one in Release Timing (`#ob-date`), and a second date UI for
+     one value is how two pickers start disagreeing about what a valid date is.
+     It writes through `setLaunchDate`, which is the same function that row
+     calls — so the guide, the checklist, the dashboard timeline and the month
+     cannot drift.
+
+     Empty is a real state: with no date the row says *Not set* and the month
+     draws no green box, which is honest — `formData.releaseDate` ships
+     pre-filled, but nothing guarantees it stays that way. */
+  const launchISO = (state.formData || {}).releaseDate || '';
+  const launchTxt = launchISO ? fmt(new Date(launchISO + 'T00:00:00')) : 'Not set';
+  const launchRow = `
+    <label class="gcal-lede-launch${launchISO ? '' : ' is-unset'}">
+      <span class="gcal-lede-launch-dot" style="--d:${CAL_STATUS.launch}"></span>
+      <span class="gcal-lede-launch-label">Launch day</span>
+      <span class="gcal-lede-launch-when">${escHtml(launchTxt)}</span>
+      <input type="date" class="gcal-lede-launch-input" value="${escHtml(launchISO)}"
+             onchange="setLaunchDate(this.value)">
+    </label>`;
 
   return `
     <div class="gcal-lede">
-      <span class="gcal-lede-txt">${who} ${lead} <b>${escHtml(when)}</b>.</span>
+      ${rows}
+      ${launchRow}
       <button class="gcal-lede-go" onclick="setView('broadcast')">Line up your launch →</button>
     </div>`;
 }
@@ -3854,12 +4155,148 @@ function _guideCalLede() {
    `state.calendar.custom` record `calDraftSave` writes; the difference is only
    how much it asks for. A title, here. The kind, the note and the repeat are
    what the popover in the big calendar is for. */
+/* EVERY WAIT CURRENTLY RUNNING, AS DATED FACTS — one function, because two
+   surfaces need the same answer and they must not be able to disagree about it.
+   The month's band is drawn from this and so is the day panel's wait line; the
+   band used to build its own Set inline, which was fine while it was the only
+   consumer and is exactly how the second consumer starts to drift.
+
+   Only `in_review` produces a wait: once a store has answered there is nothing
+   left to be waiting through. The end date is `Math.ceil`ed because a calendar
+   cell is a whole day and the submitted card ceilings the same number — the two
+   surfaces print the same date or they are a bug (that one really happened: the
+   card said Sep 15 and the calendar Sep 16 from one raw 2.2).
+
+   `macos` has no row in `OB_PLATFORM_TIMING` and falls through to iOS's, which
+   is not a fudge: a Mac App Store build goes through App Store review. */
+function _calWaits() {
+  return Object.entries(state.platformFlipped || {})
+    .filter(([, f]) => ((f && f.phase) || 'in_review') === 'in_review')
+    .map(([pid, f]) => {
+      const t    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+      const from = f && f.time ? new Date(f.time) : _calToday();
+      const a    = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+      return { pid, label: t.label, from: a, to: _calDay(a, Math.ceil(t.days)) };
+    });
+}
+
+/* THE LANES, ORDERED AND CAPPED. One row per submission, in a fixed order, so
+   a run stays on its own line across the whole month.
+
+   **THREE IS THE CAP, AND IT IS A HEIGHT DECISION.** Every lane costs 5px on
+   all 42 cells — 3 of strip and 2 of gap — which is 30px of card at two lanes
+   and 210 at seven. The guide's card is a column beside the app, not a
+   calendar, and at some point the month stops fitting. Three is the most it
+   can carry and still be a glance; beyond that the strips are 3px apart and
+   indistinguishable anyway. Anything over the cap is simply not drawn, which
+   is honest as long as the day panel still names every wait — it does, from
+   `_calWaits`, which this only ever sorts a copy of. */
+const GCAL_MAX_LANES = 3;
+function _calWaitLanes() {
+  return _calWaits()
+    .sort((a, b) => (a.from - b.from) || (a.pid < b.pid ? -1 : a.pid > b.pid ? 1 : 0))
+    .slice(0, GCAL_MAX_LANES);
+}
+
 function _guideCalDayPanel(byDay) {
   const iso = state.guideCalDay;
   if (!iso) return '';
   const d    = new Date(iso + 'T00:00:00');
   const list = byDay[iso] || [];
   const head = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  /* The waits covering THIS day, from the same `_calWaits` the month's band is
+     drawn from — so the line under the grid and the stroke across it cannot
+     disagree about which days are inside a wait. `"Nothing on this day"` is
+     then gated on both: with a wait running, that sentence is simply false. */
+  const waits = _calWaits().filter(w => d >= w.from && d <= w.to);
+  /* THE LINE COUNTS THE DAY, it does not restate the wait — and the first
+     version did, which is what reading it on screen showed.
+
+     It said "App Store has had this since Sep 15 · answer expected Sep 18",
+     which is almost word for word `_guideCalLede`'s sentence printed above the
+     month ("App Store has your build. Answer expected Fri, Sep 18") — on screen
+     at the same time, on every day of the span. A panel that repeats the header
+     is spending the one surface that could say something about THIS day. It
+     also ran to 34 characters in a 254px mono column and wrapped, which is how
+     the duplication got noticed.
+
+     "Day 3 of 3 with the App Store" is the submitted card's own `Day N of M`,
+     borrowed rather than invented — same fact, same phrasing, third surface.
+
+     **BOTH ENDS ARE EXCLUDED, and not for length.** The decision day already
+     carries a real dated item ("App Store decision expected") and the send day
+     carries "Sent to App Store"; a line above either of them saying the same
+     thing in other words is the duplication this note is about, one day further
+     along at each end. Jaco, on the send day: *"al menos en el día 1 y el final,
+     con poner el Sent debería valer, el 1/3 y 1/8 me sobran bastante."*
+
+     **The rule this settles into is worth stating once: the wait speaks only on
+     the days nothing else does.** The two ends of a span are EVENTS and the
+     calendar already draws them as items — that is what `sent-<pid>` and
+     `decide-<pid>` are. The days in between are the only ones with no item of
+     their own, and a day counter is exactly the right thing to print on a day
+     where nothing happened. So the test is the open interval, `from < d < to`,
+     not a pair of special cases: anything that ever adds a third dated item to a
+     span should exclude its day too.
+
+     It also keeps `N of M` honest at the far end. The span is `from` through
+     `from + ceil(days)`, which is M+1 cells, so the last day would have read
+     "Day 4 of 3". */
+  /* THE PRESSED STRIP HAS TO LAND SOMEWHERE WORTH ARRIVING AT, which is the
+     whole argument for making it clickable at all. A strip that only opened the
+     day would be a second, thinner copy of the cell above it.
+
+     So a focused wait prints its own block: the store, both of its dates, and
+     where it is in between. Those are facts the month cannot show — the band
+     and the strip both say "a wait covers this day" and neither can say WHOSE
+     or HOW FAR — and they are the ones you press a strip to ask for.
+
+     Focus is not per day. Pressing any day of a run focuses the SUBMISSION, so
+     walking along it keeps the block and only the "Day N" changes. It is
+     rendered only while the day being shown is inside that wait, or the panel
+     would go on describing a submission you have navigated away from. */
+  const focus = state.guideCalWait
+    ? waits.find(w => w.pid === state.guideCalWait)
+    : null;
+  /* ── `n` COUNTS ELAPSED DAYS, AND IT USED TO COUNT CELLS (fixed v6.62) ───────
+     It was `+ 1`, so the send day read "Day 1 of 3" — and that was consistent
+     only because the ends were printed: with the send day showing 1 and the
+     decision day excluded, the span's four cells ran 1, 2, 3, [item], and the
+     day BEFORE the answer claimed to be the last one. On a 14 → 17 wait Sep 16
+     read "Day 3 of 3" with a whole day still to come.
+
+     With both ends now silent (see the panel's note) the interval is exactly the
+     days that have passed and none that have not, so the number is a subtraction
+     with nothing added: Sep 15 is "Day 1 of 3", Sep 16 "Day 2 of 3", and Sep 17
+     is the answer rather than a day of waiting. `m` is unchanged — `to − from`
+     is already `ceil(days)`, the same rounding the calendar's decision item uses.
+
+     Worth noticing how it hid: the off-by-one was true for the whole life of the
+     line and invisible because the row it contradicted ("Sent to…") sat right
+     above it saying Day 1 on the day nothing had elapsed yet. Removing the
+     duplication is what exposed the arithmetic under it. */
+  const focusBlock = !focus ? '' : (() => {
+    const n = Math.round((d - focus.from) / 864e5);
+    const m = Math.round((focus.to - focus.from) / 864e5);
+    const f = x => x.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return `
+      <div class="gcal-focus">
+        <div class="gcal-focus-head">
+          <span class="gcal-focus-dot"></span>
+          <span class="gcal-focus-name">${escHtml(focus.label)}</span>
+          <span class="gcal-focus-state">in review</span>
+        </div>
+        <div class="gcal-focus-line">Sent ${escHtml(f(focus.from))}<span class="gcal-wait-sep">·</span>answer expected ${escHtml(f(focus.to))}</div>
+        ${focus.from < d && d < focus.to ? `<div class="gcal-focus-line">Day ${n} of ${m}. Nothing to do until they answer.</div>` : ''}
+      </div>`;
+  })();
+
+  const waitLines = waits.filter(w => w.from < d && d < w.to && w !== focus).map(w => {
+    const n = Math.round((d - w.from) / 864e5);   // elapsed, not cells — see above
+    const m = Math.round((w.to - w.from) / 864e5);
+    return `<div class="gcal-panel-wait">Day ${n} of ${m} with the ${escHtml(w.label)}</div>`;
+  }).join('');
 
   /* A ROW IS THREE CONTROLS, NOT ONE. It was a single `.mcal-task` button that
      ticked the item — which is all the Calendar tab's checklist needs, because
@@ -3877,6 +4314,19 @@ function _guideCalDayPanel(byDay) {
        colour it is wearing is not the thing being cycled. A control whose only
        feedback is a hue it does not own would have been unpressable in the
        dark. The tooltip still says the kind in words. */
+    /* **A DERIVED ITEM LOSES ALL THREE CONTROLS** — see `_calIsDerived` for why
+       each of them is a lie on one. It keeps the row's shape, the kind's shape
+       and the state's colour, because those are all still TRUE about it; only
+       the three presses go. No `is-static` styling beyond `cursor: default` and
+       the missing ×: a fact that looked different from an item would be a
+       second vocabulary for "this is on the 17th". */
+    if (_calIsDerived(it)) {
+      return `
+    <div class="gcal-row is-static" style="--k:${_calColor(it)}">
+      <span class="gcal-kind is-${CAL_KIND[k].shape}" title="${escHtml(CAL_KIND[k].label)}"></span>
+      <span class="gcal-row-label">${escHtml(it.label)}</span>
+    </div>`;
+    }
     return `
     <div class="gcal-row${_calDone(it) ? ' is-done' : ''}" style="--k:${_calColor(it)}">
       <button class="gcal-kind is-${CAL_KIND[k].shape}" onclick="guideCalCycleKind('${it.key}')"
@@ -3902,7 +4352,44 @@ function _guideCalDayPanel(byDay) {
         <svg class="gcal-panel-fold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
       </button>
-      ${rows || `<div class="gcal-panel-empty">Nothing on this day</div>`}
+      ${/* THE WAIT IS A FACT ABOUT THE DAY, AND THE PANEL USED TO DENY IT.
+            Measured on a banded Thursday: the grid painted the cell as occupied
+            and the panel one inch below printed "Nothing on this day". Both
+            were reading the same state and saying opposite things — the band
+            comes from `platformFlipped`, the list from `_calItems`, and only
+            the second one had ever been asked. The send day and the decision
+            day each carry a real item, so the hole was every day in between:
+            exactly the days the band exists to draw.
+
+            It is a STATEMENT, not a row — no kind dot, no tick, no ×. Those
+            three controls are for things you can change, and you cannot tick
+            off "Apple is still reading it". Same argument as `_guideCalLede`
+            one surface up: not a notification, just the state of the day you
+            are looking at, and it leaves when the wait does.
+
+            **AND IT IS NOT PRINTED ON EITHER END ANY MORE (v6.62).** It used to
+            be, on the argument that an EVENT and a STATE are different facts —
+            "Sent to App Store" is what happened, "they have had it since the
+            15th" is what is true. That is a real distinction and it still did
+            not earn a line: on the send day the panel read "Day 1 of 3 with the
+            Mac App Store" directly above "Sent to Mac App Store", two lines in a
+            254px mono column whose only difference is one of tense. With two
+            platforms out it was four lines. Jaco: *"con poner el Sent debería
+            valer, el 1/3 y 1/8 me sobran bastante."*
+
+            So the rule is the one the paragraph above already implies: the wait
+            speaks on the days nothing else does. Both ends carry a dated item of
+            their own (`sent-<pid>`, `decide-<pid>`) — which is also what
+            guarantees the panel is never left empty by this — and the open
+            interval between them is the hole the band exists to draw.
+
+            The cost, and it is small: on the send day the panel no longer states
+            how LONG the wait is. That fact is on screen twice already — the lede
+            above the month prints the answer date for every wait, and the card
+            prints "Usually 3 days". */''}
+      ${focusBlock}
+      ${waitLines}
+      ${rows || (waitLines || focusBlock ? '' : `<div class="gcal-panel-empty">Nothing on this day</div>`)}
       ${/* The add row's dot is the same control one step earlier: it shows the
             SHAPE of what you are about to type, so the kind is chosen in the
             same gesture as the typing. Its fill is `todo`, because that is what
@@ -5480,7 +5967,12 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      `readyToSubmit` survives, but only to style the row; the decision itself
      moved to the handler, where it can name the obstacle instead of just
      withholding the click. */
-  const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
+  /* `pulseClass` is GONE (v6.62) — it emitted `submit-step-pulse`, the orange
+     ring that breathed out of this row every two seconds. The argument is in
+     style.css where the keyframes used to be; short version, a ring in a hue
+     this app does not own, marking READY, which is green's job and which
+     `.submit-step-ready` already says twice. `readyToSubmit` still decides
+     ready-vs-locked below; only the ring went. */
   const stepLocked = locked || !connected;
 
   /* NO TRAILING CONTROL. "Connect to submit" lived here, a second button in a
@@ -5510,8 +6002,14 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   const trackPicker = '';
 
   return `
-    <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
-         id="${pid}-step-card-submit" onclick="submitStepClick('${pid}')">
+    <div class="ios-step-card ios-step-card--inline submit-step-card ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
+         id="${pid}-step-card-submit"
+         onpointerdown="submitHoldStart('${pid}', this, event)"
+         onpointerup="submitHoldEnd()"
+         onpointerleave="submitHoldEnd()"
+         onpointercancel="submitHoldEnd()"
+         title="${submitDone ? '' : (isWeb ? 'Hold to deploy' : 'Hold to submit')}"
+         aria-label="${submitDone ? '' : (isWeb ? 'Hold to deploy' : 'Hold to submit')}">
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
         <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
@@ -18096,6 +18594,11 @@ function buildSubmittedCard(pid, flipData) {
 
   const reviewing = !!state.subReview?.[pid];
 
+  /* Read once, used twice below: the card grid has no tab strip naming the
+     store, so this face keeps its own header there. See the long note at the
+     header itself. */
+  const modalGrid = state.submission?.layout === 'modal';
+
   /* THE ACTION IS THE STORE'S OWN VERB when the next move is the developer's
      (Release This Version / Publish changes / Release App) — see STORE_REVIEW. */
   const action = vocab.action
@@ -18104,27 +18607,45 @@ function buildSubmittedCard(pid, flipData) {
 
   return `
     <div class="active-card submitted-card ${phaseCls}" id="active-card-${pid}">
-      ${/* THE STATE IS THE HEADER NOW, and the platform's name is gone from it.
+      ${/* WHERE THE STATE GOES DEPENDS ON WHETHER ANYTHING ELSE NAMES THE STORE,
+            and that is a property of the LAYOUT, not of this card.
 
-            This card used to open with platformCardHead — the mark, the store's
-            name, the gear and the withdraw button — which was right while it was
-            one of four cards in a grid and its own header was the only thing
-            saying which store you were looking at. In the pane it is the SECOND
-            time that is said in two inches: the folder tab above it carries the
-            same mark and the same name, and it is lit.
+            Mark's pane (`submission.layout === 'inline'`) puts a lit folder tab
+            above the card carrying the same mark and the same name, so the
+            card's own header was the second time that was said in two inches.
+            He gave that slot to the one fact this face exists to report — the
+            state — and kept the two buttons. Right, there.
 
-            So the row keeps its two buttons and gives its identity slot to the
-            one fact this face exists to report. It also puts the two faces back
-            in agreement — the steps face has no header either — which is what
-            `.is-advancing`'s "the header and the release block are identical
-            across both faces, so neither is faded" was always resting on. */''}
+            **In the CARD GRID it is wrong, and measured wrong.** There is no tab
+            strip: the grid's own note argued the header was "the only thing
+            saying which store you were looking at", and that is still true.
+            Measured in both arms with one Steam submission: grid steps face
+            "Steam" with a header, grid submitted face NO header reading only
+            "IN REVIEW..."; pane, neither face has one. So in the grid a card had
+            a name until you pressed Submit and lost it exactly then, and two
+            submitted cards side by side were separable only by their track.
+
+            That also unmade the premise the original change rested on — "it puts
+            the two faces back in agreement, the steps face has no header either".
+            True in the pane. In the grid all four steps builders still call
+            `platformCardHead(pid, 'steps')`, so the faces DISAGREED.
+
+            One branch, the same shape `renderDashboard` already uses for this
+            flag, and it goes when the flag does. Nothing of Mark's is touched:
+            `inline` renders byte-for-byte what it rendered before. */''}
+      ${modalGrid ? platformCardHead(pid, 'submitted') : `
       <div class="sub-head">
         <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>
         ${_platformHeadActions(pid, 'submitted')}
-      </div>
+      </div>`}
       ${buildReleaseBlock(pid)}
       ${variant === 1 ? `<div class="sub-segbar">${segs}</div>` : ''}
+      ${/* The state line comes back HERE in the grid — its original row, where
+            `.sub-state`'s `space-between` pairs it with the wait note on one
+            baseline. `.sub-state:empty` already hides this row in the pane, so
+            the arm that does not use it costs nothing. */''}
       <div class="sub-state">
+        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>` : ''}
         ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
               `!isYours && !isBad`, which let it survive into `live` — so a
               build that was finished, distributed and on sale still said
@@ -18139,15 +18660,31 @@ function buildSubmittedCard(pid, flipData) {
         ${phase === 'in_review' ? `<span class="rel-pair"><span class="rel-label">Estimated</span><span class="rel-build">${fmt(est)}</span></span>` : ''}
       </div>` : ''}
       ${vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : ''}
-      ${/* THE WAIT IS THE ONLY PHASE WITH NOTHING TO DO IN IT, so it is the one
-            that should point somewhere. The line it replaced said exactly that
-            — "Nothing to do until they answer" — which is true and useless: it
-            named the dead air without filling it. This names what the dead air
-            is FOR. It lives here rather than in `STORE_REVIEW` because the
-            advice is the same whatever store is reading your build; that table
-            keeps only what differs between them. */''}
-      ${phase === 'in_review' ? `
-      <button class="sub-nudge" onclick="setView('broadcast')">Quiet time. Go plan your launch →</button>` : ''}
+      ${/* THE NUDGE LEFT THIS CARD IN v6.56, AND IT IS THE GUIDE'S NOW.
+            "Quiet time. Go plan your launch →" lived here from the day the wait
+            got a face, on the argument that the one phase with nothing to do in
+            it is the one that should point somewhere. That is still true; what
+            changed is that a better surface started saying it.
+
+            It is a sentence about YOUR TIME, not about this submission.
+            Everything else on this card is a fact about this build — the store,
+            the version, the day an answer is due — and where to spend the days
+            the wait has just freed up is the CALENDAR's subject. `_guideCalLede`
+            prints it once, in the same violet, under the list of what you are
+            waiting on, and it exists for exactly the span this button did.
+
+            And it multiplied. One card said it once; three platforms in review
+            said it three times on one screen, identically, while the month said
+            it once — noise proportional to the number of platforms, which is the
+            shape of a line that is in the wrong place rather than merely
+            repeated.
+
+            The cost, knowingly: with the guide collapsed, or on the checklist
+            face, the invitation is nowhere. `_doFinalSubmit` flips the guide to
+            the month at the moment of sending, so it is on screen when it
+            matters — but someone who works with that column folded will not see
+            it at all. If that turns out to bite, the fix is the collapsed rail,
+            not this button coming back. */''}
       ${/* THE STEPS ARE STILL THERE, they just have nothing left to ask. A
             submitted card that hid them entirely made the work unreachable the
             moment it was done — you could not check what you had declared
