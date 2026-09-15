@@ -418,21 +418,42 @@ const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
 // IGDB/Twitch key or a third-party CORS proxy for search. Also supports
 // looking a single game up directly by Steam or IGDB id (?steamId=<id> /
 // ?igdbId=<id>) instead of a text query — not currently used by any caller
-// here, but confirmed live to return the same result shape as ?query=.
+// here, but confirmed live to return the same result shape as ?query=
+// (?steamId=504230 → Celeste, igdb_id 26226). Two differences worth knowing
+// if a caller is ever wired up to it: the top-level echo key is named after
+// whichever param was sent (`steamId`/`igdbId` rather than `query`), and the
+// results array holds exactly the one match rather than up to five.
 // Contract (verified live): GET ?query=<text> → { query, results: [{
-// igdb_id, steam_id, name, summary, coverUrl, platforms }] }, platforms
+// id, igdb_id, steam_id, name, summary, coverUrl, platforms }] }, platforms
 // being website-derived slugs like "steam"/"app-store"/"google-play"/"epic"
 // — see IGDB_SEARCH_PLATFORM_SLUGS. igdb_id/steam_id come back as numeric
 // strings. coverUrl is already an absolute https://images.igdb.com/... URL
 // pre-sized at t_cover_small (unlike the old endpoint, which returned a
 // protocol-relative t_thumb URL) — see _igdbSearchRaw's size-upgrade regex
-// below, which no longer assumes a specific incoming size token. summary
-// has come back empty ("") in live testing so far; treated the same as
-// "absent" by the `|| ''` fallback below either way. Notably still absent
-// vs. the old direct-IGDB response: screenshots — see _igdbSearchRaw below
-// for how that's handled. steam_id IS new here (the old endpoint never
-// returned one) and is wired straight into each result's `steamAppId` (see
-// _igdbSearchRaw below) — note it isn't reliably correlated with
+// below, which no longer assumes a specific incoming size token.
+//
+// `id` IS NOT THE IGDB ID — it's a UUID (e.g.
+// "31d98a1d-44ef-40d1-88d7-eb61a9bcf5ce"), presumably this backend's own
+// row key, and it is NOT interchangeable with igdb_id. _igdbSearchRaw below
+// deliberately reads `Number(g.igdb_id)`, never `g.id`; reaching for the
+// intuitively-named `g.id` instead yields NaN, which that function's own
+// `Number.isFinite(g.id)` filter then drops on the floor — i.e. the title
+// silently disappears from the picklist rather than erroring anywhere. If
+// this backend ever needs a stable per-row handle, this is the field, but
+// don't confuse the two.
+//
+// summary DOES come back populated (Celeste's full IGDB blurb, verified
+// live) — an earlier revision of this comment recorded it as always empty
+// based on the results available at the time, which is no longer true and
+// was never guaranteed. It feeds the `|| ''` fallback below and, through
+// item.summary, Game Details' Description for any title with no Steam app
+// id, plus _applySteamAboutData's own fallback when Steam has no
+// about_the_game (app.js) — so those paths, which were effectively inert
+// while the field came back empty, now actually deliver text. Notably still
+// absent vs. the old direct-IGDB response: screenshots — see _igdbSearchRaw
+// below for how that's handled. steam_id IS new here (the old endpoint
+// never returned one) and is wired straight into each result's `steamAppId`
+// (see _igdbSearchRaw below) — note it isn't reliably correlated with
 // `platforms` including "steam" (seen present with platforms: [] in live
 // testing), so a title can carry a usable steamAppId even when `platforms`
 // doesn't list "steam". selectPicklistItem (app.js) now drives all Steam
@@ -636,6 +657,15 @@ async function _igdbSearchRaw(title) {
       .map(slug => IGDB_SEARCH_PLATFORM_SLUGS[slug])
       .filter(pid => pid && !!PLATFORMS[pid]);
     return {
+      // FROM g.igdb_id, NOT g.id — the response carries BOTH, and `g.id` is
+      // a UUID row key belonging to the search backend rather than anything
+      // IGDB knows about (see IGDB_SEARCH_ENDPOINT's own comment). Every
+      // consumer of this item — selectPicklistItem's `item.id`,
+      // _applyIgdbScreenshotFallback, _igdbFetchScreenshots' `where id =` —
+      // needs the numeric IGDB id, and swapping in the similarly-named
+      // g.id would produce NaN here, which the Number.isFinite filter at
+      // the bottom of this function then drops silently: the title just
+      // stops appearing in the picklist, with nothing logged anywhere.
       id:        Number(g.igdb_id),
       name:      g.name || '',
       coverUrl,
@@ -655,6 +685,12 @@ async function _igdbSearchRaw(title) {
       // this field and no longer makes the separate _igdbFetchSteamAppId
       // follow-up query (below) to resolve it.
       steamAppId: g.steam_id ? String(g.steam_id) : null,
+      // Real IGDB blurb text, not the empty string an earlier revision of
+      // IGDB_SEARCH_ENDPOINT's comment assumed this always was — the `|| ''`
+      // is a genuine absent/null guard now rather than a formality. Where it
+      // lands: Game Details' Description for a title with no Steam app id,
+      // and _applySteamAboutData's fallback when Steam returns no
+      // about_the_game (both app.js).
       summary:     g.summary || '',
       // Not returned by this endpoint — _fillScreenshotGridFromIgdb (app.js)
       // gets an empty array and simply has nothing to add.
