@@ -584,7 +584,10 @@ function _repaintSubStepBody() {
   if (!pid || !stepId || !bodyEl) return false;
 
   const bodyT = bodyEl.scrollTop;
-  const pm    = bodyEl.querySelector('.prv-matrix-wrap');
+  // Same pair as reRenderStepModal's — see the long note there. `.pvt-scroll`
+  // is the accordion's, `.prv-matrix-wrap` is Google Play's and Steam's until
+  // those two are ported; they never co-exist.
+  const pm    = bodyEl.querySelector('.pvt-scroll, .prv-matrix-wrap');
   const pmT   = pm ? pm.scrollTop : null;
   const mm    = bodyEl.querySelector('.mac-spp-main');
   const mmT   = mm ? mm.scrollTop : null;
@@ -592,7 +595,7 @@ function _repaintSubStepBody() {
   bodyEl.innerHTML = _subStepBodyInner(pid, stepId);
 
   bodyEl.scrollTop = bodyT;
-  if (pmT !== null) { const n = bodyEl.querySelector('.prv-matrix-wrap'); if (n) n.scrollTop = pmT; }
+  if (pmT !== null) { const n = bodyEl.querySelector('.pvt-scroll, .prv-matrix-wrap'); if (n) n.scrollTop = pmT; }
   if (mmT !== null) { const n = bodyEl.querySelector('.mac-spp-main');    if (n) n.scrollTop = mmT; }
 
   _syncSubRowAndDashes(pid, stepId);
@@ -2993,7 +2996,23 @@ function reRenderStepModal() {
   // the table, which visibly snapped back to the top. Captured/restored the
   // same way as bodyEl's own scroll above, so any Data Types table action
   // that re-renders (group toggle, checkbox, preset) keeps its place.
-  const matrixEl = document.querySelector('.prv-matrix-wrap');
+  //
+  // AND v6.52 RENAMED THAT PANE, WHICH SILENTLY UNDID ALL OF THE ABOVE. The
+  // accordion's scroller is `.pvt-scroll`, so this selector stopped matching
+  // anything on the App Store table and the capture went back to `null` — no
+  // error, no warning, and the restore below simply skipped. Measured on a cell
+  // press with a group open near the bottom: the block you were working in
+  // jumped **326.5px** to the top of the table, on every tick. Jaco: *"al
+  // rellenar cualquier casilla, se mueve arriba, no hagas eso."*
+  //
+  // Both are listed rather than one replacing the other: `.prv-matrix-wrap` is
+  // still Google Play's and Steam's, and will be until those two are ported.
+  // Whichever is on screen is the one that answers — they never co-exist.
+  //
+  // The rule this leaves: **a selector is a dependency.** Renaming a class in a
+  // builder breaks every rule and every query that named it, and the ones in JS
+  // fail quietly where CSS at least stops painting.
+  const matrixEl = document.querySelector('.pvt-scroll, .prv-matrix-wrap');
   const matrixScrollTop = matrixEl ? matrixEl.scrollTop : null;
   // Mac App Store's own Product Page Preview scrolls independently too —
   // .mac-spp-main (style.css) is its own overflow-y:auto pane nested inside
@@ -3035,7 +3054,7 @@ function reRenderStepModal() {
     el.scrollTop = top;
   };
   restoreScroll(document.getElementById('step-modal-body'), scrollTop);
-  restoreScroll(document.querySelector('.prv-matrix-wrap'), matrixScrollTop);
+  restoreScroll(document.querySelector('.pvt-scroll, .prv-matrix-wrap'), matrixScrollTop);
   restoreScroll(document.querySelector('.mac-spp-main'), macMainScrollTop);
 }
 
@@ -3469,19 +3488,130 @@ function setPrivacyUrl(url) {
 
 /* ── Privacy matrix handlers ─────────────────────────── */
 
+/* THE ORDER IS STAMPED ON THE WAY IN, ONCE (v6.52). Flagged groups float to
+   the top, and deciding that on every render meant marking the first cell of an
+   untouched group sent that group to the top of the table **under the pointer
+   that had just pressed it**. Frozen at open time it cannot move while you
+   work; the counter on each header is what stops a group you have filled in
+   from getting lost further down. Re-stamped on every open, so the next visit
+   leads with whatever you declared last time. */
+/* AND IT OPENS WITH EVERYTHING FOLDED (v6.70). Jaco: *"cuando cierro y vuelvo a
+   abrir la tabla, quiero que todo esté comprimido por defecto."*
+
+   The open group was kept per platform, and that was defended as a feature —
+   come back and you are where you left off. It is the wrong claim for a control
+   whose whole gesture is OPENING something: a table you have just unfolded
+   should show you the 16 groups and their counts, which is the view the
+   accordion exists to give, not one block already expanded from a visit you may
+   not remember making. Sixteen closed groups fit on one screen; one open one
+   spends a third of it on a decision nobody has just made.
+
+   It clears on the way IN rather than on the way out, beside the order stamp,
+   because those are one sentence: **the table opens fresh** — the order is
+   frozen and nothing is expanded. Clearing on close would work identically on
+   screen and would leave the state carrying an answer to a question the next
+   open has not asked yet. Still keyed per platform, so Mac and Mac Full stay
+   independent; they now simply both start closed. */
 function togglePrivacyMatrix() {
   state.privacyMatrixExpanded = !state.privacyMatrixExpanded;
+  if (state.privacyMatrixExpanded) {
+    _privacyStampOrder();
+    const pid = state.stepModal?.platformId || 'ios';
+    if (!state.privacyGroupOpen) state.privacyGroupOpen = {};
+    state.privacyGroupOpen[pid] = null;
+  }
   reRenderStepModal();
 }
 
-// Per-group collapse inside the Data Types table (buildPrivacyMatrix,
-// render.js) — currentlyExpanded is the group's effective state at render
-// time (explicit override, or the "has a flagged type" default), passed
-// straight through so this just flips it rather than re-deriving it.
-function togglePrivacyGroup(pid, groupName, currentlyExpanded) {
-  if (!state.privacyGroupExpanded) state.privacyGroupExpanded = {};
-  state.privacyGroupExpanded[`${pid}:${groupName}`] = !currentlyExpanded;
+function _privacyStampOrder() {
+  const pid = state.stepModal?.platformId || 'ios';
+  const a   = _appStoreAnswers(pid, 'dataPerType');
+  const sel = new Set(Object.keys(a.dataPerType || {}));
+  if (!state.privacyGroupOrder) state.privacyGroupOrder = {};
+  state.privacyGroupOrder[pid] = IOS_DATA_TYPES
+    .map((g, i) => ({ g, i, flagged: g.types.some(t => sel.has(t.id)) }))
+    .sort((x, y) => (x.flagged === y.flagged) ? x.i - y.i : (x.flagged ? -1 : 1))
+    .map(x => x.g.group);
+}
+
+/* ONE GROUP AT A TIME. Pressing the open group closes it and leaves the table
+   with none open, which is the state the accordion starts in — so the header is
+   never a button that does nothing, and the lighter ground never marks more
+   than one place. Nothing is remembered per group: the whole model is a single
+   name, or null. */
+/* THE TRAVEL IS IN THE RENDER'S OWN FRAME, NOT THE NEXT ONE (v6.66).
+   Jaco: *"cuando toco algún item que está a media altura de la tabla, hace un
+   raro, como que baja antes de ponerse en focus centrado"* — and then: *"si
+   revisas el html que te pasé, me gustaba mucho más su comportamiento, cópialo
+   igual y no inventes."*
+
+   DIFFED AGAINST THE MOCK, THE MATHS WERE ALREADY IDENTICAL AND THE TIMING WAS
+   NOT. `apple-privacy-modal-990.html` restores the old scrollTop onto the fresh
+   markup and calls `scrollTo` on the very next line — one synchronous pass, so
+   the restored position is never painted. This deferred the same block to a
+   `requestAnimationFrame`, which is one whole frame at the restored position
+   before the ease begins. And this is a one-at-a-time accordion, so that
+   position is usually WRONG: opening a group closes the one that was open, and
+   if that one sat above you everything below jumps up by its height. The frame
+   you saw was that jump. Two motions for one gesture, the second correcting the
+   first.
+
+   So the rAF is gone and nothing else moved. A pin — measure the row before,
+   put the scroller back by the drift after — was written first and thrown away:
+   it fixes the same frame by inventing a mechanism the mock does not have, and
+   the mock is the thing that was approved.
+
+   AND THE TRAVEL IS `_smScrollTo`, WHICH IS THE HALF THE FIRST PASS GOT WRONG
+   (v6.68). Jaco, still on it after the rAF came out: *"sigue haciendo un
+   recorrido rarísimo"*, then *"¿puede ser safari? ¿en chrome no pasa?"* — yes,
+   and in Chrome it does not: measured here, first-frame delta 0 and one
+   continuous ease 220 → 218.5 → 213.5 → … → 77.
+
+   v6.66 kept native `scrollTo({behavior: 'smooth'})` on the argument that *"the
+   mock is the evidence it does not [misbehave]"*. **That is evidence about the
+   MOCK, not about this DOM** — a standalone file with its own boxes, opened
+   once. This is the sentence "The travel is ours, not the browser's" exists to
+   refuse: which box an engine scrolls, and whether it honours `smooth` on a
+   NESTED scroller whose content changed height in the same tick, is per-engine,
+   and Safari is the engine nobody here can drive. Copying the mock's TIMING was
+   right; copying its choice of animator was the part that was never verifiable.
+
+   `_smScrollTo` names one element and writes `scrollTop` frame by frame on the
+   app's own 420ms sine, so no engine's smooth implementation is involved at
+   all. Same arithmetic, same single motion, one less thing that can differ.
+   **A mechanism with no per-engine behaviour beats one that has to be checked
+   in an engine you cannot open** — this file's standing preference, stated
+   three times before this and overruled once, here.
+
+   The +2 keeps the group's top rule off the sticky header's own, where the two
+   read as one thick smeared band. Closing does not travel: you are already
+   looking at the thing you just folded away. */
+function togglePrivacyGroup(pid, groupName) {
+  if (!state.privacyGroupOpen) state.privacyGroupOpen = {};
+  const open = state.privacyGroupOpen[pid] === groupName;
+  state.privacyGroupOpen[pid] = open ? null : groupName;
+  const goTo = open ? null : groupName;
+
   reRenderStepModal();
+  if (!goTo) return;
+
+  const sc = document.getElementById('pvt-scroll');
+  // Found by scanning `data-g` rather than by a selector: a group name can
+  // hold a space, an `&` or an apostrophe ("Health & Fitness"), and every one
+  // of those needs different escaping inside a selector string. A comparison
+  // needs none.
+  const td = sc && [...sc.querySelectorAll('tr.pvt-g td')]
+    .find(el => el.dataset.g === goTo);
+  if (!sc || !td) return;
+  // Reading scrollHeight flushes the pending layout of the node that has just
+  // replaced this one, so the clamp below is against the real maximum rather
+  // than a clientHeight that has not been solved yet — see "A scroll restore
+  // must flush layout first".
+  const max  = Math.max(0, sc.scrollHeight - sc.clientHeight);
+  const head = sc.querySelector('thead')?.getBoundingClientRect().height || 0;
+  const top  = td.getBoundingClientRect().top - sc.getBoundingClientRect().top
+             + sc.scrollTop - head + 2;
+  _smScrollTo(sc, Math.max(0, Math.min(max, top)));
 }
 
 function toggleContentRatingExpanded(value) {
@@ -3543,21 +3673,16 @@ function togglePrivacyPreset(id) {
   const hasGuest  = selected.includes('guest');
   const pid       = state.stepModal?.platformId;
 
-  // Every preset click resets the Data Types table's manual per-group
-  // "peek" overrides for this pid (buildPrivacyMatrix, render.js) — once
-  // dataPerType finishes updating (synchronously below, or async once
-  // _triggerPrivacyAI's fetch resolves), _isGroupExpanded is a pure
-  // function of which groups now have a flagged type, so clearing these
-  // just means that fresh flagged/unflagged split — not a stale manual
-  // expand/collapse from before this click — is what decides which
-  // groups show open, exactly as requested ("whenever a preset is
-  // selected or deselected, the table should update").
-  if (pid && state.privacyGroupExpanded) {
-    const prefix = `${pid}:`;
-    Object.keys(state.privacyGroupExpanded).forEach(k => {
-      if (k.startsWith(prefix)) delete state.privacyGroupExpanded[k];
-    });
-  }
+  /* A PRESET CLICK IS THE ONE MOMENT THE TABLE MAY RE-SORT ITSELF (v6.52).
+     The order is otherwise frozen at open time precisely so nothing moves
+     under a pointer that is working inside the table — but a preset chip lives
+     ABOVE the table, and pressing one is exactly the event that changes which
+     groups hold data. So the groups it just filled float up, in the one case
+     where the thing you are pointing at cannot be the thing that moves.
+
+     The group you have OPEN is left alone: re-stamping reorders the list, it
+     does not fold anything. Stamped after dataPerType is written, below, or it
+     would sort on the previous answer. */
 
   // Which App-Store-shaped answers object this preset click should write
   // into. 'ios' and 'macos' both resolve to state.iosSubmitAnswers (macos's
@@ -3647,6 +3772,11 @@ function togglePrivacyPreset(id) {
     });
   });
   iosAns.dataPerType = perType;
+
+  // Now that dataPerType is written, re-sort the accordion so the groups this
+  // preset just filled lead the table. See the note at the top of this
+  // function for why a preset click is the one safe moment to do that.
+  _privacyStampOrder();
 
   // Trigger AI translation for the active platform only
   if (combined.length >= 20) {
@@ -3781,30 +3911,56 @@ function togglePrivacyDataType(typeId) {
   reRenderStepModal();
 }
 
-function setPrivacyMeta(typeId, field, checked) {
-  const pid = state.stepModal?.platformId || 'ios';
-  const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
-  if (!perType[typeId]) return;
-  perType[typeId][field] = checked ? 'yes' : 'no';
+/* ── A CELL PRESS WRITES, AND THEN IT RENDERS ─────────────────────────
+   Both of these are called from _prvCell (render.js), which passes the value
+   the press should PRODUCE rather than reading `this.checked` off an input —
+   a button has no checked state to read, and the new value is already known at
+   render time.
+
+   `setPrivacyMeta` WAS DEFINED TWICE, twenty lines apart. The second won, and
+   the two differed in exactly one line: the first called reRenderStepModal(),
+   the second carried a comment saying "Tracking warning updates lazily on next
+   section re-open" — which was not a decision, it was the duplicate quietly
+   describing its own symptom. Ticking Used for Tracking is supposed to print
+   Apple's AppTrackingTransparency note under the table, and it did not appear
+   until you closed the section and came back. One definition, same rule as
+   smCheckSVG and SM_STEP_CHEVRON.
+
+   AND THEY BOTH RENDER NOW, where togglePrivacyPurpose used to say
+   "checkboxes manage themselves". A native checkbox did paint its own tick; a
+   button does not — its appearance IS the render. Rendering is also the only
+   correct answer here rather than a surgical class flip, for this file's own
+   reason: dataPerType is read by the count badge, the tracking note, the group
+   ORDERING (a flagged group floats to the top) and isIOSSectionComplete — a
+   repaint would be an inventory of those, and an inventory goes stale. The
+   table's own scroll position is captured and restored by reRenderStepModal,
+   so it keeps its place.
+
+   PRESSING A CELL ON AN UNSELECTED ROW TURNS THE TYPE ON. Both used to bail on
+   `if (!perType[typeId]) return`, because the cell was disabled and could not
+   be reached; now it can, and refusing it would be a control that lies. Saying
+   "I collect Crash Data for Analytics" is saying "I collect Crash Data", so the
+   row is created with the same defaults togglePrivacyDataType uses — identity
+   and tracking at 'no', which is an answer, not an unknown. */
+function togglePrivacyPurpose(typeId, purposeId, next) {
+  const perType = _prvEnsureType(typeId);
+  const arr = perType[typeId].purposes;
+  if (next && !arr.includes(purposeId)) arr.push(purposeId);
+  if (!next) perType[typeId].purposes = arr.filter(p => p !== purposeId);
   reRenderStepModal();
 }
 
-function togglePrivacyPurpose(typeId, purposeId, checked) {
-  const pid = state.stepModal?.platformId || 'ios';
-  const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
-  if (!perType[typeId]) return;
-  const arr = perType[typeId].purposes;
-  if (checked && !arr.includes(purposeId)) arr.push(purposeId);
-  if (!checked) perType[typeId].purposes = arr.filter(p => p !== purposeId);
-  // Checkboxes manage themselves — no full re-render needed
+function setPrivacyMeta(typeId, field, next) {
+  const perType = _prvEnsureType(typeId);
+  perType[typeId][field] = next ? 'yes' : 'no';
+  reRenderStepModal();
 }
 
-function setPrivacyMeta(typeId, field, checked) {
+function _prvEnsureType(typeId) {
   const pid = state.stepModal?.platformId || 'ios';
   const perType = _appStoreAnswers(pid, 'dataPerType').dataPerType;
-  if (!perType[typeId]) return;
-  perType[typeId][field] = checked ? 'yes' : 'no';
-  // Tracking warning updates lazily on next section re-open
+  if (!perType[typeId]) perType[typeId] = { purposes: [], identity: 'no', tracking: 'no' };
+  return perType;
 }
 
 /* ── Business — IAP Products list ─────────────────────
@@ -4783,10 +4939,40 @@ function _smModalFades() {
     const ov = getComputedStyle(body).overflowY;
     const scrollable = (ov === 'auto' || ov === 'scroll') &&
                        body.scrollHeight > body.clientHeight + 2;
+
+    /* AND THE PRIVACY STEP PUT A SECOND SCROLLER *INSIDE* THE BODY (v6.55).
+       The data-types table scrolls within itself so the preset chips stay put,
+       which means the body itself never overflows — so every test above says
+       "not scrollable", both fades sit at 0, and the table is guillotined on the
+       modal's bottom edge with nothing to say there is more.
+
+       ONE FADE, NOT A SECOND SET. It belongs to the modal and spans the whole
+       body, which is exactly where the cut is; giving `.pvt-scroll` its own
+       would be a second boundary a few pixels inside the first. So the fades ask
+       whoever is really scrolling: the body when it scrolls, and otherwise the
+       inner one. Generalised past `#pvt-scroll` on purpose — `[data-inner-scroll]`
+       means any step can hand its scrolling downwards later without editing this
+       function, which is the same contract `.mac-spp-main` gets below. */
+    const inner = body.querySelector('[data-inner-scroll]');
+    const innerScrolls = inner && inner.scrollHeight > inner.clientHeight + 2;
+    const src = scrollable ? body : (innerScrolls ? inner : null);
+
+    /* An inner scroller draws its OWN top fade, hanging off whatever sticky
+       header it has — the modal's fades are about the modal's body and cannot
+       reach inside one. Stated positively (`is-scrolled`) so the resting state
+       at the top needs no class at all and a fresh render never flashes one. */
+    if (inner) inner.classList.toggle('is-scrolled', innerScrolls && inner.scrollTop > 2);
+
     if (instant) wrap.classList.add('no-fade-anim');
-    wrap.classList.toggle('at-top',    !scrollable || body.scrollTop <= 2);
-    wrap.classList.toggle('at-bottom', !scrollable ||
-      body.scrollTop + body.clientHeight >= body.scrollHeight - 2);
+    wrap.classList.toggle('at-top',    !src || src.scrollTop <= 2);
+    wrap.classList.toggle('at-bottom', !src ||
+      src.scrollTop + src.clientHeight >= src.scrollHeight - 2);
+    // The inner scroller is rebuilt with the modal, so its listener goes with
+    // it — re-armed here, the way the body's own is.
+    if (inner && !inner._smFadeBound) {
+      inner._smFadeBound = true;
+      inner.addEventListener('scroll', () => update(false), { passive: true });
+    }
     if (instant) {
       void wrap.offsetWidth;                 // commit the new opacities untransitioned
       requestAnimationFrame(() => wrap.classList.remove('no-fade-anim'));
@@ -18767,16 +18953,25 @@ function setAndroidTypeFlag(typeId, flag, value) {
   updateAndroidCard();
 }
 
-/* Toggle a purpose for a data type */
-function toggleAndroidPurpose(typeId, purposeId, checked) {
+/* Toggle a purpose for a data type.
+   Same two changes as its App Store twin (togglePrivacyPurpose, above): it
+   CREATES the type rather than bailing — a cell on an unselected row is
+   pressable now and naming a purpose is naming the collection — and it
+   RENDERS, because the drawn cell that replaced the native checkbox does not
+   paint its own mark. It borrows setAndroidTypeFlag's own defaults rather than
+   inventing a second set. */
+function toggleAndroidPurpose(typeId, purposeId, next) {
   const a = state.androidSubmitAnswers;
-  if (!a.dataPerType[typeId]) return;
+  if (!a.dataPerType[typeId]) {
+    a.dataPerType[typeId] = { collected: false, shared: false, ephemeral: false, required: true, purposes: [] };
+  }
   const purposes = a.dataPerType[typeId].purposes;
-  if (checked) {
+  if (next) {
     if (!purposes.includes(purposeId)) purposes.push(purposeId);
   } else {
     a.dataPerType[typeId].purposes = purposes.filter(p => p !== purposeId);
   }
+  reRenderAndroidStepModal();
   updateAndroidCard();
 }
 
@@ -19070,18 +19265,20 @@ function _steamSeedLanguagesIfNeeded() {
   ssa.languages = codes.map(code => ({ code, interface: true, fullAudio: false, subtitles: false }));
 }
 
-// Interface/Full Audio/Subtitles checkbox toggle — like togglePrivacyPurpose
-// (the App Store Data Collection matrix this mirrors), the checkbox manages
-// its own visual state so no full re-render is needed; the mutation is
-// picked up next time this section (or the read-only summary) renders.
-function toggleSteamLanguageFlag(code, field, checked) {
+// Interface/Full Audio/Subtitles cell toggle — like togglePrivacyPurpose (the
+// App Store Data Collection matrix this mirrors), it now RENDERS. It used to
+// say "the checkbox manages its own visual state so no full re-render is
+// needed", which was true of a native checkbox and is false of the drawn cell
+// that replaced it (_prvCell, render.js): a button's appearance is the render,
+// so without this the mark simply never changed.
+function toggleSteamLanguageFlag(code, field, next) {
   const lang = (state.steamSubmitAnswers.languages || []).find(l => l.code === code);
   if (!lang) return;
-  lang[field] = checked;
+  lang[field] = next;
+  reRenderStepModal();
 }
 
-// Drops a language from the field entirely. Full re-render needed (unlike
-// the checkbox toggle above) since a whole row disappears.
+// Drops a language from the field entirely.
 function removeSteamLanguage(code) {
   const ssa = state.steamSubmitAnswers;
   ssa.languages = (ssa.languages || []).filter(l => l.code !== code);
@@ -19395,8 +19592,35 @@ function _smScrollTo(sc, to) {
   /* 420ms is the card's own advance duration (`.is-advancing`, _doFinalSubmit),
      borrowed rather than picked so two travels in one app do not run at two
      speeds. The curve is the app's sine — the same shape `cubic-bezier(.37,0,
-     .63,1)` draws for the carousel's glint — written here as its closed form. */
-  const DUR = 420;
+     .63,1)` draws for the carousel's glint — written here as its closed form.
+
+     AND IT IS THE DURATION AT FULL DISTANCE, NOT AT EVERY DISTANCE (v6.69).
+     Jaco, on the accordion's group travel: *"quizás el scroll podía ser un pelín
+     más rápido."* Flat, 420 was being spent on a 145px hop and on a 515px one
+     alike — so the short trip crawled while the long one was correctly paced,
+     and "too slow" was true of exactly the case he was looking at.
+
+     **The fix is not a second constant.** A shorter number here would have made
+     the app teach two travel speeds, which is the thing the paragraph above
+     exists to refuse, and it would have rushed the Mac preview's long pill trips
+     to fix a table nobody was measuring. Duration as a FUNCTION of distance
+     keeps one travel: 420 is what a full-length journey still takes, and
+     anything shorter is proportionally quicker.
+
+     SQUARE ROOT, NOT LINEAR. Linear is the obvious form and it is wrong at both
+     ends — a 60px nudge would get 48ms (a jump with an ease painted on it) and
+     the relationship people read in motion is not "twice as far, twice as long".
+     `sqrt` compresses the range the way a real gesture does: 145px lands near
+     220ms, 520 at the full 420. The floor is 170 so the shortest travel is still
+     a motion rather than a cut, and the ceiling is the 420 itself — no trip in
+     this app is longer than the reference, and if one ever is it should not
+     drift slower than the card it borrowed the number from.
+
+     REF is the longest travel measured on the Mac preview's pinned nav (515px,
+     rounded). It is a scale, not a limit: exceed it and the clamp holds. */
+  const REF = 520;
+  const DUR = Math.max(170, Math.min(420,
+    Math.round(420 * Math.sqrt(Math.abs(to - from) / REF))));
   const t0 = performance.now();
   const stop = () => {
     sc.removeEventListener('wheel', stop);

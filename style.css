@@ -10,6 +10,19 @@
      only lands back under the pinned bar if the pay-back is `24 − this`. Three
      hard-coded 11s and one hard-coded 13 is a relationship nobody can see. */
   --sm-bar:       11px;
+  /* The Apple Data Types table's two column widths (.pvt-*, v6.52). They are
+     tokens because THREE things read them: the columns themselves, the group
+     chevron — which is parked on the centre of the last column with
+     `calc(--pvt-col / 2 - 8px)` and follows if this moves — and the modal's own
+     max-width, which is 116 + 8 × 79 plus its chrome. The one term that is not
+     derived is 79 itself: it is the floor of the widest heading line once
+     "Personaliz." and "Functional." are abbreviated (66px in the 75 a column
+     leaves after 2px of padding a side). Re-measure that before narrowing it. */
+  --pvt-name:     116px;
+  --pvt-col:      79px;
+  /* The table's own scrollbar lane — narrower than --sm-bar because this one
+     sits inside the table rather than on the modal's edge. See .pvt-scroll. */
+  --pvt-bar:      9px;
   --bg:           #0a0a0a;
   --panel:        #141414;
   --panel-2:      #1c1c1c;
@@ -13083,15 +13096,82 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-mac-spp {
   max-width: 1000px;
 }
-/* ios/macos Data Collection Questions (buildPrivacyMatrix) — same width as
-   Mac App Store's Product Page Preview modal above, so the purpose/meta
-   column headers (and their tooltip icons) have room to wrap instead of
-   crowding into horizontal scroll. See renderStepModal's own isPrivacyWide
-   comment for why this is a separate class rather than reusing
-   .submit-modal-mac-spp — no sidebar flex/scroll overrides apply here. */
+/* ios/macos Data Collection Questions (buildPrivacyMatrix). See
+   renderStepModal's own isPrivacyWide comment for why this is a separate class
+   rather than reusing .submit-modal-mac-spp — no sidebar flex/scroll overrides
+   apply here.
+
+   IT IS DERIVED FROM THE TABLE, NOT PICKED (v6.49, re-derived v6.52). It was
+   1000 — the Mac Product Page Preview's number, borrowed on the argument that
+   the column headers "and their tooltip icons" needed room; then 933, once the
+   icons were gone and the two meta columns came down to what their own words
+   need. It is 820 now, and the 113 come from the accordion: with eight equal
+   79px columns and a 116px name column the table is 748 rather than 870.
+
+       748 table   116 name + 8 × 79
+       + 48  .submit-modal-scroll's side padding (24 each)
+       +  9  the TABLE's scrollbar lane (--pvt-bar) — .pvt-scroll has its own
+       +  2  the modal's own 1px border, both sides
+       = 807
+
+   ONE SCROLLBAR, AND IT IS THE TABLE'S. This was 820 for one version, with a
+   second 11px term for the modal's own lane — and that lane is exactly what the
+   inner scroller removed the need for: the body cannot overflow once the table
+   absorbs the slack, so the modal was reserving space for a bar that can never
+   be drawn. The rule that drops it is below, beside the flex chain that makes
+   the claim true. If anything ever makes this body scroll again, that lane comes
+   back and so does the 11.
+
+   The wrap's own border is NOT a term any more — .prv-matrix-wrap is not what
+   this table sits in; .pvt-scroll is, and it draws no border.
+
+   THE EIGHT COLUMNS ARE EQUAL ON PURPOSE. Narrowing LINKED TO and USED FOR
+   TRACKING does separate them as their own block — they are a different
+   question from the six purposes — but it also breaks the grid: eight
+   identical checkboxes in a row, drawn at two sizes. It costs about 40px of
+   modal and buys one single grid. What tells those two apart is what they say,
+   not that they are smaller.
+
+   Change --pvt-name or --pvt-col and this has to move with them. */
 .submit-modal.submit-modal-privacy-wide {
-  max-width: 1000px;
+  max-width: 807px;
 }
+
+/* ── THE OPENING QUESTION LANDS ON THE COLUMN, AND IT NEEDED AIR ──────────
+   Jaco: *"quiero que la primera pregunta de DOES YOUR APP etc. esté alineada a
+   la izquierda con los section titles, y que respire un poco más, porque es
+   importante."*
+
+   Measured, its TEXT sat at **257** against the 245 every other thing in this
+   step uses — the URL label, QUICK SETUP, the preset chips and the table — and
+   its BOX at 234, so it was out on both sides at once. Two separate offsets,
+   and both are Content Rating's rather than this step's:
+
+   `.ios-q-row` pays `margin-left: -11px` and takes it back as a 3px transparent
+   border plus 8px of padding, which is the machinery for the amber validation
+   rail — it needs to hang OUTSIDE the text column so the bar does not indent
+   the question when it lights. And `.ios-q-label` adds its own 12px, which is
+   what makes thirty questions read as a list hanging under their section
+   header.
+
+   NEITHER APPLIES TO ONE QUESTION AT THE TOP OF A STEP. There is no list for it
+   to be indented within and no column of rails beside it; it is the step's
+   opening statement, and it should start where everything under it starts.
+
+   THE AIR IS THE OTHER HALF OF "IT IS IMPORTANT", and air is the right lever
+   rather than size: the answer pills opposite it are `--field-h`, so growing
+   the type would either drag them with it or leave a row whose two halves
+   disagree. 34 → 46 of row and 8 → 20 of margin, which also stops the question
+   and the URL label reading as two lines of one block. Scoped to this step;
+   Content Rating's own rows are untouched. */
+.submit-modal-privacy-wide .ios-q-row {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+  min-height: 46px;
+  margin-bottom: 20px;
+}
+.submit-modal-privacy-wide .ios-q-label { padding-left: 0; }
 /* The Mac Product Page Preview's own sidebar (.mac-spp-sidebar) needs to
    stay put at full modal height while only its main pane scrolls, instead
    of the whole step body (including the sidebar) scrolling together the
@@ -15298,6 +15378,25 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    the bar's own top edge muddy. */
 .submit-modal-body-wrap:has(.cr-pinned) .submit-modal-fade-top { display: none; }
 
+/* AND THE SAME FOR THE DATA TYPES TABLE, FOR THE OPPOSITE REASON (v6.66).
+   Jaco: *"como no tenemos scroll en el modal, no hace falta que añadas el
+   gradiente del top del modal, porque la pregunta nunca cambia de posición."*
+
+   There the fade is redundant because something louder says it; here there is
+   nothing to say. This step hands its scrolling DOWN to `.pvt-scroll` (see the
+   accordion's flex chain), so the modal body cannot move: the question, the URL
+   field and the preset chips are nailed where they are drawn, and a fade over
+   them claims content is hidden above when nothing is. `_smModalFades` reads
+   the inner scroller once the body stops overflowing, which is what was
+   switching this on — correctly, for a scroller, and about the wrong box.
+
+   Gated on `:has(.pvt-scroll)` rather than on `.submit-modal-privacy-wide`, so
+   it is true exactly while the table is really there taking the scroll: fold the
+   table away and the body owns its overflow again and gets its fade back. Same
+   shape as the `:has(.cr-pinned)` rule above. The BOTTOM fade stays — the table
+   IS cut at the body's bottom edge, and that boundary is real. */
+.submit-modal-body-wrap:has(.pvt-scroll) .submit-modal-fade-top { display: none; }
+
 /* The pinned bar IS the tip box — same border, radius and padding as
    Distribution's, with the switch living inside it instead of floating above.
    One row, centred: the toggle, then the ⓘ and its line. */
@@ -15668,16 +15767,23 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-collapse: collapse;
   width: 100%;
   table-layout: fixed;
-  /* Below the target width (.prv-type-hd's 148px + 8 × .prv-col-hd's 96px =
-     916px) this is just a legibility floor for a narrower viewport — the
-     wrap's own overflow-x:auto is the fallback there. At the intended
-     ~948px-wide Data Collection Questions modal (submit-modal-privacy-wide),
-     it must stay UNDER that 948px: table-layout:fixed's width:100% then
-     stretches the columns to fill the container exactly, with zero
-     overflow — a min-width ≥ the container (950px, before this fix) forced
-     a permanent few-px horizontal scrollbar no matter how the columns were
-     sized. */
-  min-width: 900px;
+  /* THE TABLE'S OWN WIDTH IS THE SUM OF ITS COLUMNS, and the modal is sized
+     from it rather than the other way round (v6.49):
+
+         .prv-type-hd 150 + 6 × .prv-col-hd 98 + 2 × .prv-meta-col 66 = 870
+
+     Below that this is a legibility floor for a narrower viewport — the wrap's
+     own overflow-x: auto is the fallback there. At the Data Collection
+     Questions modal's own width (submit-modal-privacy-wide, 932 = 870 + its
+     2px border + 48 of scroller padding + the 11px scrollbar lane) it must stay
+     UNDER the container: table-layout: fixed's width: 100% then stretches the
+     columns to fill it exactly, with zero overflow — a min-width ≥ the
+     container forced a permanent few-px horizontal scrollbar no matter how the
+     columns were sized, which is what the 950 it once carried did.
+
+     Keep the three numbers in step. If a column width moves, this sum and the
+     modal's max-width both move with it. */
+  min-width: 870px;
 }
 
 .prv-matrix th, .prv-matrix td {
@@ -15736,29 +15842,78 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   padding-right: 4px;
 }
 
-/* The label + "?" tooltip icon inside a column header need to wrap together
-   as normal text flow (label onto up to two lines, icon trailing the last
-   word) instead of tooltip-anchor's usual single-line inline-flex row —
-   at the old fixed 76px column width that inline-flex row simply didn't
-   fit "3rd-Party Advertising" (or the other longer purpose/meta labels) and
-   their tooltip icon, so they crowded together and read as cut off. Scoped
-   to just this table's headers so every other .tooltip-anchor elsewhere
-   (single-line labels with plenty of room) keeps its normal layout. */
+/* The heading has to flow as normal text — two lines with an explicit <br>
+   between them (IOS_PURPOSES' `head`, state.js) — instead of tooltip-anchor's
+   usual single-line inline-flex row, which would put both lines on one line
+   and overflow the column. Scoped to this table's headers so every other
+   .tooltip-anchor elsewhere keeps its normal layout.
+
+   The companion rule that made the `?` disc wrap along with the label is
+   DELETED rather than left switched off: these headings no longer emit one
+   (see _prvColHead, render.js).
+
+   **BLOCK, NOT `inline`, AND THAT IS THE HALF THAT MAKES THE NAME A REAL
+   HANDLE.** An inline box's hover area is its GLYPHS: measured,
+   `elementFromPoint` at the dead centre of a two-line heading returned the
+   `<th>` and not the anchor, because the centre falls in the leading BETWEEN
+   the two lines and no inline box is there. So with the `?` gone the target
+   would have been two short runs of 9px text with a dead stripe through the
+   middle — a smaller, stranger target than the disc it replaced, which is the
+   opposite of the point. As a block it is the column's whole heading area,
+   line gap included, and comfortably bigger than the icon ever was. */
 .prv-matrix .prv-col-hd .tooltip-anchor {
-  display: inline;
+  display: block;
   white-space: normal;
 }
-.prv-matrix .prv-col-hd .tooltip-icon {
-  display: inline-flex;
-  vertical-align: middle;
-}
 
+/* EVERY HEADING'S LAST LINE SITS ON ONE BASELINE, which is the other half of
+   what makes this row read as a band rather than as eight captions. The cells
+   inherit `vertical-align: middle` from the table's own rule, so a one-line
+   heading (Analytics — one word, nothing to break) floated between the two
+   lines of its neighbours and looked misplaced rather than shorter. Bottom
+   puts it on the same line as Marketing, Advertising and Personalization, and
+   the extra air goes above it where there is nothing to align to. */
+.prv-matrix thead th.prv-col-hd { vertical-align: bottom; }
+
+/* THE TWO META COLUMNS ARE A BOUNDARY, NOT A BOX (v6.47).
+   They carried `background: var(--panel-3)` — a permanent rgb(36) slab down
+   the right of the table — ON TOP of a border-left that already separates
+   them. One boundary said twice, which is the same trade the metadata strip's
+   bottom rule and the Submit row's divider both lost.
+
+   **The cells becoming painted is what made it untenable rather than merely
+   redundant.** The empty socket is solved against this table's rgb(20) ground;
+   over the slab's rgb(36) the same white 4% lands DARKER than what it sits on,
+   so two columns of sockets inverted while the other six read correctly — and
+   a slab behind a column of filled cells is a second fill arguing with the one
+   that means something. The border stays and is now the only thing drawing
+   that edge. */
 .prv-meta-col {
   border-left: 1px solid var(--border-hover) !important;
-  background: var(--panel-3) !important;
 }
 
-thead .prv-meta-col { background: var(--panel-2) !important; }
+/* AND THEY ARE NARROWER THAN THE PURPOSES, WHICH IS WHERE THE MODAL'S WIDTH
+   CAME FROM (v6.49). Jaco: *"alguna opción de comprimir el ancho del modal, de
+   forma que sigamos pudiendo estar cómodos de espacio?"*
+
+   Measured first, because the obvious suspect was innocent: the column's floor
+   is the longest WORD in its heading, and for the six purposes that is
+   "Personalization" at **84.0px**, against 88 of content in a 96px column. The
+   `?` icon was not costing that and neither was the label's full length — so
+   the purposes cannot narrow at all at this size, and nothing here was going to
+   change that short of shrinking 9px type further.
+
+   The META columns are the ones that were paying for a constraint that is not
+   theirs. "Identity" and "Tracking" are **44.8px**, half of Personalization, and
+   they sat at the same 98 only because every column did. They are a different
+   GROUP — their own question, their own border — so equal-width applies WITHIN
+   each group and not across the rule between them, which is also what lets the
+   two read apart at a glance. Within the six purposes they stay identical, for
+   the metadata strip's own reason.
+
+   66 rather than the 53 the words strictly need: this row is the one part of
+   the table you read rather than press, and "cómodos de espacio" was the ask. */
+.prv-matrix th.prv-col-hd.prv-meta-col { width: 66px; }
 
 /* Group header rows — clickable to collapse/expand that group's data-type
    rows (togglePrivacyGroup, app.js). Defaults to collapsed unless the group
@@ -15803,8 +15958,14 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   transition: background 0.1s;
 }
 .prv-data-row:hover { background: var(--panel-2); }
-.prv-data-row.is-on { background: rgba(37, 99, 212, 0.08); }
-.prv-data-row.is-on:hover { background: rgba(37, 99, 212, 0.13); }
+/* THE ROW TINT IS THE MARK'S OWN HUE. It was rgba(37,99,212,…) — #2563d4, a
+   blue that appears nowhere else in this app — sitting directly beside cells
+   whose accent-color was #60a5fa, neither of them the --pill-on-* the rest of
+   the app uses for "you confirmed this". Three blues in one table. This is
+   --pill-on-bg's own rgb(0,154,255) at the tint alphas, so the row and the
+   marks in it are one statement. */
+.prv-data-row.is-on { background: rgba(0, 154, 255, 0.08); }
+.prv-data-row.is-on:hover { background: rgba(0, 154, 255, 0.13); }
 .prv-data-row:last-child td { border-bottom: none; }
 
 .prv-type-cell {
@@ -15826,24 +15987,594 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   font-weight: 600;
 }
 
-/* Checkboxes */
-.prv-check-cell { position: relative; }
+/* ── THE CELL IS THE CONTROL ──────────────────────────────────────────
+   Emitted by _prvCell (render.js), where the long version of the argument
+   lives. These replaced `.prv-cb`, the last native `<input type="checkbox">`
+   in the app — 15px of browser widget on `accent-color: var(--blue)`, which
+   was a shape and a blue belonging to nothing else here.
 
-.prv-cb {
-  width: 15px;
-  height: 15px;
+   .prv-hit IS THE WHOLE CELL and so is .prv-box. That is the only reason the
+   cell gives up its padding: the td holds nothing but this button, so letting
+   the button carry the box is what makes the entire column width and row
+   height both pressable AND painted. Needs td in the selector —
+   ".prv-matrix th, .prv-matrix td" is (0,1,1) and would outrank a bare class.
+
+   **THE FIRST PASS MADE THE CELL THE TARGET AND LEFT AN 18px CHIP AS THE
+   PAINT, AND THAT FIXED NOTHING YOU CAN SEE.** Jaco: *"yo me refería a que las
+   celdas fueran pulsables enteras, no con un checkmark cuadrado de 18x18
+   dentro de cada celda."* He is right and the correction is the same sentence
+   the first pass only half-applied: a hit area you cannot see is not an
+   affordance. The box is the cell now — `flex: 1` and `align-self: stretch`
+   inside the hit — so what lights up is the 92 × 30 the pointer was already
+   on, and the check is a MARK inside it rather than the thing itself.
+
+   The 3px is the only inset and it is doing one job: six purpose columns draw
+   no dividers between them, so a full-bleed fill would merge three adjacent
+   answers into one wide blue bar and the row would stop saying how many
+   purposes you picked. 3px a side leaves 6px of ground between neighbours —
+   enough to read as separate cells, far too little to read as a chip.
+
+   The 36px row total (30 + 3 + 3) is the height the old cells already made, so
+   nothing in the table moved. */
+.prv-matrix td.prv-check-cell { position: relative; padding: 0; }
+
+.prv-hit {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 36px;
+  padding: 3px;
+  margin: 0;
+  background: none;
+  border: none;
   cursor: pointer;
-  accent-color: var(--blue);
-}
-.prv-cb:disabled {
-  opacity: 0;
-  pointer-events: none;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-/* No placeholder dots — checkboxes only appear when a row is selected (opacity:0 when disabled) */
+/* THE EMPTY SOCKET'S FILL IS ONE PROPERTY THROUGH FOUR STATES, and it is a
+   variable rather than four descendant selectors on purpose: every one of
+   these sets it on .prv-hit itself, so the ladder is flat and readable
+   instead of a specificity puzzle between ".prv-hit:hover .prv-box" and
+   ".prv-hit.is-add .prv-box". Order matters and is the whole mechanism —
+   direct hover last so it wins over the row-hover reveal, locked after that
+   so it wins over everything.
+
+   WHITE 4%, AND IT CAME DOWN FROM 7 WHEN THE BOX BECAME THE CELL. The step
+   disc's own pending fill is `rgba(255,255,255,.07)` and that is what an 18px
+   chip wanted; the same alpha over 92 × 30 is nearly ten times the ink and the
+   table read as a wall of grey slabs. **An alpha is not a quantity of light
+   until you say how big it is** — which is this file's own "a weight that is
+   right once is not right four times", one more time. The socket is also not
+   the pinned nav's `rgba(0,0,0,.22)`: that one sits on the bar's rgb(55), and
+   on this table's rgb(20) ground black 22% composites to rgb(16), a four-point
+   step and invisible. So it goes lighter rather than darker, and quietly. */
+.prv-hit                            { --prv-fill: rgba(255, 255, 255, .04); }
+.prv-hit.is-add                     { --prv-fill: transparent; }
+.prv-data-row:hover .prv-hit.is-add { --prv-fill: rgba(255, 255, 255, .04); }
+/* THE SECOND HALF IS NOT A DUPLICATE OF THE FIRST — it is the row-reveal rule
+   plus `:hover`, and it has to be, because `:hover` COUNTS IN THE CLASS COLUMN.
+   ".prv-data-row:hover .prv-hit.is-add" is FOUR (row, its hover, hit, is-add),
+   so the obvious ".prv-hit.is-add:hover" is three and loses to it: measured,
+   pointing straight at a cell on an unselected row left it at the row's own
+   .07 and the cell you were aiming at never brightened. Counting the
+   pseudo-class is the whole fix. */
+.prv-hit:hover,
+.prv-data-row:hover .prv-hit.is-add:hover { --prv-fill: rgba(255, 255, 255, .10); }
+.prv-hit.is-locked,
+.prv-hit.is-locked:hover            { --prv-fill: transparent; cursor: default; pointer-events: none; }
+
+.prv-box {
+  flex: 1;
+  align-self: stretch;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--prv-fill, transparent);
+  color: transparent;
+  transition: background .12s, color .12s;
+}
+/* STILL SIZED IN CSS RATHER THAN BY smCheckSVG'S ARGUMENT — the standing rule —
+   but no longer `100%`, and that is the one thing the box becoming the cell
+   really changed. While the slot was 18px square, filling it was both the rule
+   AND the right size; a 92 × 30 slot filled at 100% is a check stretched across
+   the whole cell. So the glyph states its own 18: it is a MARK INSIDE the
+   control now, not the control. Every other consumer of that helper is a
+   square disc and keeps filling its slot.
+   The glyph is emitted in every state and hidden with `color: transparent`, so
+   pressing a cell cannot change its layout. */
+.prv-box svg { width: 18px; height: 18px; }
+
+/* PRESSED IS THE SELECTION BLUE, because that is what --pill-on-* means
+   everywhere else in this app: you confirmed this. It is its own pair rather
+   than another --prv-fill rung, so the socket ladder above only ever governs
+   the EMPTY cell and the two ideas cannot tangle. */
+.prv-box.is-on                { background: var(--pill-on-bg);       color: var(--pill-on-color); }
+.prv-hit:hover .prv-box.is-on { background: var(--pill-on-bg-hover); color: var(--pill-on-color-hover); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE APPLE DATA TYPES TABLE — ITS OWN VOCABULARY (.pvt-*, v6.52)
+   ═══════════════════════════════════════════════════════════════════════════
+   Ported from Jaco's mock (apple-privacy-modal-990.html), and deliberately NOT
+   written as overrides on the `.prv-*` rules above.
+
+   THE REASON IS WHO ELSE READS THOSE RULES. `.prv-matrix`, `.prv-hit`,
+   `.prv-box` and `.prv-check-cell` are shared by Google Play's Data Safety
+   table (eleven columns, plus a `locked` state this design has no concept of)
+   and by Steam's Languages table. Rewriting them in place would have changed
+   three surfaces to fix one, and scoping the new look under an extra class
+   would have left every rule fighting a `.prv-*` rule underneath it — the
+   specificity war this file has already lost six times on the Mac preview
+   alone. A separate prefix costs one thing and buys certainty: Google Play and
+   Steam cannot be affected, because none of these selectors can reach them.
+
+   THE COST, STATED SO IT IS NOT DISCOVERED LATER: there are now two table
+   vocabularies in this app for what is visibly the same kind of object. That
+   is deliberate and it is DEBT, not a design — Google Play wants this
+   treatment too, and the day it gets it, `.prv-*` should go rather than be
+   kept as the second dialect. It is in the backlog in CLAUDE.md.
+
+   ── the scroller ───────────────────────────────────────────────────────── */
+/* THE TABLE SCROLLS INSIDE ITSELF, so opening a group moves the rows and
+   leaves the preset chips above it on screen. Its height is whatever the modal
+   has left over rather than a fixed number: the flex column is scoped to this
+   step (below), because `.submit-modal-scroll` is shared by every step in the
+   app and turning it into a flex container globally is not a change this
+   surface gets to make.
+
+   overflow-y: scroll, not auto, for `.submit-modal-scroll`'s own stated
+   reason — a bar that appears when you open a group steals 11px of width and
+   shoves the header row sideways. Reserved always. */
+/* THE COLUMN HAS TO RUN ALL THE WAY DOWN, AND THE FIRST VERSION STOPPED AT THE
+   TOP OF IT. A `flex: 1` child only gets a bounded height if EVERY box between
+   it and the scroller is itself a flex column — one plain `display: block` in
+   the chain and the height goes back to "as tall as my content", which is
+   exactly what happened: the table grew to its full 653, the modal's own
+   scroller took the 239px of overflow instead, and the preset chips scrolled
+   away with everything else. Jaco: *"el scrolling debería ser dentro de la
+   tabla, de forma que siempre se vieran las preset chips en el mismo sitio."*
+
+   The chain is four boxes deep and none of them was obvious from the builder:
+   `.submit-modal-scroll > .ios-step-body-content > .prv-nlp-wrap >
+   .ios-subsection > .pvt-scroll`. The first attempt guessed `> .ios-subsection`
+   as a direct child of the scroller and matched nothing at all.
+
+   AND IT IS FLEX IN BOTH STATES, WHICH THE FIRST VERSION GOT WRONG. It gated
+   every link on `:has(.pvt-scroll)` — the box that contains the table — which
+   is a tidy-sounding selector and made the whole chain plain BLOCKS while the
+   table was collapsed. **A flex container does not collapse its children's
+   margins.** So closed, the question row's 20px bottom margin and the URL
+   group's and the chips' collapsed against each other as usual; open, every one
+   of them was suddenly paid in full, and the toggle plus its badge rode the
+   difference **14px down** — measured, with the button's own height 26.5 in both
+   states. Jaco: *"siguen moviéndose verticalmente al activar el chevron."*
+
+   Selected by STRUCTURE instead: `.prv-nlp-wrap` exists only on this step and
+   only ever wraps the matrix, so its own child is unambiguous — and a rule that
+   does not depend on what is currently rendered cannot change the layout when
+   something appears. Collapsed, these three stretch over empty space, which
+   draws nothing and moves nothing.
+
+   The general form: **a layout that depends on whether a thing is on screen
+   will move when it appears.** `min-height: 0` on each, because a flex item's
+   default `min-height: auto` refuses to shrink below its content and would hand
+   the overflow straight back to the modal. */
+.submit-modal-privacy-wide .submit-modal-scroll,
+.submit-modal-privacy-wide .ios-step-body-content,
+.submit-modal-privacy-wide .prv-nlp-wrap,
+.submit-modal-privacy-wide .prv-nlp-wrap > .ios-subsection {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* AND ONCE THE TABLE ABSORBS THE SLACK, THE MODAL'S OWN LANE IS DEAD WEIGHT.
+   Jaco: *"eso a la vez nos permitiría que el modal no tuviera nunca una barra
+   de scroll lateral… dejando el padding a ambos lados de 24px."* The body
+   cannot overflow by construction now — everything above the table keeps its
+   natural height and the table takes exactly what is left — so `overflow-y:
+   scroll` was reserving 11px for a bar that can never be drawn, and the modal
+   was 11px wider than its content needs. 820 → **809**, with the 24px of side
+   padding untouched.
+
+   `auto`, NOT `hidden`, and that is the one part worth arguing. The modal is
+   `clamp(560px, 88vh, 860px)`: at its floor the body has ~427px, the chips, URL
+   and yes/no row above the table take 265 of it, and the table's own min-height
+   is the rest. `hidden` would make a genuinely short viewport uncloseable rather
+   than merely tight. With `auto` the lane costs nothing in every normal case and
+   the bar still appears in the one case it is needed — which is the opposite
+   trade from `.submit-modal-scroll`'s own default, and right here for the
+   opposite reason: there the lane is reserved because content GROWS under the
+   pointer, and here nothing can. */
+.submit-modal-privacy-wide .submit-modal-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: auto;
+}
+/* Only the boxes BELOW the top one stretch — the scroller itself is already
+   sized by the modal, and the chips, the URL field and the yes/no row above the
+   table keep their natural height (`flex: 0 1 auto`, the default). */
+.submit-modal-privacy-wide .ios-step-body-content,
+.submit-modal-privacy-wide .prv-nlp-wrap,
+.submit-modal-privacy-wide .prv-nlp-wrap > .ios-subsection {
+  flex: 1;
+}
+/* NO `scrollbar-width` AND NO `scrollbar-color` HERE — this file has been
+   caught by that once already and it was caught again building this table.
+   Either of those STANDARD properties switches Chrome off the WebKit scrollbar
+   path, and on macOS the standard bar is the OVERLAY one: the gutter then
+   reserves nothing, every `::-webkit-scrollbar` rule goes inert, and the modal
+   ends up 11px wider than the table needs. Measured with `scrollbar-width:
+   thin` on this element: `offsetWidth − clientWidth` was **0**, and the nine
+   columns spread from 116/79 to 117.7/80.2. Without it, 11. */
+.pvt-scroll {
+  flex: 1;
+  min-height: 220px;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+/* THE BAR IS `.main`'s, NARROWED — and the first version set only its WIDTH,
+   which is why it came out as a fat grey slab. With no track or thumb rule of
+   its own it fell through to the app-wide default at the top of this file
+   (`::-webkit-scrollbar-thumb { background: var(--border) }`), a solid 11px
+   block: that default is written for 6px bars and is exactly what `.main` had
+   to override for the same reason.
+
+   So this takes `.main`'s treatment — transparent track, translucent white
+   thumb inset from the edges by a TRANSPARENT BORDER with `background-clip:
+   content-box`, fully rounded — which is what makes a bar read as a thin
+   floating thumb rather than as a lane with a plug in it.
+
+   9px, not 11: this bar sits INSIDE the table, a few pixels from the rows it
+   is scrolling, where the modal's own sits on the modal's edge with nothing
+   beside it. The visible thumb is still 5px in both — 9 − 2 × 2 here against
+   11 − 2 × 3 there — so the INK is the app's and only the lane is tighter.
+   It is `--pvt-bar` rather than a literal because the modal's width is solved
+   against it. */
+/* THE THUMB IS ONLY THERE WHILE YOU ARE THERE. Jaco: *"que el scroll no esté si
+   no lo uso."* Right — a bar parked down the side of the table is a permanent
+   mark for a transient act, which is the same argument the calendar's row × and
+   the privacy sockets are both built on: something that is only sometimes useful
+   should only sometimes be drawn.
+
+   IT HIDES THE THUMB, NOT THE LANE, and that distinction is the whole safety of
+   it. The 9px stays reserved, so the eight columns cannot shift by so much as a
+   pixel between "resting" and "scrolling" — the reflow-under-the-pointer bug
+   `.submit-modal-scroll`'s own gutter note exists to prevent. Only the paint
+   comes and goes.
+
+   Hover on the SCROLLER rather than the thumb, because a thumb you cannot see
+   is a thumb you cannot aim at: approaching the table is the gesture that
+   precedes scrolling it, so that is when the bar should exist.
+
+   And NOT the native overlay bar, which would do this for free on macOS: it
+   costs `scrollbar-width` or `scrollbar-color`, and either of those switches
+   Chrome off the WebKit path — the trap recorded twice in this file — taking
+   the reserved lane to 0 and making the table's width depend on a system
+   setting. This is the same behaviour with no per-engine question attached. */
+.pvt-scroll::-webkit-scrollbar       { width: var(--pvt-bar); }
+.pvt-scroll::-webkit-scrollbar-track { background: transparent; }
+.pvt-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+.pvt-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .13);
+  background-clip: content-box;
+}
+.pvt-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, .26);
+  background-clip: content-box;
+}
+.pvt-scroll::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── the table ──────────────────────────────────────────────────────────── */
+/* COLUMN WIDTHS DECIDED ONCE, FROM THE HEADER — that is what `table-layout:
+   fixed` buys, and it is the fix for the bug this table had all along: in auto
+   mode the browser re-solves every column from what is VISIBLE, so opening a
+   group introduced longer type names and the first column widened, shoving the
+   eight check columns sideways under the pointer that had just opened it.
+
+   `fixed` only takes effect on a table with a definite width, so `width: 100%`
+   is load-bearing rather than tidy. It also means the table follows the
+   scroller's gutter instead of being a literal that has to be re-solved every
+   time the modal moves — there is no arrangement where this scrolls sideways.
+
+     116 name + 8 × 79 = 748
+   and the modal is that plus its chrome — see --modal-w's note further up. */
+.pvt {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  font-family: var(--mono);
+}
+
+/* ── the heading band ───────────────────────────────────────────────────── */
+/* UPPERCASE AT 10px, and the size is why: at this scale caps read better than
+   mixed case — no descenders, one uniform height — and it matches every other
+   micro-label in the product, which are already mono and capitalised. The grey
+   is .55, up from the .40 the old header used, because two short lines of 10px
+   type need more contrast than one line of 11 did. */
+.pvt thead th {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .55);
+  padding: 7px 2px 13px;
+  text-transform: uppercase;
+  text-align: center;
+  vertical-align: bottom;
+  width: var(--pvt-col, 79px);
+  /* The header stays put while the groups scroll under it — with sixteen
+     groups and one open, the row labels are the only thing telling you which
+     column you are in. The rule is an INSET SHADOW rather than a border: a
+     border would sit inside the sticky box and scroll content can show through
+     the seam above it.
+
+     1px, NOT 2px, AND THE ALPHA IS THE HEADINGS' OWN (v6.58–59). The trade is
+     the one this file keeps making in the other direction: a thick soft line is
+     a BAND — it has a width you read before you read its position — where a
+     hairline is an EDGE, which is all this is. It separates two different kinds
+     of thing (the column labels and the data) rather than two rows, so it has
+     to outrank the `.06` between rows; at 2 × .16 it did that by being fatter,
+     and at 1px it does it by being brighter.
+
+     FULL WHITE WAS TOO MUCH, and the reason is worth stating as a rule rather
+     than as a taste: at 1.0 the line was **brighter than every label it
+     underlines** — the eight column headings are `rgba(255,255,255,.55)` and
+     DATA TYPE, the loudest thing in the row, is `.72`. A boundary that
+     outshouts the thing it belongs to stops reading as that thing's edge and
+     starts reading as a mark of its own.
+
+     THE ALPHA WENT 1.0 → .55 → .65 → .38, AND THE LAST STEP IS WHERE THE
+     ARGUMENT CHANGED (v6.66). Jaco: *"tampoco has bajado el grosor/opacidad de
+     la línea divisoria horizontal primera."* It really was at `.65` and he
+     really did want it lower, which is only a contradiction if you keep reading
+     the line against the LABELS — and that is what every value above was solved
+     against: `.55` is the headings' own alpha, `.65` a notch over it because a
+     hairline composites heavier than 10px type at the same value.
+
+     **The line belongs to the TABLE, not to the header row, and the table is
+     drawn in white `.06` and `.22`.** Measured, at `.65` it was the loudest
+     horizontal thing in the whole modal by a factor of three — a white rule
+     across a grid whose every other boundary is a whisper. That is the same
+     census mistake this file records on the calendar's filled day boxes: *"a
+     weight that is right once is not right four times"*, here arriving through
+     what sits under the line rather than what sits above it.
+
+     `.38` keeps everything the earlier passes bought. It is still the strongest
+     rule in the table — .38 against the row separators' `.06` and an open
+     group's `.22`, so it outranks both by a clear step and still reads as the
+     edge between two KINDS of thing rather than between two rows. And it is now
+     under the labels it underlines (`.55`, and DATA TYPE's `.72`), which is the
+     ceiling the first pass wrote and the one thing nobody has argued with:
+     *a boundary that outshouts the thing it belongs to stops reading as that
+     thing's edge.* 1px throughout — the thickness has been at its floor since
+     v6.58 and the alpha is the only lever left. */
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  background: var(--panel);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .38);
+}
+.pvt thead th.pvt-name-hd {
+  width: var(--pvt-name, 116px);
+  text-align: left;
+  padding-left: 14px;
+  /* The first cell is the name of the ROW AXIS, not a ninth column: a point
+     larger and a step whiter than the eight labels it sits beside. */
+  font-size: 12px;
+  color: rgba(255, 255, 255, .72);
+}
+/* TWO LINES, ALWAYS, AND NEITHER MAY WRAP. The whole point of abbreviating
+   "Personaliz." and "Functional." in state.js is that the break is ours; a
+   column narrow enough to re-wrap them would undo that silently and in one
+   language only. An empty first line is printed as &nbsp; by the builder, so
+   every heading is exactly two lines tall and the eight share a baseline by
+   construction. */
+.pvt .pvt-h1,
+.pvt .pvt-h2 { display: block; line-height: 1.45; white-space: nowrap; }
+
+/* `.tooltip-anchor` IS AUTHORED FOR A SPAN IN PROSE — `display: inline-flex`,
+   which on a <th> or a <td> stops the element being a table cell at all.
+   Measured on the first build: the eight headings stacked into a column down
+   the left of the table, each one still the right width, because they were no
+   longer cells in a row.
+
+   They keep the class, because that is what the app's ONE tooltip is bound to
+   (`e.target.closest('.tooltip-anchor')`, app.js) and a second tooltip system
+   for one table is exactly the duplication this file keeps arguing against.
+   They just take their display back. */
+.pvt thead th.tooltip-anchor,
+.pvt td.pvt-ty.tooltip-anchor { display: table-cell; }
+.pvt thead th.tooltip-anchor:hover { color: #fff; cursor: help; }
+.pvt td.pvt-ty.tooltip-anchor:hover { color: #fff; cursor: help; }
+
+/* NO FADE UNDER THE HEADER, AND IT WAS BUILT AND REMOVED IN ONE VERSION.
+   Jaco asked for *"un mini gradiente en el top de la lista"* and, looking at it,
+   took it back out. It was correct on its own terms — a 36px `::after` hanging
+   off the sticky `<th>`, `.cr-pinned::after`'s own stops, shown by
+   `.is-scrolled` — and still wrong for this table: the Mac preview's fades
+   dissolve a page that ends in nothing, where this list ends on a header with a
+   1px rule under it. A boundary that is already drawn does not also need
+   softening, which is the "two marks on one object" this file keeps refusing.
+   `_smModalFades` still writes `is-scrolled` on the inner scroller; it now has
+   no consumer here, and that is deliberate — it is one line and the next thing
+   that wants to know "is this scrolled" will read it. */
+
+/* ── rows ───────────────────────────────────────────────────────────────── */
+.pvt td {
+  padding: 5px 2px;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, .06);
+}
+/* One height for every row, whether its name takes one line or two: 36 fits
+   two (11px × 1.3 = 28.6) so the table cannot bounce as you move between
+   groups. */
+.pvt tbody tr { height: 36px; }
+.pvt td.pvt-cl { padding: 2px; height: 36px; }
+
+/* The type name is indented under its group's 14: that offset is the whole of
+   what says a row hangs off the header above it. */
+/* ITS VERTICAL PADDING IS 2, NOT THE 5 EVERY OTHER CELL TAKES, and that is
+   what keeps every row at 36 whether its name is one line or two. "Other User
+   Contact Info" wraps in a 116px column: two lines of 11px at 1.3 is 28.6, and
+   at 5px a side that cell asked for 38.6 — so five rows of the table were
+   2.6px taller than the rest and the grid visibly bounced between groups. At 2
+   it asks for 32.6 and the row's own 36 decides, as it should: the height is a
+   property of the ROW, not of the longest name in it. */
+.pvt td.pvt-ty {
+  text-align: left;
+  font-size: 11px;
+  padding: 2px 2px 2px 30px;
+  white-space: normal;
+  line-height: 1.3;
+  vertical-align: middle;
+  word-break: normal;
+  color: rgba(255, 255, 255, .34);
+}
+.pvt tr.is-in td.pvt-ty   { color: rgba(255, 255, 255, .70); }
+/* A LIVE ROW IS BLUE INK, NOT A BLUE GROUND. The old table tinted the whole
+   row at rgba(0,154,255,.08) — and a tint behind the marks competes with the
+   marks, which are the same blue and are the thing you are actually reading.
+   The name says it just as clearly and takes nothing away from them. Declared
+   after the rule above because the two tie on specificity. */
+.pvt tr.has-data td.pvt-ty { color: var(--pill-on-color); }
+/* No line between rows inside an open group: they already share a ground and a
+   height, so a rule cuts up a block that should read whole. */
+.pvt tr.is-in td { border-top: 0; background: transparent; }
+
+/* ── the group header ───────────────────────────────────────────────────── */
+.pvt tr.pvt-g td {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 11px 0 9px 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pvt .pvt-grow { display: flex; align-items: center; gap: 10px; }
+/* The name does not stretch: the count sits right against it, where it reads
+   as part of the same phrase, and the elastic gap goes after them both. */
+.pvt .pvt-gtx { flex: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pvt .pvt-gsp { flex: 1; }
+.pvt .pvt-gn  { flex: none; color: var(--pill-on-color); }
+/* THE CHEVRON SITS OVER THE LAST COLUMN, not in the left gutter — there it
+   would compete with the group name for the same 14px the DATA TYPE label
+   uses, and that shared left edge is what makes the types' 30 read as an
+   indent under it. Half a column minus half a chevron lands it on the centre
+   of USED FOR TRACKING, and it follows --pvt-col if that ever moves. */
+.pvt .pvt-gc {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 14px;
+  margin-right: calc(var(--pvt-col, 79px) / 2 - 8px);
+  color: var(--text-faint);
+  transition: transform .16s ease, color .15s ease;
+}
+/* One glyph that turns, not two that swap: a swap is a change of object where
+   a rotation is the same control reporting its state. */
+.pvt .pvt-gc.is-up { transform: rotate(180deg); }
+.pvt .pvt-gc svg   { width: 13px; height: 13px; }
+
+.pvt tr.pvt-g.is-empty td       { color: rgba(255, 255, 255, .34); }
+.pvt tr.pvt-g td:hover          { background: rgba(255, 255, 255, .04); color: #fff; }
+.pvt tr.pvt-g td:hover .pvt-gc  { color: #fff; }
+.pvt tr.pvt-g.is-open td        { color: #fff; }
+.pvt tr.pvt-g.is-open .pvt-gc   { color: var(--text-dim); }
+.pvt tr.pvt-g.is-open td:hover  { background: rgba(255, 255, 255, .05); }
+
+/* WITH ONE GROUP OPEN THE REST STEP BACK — and a group that already holds
+   something stays a rung above an empty one, so it does not get lost among the
+   fifteen you have not touched. Dimming, not hiding: they are all still the
+   map. */
+.pvt tr.pvt-g.is-dim td             { color: rgba(255, 255, 255, .38); }
+.pvt tr.pvt-g.is-dim.is-empty td    { color: rgba(255, 255, 255, .20); }
+.pvt tr.pvt-g.is-dim .pvt-gc        { color: rgba(255, 255, 255, .22); }
+.pvt tr.pvt-g.is-dim.is-empty .pvt-gc { color: rgba(255, 255, 255, .12); }
+.pvt tr.pvt-g.is-dim .pvt-gn        { color: rgba(0, 154, 255, .70); }
+.pvt tr.pvt-g.is-dim td:hover       { color: #fff; }
+.pvt tr.pvt-g.is-dim td:hover .pvt-gc { color: rgba(255, 255, 255, .55); }
+
+/* THE OPEN BLOCK IS ONE SURFACE, which is why each group is its own <tbody>:
+   a background on a run of <tr>s cannot cover the header, its rows and the
+   tail as one piece, and a <tbody> can. Flat 3%, not a gradient — a gradient
+   has a bright end and a faint one and would say the block is going somewhere.
+   Its two rules are the block's edges and belong to the tbody, not to any row
+   inside it. */
+.pvt tbody.pvt-grp.is-open              { background: rgba(255, 255, 255, .03); }
+.pvt tbody.pvt-grp.is-open > tr.pvt-g > td   { border-top: 1px solid rgba(255, 255, 255, .22); }
+.pvt tbody.pvt-grp.is-open > tr.pvt-pad > td { border-bottom: 1px solid rgba(255, 255, 255, .22); }
+.pvt tr.pvt-pad    { height: 14px; }
+.pvt tr.pvt-pad td { padding: 0; border: 0; background: transparent; }
+/* The first group loses its top border: the sticky header's 2px shadow and
+   that border land on the same vertical and add up to a blurry 3px band with
+   two alphas in it. */
+.pvt tbody.pvt-grp:first-of-type > tr.pvt-g > td { border-top: 0; }
+
+/* ── the cell, and the mark inside it ───────────────────────────────────── */
+/* THE WHOLE CELL IS THE BUTTON — v6.46's sentence, unchanged. Hitting a 14px
+   square is a lottery; what shrank is the PAINT, not the target. */
+.pvt .pvt-cel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  appearance: none;
+  transition: background-color .12s ease;
+}
+/* EMPTY IS ALMOST NOTHING. The square is outlined at white 7% — the dividers'
+   own alpha — so 280 empty cells read as white space with blue marks in it,
+   rather than as 280 boxes asking to be answered. It is the app's pill at a
+   4px radius, so its fill, its masked ring and its hover all come from the
+   shared family rather than a fourth copy of them. */
+.pvt .pvt-sq {
+  /* Its own border width and ring colours, declared here the way every other
+     family in this app declares them — the shared ::after at the end of this
+     file draws the geometry and this says which stroke and how far to pull it
+     out. `position: relative` is what gives that pseudo-element a box. */
+  --pill-bw: 1px;
+  --ring-top: var(--pill-on-stroke-top);
+  --ring-bottom: var(--pill-on-stroke-bottom);
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: transparent;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.pvt .pvt-cel:hover               { background: rgba(255, 255, 255, .045); }
+.pvt .pvt-cel:hover .pvt-sq       { border-color: rgba(255, 255, 255, .45); }
+.pvt .pvt-cel.is-on .pvt-sq       { background: var(--pill-on-bg); border-color: transparent; }
+.pvt .pvt-cel.is-on:hover .pvt-sq { background: var(--pill-on-bg-hover); }
+/* The ring itself is NOT drawn here: `.pvt-cel.is-on .pvt-sq` joins the shared
+   ::after selector list at the end of this file, for that list's own stated
+   reason — with no preprocessor, a shared selector list is the only way "the
+   same stroke" stays true after the next change to it. */
+/* After a mouse press the button kept focus and its square stayed lit, arguing
+   with its own blue. :focus-visible only fires when you arrived by keyboard,
+   which is exactly when the outline is worth having. */
+.pvt .pvt-cel:focus         { outline: none; }
+.pvt .pvt-cel:focus-visible { outline: 2px solid var(--pill-on-color); outline-offset: 1px; }
 
 /* ── Steam Languages edit table (buildSteamLanguagesEditSection) ──────
-   Reuses .prv-matrix/.prv-matrix-wrap/.prv-type-cell/.prv-check-cell/.prv-cb
+   Reuses .prv-matrix/.prv-matrix-wrap/.prv-type-cell/.prv-check-cell/.prv-hit
    above as-is (every row is always "on" here, so none of the is-on/disabled
    gating applies) — just adds a narrow trailing remove-button column. */
 .steam-lang-remove-hd { width: 32px; }
@@ -15981,15 +16712,38 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   font-size: inherit; font-family: inherit;
 }
 
-/* Matrix header: count badge + expand toggle on same row */
+/* Matrix header: count badge + expand toggle on same row.
+
+   THE ROW'S TOP MARGIN IS THE ROW'S, NOT THE BUTTON'S (v6.70). Jaco: *"que la
+   pill de data types selected y la de la advertencia se dibujen de tal manera
+   que el texto dentro de ellas esté alineado exactamente con el de Show all
+   data types."*
+
+   `align-items: center` centers each item's MARGIN box, so an item's border-box
+   centre lands at `rowHeight / 2 + itsOwnMarginTop / 2` — the toggle's own
+   `margin-top: 4px` was therefore pushing its text 2px BELOW two pills that
+   carry none. Measured 2.0, and it is arithmetic rather than a coincidence of
+   heights: it is half the margin, whatever the boxes measure.
+
+   So the 4 moves onto the row, where it was always a statement about the row's
+   distance from the section above it and never about the button. Nothing moves
+   on screen — the row is 4px shorter and starts 4px lower, so the toggle lands
+   exactly where it did and the pills come down to meet it. It also means a
+   third thing added to this row is aligned by construction, with no margin of
+   its own to remember.
+
+   Baselines follow from the centres with no extra work, which is why this does
+   not have to touch line-height: a single line box always centres its font's
+   own ascent+descent inside itself, so two boxes with aligned centres have
+   aligned baselines even though the `<button>` inherits the UA's
+   `line-height: normal` and the pills inherit the modal's. */
 .prv-matrix-header {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 4px;
 }
-
-.prv-count-badge { margin-left: 0; }
 
 /* Expand / collapse toggle above the matrix */
 .prv-expand-btn {
@@ -16003,20 +16757,81 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   font-size: 11px;
   font-family: inherit;
   padding: 6px 0;
-  margin-top: 4px;
   transition: color 0.12s;
 }
 .prv-expand-btn:hover { color: var(--text); }
 
+/* The two labels share one grid cell, so the button is as wide as the longer of
+   them in both states and neither it nor the count badge beside it moves when
+   you press it. See the note at the markup in buildPrivacyMatrix. Apple's table
+   only — Google Play's copy of this button still swaps its string and still
+   jumps, and goes with that table when it is ported. */
+.prv-expand-btn .prv-exp-label { display: grid; }
+.prv-expand-btn .prv-exp-label > span {
+  grid-area: 1 / 1;
+  text-align: left;
+  white-space: nowrap;
+}
+.prv-expand-btn .prv-exp-label > span.is-off { visibility: hidden; }
+
+/* THE GAP IS THE ROW'S `gap`, ONCE (v6.70). This carried `margin-left: 8px` on
+   top of the header's own 8px gap, so the badge sat 16 from the toggle while
+   the tracking pill beside it sat 8 from the badge — one row with two different
+   distances in it, from a margin written when this was the only thing in the
+   row. (A second rule further up had already tried `margin-left: 0` and was
+   losing on source order; it is deleted rather than left to fight this one.) */
 .prv-count-badge {
   display: inline-block;
-  margin-left: 8px;
   padding: 1px 8px;
   background: var(--blue-soft);
   color: var(--blue);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
+  line-height: normal;
+}
+
+/* THE TRACKING WARNING, BESIDE THE COUNT RATHER THAN UNDER THE TABLE (v6.70).
+   The full argument is at `trackPill` in render.js; the geometry is the count
+   badge's own — same 11px/600, same 1/8 padding, same pill radius — because
+   the two are one row making two statements about the same table, and a second
+   set of numbers beside it would read as a different KIND of thing.
+
+   ONLY THE HUE DIFFERS, and that is the whole point: `#FFB86B` is this app's
+   amber, which the colour table reserves for *this needs you*. The fill is that
+   hue at 14%, which is the wash a state wears here, against the count's own
+   `--blue-soft` — so the pair reads as "here is what you declared" and "one of
+   those needs work from you", told apart by colour alone.
+
+   `cursor: help` and no glyph: it is a `.tooltip-anchor`, and this table's own
+   two conventions (the row names, the column headings) are both bare handles.
+   A `!` disc would be the third, and this file's colour note is explicit that a
+   round `!` is a tooltip handle rather than an alert — so it would add a mark
+   without adding a fact. */
+/* THE ROW IS ONE LINE-HEIGHT, WHICH IS THE OTHER HALF OF THE ALIGNMENT (v6.70).
+   Centring the boxes is not enough on its own: a line box always positions its
+   glyphs by half-leading, so two boxes with the same centre still sit on two
+   baselines when their line-heights differ. The pills inherited the modal's
+   1.4 while the `<button>` carries the UA `font` shorthand's `line-height:
+   normal`, and measured that is exactly 0.453px of drift — half the leading,
+   (15.4 − 14.5) / 2.
+
+   So both pills state `normal`, which is the value the thing they align to
+   already uses. It is a per-face-and-size constant rather than a number to keep
+   in sync, so it costs no maintenance and cannot go stale; and because the
+   family's 600 face shares its metrics with the 400 (verified — an explicit
+   14.5px and `normal` give the identical result), the weight difference does
+   not reopen it. Measured after: baseline delta 0.000 on both pills. */
+.pvt-trk {
+  display: inline-block;
+  padding: 1px 8px;
+  background: rgba(255, 184, 107, .14);
+  color: #FFB86B;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: normal;
+  cursor: help;
 }
 
 /* ── Privacy chip picker (new matrix replacement) ────── */
@@ -20235,6 +21050,11 @@ body.viewing-splash #app-guide { display: none; }
 .profile-avatar::after,
 .spp-pin.is-on::after,
 .prv-preset-chip.is-active::after,
+/* The Apple Data Types table's 14px mark (v6.52). The class that carries the
+   state is on the BUTTON and the ring is drawn on the square inside it, which
+   is the only reason this entry is a descendant selector rather than a single
+   class like its neighbours. */
+.pvt-cel.is-on .pvt-sq::after,
 .loc-primary-pill::after {
   /* AGAINST THE BORDER BOX, NOT THE PADDING BOX — which is the whole of what
      was wrong. An absolutely positioned box resolves `inset` against its

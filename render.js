@@ -6534,7 +6534,18 @@ function renderStepModal() {
   // plain step body. Scoped to ios/macos only, per request — macos_full's
   // own 'privacy' step is a separate, differently-reached surface that
   // wasn't asked for here.
-  const isPrivacyWide = stepId === 'storePreview' && (platformId === 'ios' || platformId === 'macos') && state.storePreviewFlipTarget?.[platformId] === 'data';
+  /* TWO DOORS, ONE TABLE, ONE WIDTH (v6.52). This used to test the flip alone —
+     `storePreview` + a `data` flip target — and that was the door the width was
+     designed for. But `privacy` is also a REAL STEP (macos_full lists it), and
+     reached that way the identical table was drawn in a 680px modal with 253px
+     of sideways scroll. The old comment called that "a separate, differently
+     reached surface that wasn't asked for here"; it is the same builder, the
+     same markup and the same 748px table, so it is the same surface reached by
+     a different route and it takes the same width. */
+  const isPrivacyWide =
+    (stepId === 'privacy') ||
+    (stepId === 'storePreview' && (platformId === 'ios' || platformId === 'macos')
+      && state.storePreviewFlipTarget?.[platformId] === 'data');
   modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
@@ -12498,11 +12509,65 @@ function buildPrivacySection(pid = 'ios') {
     ${collectBlock}`;
 }
 
+/* ── THE CELL IS THE CONTROL ──────────────────────────────────────────
+   Jaco: *"quitando los checks cuadrados y convirtiendo todas las celdas en
+   pulsables."*
+
+   THESE WERE THE LAST NATIVE CONTROLS IN THE APP. Every other pressable thing
+   here is drawn by us — the step disc, the pills, the masked selection stroke —
+   and this table ran eight `<input type="checkbox">` per row on `accent-color`,
+   which is both a different shape language and a different blue from anything
+   around it.
+
+   AND THE TARGET WAS 15px WIDE IN A 98px COLUMN. The cell was a box with a tiny
+   control sitting in the middle of it, so ~85% of every cell you aimed at did
+   nothing — the same complaint the Mac preview's screenshot frames answered
+   ("the frames are not the button — the well is"). The button IS the cell now:
+   `.prv-hit` fills the column's whole width and the row's whole height, and the
+   18px mark inside it is paint, not the target.
+
+   THREE STATES, AND THE THIRD IS WHY THIS IS A HELPER AND NOT A STRING.
+     · live   — the row is part of your answer; the socket is visible at rest.
+     · add    — the row is NOT selected yet. Pressing a cell here is a
+                STATEMENT ("I collect this, for this purpose"), so it does the
+                two things at once rather than refusing. It used to be
+                `disabled` with `opacity: 0`, i.e. a name followed by seven
+                voids, which reads as broken rather than as off.
+     · locked — genuinely unavailable, which only Google Play has: Ephemeral
+                and Required mean nothing until Collected is on. A real
+                impossibility, not merely an unanswered row — so it keeps no
+                pointer and no hover.
+
+   The socket only RESTS visible on a live row; an add row reveals its sockets
+   when the pointer crosses it. Same argument as the calendar day panel's ×,
+   which is bare until its row is hovered: a permanent socket in all 280 cells
+   would be 280 invitations, and at any moment ~86% of this grid is cells you
+   have said nothing about.
+
+   The glyph is `smCheckSVG()` with NO size argument, sized by CSS, for the
+   standing reason (`.ios-step-num svg`, `.active-card-icon svg`): a literal at
+   the call site is what goes stale the first time the box moves. It is emitted
+   in every state and hidden by `color: transparent`, so pressing a cell cannot
+   change its layout. */
+function _prvCell(on, js, opts = {}) {
+  const { add = false, locked = false, meta = false } = opts;
+  const cls = `prv-check-cell${meta ? ' prv-meta-col' : ''}`;
+  if (locked) {
+    return `<td class="${cls}"><span class="prv-hit is-locked"><span class="prv-box"></span></span></td>`;
+  }
+  return `<td class="${cls}">
+    <button type="button" class="prv-hit${add ? ' is-add' : ''}" aria-pressed="${on ? 'true' : 'false'}"
+            onclick="event.stopPropagation();${js}">
+      <span class="prv-box${on ? ' is-on' : ''}">${smCheckSVG()}</span>
+    </button>
+  </td>`;
+}
+
 function buildPrivacyMatrix(a, pid = 'ios') {
   const cols = IOS_PURPOSES;
   const META_COLS = [
-    { id: 'linked_identity', label: t('ios.privacy.linked.label') || 'Linked to Identity' },
-    { id: 'used_tracking',   label: t('ios.privacy.tracking.label') || 'Used for Tracking' },
+    { id: 'linked_identity', label: t('ios.privacy.linked.label') || 'Linked to Identity',  head: ['Linked to', 'Identity'] },
+    { id: 'used_tracking',   label: t('ios.privacy.tracking.label') || 'Used for Tracking', head: ['Used for', 'Tracking'] },
   ];
   const META_COL_TIPS = {
     linked_identity: t('ios.privacy.linked.tooltip') || "Data directly linked to the user's identity — such as their account, name, or email address.",
@@ -12513,118 +12578,320 @@ function buildPrivacyMatrix(a, pid = 'ios') {
   const selectedTypeIds = new Set(Object.keys(a.dataPerType));
   const selectedCount   = Object.keys(a.dataPerType).length;
 
-  // Per-group collapse state (Contact Info, Health & Fitness, ...) — a
-  // group with one or more flagged/selected data types is ALWAYS expanded,
-  // every time the table renders (whether it's first shown, or right after
-  // a preset is applied/removed via togglePrivacyPreset, app.js) — that
-  // invariant is non-negotiable, so a flagged group ignores any override
-  // below. A group with nothing flagged defaults to collapsed, but can
-  // still be expanded manually (state.privacyGroupExpanded, keyed
-  // "pid:Group Name") to browse/select types inside it that no preset has
-  // touched — that manual peek is the ONLY thing the override map is for
-  // now, which is why togglePrivacyPreset clears it for this pid on every
-  // preset click rather than letting a stale peek survive a data change.
-  // Keyed by pid (not shared flat) because although ios/macos share the
-  // same dataPerType (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's
-  // is fully independent (_appStoreAnswers) and shouldn't inherit ios/macos's
-  // per-group peeks or vice versa.
-  if (!state.privacyGroupExpanded) state.privacyGroupExpanded = {};
-  const _groupKey     = g => `${pid}:${g.group}`;
-  const _groupFlagged = g => g.types.some(gt => selectedTypeIds.has(gt.id));
-  const _isGroupExpanded = g => _groupFlagged(g) || !!state.privacyGroupExpanded[_groupKey(g)];
+  /* ── THE TABLE IS AN ACCORDION, AND THE 16 GROUPS ARE ALWAYS THE VIEW ─────
+     v6.52, ported from Jaco's own mock (apple-privacy-modal-990.html).
 
-  // Dynamic ordering: flagged (always-expanded) groups float to the top,
-  // in their original relative order, followed by unflagged (collapsed —
-  // unless manually peeked open) groups, also in their original relative
-  // order — so a group that just gained a flagged type (individually, or
-  // via a preset) visibly moves up next to the others that already need
-  // review, instead of staying buried in its fixed catalog position.
-  const sortedGroups = IOS_DATA_TYPES
+     WHAT IT REPLACES: every type of every group drawn at once — 35 rows of 8
+     cells, of which 40 held a control. The inventory called that out as 86%
+     empty and left the structural question open; this is the answer. The 16
+     group names fit on one screen with nothing scrolled, each one carries its
+     own count of what you have declared inside it, and exactly one opens at a
+     time.
+
+     ONE AT A TIME IS THE PART THAT DOES THE WORK. With several open, the
+     open group's lighter ground marks four places and stops meaning "you are
+     here"; with one, it is the only lit block on the table and the other
+     fifteen step back to .38. It also keeps all sixteen reachable without
+     scrolling past a group you have expanded and forgotten. */
+  const _openKey  = `${pid}`;
+  if (!state.privacyGroupOpen) state.privacyGroupOpen = {};
+  const openGroup = state.privacyGroupOpen[_openKey] || null;
+
+  /* THE OLD MODEL IS GONE AND IT IS WORTH SAYING WHAT IT WAS, because its
+     central claim was the thing this replaces. It read: "a group with one or
+     more flagged data types is ALWAYS expanded, every time the table renders —
+     that invariant is non-negotiable", with a per-group override map
+     (`privacyGroupExpanded`) on top for manually peeking into the rest.
+
+     Two costs, and the first is the one its own comment admits: a header whose
+     group is flagged is a button that does nothing, because the invariant
+     immediately re-opens it. The second is that three presets flag four groups,
+     so four blocks opened at once and the table went back to being a wall —
+     which is exactly what the 86%-empty inventory was about.
+
+     The counter on each header is what made the invariant unnecessary. A closed
+     group that says "2" has not hidden anything from you; it has told you what
+     is inside without spending a screen on it.
+
+     Keyed by pid (not shared flat) because although ios/macos share the same
+     dataPerType (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's is
+     fully independent (_appStoreAnswers) and must not inherit ios/macos's open
+     group or its frozen order. */
+  const _groupFlagged = g => g.types.some(gt => selectedTypeIds.has(gt.id));
+
+  /* THE ORDER IS FROZEN WHEN THE TABLE OPENS, NOT RECOMPUTED ON EVERY CLICK.
+     Flagged groups float to the top, in Apple's own relative order, and the
+     sort is stable so the rest keep theirs. That much is unchanged — what
+     changed is WHEN it is decided. Recomputed per render, marking the first
+     cell of an untouched group made that group jump to the top of the table
+     **under the pointer that had just pressed it**, which is the one thing a
+     press must never do (the submitted card's disclosure toggle and the
+     hold-to-submit row are both built under that rule).
+
+     `togglePrivacyMatrix` (app.js) stamps the order on the way in; this only
+     reads it, and falls back to computing one if the field is missing so a
+     restored state or a direct render can never draw an empty table. */
+  const _computeOrder = () => IOS_DATA_TYPES
     .map((g, i) => ({ g, i, flagged: _groupFlagged(g) }))
     .sort((x, y) => (x.flagged === y.flagged) ? x.i - y.i : (x.flagged ? -1 : 1))
-    .map(x => x.g);
+    .map(x => x.g.group);
+  const _order = (state.privacyGroupOrder && state.privacyGroupOrder[_openKey]) || _computeOrder();
+  const sortedGroups = _order
+    .map(name => IOS_DATA_TYPES.find(g => g.group === name))
+    .filter(Boolean);
 
-  // Header row with inline tooltips
+  /* ── THE NAME IS THE HANDLE ───────────────────────────────────────────
+     Jaco: *"quizás los tooltip symbols nos hacen daño y habría que ponerlos o
+     debajo de los nombres o simplemente haciendo hover sobre el nombre del uso
+     de los datos."*
+
+     THIS TABLE ALREADY HAD TWO TOOLTIP CONVENTIONS AND ONLY ONE OF THEM DREW A
+     MARK. The 35 data-type names down the first column are bare
+     `.tooltip-anchor`s — hover the name, read the description, no glyph — and
+     the eight column headings carried a `?` disc. One table, two answers to the
+     same question. The row labels are the older and the quieter, so the
+     headings join them rather than the other way round.
+
+     WHAT THE ICON REALLY COSTS IS HEIGHT, NOT WIDTH, and that is worth being
+     exact about because it is not what it looked like. Measured, the column's
+     floor is the longest WORD in its label — "Personalization" at 84.0px —
+     which the icon does not touch; what the icon did was ride along as one more
+     wrapping token, pushing App Functionality to three lines and the whole
+     header row to 61px. Gone, the row is 46.
+
+     `_prvColHead` is one helper for both groups because they are one row: the
+     two meta columns were already a verbatim copy of the purpose header with a
+     different tip source.
+
+     TWO LINES ARE PRINTED EVEN WHEN THE FIRST IS EMPTY (v6.52). `.h1` and
+     `.h2` are two blocks rather than one string with a `<br>`, and an empty
+     first line goes out as `&nbsp;` — so every heading occupies exactly two
+     lines and the eight of them share one baseline by construction rather than
+     by `vertical-align`. Both lines carry `white-space: nowrap`: the whole
+     point of abbreviating "Personaliz." and "Functional." in state.js is that
+     the break is OURS, and a column narrow enough to re-wrap them would undo
+     that silently.
+
+     THE WHOLE `<th>` IS THE ANCHOR, not a span inside it. An inline box's hover
+     area is its GLYPHS, so on a two-line heading the dead centre falls in the
+     leading between the lines where no inline box exists — measured in v6.51,
+     `elementFromPoint` there returned the `<th>`. The tip carries the full
+     label AND the description, which is what makes the abbreviation honest:
+     Apple's own wording is one hover away. */
+  const _prvColHead = (lines, tip, cls) =>
+    `<th class="pvt-col-hd${cls ? ' ' + cls : ''} tooltip-anchor" data-tip="${tip}"` +
+    `><span class="pvt-h1">${lines[0] || '&nbsp;'}</span>` +
+    `<span class="pvt-h2">${lines[1] || lines[0] || ''}</span></th>`;
+
+  /* THE BREAK IS AN ENGLISH TYPOGRAPHIC DECISION, so a real translation does
+     not inherit it. `t()` returns the KEY when a string is missing and the
+     English file is a verbatim copy of `label`, so "is there a locale override"
+     is not the question to ask — the first attempt asked it and every heading
+     came back single-line, because en.json always answers. The test is whether
+     the resolved string IS the English one: if it is, use the chosen lines; if
+     a translator has replaced it (zh-CN has all six), print theirs and let it
+     wrap on its own, which is right for a language that breaks per character
+     anyway. A locale that wants its own two lines can grow a `head` later. */
   const purposeHeaders = cols.map(c => {
-    const cLabel = t(`ios.purpose.${c.id}.label`) || c.label;
     const cDesc  = t(`ios.purpose.${c.id}.desc`)  || c.desc;
-    return `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${cDesc}">${cLabel} <span class="tooltip-icon">?</span><span class="tooltip-body">${cDesc}</span></span></th>`;
+    const cLabel = t(`ios.purpose.${c.id}.label`) || c.label;
+    const cHead  = (cLabel === c.label) ? (c.head || ['', c.label]) : ['', cLabel];
+    // The tip names the purpose in full before describing it — that is the
+    // half the abbreviated heading gave up.
+    return _prvColHead(cHead, `${cLabel} — ${cDesc}`);
   }).join('');
   const metaHeaders = META_COLS.map(c =>
-    `<th class="prv-col-hd prv-meta-col"><span class="tooltip-anchor" data-tip="${META_COL_TIPS[c.id]}">${c.label} <span class="tooltip-icon">?</span><span class="tooltip-body">${META_COL_TIPS[c.id]}</span></span></th>`).join('');
+    _prvColHead(c.head, `${c.label} — ${META_COL_TIPS[c.id]}`)).join('');
 
-  // Build rows — all types shown when expanded (grouped); none when collapsed
+  /* ── THE CELL IS THE CONTROL, AND THE MARK IS A 14px SQUARE INSIDE IT ─────
+     v6.46's sentence is unchanged and v6.52 only moves the PAINT. The hit area
+     is still the whole cell — "acertar un cuadrito de 14px es una lotería" —
+     and what shrank is the thing drawn in it.
+
+     WHY IT HAD TO SHRINK: at 92 × 30 the mark was the right size for the six
+     columns the old table had room for, and the same fill over eight columns in
+     a 748px table turned the grid into a wall of slabs. The socket went with
+     it. An EMPTY cell now draws nothing at all: a 14px square outlined at
+     white 7% — the divider's own alpha — so the table reads as white space with
+     blue marks where there is data, instead of 280 boxes asking for attention.
+     That is the same arithmetic as v6.46's own ".07 was right for an 18px chip
+     and ten times too much ink over 92 × 30", run in the other direction.
+
+     THE SQUARE WEARS THE APP'S OWN SELECTED-PILL STROKE at a 4px radius: its
+     fill is `--pill-on-bg` and its ring is the masked gradient every other
+     selected thing in this app draws, joined through the shared `::after`
+     selector list rather than redrawn locally.
+
+     AND THE CELL CARRIES NO TOOLTIP (v6.66). Jaco: *"no me has quitado los
+     tooltips on hover de cada checkmark, quítalos por favor."* Every square was
+     a `.tooltip-anchor` naming its type and its column, on the argument that it
+     is *"what keeps a grid of unlabelled squares readable"*. With one group open
+     that argument does not survive its own numbers: a cell has its TYPE printed
+     on the same row, four inches left, and its COLUMN printed at the top of the
+     table, which is sticky and therefore always on screen. The tooltip repeated
+     two labels you can already read, on 128 targets, and a hint that fires on
+     every pass of the pointer across a grid is noise rather than help. The two
+     anchors that stay are the ones naming something NOT on screen — the row's
+     type name (Apple's description of it) and the column heading (its full
+     unabbreviated label). `aria-label` keeps the pair for a screen reader, where
+     "the label is elsewhere on screen" is not an answer. */
+  const _pvtCell = (on, js, tip) =>
+    `<td class="pvt-cl"><button type="button" class="pvt-cel${on ? ' is-on' : ''}"` +
+    ` aria-pressed="${on ? 'true' : 'false'}" aria-label="${tip}"` +
+    ` onclick="event.stopPropagation();${js}"><i class="pvt-sq"></i></button></td>`;
+
+  const COLSPAN = 1 + cols.length + META_COLS.length;
+  const anyOpen = !!openGroup;
+
+  // Resolved once, OUTSIDE the row loops — whose own variable is `t` and so
+  // shadows the locale helper of the same name. (That shadowing is why the old
+  // builder could not translate anything inside a row either.)
+  const colLabel = {};
+  cols.forEach(c => { colLabel[c.id] = t(`ios.purpose.${c.id}.label`) || c.label; });
+  META_COLS.forEach(c => { colLabel[c.id] = c.label; });
+
+  // Build rows — one <tbody> per group, so the open block's lighter ground
+  // covers its header, its rows and its tail as one surface. A background on a
+  // run of <tr>s cannot do that; a <tbody> can.
   let bodyHtml = '';
   if (expanded) {
     sortedGroups.forEach(group => {
-      const groupOn = _isGroupExpanded(group);
+      const groupOn = openGroup === group.group;
+      const nSel    = group.types.filter(gt => selectedTypeIds.has(gt.id)).length;
+      const gCls    = [
+        'pvt-g',
+        nSel ? '' : 'is-empty',
+        groupOn ? 'is-open' : '',
+        anyOpen && !groupOn ? 'is-dim' : '',
+      ].filter(Boolean).join(' ');
+
+      let rows = '';
+      if (groupOn) {
+        group.types.forEach((t, ti) => {
+          const isOn = !!a.dataPerType[t.id];
+          const td   = a.dataPerType[t.id] || { purposes: [], identity: null, tracking: null };
+          const cells = cols.map(c => {
+            const checked = td.purposes.includes(c.id);
+            return _pvtCell(checked,
+              `togglePrivacyPurpose('${t.id}','${c.id}',${!checked})`,
+              `${t.label} · ${colLabel[c.id]}`);
+          }).join('') + META_COLS.map(c => {
+            const isChecked = c.id === 'linked_identity' ? td.identity === 'yes' : td.tracking === 'yes';
+            const field     = c.id === 'linked_identity' ? 'identity' : 'tracking';
+            return _pvtCell(isChecked,
+              `setPrivacyMeta('${t.id}','${field}',${!isChecked})`,
+              `${t.label} · ${colLabel[c.id]}`);
+          }).join('');
+          rows += `
+            <tr class="pvt-r is-in${isOn ? ' has-data' : ''}${ti % 2 ? ' is-alt' : ''}">
+              <td class="pvt-ty tooltip-anchor" data-tip="${t.label} — ${t.desc}">${t.label}</td>
+              ${cells}
+            </tr>`;
+        });
+        // A tail row rather than padding on the last data row: it is what
+        // carries the open block's bottom rule, and it must be the tbody's own
+        // last child for that rule to land under the whole group.
+        rows += `<tr class="pvt-pad"><td colspan="${COLSPAN}"></td></tr>`;
+      }
+
       bodyHtml += `
-        <tr class="prv-group-row${groupOn ? ' is-expanded' : ''}" onclick="togglePrivacyGroup('${pid}','${group.group}',${groupOn})">
-          <td colspan="${1 + cols.length + META_COLS.length}"><span class="prv-group-chev">${groupOn ? _chevUp : _chevDown}</span>${group.group}</td>
-        </tr>`;
-      if (!groupOn) return;
-      group.types.forEach(t => {
-        const isOn = !!a.dataPerType[t.id];
-        const td   = a.dataPerType[t.id] || { purposes: [], identity: null, tracking: null };
-        const purposeCells = cols.map(c => {
-          const checked = td.purposes.includes(c.id);
-          return `<td class="prv-check-cell">
-            <input type="checkbox" class="prv-cb" ${isOn ? '' : 'disabled'}
-                   data-type="${t.id}" data-col="${c.id}"
-                   ${checked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="togglePrivacyPurpose('${t.id}','${c.id}',this.checked)">
-          </td>`;
-        }).join('');
-        const metaCells = META_COLS.map(c => {
-          const isChecked = c.id === 'linked_identity' ? td.identity === 'yes' : td.tracking === 'yes';
-          const field     = c.id === 'linked_identity' ? 'identity' : 'tracking';
-          return `<td class="prv-check-cell prv-meta-col">
-            <input type="checkbox" class="prv-cb" ${isOn ? '' : 'disabled'}
-                   data-type="${t.id}" data-meta="${field}"
-                   ${isChecked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="setPrivacyMeta('${t.id}','${field}',this.checked)">
-          </td>`;
-        }).join('');
-        bodyHtml += `
-          <tr class="prv-data-row ${isOn ? 'is-on' : ''}">
-            <td class="prv-type-cell">
-              <span class="prv-type-name tooltip-anchor" onclick="togglePrivacyDataType('${t.id}')" data-tip="${t.desc}">${t.label}</span>
+        <tbody class="pvt-grp${groupOn ? ' is-open' : ''}">
+          <tr class="${gCls}">
+            <td colspan="${COLSPAN}" data-g="${group.group}"
+                onclick="togglePrivacyGroup('${pid}','${group.group.replace(/'/g, "\\'")}')">
+              <div class="pvt-grow">
+                <span class="pvt-gtx">${group.group}</span>
+                ${nSel ? `<span class="pvt-gn">${nSel}</span>` : ''}
+                <span class="pvt-gsp"></span>
+                <span class="pvt-gc${groupOn ? ' is-up' : ''}">${_chevDown}</span>
+              </div>
             </td>
-            ${purposeCells}
-            ${metaCells}
-          </tr>`;
-      });
+          </tr>
+          ${rows}
+        </tbody>`;
     });
   }
 
   const tableHtml = expanded ? `
-    <div class="prv-matrix-wrap">
-      <table class="prv-matrix">
+    <div class="pvt-scroll" id="pvt-scroll" data-inner-scroll>
+      <table class="pvt">
         <thead>
           <tr>
-            <th class="prv-type-hd">Data Type</th>
+            <th class="pvt-name-hd"><span class="pvt-h2">Data Type</span></th>
             ${purposeHeaders}
             ${metaHeaders}
           </tr>
         </thead>
-        <tbody>${bodyHtml}</tbody>
+        ${bodyHtml}
       </table>
     </div>
-    ${Object.values(a.dataPerType).some(t => t.tracking === 'yes') ?
-      `<div class="dist-tip-box" style="margin-top:10px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span><strong>Tracking:</strong> You must implement Apple's AppTrackingTransparency framework and request user permission before collecting any data used for tracking.</span>
-      </div>` : ''}` : '';
+  ` : '';
+
+  /* THE TRACKING WARNING IS A PILL BESIDE THE COUNT, NOT A BOX UNDER THE TABLE
+     (v6.70). Jaco: *"salta un mensaje de advertencia de apple, que ahora mismo
+     se entierra en la parte baja de la tabla de una forma fea. Ignóralo, o
+     añádelo como un pill de advertencia de una palabra al lado del 'X data
+     types selected'."*
+
+     IT WAS IN A PLACE THAT CANNOT BE SEEN. The box sat AFTER `.pvt-scroll`, and
+     that scroller is `flex: 1` inside a chain built so the table absorbs every
+     spare pixel — so the note lived below a 400px table in a modal that does not
+     scroll, i.e. off the bottom of the step, arriving only when the table itself
+     is folded away. A warning you have to close the thing it is about in order
+     to read is not a warning.
+
+     The count badge is the one thing on this step that is always on screen and
+     always about the table, which makes it the right neighbour: it says how much
+     you have declared, and this says that one of those declarations carries an
+     obligation. Same row, same 11px, same pill.
+
+     ONE WORD, AND THE SENTENCE IS THE TOOLTIP — which is the test v6.67 wrote
+     when the cells LOST theirs: an anchor earns its place by naming something
+     NOT on screen. A cell's type and column are both printed; Apple's
+     AppTrackingTransparency requirement is printed nowhere else, so it keeps its
+     full text and loses only the 300px of box it was reserving.
+
+     AMBER, WHICH IS FORCED. The colour table gives three: green done, amber
+     *this needs you*, red wrong. This is neither finished nor an error — it is
+     work waiting outside this app (you must implement ATT), which is amber's own
+     sentence. It was drawn in `.dist-tip-box`'s green, and a green warning is a
+     contradiction in this palette. */
+  const trackingOn = Object.values(a.dataPerType).some(t => t.tracking === 'yes');
+  const trackPill  = trackingOn
+    ? `<span class="pvt-trk tooltip-anchor" data-tip="Tracking — you must implement Apple's AppTrackingTransparency framework and request user permission before collecting any data used for tracking.">Tracking</span>`
+    : '';
 
   return `
     <div class="ios-subsection" style="margin-top:10px;">
       <div class="prv-matrix-header">
+        <!-- THE TOGGLE DOES NOT MOVE WHEN IT CHANGES ITS MIND (v6.58). Jaco:
+             *"el SHOW ALL DATA TYPES está bien colocado, que el HIDE DATA TYPES
+             esté igual, que no se mueva."* Measured, the button went 144.4 →
+             118 and dragged the count badge 26.4px left with it — a control
+             that jumps as a consequence of being pressed, which is the rule the
+             submitted card's disclosure toggle and the hold-to-submit row were
+             both rebuilt under.
+
+             BOTH LABELS ARE ALWAYS IN THE BOX, one of them hidden: they are
+             stacked in one grid cell, so the width is the larger of the two by
+             construction, in any language. A measured min-width would have been
+             one number that goes stale the first time either string is
+             translated or the face changes — the same failure the inline
+             editor's reserved error column is on record for. It uses
+             visibility rather than display, so the hidden one keeps its box.
+
+             (No backticks in this comment: it sits inside a template literal,
+             and one backtick here ends the string and turns the next word into
+             an identifier — the trap CLAUDE.md records, hit again writing it.) -->
         <button class="prv-expand-btn" onclick="togglePrivacyMatrix()">
-          ${expanded ? `${_chevUp} Hide data types` : `${_chevDown} Show all data types`}
+          ${expanded ? _chevUp : _chevDown}
+          <span class="prv-exp-label">
+            <span${expanded ? '' : ' class="is-off"'}>Hide data types</span>
+            <span${expanded ? ' class="is-off"' : ''}>Show all data types</span>
+          </span>
         </button>
         ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} data type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
+        ${trackPill}
       </div>
       ${tableHtml}
     </div>`;
@@ -16866,11 +17133,16 @@ function buildAndroidDataMatrix(a) {
   const selectedTypeIds = new Set(Object.keys(a.dataPerType));
   const selectedCount   = selectedTypeIds.size;
 
+  // The name is the handle here too — see _prvColHead's note in
+  // buildPrivacyMatrix. Google Play's labels are mostly single words, so they
+  // carry no `head` and simply wrap on their own; what they gain from this is
+  // the same thing the App Store's did, the `?` no longer riding along as an
+  // extra wrapping token in an already tight column.
   const usageHeaders   = USAGE_COLS.map(c =>
-    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.tip}">${c.label} <span class="tooltip-icon">?</span><span class="tooltip-body">${c.tip}</span></span></th>`
+    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.tip}">${c.label}<span class="tooltip-body">${c.tip}</span></span></th>`
   ).join('');
   const purposeHeaders = ANDROID_PURPOSES.map(c =>
-    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.desc}">${c.label} <span class="tooltip-icon">?</span><span class="tooltip-body">${c.desc}</span></span></th>`
+    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.desc}">${c.label}<span class="tooltip-body">${c.desc}</span></span></th>`
   ).join('');
 
   let bodyHtml = '';
@@ -16882,30 +17154,30 @@ function buildAndroidDataMatrix(a) {
         const td   = a.dataPerType[t.id] || {};
 
         const usageCells = USAGE_COLS.map(col => {
-          const epOrReq   = col.id === 'ephemeral' || col.id === 'required';
-          const isDisabled = !isOn || (epOrReq && !td.collected);
+          const epOrReq = col.id === 'ephemeral' || col.id === 'required';
+          // LOCKED IS NOT THE SAME AS UNANSWERED, and Google Play is the only
+          // table here that has both. Ephemeral and Required are statements
+          // ABOUT collected data, so they mean nothing until Collected is on —
+          // that is a real impossibility and keeps no pointer. Collected and
+          // Shared on an unselected row are merely unanswered, so they stay
+          // pressable and turn the type on (see _prvCell's 'add').
+          const locked  = epOrReq && !td.collected;
           const checked = isOn && (
             col.id === 'collected' ? !!td.collected :
             col.id === 'shared'    ? !!td.shared    :
             col.id === 'ephemeral' ? !!td.ephemeral :
             !!td.required
           );
-          return `<td class="prv-check-cell${isDisabled ? ' prv-disabled' : ''}">
-            <input type="checkbox" class="prv-cb" ${isDisabled ? 'disabled' : ''}
-                   ${checked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="setAndroidTypeFlag('${t.id}','${col.id}',this.checked)">
-          </td>`;
+          return _prvCell(checked,
+            `setAndroidTypeFlag('${t.id}','${col.id}',${!checked})`,
+            { add: !isOn, locked });
         }).join('');
 
         const purposeCells = ANDROID_PURPOSES.map(p => {
           const checked = isOn && (td.purposes || []).includes(p.id);
-          return `<td class="prv-check-cell">
-            <input type="checkbox" class="prv-cb" ${isOn ? '' : 'disabled'}
-                   ${checked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="toggleAndroidPurpose('${t.id}','${p.id}',this.checked)">
-          </td>`;
+          return _prvCell(checked,
+            `toggleAndroidPurpose('${t.id}','${p.id}',${!checked})`,
+            { add: !isOn });
         }).join('');
 
         bodyHtml += `
@@ -17406,12 +17678,13 @@ function buildSteamTechnicalSection() {
    Reached by clicking the Languages side-block on the prototype page (see
    languagesHtml, buildSteamStorePreviewPrototypeSection). Mirrors the App
    Store Data Collection Questions' full matrix table (buildPrivacyMatrix,
-   above) — same .prv-matrix-wrap/.prv-matrix/.prv-type-cell/.prv-check-cell/
-   .prv-cb classes — but simpler: every listed language is already "in" by
-   definition (no row-level on/off gate the way a data type needs one before
-   its purpose columns unlock), so each Interface/Full Audio/Subtitles
-   checkbox is independently togglable straight away, plus a per-row remove
-   button to drop a language entirely.
+   above) — same .prv-matrix-wrap/.prv-matrix/.prv-type-cell/.prv-check-cell
+   classes and the same _prvCell pressable cell — but simpler: every listed
+   language is already "in" by definition (no row-level on/off gate the way a
+   data type needs one before its purpose columns unlock), so every row is
+   `is-on`, no cell is ever 'add' or 'locked', and each Interface/Full Audio/
+   Subtitles cell is independently togglable straight away, plus a per-row
+   remove button to drop a language entirely.
    Backed by state.steamSubmitAnswers.languages, seeded once — the first
    time this section is opened — from Game Details' Primary + Supported
    languages (see _steamSeedLanguagesIfNeeded, app.js), then never
@@ -17425,18 +17698,9 @@ function buildSteamLanguagesEditSection() {
   const rows = langs.map(l => `
     <tr class="prv-data-row is-on">
       <td class="prv-type-cell"><span class="prv-type-name">${escHtml(OB_LANG_NAMES[l.code] || l.code)}</span></td>
-      <td class="prv-check-cell">
-        <input type="checkbox" class="prv-cb" ${l.interface ? 'checked' : ''}
-               onchange="toggleSteamLanguageFlag('${l.code}','interface',this.checked)">
-      </td>
-      <td class="prv-check-cell">
-        <input type="checkbox" class="prv-cb" ${l.fullAudio ? 'checked' : ''}
-               onchange="toggleSteamLanguageFlag('${l.code}','fullAudio',this.checked)">
-      </td>
-      <td class="prv-check-cell">
-        <input type="checkbox" class="prv-cb" ${l.subtitles ? 'checked' : ''}
-               onchange="toggleSteamLanguageFlag('${l.code}','subtitles',this.checked)">
-      </td>
+      ${_prvCell(!!l.interface, `toggleSteamLanguageFlag('${l.code}','interface',${!l.interface})`)}
+      ${_prvCell(!!l.fullAudio, `toggleSteamLanguageFlag('${l.code}','fullAudio',${!l.fullAudio})`)}
+      ${_prvCell(!!l.subtitles, `toggleSteamLanguageFlag('${l.code}','subtitles',${!l.subtitles})`)}
       <td class="steam-lang-remove-cell">
         <button type="button" class="steam-lang-remove-btn" title="Remove language" onclick="removeSteamLanguage('${l.code}')">✕</button>
       </td>

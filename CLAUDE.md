@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.44**
+Current version: **v6.45**
 
 ---
 
@@ -5098,6 +5098,797 @@ and `androidSubmitAnswers.dataPerType` is written only by
 map above cannot serve it — mapping each preset onto Google's vocabulary is the
 real work, and it is the next thing to do here.
 
+### The cell is the control (v6.46)
+
+`_prvCell` (render.js) and `.prv-hit` / `.prv-box` (style.css). Jaco, after the
+inventory below: *"podemos empezar poco a poco, quitando los checks cuadrados y
+convirtiendo todas las celdas en pulsables."*
+
+**THE INVENTORY FIRST, because the number is what decides what this table
+becomes.** Measured with three presets on: **35 data types × 8 columns = 280
+cells if you open everything, and 40 of them hold a control — the grid is 86%
+empty.** As it stands on screen, 14 rows visible, 5 are your answer and **9 are
+there only because they share a group with one of yours**. A row is drawn
+because of its neighbour, not because of anything you said. That is the
+structural question, and it is still open; everything below is the first pass.
+
+**THESE WERE THE LAST NATIVE CONTROLS IN THE APP.** Eight
+`<input type="checkbox">` a row on `accent-color`, in a codebase where every
+other pressable thing — the step disc, the pills, the masked selection stroke —
+is drawn by us. **And the target was 15px wide in a 98px column**: the cell was
+a box with a tiny control floating in it, so most of what you aimed at did
+nothing. Same complaint the Mac preview's screenshot frames answered — *the
+frames are not the button, the well is*.
+
+**THE FIRST PASS MOVED THE TARGET AND LEFT THE PAINT BEHIND, AND THAT IS THE
+LESSON (fixed v6.48).** It made `.prv-hit` the whole cell — measured, 100% of
+its width and 36 of its 37px height — and then drew an 18 × 18 rounded chip in
+the middle of it. Jaco, looking at the result: *"pero sigue igual no? yo me
+refería a que las celdas fueran pulsables enteras, no con un checkmark cuadrado
+de 18x18 dentro de cada celda."* He is right, and the numbers say so: the hit
+had grown ~13×, the thing you can SEE had not moved at all, so from the chair
+nothing had changed. **A hit area you cannot see is not an affordance** — which
+is the same sentence the well pass rests on ("hover is not a resting mark"),
+missed on the one surface where I had just finished quoting it.
+
+So the box is the cell too: `flex: 1` + `align-self: stretch` inside the hit,
+**92.31 × 30 — 94% of the cell's width and 81% of its height** — and the check
+is a mark INSIDE the control rather than the control. The only inset is 3px a
+side, and it is not decoration: the six purpose columns draw no dividers
+between them, so a full-bleed fill merges three adjacent answers into one wide
+blue bar and the row stops saying how many purposes you picked. 6px of ground
+between neighbours, measured.
+
+**THREE BLUES IN ONE TABLE, and none of them the app's.** The checkbox accent
+was `#60a5fa` (`--sel-*`), the selected row was `rgba(37,99,212,…)` — **#2563d4,
+a blue that appears nowhere else in this app** — and neither is `--pill-on-*`
+(#52BAFF), which is what this app means by *you confirmed this*. One blue now:
+the mark is `--pill-on-bg` / `--pill-on-color` and the row tint is that same
+rgb(0,154,255) at the tint alphas, so a row and the marks in it are one
+statement.
+
+**THREE STATES, AND THE THIRD IS WHY IT IS A HELPER.** *live* — your row, socket
+visible at rest. *add* — the row is not part of your answer yet, and **pressing a
+cell there is a STATEMENT rather than a refusal**: saying "I collect Crash Data
+for Analytics" is saying "I collect Crash Data", so it does both. It used to be
+`disabled` at `opacity: 0`, i.e. a name followed by seven voids, which reads as
+broken rather than as off. *locked* — genuinely unavailable, which **only Google
+Play has**: Ephemeral and Required mean nothing until Collected is on. A real
+impossibility keeps no pointer and is a `<span>`, not a button.
+
+**THE SOCKET ONLY RESTS VISIBLE ON A LIVE ROW.** An add row reveals its sockets
+when the pointer crosses it — the calendar day panel's × argument (*a delete on
+every row, always visible, is a row of invitations*), and at any moment ~86% of
+this grid is cells you have said nothing about. Measured: aimed cell **.10**,
+its siblings in that row **.04**, a different add row **transparent**.
+
+**WHITE 4%, AND IT CAME DOWN FROM 7 WHEN THE BOX BECAME THE CELL.** The step
+disc's own pending fill is `rgba(255,255,255,.07)` and that is what an 18px chip
+wanted; the same alpha over 92 × 30 is nearly ten times the ink, and the table
+read as a wall of grey slabs. **An alpha is not a quantity of light until you
+say how big it is** — this file's own "a weight that is right once is not right
+four times", arriving through area rather than through count.
+
+It is also not the pinned nav's `rgba(0,0,0,.22)`: that one sits on the bar's
+rgb(55), and on this table's rgb(20) ground black 22% composites to rgb(16) —
+four points, invisible. So it goes lighter rather than darker. The same forced
+divergence that note describes, running the other way.
+
+**AND THE PAINT IS WHAT MADE THE META SLAB UNTENABLE.** `.prv-meta-col` carried
+`background: var(--panel-3)` — a permanent rgb(36) block down the right of the
+table — *on top of* a `border-left` that already separates those two columns.
+One boundary said twice, which the metadata strip's bottom rule and the Submit
+row's divider both lost on. It survived while the cells drew almost nothing, and
+stopped being survivable the moment they drew something: the socket is solved
+against rgb(20), so over the slab white 4% lands DARKER than its own ground and
+two columns of sockets inverted while the other six read correctly. The border
+stays and is now the only thing drawing that edge.
+
+**A CELL PRESS RENDERS, AND THAT IS NOT AN OPTIMISATION QUESTION.**
+`togglePrivacyPurpose` used to say "checkboxes manage themselves — no full
+re-render needed", which was true of a native checkbox and is false of a drawn
+one: a button's appearance IS the render. Rendering is also the only correct
+answer rather than a surgical class flip, for this file's own reason —
+`dataPerType` is read by the count badge, the tracking note, the group ORDERING
+(a flagged group floats to the top) and `isIOSSectionComplete`, and a repaint
+would be an inventory of those. `reRenderStepModal` already captures and
+restores this table's own scroll, so it keeps its place.
+
+**AND `setPrivacyMeta` WAS DEFINED TWICE, twenty lines apart.** The second won,
+and the two differed in exactly one line: the first called
+`reRenderStepModal()`, the second carried a comment reading *"Tracking warning
+updates lazily on next section re-open"* — which was not a decision, it was the
+duplicate describing its own symptom. Ticking **Used for Tracking** is supposed
+to print Apple's AppTrackingTransparency note under the table and did not until
+you closed the section and came back. One definition now, same rule as
+`smCheckSVG` and `SM_STEP_CHEVRON`; verified the note arrives and leaves in the
+same paint.
+
+**ONE MORE SPECIFICITY TIE, AND THIS ONE IS A COUNTING MISTAKE WORTH KEEPING.**
+The empty socket's fill is one custom property through four rungs, all set on
+`.prv-hit` itself so the ladder stays flat instead of becoming a fight between
+`.prv-hit:hover .prv-box` and `.prv-hit.is-add .prv-box`. The obvious direct-hover
+rule `.prv-hit.is-add:hover` is **three** in the class column and the row-reveal
+rule `.prv-data-row:hover .prv-hit.is-add` is **four** — **`:hover` counts** — so
+pointing straight at a cell left it at the row's own .07 and the cell you were
+aiming at never brightened. The fix is the row-reveal selector plus `:hover`.
+
+**AND THE PROBE LIED TWICE BEFORE THE CSS DID ANYTHING WRONG.** `.prv-box`
+carries `transition: background .12s`, so reading `getComputedStyle` in the same
+turn as the hover returns the interpolated value — transparent, every time,
+which reads exactly like a rule that is not applying. Two rounds went into a
+specificity hunt that was half real and half this. **Wait out the transition
+before measuring a hover**, and when a probe and the screen disagree, suspect the
+probe.
+
+**ONE MORE THING THE GLYPH HAD TO GIVE UP.** `.prv-box svg` was `100%`, which
+is the standing rule (size in CSS, never by `smCheckSVG`'s argument) and was
+also the right SIZE only while the slot was 18px square — at 92 × 30 a check at
+100% is a tick stretched across the whole cell. It states its own 18 now,
+because it is a mark inside the control rather than the control. Every other
+consumer of that helper is a square disc and keeps filling its slot.
+
+Verified across all three tables that share `.prv-matrix`: App Store — zero
+native inputs, 112 cells and 112 hits, the painted box **92.31 × 30 at radius 6
+with 6px between neighbours**, checked `rgba(0,154,255,.35)` with
+`rgb(82,186,255)` ink, hovered `.42`/`rgb(111,196,255)`, pressing a purpose on
+an unselected row creating exactly that one type with exactly that one purpose
+and the badge going 5 → 6, and the press inverting cleanly back. Google
+Play — 418 hits, **76 locked**, pressing Collected on Crash logs unlocking
+Ephemeral and Required in the same paint. Steam Languages — 6 cells, none ever
+add or locked (every row is on by definition), each call inverting its own
+current value, remove button untouched. Rows went 35.9 → 37 tall, so the table
+grew 13px inside its 480px window; nothing else moved.
+
+### The heading is a band, and the modal is sized from the table (v6.51)
+
+`_prvColHead` (render.js), `IOS_PURPOSES[].head` (state.js). Jaco: *"alguna
+opción de comprimir el ancho del modal, de forma que sigamos pudiendo estar
+cómodos de espacio? Quizás los tooltip symbols nos hacen daño."*
+
+**THE SUSPECT WAS INNOCENT AND THE MEASUREMENT SAYS SO IN ONE NUMBER.** A
+column's floor is the longest WORD in its heading, because everything else
+wraps — and for the six purposes that is **"Personalization" at 84.0px** against
+88 of content in a 98px column. The `?` disc does not touch that, and neither
+does the label's full length. **So the purposes could not narrow by a single
+pixel**, and no amount of tidying the header was going to change it short of
+taking 9px type smaller.
+
+**THE META COLUMNS WERE PAYING FOR A CONSTRAINT THAT IS NOT THEIRS.** "Identity"
+and "Tracking" are **44.8px**, half of Personalization, and they sat at the same
+98 only because every column did. They are a different GROUP — their own
+question, their own border — so equal width applies WITHIN a group and not
+across the rule between them, which is also what lets the two read apart at a
+glance. 66 rather than the 53 the words strictly need, because this row is the
+one part of the table you read rather than press. Within the six purposes they
+stay identical, for the metadata strip's own reason.
+
+**AND THE MODAL IS DERIVED FROM THE TABLE NOW, NOT PICKED.** It was 1000 — the
+Mac Product Page Preview's number, borrowed on the argument that the headers
+"and their tooltip icons" needed room. The table is 870 (150 + 6 × 98 + 2 × 66)
+and the modal is that plus everything between it and its own outer edge: 48 of
+scroller padding, the 11px bar, `.prv-matrix-wrap`'s 1px border and the modal's
+1px border, both sides — **933**.
+
+**THE WRAP'S BORDER IS THE TERM THAT IS EASY TO FORGET.** At 931 the wrap's
+content box came out **868 against an 870 table** and the whole thing sat in
+permanent 2px horizontal scroll. Measured before and after; the sum is written
+out at `.prv-matrix`'s `min-width`, and those two numbers move together.
+
+**THE NAME IS THE HANDLE.** This table already had two tooltip conventions and
+only one drew a mark: the 35 data-type names down the first column are bare
+`.tooltip-anchor`s — hover the name, no glyph — while the eight headings carried
+a `?` disc. One table, two answers to one question; the row labels are the older
+and the quieter, so the headings joined them. **The icon was never the trigger
+either** — `app.js`'s handler is `e.target.closest('.tooltip-anchor')`, so it
+was a visual handle on a hover area it did not define.
+
+What it really cost is **HEIGHT**: it rode along as one more wrapping token,
+pushing App Functionality to three lines and the header row to 61px. Gone, 44.8.
+
+**BLOCK, NOT `inline`, AND THAT IS THE HALF THAT MAKES THE NAME A REAL HANDLE.**
+An inline box's hover area is its GLYPHS: measured, `elementFromPoint` at the
+dead centre of a two-line heading returned the `<th>`, because the centre falls
+in the leading BETWEEN the lines where no inline box exists. So the target would
+have been two short runs of 9px text with a dead stripe through the middle — a
+smaller and stranger target than the disc it replaced, which is the opposite of
+the point. As a block it is the whole heading area; verified, the centre of all
+eight now hits the anchor.
+
+**TWO LINES ARE STATED, NOT WRAPPED INTO.** Jaco, on a mockup of the row: *"mola
+que casi todos tengan 2 lineas, queda más ordenado."* He is right and the reason
+generalises: a header row that breaks in the same place in every cell reads as
+ONE BAND, where a ragged mix of one and two lines reads as eight captions
+sitting above a table. Sized so the natural wrap happens to land there, the
+break is luck — one more character in a translation, or a font that falls back,
+and a column silently becomes one line or three while its neighbours do not.
+Stating the lines is also what lets a column be sized by its longest WORD rather
+than by its longest label.
+
+`head` is its own field because `label` is not only a heading: `_triggerPrivacyAI`
+builds its prompt out of `${p.id}: ${p.label} — ${p.desc}`, and a `<br>` in there
+would be sent to the model. Personalization takes Apple's own full name —
+**Product Personalization** — which costs nothing once the heading is two lines,
+and en.json was updated to match so the two cannot disagree.
+
+**AND `vertical-align: bottom`, because the cells inherit `middle`.** Analytics
+is one word and cannot break, so centred it floated between its neighbours' two
+lines and read as misplaced rather than as shorter. Bottom puts every heading's
+last line on one baseline — measured, **456.8 for all eight** — and the spare air
+goes above, where there is nothing to align to.
+
+**THE BREAK IS AN ENGLISH TYPOGRAPHIC DECISION, so a translation does not
+inherit it** — and the first attempt got this exactly backwards. `t()` returns
+the KEY when a string is missing and en.json is a verbatim copy of `label`, so
+"is there a locale override" is not the question: en.json always answers, and
+every heading came back single-line. The test is whether the resolved string IS
+the English one. Verified both ways: English takes the chosen lines, zh-CN's six
+translations all print as one string and wrap on their own, which is right for a
+language that breaks per character.
+
+Measured end to end: modal **1000 → 933**, table **937 → 870**, header row
+**61 → 44.8**, no horizontal scroll (wrap content 870 against a 870 table), zero
+icons, all eight tooltips intact, seven of eight headings on two lines with
+Analytics the one single, and Google Play verified — 11 headers, no icons, tips
+intact, its own pre-existing sideways scroll unchanged (eleven columns have
+never fitted a 680 modal, which is what `overflow-x: auto` is there for).
+
+### The data types table is an accordion (v6.52–70)
+
+`buildPrivacyMatrix` (render.js), `.pvt-*` (style.css), `togglePrivacyGroup` /
+`_privacyStampOrder` (app.js). Ported from Jaco's own mock,
+`apple-privacy-modal-990.html`, which is where the design was argued — this is
+the port, not the design.
+
+**IT ANSWERS THE STRUCTURAL QUESTION v6.46 LEFT OPEN.** That entry measured the
+grid and stopped: *"35 data types × 8 columns = 280 cells if you open
+everything, and 40 of them hold a control — the grid is 86% empty… That is the
+structural question, and it is still open."* The answer is that the 16 GROUPS
+are the view. All sixteen fit on one screen with nothing scrolled, each one
+carries a count of what you have declared inside it, and exactly one opens at a
+time.
+
+**THE OLD MODEL'S CENTRAL CLAIM WAS THE PROBLEM.** It read, in its own comment:
+*"a group with one or more flagged data types is ALWAYS expanded, every time the
+table renders — that invariant is non-negotiable."* Two costs, and its own
+words admit the first: the header of a flagged group is **a button that does
+nothing**, because the invariant re-opens it on the next paint. The second is
+arithmetic — three presets flag four groups, so four blocks opened at once and
+the table was a wall again.
+
+**The counter is what made the invariant unnecessary.** A closed group that says
+"2" has not hidden anything from you; it has told you what is inside without
+spending a screen on it.
+
+**ONE AT A TIME, and that is the load-bearing half.** With several open the
+lighter ground marks four places and stops meaning *you are here*; with one it
+is the only lit block on the table and the other fifteen step back to .38.
+Pressing the open group closes it, so the header is never inert. The whole model
+is `state.privacyGroupOpen[pid]` — one group name, or null.
+
+**THE ORDER IS FROZEN WHEN THE TABLE OPENS.** Flagged groups still float to the
+top in Apple's own relative order; what changed is WHEN that is decided.
+Recomputed per render, marking the first cell of an untouched group sent that
+group to the top **under the pointer that had just pressed it** — the same rule
+the submitted card's disclosure toggle and the hold-to-submit row were both
+rebuilt under. `togglePrivacyMatrix` stamps it on the way in.
+
+**A PRESET CLICK IS THE ONE EXCEPTION**, and it is a real one rather than a
+loophole: a preset chip lives ABOVE the table, and pressing one is exactly the
+event that changes which groups hold data. So `togglePrivacyPreset` re-stamps
+after writing `dataPerType` — the one case where the thing you are pointing at
+cannot be the thing that moves. The open group is left alone; re-stamping
+reorders, it does not fold.
+
+**THE CELL IS STILL THE CONTROL — ONLY THE PAINT SHRANK.** v6.46's sentence is
+unchanged and the mock says it too: *"la zona pulsable es SIEMPRE la celda
+entera —acertar un cuadrito de 14px es una lotería—; lo que cambia es dónde se
+pinta la marca."* At 92 × 30 the mark was right for six columns in an 870px
+table and turned eight columns in a 748px one into a wall of slabs. **An empty
+cell now draws almost nothing**: a 14px square outlined at white 7%, the
+dividers' own alpha, so the table reads as white space with blue marks in it
+rather than 280 boxes asking to be answered. Same arithmetic as v6.46's *"an
+alpha is not a quantity of light until you say how big it is"*, run the other
+way.
+
+The square wears the app's own selected-pill stroke at a 4px radius and joins
+the **shared `::after` selector list** rather than redrawing the gradient — that
+list's own stated reason. Note the entry is a descendant selector
+(`.pvt-cel.is-on .pvt-sq::after`) because the state class is on the BUTTON and
+the ring is drawn on the square inside it.
+
+**`table-layout: fixed` IS THE FIX FOR A BUG THIS TABLE ALWAYS HAD.** In auto
+mode the browser re-solves every column from what is VISIBLE, so opening a group
+introduced longer type names, the first column widened, and the eight check
+columns shifted sideways under the pointer that had just opened it. `fixed` only
+takes effect on a table with a definite width, so `width: 100%` is load-bearing
+rather than tidy: the table then follows the scroller's gutter and there is no
+arrangement where it scrolls sideways.
+
+**THE ABBREVIATIONS ARE THE COLUMN'S FLOOR SPEAKING.** The two words that
+decided the old 98px column were "Personalization" (84.0) and "Functionality"
+(79.2) — the longest WORD is the floor because everything else wraps. Shortened
+to **"Personaliz."** and **"Functional."** in `IOS_PURPOSES[].head`, the longest
+line in any purpose is 66px, inside the 75 a 79px column leaves. Nothing is lost
+because the `<th>` is a tooltip anchor carrying the full label AND Apple's
+description: an abbreviation with no way back would not be worth 40px of modal;
+one with the full name attached is the column being honest about its width.
+`label` stays flat and full — `_triggerPrivacyAI` builds its prompt from it.
+
+**THE MODAL IS 807, DERIVED:**
+
+```
+    748 table   116 name + 8 × 79
+    + 48  .submit-modal-scroll's side padding (24 each)
+    +  9  the TABLE's scrollbar lane (--pvt-bar) — .pvt-scroll has its own
+    +  2  the modal's own 1px border, both sides
+    = 807
+```
+
+**THE SCROLL IS INSIDE THE TABLE, AND THAT IS WHAT PAYS FOR THE OTHER TWO
+NUMBERS.** Jaco: *"el scrolling debería ser dentro de la tabla, de forma que
+siempre se vieran las preset chips en el mismo sitio."* Opening a group moves the
+rows and leaves the chips, the URL field and the opening question exactly where
+they were — which is the whole point of an accordion you work down.
+
+**THE FLEX CHAIN IS FOUR BOXES DEEP AND THE FIRST VERSION STOPPED AT THE TOP OF
+IT.** A `flex: 1` child is only bounded if EVERY box between it and the scroller
+is itself a flex column; one `display: block` in the chain and the height reverts
+to "as tall as my content". Measured then: the table grew to its full 653 and the
+MODAL took the 239px of overflow instead, so the chips scrolled away and nothing
+looked different from before. The chain is
+`.submit-modal-scroll > .ios-step-body-content > .prv-nlp-wrap > .ios-subsection
+> .pvt-scroll`, and each link is selected by **`:has(.pvt-scroll)`** rather than
+by position — three of those class names are shared with steps that must not
+become flex columns, and `:last-child` is a fact about the markup a later edit
+can quietly change. `min-height: 0` on each, or a flex item's default
+`min-height: auto` refuses to shrink below its content and hands the overflow
+straight back.
+
+It is **scoped to this step**: `.submit-modal-scroll` is shared by every step in
+the app and turning it into a flex container globally is not a change this
+surface gets to make.
+
+**AND THEN THE MODAL'S OWN LANE BECAME DEAD WEIGHT — 820 → 807.** Jaco again:
+*"eso a la vez nos permitiría que el modal no tuviera nunca una barra de scroll
+lateral… dejando el padding a ambos lados de 24px."* Right: the body cannot
+overflow once the table absorbs the slack, so `overflow-y: scroll` was reserving
+11px for a bar that can never be drawn. `auto` rather than `hidden`, and that is
+the part worth arguing — the modal is `clamp(560px, 88vh, 860px)`, and at its
+floor the content above the table plus the table's own min-height is tight, so
+`hidden` would make a short viewport uncloseable rather than merely cramped. The
+opposite trade from `.submit-modal-scroll`'s own default, for the opposite
+reason: there the lane is reserved because content grows under the pointer, here
+nothing can.
+
+**THE BAR IS `.main`'s, NARROWED — AND SETTING ONLY ITS WIDTH IS WHY IT LOOKED
+AWFUL.** Jaco: *"no necesito que el scroll bar de dentro de la tabla sea tan
+horroroso y ancho."* With `width` but no track or thumb rule it fell through to
+the app-wide default at the top of style.css (`::-webkit-scrollbar-thumb {
+background: var(--border) }`) — a solid 11px block. That default is written for
+6px bars and is exactly what `.main` had to override. So this takes `.main`'s
+treatment whole: transparent track, translucent white thumb inset by a
+TRANSPARENT BORDER with `background-clip: content-box`, fully rounded. **9px, not
+11**, because this bar sits inside the table a few pixels from the rows it
+scrolls where the modal's sits on the modal's edge with nothing beside it — the
+visible thumb is 5px in both (9 − 2×2 here, 11 − 2×3 there), so the ink is the
+app's and only the lane is tighter.
+
+**AND THE THUMB IS ONLY THERE WHILE YOU ARE.** Jaco: *"que el scroll no esté si
+no lo uso."* A bar parked down the side of the table is a permanent mark for a
+transient act — the same argument the calendar's row × and this table's own empty
+sockets are built on. **It hides the THUMB, not the lane**, which is the whole
+safety of it: the 9px stays reserved, so the eight columns cannot shift by a
+pixel between resting and scrolling. Hover on the SCROLLER rather than on the
+thumb, because a thumb you cannot see is a thumb you cannot aim at. And
+deliberately NOT the native overlay bar, which would do this for free on macOS:
+it costs `scrollbar-width` or `scrollbar-color`, either of which switches Chrome
+off the WebKit path — the trap recorded twice in this file — taking the lane to 0
+and making the table's width depend on a system setting.
+
+**THE HEADER'S RULE IS 1px AT THE HEADINGS' OWN ALPHA.** It was 2px at white 16%.
+A thick soft line is a BAND — you read its width before its position — where a
+hairline is an EDGE, which is all this is; it separates two KINDS of thing rather
+than two rows, so it has to outrank the `.06` between rows, and at 1px it does
+that by being brighter rather than fatter. Full white was the first try and was
+too much for a reason worth keeping as a rule: **the line was brighter than every
+label it underlines** (the eight headings are `.55`, DATA TYPE is `.72`), and a
+boundary that outshouts the thing it belongs to reads as a mark of its own. `.55`
+puts it level with the eight and a step under the row's own heading.
+
+**AND NOTHING MOVES WHEN YOU TICK A CELL.** Jaco: *"al rellenar cualquier
+casilla, se mueve arriba, no hagas eso. Que se queden donde están, y sólo si
+cierro y abro la tabla que se recoloquen."* Two separate movers, and the order
+was innocent both times — measured, the group kept its row on every press.
+
+**The 14px one was the flex chain gated on `:has(.pvt-scroll)`.** A flex
+container does not collapse its children's margins, so the chain was plain
+blocks while the table was closed and flex columns the moment it opened; every
+margin above the toggle started being paid in full and the toggle rode the
+difference down. It is a flex column in **both** states now — selected by
+structure rather than by what is rendered. **A layout that depends on whether a
+thing is on screen will move when it appears.**
+
+**The 326.5px one is a RENAMED CLASS that broke a JS selector silently.**
+`reRenderStepModal` captures and restores the table's own scroll, and it looked
+for `.prv-matrix-wrap` — which v6.52 renamed to `.pvt-scroll` on this surface.
+So the capture returned `null`, the restore skipped, and every cell press sent
+the group you were working in back to the top of the table. No error, no
+warning. Both selectors are listed now (`.pvt-scroll, .prv-matrix-wrap`) in all
+four places, because the old name is still Google Play's and Steam's and the two
+never co-exist. **The rule: a selector is a dependency** — renaming a class in a
+builder breaks every rule and every query that named it, and the ones in JS fail
+quietly where CSS at least stops painting.
+
+**And the cache trap caught this one too**, exactly as this file's own note
+predicts: the first fix measured as not working because the pane was holding
+`app.js` at a version bumped BEFORE the edit landed. `reRenderStepModal
+.toString()` is what caught it — the running function still had the old
+selector. Bump AFTER editing, not before.
+
+**AND THE TOGGLE DOES NOT MOVE WHEN IT CHANGES ITS MIND.** Jaco: *"el SHOW ALL
+DATA TYPES está bien colocado, que el HIDE DATA TYPES esté igual, que no se
+mueva."* Measured, the button went 144.4 → 118 and dragged the count badge 26.4px
+with it — a control that jumps as a consequence of being pressed, the rule the
+submitted card's disclosure toggle and the hold-to-submit row were both rebuilt
+under. **Both labels are always in the box**, stacked in one grid cell with the
+inactive one at `visibility: hidden`, so the width is the larger of the two by
+construction in any language; a measured `min-width` would be one number that
+goes stale the first time either string is translated. Verified: 144.41 and the
+badge at 406.4 in BOTH states, delta 0. Google Play's copy of this button still
+swaps its string and still jumps, and goes with that table when it is ported.
+
+**AND ONE FADE NOW ANSWERS TO WHICHEVER SCROLLER IS REALLY MOVING.** With the
+body no longer overflowing, every test in `_smModalFades` said "not scrollable",
+both fades sat at 0 and the table was guillotined on the modal's bottom edge with
+nothing to say there was more. It reads the body when the body scrolls and the
+inner scroller otherwise — found by `[data-inner-scroll]` rather than by id, so
+any step can hand its scrolling downwards later without editing that function.
+One fade, not a second set: it belongs to the modal and spans the whole body,
+which is exactly where the cut is, where a fade on `.pvt-scroll` would be a
+second boundary a few pixels inside the first.
+
+**THE OPENING QUESTION LANDS ON THE COLUMN, AND IT NEEDED AIR.** Jaco: *"quiero
+que la primera pregunta de DOES YOUR APP etc. esté alineada a la izquierda con
+los section titles, y que respire un poco más, porque es importante."* Measured,
+its TEXT sat at **257** against the 245 everything else in the step uses, and its
+BOX at 234 — out on both sides at once, from two offsets that are Content
+Rating's rather than this step's. `.ios-q-row` pays `margin-left: -11px` and
+takes it back as a 3px transparent border plus 8px of padding, which is the amber
+validation rail's machinery (the bar has to hang outside the text column so
+lighting it does not indent the question); `.ios-q-label` adds its own 12px, which
+is what makes thirty questions read as a list under their section header.
+**Neither applies to one question at the top of a step.** The air is the other
+half — 34 → 46 of row and 8 → 20 of margin, and air rather than size because the
+answer pills opposite are `--field-h` and growing the type would either drag them
+along or leave a row whose two halves disagree.
+
+**THE EIGHT COLUMNS ARE EQUAL ON PURPOSE.** Narrowing Linked to Identity and
+Used for Tracking does read them as their own block — they are a different
+question from the six purposes — but it also breaks the grid into eight
+identical checkboxes drawn at two sizes. It costs ~40px of modal and buys one
+grid. What separates those two is what they say, not that they are smaller.
+
+**TWO DOORS, ONE WIDTH.** `submit-modal-privacy-wide` used to test the flip
+alone (`storePreview` + a `data` flip target). But `privacy` is also a real step
+— macos_full lists it — and reached that way the identical table was drawn in a
+680px modal with **253px of sideways scroll**, which the old comment waved off
+as *"a separate, differently-reached surface that wasn't asked for here."* Same
+builder, same markup, same 748px table: same surface, different route, same
+width.
+
+**A LIVE ROW IS BLUE INK, NOT A BLUE GROUND.** The old table tinted the row at
+`rgba(0,154,255,.08)`, and a tint behind the marks competes with the marks —
+which are the same blue and are the thing you are reading. The name says it just
+as clearly and takes nothing from them.
+
+**Three traps this hit while being built, all of them already in this file:**
+
+- **`.tooltip-anchor` is authored `display: inline-flex`**, for a span in prose.
+  On a `<th>` that stops the element being a table cell: measured, the eight
+  headings stacked into a column down the left, each still the right width
+  because they were no longer cells in a row. They keep the class — it is what
+  the app's ONE tooltip binds to — and take their display back.
+- **`scrollbar-width: thin` cost the table its lane.** Same family as the
+  `scrollbar-color` note below: either STANDARD property switches Chrome off the
+  WebKit path, and on macOS the standard bar is the overlay one. Measured with
+  it: `offsetWidth − clientWidth` **0**, columns spread 116/79 → 117.7/80.2.
+  Without it, 11. **Do not put either property on a scroller in this app.**
+- **A two-line name made its row 2.6px taller.** `td.pvt-ty` takes 2px of
+  vertical padding against every other cell's 5, so "Other User Contact Info"
+  asks for 32.6 and the row's own 36 decides. The height is a property of the
+  ROW, not of the longest name in it.
+
+**IT IS ITS OWN VOCABULARY (`.pvt-*`) AND THAT IS DEBT, NOT A DESIGN.**
+`.prv-matrix`, `.prv-hit`, `.prv-box` and `.prv-check-cell` are shared by Google
+Play's Data Safety table (eleven columns, plus a `locked` state this design has
+no concept of) and Steam's Languages table. Rewriting them in place would have
+changed three surfaces to fix one; scoping the new look under an extra class
+would have left every rule fighting a `.prv-*` rule underneath it — the
+specificity war this file has lost six times on the Mac preview alone. So there
+are now two table vocabularies for what is visibly one kind of object. **Google
+Play wants this treatment too, and the day it gets it `.prv-*` should GO rather
+than be kept as the second dialect.** It is in the backlog below.
+
+`state.privacyGroupExpanded` is **deleted, not left at `{}`** — a field nothing
+reads is a mechanism waiting to be switched back on.
+
+Measured: modal **807**, table **748**, columns **116 / 79 × 8**, table scrollbar
+lane **9** with the modal's own at **0** and the body scrolling **0**, **zero**
+horizontal scroll anywhere in the modal's subtree by either door, all rows **36**
+(one-line names and two-line alike), all eight headings on one baseline, 16 groups
+with 1 open and 15 dimmed, closing leaves 0 open and 0 dimmed, pressing a cell on
+an untouched type creates exactly that type with exactly that purpose and takes
+the badge 7 → 8 with the group staying put, and the open group is kept per
+platform (`macos: Purchases` beside `macos_full: Diagnostics`). Scrolling the
+table moves the preset chips by **0.0**. The question's box AND text, the URL
+label, QUICK SETUP and the table all land on **246** — one column, five things.
+The fades read 0/1 at the top, 1/1 mid-scroll and 1/0 at the end, off the inner
+scroller.
+
+**Both neighbours verified untouched.** Google Play — 418 hits, 76 locked, box
+**92 × 30 at radius 6**, 11 headers, modal 680, an 11px body lane, no `.pvt`
+anywhere. Content Rating's own question rows — still `-11px` margin, 8px padding,
+a 3px border, 34px min-height and 8px below, on a 680 modal, so the scoped
+`.ios-q-row` override cannot reach them. Steam Languages still routes through
+`_prvCell`, which no selector here can touch.
+
+**A FADE UNDER THE HEADER WAS BUILT AND REMOVED IN ONE VERSION (v6.65 → v6.66).**
+Jaco asked for *"un mini gradiente en el top de la lista, bajo la línea divisoria
+horizontal"* and, looking at it, took it back out: *"quita casi mejor el
+degradado."*
+
+It was correct on its own terms — a 36px `::after` hanging off the sticky `<th>`
+(a sticky element is a positioned one, so the fade rode the scroll for free, nine
+of them tiling edge to edge like the calendar's week rule), `.cr-pinned::after`'s
+own stops rather than a second dialect, shown only past `scrollTop` 2. And still
+wrong for this table, which is the part worth keeping: **the Mac preview's fades
+dissolve a column that ends in nothing, where this list ends on an opaque header
+with a 1px rule under it.** A boundary already drawn does not also need
+softening — the "two marks on one object" this file has refused on the Submit
+row's border, the metadata strip's second rule and the calendar's rings. Removed
+whole, rule and note.
+
+`_smModalFades` still writes `is-scrolled` on the inner scroller and it now has
+**no consumer**, which is deliberate rather than an oversight: it is one line
+inside a function that has to run anyway, and it is the flag the next thing that
+asks "is this scrolled" will read. Not the dev bar's case — nothing is switched
+off waiting to be switched back on.
+
+**AND THE GROUP TRAVEL LOST ITS `requestAnimationFrame` — THE MOCK WAS ALREADY
+RIGHT (v6.66).** Jaco: *"cuando toco algún item que está a media altura de la
+tabla, hace un raro, como que baja antes de ponerse en focus centrado"*, and then
+the instruction that settled it: *"si revisas el html que te pasé, me gustaba
+mucho más su comportamiento, cópialo igual y no inventes."*
+
+**Diffed against `apple-privacy-modal-990.html`, the ARITHMETIC was already
+identical and the TIMING was not.** The mock restores the captured `scrollTop`
+onto the fresh markup and calls `scrollTo` on the very next line — one
+synchronous pass, so the restored position is never painted. The port deferred
+the same block to a `requestAnimationFrame`, which is one whole frame at that
+position before the ease begins.
+
+**And in a one-at-a-time accordion that position is usually WRONG**, which is why
+the frame was visible rather than merely wasted: opening a group closes the one
+that was open, so if that one sat above you, everything below it jumps up by its
+whole height. `reRenderStepModal` restores the scrollTop it captured — right for
+a cell press, wrong here, because the same number is now a different place. What
+Jaco saw was that jump, followed by a 420ms ease correcting it. Two motions for
+one gesture.
+
+**A pin was written first and thrown away**: measure the pressed row's offset
+before the render, put the scroller back by the drift after. It fixes the same
+frame and it is a mechanism the mock does not have — and the mock is the thing
+that was approved. *Copy the approved behaviour; do not solve the same problem a
+second way.*
+
+Native `behavior: 'smooth'` is kept for that reason, against this file's own
+standing preference for `_smScrollTo` on a nested scroller. If Safari misbehaves
+here that is the one line to swap — and the mock is the evidence it does not.
+
+Measured with a group open above and the table scrolled to 220: **first-frame
+delta 0**, one continuous ease 220 → 218.5 → 213.5 → 200 → 167.5 → … → 77, the
+pressed header landing **1.9px under the sticky head** (the +2), and closing
+travelling **0**. Geometry unchanged throughout — modal 807, table 748, columns
+116 / 79 × 8, data rows all 36, table lane 9, modal lane 0, zero horizontal
+scroll anywhere in the subtree.
+
+**THREE SMALL ONES ON TOP (v6.67), AND TWO OF THEM ARE THE SAME SENTENCE.**
+
+**The modal's own top fade is off here**, gated `:has(.pvt-scroll)` beside the
+`:has(.cr-pinned)` rule it copies. Jaco: *"como no tenemos scroll en el modal, no
+hace falta el gradiente del top, porque la pregunta nunca cambia de posición."*
+The two rules switch the same fade off for opposite reasons — there because an
+opaque bar says "more above" better than a gradient can, here because **nothing
+is above**: this step hands its scrolling down to `.pvt-scroll`, so the question,
+the URL field and the preset chips are nailed where they are drawn and a fade
+over them claims hidden content that does not exist. `_smModalFades` reads the
+inner scroller once the body stops overflowing, which is what was lighting it —
+correct for a scroller, about the wrong box. Gated on the table's presence rather
+than on `.submit-modal-privacy-wide`, so folding the table away gives the body
+its overflow and its fade back. The BOTTOM fade stays: the table really is cut on
+the body's bottom edge. Measured: fade-top `display: none`, question `top` 179
+before and after scrolling the table 300 — **moved 0**.
+
+**THE CELLS LOST THEIR TOOLTIPS.** Jaco: *"no me has quitado los tooltips on
+hover de cada checkmark."* Every square was a `.tooltip-anchor` naming its type
+and its column, on the argument that it is "what keeps a grid of unlabelled
+squares readable" — and with one group open that does not survive its own
+numbers. A cell's TYPE is printed on its own row four inches left, and its COLUMN
+is printed in a header that is `position: sticky` and therefore never off screen.
+The tooltip repeated two labels you can already read, on **128 targets**, and a
+hint that fires on every pass of the pointer across a grid is noise. The two
+anchors that stay are the ones naming something NOT on screen: the row's type
+name (Apple's description) and the column heading (its full unabbreviated label,
+which is what earns the abbreviations). The pair moves to `aria-label`, where
+"the label is elsewhere on screen" is not an answer. Measured: 0 cell anchors, 5
+type names and 8 headings still anchored, `elementFromPoint` at a cell's centre
+resolving to **no** `.tooltip-anchor`.
+
+**AND THE HEADER RULE WENT `.65` → `.38`, WHICH IS WHERE THE ARGUMENT CHANGED.**
+Jaco: *"tampoco has bajado el grosor/opacidad de la línea divisoria horizontal
+primera."* It measurably WAS at `.65`, the value he had asked for two messages
+earlier, and he was right anyway — which is only a contradiction while you read
+the line against the LABELS, and that is what every value in this line's history
+was solved against (1.0 → `.55`, the headings' own alpha → `.65`, a notch over it
+because a hairline composites heavier than 10px type).
+
+**The line belongs to the TABLE, and the table is drawn in white `.06` and
+`.22`.** Measured, at `.65` it was the loudest horizontal thing in the modal by a
+factor of three: a white rule across a grid whose every other boundary is a
+whisper. Same census mistake as the calendar's filled day boxes — *"a weight that
+is right once is not right four times"* — arriving here through what sits UNDER
+the line rather than what sits above it.
+
+`.38` keeps what the earlier passes bought and drops what they got wrong. Still
+the strongest rule in the table by a clear step (`.38` against `.22` and `.06`),
+so it still reads as the edge between two KINDS of thing rather than between two
+rows; and now under the labels it underlines, which is the ceiling the first pass
+wrote and the one line of the derivation nobody has argued with. 1px throughout —
+the thickness has been at its floor since v6.58, so the alpha is the only lever.
+
+**AND THE TRAVEL IS THE APP'S OWN AFTER ALL (v6.68) — v6.66 KEPT THE BROWSER'S
+AND ARGUED FOR IT.** Jaco, two versions later: *"sigo viendo un recorrido
+rarísimo, compruébalo de verdad"*, and then the question that ended it:
+*"¿puede ser safari? ¿en chrome no pasa?"*
+
+**Yes, and that is the whole answer.** Measured here with REAL clicks on v6.68's
+predecessor logic, Chrome is clean in both cases — nothing open: 240 → 304, one
+direction, biggest frame step 4px; a group open ABOVE: 260 → 115, one direction,
+9.5px at the middle of the curve. So the thing he could see on every press was
+never visible from this pane, which is this file's own opening heading arriving
+for the second time.
+
+**v6.66 kept `scrollTo({behavior: 'smooth'})` on the sentence *"the mock is the
+evidence it does not [misbehave]"*, and that sentence is the mistake.** It is
+evidence about the MOCK — a standalone file with its own boxes — not about this
+DOM, and "The travel is ours, not the browser's" exists precisely because which
+box an engine scrolls, and whether it honours `smooth` on a NESTED scroller whose
+content changed height in the same tick, is per-engine. Safari is the engine
+nobody here can drive, so that choice was unverifiable BY CONSTRUCTION and should
+never have been made on an argument rather than a measurement.
+
+**Copying the mock's TIMING was right; copying its choice of ANIMATOR was not** —
+and separating those two is the rule this leaves. "Copy it exactly, don't invent"
+is about behaviour, and the behaviour is *one motion starting from where your eye
+is*. `_smScrollTo` delivers exactly that on the app's own 420ms sine, writing
+`scrollTop` frame by frame on one named element, with no engine's smooth
+implementation involved at all. Same arithmetic, same single motion, one fewer
+thing that can differ between two browsers.
+
+**AND THE PROBE MANUFACTURED THE BUG IT WAS HUNTING — carry this one.** The first
+real-click attempt logged a **240 → 0 jump in a single frame**, which is exactly
+the symptom being chased. It was the test: the Browser pane's screenshot
+coordinate frame is **800 × 686** while the page's viewport is **1249 × 1072**, a
+factor of **0.6405**, so coordinates taken straight from `getBoundingClientRect`
+land elsewhere — that click went to (968, 994), outside the modal, onto the
+backdrop, and CLOSED it. The 240 → 0 was the modal going away.
+
+Two things follow. **Scale rect coordinates by `800 / innerWidth` before handing
+them to the click tool**, and **confirm with `elementFromPoint` at the PAGE point
+before pressing** — the check that would have caught it in one line. And the
+general form, which this file has now recorded three times in three shapes: when
+a probe reproduces the reported symptom, suspect the probe before you believe it
+(the scroll-restore bug hid FROM measurement, the pseudo-element fill was
+invisible TO it, and this one invented it).
+
+Measured on v6.68 with real clicks and the coordinates corrected: both cases
+monotone with zero direction changes, landing 2.1px under the sticky head, and
+`_smScrollTo` confirmed in the running function rather than in the file.
+**Safari is still unverified from here and has to be checked by hand** — but
+there is now nothing engine-specific left in this path to check.
+
+**AND THE 420 IS THE DURATION AT FULL DISTANCE, NOT AT EVERY DISTANCE (v6.69).**
+Jaco, once it was one clean motion: *"quizás el scroll podía ser un pelín más
+rápido."* Flat, `_smScrollTo` spent 420ms on a 145px hop and on a 515px one
+alike — so the short trip crawled while the long one was correctly paced, and
+"too slow" was exactly true of the case in front of him.
+
+**A shorter constant was the wrong fix and the note above says why.** 420 is
+borrowed from the card's own advance *"so two travels in one app do not run at
+two speeds"*; a second number here would have taught two, and would have rushed
+the Mac preview's long pill trips to fix a table nobody was looking at. Duration
+as a FUNCTION of distance keeps one travel — one rate, one curve — with 420 as
+what a full-length journey still costs.
+
+**`sqrt`, not linear.** Linear is the obvious form and fails at both ends: a 60px
+nudge would get 48ms, which is a jump with an ease painted on it, and the
+relationship the eye reads in motion is not "twice as far, twice as long".
+`420 × √(d / 520)`, floored at 170 and capped at 420 — the floor so the shortest
+travel is still a motion rather than a cut, the cap because nothing here is
+longer than the reference and if something ever is it must not drift slower than
+the card it borrowed the number from. REF is the longest travel measured on the
+Mac preview's pinned nav (515, rounded).
+
+What it gives: 100px → 184ms, 145 → 222, 220 → 273, 300 → 319, 420 → 377,
+520 and beyond → 420.
+
+Measured with a real click on the hard case (a group open above, 220.5px):
+**284ms against the old 420**, 18 frames, zero direction changes. And sampled
+frame by frame over a 260px travel the curve is a clean sine — deltas ramping
+−1.5 → −23 → −2, every one of them negative. **The two "direction changes" an
+earlier probe reported were 0.5px of sub-pixel noise at the tails**, below a
+device pixel; count a flip only when it exceeds one.
+
+The clamp still does its job and looks like a bug if you are not expecting it:
+pressing a group near the BOTTOM lands it part-way rather than under the header,
+because `scrollHeight − clientHeight` has run out. Measured 51.5px short on a
+group the table cannot lift any further — correct, and not something to chase.
+
+**THE TABLE OPENS FOLDED (v6.70).** Jaco: *"cuando cierro y vuelvo a abrir la
+tabla, quiero que todo esté comprimido por defecto."* `togglePrivacyMatrix`
+writes `state.privacyGroupOpen[pid] = null` on the way IN, beside
+`_privacyStampOrder()`, because those two are one sentence — **the table opens
+fresh**: the order is frozen at the same moment the accordion is emptied, and
+neither is a fact that should survive a fold. It is still keyed per platform, so
+Mac and Mac Full stay independent; they now simply both start closed. Verified:
+open a group, collapse, re-expand → `privacyGroupOpen.macos` null, zero open
+group rows, zero visible data rows.
+
+**AND THE TRACKING WARNING IS A PILL BESIDE THE COUNT, NOT A BOX UNDER THE
+TABLE.** Jaco: *"cuando selecciono algo que requiere tracking, salta un mensaje
+verde de advertencia de apple, que ahora mismo se entierra en la parte baja de
+la tabla de una forma fea. Ignora ese mensaje, o añádelo como un pill de
+advertencia de una palabra al lado del 'X data types selected'."*
+
+**IT WAS IN A PLACE THAT CANNOT BE SEEN.** The `.dist-tip-box` sat AFTER
+`.pvt-scroll`, and that scroller is `flex: 1` in a modal that does not scroll —
+so Apple's AppTrackingTransparency requirement lived below the bottom of a box
+you cannot scroll past. A warning you have to close the thing it is about in
+order to read is not a warning. The count badge is the one thing in this step
+that is always on screen and always about the table, so the warning joins it.
+
+**ONE WORD, AND THE SENTENCE IS THE TOOLTIP** — which is the test v6.67 wrote
+when the cells LOST theirs: an anchor earns its place by naming something NOT on
+screen. A cell's type and column are both printed; ATT is printed nowhere else,
+so it keeps its full text and loses only the 300px of box it was reserving.
+**AMBER, WHICH IS FORCED**: green done, amber *this needs you*, red wrong — this
+is work waiting outside this app, which is amber's own sentence, and it was
+drawn in `.dist-tip-box`'s GREEN, a contradiction in this palette.
+
+**AND THE ROW'S THREE TEXTS SIT ON ONE BASELINE, WHICH TOOK TWO INDEPENDENT
+FIXES.** Jaco: *"que la pill de data types selected y la de la advertencia se
+dibujen de tal manera que el texto dentro de ellas esté alineado exactamente con
+el de Show all data types."* Both are stated at their rules in style.css; the
+short version, because the pair is the general lesson:
+
+- **`align-items: center` centres MARGIN boxes**, so an item's border-box centre
+  lands at `rowHeight / 2 + itsOwnMarginTop / 2`. The toggle's `margin-top: 4px`
+  was therefore sinking its text 2px below two pills carrying none — half the
+  margin, whatever the boxes measure. The 4 moved onto `.prv-matrix-header`,
+  where it was always a statement about the row's distance from the section
+  above. Nothing moves on screen: the row is 4 shorter and starts 4 lower.
+- **Equal centres are still not equal baselines**, because a line box positions
+  its glyphs by half-leading. The pills inherited the modal's 1.4 against the
+  `<button>`'s UA `line-height: normal`, measured as exactly **0.453px** of
+  drift — (15.4 − 14.5) / 2. Both pills state `normal` now, the value the thing
+  they align to already uses.
+
+Measured after: baseline delta **0.000** on both pills, box centres identical to
+0.01, the toggle unmoved, and the two gaps **8 / 8** — the badge's own
+`margin-left: 8px` went with it, since it was paying the row's `gap` twice and
+left one row with two distances in it.
+
 ### The Stash badge is POWERED BY over the mark (v6.44)
 
 `buyElHTML` (web-page.js) and `.buy-brand*` (web-page.css). Jaco: *"que
@@ -5229,9 +6020,53 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.44** → next is **v6.45**, then **v6.46**, etc. (v6.29 –
+Current version: **v6.45** → next is **v6.46**, then **v6.47**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, and **v6.42 is Adam's** — shipped in
 parallel and touching none of this.)
+
+**AND THE WHOLE 6.45 – 6.70 RUN COLLAPSED BACK TO v6.45, WHICH IS THE THIRD
+TIME THIS FILE RECORDS THE SAME MOVE.** Jaco: *"necesito que lo pusheemos a
+6.45, ya que la live actual es 6.44."* Everything from the cell rewrite through
+the accordion, the travel work and this batch was minted by EDITING — twenty-six
+numbers, none of them by publishing — so live never moved off **v6.44** and not
+one byte was ever served under any of them.
+
+The rule is unchanged and is the only thing that makes this safe: **never go
+back past LIVE.** 6.45 > 6.44, nothing is cached under 6.45, so the key still
+only goes UP. Had any one of those twenty-six gone out, the only correct move
+would have been forward.
+
+**The note headings keep their edit-time labels** (v6.46, v6.51, v6.52–70 …),
+deliberately, for the reason the v6.62 → v6.39 renumber gives: they are the
+order the decisions were made in, which is what makes them readable as a
+history. All of them ship together in **v6.45**. Don't go looking for a live
+v6.70.
+
+**AND v6.51 THROUGH v6.53 WENT THE SAME WAY, for the same reason.** v6.51 was
+written up and, as far as this session could tell, never shipped; the accordion
+port then needed the key to move three more times to be testable — once to load
+the new `.pvt-*` rules at all, once after the `.tooltip-anchor` display fix, and
+once after the scrollbar lane. So the whole port publishes as **v6.54**, one
+version, and 6.51 – 6.53 are gaps with no bytes behind them.
+
+**If v6.51 DID go live**, this is still correct and the key still only went UP —
+nothing published under 6.52 – 6.54, and 6.54 > 6.51. Worth knowing which,
+though, because it decides whether the v6.51 privacy-matrix work is already out
+there or is riding along inside this publish.
+
+**v6.45 THROUGH v6.50 WERE MINTED AND NEVER SERVED, which is the ordinary case
+and not a mistake.** v6.44 was live, so the cell rewrite took 6.45; then the
+specificity fix 6.46, the box-becomes-the-cell correction 6.47, the meta slab
+6.48, the header band 6.49, the 2px scroll 6.50 and the block anchor 6.51 — each
+one needing the cache key to move again to be testable at all, because `?v=` is
+the only key these files have and the pane will happily serve the old bytes.
+
+That is this section's ONE EXCEPTION — a cache that has already diverged —
+working exactly as written: the number only ever went UP, and none of the six
+skipped ones had bytes behind them. Nothing to reclaim, and **all seven publish
+as one version**, which is the rule this section opens with. The cost of the
+exception is cosmetic by design: a gap in the history, against a class of bug
+that is indistinguishable from a real one.
 
 **AND v6.43 IS WHAT ASKING BUYS.** Live went to v6.41 (ours) and then v6.42
 (Adam's, nothing of ours in it), so the next free number is 6.43 — and the only
@@ -5628,6 +6463,21 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   **deliberate** — we removed all three, looked at it and put them back. There
   is a note in render.js; please don't tidy them away.
 - T4: Sync data type selections from natural language description (state.js task #4)
+- **Port Google Play's Data Safety table onto `.pvt-*`, and then delete
+  `.prv-*`.** v6.52 gave Apple's table its own vocabulary rather than rewriting
+  the shared rules, which was the right call for one change and leaves two table
+  dialects for what is visibly one kind of object. The real work is not the
+  look, it is that Google Play has **eleven columns** and a **`locked`** state
+  (Ephemeral and Required are dead until Collected is on) that the accordion
+  markup has no concept of — a 14px square that cannot be pressed needs deciding
+  before anything is ported. Steam Languages is the easy half: three cells,
+  never add, never locked. **When both are across, `.prv-matrix` / `.prv-hit` /
+  `.prv-box` / `.prv-check-cell` and `_prvCell` should GO**, not stay as the
+  second dialect — the argument the dev bar was deleted under. Until then the
+  two are deliberately independent and a change to one does not reach the other.
+  Note Google Play's own copy of the privacy-preset bug is still open too (below,
+  under "A preset that cannot answer without the network"), and both jobs are in
+  the same builder — worth doing in one pass.
 - **The screenshots editor's open questions (v6.41).** Three things it leaves
   deliberately, none of them blocking: a REMOTE screenshot (IGDB through the
   proxy) taints the canvas so no preview can be baked — the transform survives

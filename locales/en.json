@@ -243,7 +243,7 @@
   "ios.purpose.third_party_ads.desc": "Displaying third-party ads in your app, or sharing data with entities who display third-party ads",
   "ios.purpose.analytics.label": "Analytics",
   "ios.purpose.analytics.desc": "Evaluating user behavior, including to understand effectiveness of existing features, plan new features, or measure audience size",
-  "ios.purpose.personalization.label": "Personalization",
+  "ios.purpose.personalization.label": "Product Personalization",
   "ios.purpose.personalization.desc": "Customizing what the user sees, such as a list of recommended products, posts, or suggestions",
   "ios.purpose.app_function.label": "App Functionality",
   "ios.purpose.app_function.desc": "Such as to authenticate the user, enable features, prevent fraud, implement security measures, or perform customer support",

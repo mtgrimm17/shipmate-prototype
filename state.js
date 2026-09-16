@@ -1372,13 +1372,65 @@ const IOS_DATA_TYPE_LOOKUP = {};
 IOS_DATA_TYPES.forEach(g => g.types.forEach(t => { IOS_DATA_TYPE_LOOKUP[t.id] = { ...t, group: g.group }; }));
 
 // How each collected data type is used (per-type selection)
+/* `head` IS THE COLUMN HEADING, BROKEN WHERE WE CHOOSE (v6.49).
+   Jaco, looking at a mockup of the row: *"mola que casi todos tengan 2 lineas,
+   queda más ordenado."* He is right, and the reason is worth stating: a header
+   row that breaks in the same place in every cell reads as ONE BAND, where a
+   ragged mix of one and two lines reads as eight separate captions sitting
+   above a table. Same argument as the metadata strip's equal tiles.
+
+   IT HAS TO BE EXPLICIT, not a width that happens to wrap there. Sized so the
+   natural wrap lands right, the break is luck: one more character in a
+   translation, or a font that falls back, and a column silently becomes one
+   line or three while its neighbours do not. Stating the lines is also what
+   lets the column be sized by the longest WORD rather than by the longest
+   label — which is the whole reason this row can be narrow at all.
+
+   `label` STAYS FLAT because it is not only a heading: `_triggerPrivacyAI`
+   (app.js) builds its prompt out of `${p.id}: ${p.label} — ${p.desc}`, and a
+   `<br>` or a newline in there would be sent to the model. One field per job.
+
+   Personalization takes Apple's own full name now — "Product Personalization" —
+   which costs nothing once the heading is two lines, and the second word was
+   already the widest thing in this row either way. */
+/* `head` IS TWO LINES, ALWAYS — AND TWO OF THEM ARE ABBREVIATED (v6.52).
+   The heading row is ONE BAND, which is v6.49's argument and is unchanged: a
+   row that breaks in the same place in every cell reads as one object, where a
+   ragged mix of one and two lines reads as eight captions sitting over a table.
+   What changed is that the band now has to hold EIGHT columns in a 748px table
+   rather than in an 870px one, and at 79px a column the full names do not fit.
+
+   SO THE ABBREVIATION IS THE COLUMN'S FLOOR SPEAKING, not a style choice.
+   Measured, the two words that decided the old 98px column were
+   "Personalization" (84.0) and "Functionality" (79.2) — the longest WORD is the
+   floor because everything else wraps. Shortened to "Personaliz." and
+   "Functional." the longest line in any purpose is 66px, which sits inside the
+   75 a 79px column leaves after its 2px of padding each side. Nothing else in
+   the row had to move.
+
+   NOTHING IS LOST, because the heading is not the only place the name is
+   printed: the `<th>` is a tooltip anchor carrying `label` AND `desc` in full,
+   so Apple's own wording is one hover away. An abbreviation that hides a name
+   with no way back would not be worth 40px of modal; one with the full name
+   attached is just the column being honest about its width.
+
+   ANALYTICS KEEPS AN EMPTY FIRST LINE for the same band argument, printed as a
+   non-breaking space by the builder. It is one word and cannot break, so
+   centred it floated between its neighbours' two lines and read as misplaced.
+
+   `label` STAYS FLAT AND FULL, and that is load-bearing twice over:
+   `_triggerPrivacyAI` (app.js) builds its prompt out of
+   `${p.id}: ${p.label} — ${p.desc}`, so an abbreviation here would be sent to
+   the model, and `PRIVACY_PRESETS[].description` names these purposes in
+   Apple's own words for the same reader. The heading is a drawing; the label is
+   the fact. */
 const IOS_PURPOSES = [
-  { id: 'first_party_ads',  label: 'Ads & Marketing',       desc: "Displaying first-party ads, sending marketing communications, or sharing data with entities who will display your ads" },
-  { id: 'third_party_ads',  label: '3rd-Party Advertising', desc: "Displaying third-party ads in your app, or sharing data with entities who display third-party ads" },
-  { id: 'analytics',        label: 'Analytics',             desc: "Evaluating user behavior, including to understand effectiveness of existing features, plan new features, or measure audience size" },
-  { id: 'personalization',  label: 'Personalization',       desc: "Customizing what the user sees, such as a list of recommended products, posts, or suggestions" },
-  { id: 'app_function',     label: 'App Functionality',     desc: "Such as to authenticate the user, enable features, prevent fraud, implement security measures, or perform customer support" },
-  { id: 'other_purpose',    label: 'Other Purposes',        desc: "Any other purpose not listed" },
+  { id: 'first_party_ads',  label: 'Ads & Marketing',          head: ['Ads &', 'Marketing'],           desc: "Displaying first-party ads, sending marketing communications, or sharing data with entities who will display your ads" },
+  { id: 'third_party_ads',  label: '3rd-Party Advertising',    head: ['3rd-Party', 'Advertising'],     desc: "Displaying third-party ads in your app, or sharing data with entities who display third-party ads" },
+  { id: 'analytics',        label: 'Analytics',                head: ['', 'Analytics'],                desc: "Evaluating user behavior, including to understand effectiveness of existing features, plan new features, or measure audience size" },
+  { id: 'personalization',  label: 'Product Personalization',  head: ['Product', 'Personaliz.'],       desc: "Customizing what the user sees, such as a list of recommended products, posts, or suggestions" },
+  { id: 'app_function',     label: 'App Functionality',        head: ['App', 'Functional.'],           desc: "Such as to authenticate the user, enable features, prevent fraud, implement security measures, or perform customer support" },
+  { id: 'other_purpose',    label: 'Other Purposes',           head: ['Other', 'Purposes'],            desc: "Any other purpose not listed" },
 ];
 
 const IOS_INTENSITY_QUESTIONS = [
@@ -4384,7 +4436,14 @@ const state = {
   // "ios:Health & Fitness"). Absent = use the default (expanded only if the
   // group has a flagged/selected data type); present = the developer's own
   // explicit choice from clicking that group's header, which wins either way.
-  privacyGroupExpanded: {},
+  /* The Data Types accordion (v6.52). `privacyGroupOpen` is ONE group name per
+     platform, or null — the whole model. `privacyGroupOrder` is the group order
+     frozen when the table was opened, so nothing re-sorts under a pointer that
+     is working inside it. `privacyGroupExpanded`, the per-group override map
+     these replace, is DELETED rather than left at `{}`: a field nothing reads
+     is a mechanism waiting to be switched back on. */
+  privacyGroupOpen:  {},
+  privacyGroupOrder: {},
 
   // Content Rating question collapse (iOS + future AI-inferred steps)
   // Set of question IDs that were answered when AI inference last completed.
