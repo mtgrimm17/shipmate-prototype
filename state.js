@@ -3548,6 +3548,23 @@ const state = {
      since platform ids come and go with activePlatforms. */
   stepSectionSeen:          {},
 
+  /* WHICH SUBMISSION-CHECKLIST ROW IS CURRENTLY POINTING AT THE CARDS.
+
+     One of CHK_GLOW_STEPS' keys (app.js — 'uploadBuild', 'contentRating',
+     'localizations', 'dataSafety', 'storePages', 'improveSubmission',
+     'submit'), or null for none. Set by chkGoStep when a checklist row is
+     clicked on a project with more than one platform activated, where there is
+     no single step to open and the row rings that step on every card instead;
+     clicking the same row again clears it. Only ever one at a time — a second
+     row's rings would stop meaning "this is the thing I just asked about".
+
+     In state rather than as a DOM class because the dashboard rebuilds its
+     cards wholesale on every step completion and every tab switch, and the
+     rings have to still be there afterwards (applyChkGlow, app.js, called at
+     the end of renderDashboard). Deliberately NOT persisted with the project:
+     it is a gesture, not a setting. */
+  chkGlowStep:              null,
+
   // Which required element (Title/Subtitle/Content/Business/Screenshots/Data)
   // currently has the animated "needs attention" glow on the App Store/Mac
   // App Store Product Page Preview footer's prev/next navigator

@@ -9653,6 +9653,19 @@ textarea.loc-review-field.ias-inline-input {
    cells — are completely unaffected; only these two builders' markup
    places .ias-meta-label-top first. */
 .ias-meta-label-top { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+/* The Developer cell's label is the studio's real name once a title has been
+   scraped (v6.54, _sppDeveloperName in render.js) instead of the single word
+   "Developer", and studio names run long — "Maddy Makes Games Inc." takes two
+   lines in a 116px cell, and a longer one would take three or four and drag
+   the whole strip's height with it. Two lines then ellipsis: enough for the
+   names that actually occur, and a hard floor under the worst case. Applied to
+   every cell's label rather than just this one — the others are single words
+   and can never reach the clamp, so scoping it would only be a rule that says
+   the same thing twice. */
+.ias-meta-label-top {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 
 /* Screenshots */
 .ias-shots-scroll {
@@ -10021,6 +10034,36 @@ textarea.loc-review-field.ias-inline-input {
      asking for attention right now. */
   box-shadow: 0 0 0 2px rgba(255,149,0,0.06);
 }
+/* ── THE CHECKLIST'S "IT IS THAT ONE" RING ────────────────────────────────
+   A Submission checklist row on a multi-platform project has no single step to
+   open, so it rings the step on each platform's card instead (chkGoStep /
+   applyChkGlow, app.js). Built like the store preview's own pulses below — a
+   spreading box-shadow rather than a border, so nothing on the row moves by a
+   pixel when it lights up — in the app's accent blue rather than the preview's
+   amber, because this is "here it is", not "this needs attention".
+
+   It stays on until the row is clicked again, which is why the pulse is slow
+   and shallow: a fast ring that never stops is a thing you end up covering
+   with your hand. */
+@keyframes chk-point-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82,186,255,0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(82,186,255,0); }
+}
+.ios-step-card.is-chk-glow {
+  animation: chk-point-pulse 1.9s ease-in-out infinite;
+  border-radius: 12px;
+  position: relative; z-index: 1;
+}
+/* And the row that switched them on says so, so the thing doing the pointing
+   is visibly on while the rings are — otherwise a developer who has scrolled
+   the cards has no way to tell which row to click to put them away. */
+.chk-item.is-pointing .chk-label,
+.gd-task.is-pointing .gd-task-label { color: var(--accent, #52BAFF); }
+.chk-item.is-pointing, .gd-task.is-pointing {
+  background: rgba(82,186,255,0.10);
+  border-radius: 8px;
+}
+
 @keyframes spp-focus-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.7); }
   50%       { box-shadow: 0 0 0 7px rgba(255,149,0,0); }
@@ -11071,6 +11114,25 @@ textarea.loc-review-field.ias-inline-input {
   font-size: 13px; color: var(--text-dim);
 }
 .mac-spp-link-row svg { flex-shrink: 0; }
+/* Once there is a scraped URL behind it the row is a real <a> (v6.54,
+   _sppLinkRowHtml in render.js). It has to keep looking exactly like the span
+   it replaces — same neutral tone, no underline, no visited colour — so the
+   only difference the eye gets is the pointer and the underline on hover. */
+/* The developer NAME is a real name now (v6.54, _sppDeveloperName in
+   render.js) rather than the seven letters of the word "Developer", and a
+   studio's full legal name — "Maddy Makes Games Inc." — wraps in this column.
+   Right-aligned so a wrapped second line stays flush with the column's own
+   edge, matching the Website/Support rows beneath it (the column is
+   align-items:flex-end, which places each row's BOX but says nothing about
+   text inside a box that fills the width). */
+.mac-spp-dev-links .ias-dev-name { text-align: right; line-height: 1.35; }
+
+a.mac-spp-link-row { color: inherit; text-decoration: none; }
+a.mac-spp-link-row.is-live { cursor: pointer; }
+a.mac-spp-link-row.is-live:hover span { text-decoration: underline; }
+a.mac-spp-link-row.is-live:focus-visible {
+  outline: 2px solid var(--accent, #52BAFF); outline-offset: 2px; border-radius: 4px;
+}
 
 /* Description — a 2-column CSS GRID (not flexbox, per request — see below
    for why): column 1 (1fr) holds the clamped text box (mac-spp-desc-clamp,

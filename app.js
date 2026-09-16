@@ -1421,6 +1421,144 @@ function setLaunchDate(v) {
 }
 
 // Checklist item → jump to its tab (and Marketing sub-tab), then scroll to the field.
+/* ── A SUBMISSION CHECKLIST ROW POINTS AT PLATFORM STEPS ──────────────────
+   The Details rows all point at one field, so chkGo can scroll to it. A
+   Submission row cannot: "Set content ratings" is a step on App Store AND Mac
+   App Store AND Google Play AND Steam, and there is no one destination to
+   send anybody to.
+
+   So by request the row does whichever of the two honest things applies.
+
+   ONE PLATFORM ACTIVATED and there IS a single destination — open that
+   platform's step, exactly as clicking the row on its card would. Literally
+   so: the card's own row is clicked rather than an opener being guessed at,
+   because which opener is right depends on the platform (openStepModal vs
+   openTaskModal) and on the layout flag (a modal, or the step expanding in
+   place). Duplicating that decision here is how the two drift apart; the
+   openStepModal below is only the fallback for a row that isn't on screen —
+   a platform showing its account/settings face, say.
+
+   SEVERAL PLATFORMS and the row instead points at all of them: it rings that
+   step on every card that has it, and clicking again puts the rings away. The
+   row lights up too (.is-pointing), so the thing doing the pointing is
+   visibly on while the rings are.
+
+   Submit is the one step with no step-card click of its own — its row is a
+   hold, not a click (buildSubmitStepCard, render.js), and firing that from a
+   checklist row would submit a build from a place nobody expects to. It
+   scrolls into view instead. */
+const CHK_GLOW_STEPS = {
+  uploadBuild:       { stepIds: ['uploadBuild'] },
+  contentRating:     { stepIds: ['contentRating'] },
+  localizations:     { stepIds: ['localizations'] },
+  /* Data Collection Questions is a SECTION of the Product Page Preview, not a
+     card step — only Mac App Store Full carries a real 'privacy' row. So this
+     resolves to whichever the platform has: that row where it exists, and
+     otherwise the preview step with a flip to its 'data' section, which is the
+     same door openStorePreviewSection opens from inside the preview. The ring
+     therefore lands on the preview row on most platforms, which is the honest
+     answer — that IS where the questions live. */
+  dataSafety:        { stepIds: ['privacy', 'dataSafety', 'storePreview', 'storePreviewPrototype'], flip: 'data' },
+  storePages:        { stepIds: ['storePreview', 'storePreviewPrototype'] },
+  improveSubmission: { stepIds: ['improveSubmission'] },
+  submit:            { stepIds: ['submit'] },
+};
+const CHK_PREVIEW_STEPS = new Set(['storePreview', 'storePreviewPrototype']);
+
+/* Which (platform, step) pairs a checklist row is talking about. Resolved
+   through the same two helpers the row's own done-state is (render.js), so a
+   row can never point at a step its platform does not carry — including the
+   Localizations step that _visiblePlatformSteps hides when no supporting
+   languages are selected. Submit is the exception the checklist already makes
+   for it: every active platform answers for Submit, not only the handful that
+   list an explicit step for it. */
+function _chkStepTargets(key) {
+  const cfg = CHK_GLOW_STEPS[key];
+  if (!cfg) return [];
+  if (key === 'submit') {
+    return [...(state.activePlatforms || [])].map(pid => ({ pid, stepId: 'submit' }));
+  }
+  if (typeof _chkPlatformsWithStep !== 'function') return [];
+  return _chkPlatformsWithStep(cfg.stepIds)
+    .map(pid => {
+      const stepId = _chkPlatformStepId(pid, cfg.stepIds);
+      // The flip only applies when the step we landed on IS the preview — a
+      // platform with its own card row for this goes straight to that row.
+      const flip = (cfg.flip && CHK_PREVIEW_STEPS.has(stepId)) ? cfg.flip : null;
+      return { pid, stepId, flip };
+    })
+    .filter(t => !!t.stepId);
+}
+
+/* Held in state, not as a bare DOM class: the dashboard rebuilds its cards on
+   every step completion and on every tab switch, and a highlight the developer
+   switched on has to survive both. renderDashboard calls this at the end of
+   each rebuild. */
+function applyChkGlow() {
+  document.querySelectorAll('.is-chk-glow').forEach(el => el.classList.remove('is-chk-glow'));
+  const key = state.chkGlowStep;
+  if (!key) return;
+  _chkStepTargets(key).forEach(({ pid, stepId }) => {
+    document.getElementById(`${pid}-step-card-${stepId}`)?.classList.add('is-chk-glow');
+  });
+}
+
+function _chkOpenStep(pid, stepId, flip) {
+  if (typeof selectPlatformTab === 'function') selectPlatformTab(pid);
+  requestAnimationFrame(() => {
+    const row = document.getElementById(`${pid}-step-card-${stepId}`);
+    if (stepId === 'submit') {
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    /* Data Collection Questions: open the preview and turn it over, exactly as
+       its own "Answer Data Collection Questions" element does. openStorePreviewSection
+       records the visit too (markStepSectionSeen), which is half of what makes
+       the checklist row able to tick at all — see _chkDataSafetyDone. */
+    if (flip) {
+      if (typeof openStepModal === 'function') openStepModal(pid, stepId);
+      if (typeof openStorePreviewSection === 'function') openStorePreviewSection(pid, flip);
+      return;
+    }
+    /* Clicking the card's own row is what keeps this identical to opening the
+       step by hand, whichever opener that platform and layout use. But not
+       every row HAS a click: in the pre-tab-strip presentation
+       (submission.layout === 'modal') Upload Build is rendered inline on the
+       card, holding the release block itself, with no handler to fire. Test
+       for the handler rather than assume one, or that row swallows the click
+       and nothing opens at all. */
+    if (row && (row.hasAttribute('onclick') || row.getAttribute('role') === 'button')) {
+      row.click();
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof openStepModal === 'function') openStepModal(pid, stepId);
+  });
+}
+
+function chkGoStep(key) {
+  setView('dashboard');
+  const targets = _chkStepTargets(key);
+  /* "Only one selected platform" is about what the developer activated, not
+     about how many of them happen to carry this step — a project with App
+     Store alone should open the step even for a row whose step list is
+     shared. With one platform activated there is at most one target anyway. */
+  const onePlatform = (state.activePlatforms ? state.activePlatforms.size : 0) === 1;
+  if (onePlatform && targets.length === 1) {
+    state.chkGlowStep = null;
+    applyChkGlow();
+    renderChecklist();
+    if (typeof renderGuide === 'function') renderGuide();
+    _chkOpenStep(targets[0].pid, targets[0].stepId, targets[0].flip);
+    return;
+  }
+  state.chkGlowStep = (state.chkGlowStep === key) ? null : key;
+  renderDashboard();          // re-applies the glow at the end of its rebuild
+  renderChecklist();
+  if (typeof renderGuide === 'function') renderGuide();
+}
+
 function chkGo(view, anchor, section) {
   if (section && view === 'broadcast') state.marketing.section = section;
   if (section && view === 'details') state.details.section = section;

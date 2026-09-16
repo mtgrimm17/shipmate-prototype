@@ -3627,6 +3627,38 @@ function _chkEveryPlatformComplete(stepIds) {
   });
 }
 
+/* "COMPLETE DATA SAFETY DISCLOSURES", which had no way to ever tick.
+
+   Data Collection Questions is NOT a step on any platform card — it is a
+   section of the Product Page Preview, reached by flipping it over
+   (openStorePreviewSection(pid,'data'), app.js). So asking
+   _chkPlatformsWithStep for 'privacy'/'dataSafety' found no platform carrying
+   either id, got back [], and "done everywhere that has it, and at least one
+   does" is false over an empty list by design — this row sat permanently
+   unticked on every project that didn't activate the hidden Mac App Store
+   Full, which is the only platform with a real card step for it.
+
+   It asks each preview directly instead, using the exact expression that
+   preview's own required-elements list uses for its `dataDone` — section
+   visited AND questionnaire complete — so the checklist and the preview's own
+   amber "needs attention" ring can't disagree. Steam is deliberately absent:
+   its data section is a privacy-policy URL field, not a disclosure
+   questionnaire, and counting it would let the row tick on a URL. */
+const CHK_DATA_DONE = {
+  ios:        () => !!(state.storePreviewSectionSeen?.ios?.data   && isIOSSectionComplete('privacy')),
+  macos:      () => !!(state.storePreviewSectionSeen?.macos?.data && isMacSectionComplete('privacy')),
+  macos_full: () => isMacFullSectionComplete('privacy'),
+  android:    () => isAndroidSectionComplete('dataSafety'),
+};
+
+function _chkDataSafetyDone() {
+  const pids = [...(state.activePlatforms || [])].filter(pid => CHK_DATA_DONE[pid]);
+  if (!pids.length) return false;
+  return pids.every(pid => {
+    try { return !!CHK_DATA_DONE[pid](); } catch (_) { return false; }
+  });
+}
+
 /* Submitted on every activated platform. Same "at least one" guard as
    _chkEveryPlatformComplete, for the same reason. */
 function _chkAllPlatformsSubmitted() {
@@ -3654,6 +3686,9 @@ function _chkGroups() {
   const hasTrailer = !!ups.trailer
                   || !!ups.steamTrailer
                   || !!(fd.trailerUrl && fd.trailerUrl.trim());
+  // Same test _visiblePlatformSteps uses to decide whether the platform cards
+  // show a Localizations step at all (state.js).
+  const hasLocalizations = (fd.localizations || []).length > 0;
   return [
     { group: t('guide.group.details') || 'Details', view: 'details', items: [
       { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
@@ -3668,16 +3703,36 @@ function _chkGroups() {
       { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: hasScreenshots },
       { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: hasTrailer },
     ] },
+    /* THE SUBMISSION GROUP NOW WALKS THE WHOLE CARD, in the order the platform
+       cards themselves list their steps: Upload Build, Content Rating,
+       Localizations, Data, Product Page Preview, Improve Your Submission,
+       Submit. Three of those were missing, so the checklist could read 100%
+       with no build uploaded and the submission never run through Improve.
+
+       Localizations is CONDITIONAL, and on the same fact the platform cards
+       are: _visiblePlatformSteps (state.js) drops that step entirely from
+       ios/macos/macos_full when no supporting languages are selected, so a row
+       for it here would be a row pointing at nothing. Both read
+       formData.localizations, so they can't disagree.
+
+       `step` is what the row's click resolves against — see chkGoStep
+       (app.js): one platform and it opens that platform's step, several and it
+       rings the step on each of their cards. */
     { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
-      { label: t('guide.item.contentRatings') || 'Set content ratings',    done: _chkEveryPlatformComplete('contentRating') },
-      { label: t('guide.item.dataSafety') || 'Complete data safety disclosures', done: _chkEveryPlatformComplete(['privacy', 'dataSafety']) },
-      { label: t('guide.item.storePages') || 'Build store pages',          done: _chkEveryPlatformComplete(['storePreview', 'storePreviewPrototype']) },
+      { label: t('guide.item.uploadBuild') || 'Upload build',              step: 'uploadBuild',   done: _chkEveryPlatformComplete('uploadBuild') },
+      { label: t('guide.item.contentRatings') || 'Set content ratings',    step: 'contentRating', done: _chkEveryPlatformComplete('contentRating') },
+      ...(hasLocalizations ? [
+      { label: t('guide.item.platformLocalizations') || 'Complete localizations', step: 'localizations', done: _chkEveryPlatformComplete('localizations') },
+      ] : []),
+      { label: t('guide.item.dataSafety') || 'Complete data safety disclosures', step: 'dataSafety', done: _chkDataSafetyDone() },
+      { label: t('guide.item.storePages') || 'Build store pages',          step: 'storePages',    done: _chkEveryPlatformComplete(['storePreview', 'storePreviewPrototype']) },
+      { label: t('guide.item.improveSubmission') || 'Improve your submission', step: 'improveSubmission', done: _chkEveryPlatformComplete('improveSubmission') },
       // Submit has no isXxxSectionComplete arm on any platform — it is
       // recorded straight onto platformStepStatus by _doFinalSubmit (app.js),
       // which is the flag every other submit-state reader tests too. Applies
       // to every active platform, not only those listing an explicit submit
       // step, since that flag is what gets written regardless.
-      { label: t('guide.item.submitBuilds') || 'Submit builds for review', done: _chkAllPlatformsSubmitted() },
+      { label: t('guide.item.submitBuilds') || 'Submit builds for review', step: 'submit', done: _chkAllPlatformsSubmitted() },
     ] },
     { group: t('guide.group.marketing') || 'Marketing', view: 'broadcast', items: [
       { label: t('guide.item.announcement') || 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
@@ -3758,7 +3813,7 @@ function renderChecklist() {
         <div class="chk-group">
           <button class="chk-group-head${g.view === state.activeView ? ' is-current' : ''}" onclick="setView('${g.view}')">${g.group}</button>
           ${g.items.map(i => `
-            <button class="chk-item${i.done ? ' is-done' : ''}" onclick="chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')">
+            <button class="chk-item${i.done ? ' is-done' : ''}${i.step && state.chkGlowStep === i.step ? ' is-pointing' : ''}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')`}">
               <span class="chk-box">${i.done ? '✓' : ''}</span>
               <span class="chk-label">${i.label}</span>
             </button>`).join('')}
@@ -3816,7 +3871,7 @@ function renderGuide() {
   const tasks = items.map((i, idx) => {
     const cls = i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : '');
     return `
-    <button class="gd-task${cls}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">
+    <button class="gd-task${cls}${i.step && state.chkGlowStep === i.step ? ' is-pointing' : ''}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
       <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
       <span class="gd-task-label">${i.label}</span>
     </button>`;
@@ -4995,6 +5050,12 @@ function renderDashboard() {
      _smModalFades, and for the same reason. Guarded because render.js is
      loaded before app.js. */
   if (typeof _subScrollCue === 'function') requestAnimationFrame(_subScrollCue);
+  /* The cards were just thrown away and rebuilt, taking any checklist glow
+     with them — see applyChkGlow (app.js) for why it lives in state and is
+     re-applied here rather than being baked into six card builders. Also what
+     makes the glow follow the developer from one platform's tab to the next,
+     since the tab strip only ever draws the selected platform's pane. */
+  if (typeof applyChkGlow === 'function') applyChkGlow();
 }
 
 /* ── THE PLATFORM TAB STRIP ──────────────────────────────────────────────────
@@ -9378,6 +9439,53 @@ function _sppFooterNav(pid, elements) {
     </div>`;
 }
 
+/* ── WHAT THE PREVIEWS CALL THE DEVELOPER ─────────────────────────────────
+   Every store preview shipped with the literal word "Developer" (and "Your
+   Company" in the Information card) wherever the developer's name belongs —
+   placeholders seeded the way "My Game" and "Pixel Forge" are, with nothing
+   behind them. A Steam scrape does know the real name: _applySteamAboutData
+   joins /game's `developers` list onto state.webSite.developer. So by request
+   every one of those places now reads it, and falls back to its own original
+   placeholder when the project has not been linked to a Steam title (or when
+   the developer has cleared the field), which is what keeps an unscraped
+   preview looking exactly as it did.
+
+   One function rather than a value threaded through each builder: the four
+   places sit in three different files' worth of markup and each had its own
+   placeholder word, so the fallback has to travel with the call. */
+function _sppDeveloperName(placeholder) {
+  const scraped = ((state.webSite && state.webSite.developer) || '').trim();
+  return scraped || placeholder;
+}
+
+/* The preview's Website/Support destinations, also from the scrape:
+   state.webSite.officialWebsite (/game's `website`) and state.steamSupportUrl
+   (/game's `supportUrl`). Returns '' when there is nothing to link to, which
+   is the signal to render the row as the plain, unclickable span it has always
+   been rather than a dead <a>. Bare hosts get a scheme so the browser treats
+   "celestegame.com" as a site and not as a relative path. */
+function _sppExternalUrl(raw) {
+  const v = (raw || '').trim();
+  if (!v) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return /^https?:/i.test(v) ? v : '';
+  return 'https://' + v;
+}
+const MAC_SPP_WEBSITE_ICON = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M10.1 5.9L8.6 8.7 5.9 10.1 7.4 7.3 10.1 5.9Z" fill="currentColor"/></svg>`;
+const MAC_SPP_SUPPORT_ICON = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.4a1.8 1.8 0 113.3 1c-.25.5-.95.8-1.25 1.3-.15.25-.2.5-.2.75" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.55" fill="currentColor"/></svg>`;
+
+/* The label + icon pair beside the description. An <a> when there is somewhere
+   to go, the original <span> when there is not — same class either way, so the
+   two states are identical to look at and only one of them is clickable. */
+function _sppLinkRowHtml(label, url, iconSvg) {
+  const inner = `<span>${label}</span>${iconSvg}`;
+  if (!url) return `<span class="mac-spp-link-row">${inner}</span>`;
+  return `<a class="mac-spp-link-row is-live" href="${escHtml(url)}" target="_blank" rel="noopener"
+             title="${escHtml(url)}" onclick="event.stopPropagation()">${inner}</a>`;
+}
+
+function _sppWebsiteUrl() { return _sppExternalUrl(state.webSite && state.webSite.officialWebsite); }
+function _sppSupportUrl() { return _sppExternalUrl(state.steamSupportUrl); }
+
 function buildStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
@@ -9658,7 +9766,7 @@ function buildStorePreviewSection() {
     </div>`;
 
   const infoRowsTop = [
-    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Seller',        value: escHtml(_sppDeveloperName('Your Company')) },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'iPhone, iPad'      },
@@ -9804,7 +9912,7 @@ function buildStorePreviewSection() {
   // native App Store's own default "no verified developer icon" look.
   const devCell = `
     <div class="ias-meta-cell">
-      <div class="ias-meta-label-top">Developer</div>
+      <div class="ias-meta-label-top">${escHtml(_sppDeveloperName('Developer'))}</div>
       <div class="ias-meta-top ias-meta-dev-logo">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
       </div>
@@ -9983,7 +10091,7 @@ function buildStorePreviewSection() {
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
           <div class="ias-dev-row">
-            <span class="ias-dev-name">Developer</span>
+            <span class="ias-dev-name">${escHtml(_sppDeveloperName('Developer'))}</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
@@ -10419,7 +10527,7 @@ function buildMacStorePreviewSection() {
   // naturally lands alone on its own row whenever there's more than one
   // column, the same way the reference screenshot shows it.
   const infoCellsHtml = [
-    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Seller',        value: escHtml(_sppDeveloperName('Your Company')) },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'Mac',      chevron: true },
@@ -10603,7 +10711,7 @@ function buildMacStorePreviewSection() {
   // native App Store's own default "no verified developer icon" look.
   const devCell = `
     <div class="ias-meta-cell">
-      <div class="ias-meta-label-top">Developer</div>
+      <div class="ias-meta-label-top">${escHtml(_sppDeveloperName('Developer'))}</div>
       <div class="ias-meta-top ias-meta-dev-logo">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
       </div>
@@ -10952,15 +11060,22 @@ function buildMacStorePreviewSection() {
               ${descStatusHtml}
             </div>
             <div class="mac-spp-dev-links">
-              <span class="ias-dev-name">Developer</span>
-              <span class="mac-spp-link-row">
-                <span>Website</span>
-                <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M10.1 5.9L8.6 8.7 5.9 10.1 7.4 7.3 10.1 5.9Z" fill="currentColor"/></svg>
-              </span>
-              <span class="mac-spp-link-row">
-                <span>Support</span>
-                <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.4a1.8 1.8 0 113.3 1c-.25.5-.95.8-1.25 1.3-.15.25-.2.5-.2.75" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.55" fill="currentColor"/></svg>
-              </span>
+              ${/* Website and Support were "decorative (no real destination)",
+                    per the comment above. They have destinations now whenever
+                    the title has been scraped — /game's own `website` and
+                    `supportUrl` — so by request each becomes a real link to
+                    its own URL and stays the plain unclickable span it was
+                    when there is nothing to point at.
+
+                    target=_blank + rel=noopener: this is the developer's own
+                    store page opening, and the preview they are editing should
+                    still be here when they come back. stopPropagation because
+                    the description column beside this flips into inline edit on
+                    click — without it, following the link would also open an
+                    editor behind the new tab. */''}
+              <span class="ias-dev-name">${escHtml(_sppDeveloperName('Developer'))}</span>
+              ${_sppLinkRowHtml('Website', _sppWebsiteUrl(), MAC_SPP_WEBSITE_ICON)}
+              ${_sppLinkRowHtml('Support', _sppSupportUrl(), MAC_SPP_SUPPORT_ICON)}
             </div>
           </div>
         </div>
@@ -11164,7 +11279,7 @@ function _buildMacSppSidebar(gameTitle) {
             exists, this is the one line to change. */''}
       <div class="mac-spp-account">
         <div class="mac-spp-account-avatar"></div>
-        <span class="mac-spp-account-label">Developer</span>
+        <span class="mac-spp-account-label">${escHtml(_sppDeveloperName('Developer'))}</span>
       </div>
     </div>`;
 }
@@ -15487,7 +15602,7 @@ function buildMacFullStorePreviewSection() {
   // lists every language a listing is localized into.
   const languagesValue = previewLangCodes.map(code => OB_LANG_NAMES[code] || code).join(', ');
   const infoRowsTop = [
-    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Seller',        value: escHtml(_sppDeveloperName('Your Company')) },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'Mac'                },
@@ -15710,7 +15825,7 @@ function buildMacFullStorePreviewSection() {
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
           <div class="ias-dev-row">
-            <span class="ias-dev-name">Developer</span>
+            <span class="ias-dev-name">${escHtml(_sppDeveloperName('Developer'))}</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
