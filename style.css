@@ -10039,26 +10039,40 @@ textarea.loc-review-field.ias-inline-input {
    cards instead, ringing the step it names (chkGoStep / _chkPulse, app.js).
    Built like the store preview's own pulses below — a spreading box-shadow
    rather than a border, so nothing on the row moves by a pixel when it lights
-   up — in the app's accent blue rather than the preview's amber, because this
-   is "here it is", not "this needs attention".
+   up.
 
    ONE PULSE, not a loop. v6.54 ran this forever and latched it on until the
-   row was clicked again; by request it now fires once and clears itself (the
-   class comes off on animationend — see _chkPulse). A single pass has to carry
-   on its own, so it is shorter and brighter than the latched version was, and
-   reaches full strength immediately rather than easing out of nothing. The
-   checklist row's own lit state went with the latch: nobody is being asked to
-   remember to switch anything off any more. */
+   row was clicked again; it now fires once and clears itself (the class comes
+   off on animationend — see _chkPulse). A single pass has to carry on its own,
+   so it is shorter and brighter than the latched version was, and reaches full
+   strength immediately rather than easing out of nothing.
+
+   TWO COLOURS (v6.59), and they are the previews' own two rather than new
+   ones: amber for work still outstanding — the same
+   rgba(255,149,0) .is-spp-focused rings an empty required field in — and green
+   for a step every platform has already finished, the same rgba(52,199,89)
+   .is-spp-focused-done uses for a satisfied one. The app already means those
+   two things by those two colours everywhere else; a third colour here would
+   have been a third vocabulary for the same distinction. The accent blue this
+   replaced said only "over here", which is the one thing the pulse's motion
+   was already saying by itself. */
 @keyframes chk-point-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(82,186,255,0); }
-  15%  { box-shadow: 0 0 0 0 rgba(82,186,255,0.85); }
-  100% { box-shadow: 0 0 0 10px rgba(82,186,255,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(255,149,0,0); }
+  15%  { box-shadow: 0 0 0 0 rgba(255,149,0,0.85); }
+  100% { box-shadow: 0 0 0 10px rgba(255,149,0,0); }
 }
-.ios-step-card.is-chk-pulse {
-  animation: chk-point-pulse 1.25s ease-out 1;
+@keyframes chk-point-pulse-done {
+  0%   { box-shadow: 0 0 0 0 rgba(52,199,89,0); }
+  15%  { box-shadow: 0 0 0 0 rgba(52,199,89,0.85); }
+  100% { box-shadow: 0 0 0 10px rgba(52,199,89,0); }
+}
+.ios-step-card.is-chk-pulse,
+.ios-step-card.is-chk-pulse-done {
   border-radius: 12px;
   position: relative; z-index: 1;
 }
+.ios-step-card.is-chk-pulse      { animation: chk-point-pulse      1.25s ease-out 1; }
+.ios-step-card.is-chk-pulse-done { animation: chk-point-pulse-done 1.25s ease-out 1; }
 
 @keyframes spp-focus-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0.7); }

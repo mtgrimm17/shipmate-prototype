@@ -1531,13 +1531,14 @@ function _chkStepDone(pid, stepId) {
    again: re-adding a class the element already has does not restart a CSS
    animation, and reading offsetWidth in between is the standard way to force
    the style flush that does. */
-function _chkPulse(el) {
+function _chkPulse(el, tone) {
   if (!el) return;
-  el.classList.remove('is-chk-pulse');
+  const cls = tone === 'done' ? 'is-chk-pulse-done' : 'is-chk-pulse';
+  el.classList.remove('is-chk-pulse', 'is-chk-pulse-done');
   void el.offsetWidth;
-  el.classList.add('is-chk-pulse');
+  el.classList.add(cls);
   const off = () => {
-    el.classList.remove('is-chk-pulse');
+    el.classList.remove('is-chk-pulse', 'is-chk-pulse-done');
     el.removeEventListener('animationend', off);
   };
   el.addEventListener('animationend', off);
@@ -1549,14 +1550,14 @@ function _chkPulse(el) {
    already done, and the ones left to do belong to another platform — it moves
    to the first platform that still has one rather than answering the click
    with nothing at all. */
-function _chkPulseTargets(targets) {
+function _chkPulseTargets(targets, tone) {
   if (!targets.length) return;
   const paint = () => {
     const els = targets
       .map(t => document.getElementById(`${t.pid}-step-card-${t.stepId}`))
       .filter(Boolean);
     if (!els.length) return false;
-    els.forEach(_chkPulse);
+    els.forEach(el => _chkPulse(el, tone));
     els[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     return true;
   };
@@ -1617,11 +1618,29 @@ function chkGoStep(key) {
     return;
   }
 
-  /* Only what is left to do — except on a single platform, where the row has
-     exactly one thing it could possibly be pointing at and pulsing nothing
-     would just look broken. */
-  const pulse = onePlatform ? targets : targets.filter(t => !_chkStepDone(t.pid, t.stepId));
-  _chkPulseTargets(pulse.length ? pulse : targets);
+  /* TWO COLOURS, BECAUSE THE ROW IS ANSWERING TWO DIFFERENT QUESTIONS (v6.59).
+
+     Everything left to do rings AMBER — the app's one word for "this needs
+     you", the same colour the store previews ring a required-but-empty field
+     in. Pointing at outstanding work in the accent blue said "here it is" and
+     stopped there; amber says what about it matters.
+
+     But when every platform has already finished the step, there is no
+     outstanding work to point at, and an amber ring around a row of ticks
+     reads as an alarm over something that is fine. That case rings GREEN
+     instead, on all of them — the same green the previews use for a satisfied
+     requirement — so the click still answers ("all of these are done") rather
+     than either going quiet or crying wolf.
+
+     Deliberately every target rather than the incomplete subset here: with
+     nothing incomplete, the subset is empty, and the whole point of the green
+     pass is showing the set that IS done. */
+  const outstanding = targets.filter(t => !_chkStepDone(t.pid, t.stepId));
+  if (!outstanding.length) { _chkPulseTargets(targets, 'done'); return; }
+  /* On a single platform the row has exactly one thing it could be pointing
+     at, so it pulses that one whatever its state — and its state is already
+     covered by the green branch above. */
+  _chkPulseTargets(onePlatform ? targets : outstanding, 'todo');
 }
 
 function chkGo(view, anchor, section) {
