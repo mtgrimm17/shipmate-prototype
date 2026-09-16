@@ -16303,7 +16303,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   font-size: 10px;
   font-weight: 500;
   color: rgba(255, 255, 255, .55);
-  padding: 7px 2px 13px;
+  padding: 7px 2px 17px;
   text-transform: uppercase;
   text-align: center;
   vertical-align: bottom;
@@ -16471,7 +16471,18 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    handle must not outweigh the 10px label it belongs to: the rule this table
    keeps proving is that a value right for one object is not right for another
    drawn at a different size. */
-.pvt thead th.tooltip-anchor,
+/* ONLY THE `<td>` TAKES `position: relative`, AND THE `<th>` MUST NOT.
+   `position` is ONE property: the eight headings are already `position: sticky`
+   (thirty lines up, so the column labels stay on screen while sixteen groups
+   scroll under them), and a later `relative` does not "add a positioning
+   context" — it REPLACES sticky. Measured symptom: the eight headings scrolled
+   away with the rows while DATA TYPE, which is not a `.tooltip-anchor` and so
+   never matched this rule, stayed pinned on its own. Jaco: *"DATA TYPE se
+   descuelga con su propia barra y perdemos los títulos de las categorías."*
+
+   Nothing is needed there anyway — **a sticky element IS a positioned
+   element**, so the disc's `position: absolute` already resolves against the
+   cell. The `<td>` is the only one that has to be told. */
 .pvt td.pvt-ty.tooltip-anchor { position: relative; }
 .pvt .tooltip-icon.pvt-tt {
   position: absolute;
@@ -16481,10 +16492,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   margin: 0;
   pointer-events: none;
 }
+/* 5px UNDER THE DISC, AND THE PADDING GROWS WITH IT — the two are one number.
+   The disc sits in the `<th>`'s bottom padding, so its clearance BELOW (to the
+   header's rule) and its clearance ABOVE (to the second line of the label) come
+   out of the same 13px. Moving `bottom` alone would have pushed its top edge
+   into the text; the padding goes 13 → 17 so the 1px above is untouched and
+   only the gap he asked for changes. The cost, stated: the header row is 53
+   rather than 49 — the four pixels the disc no longer has to share. */
 .pvt thead th .tooltip-icon.pvt-tt {
   left: 50%;
   transform: translateX(-50%);
-  bottom: 1px;
+  bottom: 5px;
 }
 .pvt td.pvt-ty .tooltip-icon.pvt-tt {
   left: 13px;
@@ -16612,7 +16630,24 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    as part of the same phrase, and the elastic gap goes after them both. */
 .pvt .pvt-gtx { flex: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pvt .pvt-gsp { flex: 1; }
-.pvt .pvt-gn  { flex: none; color: var(--pill-on-color); }
+/* GREY, AND IT IS THE GROUP NAME'S OWN — the last hue leaving the row.
+   The count was `--pill-on-color` from the day it was the only thing telling it
+   apart from the name it was glued to. Position does that now (its own column,
+   ten pixels off the list), so the hue is free — and v6.54 had just taken blue
+   out of the open row on the argument that blue against amber is two claims and
+   neither reads as ordinary. Leaving one blue digit up here would have kept
+   exactly the contradiction that change removed, on the one row that is meant to
+   be read at a glance.
+
+   WHITE WAS THE OTHER OFFER AND IS WRONG BY THIS FILE'S OWN RULE: the mark is
+   for what is OUTSTANDING, and a count is not outstanding — at full white it
+   would be the loudest thing on a row whose subject is the group's name.
+
+   `--text-dim` rather than a fourth alpha, because the count is a fact about the
+   GROUP (Identifiers has two) where the names are its contents: name and count
+   in one register, the list a step under at `.52`, the commas at `.30`. Three
+   levels, and amber still the only colour. */
+.pvt .pvt-gn  { flex: none; color: var(--text-dim); }
 
 /* ── AND THE LIST STARTS ON ONE COLUMN ACROSS ALL SIXTEEN ─────────────────
    Jaco: *"¿debería estar alineado forzoso la lista de nombres en el header,
@@ -16778,10 +16813,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .pvt tr.pvt-g.is-dim.is-empty td    { color: rgba(255, 255, 255, .20); }
 .pvt tr.pvt-g.is-dim .pvt-gc        { color: rgba(255, 255, 255, .22); }
 .pvt tr.pvt-g.is-dim.is-empty .pvt-gc { color: rgba(255, 255, 255, .12); }
-.pvt tr.pvt-g.is-dim .pvt-gn        { color: rgba(0, 154, 255, .70); }
+/* THE COUNT'S DIM IS THE GROUP NAME'S DIM, because at rest they are one
+   register (see `.pvt-gn`): it was `rgba(0,154,255,.70)` while the count was
+   blue, and leaving it there would have put the row's only remaining blue back
+   on the fifteen rows that are meant to be stepping BACK. Stated rather than
+   inherited from the row's own `td` for the reason below — it declares its own
+   colour, so the dim cannot reach it — and stated at exactly that `td`'s .38,
+   so the pair stays one register dimmed as well as at rest. */
+.pvt tr.pvt-g.is-dim .pvt-gn        { color: rgba(255, 255, 255, .38); }
 /* The names step back with everything else, BY COLOUR — the chips declare
    their own, so the row's dim cannot reach them and has to be stated. The
-   amber keeps a rung on the blue here too, for the reason it does at rest. */
+   amber keeps a rung on the whites here too, for the reason it does at rest. */
 .pvt tr.pvt-g.is-dim .pvt-gf        { color: rgba(255, 255, 255, .26); }
 .pvt tr.pvt-g.is-dim .pvt-gf.is-trk { color: rgba(255, 184, 107, .52); }
 .pvt tr.pvt-g.is-dim .pvt-gfc       { color: rgba(255, 255, 255, .15); }

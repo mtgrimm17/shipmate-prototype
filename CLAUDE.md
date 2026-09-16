@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.46**
+Current version: **v6.47**
 
 ---
 
@@ -6105,8 +6105,14 @@ invents a second way of saying *hover me* is a second vocabulary for one fact.
 *"un tooltip muy pequeño. En el caso del header, debajo de los títulos, y en el
 caso de las subcategorías, quizás a su izquierda."*
 
-- the `<th>` pays **13px of bottom padding**, and an 11px disc sits in it with a
-  pixel to spare at each end — under the second line, centred on the column.
+- the `<th>` pays **bottom padding** it already had, and an 11px disc sits in it,
+  under the second line and centred on the column. It was 13, with the disc
+  1px clear at each end; Jaco asked for *"5px de espacio después de los
+  tooltips"* and **both numbers move together**, because the clearance below the
+  disc and the clearance above it come out of the same padding — `bottom: 5px`
+  alone would have pushed its top edge into the label. 13 → **17**, so the 1px
+  above is untouched and only the gap he named changes. Cost: the header row is
+  **53** rather than 49, the four pixels the disc no longer shares.
 - a type name is indented **30px** under its group's 14, and that indent is the
   whole of what says a row hangs off the header above it. The disc goes at 13,
   inside it, so the handles form their own column on the group names' own x and
@@ -6125,10 +6131,38 @@ two-line heading hits nothing. The disc is the SIGN that a tooltip exists, never
 the target — which is what `app.js` has always assumed, resolving on
 `closest('.tooltip-anchor')`.
 
-Measured: header row **49** with the discs and **49** without, data rows **36**,
-table 748, modal 807, zero horizontal scroll — the same numbers the underline
-was chosen to protect. The 35 type names take one too; DATA TYPE does not,
-because it is not an anchor.
+**AND ONLY THE `<td>` GOT `position: relative` — GIVING IT TO THE `<th>` BROKE
+THE HEADER, which is the trap worth carrying.** The first version set it on
+both, to "give the disc a positioning context". Jaco, immediately: *"te has
+cargado que DATA TYPE se descuelga con su propia barra y perdemos los títulos de
+las categorías."*
+
+**`position` is ONE property, and `relative` REPLACES `sticky`** — it does not
+add a context to it. These headings are `position: sticky; top: 0` (that is what
+keeps the column labels on screen while sixteen groups scroll under them), so
+the later rule silently unstuck the eight that matched it. DATA TYPE is not a
+`.tooltip-anchor` and so never matched, stayed pinned, and was left hanging over
+the table on its own while its eight neighbours scrolled away — which is exactly
+what he saw.
+
+And nothing was needed there in the first place: **a sticky element IS a
+positioned element**, so the disc's `absolute` already resolved against the cell.
+The `<td>` is the only one that has to be told. Verified with the table scrolled
+200: all nine `<th>` computing `sticky` and sharing ONE top, every heading on
+screen, 13 discs, rows 36, table 748, zero horizontal scroll.
+
+**The general form, and this file has now paid for it twice** (the Mac preview's
+`width: 100%` shifts): before adding a property to a selector, check what that
+property is ALREADY doing on those elements. A shorthand or a single-slot
+property does not accumulate — it wins.
+
+Measured: header row **49** with the discs and **49** without — the disc itself
+costs nothing, which is the whole argument; the row is **53** today only because
+the 5px gap above was asked for separately and paid for in padding. Data rows
+**36**, table 748, modal 807, zero horizontal scroll — the numbers the underline
+was chosen to protect, all still true. The 35 type names take a disc too (6px
+clear of the name, inside the 30px indent); DATA TYPE does not, because it is
+not an anchor.
 
 **AND THE BLUE LEFT THE OPEN ROW (v6.54) — v6.50's ARGUMENT ARRIVING ONE LEVEL
 DOWN.** Jaco: *"necesito que aclaremos si al final marcamos en azul las
@@ -6215,6 +6249,48 @@ count.
 It costs air: `BODY` is four characters and its count sits 110px right of it. A
 column is air spent on purpose, and three aligned columns across sixteen rows are
 what it buys.
+
+**AND THE COUNT LOST ITS BLUE (v6.49) — THE LAST HUE LEAVING THIS ROW.** Jaco:
+*"el numero delante de los datos, debería ser blanco? no sé, o gris."*
+
+**Grey, and it is the group name's own `--text-dim`.** The count has been
+`--pill-on-color` since the day it was the only thing telling it apart from the
+name it was glued to; v6.53 gave it its own column ten pixels off the list, so
+POSITION does that work now and the hue was free. v6.54 had just taken blue out
+of the open row on the argument that *blue against amber is two claims and
+neither reads as ordinary* — leaving one blue digit up here would have kept
+exactly the contradiction that change removed, on the one row meant to be read at
+a glance.
+
+**White was the other offer and is wrong by this file's own rule: the mark is for
+what is OUTSTANDING**, and a count is not outstanding. At full white it would be
+the loudest thing on a row whose subject is the group's name.
+
+`--text-dim` rather than a fourth alpha, because the count is a fact about the
+GROUP (Identifiers has two) where the names are its contents. The row is now name
+and count in one register, the list a step under at `.52`, the commas at `.30` —
+three levels, and **amber the only colour left in the table**, closed and open
+alike.
+
+**AND THE DIM STATE HAD ITS OWN BLUE, which is the half a one-line edit would
+have missed.** `.is-dim .pvt-gn` carried `rgba(0,154,255,.70)` — the chips
+declare their own colour, so the row's dim cannot reach them and every one has to
+be stated — and left alone it would have put the table's only remaining blue on
+the FIFTEEN rows that are meant to be stepping back. It is the `td`'s own `.38`
+now, so name and count are one register dimmed as well as at rest. **A colour
+change is not done until every state of that selector is checked**, which this
+file has now paid for on the cell fill and the separator alpha too.
+
+**The OPEN row's count stays grey while its name goes white**, deliberately: the
+name brightens to say *this is the one you are in*, and that is a locator, which
+belongs on one thing. The count is the same number open or closed and has no news
+to report.
+
+Measured: the count `rgb(160,160,160)`, identical to the group name beside it,
+`rgba(255,255,255,.38)` dimmed; zero blue anywhere on a group header row; the
+count's right edge 10px off the list's left across all sixteen, `.pvt-ghead`
+**139.6**, chevron on one x, group rows **37.3 / 37.8**, data rows **36**, table
+**748** in an **807** modal, zero horizontal scroll in the modal or the table.
 
 Measured at v6.53: **one** list x, **163.6**, across all sixteen (from 127.6 /
 120.4 / 113.2), **one** count column at **153.6**, every `.pvt-ghead` **139.6**
@@ -6366,7 +6442,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.46** → next is **v6.47**, then **v6.48**, etc. (v6.29 –
+Current version: **v6.47** → next is **v6.48**, then **v6.49**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, and **v6.42 is Adam's** — shipped in
 parallel and touching none of this.)
 
@@ -6399,6 +6475,25 @@ Safe for the one standing reason: **never go back past LIVE.** 6.46 > 6.45 and
 nothing was ever cached under any of the nine. The note headings keep their
 edit-time labels for the usual reason — they are the order the decisions were
 made in.
+
+**AND THEN IT WENT TO v6.47, WHICH IS THE SKIP-IF-UNSURE RULE DOING ITS JOB.**
+The sticky-header fix landed minutes after that renumber, and by then *"pushees
+en v6.46"* had been acted on or not — unknowable from here, because Claude
+cannot read `origin/main`. Staying on 6.46 risks publishing new bytes under a
+key browsers may already hold, which is the diverged-cache failure this section
+exists to prevent; going up costs one number this section's own first line calls
+cosmetic. So 6.47. If 6.46 never shipped, both batches simply publish together
+as 6.47 and 6.46 joins the gaps.
+
+**AND 6.48 AND 6.49 CAME BACK TO v6.47 — ASKING BEATING THE SKIP RULE TWICE IN
+ONE SESSION.** The 5px tooltip gap took 6.48 and the count's colour 6.49, both
+under the skip-if-unsure rule, because this session cannot read `origin/main`.
+Jaco supplied the two facts it cannot get for itself — *"just minor changes so
+we can push on the same?"* and then *"6.47 is fine"* — so the whole batch
+publishes as **v6.47**, and 6.48 and 6.49 join the gaps with no bytes behind
+them. Safe for the one standing reason and only that one: the key still only
+goes UP against LIVE. The headings below keep their `(v6.48)` / `(v6.49)` labels
+for the usual reason — they are the order the decisions were made in.
 
 **AND v6.51 THROUGH v6.53 WENT THE SAME WAY, for the same reason.** v6.51 was
 written up and, as far as this session could tell, never shipped; the accordion
