@@ -3709,6 +3709,24 @@ function _steamAlreadySupplied(entry, field, text) {
    Mac App Store FULL deliberately does NOT need this: _macFullFieldValue has
    no cross-platform fallback, and seedMacFullAppStoreListing deep-copies the
    App Store's entries (flags included), so its own entry always knows. */
+/* IS PRE-EARNED STILL THE COPY OF EARNED THAT THE IMPORT MADE IT? (v6.56)
+
+   Scraped achievements start with the two descriptions identical (see
+   _applySteamAchievements). While that is still true, Steam's own localized
+   description is the right text for BOTH of them, so the localized-achievement
+   importers seed the pre-earned translations from it as well — otherwise the
+   Localizations step ends up showing Steam's real French for Earned and a
+   machine translation of the same English sentence for Pre-Earned, two
+   different Frenchs for one line of text.
+
+   The moment the developer makes the two differ — by editing either one — this
+   goes false and the seeding stops, which is what keeps "a copy, not a link"
+   true all the way down into the translations. */
+function _steamAchPreEarnedMirrors(a) {
+  const earned = ((a && a.earnedDescription) || '').trim();
+  return !!earned && (((a && a.preEarnedDescription) || '').trim() === earned);
+}
+
 function _steamSuppliedShared(field, lang, text) {
   const shared = (state.formData.localizedStoreText || {})[lang];
   return _steamAlreadySupplied(shared, field, text);
@@ -9196,7 +9214,20 @@ async function _applySteamAchievements(appId, expectedTitle) {
     steamKey: p.identifier || '',
     displayName: p.name,
     earnedDescription: p.description || '',
-    preEarnedDescription: '',
+    /* PRE-EARNED STARTS AS A COPY OF EARNED (v6.56), by request. Steam has
+       one description per achievement and no notion of a before/after pair,
+       so this field used to import blank — leaving every scraped achievement
+       with a hole the developer had to fill in by hand, usually by retyping
+       the sentence directly above it.
+
+       A COPY, NOT A LINK. Nothing keeps the two in step afterwards: they are
+       separate fields on the record from this moment on, and editing either
+       one leaves the other exactly as it is. The only thing that reads the
+       two together again is _steamAchPreEarnedMirrors (below), and only to
+       decide whether Steam's own LOCALIZED description should seed this
+       field's translations the same way — which it stops doing the moment
+       the developer makes them differ. */
+    preEarnedDescription: p.description || '',
     image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
   }));
   // App Store (ios)'s own Game Center gets the SAME Steam import, at the
@@ -9217,7 +9248,9 @@ async function _applySteamAchievements(appId, expectedTitle) {
     steamKey: p.identifier || '',
     displayName: p.name,
     earnedDescription: p.description || '',
-    preEarnedDescription: '',
+    // A copy of Earned at import, never linked to it afterwards — see Mac App
+    // Store's own copy of this line above for the whole rule.
+    preEarnedDescription: p.description || '',
     image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
   }));
   // Mac App Store Full's own Game Center gets the SAME Steam import too,
@@ -9237,7 +9270,9 @@ async function _applySteamAchievements(appId, expectedTitle) {
     steamKey: p.identifier || '',
     displayName: p.name,
     earnedDescription: p.description || '',
-    preEarnedDescription: '',
+    // A copy of Earned at import, never linked to it afterwards — see Mac App
+    // Store's own copy of this line above for the whole rule.
+    preEarnedDescription: p.description || '',
     image: p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
   }));
   reRenderStepModal();
@@ -16772,6 +16807,21 @@ async function _checkSteamLocalizedAchievementsInner(lang) {
       changed = true;
       const backEntry = _masAchLocBackTranslationEntry(a.id, 'earnedDescription', lang);
       if (backEntry.syncedTopText !== localizedDesc) _masAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
+
+      /* ...and Pre-Earned too, while it is still the copy the import made it
+         (see _steamAchPreEarnedMirrors). Written exactly like the line above,
+         flags included, so the card shows the Steam badge for it and
+         _steamAlreadySupplied stops the auto-translate fallback replacing it
+         with a machine translation of the same sentence. No hand-edit guard,
+         deliberately: the earned write directly above has none either, and a
+         fresh Steam localization is the one event both fields agree to take. */
+      if (_steamAchPreEarnedMirrors(a)) {
+        entry.preEarnedDescription           = localizedDesc;
+        entry.preEarnedDescriptionFromSteam  = true;
+        entry.preEarnedDescriptionSourceText = a.preEarnedDescription || '';
+        const preBack = _masAchLocBackTranslationEntry(a.id, 'preEarnedDescription', lang);
+        if (preBack.syncedTopText !== localizedDesc) _masAchLocRefreshBackTranslation(a.id, 'preEarnedDescription', lang, localizedDesc);
+      }
     }
   });
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
@@ -17340,6 +17390,21 @@ async function _checkIosLocalizedAchievements(lang) {
       changed = true;
       const backEntry = _iasAchLocBackTranslationEntry(a.id, 'earnedDescription', lang);
       if (backEntry.syncedTopText !== localizedDesc) _iasAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
+
+      /* ...and Pre-Earned too, while it is still the copy the import made it
+         (see _steamAchPreEarnedMirrors). Written exactly like the line above,
+         flags included, so the card shows the Steam badge for it and
+         _steamAlreadySupplied stops the auto-translate fallback replacing it
+         with a machine translation of the same sentence. No hand-edit guard,
+         deliberately: the earned write directly above has none either, and a
+         fresh Steam localization is the one event both fields agree to take. */
+      if (_steamAchPreEarnedMirrors(a)) {
+        entry.preEarnedDescription           = localizedDesc;
+        entry.preEarnedDescriptionFromSteam  = true;
+        entry.preEarnedDescriptionSourceText = a.preEarnedDescription || '';
+        const preBack = _iasAchLocBackTranslationEntry(a.id, 'preEarnedDescription', lang);
+        if (preBack.syncedTopText !== localizedDesc) _iasAchLocRefreshBackTranslation(a.id, 'preEarnedDescription', lang, localizedDesc);
+      }
     }
   });
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
@@ -17986,6 +18051,21 @@ async function _checkMacFullLocalizedAchievements(lang) {
       changed = true;
       const backEntry = _macFullAchLocBackTranslationEntry(a.id, 'earnedDescription', lang);
       if (backEntry.syncedTopText !== localizedDesc) _macFullAchLocRefreshBackTranslation(a.id, 'earnedDescription', lang, localizedDesc);
+
+      /* ...and Pre-Earned too, while it is still the copy the import made it
+         (see _steamAchPreEarnedMirrors). Written exactly like the line above,
+         flags included, so the card shows the Steam badge for it and
+         _steamAlreadySupplied stops the auto-translate fallback replacing it
+         with a machine translation of the same sentence. No hand-edit guard,
+         deliberately: the earned write directly above has none either, and a
+         fresh Steam localization is the one event both fields agree to take. */
+      if (_steamAchPreEarnedMirrors(a)) {
+        entry.preEarnedDescription           = localizedDesc;
+        entry.preEarnedDescriptionFromSteam  = true;
+        entry.preEarnedDescriptionSourceText = a.preEarnedDescription || '';
+        const preBack = _macFullAchLocBackTranslationEntry(a.id, 'preEarnedDescription', lang);
+        if (preBack.syncedTopText !== localizedDesc) _macFullAchLocRefreshBackTranslation(a.id, 'preEarnedDescription', lang, localizedDesc);
+      }
     }
   });
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
