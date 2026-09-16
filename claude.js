@@ -802,6 +802,152 @@ function steamLibraryHeroUrl(appId) {
   return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   SHIPMATE'S OWN /game — one first-party call in place of four proxied ones
+   ══════════════════════════════════════════════════════════════════════
+   Everything below this block that talks to store.steampowered.com or
+   steamcommunity.com does so through _cors() — a free third-party CORS proxy
+   with no SLA, which has already had to be swapped once when the previous
+   one went paid, and which fails by stalling rather than erroring (hence
+   FETCH_TIMEOUT_MS). This endpoint is ours, sends its own CORS headers, needs
+   no key, and returns IGDB and Steam merged into one record — so the whole
+   proxy dependency goes with it.
+
+   ONE SHAPE, TWO KINDS OF CALL, AND THEY ARE NOT INTERCHANGEABLE:
+
+     fetchShipmateGame(appId)            → the BASELINE. Pins lang=english and
+                                           is the ONLY source of structural
+                                           data (genres, supportedLanguages,
+                                           releaseDate.date, developers,
+                                           publishers, price, images, movies).
+     fetchShipmateGame(appId, 'french')  → PROSE ONLY. name/summary/description
+                                           in that language, for the
+                                           Localization Review comparison.
+
+   Why the split is a rule and not a preference: `genres`,
+   `supportedLanguages` and `releaseDate.date` ARE TRANSLATED by this endpoint
+   too. Verified live — ?lang=turkish returns genres ["Aksiyon","Bağımsız
+   Yapımcı","RYO"], supportedLanguages ["İngilizce","Fransızca",…] and
+   releaseDate.date "17 Eyl 2020". Read those off a localized response and
+   _steamSupportsLanguageCandidate (app.js) compares Turkish names against
+   STEAM_LANG_DISPLAY_NAMES' English ones, matches nothing, and silently
+   refuses every language; webSite.genres meanwhile fills with Turkish words.
+   So: structural data comes from the baseline call, always, and a localized
+   response is read for prose and nothing else.
+
+   lang takes a Steam API language code ('english', 'french', 'koreana',
+   'schinese', 'brazilian', …) — the exact vocabulary
+   STEAM_LOCALIZATION_LANG_MAP (app.js) already produces, so callers pass the
+   value they were already computing for appdetails' `l=` param. No mapping
+   layer; every one of that map's 29 values is a valid code here.
+
+   Steam's own fallback behaviour is unchanged and still the caller's problem:
+   asking for a language the game has no translation for returns the DEFAULT
+   language's prose rather than an error (confirmed — Hades has no Turkish, so
+   ?lang=turkish comes back in English), which is exactly why the localized
+   checks compare against a same-language-as-default baseline instead of
+   trusting that a response came back at all. */
+const SHIPMATE_GAME_ENDPOINT = 'https://search.dev.shipmate.gg/game';
+
+/* IN-FLIGHT DEDUPE ONLY, deliberately not a cache. _applySteamAboutData and
+   _applySteamAchievements both want the same record for the same app id and
+   are fired together by selectPicklistItem, so without this a single title
+   pick issues the identical request twice. Entries are dropped the moment the
+   promise settles — the same shape _igdbInflight uses above, and for the same
+   reason: a lasting cache would serve a stale record after a re-pick, while
+   this only ever collapses requests that genuinely overlap in time. */
+const _shipmateGameInflight = new Map();
+
+async function fetchShipmateGame(steamAppId, lang) {
+  if (!steamAppId) throw new Error('fetchShipmateGame: no Steam app id');
+  const key = `${steamAppId}:${lang || 'english'}`;
+  if (_shipmateGameInflight.has(key)) return _shipmateGameInflight.get(key);
+  const p = _fetchShipmateGameRaw(steamAppId, lang)
+    .finally(() => _shipmateGameInflight.delete(key));
+  _shipmateGameInflight.set(key, p);
+  return p;
+}
+
+async function _fetchShipmateGameRaw(steamAppId, lang) {
+  // Explicit english rather than an omitted param: the no-lang branch of this
+  // endpoint has been observed returning a stale, partially-enriched record
+  // (no isFree/developers/publishers/supportedLanguages, a different currency,
+  // prose in an unrelated language) where every lang-bearing request returns
+  // the full one. Pinning it also makes the baseline genuinely English rather
+  // than whatever the caller's IP geolocates to.
+  const code = lang || 'english';
+  const url = `${SHIPMATE_GAME_ENDPOINT}?steamId=${encodeURIComponent(steamAppId)}&lang=${encodeURIComponent(code)}`;
+  const res = await _fetchWithTimeout(url);
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.text()).slice(0, 200); } catch (_) {}
+    throw new Error('Shipmate /game fetch failed (' + res.status + ')' + (detail ? ' — ' + detail : ''));
+  }
+  const data = await res.json();
+  if (!data || !data.steam_id) throw new Error('Shipmate /game: no data for app ' + steamAppId);
+  return data;
+}
+
+/* images[] carries screenshots AND key art in one array, discriminated by
+   `type` ('screenshot' | 'capsule' | 'header' | 'cover'), where appdetails
+   had screenshots[] plus capsule_image/header_image as separate top-level
+   fields. These two keep every caller out of the filtering. */
+function _shipmateImages(game, type) {
+  return ((game && game.images) || []).filter(im => im && im.type === type && im.url);
+}
+function _shipmateImageUrl(game, type) {
+  const hit = _shipmateImages(game, type)[0];
+  return hit ? hit.url : '';
+}
+
+/* Achievements, normalised to what _applySteamAchievements already consumed
+   from the community-stats scrape ({ name, description, iconUrl }) plus the
+   two things that scrape could never provide:
+
+   `hidden` is now STATED rather than inferred. The HTML page blanks the
+   description of a hidden achievement, so `!description` was the only
+   available signal — true in practice, but it also meant any achievement
+   whose description simply hadn't been written read as hidden.
+
+   `identifier` is the Steamworks API name ('CH1', 'FAREWELL'), and it is a
+   stable key. _checkSteamLocalizedAchievements had to pair baseline and
+   localized achievements BY ARRAY POSITION because the scrape offered
+   nothing else — and this endpoint's array order is NOT stable between
+   requests (observed: 'BSIDE5' at index 7 in one response and 15 in
+   another), which would have quietly mis-paired every translation. */
+function _shipmateAchievements(game) {
+  return ((game && game.achievements) || [])
+    .filter(a => a && a.name)
+    .map(a => ({
+      identifier:  a.identifier || '',
+      name:        a.name,
+      description: a.description || '',
+      hidden:      a.hidden === true,
+      iconUrl:     a.icon || '',
+    }));
+}
+
+/* price is { currency, value } in MINOR UNITS (1999 = $19.99), where
+   appdetails handed back an already-formatted "$19.99" in
+   price_overview.final_formatted. Free-to-play titles omit `price` entirely
+   and set isFree — so the two have to be read together: a missing price with
+   isFree false means "not populated", not "free", and only isFree === true
+   means free. Formatted with Intl so the currency code the endpoint actually
+   returned is honoured rather than assuming dollars. */
+function _shipmateFormatPrice(game) {
+  if (!game) return '';
+  if (game.isFree === true) return 'Free';
+  const p = game.price;
+  if (!p || typeof p.value !== 'number') return '';
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: p.currency || 'USD' })
+      .format(p.value / 100);
+  } catch (_) {
+    // Unknown/absent currency code — Intl throws rather than guessing.
+    return (p.value / 100).toFixed(2);
+  }
+}
+
 /* ── Steam appdetails — short description, developer, "About This Game",
    and screenshots ─────────────────────────────────────────────────────
    store.steampowered.com/api/appdetails is undocumented (no official

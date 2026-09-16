@@ -7614,13 +7614,18 @@ function _fillScreenshotGridFromIgdb(urls) {
 // objects) instead — up to the first 10. Steam's own CDN images load
 // directly with no proxy needed (same reasoning as steamLibraryHeroUrl
 // above: plain <img> loading doesn't require CORS headers).
-function _fillScreenshotGridFromSteam(steamScreenshots) {
+// Takes plain URL strings now. It used to take appdetails' screenshots[]
+// objects and reach for .path_full; /game hands back images[] entries whose
+// url is already the full-size one, so the caller filters by type and passes
+// the urls (see _applySteamAboutData). A string array is also the smaller
+// contract — this function never wanted the rest of that object.
+function _fillScreenshotGridFromSteam(screenshotUrls) {
   const ts = Date.now();
-  const entries = (steamScreenshots || []).slice(0, 10).filter(s => s && s.path_full).map((s, i) => ({
+  const entries = (screenshotUrls || []).slice(0, 10).filter(Boolean).map((url, i) => ({
     id:   'steam-' + i + '-' + ts,
     // Adopted on arrival: a fetched screenshot is as much a project asset as
     // an uploaded one, and the library is where anything pickable lives.
-    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url: s.path_full }, 'steam'),
+    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url }, 'steam'),
   }));
   // Manual uploads survive a change of linked title; fetched ones do not —
   // and "do not" means removed from the shared asset pool itself, not just
@@ -7788,8 +7793,24 @@ function _steamSupportedLanguageNames(raw) {
 // check") whenever parsing is inconclusive, since the real answer always
 // comes from _checkSteamLocalizedDescription's own content comparison —
 // this must never be the thing that wrongly rules out a real localization.
-function _steamSupportsLanguageCandidate(steamLang, supportedLanguagesRaw) {
-  const names = _steamSupportedLanguageNames(supportedLanguagesRaw);
+// THE MAPPING LAYER, and it turned out to be a shape adapter rather than a
+// translation table. STEAM_LANG_DISPLAY_NAMES is already keyed by Steam API
+// language code and holds exactly the English display names /game returns
+// ('Spanish - Spain', 'Portuguese - Brazil', 'Simplified Chinese'), so the
+// only mismatch was one raw string vs. an array. Both are accepted here: an
+// array passes straight through, a string still goes through
+// _steamSupportedLanguageNames' tag/footnote stripping — which keeps the old
+// appdetails shape working for anything still on it, and means callers don't
+// have to care which source their steamLocInfo came from.
+//
+// The array MUST be the English one from the baseline call. A localized
+// response's supportedLanguages (["İngilizce","Fransızca", …]) matches
+// nothing here, and because this fails closed on a non-empty list that
+// matches nothing, it would veto every language rather than failing open.
+function _steamSupportsLanguageCandidate(steamLang, supportedLanguages) {
+  const names = Array.isArray(supportedLanguages)
+    ? supportedLanguages.filter(Boolean).map(s => String(s).trim())
+    : _steamSupportedLanguageNames(supportedLanguages);
   if (!names.length) return true;
   const expected = STEAM_LANG_DISPLAY_NAMES[steamLang];
   if (!expected) return true;
@@ -7819,11 +7840,14 @@ async function _checkSteamLocalizedDescription(lang) {
   if (!info || !info.appId) return;
   const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
   if (!steamLang) return;
-  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguages)) return;
 
   let data = null;
   try {
-    data = await fetchSteamAppDetails(info.appId, steamLang);
+    // A PROSE-ONLY call. Only `description` is read below — genres,
+    // supportedLanguages and releaseDate.date come back translated on this
+    // request and must never be taken from it (see fetchShipmateGame).
+    data = await fetchShipmateGame(info.appId, steamLang);
   } catch (e) {
     console.warn('[Steam Localized Description]', lang, e.message);
     return;
@@ -7839,7 +7863,7 @@ async function _checkSteamLocalizedDescription(lang) {
   // shorter short_description) — kept consistent so this comparison is
   // apples-to-apples against info.baselineDescription, which was cached
   // from that same conversion.
-  const localizedDesc = _steamHtmlToParagraphLines(data && data.about_the_game || '').trim();
+  const localizedDesc = _steamHtmlToParagraphLines(data && data.description || '').trim();
   const baseline      = (info.baselineDescription || '').trim();
   // Steam silently falls back to the store page's default listing language
   // instead of erroring when it has no real translation for the requested
@@ -7926,11 +7950,15 @@ async function _checkSteamLocalizedListing(lang) {
   if (!info || !info.appId) return;
   const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
   if (!steamLang) return;
-  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguages)) return;
 
   let data = null;
   try {
-    data = await fetchSteamAppDetails(info.appId, steamLang);
+    // PROSE ONLY — name, summary, description, developers and publishers are
+    // the only fields read below. genres/supportedLanguages/releaseDate.date
+    // are translated on a lang= request and are never read from one; the
+    // baseline call in _applySteamAboutData owns those.
+    data = await fetchShipmateGame(info.appId, steamLang);
   } catch (e) {
     console.warn('[Steam Localized Listing]', lang, e.message);
     return;
@@ -7975,20 +8003,17 @@ async function _checkSteamLocalizedListing(lang) {
   // that happens, fall back to scraping that meta tag directly off the
   // store page itself (see fetchSteamStorePage/_parseSteamMetaDescription,
   // claude.js) before giving up on this language's Short Description.
-  let localizedShortDesc = (data.short_description || '').trim();
-  const baselineShortDesc = (info.shortDescription || '').trim();
-  if (!localizedShortDesc || localizedShortDesc === baselineShortDesc) {
-    try {
-      const html = await fetchSteamStorePage(info.appId, steamLang);
-      // Re-check staleness — a second await elapsed since the guards above.
-      if (!state.steamLocInfo || state.steamLocInfo.appId !== info.appId) return;
-      if (!(state.formData.localizations || []).includes(lang)) return;
-      const metaDesc = (_parseSteamMetaDescription(html) || '').trim();
-      if (metaDesc && metaDesc !== baselineShortDesc) localizedShortDesc = metaDesc;
-    } catch (e) {
-      console.warn('[Steam Localized Listing] short_description HTML fallback failed for', lang, e.message);
-    }
-  }
+  /* THE STORE-PAGE HTML FALLBACK IS GONE, and it was a workaround for a bug
+     this endpoint doesn't have. /api/appdetails didn't reliably honour its
+     own `l=` for short_description — a page could render a correctly
+     localized og:description while the JSON came back empty or in the
+     default language — so this scraped the meta tag off the store page HTML
+     to recover it. /game returns genuinely localized prose for a language
+     the game supports (verified: ?lang=french gives French summary AND
+     description), so there is nothing left to recover, and dropping it also
+     drops one of the two remaining proxied calls. */
+  const localizedShortDesc = (data.summary || '').trim();
+  const baselineShortDesc  = (info.shortDescription || '').trim();
   if (localizedShortDesc && localizedShortDesc !== baselineShortDesc) {
     wsEntry.description           = localizedShortDesc;
     wsEntry.descriptionFromSteam  = true;
@@ -8036,7 +8061,7 @@ async function _checkSteamLocalizedListing(lang) {
   // conversion and baseline comparison _checkSteamLocalizedDescription uses
   // for the App Store's own Description, just written into Steam's own
   // independent About This Game field instead.
-  const localizedAboutGame = _steamHtmlToParagraphLines(data.about_the_game || '').trim();
+  const localizedAboutGame = _steamHtmlToParagraphLines(data.description || '').trim();
   const baselineAboutGame  = (info.baselineDescription || '').trim();
   if (localizedAboutGame && localizedAboutGame !== baselineAboutGame) {
     wsEntry.aboutGame           = localizedAboutGame;
@@ -8159,9 +8184,13 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   let data = null;
   let fetchFailed = false;
   try {
-    data = await fetchSteamAppDetails(appId);
+    // THE BASELINE CALL, and the only structural source. Pinned to English by
+    // fetchShipmateGame itself — genres/supportedLanguages/releaseDate.date
+    // all translate on this endpoint, so reading them off anything else would
+    // put Turkish genre names in a store listing. See that function's comment.
+    data = await fetchShipmateGame(appId);
   } catch (e) {
-    console.warn('[Steam About Data] failed to fetch appdetails for app', appId, e);
+    console.warn('[Steam About Data] failed to fetch /game for app', appId, e);
     fetchFailed = true;
   }
 
@@ -8196,7 +8225,12 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // ends up showing Steam's about_the_game by default for a Steam-linked
     // title — just through that one indirect path rather than two separate
     // direct writes that could drift out of sync with each other.
-    const aboutGameText = data.about_the_game ? _steamHtmlToParagraphLines(data.about_the_game) : '';
+    // Still through _steamHtmlToParagraphLines: /game's own `description` is
+    // the same store-page HTML, and its server-side flattening is lossier
+    // than this one's (bullets glued onto the previous sentence, <i>/<strong>
+    // left in). This function handles <li>/</p>/headings properly, so the
+    // pre-fill stays readable — see its own comment in claude.js.
+    const aboutGameText = data.description ? _steamHtmlToParagraphLines(data.description) : '';
 
     // Guarded like item.summary in the no-Steam-link branch below — only
     // overwrite a field if Steam actually has content for it, rather than
@@ -8234,7 +8268,12 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // then freely editable" treatment as officialWebsite above, just for
     // Mac App Store Full's own Support URL field instead of the preview
     // website's.
-    if (data.support_info && data.support_info.url) state.steamSupportUrl = data.support_info.url;
+    if (data.supportUrl) state.steamSupportUrl = data.supportUrl;
+    // supportEmail is new with this endpoint — appdetails had support_info.email
+    // and nothing here ever read it. Cached the same "auto-fill once, then
+    // freely editable" way as supportUrl above, for Mac App Store Full's own
+    // support contact field to seed from.
+    if (data.supportEmail) state.steamSupportEmail = data.supportEmail;
     // Steam's genres are { id, description } objects (e.g. { id: "1",
     // description: "Action" }) — not the community-voted "tags" chips
     // shown on the store page (appdetails has no field for those at all,
@@ -8242,21 +8281,20 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // developer-assigned genre list. webSite.genres is free text (see
     // state.js), so this joins the descriptions the same way developers
     // above joins Steam's developers list.
-    if (data.genres && data.genres.length) state.webSite.genres = data.genres.map(g => g.description).filter(Boolean).join(', ');
-    // Purchase price — Steam's appdetails 'price_overview' (shaped like
-    // { currency, initial, final, discount_percent, initial_formatted,
-    // final_formatted }, e.g. final_formatted: "$19.99"), already
-    // currency-formatted so it's used as-is; 'is_free' is a separate top-
-    // level boolean Steam sets instead of price_overview for free-to-play
-    // titles. Same "auto-fill once, then freely editable" treatment as
-    // developer/publisher/genres above — only sets it here, at Steam-link
-    // time, never re-synced afterward, so the developer's own later edit
-    // (or a game that later goes on sale) is never silently overwritten.
-    if (data.price_overview && data.price_overview.final_formatted) {
-      state.webSite.price = data.price_overview.final_formatted;
-    } else if (data.is_free) {
-      state.webSite.price = 'Free';
-    }
+    // Plain strings now (["Action","Adventure","Indie"]) where appdetails gave
+    // { id, description } objects — same join, one less hop. English because
+    // this is the baseline call; see fetchShipmateGame.
+    if (data.genres && data.genres.length) state.webSite.genres = data.genres.filter(Boolean).join(', ');
+    // Purchase price. /game gives { currency, value } in MINOR units (1999 =
+    // $19.99) rather than appdetails' pre-formatted "$19.99", and omits the
+    // object entirely for free-to-play titles while setting isFree — so the
+    // two are read together by _shipmateFormatPrice (claude.js), which is
+    // also what keeps "free" distinguishable from "not populated". Same
+    // "auto-fill once, then freely editable" treatment as developer/publisher/
+    // genres above — set here at link time and never re-synced, so a later
+    // edit (or the game going on sale) is never silently overwritten.
+    const priceText = _shipmateFormatPrice(data);
+    if (priceText) state.webSite.price = priceText;
     // Release Date — Steam's own appdetails 'release_date' field, shaped
     // { coming_soon: bool, date: string } (e.g. { coming_soon: false, date:
     // "Feb 18, 2026" }, confirmed live against this project's own captured
@@ -8271,25 +8309,35 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // render.js). Only skipped when Steam omits release_date entirely,
     // which the "only overwrite with real content" guard elsewhere in this
     // function would also apply to.
-    if (data.release_date) {
-      const rd = (data.release_date.date || '').trim();
+    // camelCase on this endpoint ({ comingSoon, date }) where appdetails used
+    // release_date/{coming_soon}. `date` is English here because this is the
+    // baseline call — it localizes ("17 Eyl 2020") on a lang= request, which
+    // is one of the three fields that must never be read off one.
+    if (data.releaseDate) {
+      const rd = (data.releaseDate.date || '').trim();
       state.webSite.releaseDate = rd || 'Coming soon';
     }
-    _fillScreenshotGridFromSteam(data.screenshots || []);
-    // Steam returned appdetails but simply has no screenshots listed for
-    // this title — fall back to IGDB's own rather than leaving the grid
-    // empty, same fallback used when Steam scraping fails outright below.
-    if (!(data.screenshots && data.screenshots.length) && fallbackItem) {
+    // Screenshots and Key Art now arrive in ONE images[] array discriminated
+    // by `type`, where appdetails had screenshots[] plus capsule_image and
+    // header_image as separate top-level fields — _shipmateImages/
+    // _shipmateImageUrl (claude.js) do the filtering.
+    const shotUrls = _shipmateImages(data, 'screenshot').map(im => im.url);
+    _fillScreenshotGridFromSteam(shotUrls);
+    // The record has no screenshots for this title — fall back to IGDB's own
+    // rather than leaving the grid empty, same fallback used when the fetch
+    // fails outright below.
+    if (!shotUrls.length && fallbackItem) {
       _applyIgdbScreenshotFallback(fallbackItem.id, expectedTitle);
     }
-    // Steam Key Art "Capsule Image"/"Header Image" — appdetails' own
-    // capsule_image (231×87)/header_image (460×215), no CDN URL guessing
-    // needed since appdetails hands back the exact, already-hash-resolved
-    // path directly (see this project's appdetails field enumeration).
-    // Fetched art joins the library too, so it is classified and pickable
-    // from the moment it arrives rather than at the next project load.
-    if (data.capsule_image) state.uploads.steamCapsuleImage = smRef(smAdopt({ name:'capsule.jpg', url: data.capsule_image }, 'steam'));
-    if (data.header_image)  state.uploads.steamHeaderImage  = smRef(smAdopt({ name:'header.jpg', url: data.header_image }, 'steam'));
+    // Steam Key Art "Capsule Image"/"Header Image" — capsule_231x87.jpg and
+    // header.jpg, handed back already hash-resolved exactly as appdetails
+    // did, just under images[].type now. Fetched art joins the library too,
+    // so it is classified and pickable from the moment it arrives rather
+    // than at the next project load.
+    const capsuleUrl = _shipmateImageUrl(data, 'capsule');
+    const headerUrl  = _shipmateImageUrl(data, 'header');
+    if (capsuleUrl) state.uploads.steamCapsuleImage = smRef(smAdopt({ name:'capsule.jpg', url: capsuleUrl }, 'steam'));
+    if (headerUrl)  state.uploads.steamHeaderImage  = smRef(smAdopt({ name:'header.jpg',  url: headerUrl  }, 'steam'));
     // Assets "Trailer" section thumbnail — Steam's own first listed trailer
     // (appdetails' movies[0]), rather than anything IGDB provides.
     const trailer = _steamTrailerFromMovies(data.movies);
@@ -8325,8 +8373,22 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
       baselineDescription:    aboutGameText,
       baselineDeveloper:      (data.developers || []).join(', '),
       baselinePublisher:      (data.publishers || []).join(', '),
-      shortDescription:       data.short_description || '',
-      supportedLanguagesRaw:  data.supported_languages || '',
+      shortDescription:       data.summary || '',
+      /* AN ARRAY OF ENGLISH DISPLAY NAMES, and both halves of that matter.
+         appdetails gave one raw HTML-ish string ("English<strong>*</strong>,
+         French, …" with a footnote about full audio support) which
+         _steamSupportedLanguageNames had to strip and split; /game gives
+         ["English","French","Spanish - Spain","Simplified Chinese", …]
+         already parsed, so the parser is bypassed — see
+         _steamSupportsLanguageCandidate.
+
+         ENGLISH because it came from the baseline call. This exact field is
+         one of the three that translate on a lang= request, and a Turkish
+         ["İngilizce","Fransızca", …] would match nothing in
+         STEAM_LANG_DISPLAY_NAMES and silently veto every language before a
+         single localized fetch went out. Never repopulate it from a
+         localized response. */
+      supportedLanguages:     Array.isArray(data.supportedLanguages) ? data.supportedLanguages : [],
     };
     // Any supported languages already selected before this game finished
     // loading (e.g. left over from a prior title, or set via a language
@@ -8448,10 +8510,15 @@ async function _applySteamSocialLinks(appId, expectedTitle) {
 async function _applySteamAchievements(appId, expectedTitle) {
   let parsed = null;
   try {
-    const html = await fetchSteamAchievementsPage(appId);
-    parsed = _parseSteamAchievements(html);
+    // From /game's own achievements array now, not a scrape of
+    // steamcommunity.com/stats/<appid>/achievements — same fields, plus a
+    // stated `hidden` and a stable `identifier` (see _shipmateAchievements,
+    // claude.js). The one thing the scrape had that this doesn't is the
+    // global unlock percentage, which nothing in this app ever read.
+    const game = await fetchShipmateGame(appId);
+    parsed = _shipmateAchievements(game);
   } catch (e) {
-    console.warn('[Steam Achievements] failed to fetch/parse achievements page for app', appId, e);
+    console.warn('[Steam Achievements] failed to fetch achievements for app', appId, e);
     if ((state.formData.title || '').trim() === (expectedTitle || '').trim()) {
       bcToast(`Couldn't load Steam's achievements for "${expectedTitle}" — add them manually under Game Center if needed.`);
     }
@@ -8473,14 +8540,20 @@ async function _applySteamAchievements(appId, expectedTitle) {
   // cache has to guess whether the other has finished loading yet.
   state.steamAchievementsBaseline = {
     appId,
-    achievements: parsed.map(p => ({ name: p.name, description: p.description || '' })),
+    // identifier rides along so the localized comparison can pair by key
+    // rather than by array position — see _checkSteamLocalizedAchievements.
+    achievements: parsed.map(p => ({
+      identifier:  p.identifier || '',
+      name:        p.name,
+      description: p.description || '',
+    })),
   };
 
   state.macGameCenterAchievements = parsed.map((p, idx) => ({
     id: generateId('ach'),
     refName: p.name,
     pointValue: '',
-    hidden: !p.description,
+    hidden: p.hidden,
     achievableMultipleTimes: false,
     collapsed: true,
     saved: true,
@@ -8493,6 +8566,7 @@ async function _applySteamAchievements(appId, expectedTitle) {
     // of-language order) purely by position, without needing a shared name
     // key that a developer edit could invalidate.
     steamIndex: idx,
+    steamKey: p.identifier || '',
     displayName: p.name,
     earnedDescription: p.description || '',
     preEarnedDescription: '',
@@ -8507,12 +8581,13 @@ async function _applySteamAchievements(appId, expectedTitle) {
     id: generateId('ach'),
     refName: p.name,
     pointValue: '',
-    hidden: !p.description,
+    hidden: p.hidden,
     achievableMultipleTimes: false,
     collapsed: true,
     saved: true,
     fromSteam: true,
     steamIndex: idx,
+    steamKey: p.identifier || '',
     displayName: p.name,
     earnedDescription: p.description || '',
     preEarnedDescription: '',
@@ -8526,12 +8601,13 @@ async function _applySteamAchievements(appId, expectedTitle) {
     id: generateId('ach'),
     refName: p.name,
     pointValue: '',
-    hidden: !p.description,
+    hidden: p.hidden,
     achievableMultipleTimes: false,
     collapsed: true,
     saved: true,
     fromSteam: true,
     steamIndex: idx,
+    steamKey: p.identifier || '',
     displayName: p.name,
     earnedDescription: p.description || '',
     preEarnedDescription: '',
@@ -15918,6 +15994,36 @@ function _masAchLocToggleSettingsMenu(event) {
    getting a blank `<h5>`) — only Display Name and Earned Description can
    ever come from Steam here; Pre-Earned Description is never touched by
    this function. */
+/* PAIR AN IMPORTED ACHIEVEMENT WITH ITS LOCALIZED COUNTERPART — by key first,
+   by position only as a fallback.
+
+   Position was all the community-stats scrape could offer: that page has no
+   stable per-achievement id, so every imported achievement recorded its
+   steamIndex and trusted Steam to return the same order in every language.
+   /game DOES expose the Steamworks identifier, and its own array order is
+   NOT stable between requests — 'BSIDE5' came back at index 7 in one
+   response and 15 in another — so keeping the positional match would now
+   silently write one achievement's translation onto a different achievement.
+
+   steamIndex is still honoured for achievements imported before steamKey
+   existed, so a project mid-flight doesn't lose its localizations; it is only
+   reached when there is no key to match on. Shared by all three Game Center
+   lists (Mac App Store, App Store, Mac App Store Full) rather than written
+   out three times — which is how the positional version came to exist as
+   three identical copies in the first place. */
+function _steamAchPair(a, parsed, baseline) {
+  const baseList = (baseline && baseline.achievements) || [];
+  if (a.steamKey) {
+    const localized = parsed.find(p => p.identifier && p.identifier === a.steamKey);
+    const base      = baseList.find(b => b.identifier && b.identifier === a.steamKey);
+    if (localized && base) return { localized, base };
+  }
+  if (a.steamIndex == null) return null;
+  const localized = parsed[a.steamIndex];
+  const base      = baseList[a.steamIndex];
+  return (localized && base) ? { localized, base } : null;
+}
+
 async function _checkSteamLocalizedAchievements(lang) {
   const baseline = state.steamAchievementsBaseline;
   if (!baseline || !baseline.appId) return;
@@ -15929,12 +16035,15 @@ async function _checkSteamLocalizedAchievements(lang) {
   // it (unlike the store-listing checks, achievements have their own
   // independently-timed fetch and shouldn't wait on a sibling one).
   const info = state.steamLocInfo;
-  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguages)) return;
 
   let parsed = null;
   try {
-    const html = await fetchSteamAchievementsPage(baseline.appId, steamLang);
-    parsed = _parseSteamAchievements(html);
+    // PROSE ONLY, same rule as the store-listing checks: just the achievement
+    // name/description in this language. /game replaces the
+    // steamcommunity.com/stats scrape here too.
+    const game = await fetchShipmateGame(baseline.appId, steamLang);
+    parsed = _shipmateAchievements(game);
   } catch (e) {
     console.warn('[Steam Localized Achievements]', lang, e.message);
     return;
@@ -15948,10 +16057,11 @@ async function _checkSteamLocalizedAchievements(lang) {
 
   let changed = false;
   (state.macGameCenterAchievements || []).forEach(a => {
-    if (!a.fromSteam || a.steamIndex == null) return;
-    const localized = parsed[a.steamIndex];
-    const base = baseline.achievements[a.steamIndex];
-    if (!localized || !base) return;
+    if (!a.fromSteam) return;
+    const pair = _steamAchPair(a, parsed, baseline);
+    if (!pair) return;
+    const localized = pair.localized;
+    const base = pair.base;
 
     if (!a.locs) a.locs = {};
     if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
@@ -16496,12 +16606,15 @@ async function _checkIosLocalizedAchievements(lang) {
   const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
   if (!steamLang) return;
   const info = state.steamLocInfo;
-  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguages)) return;
 
   let parsed = null;
   try {
-    const html = await fetchSteamAchievementsPage(baseline.appId, steamLang);
-    parsed = _parseSteamAchievements(html);
+    // PROSE ONLY, same rule as the store-listing checks: just the achievement
+    // name/description in this language. /game replaces the
+    // steamcommunity.com/stats scrape here too.
+    const game = await fetchShipmateGame(baseline.appId, steamLang);
+    parsed = _shipmateAchievements(game);
   } catch (e) {
     console.warn('[Steam Localized Achievements - iOS]', lang, e.message);
     return;
@@ -16513,10 +16626,11 @@ async function _checkIosLocalizedAchievements(lang) {
 
   let changed = false;
   (state.iosGameCenterAchievements || []).forEach(a => {
-    if (!a.fromSteam || a.steamIndex == null) return;
-    const localized = parsed[a.steamIndex];
-    const base = baseline.achievements[a.steamIndex];
-    if (!localized || !base) return;
+    if (!a.fromSteam) return;
+    const pair = _steamAchPair(a, parsed, baseline);
+    if (!pair) return;
+    const localized = pair.localized;
+    const base = pair.base;
 
     if (!a.locs) a.locs = {};
     if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
@@ -17127,12 +17241,15 @@ async function _checkMacFullLocalizedAchievements(lang) {
   // it (unlike the store-listing checks, achievements have their own
   // independently-timed fetch and shouldn't wait on a sibling one).
   const info = state.steamLocInfo;
-  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguagesRaw)) return;
+  if (info && info.appId === baseline.appId && !_steamSupportsLanguageCandidate(steamLang, info.supportedLanguages)) return;
 
   let parsed = null;
   try {
-    const html = await fetchSteamAchievementsPage(baseline.appId, steamLang);
-    parsed = _parseSteamAchievements(html);
+    // PROSE ONLY, same rule as the store-listing checks: just the achievement
+    // name/description in this language. /game replaces the
+    // steamcommunity.com/stats scrape here too.
+    const game = await fetchShipmateGame(baseline.appId, steamLang);
+    parsed = _shipmateAchievements(game);
   } catch (e) {
     console.warn('[Steam Localized Achievements - Mac App Store Full]', lang, e.message);
     return;
@@ -17146,10 +17263,11 @@ async function _checkMacFullLocalizedAchievements(lang) {
 
   let changed = false;
   (state.macFullGameCenterAchievements || []).forEach(a => {
-    if (!a.fromSteam || a.steamIndex == null) return;
-    const localized = parsed[a.steamIndex];
-    const base = baseline.achievements[a.steamIndex];
-    if (!localized || !base) return;
+    if (!a.fromSteam) return;
+    const pair = _steamAchPair(a, parsed, baseline);
+    if (!pair) return;
+    const localized = pair.localized;
+    const base = pair.base;
 
     if (!a.locs) a.locs = {};
     if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
