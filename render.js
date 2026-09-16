@@ -2454,11 +2454,11 @@ const TAB_HERO = {
   dashboard: { accent: '#4ade80', soft: 'rgba(74,222,128,.15)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`,
     title: 'Submit to every platform, the right way',
-    sub: 'Shipmate preps your content ratings, data disclosures, and store pages, then walks each store’s submission for you — Apple, Google, Steam, and the consoles.' },
+    sub: 'Shipmate helps prep your content ratings, data disclosures, and store pages, then completes each platform’s submission for you.' },
   broadcast: { accent: '#FF3B76', soft: 'rgba(255,59,118,.16)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/></svg>`,
-    title: 'Announce your game everywhere at once',
-    sub: 'Write your update once. Shipmate reshapes it for each channel and posts to all of them together, so players find you wherever they look for indie games.' },
+    title: 'All the marketing tools you need, in one place',
+    sub: 'Push posts and media specced for every channel, connect with press and content creators, and build a marketing website in seconds.' },
   performance: { accent: '#fb923c', soft: 'rgba(251,146,60,.16)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 4 3 5-7"/></svg>`,
     title: 'See how your game is performing',
@@ -16443,6 +16443,9 @@ function _buildUnifiedLocalizationsSection(p) {
     itemId = '';
     itemSetterName = null;
     cardClass = 'loc-review';
+    // Also read by the cards' own pending test below — a field the developer
+    // has switched auto-translation off for is not waiting on one.
+    const storeAutoCfg = state[p.storePage.autoCfgKey] || p.storePage.autoCfgDefault || {};
     settingsHtml = _locsSettingsMenu({
       wrapId: `${p.idPrefix}-locs-storepage-settings-wrap`,
       isOpen: !!state[p.storePage.settingsOpenKey],
@@ -16463,7 +16466,15 @@ function _buildUnifiedLocalizationsSection(p) {
       langCodes, primary, primaryName, limit, reviewMode, cardClass,
       fieldValue: (lang) => p.storePage.fieldValue(field, lang),
       backValue: (lang) => p.storePage.backTranslationValue(field, lang),
-      translatePending: (lang) => p.storePage.fieldTranslatePending(field, lang),
+      /* ...or Steam's own scrape for this language hasn't settled yet, so the
+         translation that would fill this card is still being held back for it
+         (_locAwaitingSteamOrQueue, app.js — its comment has the whole rule).
+         Feeding it through the SAME translatePending the cards already use
+         means both faces get it for free: the spinner on an un-flipped card
+         and the status slot on a flipped one. */
+      translatePending: (lang) => p.storePage.fieldTranslatePending(field, lang)
+        || (typeof _locAwaitingSteamOrQueue === 'function' && _locAwaitingSteamOrQueue(
+             'listing', lang, field, !!storeAutoCfg[field], p.storePage.fieldValue(field, primary))),
       sourceBadge: (lang) => p.storePage.sourceBadge(field, lang),
       undoState: (kind, lang) => p.storePage.undoState(kind, field, lang),
       undoOnclick: (kind, lang) => `${p.storePage.undoFn}('${kind}','${field}','${lang}')`,
@@ -16529,6 +16540,9 @@ function _buildUnifiedLocalizationsSection(p) {
     const item = savedAchievements.find(x => x.id === itemId);
     if (!emptyState && !item) emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
     field = state[p.achievements.fieldKey] || 'displayName';
+    // Shared with the cards' pending test below, same as the Store Page branch.
+    const achAutoCfg = state[p.achievements.autoCfgKey]
+      || { displayName: true, earnedDescription: true, preEarnedDescription: true };
     const limit = ACHIEVEMENT_FIELD_LIMITS[field];
     reviewMode = state[p.achievements.modeKey] === 'review';
     fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
@@ -16545,7 +16559,7 @@ function _buildUnifiedLocalizationsSection(p) {
       // See the Store Page branch's own note above — same fix, same reason.
       toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.achievements.settingsOpenKey}', '${p.idPrefix}-locs-achievements-settings-wrap')`,
       toggleFieldOnclick: (key) => `${p.achievements.toggleAutoTranslateFieldFn}('${key}')`,
-      autoCfg: state[p.achievements.autoCfgKey] || { displayName: true, earnedDescription: true, preEarnedDescription: true },
+      autoCfg: achAutoCfg,
       rows: [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
     });
     toggleReviewFnName = p.achievements.toggleReviewModeFn;
@@ -16554,7 +16568,11 @@ function _buildUnifiedLocalizationsSection(p) {
         langCodes, primary, primaryName, limit, reviewMode, cardClass,
         fieldValue: (lang) => p.achievements.fieldValue(itemId, field, lang),
         backValue: (lang) => p.achievements.backTranslationValue(itemId, field, lang),
-        translatePending: (lang) => p.achievements.fieldTranslatePending(itemId, field, lang),
+        // Steam localizes achievements too — see the Store Page branch's own
+        // note above for what this second arm is for.
+        translatePending: (lang) => p.achievements.fieldTranslatePending(itemId, field, lang)
+          || (typeof _locAwaitingSteamOrQueue === 'function' && _locAwaitingSteamOrQueue(
+               'achievements', lang, field, !!achAutoCfg[field], p.achievements.fieldValue(itemId, field, primary))),
         sourceBadge: (lang) => p.achievements.sourceBadge(itemId, field, lang),
         undoState: (kind, lang) => p.achievements.undoState(kind, itemId, field, lang),
         undoOnclick: (kind, lang) => `${p.achievements.undoFn}('${kind}','${itemId}','${field}','${lang}')`,

@@ -3742,6 +3742,40 @@ function _steamMayStillSupply(lang, domain) {
   return !(settled && settled[lang]);
 }
 
+/* ── IS ANYTHING STILL ON ITS WAY TO THIS CARD? (v6.57) ───────────────────
+   The Localizations cards already showed a spinner while an auto-translation
+   was in flight (each surface's own *FieldTranslatePending). That covered one
+   of the three ways a card can be waiting, and it was the short one.
+
+   The other two both come from the Steam-first rule (v6.52): a language Steam
+   might genuinely localize does not get translated at all until Steam's own
+   scrape has settled for it. So between adding a language and that settle, the
+   card sits blank with nothing to say — first while the localized /game call
+   is in flight, and then, if Steam turns out to have nothing for it, for as
+   long as the fallback translation is queued behind TRANSLATE_CONCURRENCY. On
+   a Steam-linked title with several languages that is the majority of the
+   wait, and it read as "the scrape missed this one".
+
+   _steamMayStillSupply answers both at once: it is true from the moment the
+   title has a Steam app id until that domain settles for that language, which
+   is exactly the window in which something is still coming. The two extra
+   tests below stop it claiming a wait that will never end in anything —
+   nothing is coming for a field with no source text, or for one that Steam
+   does not supply AND the developer has switched auto-translation off for. */
+const STEAM_SUPPLIES_FIELDS = {
+  listing:      new Set(['title', 'description']),
+  achievements: new Set(['displayName', 'earnedDescription', 'preEarnedDescription']),
+};
+
+function _locAwaitingSteamOrQueue(domain, lang, field, autoEnabled, primaryText) {
+  if (!domain) return false;                                    // IAPs: Steam has no source
+  if (lang === (state.formData.primaryLanguage || 'en')) return false;
+  if (!(primaryText || '').trim()) return false;
+  const supplies = STEAM_SUPPLIES_FIELDS[domain];
+  if (!autoEnabled && !(supplies && supplies.has(field))) return false;
+  return _steamMayStillSupply(lang, domain);
+}
+
 /* Called by each Steam localization scrape once it has finished with a
    language — success, "Steam had nothing", or outright failure, because all
    three equally mean "stop waiting for Steam on this one". Re-runs the
@@ -11403,9 +11437,22 @@ function _masFieldHasOverLimitLang(field, langCodes) {
 // _iasFieldTranslatePending for those two fields.
 function _masFieldTranslatePending(field, lang) {
   if (MAS_SHARED_LISTING_FIELDS.has(field)) return _iasFieldTranslatePending(field, lang);
-  if (!state.masTranslateStatus || state.masTranslateStatus[field] !== 'loading') return false;
-  const pending = state.masTranslatePendingLangs && state.masTranslatePendingLangs[field];
-  return !!(pending && pending.includes(lang));
+  const own = state.masTranslateStatus && state.masTranslateStatus[field] === 'loading'
+    && (state.masTranslatePendingLangs && state.masTranslatePendingLangs[field] || []).includes(lang);
+  if (own) return true;
+  /* ...AND THE APP STORE'S, WHEN THAT IS THE COPY THIS CARD IS SHOWING (v6.57).
+
+     Same fallback _masFieldValue reads and _masLocReviewSourceBadge reports
+     against: Description/What's New show the App Store's text until Mac has
+     one of its own, and the translation filling it is the App Store's
+     operation, tracked in iasTranslateStatus. Asking only Mac's own status —
+     which never receives a write while ml[field] is empty — is why a Mac card
+     sat blank and still through the whole translation and then simply had
+     text, with no indication anything had been happening. */
+  const ml = state.macAppStoreListing;
+  const entry = ml && ml.localizedStoreText && ml.localizedStoreText[lang];
+  if (entry && entry[field]) return false;          // Mac has its own; not waiting on the App Store's
+  return _iasFieldTranslatePending(field, lang);
 }
 
 // Mirrors _locReviewSourceBadge. No Steam-sourced-description concept
