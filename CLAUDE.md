@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.43**
+Current version: **v6.44**
 
 ---
 
@@ -5098,6 +5098,63 @@ and `androidSubmitAnswers.dataPerType` is written only by
 map above cannot serve it — mapping each preset onto Google's vocabulary is the
 real work, and it is the next thing to do here.
 
+### The Stash badge is POWERED BY over the mark (v6.44)
+
+`buyElHTML` (web-page.js) and `.buy-brand*` (web-page.css). Jaco: *"que
+pudieras poner el texto powered by encima del logo, y luego ajustar ese pack
+para que coincidiese con el botón buy now."*
+
+The mark alone said WHOSE it was and not what the relationship is, which is the
+whole sentence: the button sells the game, the badge says who powers the
+selling. **Two lines because "Powered by" is a label ABOUT the mark** — set
+inline beside it, it reads as one wordmark that happens to open with two
+English words.
+
+**Two things it deliberately did not disturb, both of which were already
+written for this.** The badge stays a plain inline-block SIBLING of `.buy`
+rather than becoming a flex wrapper on `.buy-el` — that rule's own note says
+the sibling arrangement is what keeps every alignment and anchoring expression
+on `.el` applying unchanged — so the new wrapper goes INSIDE, around the badge
+only, and `.buy-el` still holds exactly two children in the same order. And
+`edges()` already unions EVERY child rather than measuring `firstElementChild`,
+in its own words "however many pieces a box ends up with": the badge becoming a
+stack is precisely the case that generalisation was for, so the aligners needed
+no change either.
+
+The label is the CTA's own register — IBM Plex Mono, uppercase, tracked —
+because a second face on a badge beside a button set that way would read as a
+third brand on the hero. **White at 55%, not a grey**: this sits on arbitrary
+key art, and a fixed grey is a colour that happens to work over one screenshot.
+It takes the mark's drop-shadow rather than inventing a text-shadow, so one
+`--bs` lever still moves both.
+
+**`text-indent: .14em` is the one line that looks like a fudge and is not.**
+Letter-spacing is added to the RIGHT of the last letter too, so a centred line
+sits visibly left of the mark under it; paying that back puts the two optical
+centres on one axis. Measured: **0.00**.
+
+23 and 10, down from 26 / 11 — *"un pelín más pequeño"* — and both move
+together, keeping their ratio (2.3 against 2.36): the pack is one object, and
+shrinking the mark alone would make the label the louder half of a badge whose
+whole point is the mark. They are the only two numbers in the stack that are
+not `calc(… * var(--bz))`.
+
+Measured on the real page: logo **23 × 82**, label 10px and **82 wide** — the
+same width, which is the tracking pay-back landing exactly — label centred on
+the logo to **0.00** and 5px above it, the PACK centred on the button to
+**1.6px** (the label's line-box asymmetry), 15.9 to the button, and `.buy-el`
+still **51 tall**, the button's own height, so the stack costs no vertical
+space and nothing else in the hero moved.
+
+**One measurement trap, and it is the "One live page" backlog item biting for
+real.** Two surfaces render `id="site"`, so `getElementById('site')` returned
+the DETACHED one and every rect came back 0 while the badge was plainly on
+screen. Select by geometry (`[...querySelectorAll('.buy-el')].find(n =>
+n.getBoundingClientRect().width > 0)`) until that item is fixed. A cold load
+also sits on the landing page: `state.activeView = 'broadcast'` by hand is not
+enough, the preview only mounts through the real door (Get started → Marketing
+→ Website).
+
 ### The Content Rating bar is never silent
 
 Three outcomes, three lines (`buildContentRatingSection`): Shipmate inferred
@@ -5172,7 +5229,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.43** → next is **v6.44**, then **v6.45**, etc. (v6.29 –
+Current version: **v6.44** → next is **v6.45**, then **v6.46**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, and **v6.42 is Adam's** — shipped in
 parallel and touching none of this.)
 

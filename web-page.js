@@ -2073,9 +2073,34 @@ function buyElHTML(){
   // than needing its own position — it is a badge on the CTA, not a second
   // hero element in its own right. pointer-events:none (inherited from the
   // global `#site .el img` rule) keeps it from stealing the button's click.
+  /* **THE BADGE IS A TWO-LINE STACK NOW — "POWERED BY" OVER THE WORDMARK.**
+     Jaco: *"que pudieras poner el texto powered by encima del logo, y luego
+     ajustar ese pack para que coincidiese con el botón buy now."*
+
+     The mark alone said WHOSE it was and not WHAT the relationship is, which
+     is the whole sentence: the button sells the game, the badge says who
+     powers the selling. Two lines because "Powered by" is a label ABOUT the
+     mark and cannot be the mark — set inline beside it, it would read as one
+     wordmark that happens to start with two English words.
+
+     **It stays a plain inline-block sibling of `.buy`, which is the one thing
+     not to change.** The note below in the CSS is explicit that the badge is a
+     sibling rather than a flex wrapper on `.buy-el`, so every alignment and
+     anchoring expression on `.el` still applies untouched — wrapping the PAIR
+     would have moved that. The wrapper introduced here goes INSIDE, around the
+     badge only, so `.buy-el` still holds exactly two children in the same
+     order.
+
+     And `edges()` was already written for this: it unions EVERY child rather
+     than measuring `firstElementChild`, in its own words "however many pieces
+     a box ends up with". The badge becoming a stack is precisely the case that
+     generalisation was for, so the aligners need no change either. */
   return `<div class="el buy-el fixed" data-edit="buy" data-align="${M.buy.align}"
                style="left:${M.buy.x}%;--bz:${(M.buy.size/100).toFixed(2)};--bs:${(M.buy.shadow/100).toFixed(2)};--bfg:${M.buy.fg}">
-            <img class="buy-brand-logo" src="${WP_STASH_LOGO_SRC}" alt="">
+            <span class="buy-brand">
+              <span class="buy-brand-by">Powered by</span>
+              <img class="buy-brand-logo" src="${WP_STASH_LOGO_SRC}" alt="Stash">
+            </span>
             <span class="buy" data-buytext="1">${esc(M.buy.label)}</span>
           </div>`;
 }

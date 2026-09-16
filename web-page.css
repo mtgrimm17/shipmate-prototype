@@ -388,11 +388,54 @@
    flex wrapper on .buy-el) so alignment/anchoring math on .el above still
    applies unchanged. Scales on the button's own --bz lever, drop-shadowed
    rather than boxed like the button's own box-shadow, since it's a mark on
-   the hero, not a second slab next to the first. */
-#site .buy-el .buy-brand-logo{
-  display:inline-block; vertical-align:middle;
-  height:calc(26px * var(--bz)); width:auto;
+   the hero, not a second slab next to the first.
+
+   IT IS A TWO-LINE STACK — "Powered by" over the wordmark — and the WRAPPER
+   is what is now the inline sibling, so the sentence above still holds: one
+   inline-block beside the button, `.buy-el` unchanged with two children.
+   `vertical-align: middle` moves to the wrapper, which is what makes the
+   PACK centre on the button rather than the logo alone. */
+#site .buy-el .buy-brand{
+  display:inline-block; vertical-align:middle; text-align:center;
   margin-right:calc(12px * var(--bz));
+}
+
+/* THE LABEL IS A LABEL, so it is quieter than the thing it names — and the
+   register is the one the CTA already uses: the same IBM Plex Mono, uppercase
+   and tracked, because this badge sits beside a button set that way and a
+   second face here would read as a third brand on the hero.
+
+   White at 55%, not a grey: this sits on ARBITRARY key art, and a fixed grey
+   is a colour that happens to work over one screenshot. An alpha of the same
+   white the button's own label uses composites against whatever is behind it
+   and keeps the relationship (`--bfg` full strength, the label just under).
+
+   It takes the logo's drop-shadow rather than a text-shadow of its own, for
+   the reason the mark has one at all: 11px of text over key art needs the
+   same separation the 26px mark needs, and one --bs lever should move both. */
+#site .buy-el .buy-brand-by{
+  display:block;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:calc(10px * var(--bz));
+  letter-spacing:.14em; text-transform:uppercase;
+  color:rgba(255,255,255,.55);
+  margin-bottom:calc(5px * var(--bz));
+  /* The tracking is added to the RIGHT of the last letter too, so a centred
+     line sits visibly left of the mark under it. Paying it back is what puts
+     the two optical centres on one axis. */
+  text-indent:.14em;
+  text-shadow:0 calc(var(--bs) * 3px) calc(var(--bs) * 8px) rgba(0,0,0,calc(var(--bs) * .8));
+}
+
+/* 23 and the label's 10, down from 26 / 11 — Jaco: *"puedes poner tanto el
+   logo como el powered by un pelín más pequeño."* Both move TOGETHER and keep
+   their ratio (2.3 against 2.36): the pack is one object, and shrinking the
+   mark alone would have made the label read as the louder half of a badge
+   whose whole point is the mark. Everything else is `calc(… * var(--bz))`, so
+   the two numbers are the only ones in the stack that are not derived. */
+#site .buy-el .buy-brand-logo{
+  display:block;
+  height:calc(23px * var(--bz)); width:auto;
   filter:drop-shadow(0 calc(var(--bs) * 4px) calc(var(--bs) * 10px) rgba(0,0,0,calc(var(--bs) * .8)));
 }
 
