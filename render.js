@@ -1367,18 +1367,15 @@ function _steamTrailerPreviewHTML(steamTrailer) {
 
 function buildAssetsTab() {
   const hasAndroid = state.activePlatforms.has('android');
-  // Auto-filled when the picked title (About section's IGDB picklist) has a
-  // linked Steam store page with at least one trailer — see
-  // _applySteamAboutData/_steamTrailerFromMovies in app.js, sourced from
-  // appdetails' own `movies` array. Shown beneath the manual upload
-  // dropzone/YouTube-URL fields below via the shared _steamTrailerPreviewHTML
-  // helper above (also used by the preview website's own "Trailers"
-  // sub-section, buildWebSitePreviewSection) — purely a compact reference
-  // of what's already live on the game's Steam page, it doesn't replace,
-  // block, or get overwritten by either of those, since a developer may
-  // still want to upload their own file or paste a different URL for
-  // Shipmate's own submission flow.
-  const steamTrailerHTML = _steamTrailerPreviewHTML(state.uploads.steamTrailer);
+  // BY REQUEST (v6.53): the auto-filled Steam trailer is no longer a block of
+  // its own here. It used to render through _steamTrailerPreviewHTML below the
+  // dropzone — large thumbnail, "🎬 <name> (from Steam)" caption — which
+  // presented the one asset Shipmate found for the developer as a different
+  // class of thing from the ones they dropped in themselves. It now appears in
+  // the library's Video well alongside any uploaded video, at the library's own
+  // thumbnail size and with no caption (_smLibraryHTML, app.js). The helper
+  // itself stays: the preview website's "Trailers" sub-section and the Steam
+  // Assets section both still use it, and both still want the caption.
   return `
     <div class="ob-form">
 
@@ -1441,7 +1438,6 @@ function buildAssetsTab() {
                 information twice. handleTrailerFiles still fills it wherever
                 it does exist (the Steam Assets section has its own), it just
                 is not here any more. */''}
-          ${steamTrailerHTML}
           <div class="asset-url-row">
             <label class="form-label" style="margin-bottom:6px;">${t('ob.field.trailer_url.label') || 'Or paste a YouTube URL'}</label>
             <input class="form-input" id="ob-trailer-url" type="url" placeholder="${t('ob.field.trailer_url.placeholder') || 'https://youtube.com/watch?v=...'}"
@@ -10038,6 +10034,35 @@ const LOC_REVIEW_FIELDS = [
   { value: 'releaseNotes', label: "What's New" },
 ];
 
+/* The unified Localizations STEP's own Store Page field list. By request it
+   drops What's New from both the Fields dropdown and the "Automatically
+   translated fields" menu. LOC_REVIEW_FIELDS itself is untouched: the
+   standalone Localization Review sections, opened from each platform's Store
+   Page Preview, still offer all four — this narrows one screen, it does not
+   remove the field or stop it being translated. */
+const LOC_STEP_REVIEW_FIELDS = LOC_REVIEW_FIELDS.filter(f => f.value !== 'releaseNotes');
+
+/* Store Page rows for the unified step's settings menu, in the requested
+   order: Title, Subtitle, Description. `shared` points Title/Subtitle at
+   iasAutoTranslateFields for the platforms whose Title/Subtitle ARE the App
+   Store's (Mac App Store — see MAS_SHARED_LISTING_FIELDS, app.js); the App
+   Store's own menu needs no override since that is already its config, and
+   Mac App Store Full owns all four fields outright. */
+const LOC_STEP_AUTOCFG_DEFAULT = { title: false, subtitle: true, description: true, releaseNotes: true };
+const LOC_SHARED_AUTO_OVERRIDE = {
+  autoCfgKey:        'iasAutoTranslateFields',
+  autoCfgDefault:    LOC_STEP_AUTOCFG_DEFAULT,
+  toggleFieldOnclick: (k) => `_iasToggleAutoTranslateField('${k}')`,
+};
+const LOC_STEP_SETTINGS_ROWS_OWN = [
+  ['title', 'Title'], ['subtitle', 'Subtitle'], ['description', 'Description'],
+];
+const LOC_STEP_SETTINGS_ROWS_SHARED_TITLE = [
+  ['title', 'Title', LOC_SHARED_AUTO_OVERRIDE],
+  ['subtitle', 'Subtitle', LOC_SHARED_AUTO_OVERRIDE],
+  ['description', 'Description'],
+];
+
 /* ── App Store Product Page Preview flip section: "Localization Review" ──
    Opened via the preview's "Localizations" button (openStorePreviewSection('ios',
    'localization')). One card per language the preview covers
@@ -16139,6 +16164,22 @@ function _locsCardsHtml(cfg) {
     const langName = escHtml(OB_LANG_NAMES[lang] || lang);
     const raw = cfg.fieldValue(lang);
 
+    /* BY REQUEST (v6.53): the source badge survives the flip. It used to be
+       computed inside the un-flipped branch only, so pressing Review — the one
+       moment a developer is deliberately auditing whether a localization can
+       be trusted — took away the very mark that says where it came from. The
+       flipped card's TOP half holds the same value the un-flipped card shows,
+       so the same badge belongs in its head; a live translation's spinner
+       still wins that slot while it is spinning. */
+    const srcBadge = cfg.sourceBadge(lang);
+    const badgeHtml = (!isPrimary && cfg.translatePending(lang))
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
     if (reviewMode && !isPrimary) {
       const back = cfg.backValue(lang);
       const topStatusHtml = cfg.translatePending(lang)
@@ -16150,7 +16191,7 @@ function _locsCardsHtml(cfg) {
       <div class="${cardCls}">
         <div class="${sideClass}">
           <div class="${halfClass} ${halfClass}--top">
-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml || badgeHtml}</div>
             ${fieldBlock(raw, cfg.inlineOnclick(lang), undoRedoGroup('real', lang))}
           </div>
           <div class="${halfClass} ${halfClass}--bottom">
@@ -16160,16 +16201,6 @@ function _locsCardsHtml(cfg) {
         </div>
       </div>`;
     }
-
-    const isPending = !isPrimary && cfg.translatePending(lang);
-    const srcBadge = cfg.sourceBadge(lang);
-    const badgeHtml = isPending
-      ? locReviewLoadingSpinnerHtml
-      : srcBadge === 'steam'
-        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
-        : srcBadge === 'ai'
-          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
-          : '';
 
     return `
       <div class="${cardCls}${isPrimary ? ` ${cardCls}--primary` : ''}">
@@ -16189,17 +16220,31 @@ function _locsSettingsMenu(cfg) {
         <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>`;
-  const settingsRow = (key, label) => `
+  /* A row may carry its own backing config as an optional third element —
+     see LOC_SHARED_TITLE_ROWS below. Mac App Store's Title/Subtitle are the
+     App Store's own values (MAS_SHARED_LISTING_FIELDS, app.js), so their
+     checkboxes have to read and write iasAutoTranslateFields; pointed at
+     masAutoTranslateFields like the rest of that menu they would tick and
+     untick while changing nothing at all. */
+  const settingsRow = (key, label, over) => {
+    const backing  = over && over.autoCfgKey
+      ? (state[over.autoCfgKey] || over.autoCfgDefault || {})
+      : cfg.autoCfg;
+    const onchange = over && over.toggleFieldOnclick
+      ? over.toggleFieldOnclick(key)
+      : cfg.toggleFieldOnclick(key);
+    return `
         <label class="cq-check-row loc-review-settings-row">
-          <input type="checkbox" ${cfg.autoCfg[key] ? 'checked' : ''} onchange="${cfg.toggleFieldOnclick(key)}">
+          <input type="checkbox" ${backing[key] ? 'checked' : ''} onchange="${onchange}">
           <span>${label}</span>
         </label>`;
+  };
   return `
       <div class="loc-review-settings-wrap sw-select-wrap${cfg.isOpen ? ' is-open' : ''}" id="${cfg.wrapId}">
         <button class="loc-review-settings-btn" type="button" onclick="${cfg.toggleMenuOnclick}" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
         <div class="loc-dropdown loc-review-settings-dropdown">
           <div class="loc-review-settings-heading">Automatically translated fields</div>
-          ${cfg.rows.map(([k, l]) => settingsRow(k, l)).join('')}
+          ${cfg.rows.map(([k, l, over]) => settingsRow(k, l, over)).join('')}
         </div>
       </div>`;
 }
@@ -16266,9 +16311,16 @@ function _buildUnifiedLocalizationsSection(p) {
 
   if (view === 'storePage') {
     field = state[p.storePage.fieldKey] || 'title';
+    // What's New is no longer one of this step's fields (LOC_STEP_REVIEW_FIELDS
+    // above). A selection left over from the standalone Localization Review,
+    // which shares this same state key, falls back to Title rather than showing
+    // a field with no tab left to reselect it from — same treatment the view
+    // fallback above gives a tab that has disappeared, and deliberately not
+    // written back to state for the same reason.
+    if (!LOC_STEP_REVIEW_FIELDS.some(f => f.value === field)) field = 'title';
     const limit = IAS_FIELD_CHAR_LIMITS[field];
     reviewMode = state[p.storePage.modeKey] === 'review';
-    fieldOptions = LOC_REVIEW_FIELDS.map(f => ({
+    fieldOptions = LOC_STEP_REVIEW_FIELDS.map(f => ({
       value: f.value,
       label: f.label,
       warning: p.storePage.fieldHasOverLimitLang(f.value, langCodes),
@@ -16463,8 +16515,8 @@ function buildIosLocalizationsSection() {
     storePage: {
       fieldKey: 'locReviewField', modeKey: 'locReviewMode', settingsOpenKey: 'iasReviewSettingsOpen',
       autoCfgKey: 'iasAutoTranslateFields',
-      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
-      settingsRows: [['title', 'Title'], ['subtitle', 'Subtitle'], ['description', 'Description'], ['releaseNotes', "What's New"]],
+      autoCfgDefault: LOC_STEP_AUTOCFG_DEFAULT,
+      settingsRows: LOC_STEP_SETTINGS_ROWS_OWN,
       fieldHasOverLimitLang: _iasFieldHasOverLimitLang,
       fieldValue: _iasFieldValue,
       backTranslationValue: _locReviewBackTranslationValue,
@@ -16517,8 +16569,8 @@ function buildMacLocalizationsSection() {
     storePage: {
       fieldKey: 'masLocReviewField', modeKey: 'masLocReviewMode', settingsOpenKey: 'masReviewSettingsOpen',
       autoCfgKey: 'masAutoTranslateFields',
-      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
-      settingsRows: [['description', 'Description'], ['releaseNotes', "What's New"]],
+      autoCfgDefault: LOC_STEP_AUTOCFG_DEFAULT,
+      settingsRows: LOC_STEP_SETTINGS_ROWS_SHARED_TITLE,
       fieldHasOverLimitLang: _masFieldHasOverLimitLang,
       fieldValue: _masFieldValue,
       backTranslationValue: _masLocReviewBackTranslationValue,
@@ -16571,8 +16623,8 @@ function buildMacFullLocalizationsSection() {
     storePage: {
       fieldKey: 'macFullLocReviewField', modeKey: 'macFullLocReviewMode', settingsOpenKey: 'macFullReviewSettingsOpen',
       autoCfgKey: 'macFullAutoTranslateFields',
-      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
-      settingsRows: [['description', 'Description'], ['releaseNotes', "What's New"]],
+      autoCfgDefault: LOC_STEP_AUTOCFG_DEFAULT,
+      settingsRows: LOC_STEP_SETTINGS_ROWS_OWN,
       fieldHasOverLimitLang: _macFullFieldHasOverLimitLang,
       fieldValue: _macFullFieldValue,
       backTranslationValue: _macFullLocReviewBackTranslationValue,

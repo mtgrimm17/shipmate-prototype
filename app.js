@@ -3246,21 +3246,93 @@ function _deferredRerenderStepModal() {
    renders as its own card simultaneously, so any language that finished IS on
    screen. The multiplier this cuts is fields and items, which is where the
    volume actually is. */
+/* WHAT THE VISIBILITY TEST HAS TO KNOW (v6.53)
+
+   v6.52 described each platform by ONE screen — its unified Localizations
+   step — and mapped only ios and macos. Both limits were bugs, and together
+   they are why the modal still rebuilt itself while the queue drained:
+
+     • macos_full was unmapped, so every one of its calls took the "unknown
+       surface, repaint to be safe" branch. It is in HIDDEN_PLATFORMS — a
+       developer can never even see it — yet a 32-achievement title had it
+       asking for 32 repaints of whichever OTHER platform's modal was open.
+       That alone was 32 of the 36 repaints measured for the reported
+       sequence.
+
+     • The same localization data is rendered by TWO different screens: the
+       unified Localizations step, and the Store Page Preview's own
+       "Localizations" flip (plus the Business step's "IAP Locs" and Game
+       Center's "Achievement Locs" flips, which share the same flip state).
+       Testing only the step meant a translation landing while the developer
+       sat in the preview's own review section silently never repainted it.
+
+   So the map below carries, per platform, every screen that can render that
+   platform's localization cards, and what each of them is showing:
+
+     unifiedStep  the Localizations step id, plus the state key holding which
+                  of Store Page/IAPs/Achievements it has selected
+     views        per domain: which state key holds the selected field, what
+                  that key defaults to, how to resolve the selected item
+                  (IAPs/Achievements only), and which storePreviewFlipTarget
+                  flips render that same domain
+
+   Steam has no unified Localizations step at all — its review section exists
+   only as a flip off the Store Page Preview - Prototype step — so it maps
+   with unifiedStep null and its own five fields' state key. */
 const LOC_SURFACE = {
   ios: {
+    unifiedStep: 'localizations',
     viewKey: 'iosLocsView',
-    fieldKeys: { storePage: 'locReviewField', iaps: 'iapLocField', achievements: 'iasAchLocField' },
-    itemFns:   { iaps: () => _iapLocEffectiveIapId(), achievements: () => _iasAchLocEffectiveAchId() },
+    views: {
+      storePage:    { fieldKey: 'locReviewField',   modeKey: 'locReviewMode',       defaultField: 'title',
+                      screens: [{ stepId: 'storePreview', flip: 'localization' }] },
+      iaps:         { fieldKey: 'iapLocField',      modeKey: 'iapLocMode',          defaultField: 'name',
+                      itemFn: () => _iapLocEffectiveIapId(),
+                      screens: [{ stepId: 'storePreview', flip: 'iapLocalizations' }] },
+      achievements: { fieldKey: 'iasAchLocField',   modeKey: 'iasAchLocMode',       defaultField: 'displayName',
+                      itemFn: () => _iasAchLocEffectiveAchId(),
+                      screens: [{ stepId: 'gameCenter', flip: 'achievementLocalizations' }] },
+    },
   },
   macos: {
+    unifiedStep: 'localizations',
     viewKey: 'macLocsView',
-    fieldKeys: { storePage: 'masLocReviewField', iaps: 'masIapLocField', achievements: 'masAchLocField' },
-    itemFns:   { iaps: () => _masIapLocEffectiveIapId(), achievements: () => _masAchLocEffectiveAchId() },
+    views: {
+      storePage:    { fieldKey: 'masLocReviewField', modeKey: 'masLocReviewMode',   defaultField: 'title',
+                      screens: [{ stepId: 'storePreview', flip: 'localization' }] },
+      iaps:         { fieldKey: 'masIapLocField',    modeKey: 'masIapLocMode',      defaultField: 'name',
+                      itemFn: () => _masIapLocEffectiveIapId(),
+                      screens: [{ stepId: 'storePreview', flip: 'iapLocalizations' }] },
+      achievements: { fieldKey: 'masAchLocField',    modeKey: 'masAchLocMode',      defaultField: 'displayName',
+                      itemFn: () => _masAchLocEffectiveAchId(),
+                      screens: [{ stepId: 'gameCenter', flip: 'achievementLocalizations' }] },
+    },
+  },
+  macos_full: {
+    unifiedStep: 'localizations',
+    viewKey: 'macFullLocsView',
+    views: {
+      storePage:    { fieldKey: 'macFullLocReviewField', modeKey: 'macFullLocReviewMode', defaultField: 'title',
+                      screens: [{ stepId: 'storePreview', flip: 'localization' }] },
+      iaps:         { fieldKey: 'macFullIapLocField',    modeKey: 'macFullIapLocMode',    defaultField: 'name',
+                      itemFn: () => _macFullIapLocEffectiveIapId(),
+                      screens: [{ stepId: 'storePreview', flip: 'iapLocalizations' }] },
+      achievements: { fieldKey: 'macFullAchLocField',    modeKey: 'macFullAchLocMode',    defaultField: 'displayName',
+                      itemFn: () => _macFullAchLocEffectiveAchId(),
+                      screens: [{ stepId: 'gameCenter', flip: 'achievementLocalizations' }] },
+    },
+  },
+  steam: {
+    unifiedStep: null,
+    viewKey: null,
+    views: {
+      storePage:    { fieldKey: 'steamLocReviewField', modeKey: 'steamLocReviewMode', defaultField: 'title',
+                      screens: [{ stepId: 'storePreviewPrototype', flip: 'localization' }] },
+    },
   },
 };
-const LOC_FIELD_DEFAULT = { storePage: 'title', iaps: 'name', achievements: 'displayName' };
 
-/* IS THE LOCALIZATIONS STEP FOR THIS PLATFORM ACTUALLY ON SCREEN?
+/* IS THIS PLATFORM'S <stepId> ACTUALLY ON SCREEN?
 
    state.stepModal cannot answer this by itself: closeStepModal deliberately
    leaves it set, because it means "which step am I in", not "is a modal
@@ -3272,28 +3344,49 @@ const LOC_FIELD_DEFAULT = { storePage: 'title', iaps: 'name', achievements: 'dis
    Both layouts therefore get their own real test: the modal is on screen when
    #submit-overlay is not `hidden`, and the inline pane when this platform's
    own openStep says so. */
-function _locStepOnScreen(platformId) {
-  const inlineOpen = ((state.submission && state.submission.openStep) || {})[platformId] === 'localizations';
+function _locStepOnScreen(platformId, stepId) {
+  if (!stepId) return false;
+  const inlineOpen = ((state.submission && state.submission.openStep) || {})[platformId] === stepId;
   if (inlineOpen) return true;
   const overlay = document.getElementById('submit-overlay');
   if (!overlay || overlay.classList.contains('hidden')) return false;
   const sm = state.stepModal;
-  return !!sm && sm.platformId === platformId && sm.stepId === 'localizations';
+  return !!sm && sm.platformId === platformId && sm.stepId === stepId;
 }
 
+/* A flip section is on screen when its host step is AND that step is turned
+   over to it — _subFlipTarget (render.js) resolves exactly this pair, and
+   storePreviewFlipTarget is keyed by platform, so both halves are needed. */
+function _locFlipOnScreen(platformId, screen) {
+  if (!_locStepOnScreen(platformId, screen.stepId)) return false;
+  return ((state.storePreviewFlipTarget || {})[platformId] || null) === screen.flip;
+}
+
+/* `field` and `itemId` are both optional: pass null for either to mean "any".
+   The Steam achievement importers write every achievement's every field in one
+   pass, so they have no single field/item to name — for them the honest test
+   is just "is this platform's Achievements view on screen at all". */
 function _locTranslateVisible(platformId, view, field, itemId) {
   const cfg = LOC_SURFACE[platformId];
   if (!cfg) return true;   // unmapped surface — repaint, same as before this existed
-  if (!_locStepOnScreen(platformId)) return false;
-  const curView = state[cfg.viewKey] || 'storePage';
-  if (curView !== view) return false;
-  const curField = state[cfg.fieldKeys[view]] || LOC_FIELD_DEFAULT[view];
-  if (curField !== field) return false;
+  const vcfg = cfg.views && cfg.views[view];
+  if (!vcfg) return true;
+
+  let onScreen = false;
+  if (cfg.unifiedStep && _locStepOnScreen(platformId, cfg.unifiedStep)) {
+    onScreen = (state[cfg.viewKey] || 'storePage') === view;
+  }
+  if (!onScreen && vcfg.screens) onScreen = vcfg.screens.some(s => _locFlipOnScreen(platformId, s));
+  if (!onScreen) return false;
+
+  if (field != null) {
+    if ((state[vcfg.fieldKey] || vcfg.defaultField) !== field) return false;
+  }
   // Store-page fields have no per-item selector; IAPs and achievements show
   // one saved item at a time.
-  if (itemId != null && cfg.itemFns[view]) {
+  if (itemId != null && vcfg.itemFn) {
     let curItem = null;
-    try { curItem = cfg.itemFns[view](); } catch (_) { return true; }
+    try { curItem = vcfg.itemFn(); } catch (_) { return true; }
     if (curItem !== itemId) return false;
   }
   return true;
@@ -3305,6 +3398,63 @@ function _locTranslateVisible(platformId, view, field, itemId) {
 function _locDeferredRerender(platformId, view, field, itemId) {
   if (!_locTranslateVisible(platformId, view, field, itemId)) return;
   _deferredRerenderStepModal();
+}
+
+/* A BACK-TRANSLATION ONLY EXISTS ON THE FLIPPED SIDE (v6.53)
+
+   This is where the repaint storm actually lived, and why gating the
+   *TriggerAutoTranslate functions twice changed nothing a developer could
+   feel. Every trigger and every Steam achievement import ends by calling its
+   surface's *RefreshBackTranslation for each (item, field, language) it
+   touched — and each of those called reRenderStepModal() DIRECTLY, three
+   times over (clear, announce loading, complete), never going through the
+   deferral machinery at all. Instrumenting reRenderStepModal itself for the
+   reported sequence — scrape Celeste, add French and German, sit in Mac App
+   Store's Localizations step — counted 462 full rebuilds of
+   #step-modal-body, all of them from these ten functions, against 0 requests
+   through _deferredRerenderStepModal. 462 rebuilds over a few seconds is
+   about one every eight milliseconds: any dropdown open during that window
+   is re-emitted without its `.is-open` class and every item under the cursor
+   is a fresh node, which is exactly the "can't click anything" report.
+
+   Almost none of them show anything, for a second reason on top of the
+   view/field/item test every other caller uses: a back-translation is drawn
+   only on the flipped side of a card, so unless THIS surface is currently in
+   Review mode the value can land silently and be there when the developer
+   flips. Hence the extra mode test here. */
+function _locBackTranslationVisible(platformId, view, field, itemId) {
+  const cfg  = LOC_SURFACE[platformId];
+  const vcfg = cfg && cfg.views && cfg.views[view];
+  if (!vcfg) return true;                                   // unmapped — behave as before
+  if (vcfg.modeKey && state[vcfg.modeKey] !== 'review') return false;
+  return _locTranslateVisible(platformId, view, field, itemId);
+}
+
+function _locDeferredRerenderBack(platformId, view, field, itemId) {
+  if (!_locBackTranslationVisible(platformId, view, field, itemId)) return;
+  _deferredRerenderStepModal();
+}
+
+/* One write, several surfaces. Steam's localized-listing scrape writes the
+   SHARED listing fields (Title, Description — see STEAM_SHARED_LISTING_FIELDS),
+   which every Apple platform's Store Page renders from the same state, as well
+   as Steam's own independent copies. Whichever of those happens to be the
+   screen in front of the developer is the one owed a repaint, so ask them all
+   and render once if any says yes. Each spec is [platform, view, field, item].*/
+function _locDeferredRerenderAny(specs) {
+  if (!specs.some(s => _locTranslateVisible(s[0], s[1], s[2], s[3]))) return;
+  _deferredRerenderStepModal();
+}
+
+const LOC_APPLE_PLATFORMS = ['ios', 'macos', 'macos_full'];
+
+/* Shorthand for the shared-listing case above: `field` is the Apple-side
+   field name (null = any), `steamField` Steam's own (null = any, false =
+   Steam's review section doesn't show this write at all). */
+function _locDeferredRerenderStorePage(field, steamField) {
+  const specs = LOC_APPLE_PLATFORMS.map(p => [p, 'storePage', field, null]);
+  if (steamField !== false) specs.push(['steam', 'storePage', steamField, null]);
+  _locDeferredRerenderAny(specs);
 }
 
 /* ── Steam first, machine translation only as the fallback ────────────────
@@ -3330,6 +3480,35 @@ function _locDeferredRerender(platformId, view, field, itemId) {
 function _steamAlreadySupplied(entry, field, text) {
   if (!entry) return false;
   return !!entry[field + 'FromSteam'] && entry[field + 'SourceText'] === text;
+}
+
+/* MAC APP STORE READS THE APP STORE'S COPY UNTIL IT HAS ONE OF ITS OWN (v6.53)
+
+   _masFieldValue's fallback chain for Description/What's New is
+   `ml.localizedStoreText[lang][field] || fd.localizedStoreText[lang][field]`,
+   and Steam's localized-description scrape writes only the second of those.
+   So a Mac App Store card showing Steam's real French description is showing
+   the App Store's entry — Mac's own is still empty and carries no
+   `descriptionFromSteam` flag at all. _steamAlreadySupplied, asked about Mac's
+   own entry, therefore answered "no, Steam has not supplied this", and once
+   the domain settled _masTriggerAutoTranslate wrote a machine translation into
+   Mac's own copy, which then SHADOWED Steam's text through that same fallback.
+   From the developer's seat: the Mac App Store's Store Page - Description
+   localization silently replaced itself with an AI translation a few seconds
+   after the real Steam one appeared. That is the reported "Steam localizations
+   are still being overridden, particularly Description".
+
+   Asking both entries is the fix. Note the source-text test still applies to
+   whichever entry answers yes, so a developer who genuinely rewrites Mac's own
+   primary Description still gets it translated — the two texts diverge, and
+   Steam's authority over the old one stops applying.
+
+   Mac App Store FULL deliberately does NOT need this: _macFullFieldValue has
+   no cross-platform fallback, and seedMacFullAppStoreListing deep-copies the
+   App Store's entries (flags included), so its own entry always knows. */
+function _steamSuppliedShared(field, lang, text) {
+  const shared = (state.formData.localizedStoreText || {})[lang];
+  return _steamAlreadySupplied(shared, field, text);
 }
 
 function _steamMayStillSupply(lang, domain) {
@@ -8152,7 +8331,7 @@ async function _checkSteamLocalizedDescriptionInner(lang) {
   // _checkSteamLocalizedDescriptionForNewLangs) as the ten *TriggerAutoTranslate
   // functions that fix covered, but weren't themselves *TriggerAutoTranslate
   // functions, so they kept calling reRenderStepModal() directly.
-  _deferredRerenderStepModal();
+  _locDeferredRerenderStorePage('description', false);
 }
 
 // Sibling to _checkSteamLocalizedDescription above — same "genuine Steam
@@ -8316,7 +8495,7 @@ async function _checkSteamLocalizedListingInner(lang) {
 
   // Deferred — see _checkSteamLocalizedDescription's own comment above for
   // why this can't be a direct reRenderStepModal() call.
-  _deferredRerenderStepModal();
+  _locDeferredRerenderStorePage('title', null);
 }
 
 // Defense-in-depth backstop for every "*FromSteam" authority flag this
@@ -9633,7 +9812,11 @@ function _locReviewSourceBadge(field, lang) {
   if (!_iasFieldValue(field, lang)) return null;
   const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
   if (!entry) return null;
-  if (field === 'description' && entry.descriptionFromSteam) return 'steam';
+  /* Was `field === 'description' && entry.descriptionFromSteam` — a Steam badge
+     that only Description could ever earn, even though _checkSteamLocalizedListing
+     sets titleFromSteam the same way. Generic now, so every field Steam
+     genuinely supplied says so. */
+  if (entry[field + 'FromSteam']) return 'steam';
   if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
   return null;
 }
@@ -10176,6 +10359,22 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
     // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Mac App Store shares the App
     // Store's scraped listing, so the same wait applies here.
     if (_steamAlreadySupplied(entry, field, text)) return false;
+    // ...and of the App Store's entry this card falls back to — see
+    // _steamSuppliedShared's own comment for why asking only Mac's misses it.
+    if (_steamSuppliedShared(field, lang, text)) {
+      /* A translation that landed BEFORE Steam's scrape settled (the language
+         was added before the title was scraped, so there was no steamLocInfo
+         to wait on) is sitting in Mac's own copy, shadowing the Steam text
+         that has since arrived in the App Store's. Drop it so the fallback
+         shows Steam's. Only ever a machine translation: a hand edit goes
+         through _masSetFieldValue, which writes the value alone and never a
+         sourceKey, so a non-empty sourceKey is this function's own signature. */
+      if (entry && entry[field] && !entry[field + 'FromSteam'] && entry[sourceKey]) {
+        entry[field]     = '';
+        entry[sourceKey] = '';
+      }
+      return false;
+    }
     if (_steamMayStillSupply(lang, 'listing')) return false;
     return true;
   });
@@ -10264,6 +10463,14 @@ Rules:
       const entry = ml.localizedStoreText[lang];
       delete entry[inFlightKey];
       if (typeof translated !== 'string' || !translated.trim()) return;
+      // Re-check Steam's authority at WRITE time, not just when this batch was
+      // kicked off — mirrors _iasTriggerAutoTranslate's own guard. Steam's
+      // localized fetch can resolve while this translate call is still queued
+      // behind TRANSLATE_CONCURRENCY, and without this the slower-but-already-
+      // in-flight translation lands afterward and clobbers it. Both entries,
+      // for the reason _steamSuppliedShared explains.
+      if (_steamAlreadySupplied(entry, field, text)) return;
+      if (_steamSuppliedShared(field, lang, text)) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
       const backEntry = _masLocReviewBackTranslationEntry(field, lang);
@@ -10701,12 +10908,12 @@ async function _masLocReviewRefreshBackTranslation(field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('macos', 'storePage', field, null);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos', 'storePage', field, null);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -10723,7 +10930,7 @@ async function _masLocReviewRefreshBackTranslation(field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos', 'storePage', field, null);
 }
 
 // Mirrors _locReviewCommitPrimaryEdit — commits an edit made directly in the
@@ -10970,22 +11177,33 @@ function _masFieldTranslatePending(field, lang) {
 // state.formData entry/sourceText and its iasAutoTranslateFields setting —
 // the same single source of truth the App Store's own Localization Review
 // card would show for that language.
+/* The badge has to describe the value the card is actually SHOWING, which for
+   Description/What's New is Mac's own copy only while it has one — otherwise
+   _masFieldValue falls through to the App Store's, where Steam's localization
+   lives (see _steamSuppliedShared). Asking only Mac's own entry is why a Mac
+   App Store card displaying a genuine Steam localization carried no Steam
+   badge at all, and why Steam never appeared here for Title either. */
 function _masLocReviewSourceBadge(field, lang) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
   if (lang === primary) return null;
   if (!_masFieldValue(field, lang)) return null;
-  if (MAS_SHARED_LISTING_FIELDS.has(field)) {
-    const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
-    if (!entry) return null;
-    if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+  const shared = fd.localizedStoreText && fd.localizedStoreText[lang];
+  const sharedBadge = () => {
+    if (!shared) return null;
+    if (shared[field + 'FromSteam']) return 'steam';
+    if (_iasFieldAutoTranslateEnabled(field) && shared[field + 'SourceText'] === (fd[field] || '')) return 'ai';
     return null;
-  }
+  };
+  if (MAS_SHARED_LISTING_FIELDS.has(field)) return sharedBadge();
   const ml = state.macAppStoreListing;
   const entry = ml && ml.localizedStoreText && ml.localizedStoreText[lang];
-  if (!entry) return null;
-  if (_masFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ml[field] || '')) return 'ai';
-  return null;
+  if (entry && entry[field]) {
+    if (entry[field + 'FromSteam']) return 'steam';
+    if (_masFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ml[field] || '')) return 'ai';
+    return null;
+  }
+  return sharedBadge();
 }
 
 // Mirrors _iasToggleAutoTranslateField — Mac App Store's own "Automatically
@@ -11209,7 +11427,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _steamLocReviewRefreshBackTranslation(field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('steam', 'storePage', field, null);
     return;
   }
 
@@ -11224,7 +11442,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
     if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
     ws.localizedStoreText[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('steam', 'storePage', field, null);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = STEAM_FIELD_LABELS[field] || field;
@@ -11316,7 +11534,7 @@ Rules:
   }
   state.steamTranslatePendingLangs[field] = [];
 
-  _deferredRerenderStepModal();
+  _locDeferredRerender('steam', 'storePage', field, null);
 }
 
 // Mirrors _masFieldTranslatePending — Title defers to _iasFieldTranslatePending
@@ -11422,12 +11640,12 @@ async function _steamLocReviewRefreshBackTranslation(field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('steam', 'storePage', field, null);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('steam', 'storePage', field, null);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -11444,7 +11662,7 @@ async function _steamLocReviewRefreshBackTranslation(field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('steam', 'storePage', field, null);
 }
 
 async function _steamLocReviewCommitPrimaryEdit(field, lang, value) {
@@ -11946,12 +12164,12 @@ async function _locReviewRefreshBackTranslation(field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('ios', 'storePage', field, null);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('ios', 'storePage', field, null);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -11973,7 +12191,7 @@ async function _locReviewRefreshBackTranslation(field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('ios', 'storePage', field, null);
 }
 
 // Commits an edit made directly in the Review side's BOTTOM half (the
@@ -12858,12 +13076,12 @@ async function _iapLocRefreshBackTranslation(iapId, field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('ios', 'iaps', field, iapId);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('ios', 'iaps', field, iapId);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -12880,7 +13098,7 @@ async function _iapLocRefreshBackTranslation(iapId, field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('ios', 'iaps', field, iapId);
 }
 
 async function _iapLocCommitPrimaryEdit(iapId, field, lang, value) {
@@ -13384,12 +13602,12 @@ async function _masIapLocRefreshBackTranslation(iapId, field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('macos', 'iaps', field, iapId);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos', 'iaps', field, iapId);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -13406,7 +13624,7 @@ async function _masIapLocRefreshBackTranslation(iapId, field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos', 'iaps', field, iapId);
 }
 
 async function _masIapLocCommitPrimaryEdit(iapId, field, lang, value) {
@@ -16042,12 +16260,12 @@ async function _masAchLocRefreshBackTranslation(achId, field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('macos', 'achievements', field, achId);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos', 'achievements', field, achId);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -16064,7 +16282,7 @@ async function _masAchLocRefreshBackTranslation(achId, field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos', 'achievements', field, achId);
 }
 
 async function _masAchLocCommitPrimaryEdit(achId, field, lang, value) {
@@ -16355,7 +16573,7 @@ async function _checkSteamLocalizedAchievementsInner(lang) {
   });
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
   // this file) for why this can't be a direct reRenderStepModal() call.
-  if (changed) _deferredRerenderStepModal();
+  if (changed) _locDeferredRerender('macos', 'achievements', null, null);
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -16675,12 +16893,12 @@ async function _iasAchLocRefreshBackTranslation(achId, field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('ios', 'achievements', field, achId);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('ios', 'achievements', field, achId);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -16697,7 +16915,7 @@ async function _iasAchLocRefreshBackTranslation(achId, field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('ios', 'achievements', field, achId);
 }
 
 async function _iasAchLocCommitPrimaryEdit(achId, field, lang, value) {
@@ -16923,7 +17141,7 @@ async function _checkIosLocalizedAchievements(lang) {
   });
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
   // this file) for why this can't be a direct reRenderStepModal() call.
-  if (changed) _deferredRerenderStepModal();
+  if (changed) _locDeferredRerender('ios', 'achievements', null, null);
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -17080,7 +17298,7 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
       const backEntry = _macFullAchLocBackTranslationEntry(achId, field, lang);
       if (backEntry.syncedTopText !== '') _macFullAchLocRefreshBackTranslation(achId, field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('macos_full', 'achievements', field, achId);
     return;
   }
 
@@ -17096,7 +17314,7 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
     if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
     a.locs[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos_full', 'achievements', field, achId);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
@@ -17181,7 +17399,7 @@ Rules:
     });
   }
   state.macFullAchLocTranslatePendingLangs[achId][field] = [];
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos_full', 'achievements', field, achId);
 }
 
 function _macFullAchLocFieldTranslatePending(achId, field, lang) {
@@ -17286,12 +17504,12 @@ async function _macFullAchLocRefreshBackTranslation(achId, field, lang, topText)
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('macos_full', 'achievements', field, achId);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos_full', 'achievements', field, achId);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -17308,7 +17526,7 @@ async function _macFullAchLocRefreshBackTranslation(achId, field, lang, topText)
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos_full', 'achievements', field, achId);
 }
 
 async function _macFullAchLocCommitPrimaryEdit(achId, field, lang, value) {
@@ -17569,7 +17787,7 @@ async function _checkMacFullLocalizedAchievements(lang) {
   });
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
   // this file) for why this can't be a direct reRenderStepModal() call.
-  if (changed) _deferredRerenderStepModal();
+  if (changed) _locDeferredRerender('macos_full', 'achievements', null, null);
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -17672,6 +17890,7 @@ function _macFullLocReviewSourceBadge(field, lang) {
   const ml = state.macFullAppStoreListing;
   const entry = ml && ml.localizedStoreText && ml.localizedStoreText[lang];
   if (!entry) return null;
+  if (entry[field + 'FromSteam']) return 'steam';
   if (_macFullFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (ml[field] || '')) return 'ai';
   return null;
 }
@@ -17731,7 +17950,7 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _macFullLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _macFullLocReviewRefreshBackTranslation(field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('macos_full', 'storePage', field, null);
     return;
   }
 
@@ -17746,7 +17965,7 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
     if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _macFullBlankLocalizedText();
     ml.localizedStoreText[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos_full', 'storePage', field, null);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -17823,7 +18042,7 @@ Rules:
   }
   state.macFullTranslatePendingLangs[field] = [];
 
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos_full', 'storePage', field, null);
 }
 function _macFullRetryTranslate(field) {
   const ml = state.macFullAppStoreListing;
@@ -17913,12 +18132,12 @@ async function _macFullLocReviewRefreshBackTranslation(field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('macos_full', 'storePage', field, null);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos_full', 'storePage', field, null);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -17935,7 +18154,7 @@ async function _macFullLocReviewRefreshBackTranslation(field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos_full', 'storePage', field, null);
 }
 async function _macFullLocReviewCommitPrimaryEdit(field, lang, value) {
   const entry = _macFullLocReviewBackTranslationEntry(field, lang);
@@ -18250,7 +18469,7 @@ async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
       const backEntry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
       if (backEntry.syncedTopText !== '') _macFullIapLocRefreshBackTranslation(iapId, field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('macos_full', 'iaps', field, iapId);
     return;
   }
 
@@ -18266,7 +18485,7 @@ async function _macFullIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
     if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
     p.locs[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos_full', 'iaps', field, iapId);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
@@ -18341,7 +18560,7 @@ Rules:
     });
   }
   state.macFullIapLocTranslatePendingLangs[iapId][field] = [];
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos_full', 'iaps', field, iapId);
 }
 function _macFullIapLocFieldTranslatePending(iapId, field, lang) {
   if (!state.macFullIapLocTranslateStatus || !state.macFullIapLocTranslateStatus[iapId] || state.macFullIapLocTranslateStatus[iapId][field] !== 'loading') return false;
@@ -18442,12 +18661,12 @@ async function _macFullIapLocRefreshBackTranslation(iapId, field, lang, topText)
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    reRenderStepModal();
+    _locDeferredRerenderBack('macos_full', 'iaps', field, iapId);
     return;
   }
 
   entry.status = 'loading';
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos_full', 'iaps', field, iapId);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -18464,7 +18683,7 @@ async function _macFullIapLocRefreshBackTranslation(iapId, field, lang, topText)
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  reRenderStepModal();
+  _locDeferredRerenderBack('macos_full', 'iaps', field, iapId);
 }
 async function _macFullIapLocCommitPrimaryEdit(iapId, field, lang, value) {
   const entry = _macFullIapLocBackTranslationEntry(iapId, field, lang);
@@ -20947,13 +21166,40 @@ function renderAssetLibrary() {
    and two pieces of key art fit on one line, so the whole folder is one
    glance instead of a scroll — which is the entire promise of dropping a
    folder in and being told what is in it. */
+/* THE SCRAPED TRAILER IS JUST A VIDEO (v6.53)
+
+   It used to get its own block under the dropzone — a big thumbnail with
+   "🎬 Launch Trailer (from Steam)" written beside it — which made the one
+   asset Shipmate found for you look like a different class of thing from the
+   ones you dropped in yourself. By request it now sits in the Video well with
+   everything else, at the same 50px the rest of the library uses and with no
+   caption at all.
+
+   It cannot be a real pool record: smAdd stores a directly-playable `src`, and
+   Steam hands out an HLS manifest plus a poster image, not a file. So this is
+   a synthetic entry rendered from state.uploads.steamTrailer — same .sm-thumb
+   markup, same hold-to-remove gesture, its own click target (the poster is an
+   <img>, and playback needs hls.js — see smZoomSteamTrailer). */
+const SM_STEAM_TRAILER_ID = '__steam-trailer';
+
 function _smLibraryHTML() {
   const pool = state.assets || [];
+  const steamTrailer = (state.uploads && state.uploads.steamTrailer) || null;
+  const hasSteamTrailer = !!(steamTrailer && steamTrailer.thumbnail);
   /* Nothing at all draws nothing. The dropzone directly above already says
      what to do, and a paragraph under it repeating that is the interface
      talking to itself. */
-  if (!pool.length) return '';
-  const groups = SM_KINDS.map(k => [k, pool.filter(a => a.kind === k)]).filter(([, l]) => l.length);
+  if (!pool.length && !hasSteamTrailer) return '';
+  const byKind = {};
+  SM_KINDS.forEach(k => { byKind[k] = pool.filter(a => a.kind === k); });
+  if (hasSteamTrailer) {
+    byKind.video = byKind.video.concat([{
+      id: SM_STEAM_TRAILER_ID, kind: 'video', steamTrailer: true,
+      name: steamTrailer.name || 'Trailer',
+      src: steamTrailer.thumbnail, w: 16, h: 9,
+    }]);
+  }
+  const groups = SM_KINDS.map(k => [k, byKind[k]]).filter(([, l]) => l.length);
   return `<div class="sm-wells">${groups.map(([k, list]) => `
     <div class="sm-well">
       <div class="sm-well-h">${escHtml(SM_KIND_SHORT[k] || k)}${
@@ -20966,17 +21212,24 @@ function _smLibraryHTML() {
                is a question you can only answer at full size. */''}
           <div class="sm-thumb${a.kindBy === 'user' ? ' is-user' : ''}"
                style="aspect-ratio:${a.w || 16}/${a.h || 9}"
-               onclick="smZoom('${a.id}')" role="button" tabindex="0"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();smZoom('${a.id}')}"
-               title="${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${a.alpha ? ' · transparent' : ''}">
+               onclick="${a.steamTrailer ? 'smZoomSteamTrailer()' : `smZoom('${a.id}')`}" role="button" tabindex="0"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${a.steamTrailer ? 'smZoomSteamTrailer()' : `smZoom('${a.id}')`}}"
+               title="${a.steamTrailer ? escHtml(a.name) : `${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${a.alpha ? ' · transparent' : ''}`}">
             ${/* A VIDEO CANNOT BE AN <img>. preload="metadata" is what gets a
                   first frame without pulling the whole file, and #t=0.1 asks
                   for a frame a tenth of a second in — the frame at exactly 0
                   is black in a great many trailers. muted + playsinline so no
                   browser decides to autoplay it with sound on a phone. */''}
-            ${a.kind === 'video'
-              ? `<video src="${escHtml(a.src)}#t=0.1" muted playsinline preload="metadata"></video>`
-              : `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">`}
+            ${/* The scraped trailer has a poster frame from Steam rather than a
+                  file to pull a frame out of, so it draws that — with the same
+                  play badge the rest of the app puts on a Steam trailer, since
+                  a still with nothing on it is indistinguishable from a
+                  screenshot. */''}
+            ${a.steamTrailer
+              ? `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}"><span class="steam-trailer-play-badge">▶</span>`
+              : a.kind === 'video'
+                ? `<video src="${escHtml(a.src)}#t=0.1" muted playsinline preload="metadata"></video>`
+                : `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">`}
             ${/* HOLD, DON'T CLICK. These are the developer's own files, often
                  the only copy to hand, and a 20px × in the corner of a
                  thumbnail is exactly the target a stray click finds. There is
@@ -21018,8 +21271,15 @@ function smHoldStart(ev, id) {
   _smHold = { thumb, t: setTimeout(() => {
     _smHold = null;
     thumb.classList.remove('is-arming');
-    smRemove(id);
+    // The scraped trailer is not a pool record (see _smLibraryHTML) — removing
+    // it means dropping the scrape, not calling smRemove with an id smGet
+    // would never find.
+    if (id === SM_STEAM_TRAILER_ID) { if (state.uploads) state.uploads.steamTrailer = null; }
+    else smRemove(id);
     renderAssetLibrary();
+    // The trailer counts toward the Shippy Checklist's "Add a trailer" item
+    // (v6.51), and that lives outside this panel.
+    if (typeof renderDashboard === 'function') renderDashboard();
   }, 1500) };
 }
 
@@ -21076,7 +21336,50 @@ function _smZoomKey(e) {
   smZoomClose();
 }
 
+/* The scraped trailer opens the same lightbox an uploaded video does. It can't
+   go through smZoom, which needs a pool record with a directly-playable src:
+   Steam publishes an adaptive-streaming manifest, so the <video> here is fed
+   the same way playSteamTrailer feeds the inline player — natively on Safari,
+   through hls.js elsewhere, and a link-out when neither is available. */
+function smZoomSteamTrailer() {
+  const t = (state.uploads && state.uploads.steamTrailer) || null;
+  if (!t || !t.hlsUrl) return;
+  smZoomClose();
+  const box = document.createElement('div');
+  box.id = 'sm-lightbox';
+  box.innerHTML =
+    `<figure>
+       <video controls autoplay playsinline></video>
+       <figcaption>${escHtml(t.name || 'Trailer')} · ${escHtml(SM_KIND_SHORT.video || 'Video')}</figcaption>
+     </figure>`;
+  const video = box.querySelector('video');
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = t.hlsUrl;
+  } else if (window.Hls && window.Hls.isSupported()) {
+    const hls = new window.Hls();
+    hls.loadSource(t.hlsUrl);
+    hls.attachMedia(video);
+    // Torn down by smZoomClose — an abandoned hls.js instance keeps fetching
+    // segments long after its <video> has left the document.
+    _smZoomHls = hls;
+  } else {
+    const link = document.createElement('a');
+    link.href = t.hlsUrl; link.target = '_blank'; link.rel = 'noopener';
+    link.className = 'steam-trailer-fallback-link';
+    link.textContent = 'This browser can\u2019t play the trailer inline \u2014 open it on Steam\u2019s CDN instead';
+    video.replaceWith(link);
+  }
+  box.addEventListener('click', e => {
+    if (e.target.tagName !== 'IMG' && e.target.tagName !== 'VIDEO' && e.target.tagName !== 'A') smZoomClose();
+  });
+  document.body.appendChild(box);
+  document.addEventListener('keydown', _smZoomKey, true);
+}
+
+let _smZoomHls = null;
+
 function smZoomClose() {
+  if (_smZoomHls) { try { _smZoomHls.destroy(); } catch (_) {} _smZoomHls = null; }
   document.removeEventListener('keydown', _smZoomKey, true);
   const box = document.getElementById('sm-lightbox');
   if (box) box.remove();
