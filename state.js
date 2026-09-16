@@ -4496,6 +4496,25 @@ const state = {
   // than inside formData.
   steamLocInfo: null,
 
+  /* Which languages Steam's own localization scrapes have FINISHED with, as
+     { listing: { [lang]: true }, achievements: { [lang]: true } }.
+
+     "Finished" deliberately means settled, not successful: a language Steam
+     had no translation for, and a language whose fetch failed outright, both
+     belong here, because all three outcomes equally answer the only question
+     being asked — is it still worth waiting for Steam before machine-
+     translating this language? Auto-translate holds off while a language is
+     unsettled (see _steamMayStillSupply, app.js) so Shipmate doesn't pay for
+     a translation Steam is about to overwrite, and the scrape calls
+     _markSteamLocSettled when it lands, which re-runs the propagate pass so
+     whatever Steam left empty falls through to translation as the fallback.
+
+     Two domains because the store listing and the achievements list are
+     scraped by separate, independently-timed calls — one settling says
+     nothing about the other. Reset with the rest of the Steam localization
+     cache whenever a new title is picked. */
+  steamLocSettled: null,
+
   // Cached default-language ("baseline") name/description for every
   // achievement on the currently-selected Steam-linked game's public
   // achievement stats page — { appId, achievements: [{name, description}] }

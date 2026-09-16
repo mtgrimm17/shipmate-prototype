@@ -3218,6 +3218,215 @@ function _deferredRerenderStepModal() {
   _scheduleCoalescedStepModalRerender();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   A BACKGROUND TRANSLATION SHOULD NOT REPAINT A SCREEN IT DID NOT CHANGE
+   ══════════════════════════════════════════════════════════════════════════
+   Deferring a render until the user's gesture ends (above) stops a rebuild
+   landing mid-click, but it does not stop the rebuilds. Adding one supporting
+   language to a Steam-linked title fans out to every field of every saved IAP
+   and achievement on every active platform — the file's own note upstream
+   puts Hades at 49 achievements x 3 fields x 3 platforms — and each of those
+   calls asks for a repaint up to three times (clear, announce loading,
+   complete). The result is a modal rebuilding itself every few hundred
+   milliseconds for as long as the queue drains, which is what makes its
+   dropdowns and buttons feel unreliable.
+
+   Almost none of those repaints show anything. The Localizations step renders
+   exactly ONE (view, item, field) triple at a time — the pickers at the top
+   choose it — across every selected language at once. So a translation that
+   lands for a different field, or a different achievement, or a different
+   IAP, or while a different platform's step is open, changes nothing a person
+   can see. Only the triple on screen needs the repaint; the rest can land in
+   state silently and be there when the user navigates to them.
+
+   Generalises _masPreviewNeedsTranslateRefresh, which already did exactly
+   this for one surface (Mac's store preview) and whose reasoning is the same.
+
+   Language is deliberately NOT part of the test: every selected language
+   renders as its own card simultaneously, so any language that finished IS on
+   screen. The multiplier this cuts is fields and items, which is where the
+   volume actually is. */
+const LOC_SURFACE = {
+  ios: {
+    viewKey: 'iosLocsView',
+    fieldKeys: { storePage: 'locReviewField', iaps: 'iapLocField', achievements: 'iasAchLocField' },
+    itemFns:   { iaps: () => _iapLocEffectiveIapId(), achievements: () => _iasAchLocEffectiveAchId() },
+  },
+  macos: {
+    viewKey: 'macLocsView',
+    fieldKeys: { storePage: 'masLocReviewField', iaps: 'masIapLocField', achievements: 'masAchLocField' },
+    itemFns:   { iaps: () => _masIapLocEffectiveIapId(), achievements: () => _masAchLocEffectiveAchId() },
+  },
+};
+const LOC_FIELD_DEFAULT = { storePage: 'title', iaps: 'name', achievements: 'displayName' };
+
+/* IS THE LOCALIZATIONS STEP FOR THIS PLATFORM ACTUALLY ON SCREEN?
+
+   state.stepModal cannot answer this by itself: closeStepModal deliberately
+   leaves it set, because it means "which step am I in", not "is a modal
+   open" — twenty-odd handlers resolve their platform through it and would
+   fall back to 'ios' if it were nulled. So closing the modal and asking
+   state.stepModal alone reports the step as still visible, which is the one
+   case that matters most (a closed step should never repaint).
+
+   Both layouts therefore get their own real test: the modal is on screen when
+   #submit-overlay is not `hidden`, and the inline pane when this platform's
+   own openStep says so. */
+function _locStepOnScreen(platformId) {
+  const inlineOpen = ((state.submission && state.submission.openStep) || {})[platformId] === 'localizations';
+  if (inlineOpen) return true;
+  const overlay = document.getElementById('submit-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return false;
+  const sm = state.stepModal;
+  return !!sm && sm.platformId === platformId && sm.stepId === 'localizations';
+}
+
+function _locTranslateVisible(platformId, view, field, itemId) {
+  const cfg = LOC_SURFACE[platformId];
+  if (!cfg) return true;   // unmapped surface — repaint, same as before this existed
+  if (!_locStepOnScreen(platformId)) return false;
+  const curView = state[cfg.viewKey] || 'storePage';
+  if (curView !== view) return false;
+  const curField = state[cfg.fieldKeys[view]] || LOC_FIELD_DEFAULT[view];
+  if (curField !== field) return false;
+  // Store-page fields have no per-item selector; IAPs and achievements show
+  // one saved item at a time.
+  if (itemId != null && cfg.itemFns[view]) {
+    let curItem = null;
+    try { curItem = cfg.itemFns[view](); } catch (_) { return true; }
+    if (curItem !== itemId) return false;
+  }
+  return true;
+}
+
+/* The render call the Localizations auto-translate triggers use instead of
+   _deferredRerenderStepModal. Same deferral behaviour once it decides to
+   render — it just declines to ask at all for work nobody is looking at. */
+function _locDeferredRerender(platformId, view, field, itemId) {
+  if (!_locTranslateVisible(platformId, view, field, itemId)) return;
+  _deferredRerenderStepModal();
+}
+
+/* ── Steam first, machine translation only as the fallback ────────────────
+   The write-time guard each trigger already carries —
+   `if (entry[field+'FromSteam'] && entry[sourceKey] === text) return;` — threw
+   the translation away AFTER paying for it: the request went out, the queue
+   slot was spent, the spinner rendered, and Steam's real text won the race at
+   the end anyway. For a title whose store page Steam has genuinely localized,
+   that is the common case, not the edge one.
+
+   These two move the decision to BEFORE the request:
+
+   _steamAlreadySupplied — Steam's scrape has already written this exact field
+   for this language against this same source text. Nothing to translate.
+
+   _steamMayStillSupply — Steam lists this language as supported and its scrape
+   for that language has not settled yet, so a real localization is probably
+   still in flight. Hold off; the scrape marks itself settled when it finishes
+   (whether or not it found anything) and re-runs the propagate pass, at which
+   point anything Steam did NOT fill becomes eligible and gets translated as
+   the fallback. A title with no Steam link at all has no steamLocInfo, so this
+   is false and translation proceeds immediately, exactly as before. */
+function _steamAlreadySupplied(entry, field, text) {
+  if (!entry) return false;
+  return !!entry[field + 'FromSteam'] && entry[field + 'SourceText'] === text;
+}
+
+function _steamMayStillSupply(lang, domain) {
+  const info = state.steamLocInfo;
+  if (!info || !info.appId) return false;                 // not a Steam-linked title
+  const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
+  if (!steamLang) return false;                           // Steam has no code for it
+  if (!_steamSupportsLanguageCandidate(steamLang, info.supportedLanguages)) return false;
+  const settled = state.steamLocSettled && state.steamLocSettled[domain];
+  return !(settled && settled[lang]);
+}
+
+/* Called by each Steam localization scrape once it has finished with a
+   language — success, "Steam had nothing", or outright failure, because all
+   three equally mean "stop waiting for Steam on this one". Re-runs the
+   propagate pass so any field the scrape left empty now falls through to
+   machine translation. */
+function _markSteamLocSettled(lang, domain, repropagate) {
+  if (!state.steamLocSettled) state.steamLocSettled = {};
+  if (!state.steamLocSettled[domain]) state.steamLocSettled[domain] = {};
+  if (state.steamLocSettled[domain][lang]) return;        // already settled
+  state.steamLocSettled[domain][lang] = true;
+  if (typeof repropagate === 'function') repropagate();
+}
+
+/* The store page is scraped by TWO independently-timed calls — the listing
+   (title/short description/developer/publisher) and the description — and a
+   language is only done with Steam once BOTH have landed. This counts them in
+   and out so the domain settles on the last one out rather than the first,
+   which would release machine translation while the other was still in
+   flight. Achievements are their own domain and their own single call. */
+function _steamLocScrapeStart(lang, domain) {
+  if (!state.steamLocPending) state.steamLocPending = {};
+  if (!state.steamLocPending[domain]) state.steamLocPending[domain] = {};
+  const m = state.steamLocPending[domain];
+  m[lang] = (m[lang] || 0) + 1;
+}
+
+function _steamLocScrapeDone(lang, domain, repropagate) {
+  if (!state.steamLocPending) state.steamLocPending = {};
+  if (!state.steamLocPending[domain]) state.steamLocPending[domain] = {};
+  const m = state.steamLocPending[domain];
+  m[lang] = (m[lang] || 1) - 1;
+  if (m[lang] > 0) return;                     // a sibling scrape is still out
+  delete m[lang];
+  _markSteamLocSettled(lang, domain, repropagate);
+}
+
+/* THE WRAPPERS EXIST SO SETTLING CANNOT BE FORGOTTEN. Each of these three
+   functions has between seven and ten early returns — no Steam link, no
+   language code, Steam doesn't list the language, the fetch threw, the user
+   switched title mid-flight, Steam returned the default-language text — and
+   every one of them means the same thing to a language waiting on Steam:
+   stop waiting. A `finally` settles on all of them at once, the throw
+   included, rather than asking each return site to remember.
+
+   The repropagate pass is what makes machine translation the FALLBACK rather
+   than something merely skipped: whatever Steam just wrote is now guarded by
+   _steamAlreadySupplied, so re-running propagate translates exactly the
+   fields Steam left empty, and nothing else. */
+async function _checkSteamLocalizedListing(lang) {
+  _steamLocScrapeStart(lang, 'listing');
+  try {
+    return await _checkSteamLocalizedListingInner(lang);
+  } finally {
+    _steamLocScrapeDone(lang, 'listing', _steamRepropagateStorePage);
+  }
+}
+
+async function _checkSteamLocalizedDescription(lang) {
+  _steamLocScrapeStart(lang, 'listing');
+  try {
+    return await _checkSteamLocalizedDescriptionInner(lang);
+  } finally {
+    _steamLocScrapeDone(lang, 'listing', _steamRepropagateStorePage);
+  }
+}
+
+async function _checkSteamLocalizedAchievements(lang) {
+  _steamLocScrapeStart(lang, 'achievements');
+  try {
+    return await _checkSteamLocalizedAchievementsInner(lang);
+  } finally {
+    _steamLocScrapeDone(lang, 'achievements', _steamRepropagateAchievements);
+  }
+}
+
+function _steamRepropagateStorePage() {
+  if (typeof _iasPropagateAllFields === 'function') _iasPropagateAllFields();
+  if (typeof _masPropagateAllFields === 'function') _masPropagateAllFields();
+}
+
+function _steamRepropagateAchievements() {
+  if (typeof _iasAchLocPropagateAllFields === 'function') _iasAchLocPropagateAllFields();
+  if (typeof _masAchLocPropagateAllFields === 'function') _masAchLocPropagateAllFields();
+}
+
 (function initStepModalInteractionTracking() {
   const inModal = el => !!(el && el.closest && el.closest('#submit-modal'));
 
@@ -7410,6 +7619,12 @@ function selectPicklistItem(igdbId) {
   // preferences (steamAutoTranslateFields/steamReviewSettingsOpen) aren't
   // game-specific, so those are deliberately left alone.
   state.steamLocInfo = null;
+  // The previous title's "Steam has finished with this language" record goes
+  // with it. Left behind, the new game's languages would look already settled
+  // and fall straight through to machine translation instead of waiting for
+  // their own scrape (see _steamMayStillSupply).
+  state.steamLocSettled = null;
+  state.steamLocPending = null;
   if (!state.webSite) state.webSite = {};
   state.webSite.localizedStoreText = {};
   state.steamLocReviewBackTranslation = {};
@@ -7865,7 +8080,7 @@ function _steamSupportsLanguageCandidate(steamLang, supportedLanguages) {
 // not an AI-translated placeholder — overwriting it with Steam's own
 // "About This Game" copy would replace real authored text rather than
 // backfilling an empty/translated one, unlike every other call site here.
-async function _checkSteamLocalizedDescription(lang) {
+async function _checkSteamLocalizedDescriptionInner(lang) {
   const info = state.steamLocInfo;
   if (!info || !info.appId) return;
   const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
@@ -7975,7 +8190,7 @@ async function _checkSteamLocalizedDescription(lang) {
 // guarded against being clobbered by an in-flight AI translation inside
 // _steamTriggerAutoTranslate's/_iasTriggerAutoTranslate's own write-time
 // checks (see those functions for the exact race this closes).
-async function _checkSteamLocalizedListing(lang) {
+async function _checkSteamLocalizedListingInner(lang) {
   const info = state.steamLocInfo;
   if (!info || !info.appId) return;
   const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
@@ -9543,6 +9758,12 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
     if (pendingSource === text) return false;
+    // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Either
+    // Steam's scrape has already written this exact field for this language,
+    // or it still might, in which case machine translation waits rather than
+    // racing it and losing at the write-time guard further down.
+    if (_steamAlreadySupplied(entry, field, text)) return false;
+    if (_steamMayStillSupply(lang, 'listing')) return false;
     return true;
   });
   if (!eligible.length) return;
@@ -9566,7 +9787,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _locReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _locReviewRefreshBackTranslation(field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('ios', 'storePage', field, null);
     return;
   }
 
@@ -9582,7 +9803,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
   // `eligible` above).
   state.iasTranslatePendingLangs = state.iasTranslatePendingLangs || {};
   state.iasTranslatePendingLangs[field] = eligible.slice();
-  _deferredRerenderStepModal();
+  _locDeferredRerender('ios', 'storePage', field, null);
 
   // Mark every language this request is about to translate as in flight
   // for `text`, so a call triggered again before this one resolves (e.g.
@@ -9722,7 +9943,7 @@ Rules:
   // clearing this doesn't affect that.
   state.iasTranslatePendingLangs[field] = [];
 
-  _deferredRerenderStepModal();
+  _locDeferredRerender('ios', 'storePage', field, null);
 }
 
 // Read-only lookup for render.js (never mutates state) — whether `lang` is
@@ -9952,6 +10173,10 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
     if (pendingSource === text) return false;
+    // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Mac App Store shares the App
+    // Store's scraped listing, so the same wait applies here.
+    if (_steamAlreadySupplied(entry, field, text)) return false;
+    if (_steamMayStillSupply(lang, 'listing')) return false;
     return true;
   });
   if (!eligible.length) return;
@@ -9965,7 +10190,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _masLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _masLocReviewRefreshBackTranslation(field, lang, '');
     });
-    if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
+    if (_masPreviewNeedsTranslateRefresh()) _locDeferredRerender('macos', 'storePage', field, null);
     return;
   }
 
@@ -9980,7 +10205,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
     if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
     ml.localizedStoreText[lang][inFlightKey] = text;
   });
-  if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
+  if (_masPreviewNeedsTranslateRefresh()) _locDeferredRerender('macos', 'storePage', field, null);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -10057,7 +10282,7 @@ Rules:
   }
   state.masTranslatePendingLangs[field] = [];
 
-  if (_masPreviewNeedsTranslateRefresh()) _deferredRerenderStepModal();
+  if (_masPreviewNeedsTranslateRefresh()) _locDeferredRerender('macos', 'storePage', field, null);
 }
 
 function _masRetryTranslate(field) {
@@ -12409,7 +12634,7 @@ async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
       const backEntry = _iapLocBackTranslationEntry(iapId, field, lang);
       if (backEntry.syncedTopText !== '') _iapLocRefreshBackTranslation(iapId, field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('ios', 'iaps', field, iapId);
     return;
   }
 
@@ -12425,7 +12650,7 @@ async function _iapLocTriggerAutoTranslate(iapId, field, primaryValue) {
     if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
     p.locs[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('ios', 'iaps', field, iapId);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
@@ -12503,7 +12728,7 @@ Rules:
     });
   }
   state.iapLocTranslatePendingLangs[iapId][field] = [];
-  _deferredRerenderStepModal();
+  _locDeferredRerender('ios', 'iaps', field, iapId);
 }
 
 // Read-only lookup for render.js — mirrors _iasFieldTranslatePending.
@@ -12960,7 +13185,7 @@ async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
       const backEntry = _masIapLocBackTranslationEntry(iapId, field, lang);
       if (backEntry.syncedTopText !== '') _masIapLocRefreshBackTranslation(iapId, field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('macos', 'iaps', field, iapId);
     return;
   }
 
@@ -12976,7 +13201,7 @@ async function _masIapLocTriggerAutoTranslate(iapId, field, primaryValue) {
     if (!p.locs[lang]) p.locs[lang] = _iapLocBlankLocalizedText();
     p.locs[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos', 'iaps', field, iapId);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = IAP_LOC_FIELD_LABELS[field] || field;
@@ -13051,7 +13276,7 @@ Rules:
     });
   }
   state.masIapLocTranslatePendingLangs[iapId][field] = [];
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos', 'iaps', field, iapId);
 }
 
 function _masIapLocFieldTranslatePending(iapId, field, lang) {
@@ -15591,6 +15816,10 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
     if (pendingSource === text) return false;
+    // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Achievements are scraped by their
+    // own separately-timed call, hence the 'achievements' domain.
+    if (_steamAlreadySupplied(entry, field, text)) return false;
+    if (_steamMayStillSupply(lang, 'achievements')) return false;
     return true;
   });
   if (!eligible.length) return;
@@ -15604,7 +15833,7 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
       const backEntry = _masAchLocBackTranslationEntry(achId, field, lang);
       if (backEntry.syncedTopText !== '') _masAchLocRefreshBackTranslation(achId, field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('macos', 'achievements', field, achId);
     return;
   }
 
@@ -15620,7 +15849,7 @@ async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
     if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
     a.locs[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos', 'achievements', field, achId);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
@@ -15708,7 +15937,7 @@ Rules:
     });
   }
   state.masAchLocTranslatePendingLangs[achId][field] = [];
-  _deferredRerenderStepModal();
+  _locDeferredRerender('macos', 'achievements', field, achId);
 }
 
 function _masAchLocFieldTranslatePending(achId, field, lang) {
@@ -16054,7 +16283,7 @@ function _steamAchPair(a, parsed, baseline) {
   return (localized && base) ? { localized, base } : null;
 }
 
-async function _checkSteamLocalizedAchievements(lang) {
+async function _checkSteamLocalizedAchievementsInner(lang) {
   const baseline = state.steamAchievementsBaseline;
   if (!baseline || !baseline.appId) return;
   const steamLang = STEAM_LOCALIZATION_LANG_MAP[lang];
@@ -16231,6 +16460,10 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
     if (pendingSource === text) return false;
+    // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Achievements are scraped by their
+    // own separately-timed call, hence the 'achievements' domain.
+    if (_steamAlreadySupplied(entry, field, text)) return false;
+    if (_steamMayStillSupply(lang, 'achievements')) return false;
     return true;
   });
   if (!eligible.length) return;
@@ -16244,7 +16477,7 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
       const backEntry = _iasAchLocBackTranslationEntry(achId, field, lang);
       if (backEntry.syncedTopText !== '') _iasAchLocRefreshBackTranslation(achId, field, lang, '');
     });
-    _deferredRerenderStepModal();
+    _locDeferredRerender('ios', 'achievements', field, achId);
     return;
   }
 
@@ -16260,7 +16493,7 @@ async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
     if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
     a.locs[lang][inFlightKey] = text;
   });
-  _deferredRerenderStepModal();
+  _locDeferredRerender('ios', 'achievements', field, achId);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = ACHIEVEMENT_LOC_FIELD_LABELS[field] || field;
@@ -16337,7 +16570,7 @@ Rules:
     });
   }
   state.iasAchLocTranslatePendingLangs[achId][field] = [];
-  _deferredRerenderStepModal();
+  _locDeferredRerender('ios', 'achievements', field, achId);
 }
 
 function _iasAchLocFieldTranslatePending(achId, field, lang) {
@@ -16830,6 +17063,10 @@ async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
     if (pendingSource === text) return false;
+    // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Achievements are scraped by their
+    // own separately-timed call, hence the 'achievements' domain.
+    if (_steamAlreadySupplied(entry, field, text)) return false;
+    if (_steamMayStillSupply(lang, 'achievements')) return false;
     return true;
   });
   if (!eligible.length) return;
@@ -17477,6 +17714,10 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
     if (pendingSource === text) return false;
+    // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Mac App Store shares the App
+    // Store's scraped listing, so the same wait applies here.
+    if (_steamAlreadySupplied(entry, field, text)) return false;
+    if (_steamMayStillSupply(lang, 'listing')) return false;
     return true;
   });
   if (!eligible.length) return;
