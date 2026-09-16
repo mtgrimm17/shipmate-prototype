@@ -310,7 +310,52 @@
   --inp-bg-hover: rgba(102, 97, 122, .22);
   --pill-bg:      rgba(102, 97, 122, .16);
   --pill-bg-hover: rgba(102, 97, 122, .24);
-  --gi-desc-h:    290px;   /* height of the description box */
+  /* THE DESCRIPTION BOX IS SEVEN LINES, AND IT WAS THIRTEEN AND A HALF.
+     Jaco: *"me gustaría que el content panel fuese un poco más bajito… que el
+     description box sea un poco más bajo, de forma que en un ordenador normal
+     pueda ver sin scrollear el botón de 'languages'."*
+
+     MEASURED, THE OLD 290 WAS **13.54 LINES** — 264 of text at 13px/1.5 plus 26
+     of chrome (12 + 12 of padding and the two 1px borders). The field's own
+     markup says `rows="5"`; this `min-height` has been overriding it for as long
+     as both have existed, so the element states its size twice and the two
+     disagree by a factor of nearly three. That is the finding, not the pixel
+     count: nobody chose 13 lines for a store blurb, a round number got typed.
+
+     SO IT TAKES THE MARKUP'S OWN NUMBER, stated in lines the way `--spp-desc-3`
+     is on the Mac preview: `5 × 19.5 + 26`. Five is not a fresh guess — it is
+     what the `<textarea>` has been asking for all along, so the contradiction
+     closes rather than being replaced by a second arbitrary figure.
+
+     TWO THINGS THE ARITHMETIC GOT WRONG, AND BOTH ONLY SHOWED UP IN A SMALL
+     WINDOW. Seven lines were tried first, from `button bottom = 537 + height`
+     measured in a 1318-wide pane — 699.5 against a 1280×800 laptop's ~700.
+
+     - **537 IS NOT A CONSTANT.** The notice above the field wraps one line
+       further at 1280 than at 1318, so the stack above the box is 302 rather
+       than 285 and the real figure came back **715.3**. The thing being designed
+       for is exactly the thing that moves the number: *measure the small window,
+       never extrapolate from the big one.*
+     - **AND THE FOLD IS NOT THE VIEWPORT — `.app-footer` is `position: fixed`,
+       46px tall, and the page reserves nothing for it.** So the last 46px of
+       EVERY view in this app is permanently covered, and the real floor at
+       vh 700 is **654**. That is a bug of its own rather than a fact about this
+       field, and it is the first thing to look at if this box is ever asked to
+       shrink again.
+
+     Measured at a true 1280×700: box **123.5** (exactly 5 lines), button bottom
+     **677.3**. That clears a 13-inch Air (1440×900 → ~790 of viewport, no wrap,
+     footer top ~744) by **83px** — which is the machine that was asked about —
+     and still sits 23px behind the footer on a 1280×800. The remaining 23 is not
+     in this token: `.step-nav-row` spends **46** on `margin-top: 26` +
+     `padding-top: 20` for one horizontal rule, and that is where to go next.
+
+     Re-derive rather than nudging if the type moves: 19.5 is `13px × 1.5`, both
+     stated at `.ob-form textarea.form-input`, and 26 is that rule's padding plus
+     the shared 1px border. The box does not grow (`resize: none`), so five lines
+     is what you see and the rest scrolls inside it — which is generous against
+     the three the Mac preview shows before "more". */
+  --gi-desc-h:    calc(5 * 19.5px + 26px);   /* height of the description box */
   --cta-bg:       #212028;
   --cta-bg-hover: #453C5A;
   --cta-blob:     #A078FF;
@@ -4264,21 +4309,83 @@ body.viewing-splash .app-subnav { display: none; }
    action) but softened — a translucent purple fill with light-purple text, not
    stark white on solid purple. */
 .step-nav-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border); }
+/* ── PREV / NEXT ARE THE MODAL'S FOOTER BUTTON, AND THE COLOUR QUESTION
+   DISSOLVES RATHER THAN GETTING AN ANSWER ─────────────────────────────────
+   Jaco: *"los botones de siguiente / previous del game details deberían tener
+   el mismo formato que los botones de los modales, con stroke gradientado y el
+   fill transparente. Tengo duda también sobre si deberían ser morados o
+   verdes."*
+
+   **NEITHER, AND THE COLOUR TABLE IS WHY.** This app has three meanings and two
+   additions, and a nav button is none of them: **green is DONE** — it exists to
+   mark one finished thing against others that are not, and a Next button has
+   finished nothing; **violet PROPOSES**, which is Improve's, and is separately
+   the guide's own hue; amber is *this needs you* and red is *wrong*. What is
+   left is the table's own last line — *anything informational wears text
+   colours* — and "go to the next sub-tab" is exactly that.
+
+   Which is the same answer the first half of his sentence already gives: the
+   thing he asked to copy, `.submit-modal-footer .imp-cta`, is the most-pressed
+   action in the app and carries NO HUE AT ALL. Taking its format takes its
+   colour, so there was never a second decision to make.
+
+   IT WAS ALREADY THE SAME BOX, which is what makes this four values rather than
+   a restyle: measured, both are IBM Plex Mono at 13px with `padding: 10px 18px`
+   and a 1px border, 39 against 38 tall. Only the fill, the ring, the radius and
+   the weight differed — violet 14% on a violet-32% border at radius 10 and 700,
+   against white 12% on a transparent border at 8 and 500.
+
+   **AND THE STROKE IS JOINED, NOT COPIED**: `.step-nav-btn::after` is added to
+   `.imp-cta::after`'s own rule rather than redrawing that gradient here, for
+   the reason the shared `::after` list states — with no preprocessor, a shared
+   selector list is the only way "the same stroke" stays true after the next
+   change. It needs `position: relative` (a static element gives an absolute
+   child nothing to resolve against) and `isolation: isolate`, both of which
+   `.imp-cta` carries for the same reason.
+
+   `.step-nav-finish` KEEPS ITS VIOLET and is the one real exception — see its
+   own note below. */
 .step-nav-btn {
+  position: relative; isolation: isolate;
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 18px; border-radius: 10px; cursor: pointer;
-  background: rgba(159, 104, 240, .14); color: #c9b3f2;
-  border: 1px solid rgba(159, 104, 240, .32);
-  font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: .02em;
+  padding: 10px 18px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, .12); color: #fff;
+  border: 1px solid transparent;
+  font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: .02em;
   transition: background .15s ease, color .15s ease, border-color .15s ease, transform .1s ease;
 }
-.step-nav-btn:hover { background: rgba(159, 104, 240, .24); color: #e6d9ff; border-color: rgba(159, 104, 240, .5); }
+.step-nav-btn:hover { background: rgba(255, 255, 255, .17); color: #fff; }
+/* NO HOVER RULE ON `::after`, AND THAT ABSENCE IS THE POINT. This button exists
+   to BE `.submit-modal-footer .imp-cta`, which changes its fill on hover and
+   never touches its ring — so anything added here is a way for the two to stop
+   being one object. A violet hover was added and reverted in the same session;
+   the long version is in CLAUDE.md. The app's only violet ring belongs to Apply
+   Fix, where it means "Shipmate is proposing this", which a Next button is not
+   doing. */
 .step-nav-btn:active { transform: translateY(1px); }
 .step-nav-btn svg { display: block; }
-/* "Submission" hand-off button on the last Game Details sub-tab — a filled,
-   primary-looking CTA so it clearly reads as "go here next". */
+/* ── "SUBMISSION" KEEPS ITS VIOLET, AND IT IS THE ONE REAL EXCEPTION.
+   Everything above argues a nav button has no hue, and this button is not one:
+   Prev and Next move you between four sub-tabs of the page you are on, while
+   this LEAVES Game Details for another top-level tab. That is the one thing
+   violet already means outside Improve — the calendar lede's `.gcal-lede-go`
+   and the submitted card's Marketing nudge are both "a link that goes
+   somewhere else", in this same violet, and this file's own rule for them is
+   that an arrow means elsewhere.
+
+   AND IT STAYS SOLID rather than joining the outline, which is the Release
+   button's argument: a filled fill is this app's shape for a call to action,
+   and nothing merely available is ever painted that way. Two outlines and one
+   filled button in a row reads correctly — twice "carry on" and once "you are
+   done here".
+
+   SO IT DROPS THE RING. A solid CTA carries no lit edge anywhere in this app
+   (the Release button does not), and left on, `.imp-cta::after`'s white
+   gradient would be drawn OVER a solid violet fill — a second mark on a box
+   that is already the loudest thing in the row. */
 .step-nav-finish { background: var(--purple, #9F68F0); color: #fff; border-color: var(--purple, #9F68F0); }
 .step-nav-finish:hover { background: #b184f5; color: #fff; border-color: #b184f5; }
+.step-nav-finish::after { display: none; }
 
 /* Submission "+ Add platform" → a simple list of available platforms. */
 .add-plat-list { display: flex; flex-direction: column; gap: 8px; }
@@ -6506,7 +6613,12 @@ body.viewing-splash .app-subnav { display: none; }
     opacity: 0; transition: opacity 0.2s ease;
   }
 
-.imp-cta::after{
+/* Game Details' Prev / Next JOIN this rule rather than copying the gradient —
+   the shared `::after` list's own argument, one door along: with no
+   preprocessor here, a shared selector list is the only way "the same stroke"
+   stays true after the next change. The long version is at `.step-nav-btn`. */
+.imp-cta::after,
+.step-nav-btn::after{
     content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
     background: linear-gradient(180deg, rgba(255,255,255,0.40) 0%, rgba(255,255,255,0.12) 100%);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -16314,11 +16426,14 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   font-size: 10px;
   font-weight: 500;
   color: rgba(255, 255, 255, .55);
-  padding: 7px 2px 17px;
+  padding: 7px 2px 23px;
   text-transform: uppercase;
   text-align: center;
   vertical-align: bottom;
   width: var(--pvt-col, 79px);
+  /* 23 = 6 + the 11px disc + 6. See the `bottom: 6px` rule below: the disc's
+     clearance above and below come out of this ONE number, so it is written as
+     the sum rather than as 23. */
   /* The header stays put while the groups scroll under it — with sixteen
      groups and one open, the row labels are the only thing telling you which
      column you are in. The rule is an INSET SHADOW rather than a border: a
@@ -16503,17 +16618,39 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   margin: 0;
   pointer-events: none;
 }
-/* 5px UNDER THE DISC, AND THE PADDING GROWS WITH IT — the two are one number.
-   The disc sits in the `<th>`'s bottom padding, so its clearance BELOW (to the
-   header's rule) and its clearance ABOVE (to the second line of the label) come
-   out of the same 13px. Moving `bottom` alone would have pushed its top edge
-   into the text; the padding goes 13 → 17 so the 1px above is untouched and
-   only the gap he asked for changes. The cost, stated: the header row is 53
-   rather than 49 — the four pixels the disc no longer has to share. */
+/* THE DISC SITS IN ITS OWN BAND: 6 ABOVE, 6 BELOW, ONE NUMBER PAID TWICE.
+   Jaco: *"separar un poco más los tooltips de los títulos de dato, y de la
+   línea horizontal divisoria."* Both halves of that are the same number, which
+   is why they move together and why the padding is written as a sum.
+
+   IT WAS 1 AND 5, AND THE ASYMMETRY WAS THE REAL DEFECT rather than either
+   figure. At 1px the disc was touching the label's line box, so it read as a
+   piece of the heading — a glyph hanging off the end of PERSONALIZ. — while 5px
+   of clear air below detached it from the rule it belongs beside. A mark with
+   nothing above it and something below it joins what is above: the eye reads
+   the smaller gap as the bond. So the handle was attached to the one thing it
+   is not part of, and loose from the band it is meant to occupy.
+
+   Equal clearance is what makes it a BAND: the disc stops being an appendix of
+   the label and becomes a row of eight handles on one line, which is what it
+   already is horizontally (`left: 50%` on every column). Same move the metadata
+   strip made when its 8px of vertical padding went to 14 — *"a band of objects
+   needs air around the band rather than around the words"*.
+
+   6 rather than 5, and the two are not independent: the padding is
+   `6 + 11 + 6 = 23`, so asking for more under the disc without moving the
+   padding would push its top edge INTO the text. That is the trap the 13 → 17
+   pass already recorded and the reason this is one number.
+
+   The cost, stated rather than hidden: the header row is **59**, up from 53 and
+   from the 49 it measured before the disc came back — ten pixels of a scroller
+   whose whole argument is that sixteen groups fit on one screen. Worth it while
+   the table is closed (sixteen group rows, nothing else) and the first thing to
+   look at if a future pass needs rows back. */
 .pvt thead th .tooltip-icon.pvt-tt {
   left: 50%;
   transform: translateX(-50%);
-  bottom: 5px;
+  bottom: 6px;
 }
 .pvt td.pvt-ty .tooltip-icon.pvt-tt {
   left: 13px;
@@ -16641,14 +16778,51 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    as part of the same phrase, and the elastic gap goes after them both. */
 .pvt .pvt-gtx { flex: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pvt .pvt-gsp { flex: 1; }
+/* ── A GROUP THAT HOLDS SOMETHING IS 500, AND WEIGHT IS THE ONE CHANNEL LEFT.
+   Jaco: *"¿marcar en medium weight las categorías que tengan algo
+   seleccionado?"*
+
+   THIS FILE'S STANDING RULE IS "COLOUR IS THE EMPHASIS, WEIGHT ONLY RIDES
+   ALONG", AND THE REASON IT DOES NOT DECIDE THIS IS THAT COLOUR ON THIS ROW IS
+   ALREADY SPENT THREE TIMES OVER. The group name's own value carries: empty vs
+   declared (.34 against `--text-dim`), open vs not (white), and dimmed vs not
+   (.38 / .20). So the one fact you scan this column FOR — which of the sixteen
+   holds your answer — is stated in a channel that is also saying two other
+   things, and it loses both arguments: **open a group and every name goes
+   white, so the distinction disappears at exactly the moment you are working
+   in the table**; dim the rest and .38 against .20 is a far smaller step than
+   .63 against .34 was. The fact did not change; the only thing that reports it
+   did.
+
+   SO: WEIGHT IS A PROPERTY OF THE GROUP, COLOUR IS A PROPERTY OF THE VIEW.
+   That is v6.51's own sentence about the amber (*"the hue is a property of the
+   TYPE, not of the view"*) arriving one row up, and it is what makes this a
+   second channel rather than a second mark: it is orthogonal by construction —
+   it survives open, closed and dimmed unchanged, which is precisely what the
+   colour cannot do.
+
+   AND IT IS FREE, WHICH IS THE OTHER HALF. The face is IBM Plex **Mono**, so
+   400 and 500 share an advance width: `.pvt-ghead`'s `min-width` is stated in
+   `ch` for exactly that reason, and a monospace weight change cannot push one
+   row's list out of the column that note guarantees. Measured both ways — 142.8
+   and one list x, identical.
+
+   500 and not 600: the eight column headings are 500 and the row is 12px
+   uppercase mono, where 600 stops reading as the same object set firmer and
+   starts reading as a heading over the fifteen beside it. **The count goes with
+   it**, because `.pvt-gn` is the name's own register by construction (it only
+   exists on a declared group) and splitting the pair would undo the parentheses
+   that put them back together. */
+.pvt tr.pvt-g:not(.is-empty) .pvt-gtx,
+.pvt tr.pvt-g:not(.is-empty) .pvt-gn { font-weight: 500; }
 /* GREY, AND IT IS THE GROUP NAME'S OWN — the last hue leaving the row.
    The count was `--pill-on-color` from the day it was the only thing telling it
-   apart from the name it was glued to. Position does that now (its own column,
-   ten pixels off the list), so the hue is free — and v6.54 had just taken blue
-   out of the open row on the argument that blue against amber is two claims and
-   neither reads as ordinary. Leaving one blue digit up here would have kept
-   exactly the contradiction that change removed, on the one row that is meant to
-   be read at a glance.
+   apart from the name it was glued to. PARENTHESES do that now, which is what
+   let it come back against the name, so the hue is free — and v6.54 had just
+   taken blue out of the open row on the argument that blue against amber is two
+   claims and neither reads as ordinary. Leaving one blue digit up here would
+   have kept exactly the contradiction that change removed, on the one row that
+   is meant to be read at a glance.
 
    WHITE WAS THE OTHER OFFER AND IS WRONG BY THIS FILE'S OWN RULE: the mark is
    for what is OUTSTANDING, and a count is not outstanding — at full white it
@@ -16669,23 +16843,61 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    wherever their group's name happens to end are sixteen separate lines
    rather than one list.
 
-   THE SLOT WRAPS THE PAIR, AND THE COUNT SITS AT ITS RIGHT EDGE. It used to be
-   glued to the name (*"it reads as part of the same phrase"*, two comments up),
-   which was right while the slot was fluid — a number floating away from a
-   short name looked orphaned. A fixed slot removes that failure: right-aligned,
-   the sixteen counts form their own column 10px left of the list. It is also
-   the honest place, because the number counts the LIST, not the name — and the
-   list TRUNCATES (measured: User Content with all six wants 673px and gets 517),
-   so the count is the only thing that survives it and belongs beside it.
-   `space-between` with the `gap` surviving as the floor, so a full-width name
-   still cannot collide with its own count.
+   THE SLOT WRAPS THE PAIR, AND THE COUNT IS BACK AGAINST THE NAME — IN
+   PARENTHESES. Jaco: *"quizás el número no tendría por qué ir alineado a la
+   izquierda, sino justo después del título de categoría principal, entre
+   paréntesis?"*
 
-   AND THE NUMBER IS THE CONTENT'S, IN `ch`. The longest group name is
+   It was right-aligned to the slot's far edge for a version, on the argument
+   that the number counts the LIST rather than the name and should sit beside
+   the thing it counts. That reading is still true and it stopped deciding the
+   layout the moment the count lost its blue: with name and count in ONE
+   register (`--text-dim`, both), a gap between them says nothing — it is two
+   pieces of the same phrase held apart, and on a four-character group like BODY
+   it opened 110px of dead air mid-row.
+
+   **The brackets do what the column was doing.** Right-aligning was a way to
+   stop a bare digit reading as part of the name; punctuation states that
+   directly and costs no space, which is the same trade the comma made for the
+   list two rules down. So the row reads NAME (n) · contents — one phrase, then
+   its list — rather than three columns, and the count is legible as a count
+   without a hue, a column or a size of its own.
+
+   What it gives up, stated rather than hidden: the sixteen counts no longer
+   form a column, so "how many in each" is no longer scannable vertically. The
+   count's real job is unchanged and is the reason it exists at all — the list
+   TRUNCATES (measured: User Content with all six wants 673px and gets 517) and
+   the count is the one part that survives; it does that from here just as well.
+
+   AND THE SLOT'S WIDTH IS THE CONTENT'S, IN `ch`. The longest group name is
    "Health & Fitness" / "Browsing History" at 16 characters, and the face is
    monospace, so 1ch IS the character advance and 16ch IS that name at any
    size — the same reason `.rel-version`'s cap is written in `ch`. Plus the
-   pair's own 10px gap, plus 2ch for a two-digit count. Nothing can exceed it,
-   which is what makes this exact rather than approximately wide enough.
+   count and the 6px between them. Nothing can exceed it, which is what makes
+   this exact rather than approximately wide enough. The slot is still what
+   forces every list onto ONE column: that never depended on where the count
+   sat inside it.
+
+   AND THE COUNT IS 3ch, NOT 4 — which is where the 10px came from. Jaco:
+   *"¿podemos rascar algo de espacio a la izquierda para las subcategorías en
+   los headers, moverlas como 10px a la izquierda?"* The slot reserved a
+   BRACKETED TWO-DIGIT count, and **no group in `IOS_DATA_TYPES` holds ten data
+   types** — measured, the largest is User Content with six. So the second digit
+   was a column of air for a number Apple's own table cannot produce: `(6)` is
+   three characters and always will be. 20ch → **19ch**, the list 150 → 142.8,
+   and nothing that can actually render is a pixel tighter than before.
+
+   THE REMAINING ~3px WOULD HAVE TO COME OUT OF SOMETHING REAL, which is why
+   they do not: the 6px is the space between a name and its count, and the 16ch
+   is the guarantee that no name pushes its own list out of column. Both are
+   load-bearing; the fourth character was not. **If a group ever gains a tenth
+   type this is the line to change** — a two-digit count would push that one
+   row's list 7.2px right, visible and local, which is the failure `min-width`
+   is chosen for.
+
+   6px is a SPACE, not a gap — at 12px mono the advance is ~7.2 and the
+   brackets carry their own side bearings, so a full one reads as a break
+   between two things rather than as the phrase it is.
 
    `min-width`, NEVER a hard width. If a longer group name ever arrives it
    pushes THAT ONE ROW's list out of column, which is a visible and local
@@ -16693,11 +16905,10 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    thing on this row you cannot lose. */
 .pvt .pvt-ghead {
   flex: none;
-  min-width: calc(18ch + 10px);
+  min-width: calc(19ch + 6px);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
 }
 
 /* ── THE FLAGGED TYPES, NAMED ON THE GROUP'S OWN ROW ──────────────────────
@@ -16937,13 +17148,31 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .prv-preset-wrap {
   margin-bottom: 14px;
 }
+/* IT IS `.form-label`, BECAUSE IT IS ONE. Jaco: *"que 'quick setup…' tenga el
+   mismo tamaño de font que 'privacy policy url'."* Those two sit one row apart
+   and do the same job — a micro-label naming the control underneath it — and
+   they were 11/600/.55 against 10/700/.8, three values apart for no decision
+   anyone made: this one was written with the preset chips and never measured
+   against the field above them.
+
+   The SIZE is what he asked for and the other two come with it rather than
+   being a separate liberty: at 10px uppercase the app's own tracking is 0.8,
+   and 0.55 here would leave one surface setting the same object two ways at one
+   size. The colour was already `--text-dim` on both, which is the tell that
+   they were meant to match all along. */
 .prv-preset-heading {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   color: var(--text-dim);
   margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  /* `.8px`, NOT the `0.05em` this block carried — and the em is why the first
+     pass measured 0.5 with an `.8px` written two lines above it: a second
+     declaration in the same rule, further down, wins silently. It was right at
+     11px (0.55) and follows the size DOWN, which is exactly what a relative
+     unit is for and exactly what is wrong here: this label is not being tracked
+     as a proportion of itself, it is matching `.form-label`'s absolute 0.8. */
+  letter-spacing: .8px;
 }
 .prv-preset-chips {
   display: grid;
@@ -17075,6 +17304,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    own ascent+descent inside itself, so two boxes with aligned centres have
    aligned baselines even though the `<button>` inherits the UA's
    `line-height: normal` and the pills inherit the modal's. */
+/* AND 5px OF AIR BEFORE THE TABLE. Jaco: *"que haya 5px más de espacio entre la
+   línea de 'hide data types' y el inicio de la tabla."* It was **0** — the row
+   ended and the header band began, so the control and the thing it controls
+   read as one block with a rule through it.
+
+   It goes on the HEADER, beside the `margin-top: 4px` the v6.70 baseline pass
+   moved here, so this row states its own distance from both neighbours in one
+   place. It is paid in FULL rather than collapsed, because `.ios-subsection` is
+   a flex column on this step — the same fact the flex-chain note records, used
+   the right way round for once. The cost: `.pvt-scroll` is `flex: 1`, so the
+   table is 5px shorter rather than the modal 5px taller. */
 .prv-matrix-header {
   display: flex;
   align-items: center;
@@ -17082,8 +17322,64 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   flex-wrap: wrap;
   margin-top: 4px;
 }
+/* THE LAST THREE ARE APPLE'S TABLE ONLY, AND THE SCOPE IS THE WHOLE POINT.
+   `.prv-matrix-header` and `.prv-expand-btn` are ALSO Google Play's (render.js
+   17268–9) — the shared `.prv-*` dialect this file's own backlog is waiting to
+   delete. Unscoped, the 5px, the full-width press and the lane pay-back would
+   all land on a table with eleven columns and an 11px body lane, where two of
+   the three are simply wrong. `:has(.pvt-scroll)` is the same structural test
+   the flex chain uses, for the same reason: it names the surface rather than
+   the route, so folding the table away or reaching it by the other door cannot
+   miss it. */
+.ios-subsection:has(.pvt-scroll) .prv-matrix-header {
+  /* 5px OF AIR BEFORE THE TABLE. Jaco: *"que haya 5px más de espacio entre la
+     línea de 'hide data types' y el inicio de la tabla."* It was **0** — the
+     row ended and the header band began, so the control and the thing it
+     controls read as one block with a rule through it. It goes HERE rather
+     than on the scroller, beside the `margin-top: 4px` the v6.70 baseline pass
+     moved onto this row, so one rule states this row's distance from both
+     neighbours. Paid in full rather than collapsed, because `.ios-subsection`
+     is a flex column on this step — the flex-chain note's own fact, used the
+     right way round for once. The cost: `.pvt-scroll` is `flex: 1`, so the
+     table is 5px shorter rather than the modal 5px taller. */
+  margin-bottom: 5px;
+  /* AND THE ROW'S COLUMN IS THE TABLE'S, NOT THE SCROLLER'S — which only had to
+     be said once the badges moved to the right edge. `.pvt-scroll` reserves a
+     9px lane for its own bar, so its box is 757 against the table's 748, and
+     left alone the tracking pill ended 9.5px right of the last column it is
+     talking about. Paying the lane back as padding puts this row on the TABLE's
+     content column, which is what everything else in this step lands on.
+     Measured: pill right 1029 against the table's 1028.5. */
+  padding-right: var(--pvt-bar, 9px);
+}
 
 /* Expand / collapse toggle above the matrix */
+/* IT TAKES THE WHOLE ROW, AND THE BADGES GO TO THE FAR EDGE. Jaco: *"que el
+   show data types / hide sea clicable en toda su horizontal."*
+
+   It was **144.4px** of a 757px row — the chevron and its label and nothing
+   else — so a control that opens and closes the whole table was the narrowest
+   thing above it, with ~430px of dead row beside it that looks exactly as
+   pressable as the part that is. Same complaint the cells answered two notes up
+   (*"the frames are not the button, the well is"*): the target was a fraction
+   of the box the eye reads as the control.
+
+   `flex: 1`, and the LABEL does not move — the button is already a flex row and
+   its content stays at `flex-start`, so the chevron and the words are drawn
+   exactly where they were and only the box grows. Measured: label on the same x
+   in both states, hit area 144.4 → **517**.
+
+   **WHAT IT COSTS IS THE 8px THE v6.70 PASS TUNED**: the count badge and the
+   tracking pill are pushed to the row's right edge, so the toggle → badge gap
+   becomes elastic while badge → pill stays 8. That is the trade being made
+   rather than an oversight, and it is the arrangement this row was heading for
+   anyway — the control on the left, what it is reporting on the right, which is
+   the release block's own shape. It lands well because the row is exactly the
+   table plus its 9px scrollbar lane, so the pill's right edge is the table's.
+
+   SCOPED to Apple's table, for the reason stated at `.prv-matrix-header` above:
+   Google Play draws this same button and is not being re-argued here. */
+.ios-subsection:has(.pvt-scroll) .prv-expand-btn { flex: 1; min-width: 0; }
 .prv-expand-btn {
   display: flex;
   align-items: center;
@@ -21244,6 +21540,49 @@ body.viewing-splash #app-guide { display: none; }
   display: block; margin-left: auto;
   font-family: var(--mono); font-weight: 400;
   font-size: 11px; line-height: 1; color: #5A615D;
+}
+/* ── THE IMPORT NOTE RIDES THIS ROW, AND THE ROW IS WHAT MAKES IT FREE.
+   `.gi-head` is a hard 18px, so this costs no layout in either state — which
+   is the whole reason the note moved here out of the flow between Title and
+   Description, where it pushed the field, the platform grid and everything
+   below it down on confirm. The long version is at `_giImportNote` (render.js).
+
+   IT SITS AGAINST THE LABEL, 10px after it, and NOT against the counter. The
+   note names where this description came from, so it belongs to the thing the
+   label names; the counter is a measurement of what is in the box and keeps
+   its own `margin-left: auto` and its own right edge. That also means this rule
+   touches nothing else — no `:has()`, no override on `.char-count`, and every
+   other `.gi-head` in the app is untouched by construction.
+
+   IT IS STILL THE COUNTER'S REGISTER (11px mono, the same #5A615D — one value,
+   not a near-miss), because register is about WHAT KIND of thing it is, not
+   about where it sits: both are facts about the field rather than part of it,
+   and the label above them is the only heading in the row.
+
+   NO CHECK. A green tick is this app's word for *done*, which is a claim about
+   a step you completed; an import is something that HAPPENED and is already
+   stated by the sentence. The mark also made the note a two-part object needing
+   its own alignment and its own flex-shrink rules beside a label that is one
+   run of text.
+
+   The slot is always in the DOM and always zero-width when empty, so the
+   contents rule is what keeps it from being a box of its own. */
+.ob-form .gi-head .gi-import-slot { display: contents; }
+/* `line-height` IS THE ROW, AND THAT IS A CLIPPING FIX RATHER THAN A RHYTHM ONE.
+   `overflow: hidden` — which the ellipsis needs — clips to the CONTENT box, and
+   at `line-height: 1` that box is exactly the font size: 11px for a face whose
+   ascender-to-descender is ~14.3. So the descender of a `g` or `y` was being
+   cut off, on "Google Play" and on nothing else in this row. `.char-count` sits
+   at `1` and always will be fine, because "175/4000" has no descender — which
+   is exactly why copying its value here was safe-looking and wrong.
+   18px is the ROW's own height, so the line box can never be shorter than what
+   it has to hold and nothing is clipped at any string. It costs no layout: the
+   row is a hard 18 and this is a flex item inside it. */
+.ob-form .gi-head .gi-import-note {
+  margin-left: 10px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-weight: 400;
+  font-size: 11px; line-height: 18px; color: #5A615D;
 }
 
 /* ── Typable fields ──────────────────────────────────── */

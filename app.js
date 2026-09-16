@@ -6945,8 +6945,21 @@ function _refreshTimingContent() {
 
 function _renderScenarioSection() {
   const wrap = document.getElementById('ob-scenario-wrap');
-  if (!wrap) return;
-  wrap.innerHTML = buildScenarioWidget();
+  if (wrap) wrap.innerHTML = buildScenarioWidget();
+  // The confirmed note lives in the Description label row, not in this wrap
+  // (see _giImportNote). Repainted from the same call so the widget and the
+  // note cannot disagree about whether an import happened — the one thing a
+  // second, separate repaint would eventually get wrong.
+  _giRenderImportNote();
+}
+
+/* Writes the import note into the slot the Description head always emits.
+   A write, never an insert: the slot exists in both states and the row it
+   sits in is a fixed 18px, so nothing below it can move. */
+function _giRenderImportNote() {
+  const slot = document.getElementById('ob-desc-import');
+  if (!slot) return;
+  slot.innerHTML = _giImportNote();
 }
 
 function _triggerScenarioSearch() {

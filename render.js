@@ -217,6 +217,11 @@ function buildAboutTab() {
         <div class="ob-q" id="ob-q-desc" data-answered="${fd.description?.trim() ? '1' : '0'}">
           <div class="gi-head">
             <label class="form-label" for="ob-desc">${t('ob.field.desc.label') || 'Description'}</label>
+            <!-- THE IMPORT NOTE LIVES IN THIS ROW, NOT ABOVE THE FIELD.
+                 The slot is always emitted, empty or not, so that confirming an
+                 import is a write into an element that already exists rather
+                 than a node appearing in the flow. See _giImportNote. -->
+            <span class="gi-import-slot" id="ob-desc-import">${_giImportNote()}</span>
             <div class="char-count" id="ob-desc-count">${(fd.description || '').length}/4000</div>
           </div>
           <div class="form-group">
@@ -692,6 +697,67 @@ function buildTitlePicklist() {
   }).join('');
 }
 
+/* ── THE IMPORT NOTE IS META ABOUT THE DESCRIPTION, SO IT LIVES IN ITS LABEL
+   ROW ───────────────────────────────────────────────────────────────────────
+   Jaco: *"el 'Imported from Steam, Google Play etc' no debería mover ni el
+   cajetín de descripción, ni las plataformas ni cambiar el tamaño."*
+
+   IT WAS A BLOCK BETWEEN TWO FIELDS, so it could only ever push. `#ob-scenario
+   -wrap` sits in the flow between Title and Description, and the confirmed note
+   drew a 12px line with a 10px top margin inside it — so pressing "That's it!"
+   moved the description box, the platform grid and everything under them down
+   by its own height, in the same paint that filled them in. The three things
+   you had just asked for all jumped at once.
+
+   **The fix is not a smaller note, it is a slot that is already paid for.**
+   `.ob-form .gi-head` is a hard `height: 18px` — the row the label shares with
+   the character counter — so ANYTHING put in it costs zero layout by
+   construction, in every state, without a single number being tuned. That is
+   why the note goes there rather than being shrunk where it was.
+
+   **IT SITS 10px AFTER THE LABEL, NOT AGAINST THE COUNTER.** The first pass put
+   it left of the counter, on the argument that both are meta and should group
+   flush right — true about the REGISTER and wrong about what the note is
+   attached to. It says where this description came from, so it belongs to the
+   word DESCRIPTION; the counter measures what is in the box and keeps its own
+   `margin-left: auto` and its own right edge. That also makes this rule reach
+   nothing else: no `:has()`, no override on `.char-count`, every other
+   `.gi-head` in the app untouched by construction.
+
+   The register is still the counter's — 11px mono, the same `#5A615D`, one
+   value rather than a near-miss — because register says what KIND of thing this
+   is, not where it sits. The label above is the only heading in the row, and at
+   10px/700 uppercase against 11px mono nothing here competes with it.
+
+   **The tail is cut and that is the point of the move.** It used to end
+   "— description and platforms filled in", which is a sentence describing the
+   two things you can see: the box below it now has text in it and the platform
+   tiles are lit. This file has refused that shape repeatedly — a mark restating
+   what the surface already states. What is left is the one fact nothing else on
+   screen carries: WHICH stores it came from, with the full sentence surviving
+   as the `title`.
+
+   **AND NO CHECK.** Green is this app's word for DONE — a claim about a step
+   you finished — where an import is something that HAPPENED, which the sentence
+   already says in words. The mark also made the note a two-part object wanting
+   its own alignment, its own gap and its own shrink rule, beside a label that
+   is one run of text. One span now, and the only thing that can give way if the
+   row ever runs short is the tail of the store list.
+
+   The slot is emitted EMPTY when there is nothing to say, so confirming writes
+   into an element that already exists — `_giRenderImportNote` (app.js) is the
+   one repaint, called beside `_renderScenarioSection` so the two halves cannot
+   disagree about whether an import happened. */
+function _giImportNote() {
+  const ls = state.liveSearch;
+  if (!ls || ls.status !== 'done' || !ls.confirmed) return '';
+  const storeLabels = { ios: 'App Store', steam: 'Steam', android: 'Google Play', egs: 'Epic', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PlayStation' };
+  const stores = (ls.allStores || []).map(pid => storeLabels[pid] || pid);
+  if (!stores.length) return '';
+  return `
+    <span class="gi-import-note" title="Imported from ${escHtml(stores.join(' · '))} — description and platforms filled in.">Imported from ${escHtml(stores.join(' · '))}</span>`;
+}
+
 /* ── Store search result widget ──────────────────────── */
 function buildScenarioWidget() {
   const ls = state.liveSearch;
@@ -706,18 +772,10 @@ function buildScenarioWidget() {
       </div>`;
   }
 
-  // Confirmed import — compact success note
-  if (ls && ls.status === 'done' && ls.confirmed) {
-    const storeLabels = { ios: 'App Store', steam: 'Steam', android: 'Google Play', egs: 'Epic', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PlayStation' };
-    const stores = (ls.allStores || []).map(pid => storeLabels[pid] || pid);
-    return `
-      <div class="ob-search-confirm">
-        <svg viewBox="0 0 16 16" fill="none" width="13" height="13" aria-hidden="true" style="flex-shrink:0">
-          <path d="M3 8l3.5 3.5L13 5" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Imported from ${escHtml(stores.join(' · '))} — description and platforms filled in.</span>
-      </div>`;
-  }
+  // Confirmed import — the note has MOVED into the Description label row.
+  // Nothing is drawn here, so the widget's own box collapses to zero the
+  // moment you confirm: see _giImportNote for the whole argument.
+  if (ls && ls.status === 'done' && ls.confirmed) return '';
 
   // Found — result card
   if (ls && ls.status === 'done' && ls.found) {
@@ -12954,7 +13012,7 @@ function buildPrivacyMatrix(a, pid = 'ios') {
               <div class="pvt-grow">
                 <span class="pvt-ghead"
                   ><span class="pvt-gtx">${group.group}</span
-                  >${nSel ? `<span class="pvt-gn">${nSel}</span>` : ''}</span>
+                  >${nSel ? `<span class="pvt-gn">(${nSel})</span>` : ''}</span>
                 ${nSel ? `<span class="pvt-gfs">${gFlags}</span>` : ''}
                 <span class="pvt-gsp"></span>
                 <span class="pvt-gc${groupOn ? ' is-up' : ''}">${_chevDown}</span>
