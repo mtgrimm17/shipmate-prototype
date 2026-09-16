@@ -3287,7 +3287,25 @@ const state = {
                  sets it, the back arrow clears it. It is NOT platformFace:
                  that one drives the card's own flip, which the pane has no
                  reverse to perform. */
-  submission: { addOpen: false, tab: null, openStep: {}, settings: null, layout: 'inline' },
+  /* `layout` DEFAULTS TO 'modal' AS OF v6.47 — Jaco: *"quiero que por defecto
+     siempre tengamos ?layout=modal… no quiero que borremos nada de la
+     implementación inline, pero que modal esté por defecto siempre."*
+
+     This is ONE WORD and nothing else. Both arms are intact, the `?layout=`
+     hook below still sets either one, `smLayout()` still flips it from the
+     console, and every branch that reads this flag is untouched — which is the
+     whole point.
+
+     AND SINCE v6.46 IT REALLY IS THE DEFAULT FOR EVERYONE: the hook below no
+     longer remembers a choice in `localStorage`, so no machine can be silently
+     pinned to the other arm by a query string it loaded once, weeks ago. See
+     that block for the argument. This literal is now the only thing that
+     decides what a person who just opens the page sees — which is the
+     whole point: the decision aid stops defaulting to the arm nobody chose,
+     without the loser being deleted before there is a decision. See the
+     backlog's "TWO PRESENTATIONS BEHIND ONE FLAG" for what that decision
+     eventually has to do. */
+  submission: { addOpen: false, tab: null, openStep: {}, settings: null, layout: 'modal' },
 
   // Marketing tab subsections: 'announce' | 'website' | 'press' | 'influencers'
   marketing: { section: 'announce' },
@@ -4586,25 +4604,41 @@ const state = {
    other presentation was to edit the literal above, which means the flag could
    not do the one job it was put there for — letting us look at both and decide.
 
-   So: `?layout=modal` on the URL sets it and REMEMBERS it, `?layout=inline`
-   sets it back. Nothing else changes.
+   So: `?layout=modal` on the URL sets it, `?layout=inline` sets it back.
+   Nothing else changes.
 
-   **THE DEFAULT IS UNTOUCHED.** With no parameter and nothing stored this
-   block does nothing at all, so what ships and what anyone sees on the live
-   site is exactly the literal above — 'inline'. This cannot change the
-   published default by accident; it can only be opted into, per browser.
+   **THE DEFAULT IS WHATEVER THE LITERAL ABOVE SAYS, AND THAT IS 'modal'
+   (v6.47).** With no parameter this block does nothing at all, so what ships is
+   exactly that literal. This hook cannot change the published default by
+   accident.
 
-   It is stored rather than read fresh each time because the alternative is
-   carrying the query string through every reload of a working day. `sm.` and
-   the try/catch are the house style (see app.js's own localStorage line):
-   private browsing throws on both get and set, and a preference for which
-   layout you are LOOKING at is never worth an exception. */
+   **AND THE URL IS NOW THE ONLY DOOR — `sm.layout` IS GONE (v6.46).** Jaco:
+   *"necesito que me garantices que cualquier persona que lo abra verá el modal
+   flag por defecto."* It stored the choice so a working day did not have to
+   carry the query string through every reload, and the cost of that was the one
+   thing this comment used to defend as "looks like a bug and is not": a browser
+   that loaded `?layout=inline` ONCE, at any point, was pinned to the arm nobody
+   chose, forever, with no sign of it on screen. That is not a guarantee about a
+   default, it is a default with an invisible exception per machine — and the
+   people who will open this are exactly the ones who cannot be told to run
+   `localStorage.removeItem`.
+
+   So the remembering goes, and any key already written is CLEARED on the way
+   past rather than left as a dead entry: the guarantee has to hold on the
+   machines that already tripped it, which is the whole point of asking for one.
+   The flag itself is untouched — both arms, the literal and the console helper
+   all still work — and `?layout=inline` still gives you the other presentation,
+   for that load. `smSubmitLayout()` (app.js) already never touched storage, so
+   the live switch and the reload door now agree.
+
+   The try/catch is the house style (see app.js's own localStorage line):
+   private browsing throws on get, set and remove alike, and a layout you are
+   merely LOOKING at is never worth an exception. */
 (() => {
   try {
     const q = new URLSearchParams(location.search).get('layout');
-    if (q === 'modal' || q === 'inline') localStorage.setItem('sm.layout', q);
-    const saved = localStorage.getItem('sm.layout');
-    if (saved === 'modal' || saved === 'inline') state.submission.layout = saved;
+    if (q === 'modal' || q === 'inline') state.submission.layout = q;
+    localStorage.removeItem('sm.layout');
   } catch (_) {}
 })();
 

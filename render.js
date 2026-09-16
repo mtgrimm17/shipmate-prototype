@@ -12681,7 +12681,17 @@ function buildPrivacyMatrix(a, pid = 'ios') {
   const _prvColHead = (lines, tip, cls) =>
     `<th class="pvt-col-hd${cls ? ' ' + cls : ''} tooltip-anchor" data-tip="${tip}"` +
     `><span class="pvt-h1">${lines[0] || '&nbsp;'}</span>` +
-    `<span class="pvt-h2">${lines[1] || lines[0] || ''}</span></th>`;
+    `<span class="pvt-h2">${lines[1] || lines[0] || ''}</span>` +
+    /* THE HANDLE IS BACK, AND IT COSTS NOTHING BECAUSE IT IS OUT OF FLOW.
+       v6.51 removed the `?` disc because it rode along as one more wrapping
+       token and pushed this row to 61px — that is a fact about an INLINE icon,
+       not about the icon. Absolutely positioned into the 13px of bottom padding
+       the `<th>` already pays, it changes no box at all, which is the same
+       guarantee `text-decoration` bought and the reason that underline was
+       chosen over bringing this back. `pointer-events: none` because the whole
+       cell is the anchor: the disc is a SIGN that there is a tooltip, never the
+       target, exactly as it already was before it was removed. */
+    `<span class="tooltip-icon pvt-tt">?</span></th>`;
 
   /* THE BREAK IS AN ENGLISH TYPOGRAPHIC DECISION, so a real translation does
      not inherit it. `t()` returns the KEY when a string is missing and the
@@ -12757,7 +12767,51 @@ function buildPrivacyMatrix(a, pid = 'ios') {
   if (expanded) {
     sortedGroups.forEach(group => {
       const groupOn = openGroup === group.group;
-      const nSel    = group.types.filter(gt => selectedTypeIds.has(gt.id)).length;
+      const selIn   = group.types.filter(gt => selectedTypeIds.has(gt.id));
+      const nSel    = selIn.length;
+
+      /* ── THE HEADER NAMES WHAT IS INSIDE IT, NOT JUST HOW MUCH ───────────
+         Jaco: *"the user might sometimes want to see all the data types
+         they've flagged at a glance. Maybe we can do this by showing flagged
+         data types in each data type section header, where you currently have
+         the number. That way this info is available at a glance without
+         accordioning."*
+
+         IT IS THE ANSWER TO THE COST OF ONE-AT-A-TIME. v6.52's argument for a
+         single open group is unchanged and is what makes the table readable —
+         "with several open the lighter ground marks four places and stops
+         meaning *you are here*" — but it does mean the only way to re-read
+         what you declared is to open four blocks in turn. The count already
+         says a group is not empty; the names say what it holds, and the row
+         they go on is already drawn.
+
+         THE COUNT STAYS. It is the one part that is always true and always
+         fits: the list ellipsises when a group holds more names than the row
+         has room for, and a truncated list with a number beside it still
+         answers "how many". Removing it would make the ellipsis lossy.
+
+         SENTENCE CASE, AGAINST THE GROUP NAME'S UPPERCASE. The `<td>` shouts
+         because a group name is a section heading; these are content sitting
+         on the same line, and the case is what keeps one from reading as a
+         continuation of the other. Same lever the release block's labels use
+         against their values. */
+      const gFlags = selIn.map(gt => {
+        const gtd = a.dataPerType[gt.id] || {};
+        const trk = gtd.tracking === 'yes';
+        const idn = gtd.identity === 'yes';
+        const tip = trk && idn
+          ? `${gt.label} — linked to the user's identity AND used for tracking. Tracking requires AppTrackingTransparency.`
+          : trk ? `${gt.label} — used for tracking. Tracking requires AppTrackingTransparency.`
+          : idn ? `${gt.label} — linked to the user's identity.`
+          : `${gt.label} — declared, not linked to identity and not used for tracking.`;
+        return `<span class="pvt-gf${trk ? ' is-trk' : ''}` +
+               ` tooltip-anchor" data-tip="${tip}">${gt.label}</span>`;
+      // A COMMA, NOT A GAP — and the comma is NOT inside the chip. It belongs to
+      // the list rather than to either name beside it, so it takes neither
+      // name's hue: an amber comma after a tracked type would read as part of
+      // that type's mark. Its own span, in the row's text colour.
+      }).join('<span class="pvt-gfc">,</span>');
+
       const gCls    = [
         'pvt-g',
         nSel ? '' : 'is-empty',
@@ -12783,8 +12837,9 @@ function buildPrivacyMatrix(a, pid = 'ios') {
               `${t.label} · ${colLabel[c.id]}`);
           }).join('');
           rows += `
-            <tr class="pvt-r is-in${isOn ? ' has-data' : ''}${ti % 2 ? ' is-alt' : ''}">
-              <td class="pvt-ty tooltip-anchor" data-tip="${t.label} — ${t.desc}">${t.label}</td>
+            <tr class="pvt-r is-in${isOn ? ' has-data' : ''}${td.tracking === 'yes' ? ' is-trk' : ''}${ti % 2 ? ' is-alt' : ''}">
+              <td class="pvt-ty tooltip-anchor" data-tip="${t.label} — ${t.desc}"
+                ><span class="tooltip-icon pvt-tt">?</span>${t.label}</td>
               ${cells}
             </tr>`;
         });
@@ -12800,8 +12855,10 @@ function buildPrivacyMatrix(a, pid = 'ios') {
             <td colspan="${COLSPAN}" data-g="${group.group}"
                 onclick="togglePrivacyGroup('${pid}','${group.group.replace(/'/g, "\\'")}')">
               <div class="pvt-grow">
-                <span class="pvt-gtx">${group.group}</span>
-                ${nSel ? `<span class="pvt-gn">${nSel}</span>` : ''}
+                <span class="pvt-ghead"
+                  ><span class="pvt-gtx">${group.group}</span
+                  >${nSel ? `<span class="pvt-gn">${nSel}</span>` : ''}</span>
+                ${nSel ? `<span class="pvt-gfs">${gFlags}</span>` : ''}
                 <span class="pvt-gsp"></span>
                 <span class="pvt-gc${groupOn ? ' is-up' : ''}">${_chevDown}</span>
               </div>
@@ -19018,6 +19075,26 @@ function _shotEdRatio(pid, sampleLandscape) {
   return r;
 }
 
+/* THE CANVAS'S OWN RATIO, WHICH IS NOT ALWAYS THE FRAME'S — and it is a
+   separate function because THREE things now need it and they cannot be
+   allowed to disagree: `_shotEdGeometry` solving the live stage, the EMPTY
+   stage's box, and anything later that wants to reserve the right hole before
+   a picture exists.
+
+   The rule is the one `_shotEdGeometry` already stated in prose: a LANDSCAPE
+   store's frame IS the canvas, so the canvas takes the store's ratio; a
+   PORTRAIT store cannot do that, so the canvas stays a landscape band at
+   1.96 — the reference's own 632 × 322 — with the tall frame centred in it.
+
+   It takes no image and needs none. That is the whole reason the empty state
+   can be drawn correctly: the ratio is a fact about the STORE, which this file
+   has had to say twice already (once when the stage measured 0 until an image
+   decoded, once when a `ResizeObserver` replaced a snapshot of the width). */
+function _shotEdCanvasRatio(pid, sampleLandscape) {
+  const r = _shotEdRatio(pid, sampleLandscape);
+  return r >= 1 ? r : 1.96;
+}
+
 /* ══════════════════════════════════════════════════════
    SCREENSHOTS STEP  (per-platform, inside step modal)
    ══════════════════════════════════════════════════════
@@ -19111,11 +19188,32 @@ function buildScreenshotsSection(pid) {
           <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
         </div>
       </div>`
+    /* IT IS THE ASSETS DROP WELL, IN ITS OWN WORDS (v6.47). Jaco: *"Upload
+       screenshots en vez de 'Add a screenshot', puedes copiar el mismo estilo
+       de texto del dropwell que tenemos en assets."*
+
+       The three text classes are BORROWED, not copied — `.asset-dropzone-icon`
+       / `-label` / `-hint`, the same rules Game Details' own well uses, so the
+       20px arrow, the 13/600 label and the 11px hint cannot drift from it. What
+       is deliberately NOT taken is `.asset-dropzone` itself: that carries a
+       dashed border and a `--inp-bg` fill, and this box already IS a well (the
+       stage's `--bg` and inset ring), so wearing both would be the second box
+       this whole surface keeps refusing.
+
+       The hint names the FILE, never the size — the head above already prints
+       the store's own "2880 × 1800 — 16:10 only", and the frame you are looking
+       at states the shape. */
     : `
-      <div class="shot-ed-stage is-empty" id="shot-ed-stage">
+      <div class="shot-ed-stage is-empty" id="shot-ed-stage"
+           style="--shot-canvas-ratio:${_shotEdCanvasRatio(pid)}">
         <button class="shot-ed-empty" data-shot-add>
-          <span class="shot-thumb-add-plus">+</span>
-          <span>${removedCount ? 'Every screenshot has been removed from this listing' : 'Add a screenshot'}</span>
+          <div class="asset-dropzone-icon">↑</div>
+          <div class="asset-dropzone-label">${removedCount
+            ? 'Every screenshot has been removed from this listing'
+            : 'Upload screenshots'}</div>
+          <div class="asset-dropzone-hint">${removedCount
+            ? 'Restore them below, or upload new ones'
+            : 'PNG or JPG · Multiple files accepted'}</div>
         </button>
       </div>`;
 

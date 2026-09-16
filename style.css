@@ -16393,6 +16393,105 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .pvt thead th.tooltip-anchor:hover { color: #fff; cursor: help; }
 .pvt td.pvt-ty.tooltip-anchor:hover { color: #fff; cursor: help; }
 
+/* ── AND A DOTTED RULE SAYS THERE IS A TOOLTIP, BECAUSE THE `?` DISC CANNOT
+   COME BACK. Jaco: *"the user might not know that they can hover for the
+   tooltips, since this deviates from our established tooltip icon paradigm."*
+   Right, and v6.51 is what caused it — the discs were removed from these eight
+   headings and the rule written there was "the name IS the handle". That
+   removal is not reversible: the icon's real cost was HEIGHT, not width (it
+   rode along as one more wrapping token and pushed the header row to 61px),
+   and it is also what let "Personalization" become "Personaliz.".
+
+   SO THE MARK HAS TO COST NOTHING, and `text-decoration` is the one that
+   does: it does not change the box, in any engine, so the 79px column, the
+   two stated lines and the 748px table are untouched by construction.
+
+   IT IS ALSO THE WEB'S OWN WORD FOR THIS, which is why it is not an
+   invention — a dotted underline is what `<abbr title>` has meant since
+   forever, and these headings ARE abbreviations. The affordance and the fact
+   it is abbreviated are the same mark. `cursor: help` was already here and
+   says the same thing a moment later.
+
+   ON `.pvt-h2` ALONE, never on the `<th>`: text-decoration propagates to
+   in-flow block descendants, so on the cell it would also underline the
+   `&nbsp;` first line of a one-word heading — a dotted rule floating over
+   ANALYTICS with nothing under it. The second line is the one every heading
+   really has, so one heading gets one rule, at its base.
+
+   `.38`, AND IT CAME UP FROM `.22`. The dividers' own alpha was the first
+   try, on the reasoning that this is a hint and hints are quiet — and at the
+   size of a dotted 1px rule it was invisible on screen, which for a mark whose
+   ENTIRE job is to be noticed is not quiet, it is absent. Same census mistake
+   this file records twice already (the pending disc's fill, the separator's
+   alpha): a value that is right for one object is not right for another drawn
+   at a different size. The ceiling is still v6.67's — a hint must not outshout
+   the label it belongs to, and the eight are at `.55` — so it sits a clear step
+   under them, on the header rule's own number. It goes to the label's own
+   colour on approach, so the pair brightens together rather than the hint
+   arriving separately. */
+/* ── AND THEN THE DISC CAME BACK AFTER ALL, OUT OF FLOW (v6.54). Jaco: *"cómo
+   quedaría volviendo a poner el tooltip en vez de subrayado. Un tooltip muy
+   pequeño. En el caso del header, debajo de los títulos, y en el caso de las
+   subcategorías, quizás a su izquierda."*
+
+   THE NOTE ABOVE SAID THE REMOVAL WAS NOT REVERSIBLE AND IT WAS WRONG ABOUT
+   WHY. The icon's cost was never the icon — it was that the icon was INLINE, so
+   it wrapped with the label and took the header row to 61px. Out of flow it
+   changes no box in any engine, which is the identical guarantee that argued
+   for `text-decoration`, so the only thing the underline really had over the
+   disc is now shared and the disc wins on the ground Jaco raised first: it is
+   THE APP'S OWN TOOLTIP PARADIGM, and a table that invents a second way of
+   saying "hover me" is a second vocabulary for one fact.
+
+   IT COSTS NOTHING TWICE, in two different bits of space that were already
+   being paid for:
+
+   - the `<th>` pays **13px of bottom padding**, and an 11px disc sits in it
+     with a pixel to spare at each end — under the second line, centred on the
+     column, where "debajo de los títulos" puts it.
+   - a type name is indented **30px** under its group's 14, and that indent is
+     the whole of what says a row hangs off the header above it. The disc goes
+     at 13, inside it — so the fifteen handles form their own column on the
+     group names' own x, and the names still start on 30.
+
+   Measured: header row 49 with the discs and 49 without, data rows 36 and 36,
+   table 748, modal 807, zero horizontal scroll — the same numbers the underline
+   was chosen to protect.
+
+   `pointer-events: none`, because the whole CELL is the anchor (v6.51's own
+   finding: an inline box's hover area is its glyphs, so the dead centre of a
+   two-line heading hits nothing). The disc is the SIGN that a tooltip exists,
+   never the target — which is also what `app.js` has always assumed, since it
+   resolves on `closest('.tooltip-anchor')`.
+
+   IT IS `.tooltip-icon` ITSELF, resized — the same disc, fill, border, `?` and
+   hover the app draws everywhere, so it cannot drift into a third dialect. Only
+   the size and the position are local. 11px against the app's 15 (and Content
+   Rating's 16) because this is the densest surface in the product and the
+   handle must not outweigh the 10px label it belongs to: the rule this table
+   keeps proving is that a value right for one object is not right for another
+   drawn at a different size. */
+.pvt thead th.tooltip-anchor,
+.pvt td.pvt-ty.tooltip-anchor { position: relative; }
+.pvt .tooltip-icon.pvt-tt {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  font-size: 7px;
+  margin: 0;
+  pointer-events: none;
+}
+.pvt thead th .tooltip-icon.pvt-tt {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 1px;
+}
+.pvt td.pvt-ty .tooltip-icon.pvt-tt {
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* NO FADE UNDER THE HEADER, AND IT WAS BUILT AND REMOVED IN ONE VERSION.
    Jaco asked for *"un mini gradiente en el top de la lista"* and, looking at it,
    took it back out. It was correct on its own terms — a 36px `::after` hanging
@@ -16436,13 +16535,64 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   word-break: normal;
   color: rgba(255, 255, 255, .34);
 }
-.pvt tr.is-in td.pvt-ty   { color: rgba(255, 255, 255, .70); }
-/* A LIVE ROW IS BLUE INK, NOT A BLUE GROUND. The old table tinted the whole
-   row at rgba(0,154,255,.08) — and a tint behind the marks competes with the
-   marks, which are the same blue and are the thing you are actually reading.
-   The name says it just as clearly and takes nothing away from them. Declared
-   after the rule above because the two tie on specificity. */
-.pvt tr.has-data td.pvt-ty { color: var(--pill-on-color); }
+/* ── WHITE IF YOU DECLARED IT, A DIMMER GREY IF YOU HAVE NOT, AMBER IF IT IS
+   TRACKED — AND THE BLUE IS GONE (v6.54). Jaco: *"necesito que aclaremos si al
+   final marcamos en azul las subcategorías seleccionadas, o en blanco por
+   defecto, y dejamos las no seleccionadas en un gris más tibio."*
+
+   THE SECOND, AND IT IS v6.50's OWN ARGUMENT ARRIVING ONE LEVEL DOWN. That
+   version took the group header's names off blue because *"blue is not a base,
+   it is a meaning"*: blue against amber is two hues each making a claim, so
+   neither reads as the ordinary case and the eye has to be taught the code
+   before it can use it. Exactly the same two hues were still sitting in the
+   OPEN ROW, so the table taught one vocabulary closed and another open.
+
+   v6.51 KEPT THE BLUE HERE ON A REAL DISTINCTION THAT TURNS OUT NOT TO DECIDE
+   IT. Its argument was that a header's list is declared by construction while a
+   row's list is MIXED — true, and it only establishes that the two have to be
+   TOLD APART, not that the difference has to be a hue. Value says it: white
+   against `.34` is a bigger step than blue against grey ever was, and it leaves
+   **amber the only colour in the table**, which is what keeps this surface's
+   standing rule — *the mark is for what is outstanding* — true in both views at
+   once.
+
+   AND THE CELLS ALREADY SAY IT IN BLUE. Every declared row carries its marks
+   eight columns to the right in `--pill-on-*`; painting the name the same blue
+   is one fact stated twice in one colour, which is the "two marks on one
+   object" this file has refused on the Submit row's border, the metadata
+   strip's second rule and the calendar's rings. Now the MARKS are blue and the
+   NAMES are not, so the row reads *what it is* on the left and *what you said*
+   on the right.
+
+   `.34 → .42` on the undeclared name is the "gris más tibio", and it is the
+   half that makes white legible as a state rather than as a font-weight: at the
+   old `.70` against a white declared name the two were four points apart in a
+   list you scan vertically. Measured: undeclared `rgba(255,255,255,.42)`,
+   declared `rgba(255,255,255,.88)`, tracked `#FFB86B`. */
+.pvt tr.is-in td.pvt-ty   { color: rgba(255, 255, 255, .42); }
+.pvt tr.has-data td.pvt-ty { color: rgba(255, 255, 255, .88); }
+
+/* ── AMBER FOLLOWS THE NAME WHEREVER IT IS PRINTED, AND THE TWO LISTS KEEP
+   DIFFERENT BASES ON PURPOSE. Jaco, looking at an open group: *"¿cómo te
+   imaginas el USER ID y el DEVICE ID — blancos? ¿o Device ID naranja porque
+   está trackeado?"*
+
+   THE HUE IS A PROPERTY OF THE TYPE, NOT OF THE VIEW. A tracked type needs
+   AppTrackingTransparency whether or not you happen to have its group open, so
+   painting it amber closed and blue open would make the colour about the
+   accordion rather than about the data — and it would break the one thing a
+   press should preserve: you open IDENTIFIERS and Device ID is still the same
+   object, still marked. Same object changing state, never changing kind.
+
+   **AND THE BASE DIFFERS BECAUSE THE TWO LISTS DIFFER.** In the group HEADER
+   every name printed is declared by construction, so blue would have nothing
+   to contrast with and becomes decoration — hence white there. In a ROW the
+   list is MIXED: two of your types beside thirteen you have said nothing
+   about, and blue is exactly what separates them. That is this file's own
+   green-on-the-pinned-nav argument (*"this list is MIXED — that is the entire
+   point of the mark"*) against the submitted card's all-done list, arriving a
+   third time. One rule, two bases, and amber is the exception in both. */
+.pvt tr.has-data.is-trk td.pvt-ty { color: #FFB86B; }
 /* No line between rows inside an open group: they already share a ground and a
    height, so a rule cuts up a block that should read whole. */
 .pvt tr.is-in td { border-top: 0; background: transparent; }
@@ -16463,6 +16613,135 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .pvt .pvt-gtx { flex: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pvt .pvt-gsp { flex: 1; }
 .pvt .pvt-gn  { flex: none; color: var(--pill-on-color); }
+
+/* ── AND THE LIST STARTS ON ONE COLUMN ACROSS ALL SIXTEEN ─────────────────
+   Jaco: *"¿debería estar alineado forzoso la lista de nombres en el header,
+   como para que todos estuvieran alineados y se leyeran de arriba a abajo sin
+   confusión?"* Measured, the three groups that carry a list started their
+   names at 127.6, 120.4 and 113.2 — ragged by 14px, which for a column you
+   read TOP TO BOTTOM is the whole cost: sixteen rows whose contents begin
+   wherever their group's name happens to end are sixteen separate lines
+   rather than one list.
+
+   THE SLOT WRAPS THE PAIR, AND THE COUNT SITS AT ITS RIGHT EDGE. It used to be
+   glued to the name (*"it reads as part of the same phrase"*, two comments up),
+   which was right while the slot was fluid — a number floating away from a
+   short name looked orphaned. A fixed slot removes that failure: right-aligned,
+   the sixteen counts form their own column 10px left of the list. It is also
+   the honest place, because the number counts the LIST, not the name — and the
+   list TRUNCATES (measured: User Content with all six wants 673px and gets 517),
+   so the count is the only thing that survives it and belongs beside it.
+   `space-between` with the `gap` surviving as the floor, so a full-width name
+   still cannot collide with its own count.
+
+   AND THE NUMBER IS THE CONTENT'S, IN `ch`. The longest group name is
+   "Health & Fitness" / "Browsing History" at 16 characters, and the face is
+   monospace, so 1ch IS the character advance and 16ch IS that name at any
+   size — the same reason `.rel-version`'s cap is written in `ch`. Plus the
+   pair's own 10px gap, plus 2ch for a two-digit count. Nothing can exceed it,
+   which is what makes this exact rather than approximately wide enough.
+
+   `min-width`, NEVER a hard width. If a longer group name ever arrives it
+   pushes THAT ONE ROW's list out of column, which is a visible and local
+   failure; a fixed width would truncate the group's own name, which is the one
+   thing on this row you cannot lose. */
+.pvt .pvt-ghead {
+  flex: none;
+  min-width: calc(18ch + 10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ── THE FLAGGED TYPES, NAMED ON THE GROUP'S OWN ROW ──────────────────────
+   Jaco: *"the user might sometimes want to see all the data types they've
+   flagged at a glance… by showing flagged data types in each section header,
+   where you currently have the number."* The full argument is at the builder;
+   this is the paint.
+
+   IT SHRINKS, IT DOES NOT PUSH. `flex: 0 1 auto` with `min-width: 0` against
+   the spacer's `flex: 1`, so a group holding more names than the row can seat
+   ellipsises instead of moving the chevron — which is pinned to the same x on
+   all sixteen rows and is what makes the closed table read as a list. The
+   count survives the truncation and is why it is still printed.
+
+   11px, SENTENCE CASE, against the group name's 12px uppercase. Two registers
+   on one line: a heading, and the content under it. */
+.pvt .pvt-gfs {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  font-size: 11px;
+}
+
+/* ── ONE CHANNEL, TWO COLOURS, AND THE SECOND CHANNEL WAS CUT. Jaco, spitballing
+   first: *"I wonder if we could do something to colour coding to indicate… not
+   linked and not tracked / linked to identity / used for tracking / linked to
+   identity AND used for tracking"* — and then, looking at the built version:
+   *"quizás podríamos hacerlo sin los cuadraditos rellenos o no rellenos.
+   Simplemente azul si no hay tracking, amarillo si sí."*
+
+   IT SHIPPED WITH TWO CHANNELS FOR TWO BOOLEANS and that was one too many.
+   Tracking took the HUE and identity took a 7px square — `.pvt-sq` shrunk, so
+   the mark WAS the cell it reported, which is a good argument for a mark that
+   should not have been there. The header is a GLANCE: four states asked to be
+   decoded from a hue plus a fill, on 11px type, when the thing you scan this
+   row for is the one fact with a consequence attached. Identity is stated in
+   its own column, two clicks away and four inches down, and nothing about it is
+   work waiting on you.
+
+   SO: **BLUE IF NOT TRACKED, AMBER IF TRACKED.** One property, two values, no
+   legend and nothing to learn. Same shape as the calendar dropping the band's
+   progress split — *"a calendar already says where today is"*: the grid already
+   says which types are linked, so the header saying it again in a second
+   channel was restating what the table states for free.
+
+   **TRACKING IS THE ONE THAT EARNS THE HUE, AND ITS COLOUR IS FORCED.** Green
+   done, amber *this needs you*, red wrong — a tracked type is work waiting
+   OUTSIDE this app (you must implement AppTrackingTransparency), which is
+   amber's own sentence, and it is the exact `#FFB86B` the `.pvt-trk` pill took
+   one version earlier for saying the same thing. One fact, one colour, two
+   places.
+
+   **AND THE BASE IS TEXT, NOT BLUE — which is Jaco's correction and the whole
+   reason this works.** It shipped blue-by-default on the argument that a
+   declared type is a thing you confirmed, and `--pill-on-color` is what this
+   app means by that. He read it and said: *"¿las subcategorías deberían ponerse
+   en amarillo si están tracked? Entiendo que queda muy confuso porque azul es
+   la base."*
+
+   **BLUE IS NOT A BASE, IT IS A MEANING**, and that is the flaw in one
+   sentence. Blue against amber is two hues both making a claim, so neither of
+   them reads as the ordinary case — the list says "these are different from
+   each other" without saying which one is the news. The eye has to be TOLD
+   the code before it can use it, which is exactly what a glance cannot afford.
+
+   So the ordinary case takes no hue at all. **The colour table's own line:
+   *anything informational wears text colours*** — a declared type's NAME is
+   information, and the fact that it is declared is already said by it being
+   printed here and counted in the badge beside it. That leaves amber as the
+   ONLY colour in the list, which is this surface's standing rule arriving
+   again: **the mark is for what is outstanding.** One hue, one meaning, nothing
+   to learn.
+
+   The ladder is three alphas of one white — the group's own `--text-dim` (160)
+   over the names (.52) over the commas (.30) — so the header reads name, then
+   contents, then punctuation, and the amber cuts through all three.
+
+   Identity is not lost, it moves into the TOOLTIP — which is exactly the test
+   v6.67 wrote when the cells lost theirs: an anchor earns its place by naming
+   something not on screen, and with the group closed that is precisely what
+   identity is. */
+.pvt .pvt-gf       { color: rgba(255, 255, 255, .52); cursor: help; }
+.pvt .pvt-gf.is-trk { color: #FFB86B; }
+/* The comma is the list's, not either name's — hence its own colour rather
+   than `currentColor`, which would have made it amber after a tracked type and
+   plain after a declared one: punctuation reporting a state it is not about. */
+.pvt .pvt-gfc { color: rgba(255, 255, 255, .30); margin-right: 4px; }
 /* THE CHEVRON SITS OVER THE LAST COLUMN, not in the left gutter — there it
    would compete with the group name for the same 14px the DATA TYPE label
    uses, and that shared left edge is what makes the types' 30 read as an
@@ -16500,6 +16779,12 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .pvt tr.pvt-g.is-dim .pvt-gc        { color: rgba(255, 255, 255, .22); }
 .pvt tr.pvt-g.is-dim.is-empty .pvt-gc { color: rgba(255, 255, 255, .12); }
 .pvt tr.pvt-g.is-dim .pvt-gn        { color: rgba(0, 154, 255, .70); }
+/* The names step back with everything else, BY COLOUR — the chips declare
+   their own, so the row's dim cannot reach them and has to be stated. The
+   amber keeps a rung on the blue here too, for the reason it does at rest. */
+.pvt tr.pvt-g.is-dim .pvt-gf        { color: rgba(255, 255, 255, .26); }
+.pvt tr.pvt-g.is-dim .pvt-gf.is-trk { color: rgba(255, 184, 107, .52); }
+.pvt tr.pvt-g.is-dim .pvt-gfc       { color: rgba(255, 255, 255, .15); }
 .pvt tr.pvt-g.is-dim td:hover       { color: #fff; }
 .pvt tr.pvt-g.is-dim td:hover .pvt-gc { color: rgba(255, 255, 255, .55); }
 
@@ -18804,25 +19089,55 @@ body.is-splash .ai-disclaimer { display: none; }
 .shot-ed-canvas.is-active .shot-ed-hint,
 .shot-ed-canvas.is-grabbing .shot-ed-hint { opacity: 0; }
 
+/* AN EMPTY EDITOR STILL KNOWS ITS FRAME (v6.46). Jaco: *"cuando no hay
+   screenshots, haz que la preview tenga el ratio de la plataforma en la que
+   está — en Mac App Store el blank preview debería ser 16:10, no un dropwell
+   de 617×178."*
+
+   It was `min-height: 180px`, a number with nothing behind it, so the one
+   moment the editor has to say what shape the store wants was the one moment
+   it drew a shape of its own — and the box then JUMPED from 180 to 387 the
+   instant the first screenshot landed, which is this file's own "a control
+   must not move as a consequence of being used" arriving at a drop well.
+
+   `aspect-ratio` off `--shot-canvas-ratio`, written by the builder from
+   `_shotEdCanvasRatio(pid)` — the same helper `_shotEdGeometry` solves the
+   live stage with, so empty and filled cannot disagree. Mac lands at 1.6 and
+   measures the same 619 × 387 a picture would; a portrait store gets the 1.96
+   band its canvas really is, not a 619 × 1345 shaft.
+
+   The fallback in the `var()` is deliberate and is Mac's: this element is only
+   ever drawn by that builder, so a missing token means the style attribute
+   failed rather than that some other surface borrowed the class. `min-height:
+   0` because a grid container's `auto` minimum would otherwise let the button
+   inside argue with the ratio. */
 .shot-ed-stage.is-empty {
   display: grid;
   place-items: center;
-  min-height: 180px;
+  aspect-ratio: var(--shot-canvas-ratio, 1.6);
+  min-height: 0;
 }
+/* THE EMPTY STAGE SPEAKS IN THE ASSETS WELL'S VOICE (v6.47). The three
+   children carry `.asset-dropzone-*`'s own rules, so this states no type at
+   all — no size, no weight, no colour — and cannot drift from the well it is
+   quoting. The `gap` goes with them: those classes bring their own margins
+   (6px under the icon, 4 under the label), and a flex gap on top would pay the
+   spacing twice, which is the guide's wait-list mistake in a smaller box.
+
+   `background: none; border: none` stay because it is a `<button>` and arrives
+   carrying both. The hover moves the LABEL and the ICON, exactly as
+   `.asset-dropzone:hover` does — the hint stays faint there too, because a
+   hint that brightens is claiming to be the thing you pressed. */
 .shot-ed-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  display: block;
   padding: 24px 32px;
   background: none;
   border: none;
-  color: var(--text-faint);
-  font-size: 12px;
   cursor: pointer;
   text-align: center;
 }
-.shot-ed-empty:hover { color: var(--text-dim); }
+.shot-ed-empty:hover .asset-dropzone-label,
+.shot-ed-empty:hover .asset-dropzone-icon { color: var(--text); }
 
 /* ── The toolbar ──────────────────────────────────────────────────────── */
 .shot-ed-toolbar {

@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.45**
+Current version: **v6.46**
 
 ---
 
@@ -4411,7 +4411,7 @@ veil at 1 unreviewed and 0 reviewed, zero `onclick` on any frame — and iOS /
 Mac Full verified untouched (per-frame handlers intact, no veil, no prev arrow,
 Achievements still `0 6px` / `14px 10px`, `.ias-section` still `14px 16px`).
 
-### A listing is an ordered row of pictures (v6.41)
+### A listing is an ordered row of pictures (v6.41–47)
 
 `buildScreenshotsSection` (render.js) and the `_shotEd*` family (app.js). The
 Screenshots step stopped being a picker and became an editor. Jaco: *"ahora
@@ -4784,6 +4784,91 @@ zero bad; title over 30 → bar back to white 12%, the Title disc `rgb(255,59,11
 with `rgb(46,7,19)` ink and the full cross path, 15px box and 15px glyph, the
 field's own well `rgb(255,59,118)`, tooltip "Title — over the character limit";
 title fixed → green again, zero bad, every width unchanged throughout.
+
+#### AN EMPTY EDITOR STILL KNOWS ITS FRAME (v6.46)
+
+Jaco: *"cuando no hay screenshots, haz que la preview tenga el ratio de la
+plataforma en la que está — en Mac App Store el blank preview debería ser 16:10
+en vez del dropwell de 617×178."*
+
+**This file had already written the sentence that decides it, twice, and never
+applied it to the empty arm.** *"The RATIO is a fact about the STORE, not about
+the picture"* is why `_shotEdArm` solves the frame before an image decodes, and
+why a `ResizeObserver` replaced a snapshot of the width. The empty stage was
+`min-height: 180px` — a number with nothing behind it — so the one moment the
+editor exists purely to say **what shape the store wants** was the one moment it
+drew a shape of its own.
+
+It also moved: the box went **180 → 387** the instant the first screenshot
+landed, which is "a control must not move as a consequence of being used"
+arriving at a drop well. Measured now, Mac: empty **619 × 386.9**, filled
+**619 × 387** — 0.1px, `Math.round` in JS against the exact ratio in CSS.
+
+**ONE HELPER, THREE CONSUMERS, because the 1.96 was a literal in the only place
+that knew it.** `_shotEdCanvasRatio(pid)` (render.js, beside `_shotEdRatio`)
+states the canvas rule once — a landscape store's frame IS the canvas so the
+canvas takes the store's ratio, a portrait store's canvas stays the reference's
+1.96 band with the tall frame centred in it. `_shotEdGeometry` reads it, and the
+builder writes it onto the empty stage as `--shot-canvas-ratio` for an
+`aspect-ratio` to consume. The empty box and the live one cannot disagree
+because they are solved from the same number. Verified: Mac 1.6 (empty 386.9 /
+filled 387), Steam 1.778 (348.2 / 348).
+
+**`rot: true` IS THE ONE PLACE EMPTY AND FILLED LEGITIMATELY DIFFER, and it is
+not a bug to chase.** iOS and Android accept their screenshots either way up, so
+the frame is derived from the picture — which the empty state has not got.
+Measured on iOS: empty **619 × 315.8** (the 1.96 band, i.e. exactly where a
+PORTRAIT shot settles), landscape shot **619 × 285**. About 30px, and the
+alternative is asking the developer a question the pictures answer. Mac carries
+no `rot`, so there it is exact by construction.
+
+**AND THE SEED HAD NO `id`, WHICH FAKED THE STATE THIS WAS ABOUT.** Found while
+opening the step: `smReadyToShip` pushed `{name, dataUrl}` into
+`state.uploads.screenshots`, and every real door mints an id — `ss_…` from the
+Assets well, `igdb-…` from a fetched title, `pshot-…` from the editor's own +,
+because `order`, `removed` and `crops` are all keyed on it. So `shots[0]?.id`
+came back `undefined`, `sel` fell to null, and **the stage drew its EMPTY arm
+with the thumbnail sitting in the strip underneath it** — one screenshot on
+screen, an editor saying there were none, and that thumbnail rendered
+`data-shot-thumb="undefined"` and could not be opened at all.
+
+**A helper that fabricates state has to fabricate it in the shape the real doors
+produce**, or it exercises a state the app cannot reach — the same failure as
+v6.61's ticks, which reported success while writing a status nothing read.
+Verified: `_shotEd.shotId` and the thumb's own id both `ss_seed_macos`, zero
+`undefined` in the strip.
+
+**AND THE EMPTY STAGE SPEAKS IN THE ASSETS WELL'S VOICE (v6.47).** Jaco:
+*"Upload screenshots en vez de 'Add a screenshot', puedes copiar el mismo
+estilo de texto del dropwell que tenemos en assets."*
+
+It was a `+` glyph and one 12px line — a control's label where the surface it
+is quoting uses three lines: an arrow, a 13/600 label and an 11px hint. The
+three `.asset-dropzone-*` classes are **borrowed, not copied**, so the type
+cannot drift from Game Details' own well; measured, all nine values match it
+(icon 20px/300 at `rgb(85)` with 6px under, label 13px/600 at `rgb(160)` with
+4, hint 11px at `rgb(85)`).
+
+**What is deliberately NOT taken is `.asset-dropzone` itself** — its dashed
+border and `--inp-bg` fill — because this box already IS a well, and wearing
+both is the second box this surface has refused all session. The flex `gap`
+went with them for the same reason one layer down: those classes bring their
+own margins, so a gap on top pays the spacing twice, which is the guide's
+wait-list mistake in a smaller box.
+
+The hint names the FILE and never the size: the head above already prints the
+store's own "2880 × 1800 — 16:10 only", and since v6.46 the frame you are
+looking at states the shape. The REMOVED-everything arm keeps its own sentence
+and gains a second line pointing at the restore button underneath it.
+
+**Still open, and it is a judgement rather than a measurement:** the zoom slider
+and Reset are still drawn under an empty stage at `.4` and `pointer-events:
+none`. Two rules in this file point opposite ways — `.35` is "still true, just
+not what you asked for", while the shots veil's is *"a mark whose only content
+is the question itself does not recede, it leaves"*. A zoom control for a
+picture that does not exist looks like the second, but reserving the row is what
+stops the strip moving when the first shot lands. Worth deciding rather than
+sweeping.
 
 ### Editing a field must not move the page
 
@@ -5889,6 +5974,267 @@ Measured after: baseline delta **0.000** on both pills, box centres identical to
 `margin-left: 8px` went with it, since it was paying the row's `gap` twice and
 left one row with two distances in it.
 
+**AND THE GROUP HEADER NAMES WHAT IS INSIDE IT (v6.48).** Jaco: *"the user
+might sometimes want to see all the data types they've flagged at a glance.
+Maybe we can do this by showing flagged data types in each data type section
+header, where you currently have the number of flagged data types shown in
+blue. That way this info is available at a glance without accordioning."*
+
+**IT IS THE BILL FOR ONE-AT-A-TIME, AND IT IS PAID ON THE ROW THAT IS ALREADY
+DRAWN.** v6.52's argument is untouched and is what makes this table readable —
+*"with several open the lighter ground marks four places and stops meaning you
+are here"* — but the cost was that re-reading your own answer means opening four
+blocks in turn. The count says a group is not empty; the names say what it
+holds, and the sixteen headers are on screen either way.
+
+**THE COUNT STAYS.** It is the one part that always fits: the list ellipsises
+when a group holds more names than the row has room for, and a truncated list
+with a number beside it still answers *how many*. Without it the truncation
+would be lossy. Sentence case against the group name's uppercase, so one does
+not read as a continuation of the other — 11px against 12.
+
+**IT SHRINKS, IT DOES NOT PUSH.** `flex: 0 1 auto` + `min-width: 0` against the
+spacer's `flex: 1`, so the chevron stays on one x across all sixteen rows, which
+is what makes the closed table read as a list. Measured: chevron at **1029** on
+every row, empty or full, clipped or not; group rows **37.8** and the table
+**652.75** tall with the list drawn and with it `display: none` — zero layout,
+as promised.
+
+**ONE CHANNEL, TWO COLOURS — AND THE SECOND CHANNEL WAS BUILT AND CUT IN ONE
+VERSION (v6.48 → v6.49).** Jaco, spitballing first: *"I wonder if we could do
+something to colour coding to indicate… not linked and not tracked / linked to
+identity / used for tracking / linked to identity AND used for tracking"* — and
+then, looking at the built version: *"quizás podríamos hacerlo sin los
+cuadraditos rellenos o no rellenos. Simplemente azul si no hay tracking,
+amarillo si sí."*
+
+v6.48 gave the two booleans two channels: tracking took the HUE and identity
+took a 7px square — `.pvt-sq` shrunk, so the mark literally WAS the cell it
+reported. That is a good argument for a mark that should not have been there,
+and it is worth keeping the correction rather than the design.
+
+**THE HEADER IS A GLANCE, AND FOUR STATES IS NOT ONE.** Decoding a hue plus a
+fill on 11px type is reading, not glancing, and the thing you scan this row for
+is the one fact with a consequence attached. **Identity is stated in its own
+column** — a click away, four inches down — and nothing about it is work waiting
+on you. So the header says the one thing the table cannot say at a glance and
+stops there. Same shape as the calendar dropping the band's progress split
+(*"a calendar already says where today is"*): **a second channel that restates
+what the grid states for free is not a second fact, it is a second reading.**
+
+- **TRACKING IS THE HUE, AND ITS COLOUR IS FORCED.** Green done, amber *this
+  needs you*, red wrong — a tracked type is work waiting OUTSIDE this app (you
+  must implement AppTrackingTransparency), which is amber's own sentence, and
+  it is the exact `#FFB86B` the `.pvt-trk` pill took one version earlier for
+  saying the same thing. One fact, one colour, two places.
+- **AND THE BASE IS TEXT, NOT BLUE (v6.50) — the correction that makes the one
+  hue work.** v6.49 painted an untracked name in `--pill-on-color`, on the
+  argument that a declared type is a thing you confirmed. Jaco read it:
+  *"¿las subcategorías deberían ponerse en amarillo si están tracked? Entiendo
+  que queda muy confuso porque azul es la base."*
+
+  **BLUE IS NOT A BASE, IT IS A MEANING**, and that is the flaw in one sentence.
+  Blue against amber is two hues both making a claim, so neither reads as the
+  ordinary case: the list says *these are different from each other* without
+  saying which one is the news, and the eye has to be told the code before it
+  can use it — exactly what a glance cannot afford. So the ordinary case takes
+  no hue at all, which is the colour table's own line (*anything informational
+  wears text colours*): a declared type's NAME is information, and that it is
+  declared is already said by its being printed here and counted in the badge
+  beside it. That leaves amber the ONLY colour in the list — **the mark is for
+  what is outstanding**, arriving on this surface again.
+
+  Three alphas of one white, so the row reads name → contents → punctuation and
+  the amber cuts through all three: the group's own `--text-dim` (160), the
+  names at `.52`, the commas at `.30`.
+- **IDENTITY MOVES INTO THE TOOLTIP**, which is exactly the test v6.67 wrote
+  when the cells lost theirs: an anchor earns its place by naming something NOT
+  on screen, and with the group closed that is precisely what identity is.
+- **AND AMBER FOLLOWS THE NAME INTO THE OPEN ROW (v6.51).** Jaco, looking at an
+  open group: *"¿cómo te imaginas el USER ID y el DEVICE ID — blancos? ¿o Device
+  ID naranja porque está trackeado?"*
+
+  **THE HUE IS A PROPERTY OF THE TYPE, NOT OF THE VIEW.** A tracked type needs
+  AppTrackingTransparency whether or not its group happens to be open, so amber
+  closed and blue open would make the colour about the ACCORDION rather than
+  about the data — and it would break the one thing a press should preserve:
+  you open IDENTIFIERS and Device ID is still the same object, still marked.
+  Same object changing state, never changing kind.
+
+  **AND THE BASE DIFFERS BECAUSE THE TWO LISTS DIFFER, which is the part worth
+  keeping.** In the group HEADER every name printed is declared by
+  construction, so blue has nothing to contrast with and is decoration — white
+  there. In a ROW the list is MIXED: two of your types beside thirteen you have
+  said nothing about, and blue is exactly what separates them, which is why
+  `tr.has-data td.pvt-ty` keeps it. That is this file's own green-on-the-pinned-
+  nav argument (*"this list is MIXED — that is the entire point of the mark"*)
+  against the submitted card's all-done list, arriving a third time. **One rule,
+  two bases, and amber is the exception in both.**
+
+**AND THE SEPARATOR IS A COMMA, NOT A GAP** — Jaco's, in the same breath: *"con
+comas si quieres. Name, Email…"*. A 12px gap between coloured names read as a
+row of chips; a comma says *list*, which is what it is. **The comma is NOT
+inside the chip**: it belongs to the list rather than to either name beside it,
+so it takes neither name's hue (`.pvt-gfc`, white `.34`). Left on
+`currentColor` it would have been amber after a tracked type and blue after a
+declared one — punctuation reporting a state it is not about.
+
+**AND A DOTTED RULE SAID THERE WAS A TOOLTIP — FOR ONE VERSION (v6.51 → v6.54).**
+Jaco: *"the user might not know that they can hover for the tooltips, since this
+deviates from our established tooltip icon paradigm."* Right, and v6.51 caused
+it: the `?` discs came off these eight headings under the rule *the name IS the
+handle*.
+
+The underline was the answer for a version, on the argument that **the removal
+was not reversible**: the icon's real cost was HEIGHT, not width — it rode along
+as one more wrapping token and pushed the header row to 61px — and it is what
+bought "Personaliz." and "Functional.". So the mark had to cost nothing, and
+`text-decoration` is the one that does. It was also the web's own word for this:
+a dotted underline is what `<abbr title>` has meant forever, and these headings
+ARE abbreviations.
+
+**AND THAT ARGUMENT WAS WRONG ABOUT WHAT THE COST WAS ATTACHED TO.** The height
+was never a fact about the ICON, it was a fact about the icon being **INLINE** —
+it wrapped with the label because it was in flow with it. Out of flow it changes
+no box in any engine, which is the identical guarantee `text-decoration` was
+chosen for. With the only real advantage shared, the disc wins on the ground
+Jaco raised first: **it is the app's own tooltip paradigm**, and a table that
+invents a second way of saying *hover me* is a second vocabulary for one fact.
+
+**IT COSTS NOTHING TWICE, in two pieces of space already being paid for.** Jaco:
+*"un tooltip muy pequeño. En el caso del header, debajo de los títulos, y en el
+caso de las subcategorías, quizás a su izquierda."*
+
+- the `<th>` pays **13px of bottom padding**, and an 11px disc sits in it with a
+  pixel to spare at each end — under the second line, centred on the column.
+- a type name is indented **30px** under its group's 14, and that indent is the
+  whole of what says a row hangs off the header above it. The disc goes at 13,
+  inside it, so the handles form their own column on the group names' own x and
+  the names still start on 30.
+
+**It is `.tooltip-icon` ITSELF, resized** — same disc, fill, border, `?` and
+hover as everywhere else in the app, so it cannot drift into a third dialect;
+only the size and the position are local. **11px against the app's 15** (and
+Content Rating's 16) because this is the densest surface in the product and a
+handle must not outweigh the 10px label it belongs to — this table's own
+recurring rule about a value being right at one size and wrong at another.
+
+**`pointer-events: none`, because the whole CELL is the anchor.** v6.51's own
+finding: an inline box's hover area is its glyphs, so the dead centre of a
+two-line heading hits nothing. The disc is the SIGN that a tooltip exists, never
+the target — which is what `app.js` has always assumed, resolving on
+`closest('.tooltip-anchor')`.
+
+Measured: header row **49** with the discs and **49** without, data rows **36**,
+table 748, modal 807, zero horizontal scroll — the same numbers the underline
+was chosen to protect. The 35 type names take one too; DATA TYPE does not,
+because it is not an anchor.
+
+**AND THE BLUE LEFT THE OPEN ROW (v6.54) — v6.50's ARGUMENT ARRIVING ONE LEVEL
+DOWN.** Jaco: *"necesito que aclaremos si al final marcamos en azul las
+subcategorías seleccionadas, o en blanco por defecto, y dejamos las no
+seleccionadas en un gris más tibio."*
+
+**The second.** v6.50 took the group header's names off blue because *"blue is
+not a base, it is a meaning"* — blue against amber is two hues each making a
+claim, so neither reads as the ordinary case and the eye has to be taught the
+code before it can use it. Exactly those two hues were still sitting in the OPEN
+ROW, so the table taught one vocabulary closed and another open.
+
+**v6.51 kept the blue here on a real distinction that turns out not to decide
+it.** Its argument was that a header's list is declared by construction while a
+row's is MIXED — true, and it establishes only that the two have to be TOLD
+APART, not that the difference must be a hue. **Value says it**: white against
+`.42` is a bigger step than blue against grey ever was, and it leaves **amber the
+only colour in the table**, which is what keeps this surface's standing rule —
+*the mark is for what is outstanding* — true in both views at once.
+
+**And the cells already say it in blue.** Every declared row carries its marks
+eight columns to the right in `--pill-on-*`; painting the name the same blue is
+one fact stated twice in one colour — the "two marks on one object" this file has
+refused on the Submit row's border, the metadata strip's second rule and the
+calendar's rings. Now the MARKS are blue and the NAMES are not, so the row reads
+*what it is* on the left and *what you said* on the right.
+
+`.34 → .42` on the undeclared name is the *"gris más tibio"*, and it is the half
+that makes white legible as a state rather than as a weight: at the old `.70`
+against a white declared name the two were four points apart in a list you scan
+vertically. Measured: undeclared `rgba(255,255,255,.42)`, declared
+`rgba(255,255,255,.88)`, tracked `#FFB86B` — and the group header's own three
+alphas are untouched, so closed and open now say the same thing the same way.
+
+**AND THE LIST IS FORCED ONTO ONE COLUMN (v6.52).** Jaco: *"¿debería estar
+alineado forzoso la lista de nombres en el header? ¿Como para que todos
+estuvieran alineados y se leyeran de arriba a abajo sin confusión?"* Measured
+before: the three groups carrying a list started their names at **127.6 / 120.4
+/ 113.2**, because each list began wherever its own group's name happened to
+end. That is fine for one row read on its own and wrong for the thing this
+column IS — sixteen rows read top to bottom, which at three different left edges
+are sixteen separate lines rather than one list.
+
+**THE SLOT WRAPS THE PAIR, NOT THE NAME.** This row's own rule two notes up says
+*"the count sits right against it, where it reads as part of the same phrase"* —
+so fixing the NAME's width would have put every count on a column of its own and
+detached it from the phrase it belongs to. `.pvt-ghead` wraps name + count, the
+count stays ragged-but-adjacent, and only the thing that has to align does.
+
+**AND THE WIDTH IS THE CONTENT'S, IN `ch`.** The longest group name is
+"Health & Fitness" / "Browsing History" at **16 characters**, and the face is
+monospace — 1ch IS the character advance, so 16ch IS that name at any size, the
+same reason `.rel-version`'s cap is written in `ch` rather than in the pixels it
+currently equals. `calc(18ch + 10px)` is that name, the pair's own 10px gap and
+2ch for a two-digit count: nothing can exceed it, which is what makes it exact
+rather than approximately wide enough.
+
+**`min-width`, NEVER a hard width**, and the failure mode is the reason. A longer
+name pushes THAT ONE ROW's list out of column — visible, local, and obviously a
+consequence of the name. A fixed width would truncate the group's own name
+instead, which is the one thing on this row you cannot lose.
+
+**AND THE COUNT WENT TO THE SLOT'S RIGHT EDGE, WHICH REVERSES THE RULE ABOVE
+(v6.53).** Jaco, looking at it: *"¿debería ir el número a la izquierda de la
+lista? ¿O sobra ahora el número?"* Two questions, and the second is answered by
+measurement: with every type in every group selected, **User Content's list wants
+673px and gets 517 — 156px clipped**, so the row shows four names and says six.
+**The count is the only thing that survives truncation**, which is exactly what
+the "THE COUNT STAYS" note above claims and this is the first time it has been
+proved rather than asserted.
+
+The first is a real move and it is now the better one. The count was glued to the
+NAME on this row's original argument (*"it reads as part of the same phrase"*),
+written when the slot was fluid — a number floating away from a short name looked
+orphaned. **A fixed slot removes exactly that failure**: right-aligned, the
+sixteen counts form their own column at 153.6, ten pixels left of the list at
+163.6, and a column does not read as orphaned, it reads as a column. It is also
+the more honest place, because **the number counts the LIST, not the name** — and
+with the list truncating, the count and the thing it is counting for should be
+adjacent. `justify-content: space-between` is the whole change; the 10px `gap`
+survives as the floor, so a full-width name still cannot collide with its own
+count.
+
+It costs air: `BODY` is four characters and its count sits 110px right of it. A
+column is air spent on purpose, and three aligned columns across sixteen rows are
+what it buys.
+
+Measured at v6.53: **one** list x, **163.6**, across all sixteen (from 127.6 /
+120.4 / 113.2), **one** count column at **153.6**, every `.pvt-ghead` **139.6**
+wide, chevron still on **1029**, group rows 37.3 / 37.8, data rows 36, table 748
+in an 807 modal, **zero** horizontal scroll.
+
+Measured at v6.51: zero `.pvt-gfsq` in the document, header names reading white
+`.52` and tracked ones `rgb(255,184,107)` with the commas at white `.30`, the
+group names still `rgb(160)` and the count still the one blue thing on that row;
+open, Identifiers draws User ID at `rgb(82,186,255)` and Device ID at
+`rgb(255,184,107)` — the same amber it wears in the header three lines up — group rows 37.8 and header row 49 with the new marks and without,
+chevron on 1029 across all sixteen, a clamped list clipping with the chevron and
+the row height unmoved, data rows still 36, table 748 in an 807 modal with
+**zero** horizontal scroll, the dim state stepping the chips back by colour, the
+chip tooltips resolving through `closest('.tooltip-anchor')` with `cursor: help`,
+and the v6.45 baseline fix still reading **0.000** on both header pills. Every
+new rule is `.pvt`-scoped (checked against the CSSOM, not the file), so Google
+Play's `.prv-*` table and Steam's Languages table cannot be reached — verified
+680px modal, zero `.pvt`, zero underlined anchors.
+
 ### The Stash badge is POWERED BY over the mark (v6.44)
 
 `buyElHTML` (web-page.js) and `.buy-brand*` (web-page.css). Jaco: *"que
@@ -6020,7 +6366,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.45** → next is **v6.46**, then **v6.47**, etc. (v6.29 –
+Current version: **v6.46** → next is **v6.47**, then **v6.48**, etc. (v6.29 –
 v6.31 are Mark's Distribution work, and **v6.42 is Adam's** — shipped in
 parallel and touching none of this.)
 
@@ -6041,6 +6387,18 @@ deliberately, for the reason the v6.62 → v6.39 renumber gives: they are the
 order the decisions were made in, which is what makes them readable as a
 history. All of them ship together in **v6.45**. Don't go looking for a live
 v6.70.
+
+**AND THE 6.46 – 6.54 RUN COLLAPSED TO v6.46, WHICH IS THE FOURTH TIME.** Jaco:
+*"me lo pushees en v6.46 por favor."* Live is **v6.45**; everything since — the
+forced alignment, the count column, the tooltip discs, the blue leaving the open
+row and the layout flag's storage — was minted by EDITING, nine numbers, none of
+them ever served. So it all publishes as **v6.46**, and 6.47 – 6.54 are gaps
+with no bytes behind them.
+
+Safe for the one standing reason: **never go back past LIVE.** 6.46 > 6.45 and
+nothing was ever cached under any of the nine. The note headings keep their
+edit-time labels for the usual reason — they are the order the decisions were
+made in.
 
 **AND v6.51 THROUGH v6.53 WENT THE SAME WAY, for the same reason.** v6.51 was
 written up and, as far as this session could tell, never shipped; the accordion
@@ -6350,6 +6708,48 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   **The default is untouched by construction.** With no `?layout=` and nothing
   stored, neither the hook nor the branch does anything, so the live site is
   exactly what it was. That is what made it safe to add without waiting.
+
+  **AND IN v6.47 THE DEFAULT BECAME 'modal'.** Jaco: *"quiero que por defecto
+  siempre tengamos ?layout=modal… no quiero que borremos nada de la
+  implementación inline, pero que modal esté por defecto siempre."* It is ONE
+  WORD — the literal in state.js — plus two stale statements of the default
+  that had to move with it: `smSubmitLayout`'s own doc line, which still said
+  "(default)" beside inline, and its `|| 'inline'` fallback, which is
+  unreachable while the literal exists but was a second place naming the other
+  arm. **Both arms, the `?layout=` hook and every branch that reads the flag
+  are untouched**, which is the point: the decision aid stops defaulting to the
+  arm nobody chose, without the loser being deleted before there is a decision.
+  Verified on a cold load with nothing stored: `modal`, and `smSubmitLayout`
+  still flips to `inline` and back.
+
+  **AND IN v6.46 THE REMEMBERING WENT, WHICH IS WHAT MAKES IT A REAL DEFAULT.**
+  Jaco: *"necesito que me garantices que cualquier persona que lo abra verá el
+  modal flag por defecto."*
+
+  This entry used to carry a paragraph headed *"one thing that looks like a bug
+  and is not"*: a browser that ever loaded `?layout=inline` had `sm.layout`
+  stored, the hook was "required to honour" it, and on that machine the new
+  default did nothing until someone ran `localStorage.removeItem`. Re-read as a
+  guarantee rather than as a feature, that is **a default with an invisible
+  per-machine exception** — and the people who open a prototype are exactly the
+  ones who cannot be told to clear a storage key.
+
+  So `localStorage` leaves this block entirely, and **any key already written is
+  REMOVED on the way past** rather than left as a dead entry: the guarantee has
+  to hold on the machines that already tripped it, which is the whole point of
+  being asked for one. The URL is the only door now — `?layout=inline` still
+  gives the other arm, for that load — and `smSubmitLayout()` never touched
+  storage, so the console switch and the reload door finally agree.
+
+  What it costs, and it is the thing that was being bought: comparing the inline
+  arm over a working day now means keeping the query string on. That was worth a
+  localStorage key while the two arms were genuinely being weighed; it is not
+  worth one now that the default is settled and the flag is waiting to be
+  deleted.
+
+  Verified end to end: `sm.layout` set to `inline` → cold load with no query
+  comes up **modal** with the key **cleared**; `?layout=inline` → inline for
+  that load and nothing stored; the next plain load → modal again.
 
   **AND IT IS A DECISION AID, NOT AN ARCHITECTURE.** Two presentations of the same
   surface is a real tax: every future change to the submission tab has to be

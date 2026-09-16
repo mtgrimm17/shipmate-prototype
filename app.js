@@ -456,8 +456,8 @@ async function toggleStepSection(pid, stepId) {
 
 /* THE ESCAPE HATCH FROM THE INLINE PANE.
 
-     smSubmitLayout('modal')   steps open the step modal again
-     smSubmitLayout('inline')  steps expand in the pane (default)
+     smSubmitLayout('modal')   steps open the step modal (the DEFAULT, v6.47)
+     smSubmitLayout('inline')  steps expand in Mark's pane
      smSubmitLayout()          reports which is active
 
    Console-only, like smCardState and smReviewVariant, and for the reason the
@@ -469,7 +469,11 @@ async function toggleStepSection(pid, stepId) {
    open section on the way, or the pane would keep drawing a body no row can
    close. */
 function smSubmitLayout(mode) {
-  if (mode !== 'modal' && mode !== 'inline') return state.submission.layout || 'inline';
+  /* The fallback is 'modal' as of v6.47, matching the literal in state.js. It
+     is unreachable while that literal exists — this is the reporting arm and
+     the field is always set — but a fallback that names the OTHER arm is a
+     second statement of the default, and two of those is how they drift. */
+  if (mode !== 'modal' && mode !== 'inline') return state.submission.layout || 'modal';
   state.submission.layout = mode;
   state.submission.openStep = {};
   state.stepModal = null;
@@ -5622,7 +5626,24 @@ function smReadyToShip(pid) {
     if (!state.uploads.screenshots.length &&
         !(state.platformScreenshots?.[pid]?.selected?.length) &&
         !(state.platformScreenshots?.[pid]?.custom?.length)) {
-      state.uploads.screenshots.push({ name: 'placeholder.svg', dataUrl: SM_STUB_SHOT });
+      /* IT NEEDS AN `id`, AND LEAVING IT OUT FAKED AN EMPTY LISTING. Every
+         real door into this pool mints one — `ss_…` from the Assets well,
+         `igdb-…` from a fetched title, `pshot-…` from the editor's own + —
+         because `order`, `removed` and `crops` are all keyed on it. This seed
+         had none, so `shots[0]?.id` came back `undefined`, the Screenshots
+         editor drew its EMPTY stage with the thumbnail sitting in the strip
+         underneath it, and that thumbnail rendered as
+         `data-shot-thumb="undefined"` and could not be opened at all.
+
+         A helper that fabricates state has to fabricate it in the shape the
+         real doors produce, or it tests a state the app cannot reach — the
+         same failure as v6.61's ticks, which reported success while writing a
+         status nothing read. */
+      state.uploads.screenshots.push({
+        id: 'ss_seed_' + pid,
+        name: 'placeholder.svg',
+        dataUrl: SM_STUB_SHOT,
+      });
     }
   } else if (pid === 'android' || pid === 'steam') {
     console.warn(`[smReadyToShip] ${pid} computes its steps from ${pid}SubmitAnswers and this helper has no filler for them yet — the card will still show them outstanding.`);
@@ -13683,14 +13704,17 @@ function _shotEdGeometry(pid, landscape) {
   const stage = document.getElementById('shot-ed-stage');
   const CW = Math.round(stage ? stage.clientWidth : 0);
   if (!CW) return null;
-  const r = (typeof _shotEdRatio === 'function') ? _shotEdRatio(pid, landscape) : 16 / 10;
-  if (r >= 1) {
-    const FW = CW, FH = Math.round(CW / r);
-    return { CW, CH: FH, FW, FH, full: true };
-  }
-  const CH = Math.round(CW / 1.96);
-  const FH = CH, FW = Math.round(CH * r);
-  return { CW, CH, FW, FH, full: false };
+  /* Both ratios come from the one pair of helpers in render.js — the FRAME's
+     (the store's shape) and the CANVAS's (that shape when it is landscape, a
+     1.96 band when it is not). The 1.96 used to be written here as a literal
+     inside the portrait arm, which made this the only place that knew the
+     rule; the empty stage needs the same number and cannot call this function,
+     because it has no laid-out stage to measure. See `_shotEdCanvasRatio`. */
+  const r  = (typeof _shotEdRatio === 'function') ? _shotEdRatio(pid, landscape) : 16 / 10;
+  const cr = (typeof _shotEdCanvasRatio === 'function') ? _shotEdCanvasRatio(pid, landscape) : Math.max(r, 1.96);
+  const CH = Math.round(CW / cr);
+  if (r >= 1) return { CW, CH, FW: CW, FH: CH, full: true };
+  return { CW, CH, FW: Math.round(CH * r), FH: CH, full: false };
 }
 
 function _shotEdWireStage(pid) {
