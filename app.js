@@ -8460,9 +8460,14 @@ const STEAM_LOCALIZATION_LANG_MAP = {
 const STEAM_LANG_DISPLAY_NAMES = {
   english: ['English'], french: ['French'], german: ['German'],
   spanish: ['Spanish - Spain', 'Spanish'], latam: ['Spanish - Latin America', 'Latin American Spanish'],
-  italian: ['Italian'], portuguese: ['Portuguese'], brazilian: ['Portuguese - Brazil', 'Brazilian Portuguese'],
+  // Steam lists European Portuguese as "Portuguese - Portugal" on current
+  // store pages; the bare 'Portuguese' here was the older wording and is kept
+  // for pages still carrying it.
+  italian: ['Italian'], portuguese: ['Portuguese - Portugal', 'Portuguese'],
+  brazilian: ['Portuguese - Brazil', 'Brazilian Portuguese'],
   russian: ['Russian'], japanese: ['Japanese'], koreana: ['Korean'],
-  schinese: ['Simplified Chinese'], tchinese: ['Traditional Chinese'],
+  schinese: ['Simplified Chinese', 'Chinese - Simplified'],
+  tchinese: ['Traditional Chinese', 'Chinese - Traditional'],
   polish: ['Polish'], dutch: ['Dutch'], turkish: ['Turkish'], swedish: ['Swedish'],
   norwegian: ['Norwegian'], danish: ['Danish'], finnish: ['Finnish'], czech: ['Czech'],
   hungarian: ['Hungarian'], romanian: ['Romanian'], ukrainian: ['Ukrainian'],
@@ -8505,6 +8510,49 @@ function _steamSupportedLanguageNames(raw) {
 // response's supportedLanguages (["İngilizce","Fransızca", …]) matches
 // nothing here, and because this fails closed on a non-empty list that
 // matches nothing, it would veto every language rather than failing open.
+/* MATCHED ON THE BASE LANGUAGE, NOT THE EXACT STRING (v6.60), and that was a
+   real reported bug rather than tidying.
+
+   The comparison was `n.toLowerCase() === e.toLowerCase()` against a fixed
+   table, which made every entry in that table a hard dependency on Steam's
+   exact present-day wording — and the wording has moved. Steam now lists
+   European Portuguese as "Portuguese - Portugal" where the table said
+   "Portuguese", so for a game offering "Portuguese - Brazil" and/or
+   "Portuguese - Portugal" this returned FALSE for `pt`. Everything downstream
+   agrees with that answer: _checkSteamLocalizedDescription returns before
+   issuing a fetch, and _steamMayStillSupply reports nothing is coming — so the
+   card got an AI translation instead of Steam's real text AND never showed the
+   loading state, which is exactly the pair of symptoms reported against Hades.
+
+   That is also the precise failure this function's own contract says it must
+   never produce: "deliberately fails OPEN whenever parsing is inconclusive
+   … this must never be the thing that wrongly rules out a real localization".
+   Exact equality against a non-empty list fails CLOSED, which contradicted it.
+
+   So the test is now on the base language either side of a regional suffix:
+   "portuguese" matches "portuguese - brazil", and "portuguese - brazil"
+   matches a bare "portuguese". Both directions, because either side can be the
+   more specific one depending on which name Steam happens to print.
+
+   It is deliberately generous, and that costs nothing it did not already risk:
+   the worst case is one fetch for a regional variant Steam answers with its
+   fallback language, which _checkSteamLocalizedDescription's baseline
+   comparison then rejects and the AI translation fills in — the same outcome
+   as today, one HTTP call later. The best case is the localization the
+   developer actually paid for showing up. */
+function _steamLangNameMatches(listed, expected) {
+  // Normalised: case, surrounding space, en/em dashes Steam sometimes prints
+  // instead of a hyphen, and any run of whitespace around the separator.
+  const norm = (v) => String(v).toLowerCase()
+    .replace(/[\u2010-\u2015]/g, '-')
+    .replace(/\s*-\s*/g, ' - ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const a = norm(listed), b = norm(expected);
+  if (a === b) return true;
+  return a.startsWith(b + ' - ') || b.startsWith(a + ' - ');
+}
+
 function _steamSupportsLanguageCandidate(steamLang, supportedLanguages) {
   const names = Array.isArray(supportedLanguages)
     ? supportedLanguages.filter(Boolean).map(s => String(s).trim())
@@ -8512,7 +8560,7 @@ function _steamSupportsLanguageCandidate(steamLang, supportedLanguages) {
   if (!names.length) return true;
   const expected = STEAM_LANG_DISPLAY_NAMES[steamLang];
   if (!expected) return true;
-  return names.some(n => expected.some(e => n.toLowerCase() === e.toLowerCase()));
+  return names.some(n => expected.some(e => _steamLangNameMatches(n, e)));
 }
 
 // Checks whether the currently-selected Steam-linked game's store page has
@@ -8940,6 +8988,53 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // no about_the_game text needs its own IGDB fallback here too, or the
     // field would be left blank instead of getting IGDB's summary the way
     // it always did before that deferral.
+    /* THE STEAM-FIRST GATE IS ARMED BEFORE THE FIRST WRITE (v6.60).
+
+       This block used to sit ~120 lines further down, after every field this
+       function fills. That is a race, and it is the second half of the
+       reported "sometimes": _fillDescriptionField immediately below calls
+       _iasTriggerAutoTranslate, and _steamMayStillSupply — the gate that holds
+       a translation back for a language Steam might genuinely localize —
+       answers `false` while state.steamLocInfo is still null. So any language
+       already selected when a title was picked had its translation fired off
+       before this function had said which languages Steam covers, with no
+       loading state for the wait either, because that is read from the same
+       gate.
+
+       Nothing here depends on the writes below; `data`, `appId` and
+       `aboutGameText` are all in hand. Setting it first means the gate is up
+       from the moment the baseline lands, which is the earliest any write can
+       happen. */
+    state.steamLocInfo = {
+      appId,
+      // baselineName/baselineDeveloper/baselinePublisher, alongside
+      // baselineDescription/shortDescription below, give
+      // _checkSteamLocalizedListing (above) a same-language-as-default
+      // value to compare each of Steam's own Localization Review fields
+      // against, so it can tell a genuine per-language localization apart
+      // from Steam silently falling back to this default listing language.
+      baselineName:           data.name || '',
+      baselineDescription:    aboutGameText,
+      baselineDeveloper:      (data.developers || []).join(', '),
+      baselinePublisher:      (data.publishers || []).join(', '),
+      shortDescription:       data.summary || '',
+      /* AN ARRAY OF ENGLISH DISPLAY NAMES, and both halves of that matter.
+         appdetails gave one raw HTML-ish string ("English<strong>*</strong>,
+         French, …" with a footnote about full audio support) which
+         _steamSupportedLanguageNames had to strip and split; /game gives
+         ["English","French","Spanish - Spain","Simplified Chinese", …]
+         already parsed, so the parser is bypassed — see
+         _steamSupportsLanguageCandidate.
+
+         ENGLISH because it came from the baseline call. This exact field is
+         one of the three that translate on a lang= request, and a Turkish
+         ["İngilizce","Fransızca", …] would match nothing in
+         STEAM_LANG_DISPLAY_NAMES and silently veto every language before a
+         single localized fetch went out. Never repopulate it from a
+         localized response. */
+      supportedLanguages:     Array.isArray(data.supportedLanguages) ? data.supportedLanguages : [],
+    };
+
     if (aboutGameText) {
       _fillDescriptionField(aboutGameText);
     } else if (fallbackItem && fallbackItem.summary) {
@@ -9059,35 +9154,6 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // platform's "Hook" field, which reads this at render time
     // (buildWebSitePreviewSection, render.js) the same way it used to read
     // Game Details' Description before that role moved to About This Game.
-    state.steamLocInfo = {
-      appId,
-      // baselineName/baselineDeveloper/baselinePublisher, alongside
-      // baselineDescription/shortDescription below, give
-      // _checkSteamLocalizedListing (above) a same-language-as-default
-      // value to compare each of Steam's own Localization Review fields
-      // against, so it can tell a genuine per-language localization apart
-      // from Steam silently falling back to this default listing language.
-      baselineName:           data.name || '',
-      baselineDescription:    aboutGameText,
-      baselineDeveloper:      (data.developers || []).join(', '),
-      baselinePublisher:      (data.publishers || []).join(', '),
-      shortDescription:       data.summary || '',
-      /* AN ARRAY OF ENGLISH DISPLAY NAMES, and both halves of that matter.
-         appdetails gave one raw HTML-ish string ("English<strong>*</strong>,
-         French, …" with a footnote about full audio support) which
-         _steamSupportedLanguageNames had to strip and split; /game gives
-         ["English","French","Spanish - Spain","Simplified Chinese", …]
-         already parsed, so the parser is bypassed — see
-         _steamSupportsLanguageCandidate.
-
-         ENGLISH because it came from the baseline call. This exact field is
-         one of the three that translate on a lang= request, and a Turkish
-         ["İngilizce","Fransızca", …] would match nothing in
-         STEAM_LANG_DISPLAY_NAMES and silently veto every language before a
-         single localized fetch went out. Never repopulate it from a
-         localized response. */
-      supportedLanguages:     Array.isArray(data.supportedLanguages) ? data.supportedLanguages : [],
-    };
     // Any supported languages already selected before this game finished
     // loading (e.g. left over from a prior title, or set via a language
     // preset that ran before this async fetch resolved) haven't had a
