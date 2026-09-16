@@ -10035,33 +10035,29 @@ textarea.loc-review-field.ias-inline-input {
   box-shadow: 0 0 0 2px rgba(255,149,0,0.06);
 }
 /* ── THE CHECKLIST'S "IT IS THAT ONE" RING ────────────────────────────────
-   A Submission checklist row on a multi-platform project has no single step to
-   open, so it rings the step on each platform's card instead (chkGoStep /
-   applyChkGlow, app.js). Built like the store preview's own pulses below — a
-   spreading box-shadow rather than a border, so nothing on the row moves by a
-   pixel when it lights up — in the app's accent blue rather than the preview's
-   amber, because this is "here it is", not "this needs attention".
+   A Submission checklist row that has no single step to open points at the
+   cards instead, ringing the step it names (chkGoStep / _chkPulse, app.js).
+   Built like the store preview's own pulses below — a spreading box-shadow
+   rather than a border, so nothing on the row moves by a pixel when it lights
+   up — in the app's accent blue rather than the preview's amber, because this
+   is "here it is", not "this needs attention".
 
-   It stays on until the row is clicked again, which is why the pulse is slow
-   and shallow: a fast ring that never stops is a thing you end up covering
-   with your hand. */
+   ONE PULSE, not a loop. v6.54 ran this forever and latched it on until the
+   row was clicked again; by request it now fires once and clears itself (the
+   class comes off on animationend — see _chkPulse). A single pass has to carry
+   on its own, so it is shorter and brighter than the latched version was, and
+   reaches full strength immediately rather than easing out of nothing. The
+   checklist row's own lit state went with the latch: nobody is being asked to
+   remember to switch anything off any more. */
 @keyframes chk-point-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(82,186,255,0.55); }
-  50%      { box-shadow: 0 0 0 6px rgba(82,186,255,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(82,186,255,0); }
+  15%  { box-shadow: 0 0 0 0 rgba(82,186,255,0.85); }
+  100% { box-shadow: 0 0 0 10px rgba(82,186,255,0); }
 }
-.ios-step-card.is-chk-glow {
-  animation: chk-point-pulse 1.9s ease-in-out infinite;
+.ios-step-card.is-chk-pulse {
+  animation: chk-point-pulse 1.25s ease-out 1;
   border-radius: 12px;
   position: relative; z-index: 1;
-}
-/* And the row that switched them on says so, so the thing doing the pointing
-   is visibly on while the rings are — otherwise a developer who has scrolled
-   the cards has no way to tell which row to click to put them away. */
-.chk-item.is-pointing .chk-label,
-.gd-task.is-pointing .gd-task-label { color: var(--accent, #52BAFF); }
-.chk-item.is-pointing, .gd-task.is-pointing {
-  background: rgba(82,186,255,0.10);
-  border-radius: 8px;
 }
 
 @keyframes spp-focus-pulse {

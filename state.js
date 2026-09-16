@@ -1901,18 +1901,31 @@ function isIOSSectionComplete(sectionId) {
 
   const a = state.iosSubmitAnswers;
 
+  /* DATA COLLECTION QUESTIONS — THE PRESET IS OPTIONAL (v6.55).
+
+     This used to require a purpose on every flagged data type, and in practice
+     that made the preset chips mandatory without ever saying so: flagging a
+     type (togglePrivacyDataType, app.js) creates it with `purposes: []`, and a
+     preset is the only thing that fills them in bulk. A developer who ticked
+     the types their game actually collects, by hand, and skipped the presets —
+     which are offered as a shortcut, not a step — was left with a section that
+     would not go green and no visible reason why.
+
+     By request the bar is now the three answers the section really asks for:
+     the collect-data question, a privacy policy URL, and — only when the
+     answer is Yes — at least one data type flagged. Purposes still matter and
+     the risk scoring still reads them (computeIOSSectionRisk, below), so an
+     under-filled table still says so; it just no longer blocks submission.
+
+     Mac App Store gets this for free: isMacSectionComplete delegates 'privacy'
+     straight here, since both platforms answer these questions once into the
+     same state.iosSubmitAnswers. */
   if (sectionId === 'privacy') {
     // Accept URL from either the step modal field or the onboarding field
     const url = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
     if (!url) return false;
     if (a.collectsData === null) return false;
-    if (a.collectsData === 'yes') {
-      const types = Object.entries(a.dataPerType);
-      if (types.length === 0) return false;
-      for (const [, t] of types) {
-        if (t.purposes.length === 0) return false;
-      }
-    }
+    if (a.collectsData === 'yes' && Object.keys(a.dataPerType).length === 0) return false;
     return true;
   }
 
@@ -3548,22 +3561,6 @@ const state = {
      since platform ids come and go with activePlatforms. */
   stepSectionSeen:          {},
 
-  /* WHICH SUBMISSION-CHECKLIST ROW IS CURRENTLY POINTING AT THE CARDS.
-
-     One of CHK_GLOW_STEPS' keys (app.js — 'uploadBuild', 'contentRating',
-     'localizations', 'dataSafety', 'storePages', 'improveSubmission',
-     'submit'), or null for none. Set by chkGoStep when a checklist row is
-     clicked on a project with more than one platform activated, where there is
-     no single step to open and the row rings that step on every card instead;
-     clicking the same row again clears it. Only ever one at a time — a second
-     row's rings would stop meaning "this is the thing I just asked about".
-
-     In state rather than as a DOM class because the dashboard rebuilds its
-     cards wholesale on every step completion and every tab switch, and the
-     rings have to still be there afterwards (applyChkGlow, app.js, called at
-     the end of renderDashboard). Deliberately NOT persisted with the project:
-     it is a gesture, not a setting. */
-  chkGlowStep:              null,
 
   // Which required element (Title/Subtitle/Content/Business/Screenshots/Data)
   // currently has the animated "needs attention" glow on the App Store/Mac

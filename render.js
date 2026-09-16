@@ -3703,11 +3703,16 @@ function _chkGroups() {
       { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: hasScreenshots },
       { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: hasTrailer },
     ] },
-    /* THE SUBMISSION GROUP NOW WALKS THE WHOLE CARD, in the order the platform
-       cards themselves list their steps: Upload Build, Content Rating,
-       Localizations, Data, Product Page Preview, Improve Your Submission,
-       Submit. Three of those were missing, so the checklist could read 100%
-       with no build uploaded and the submission never run through Improve.
+    /* THE SUBMISSION GROUP WALKS THE WHOLE CARD: Upload build, Content
+       ratings, Data safety, Localizations, Store pages, Improve, Submit.
+       Three of those were missing before v6.54, so the checklist could read
+       100% with no build uploaded and the submission never run through
+       Improve.
+
+       The order is the developer's, not the cards': Data safety sits ahead of
+       Localizations by request, because there is no point translating a
+       listing whose disclosures may still change it. It is the one place this
+       list deliberately does NOT follow the step order on the cards.
 
        Localizations is CONDITIONAL, and on the same fact the platform cards
        are: _visiblePlatformSteps (state.js) drops that step entirely from
@@ -3716,15 +3721,15 @@ function _chkGroups() {
        formData.localizations, so they can't disagree.
 
        `step` is what the row's click resolves against — see chkGoStep
-       (app.js): one platform and it opens that platform's step, several and it
-       rings the step on each of their cards. */
+       (app.js): it either opens the one step it can name, or pulses the cards'
+       own rows to point at what is left to do. */
     { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
       { label: t('guide.item.uploadBuild') || 'Upload build',              step: 'uploadBuild',   done: _chkEveryPlatformComplete('uploadBuild') },
       { label: t('guide.item.contentRatings') || 'Set content ratings',    step: 'contentRating', done: _chkEveryPlatformComplete('contentRating') },
+      { label: t('guide.item.dataSafety') || 'Review data safety', step: 'dataSafety', done: _chkDataSafetyDone() },
       ...(hasLocalizations ? [
       { label: t('guide.item.platformLocalizations') || 'Complete localizations', step: 'localizations', done: _chkEveryPlatformComplete('localizations') },
       ] : []),
-      { label: t('guide.item.dataSafety') || 'Complete data safety disclosures', step: 'dataSafety', done: _chkDataSafetyDone() },
       { label: t('guide.item.storePages') || 'Build store pages',          step: 'storePages',    done: _chkEveryPlatformComplete(['storePreview', 'storePreviewPrototype']) },
       { label: t('guide.item.improveSubmission') || 'Improve your submission', step: 'improveSubmission', done: _chkEveryPlatformComplete('improveSubmission') },
       // Submit has no isXxxSectionComplete arm on any platform — it is
@@ -3813,7 +3818,7 @@ function renderChecklist() {
         <div class="chk-group">
           <button class="chk-group-head${g.view === state.activeView ? ' is-current' : ''}" onclick="setView('${g.view}')">${g.group}</button>
           ${g.items.map(i => `
-            <button class="chk-item${i.done ? ' is-done' : ''}${i.step && state.chkGlowStep === i.step ? ' is-pointing' : ''}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')`}">
+            <button class="chk-item${i.done ? ' is-done' : ''}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')`}">
               <span class="chk-box">${i.done ? '✓' : ''}</span>
               <span class="chk-label">${i.label}</span>
             </button>`).join('')}
@@ -3871,7 +3876,7 @@ function renderGuide() {
   const tasks = items.map((i, idx) => {
     const cls = i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : '');
     return `
-    <button class="gd-task${cls}${i.step && state.chkGlowStep === i.step ? ' is-pointing' : ''}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
+    <button class="gd-task${cls}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
       <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
       <span class="gd-task-label">${i.label}</span>
     </button>`;
@@ -5050,12 +5055,6 @@ function renderDashboard() {
      _smModalFades, and for the same reason. Guarded because render.js is
      loaded before app.js. */
   if (typeof _subScrollCue === 'function') requestAnimationFrame(_subScrollCue);
-  /* The cards were just thrown away and rebuilt, taking any checklist glow
-     with them — see applyChkGlow (app.js) for why it lives in state and is
-     re-applied here rather than being baked into six card builders. Also what
-     makes the glow follow the developer from one platform's tab to the next,
-     since the tab strip only ever draws the selected platform's pane. */
-  if (typeof applyChkGlow === 'function') applyChkGlow();
 }
 
 /* ── THE PLATFORM TAB STRIP ──────────────────────────────────────────────────

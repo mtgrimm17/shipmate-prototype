@@ -1427,7 +1427,7 @@ function setLaunchDate(v) {
    App Store AND Google Play AND Steam, and there is no one destination to
    send anybody to.
 
-   So by request the row does whichever of the two honest things applies.
+   So the row does whichever of the two honest things applies.
 
    ONE PLATFORM ACTIVATED and there IS a single destination — open that
    platform's step, exactly as clicking the row on its card would. Literally
@@ -1438,15 +1438,24 @@ function setLaunchDate(v) {
    openStepModal below is only the fallback for a row that isn't on screen —
    a platform showing its account/settings face, say.
 
-   SEVERAL PLATFORMS and the row instead points at all of them: it rings that
-   step on every card that has it, and clicking again puts the rings away. The
-   row lights up too (.is-pointing), so the thing doing the pointing is
-   visibly on while the rings are.
+   OTHERWISE IT POINTS, by pulsing a ring around the step on the cards once.
+   That covers two cases, both by request:
 
-   Submit is the one step with no step-card click of its own — its row is a
-   hold, not a click (buildSubmitStepCard, render.js), and firing that from a
-   checklist row would submit a build from a place nobody expects to. It
-   scrolls into view instead. */
+     • Several platforms. There is no one destination, and v6.54's answer —
+       a ring that latched on until you clicked the row again — asked the
+       developer to remember to switch it off. A single pulse says the same
+       thing and cleans up after itself. It pulses only the steps NOT yet
+       done, since "here is what is left" is the question the row is being
+       asked.
+
+     • Upload Build and Submit, even on a single platform. Neither has
+       anything to open: Upload Build's section is an empty dropzone until a
+       build exists, and Submit's row is a hold rather than a click
+       (buildSubmitStepCard, render.js) — firing it from a checklist would
+       submit a build from a place nobody expects to. So both point instead
+       of navigating, on any number of platforms. */
+/* The two rows that never navigate — see the header comment above. */
+const CHK_PULSE_ONLY = new Set(['uploadBuild', 'submit']);
 const CHK_GLOW_STEPS = {
   uploadBuild:       { stepIds: ['uploadBuild'] },
   contentRating:     { stepIds: ['contentRating'] },
@@ -1490,16 +1499,72 @@ function _chkStepTargets(key) {
     .filter(t => !!t.stepId);
 }
 
-/* Held in state, not as a bare DOM class: the dashboard rebuilds its cards on
-   every step completion and on every tab switch, and a highlight the developer
-   switched on has to survive both. renderDashboard calls this at the end of
-   each rebuild. */
-function applyChkGlow() {
-  document.querySelectorAll('.is-chk-glow').forEach(el => el.classList.remove('is-chk-glow'));
-  const key = state.chkGlowStep;
-  if (!key) return;
-  _chkStepTargets(key).forEach(({ pid, stepId }) => {
-    document.getElementById(`${pid}-step-card-${stepId}`)?.classList.add('is-chk-glow');
+/* IS THIS STEP DONE? Asked of the card row itself wherever one is on screen,
+   because `.is-complete` is literally what the developer is looking at, and a
+   pulse that rings a row with a tick in it reads as a mistake. Only a platform
+   whose pane isn't currently rendered (the tab strip draws one at a time) falls
+   back to the status map the row itself is built from. */
+function _chkStepDone(pid, stepId) {
+  const el = document.getElementById(`${pid}-step-card-${stepId}`);
+  if (el) return el.classList.contains('is-complete');
+  /* Off screen, ask what the row would have been built from — which for every
+     step but Submit is platformSectionComplete, NOT platformStepStatus. The
+     two are not the same thing: the status map is written by the submit flow
+     and by the card painters, while a step row's tick is recomputed from the
+     answers on every render (_paneComplete → platformSectionComplete). Submit
+     is the exception the checklist already makes for it: it has no
+     isXxxSectionComplete arm anywhere, only the flag _doFinalSubmit writes. */
+  if (stepId !== 'submit' && typeof platformSectionComplete === 'function') {
+    try { return !!platformSectionComplete(pid, stepId); } catch (_) { /* fall through */ }
+  }
+  return (state.platformStepStatus && state.platformStepStatus[pid]
+          && state.platformStepStatus[pid][stepId]) === 'complete';
+}
+
+/* ONE PULSE, THEN GONE. The class removes itself on animationend rather than
+   on a timer that has to be kept in step with the CSS, with a timeout only as
+   a backstop for a browser that never fires the event (a tab backgrounded
+   mid-animation, say — an element left ringed forever is the exact failure the
+   latch was replaced to avoid).
+
+   The remove/reflow/add is what makes a second click on the same row pulse
+   again: re-adding a class the element already has does not restart a CSS
+   animation, and reading offsetWidth in between is the standard way to force
+   the style flush that does. */
+function _chkPulse(el) {
+  if (!el) return;
+  el.classList.remove('is-chk-pulse');
+  void el.offsetWidth;
+  el.classList.add('is-chk-pulse');
+  const off = () => {
+    el.classList.remove('is-chk-pulse');
+    el.removeEventListener('animationend', off);
+  };
+  el.addEventListener('animationend', off);
+  setTimeout(off, 2500);
+}
+
+/* Pulses every target that is on screen, and scrolls the first of them into
+   view. When none of them is — the developer is on a tab whose own step is
+   already done, and the ones left to do belong to another platform — it moves
+   to the first platform that still has one rather than answering the click
+   with nothing at all. */
+function _chkPulseTargets(targets) {
+  if (!targets.length) return;
+  const paint = () => {
+    const els = targets
+      .map(t => document.getElementById(`${t.pid}-step-card-${t.stepId}`))
+      .filter(Boolean);
+    if (!els.length) return false;
+    els.forEach(_chkPulse);
+    els[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return true;
+  };
+  requestAnimationFrame(() => {
+    if (paint()) return;
+    const elsewhere = targets[0];
+    if (typeof selectPlatformTab === 'function') selectPlatformTab(elsewhere.pid);
+    requestAnimationFrame(paint);
   });
 }
 
@@ -1540,23 +1605,23 @@ function _chkOpenStep(pid, stepId, flip) {
 function chkGoStep(key) {
   setView('dashboard');
   const targets = _chkStepTargets(key);
+  if (!targets.length) return;
+
   /* "Only one selected platform" is about what the developer activated, not
      about how many of them happen to carry this step — a project with App
      Store alone should open the step even for a row whose step list is
      shared. With one platform activated there is at most one target anyway. */
   const onePlatform = (state.activePlatforms ? state.activePlatforms.size : 0) === 1;
-  if (onePlatform && targets.length === 1) {
-    state.chkGlowStep = null;
-    applyChkGlow();
-    renderChecklist();
-    if (typeof renderGuide === 'function') renderGuide();
+  if (onePlatform && targets.length === 1 && !CHK_PULSE_ONLY.has(key)) {
     _chkOpenStep(targets[0].pid, targets[0].stepId, targets[0].flip);
     return;
   }
-  state.chkGlowStep = (state.chkGlowStep === key) ? null : key;
-  renderDashboard();          // re-applies the glow at the end of its rebuild
-  renderChecklist();
-  if (typeof renderGuide === 'function') renderGuide();
+
+  /* Only what is left to do — except on a single platform, where the row has
+     exactly one thing it could possibly be pointing at and pulsing nothing
+     would just look broken. */
+  const pulse = onePlatform ? targets : targets.filter(t => !_chkStepDone(t.pid, t.stepId));
+  _chkPulseTargets(pulse.length ? pulse : targets);
 }
 
 function chkGo(view, anchor, section) {
