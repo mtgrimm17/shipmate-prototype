@@ -3603,6 +3603,51 @@ function togglePrivacyPreset(id) {
   iosAns.privacyDescription                       = combined;
   state.androidSubmitAnswers.androidDataDescription = combined;
 
+  /* **THE PRESETS FILL THE TABLE THEMSELVES, AND UNTIL NOW NOTHING DID.**
+     Jaco: *"si elijo varias casillas como cloud save, leaderboards, no guarda
+     el resultado y nunca marca como completado el paso."*
+
+     Everything above this line was already being written correctly — measured
+     with cloudsave + leaderboards: both ids in `privacyPresets`, both chips
+     lit, `collectsData: 'yes'`, a 692-character description. What stayed empty
+     was `dataPerType`, and that is the ONE thing the completion test asks for
+     once `collectsData` is `'yes'` (isIOSSectionComplete, state.js). So the
+     answer was saved and the step still could not finish.
+
+     **`_triggerPrivacyAI` was the only writer of that field**, and its first
+     line is `if (!CLAUDE_API_KEY) return` — every local session, plus any live
+     one where the call fails. A checklist item that cannot complete without a
+     network round trip is not a checklist item.
+
+     The union is per TYPE rather than per preset, because two presets naming
+     the same type are one row with both purposes: Cloud Save and Leaderboards
+     both collect `user_id` and `gameplay`, and the table has one line each.
+     `tracking` and `identity` take the STRONGER claim — a type that any
+     selected preset tracks is tracked, and Apple's label is a statement about
+     the app rather than about one feature, so the safer answer has to win.
+
+     Fresh each time, never merged into what is there: this recomputes from the
+     selection, so DESELECTING a preset removes exactly its rows rather than
+     leaving them behind. Hand edits inside the table are overwritten by the
+     next preset press, which is the same contract the AI path already had.
+
+     The AI still runs below and still replaces this wholesale when it answers.
+     That is not a conflict: it reads these very descriptions and can be more
+     nuanced than a table lookup. What changed is that nothing DEPENDS on it. */
+  const perType = {};
+  selected.forEach(pid2 => {
+    const t = PRIVACY_PRESETS.find(p => p.id === pid2)?.types;
+    if (!t) return;
+    Object.entries(t).forEach(([typeId, row]) => {
+      const cur = perType[typeId] || { purposes: [], identity: 'no', tracking: 'no' };
+      row.purposes.forEach(p => { if (!cur.purposes.includes(p)) cur.purposes.push(p); });
+      if (row.identity === 'yes') cur.identity = 'yes';
+      if (row.tracking === 'yes') cur.tracking = 'yes';
+      perType[typeId] = cur;
+    });
+  });
+  iosAns.dataPerType = perType;
+
   // Trigger AI translation for the active platform only
   if (combined.length >= 20) {
     if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') _triggerPrivacyAI(pid);
@@ -4061,30 +4106,39 @@ function selectTrack(pid, trackId) {
   if (!state.selectedTracks) state.selectedTracks = {};
   state.selectedTracks[pid] = trackId;
 
-  /* REPAINT THE PICKER'S OWN BLOCK TOO.
-     This function only ever refreshed the submit step card, because that is
-     where the track pill used to live. The pill moved up into the release
-     block under the card header, and nothing was repainting that — so
-     choosing "Default branch" changed the state and the label kept saying
-     "Beta branch" until something else happened to re-render the card. The
-     control has to show its own new value; that is the whole contract of a
-     picker. */
-  const card = document.getElementById('active-card-' + pid);
-  const block = card?.querySelector('.card-release-block');
-  if (block && typeof buildReleaseBlock === 'function') {
-    block.outerHTML = buildReleaseBlock(pid);
-  }
+  /* A TRACK IS NOT A LABEL, IT IS HALF OF UPLOAD BUILD — so the whole surface
+     repaints, and this function stops patching two boxes by hand.
 
-  // Re-render just the submit step card so the "Submit →" button appears now that a track is chosen
-  const cardEl = document.getElementById(pid + '-step-card-submit');
-  if (cardEl && typeof buildSubmitStepCard === 'function') {
-    const p        = PLATFORMS[pid];
-    const counts   = platformStepCount(pid);
-    const locked   = !counts.allRequired;
-    const done     = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
-    const newHtml  = buildSubmitStepCard(pid, p ? p.steps.length : 0, locked, done);
-    cardEl.outerHTML = newHtml;
-  }
+     It used to refresh exactly the two things the pill had ever lived in: the
+     submit step card (where it started) and the release block (where shape 4
+     moved it, added when choosing "Default branch" left the label reading
+     "Beta branch"). Both patches were correct and both were an inventory, and
+     the inventory was two short. `_uploadBuildComplete` (state.js) reads
+     `selectedTracks` — "a build with no destination is not a finished step" —
+     so choosing one also ticks Upload Build's disc, promotes its row, moves
+     the step count and the progress bar, and takes `.active-card` into
+     `submit-ready`. None of those five were repainted, so the step you had
+     just finished stayed grey until something unrelated forced a render, and
+     the card said the destination was chosen while the step asking for it said
+     it was not.
+
+     `_refreshBuildUI`'s own note is the precedent and the argument is identical:
+     "an upload changes more than the body it happened in… repainting only the
+     body would leave four of those stale, and branching on which to do would be
+     two code paths for one event". The picker's panel is already closed —
+     swSelectChoose calls closeAllDropdowns() before the callback — so there is
+     nothing on screen to lose.
+
+     It also fixes both presentations at once. `_paintStepRow` could not be used
+     here: the card builders emit `.ios-step-num` with no `dot-<pid>-<stepId>`
+     id, so on a card row that helper returns on its first line (see CLAUDE.md).
+     A render has no such blind spot. */
+  renderDashboard();
+
+  // The Upload Build step has a modal form of its own (buildBuildDropdown's
+  // `inModal` arm); if it is open, it holds a stale destination too. Guarded
+  // and ordered exactly as handleBuildUpload does it.
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
 /* ONE SHAKE, REPLAYABLE — and it has to be element.animate(), not a class.
@@ -4906,11 +4960,26 @@ function submitStepClick(pid) {
       _smSpotlight(c, [chip]);
       _smShake?.(chip, 'nudge');
     };
-    if (state.submission?.openStep?.[pid] !== 'uploadBuild') {
+    /* **ASK THE DOM WHETHER THE CHIP IS THERE, NOT THE STATE WHETHER A SECTION
+       IS OPEN.** The test above was `openStep[pid] !== 'uploadBuild'` — a fact
+       about the PANE, where the picker is inside a collapsible body. In the
+       card grid the chip is in the release block and has been on screen since
+       the build landed, so that test was true, and the branch called
+       `toggleStepSection` — whose first line is `if (layout === 'modal') return
+       openStepModal(...)`. Measured: pressing Submit with no track OPENED THE
+       UPLOAD BUILD MODAL over the card and spotlighted nothing (`is-spotlight`
+       absent, no `.is-spotlit`). The one press this gate exists to answer
+       navigated somewhere instead.
+
+       Third instance of one shape in this flag's life: a control re-pointed at
+       the pane, still aimed there from the card. The fix is to stop asking
+       which presentation this is — the chip either is in the document or it is
+       not, and that is true in both arms without a flag. */
+    if (card?.querySelector('.submit-track-pick')) {
+      spotlightChip();
+    } else {
       Promise.resolve(toggleStepSection(pid, 'uploadBuild'))
         .then(() => requestAnimationFrame(spotlightChip));
-    } else {
-      spotlightChip();
     }
     return false;
   }
@@ -5735,7 +5804,16 @@ function _flipPlatformCard(pid, toFace, dir) {
      its Y axis, because the pane inherited the card's id. So finishing the flow
      just swaps the pane back: the thing the flip was announcing — you are
      connected now — is already true, and the steps are where you were going. */
-  if (state.submission?.settings === pid) {
+  /* THE GUARD IS ABOUT THE PANE, SO IT HAS TO ASK WHETHER THERE IS ONE.
+     `submission.settings` names a platform whose account face the PANE is
+     showing — a fact that only exists in the inline presentation. Tested
+     alone it also fired in the card grid, where the gear is a real flip
+     again: a stale value left there by a press under the old handler would
+     have sent the next flip straight into closePlatformSettings, i.e. the
+     card refusing to turn over for a reason belonging to another layout.
+     The flag is what says which presentation is on screen, so it is what the
+     guard asks. */
+  if (state.submission?.settings === pid && state.submission?.layout !== 'modal') {
     _setPlatformFace(pid, 'steps');
     if (toFace === 'steps') { closePlatformSettings(); return; }
     renderDashboard();
@@ -5755,7 +5833,13 @@ function _flipPlatformCard(pid, toFace, dir) {
   _setPlatformFace(pid, toFace);
 
   function _apply() {
-    const grid = document.querySelector('.active-cards-grid');
+    /* The column is pinned to its live height so the flip does not collapse
+       what is under the card being turned. `.active-cards-grid` is the only
+       name this ever looked for and it is rendered NOWHERE — the card grid is
+       `.dash-column` (renderSubmission's 'modal' arm), so the query came back
+       null and the pin has been a no-op for as long as that markup has been
+       the one in use. Both names, because they are the same object. */
+    const grid = document.querySelector('.active-cards-grid, .dash-column');
     const gridHeight = grid ? grid.offsetHeight : 0;
     if (grid && gridHeight > 0) grid.style.minHeight = gridHeight + 'px';
 

@@ -1149,10 +1149,49 @@ function smBuildAccept(pid) { return SM_BUILD_ACCEPT[pid] || SM_BUILD_ACCEPT_DEF
 
    Platforms with no PLATFORM_TRACKS entry (Web, the consoles) are finished as
    soon as the binary is in — there is no destination to choose, and requiring
-   one would deadlock them. */
+   one would deadlock them.
+
+   **AND THE SAME SENTENCE IS FALSE IN THE CARD GRID, BECAUSE THE PICKER IS NOT
+   IN THE STEP THERE.** Read the paragraph above closely: every word of its
+   argument rests on "v6.29 folded that block into Upload Build's own body, so
+   the step now literally contains the question". In `submission.layout ===
+   'modal'` it does not — the release block is the card's own chrome, two rows
+   ABOVE the step list, and shape 4 put it there on purpose. So the predicate
+   was holding a step to a control that is nowhere inside it.
+
+   **A step disc answers for what the step CONTAINS.** That is the rule, and the
+   layout test is not a special case for one arm — it is how this expression
+   asks where the picker currently lives. Jaco: *"en el flag modal dudo que eso
+   tenga que ser así? quizás debería marcarse el check sí o sí."*
+
+   Measured, the card contradicted itself twice over. The Upload Build row holds
+   the build pill, which draws a green check and the filename — `build-pill
+   has-build` — while its own disc beside it stayed a bare `ios-step-num`: one
+   row, two answers. And pressing Submit never even reached the destination
+   gate: with Upload Build incomplete, gate 2 fired first and spotlighted that
+   row, so the app answered "finish this step" by pointing at the one row that
+   looks finished.
+
+   **The destination did not stop being required — it stopped being a CHECKLIST
+   item and became a property of the press.** Where the build goes is the
+   question the act of submitting asks, and `submitStepClick`'s gate 3 is where
+   it is asked: press Submit with no track and the card dims to the chip. That
+   is Jaco's other half — *"sólo si doy a submit y falta elegir el track, se
+   oscurezca todo para elegir el track"* — and it needed its own fix to work
+   here at all (see that gate).
+
+   The cost, stated rather than hidden: on a card the Submit row now goes green
+   with no destination chosen, and the first press refuses. That is the exact
+   failure the paragraph above complains about — and it is the right trade HERE
+   and only here, because the picker is permanently on screen saying "Select
+   track" and the refusal points straight at it. It also happens at most once:
+   choosing a track is one press and it is remembered. In the pane the picker is
+   inside the step body, where a green disc over an unanswered control really
+   would be the step lying about its own contents, so that arm is untouched. */
 function _uploadBuildComplete(pid) {
   if (!state.platformBuilds?.[pid]) return false;
   if (state.platformBuildProcessing?.[pid]) return false;
+  if (state.submission?.layout === 'modal') return true;
   const tracks = (typeof PLATFORM_TRACKS !== 'undefined') ? PLATFORM_TRACKS[pid] : null;
   if (!tracks || !tracks.length) return true;
   return !!(state.selectedTracks || {})[pid];
@@ -3056,6 +3095,41 @@ function loadProjectAndVersion(projectId, versionId) {
 /* ── Data Collection Presets ─────────────────────────── */
 // Quick-select chips on the Privacy / Data Safety steps.
 // Selecting presets auto-fills the NLP description and triggers AI translation.
+
+/* **EACH PRESET CARRIES ITS OWN ANSWER, AND THAT IS THE FIX FOR A REAL BUG.**
+   Jaco: *"si elijo varias casillas como cloud save, leaderboards, no guarda el
+   resultado y nunca marca como completado el paso."*
+
+   Measured, the presets were saved perfectly — `privacyPresets` held both, the
+   chips were lit, `collectsData` was `'yes'` and `privacyDescription` was 692
+   characters. What was empty was **`dataPerType`**, and that is the ONE thing
+   `isIOSSectionComplete('privacy')` asks for once `collectsData === 'yes'`. So
+   the step could not complete, and the answer the chips had "saved" was a
+   paragraph of prose nothing downstream reads.
+
+   **The only thing that ever wrote `dataPerType` was the AI call.**
+   `_triggerPrivacyAI` returns on its first line without an API key — which is
+   every local session, by design ("AI inference features won't work locally") —
+   and on a failed or slow call live. A checklist item that cannot be completed
+   without a network round trip is not a checklist item.
+
+   **And the answer was already here, written for a machine to read back.** Look
+   at the descriptions: they name Apple's own data types and groups in quotes,
+   with purposes, because they were authored as a PROMPT. The preset knows
+   exactly which types it means and then throws that away into a sentence so an
+   LLM can parse it out again. `types` states it directly instead — same content,
+   in the shape `dataPerType` actually stores.
+
+   So the preset is deterministic and instant, and the AI becomes what it should
+   have been: the path for a description somebody TYPES. It still overwrites
+   `dataPerType` when it succeeds, which is the same question answered with more
+   nuance — but nothing now depends on its answering at all.
+
+   The shape is `togglePrivacyDataType`'s own (`purposes` / `identity` /
+   `tracking`), not a second dialect, so a preset's rows are indistinguishable
+   from hand-ticked ones and every existing control edits them. `identity` and
+   `tracking` are read off each description's own closing sentences — "Linked to
+   user identity", "NOT used for advertising or tracking" — rather than guessed. */
 const PRIVACY_PRESETS = [
   {
     id:    'guest',
@@ -3071,30 +3145,52 @@ const PRIVACY_PRESETS = [
     sub:   'Email, username & password',
     // Structured description with explicit Apple data-type label names for reliable AI mapping
     description: 'App Store privacy data types collected: "Email Address" (Contact Info group) for App Functionality and Account Management — required for account creation, login, and recovery. "User ID" (Identifiers group) for App Functionality — account ID linked to the user. "Name" (Contact Info group) for App Functionality — display name. All data encrypted in transit. Linked to user identity. NOT used for advertising or tracking.',
+    types: {
+      email:   { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+      user_id: { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+      name:    { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+    },
   },
   {
     id:    'analytics',
     label: 'Game Analytics',
     sub:   'Gameplay events & crash reports',
     description: 'App Store privacy data types collected: "Crash Data" (Diagnostics group) for Analytics and App Functionality — crash logs and error reports. "Performance Data" (Diagnostics group) for Analytics — launch time, frame rate, memory usage. "Product Interaction" (Usage Data group) for Analytics — feature usage, session duration, level progression. NOT linked to user identity. NOT used for advertising or tracking. NOT shared with third parties.',
+    types: {
+      crash:       { purposes: ['analytics', 'app_function'], identity: 'no', tracking: 'no' },
+      performance: { purposes: ['analytics'],                 identity: 'no', tracking: 'no' },
+      product_use: { purposes: ['analytics'],                 identity: 'no', tracking: 'no' },
+    },
   },
   {
     id:    'ads',
     label: 'Advertising',
     sub:   'Ad network & device identifiers',
     description: 'App Store privacy data types collected: "Device ID" (Identifiers group) for Third-Party Advertising — advertising identifier (IDFA) shared with ad network. "Advertising Data" (Usage Data group) for Third-Party Advertising — ad impressions and interactions. Data is SHARED with third-party advertising partners. May be used for cross-app tracking and targeted advertising.',
+    types: {
+      device_id: { purposes: ['third_party_ads'], identity: 'no', tracking: 'yes' },
+      ad_data:   { purposes: ['third_party_ads'], identity: 'no', tracking: 'yes' },
+    },
   },
   {
     id:    'cloudsave',
     label: 'Cloud Save',
     sub:   'Game progress synced to cloud',
     description: 'App Store privacy data types collected: "User ID" (Identifiers group) for App Functionality — account identifier used to sync data. "Gameplay Content" (User Content group) for App Functionality — game save data including progress, achievements, and settings synced across devices. Data linked to user account. Encrypted in transit. NOT used for advertising.',
+    types: {
+      user_id:  { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+      gameplay: { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+    },
   },
   {
     id:    'leaderboards',
     label: 'Leaderboards',
     sub:   'Usernames & scores',
     description: 'App Store privacy data types collected: "User ID" (Identifiers group) for App Functionality — player identifier displayed on leaderboards. "Gameplay Content" (User Content group) for App Functionality — scores and achievements visible to other players. Data is publicly displayed within the game. NOT used for advertising or tracking.',
+    types: {
+      user_id:  { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+      gameplay: { purposes: ['app_function'], identity: 'yes', tracking: 'no' },
+    },
   },
 ];
 

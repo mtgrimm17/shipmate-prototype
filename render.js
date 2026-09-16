@@ -5555,7 +5555,23 @@ function _platformHeadActions(pid, face) {
        that _cacheStepsFaceHeight and buildActiveCard still exercise; it is no
        longer what this button calls, because from a pane there is no reverse to
        turn to. */
-    gear = _gearBtn(`platformGearFromTab('${pid}')`,
+    /* AND IN THE CARD GRID IT IS STILL A FLIP, because there the card really
+       does have a back. `platformGearFromTab` sets `submission.settings` and
+       lets the PANE draw the account face in place of the steps — which is the
+       right door when a pane is what is on screen and the only door the note
+       above was written against. With `submission.layout === 'modal'` there is
+       no pane: nothing reads `submission.settings`, `renderSubmission`'s grid
+       arm just rebuilds the same cards, and `showAccountFace` — which is what
+       `buildActiveCard` actually asks — reads `platformFace`, which that
+       function never writes. So the press changed two fields nobody was
+       reading and the card sat there. Measured as "el gear no hace nada".
+
+       `platformGearFromSteps` is the flip and has been all along; it is what
+       `_cacheStepsFaceHeight` and `buildAccountCard` are still built around.
+       One branch, the same shape `buildSubmittedCard` and `renderSubmission`
+       already use for this flag, and it goes when the flag does. */
+    const cardGrid = state.submission?.layout === 'modal';
+    gear = _gearBtn(cardGrid ? `platformGearFromSteps('${pid}')` : `platformGearFromTab('${pid}')`,
       connected ? 'Account settings' : 'Connect account to publish',
       false, !connected && face === 'steps');
   } else {
@@ -18622,9 +18638,23 @@ function buildBuildDropdown(pid, inModal) {
       </div>`;
   }
   const noBuild = !build;
+  /* THE TOOLTIP IS THE HINT, WHICH IS AN INSTRUCTION RATHER THAN A FORMAT LIST.
+     It read "Upload build — accepts .pkg or .zip", i.e. what the control will
+     swallow — and `hint`'s own note in state.js is explicit that this is the
+     wrong half: "Export a signed .pkg from Xcode" tells you what to go and DO,
+     which is the actual question someone staring at an empty Upload Build has.
+     Mark's inline pane already prints that string beside this same pill, so the
+     card was the one surface saying something different about one control.
+     Jaco: *"el tooltip … fuera 'Export a signed .pkg from Xcode', igual que en
+     el modo inline de Mark."*
+
+     One string in both states: it stays true once a build is in, because
+     replacing it means exporting another. `accept` is unchanged and still
+     filters the dialog — what we recommend and what we permit are two different
+     things, which is that note's other half. */
   return `
     <div class="build-pill ${noBuild ? 'no-build' : 'has-build'}"
-         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${noBuild ? 'Upload build' : 'Change build'} — accepts ${escHtml(fmt.accept.split(',').join(' or '))}">
+         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${escHtml(fmt.hint)}">
       <input type="file" id="${inputId}" accept="${accept}" hidden
              onchange="handleBuildUpload('${pid}', this.files)">
       ${noBuild ? uploadSVG : checkSVG}

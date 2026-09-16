@@ -15881,26 +15881,59 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
+/* THESE ARE PILLS AND WERE THE LAST ONES SAYING OTHERWISE. Jaco: *"las pills de
+   los presets no siguen el estilo de nuestras pills clásicas (quiero que sigas
+   el mismo estilo de stroke degradado y fill azul si se seleccionan)."*
+
+   Two things were wrong and only one of them is the shape. The selected state
+   was `--orange` on `--orange-soft` — **#fb923c, the Subwoofer orange this app
+   RETIRED** from the tip vocabulary precisely because one hue had come to mean
+   four things; it survived here because nothing had looked at this chip since.
+   And a selection is exactly what `--pill-on-*` exists for: "violet proposes,
+   blue confirms", and these are confirmed answers.
+
+   The resting state was already the pill's values written as literals
+   (`--panel-2` / `--border` / `--text`), so pointing them at `--pill-off-*` is
+   the same paint through the tokens the rest of the family reads. That is what
+   makes the hover free too.
+
+   **It joins the shared `::after` list rather than redrawing the gradient** —
+   that list's own note is explicit that a shared selector is the only way "the
+   same stroke" stays true after the next change. `--pill-bw: 1px`, because this
+   chip keeps a real border, and `border-color: transparent` on select so the
+   ring replaces the edge without the box changing size.
+
+   The one thing it does NOT copy is `.ob-preset-pill`'s geometry: that is a
+   one-line pill at `--field-h`, and this holds a label AND a sub. Size and
+   weight are what separate those two lines, so the sub takes one alpha of the
+   same blue — one lever, the relationship `--text-faint` has to `--text`, and
+   the same move the pinned nav's separator made going from a colour plus an
+   opacity to a single alpha. */
 .prv-preset-chip {
+  --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
+  --pill-bw: 1px;   /* the ring below is placed against the border box */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 8px 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--pill-off-bg);
+  border: 1px solid var(--pill-off-border);
+  border-radius: var(--field-radius);
   cursor: pointer;
   font-family: inherit;
   text-align: left;
-  transition: border-color 0.12s, background 0.12s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.prv-preset-chip:hover {
-  border-color: var(--border-hover);
-  background: var(--panel-3);
+.prv-preset-chip:hover:not(.is-active) {
+  background: var(--pill-off-bg-hover);
 }
 .prv-preset-chip.is-active {
-  border-color: var(--orange);
-  background: var(--orange-soft);
+  border-color: transparent;
+  background: var(--pill-on-bg);
+}
+.prv-preset-chip.is-active:hover {
+  background: var(--pill-on-bg-hover);
 }
 .prv-preset-chip-label {
   font-size: 12px;
@@ -15909,7 +15942,7 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   line-height: 1.2;
 }
 .prv-preset-chip.is-active .prv-preset-chip-label {
-  color: var(--orange);
+  color: var(--pill-on-color);
 }
 .prv-preset-chip-sub {
   font-size: 10px;
@@ -15917,8 +15950,7 @@ thead .prv-meta-col { background: var(--panel-2) !important; }
   line-height: 1.3;
 }
 .prv-preset-chip.is-active .prv-preset-chip-sub {
-  color: var(--orange);
-  opacity: 0.8;
+  color: rgba(82, 186, 255, .72);
 }
 
 /* Plain-language description field */
@@ -20202,6 +20234,7 @@ body.viewing-splash #app-guide { display: none; }
 .bar-nav-btn .ic.cover::after,
 .profile-avatar::after,
 .spp-pin.is-on::after,
+.prv-preset-chip.is-active::after,
 .loc-primary-pill::after {
   /* AGAINST THE BORDER BOX, NOT THE PADDING BOX — which is the whole of what
      was wrong. An absolutely positioned box resolves `inset` against its

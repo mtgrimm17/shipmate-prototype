@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.41**
+Current version: **v6.43**
 
 ---
 
@@ -598,6 +598,56 @@ same test that paints them) is the part that counts down. Before this, the line
 read the filter's snapshot — which is deliberately re-taken every time you press
 "Unanswered" — so answering five questions yourself and pressing it turned
 "12 inferred" into 17.
+
+**AND THE PRIVACY PRESET CHIPS WERE THE LAST ORANGE SELECTION IN THE APP
+(v6.43).** Jaco: *"en data privacy… las pills de los presets no siguen el estilo
+de nuestras pills clásicas (quiero que sigas el mismo estilo de stroke degradado
+y fill azul si se seleccionan)."*
+
+Two things were wrong and only one of them is the shape. The selected state was
+`--orange` on `--orange-soft` — **`#fb923c`, the Subwoofer orange this file
+records as RETIRED** from the tip vocabulary, surviving here because nothing had
+looked at `.prv-preset-chip` since. And a selection is precisely what
+`--pill-on-*` is for: these are answers you confirmed, so they are blue.
+
+The resting state was already the pill's own values written as literals
+(`--panel-2` / `--border` / `--text`), so pointing them at `--pill-off-*` is the
+same paint through the tokens the rest of the family reads — which is what makes
+the hover free as well. **It joins the shared `::after` selector list rather than
+redrawing the gradient**, for that list's own stated reason, with `--pill-bw: 1px`
+and `border-color: transparent` on select so the ring replaces the edge and the
+box does not change size.
+
+The one thing it does NOT copy is `.ob-preset-pill`'s geometry: that is a
+one-line pill at `--field-h` and this holds a label AND a sub. Size and weight
+already separate those, so the sub takes **one alpha of the same blue**
+(`rgba(82,186,255,.72)`) — one lever, the relationship `--text-faint` has to
+`--text`, and the same move the pinned nav's separator made in going from a
+colour plus an opacity to a single alpha.
+
+Measured against a live `.ob-preset-pill.is-active` probe: fill
+`rgba(0,154,255,.35)`, border transparent, ring `rgba(82,186,255,.75) → .25` at
+`inset: -1px` with `padding: 1px` and `mask-composite: exclude` — identical on
+both. Label `rgb(82,186,255)`, sub `rgba(82,186,255,.72)`, resting `rgb(28)` on a
+`rgb(42)` border. All six chips **201 × 60 in both states**, zero `#fb923c`
+anywhere in the subtree, and the CSSOM confirmed carrying both new rules (the
+test that catches a comment delimiter swallowing one).
+
+**AND THE BUILD PILL'S TOOLTIP IS THE HINT, NOT THE FORMAT LIST.** Jaco: *"el
+tooltip … fuera 'Export a signed .pkg from Xcode', igual que en el modo inline
+de Mark."* It read "Upload build — accepts .pkg or .zip", and `hint`'s own note
+in state.js already argues why that is the wrong half: *"'Export a signed .pkg
+from Xcode' tells you what to go and DO, which is the actual question someone
+staring at an empty Upload Build has."* Mark's pane prints that string beside
+this same pill, so the card was the one surface saying something different about
+one control.
+
+One string in both states — it stays true once a build is in, because replacing
+it means exporting another — and `accept` is untouched, since what we recommend
+and what we permit are two different things. Verified per store: Mac "Export a
+signed .pkg from Xcode", iOS "…signed .ipa…", Steam still "Upload an .exe or
+.zip" (naming a tool only where one extension is the real answer), and the file
+dialog still filtering on `.pkg,.zip`.
 
 ### The destination rides the VERSION row
 
@@ -4983,6 +5033,71 @@ resolves the src so no caller has to know the difference. Verified: with the slo
 empty and one `kind: 'icon'` asset in the pool, the preview draws the real image
 and the placeholder is gone.
 
+### A preset that cannot answer without the network is not an answer (v6.43)
+
+Jaco: *"si elijo varias casillas como cloud save, leaderboards, no guarda el
+resultado y nunca marca como completado el paso en la store page review."*
+
+**It was saving everything except the one field the step reads.** Measured with
+cloudsave + leaderboards: both ids in `state.privacyPresets`, both chips lit,
+`collectsData: 'yes'`, a 692-character `privacyDescription`. Empty:
+**`dataPerType`** — and `isIOSSectionComplete('privacy')` requires it the moment
+`collectsData` is `'yes'`. So the answer really was stored and the step still
+could not finish, which is exactly what "no guarda el resultado" feels like from
+the outside.
+
+**The only writer of that field was the AI call.** `_triggerPrivacyAI`'s first
+line is `if (!CLAUDE_API_KEY) return` — true in every local session by design
+("AI inference features won't work locally"), and true live whenever the call
+fails. **A checklist item that cannot be completed without a network round trip
+is not a checklist item.**
+
+**And the answer was already in the file, written for a machine to read back.**
+Each preset's `description` names Apple's own data types and groups in quotes,
+with purposes, because it was authored as a PROMPT: *"App Store privacy data
+types collected: \"User ID\" (Identifiers group) for App Functionality…"*. The
+preset knew precisely which rows it meant and then threw that away into a
+sentence so an LLM could parse it out again. `types` on each preset states it
+directly — same content, in the shape `dataPerType` stores — and
+`togglePrivacyPreset` applies it synchronously.
+
+Four things it is built under:
+
+- **The union is per TYPE, not per preset.** Cloud Save and Leaderboards both
+  collect `user_id` and `gameplay`; the table has one row each, carrying both
+  presets' purposes. Verified: accounts + analytics gives `crash` →
+  `analytics + app_function`, six rows in total.
+- **`tracking` and `identity` take the STRONGER claim.** A type any selected
+  preset tracks is tracked, because Apple's label is a statement about the APP
+  rather than about one feature — the safer answer has to win a merge.
+- **It recomputes from the selection rather than merging into what is there**,
+  so DESELECTING a preset removes exactly its rows. Verified: +ads → 4 rows with
+  `device_id` / `ad_data` at `trk: yes`; −ads → back to the same 2 rows.
+- **The shape is `togglePrivacyDataType`'s own** (`purposes` / `identity` /
+  `tracking`), not a second dialect, so a preset's rows are indistinguishable
+  from hand-ticked ones and every existing control edits them.
+
+**The AI is not removed and is not in conflict** — it still runs and still
+replaces `dataPerType` wholesale when it answers, reading these very
+descriptions and able to be more nuanced than a table lookup. What changed is
+that nothing DEPENDS on it. That is the general form: *an inference may improve
+an answer; it must not be the only thing that can produce one.*
+
+Verified end to end on Mac App Store with a privacy URL set: cloudsave →
+complete, +leaderboards → complete (same 2 rows), +ads → 4 rows, −ads → 2, all
+off → `dataPerType {}` and `complete: false` (right: `collectsData` is null
+again), Guest Play → `collectsData: 'no'`, no rows, complete. On screen the
+badge reads **"6 data types selected"** with 6 rows lit and 10 boxes ticked.
+
+**GOOGLE PLAY HAS THE IDENTICAL BUG AND IS DELIBERATELY NOT FIXED HERE.**
+`isAndroidSectionComplete('dataSafety')` also demands a non-empty `dataPerType`,
+and `androidSubmitAnswers.dataPerType` is written only by
+`_triggerAndroidDataAI`. It is not a copy-paste away: Google's table is
+`ANDROID_DATA_TYPES` with its own ids and its own flags
+(`collected` / `shared` / `ephemeral` / `required`), so the Apple-shaped `types`
+map above cannot serve it — mapping each preset onto Google's vocabulary is the
+real work, and it is the next thing to do here.
+
 ### The Content Rating bar is never silent
 
 Three outcomes, three lines (`buildContentRatingSection`): Shipmate inferred
@@ -5057,8 +5172,18 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.41** → next is **v6.42**, then **v6.43**, etc. (v6.29 –
-v6.31 are Mark's Distribution work, shipped in parallel.)
+Current version: **v6.43** → next is **v6.44**, then **v6.45**, etc. (v6.29 –
+v6.31 are Mark's Distribution work, and **v6.42 is Adam's** — shipped in
+parallel and touching none of this.)
+
+**AND v6.43 IS WHAT ASKING BUYS.** Live went to v6.41 (ours) and then v6.42
+(Adam's, nothing of ours in it), so the next free number is 6.43 — and the only
+way to know that from here is that Jaco said so. Claude cannot read
+`origin/main`. Left to the skip-if-unsure rule below it would have picked 6.42
+and collided with a number already served, which is the one failure that rule
+exists to prevent; guessing upward would then have been *wrong in the other
+direction* only by luck. The ordering holds: **ask first, guess up only when
+nobody can say.**
 
 **THE SKIP-IF-UNSURE RULE, AND THE ONE THING THAT BEATS IT: ASKING.** This
 batch was written up to v6.42 mid-session on the reasoning that v6.41 had been
@@ -5343,6 +5468,90 @@ See GitHub Issues for the current backlog. As of v6.26, the following items are 
   both and choose. **When the choice is made, the loser comes out** — the arm, the
   flag, the hook and this note, the way the dev bar was deleted rather than left
   switched off. If it is still here in a month, that is the bug.
+
+  **AND IT RECURRED TWICE, EXACTLY AS PREDICTED.** Both of Jaco's reports from
+  the card grid are one shape: a control that was re-pointed at the PANE when
+  the pane arrived, leaving the card's copy aimed at a surface that is not on
+  screen. Neither throws, both look like nothing happening.
+
+  - **The gear stopped flipping the card.** `_platformHeadActions` sends the
+    steps face's gear to `platformGearFromTab`, which writes
+    `submission.tab` / `submission.settings` and re-renders — and in the grid
+    arm nothing reads either one. `buildActiveCard` asks `showAccountFace`,
+    which reads `platformFace`, which that function never writes; so the press
+    changed two fields nobody was reading and `renderSubmission` rebuilt the
+    identical cards. It branches on the flag now, back to
+    `platformGearFromSteps`, the flip `_cacheStepsFaceHeight` and
+    `buildAccountCard` are still built around. **`_flipPlatformCard`'s pane
+    guard had to move with it**: `submission.settings === pid` is a fact about
+    the INLINE presentation, and tested alone a value left there by a press
+    under the old handler would send the next flip into
+    `closePlatformSettings` — the card refusing to turn over for a reason
+    belonging to another layout.
+  - **`.active-cards-grid` is rendered NOWHERE**, so the height pin inside that
+    flip has been a no-op for as long as `.dash-column` has been the markup.
+    Found while fixing the gear, and the tell is the same one the add banner
+    gave: a name with rules in style.css and zero uses in render.js.
+
+  **AND CHOOSING A TRACK NEVER TICKED UPLOAD BUILD — that one is both arms.**
+  `selectTrack` patched exactly the two boxes the pill had ever lived in, the
+  submit row and the release block. Both patches were correct and both were an
+  INVENTORY, and the inventory was two short: `_uploadBuildComplete` reads
+  `selectedTracks`, so a destination also ticks Upload Build's disc, promotes
+  its row, moves the step count and takes `.active-card` into `submit-ready`.
+  So the card said the destination was chosen while the step asking for it sat
+  grey. It renders now, on `_refreshBuildUI`'s own argument — "branching on
+  which to do would be two code paths for one event" — and `_paintStepRow` was
+  not an option, because the card builders emit `.ios-step-num` with no
+  `dot-<pid>-<stepId>` and that helper returns on its first line.
+
+  **The general form, and it is worth stating once for the rest of this flag's
+  life: a surgical repaint is an inventory of consequences, and an inventory
+  goes stale every time something new starts reading the value.** A render
+  cannot.
+
+  **AND THEN THE THIRD ONE, WHICH IS THE SAME SHAPE AGAIN AND ALSO A MODEL
+  QUESTION.** The entry above shipped one thing DECIDED-AGAINST: uploading a
+  binary did not tick Upload Build on a card, filed as the model working —
+  "a build with no destination is not a finished step". Jaco: *"en el flag modal
+  dudo que eso tenga que ser así? quizás debería marcarse el check sí o sí. Y
+  que sólo si doy a submit y falta elegir el track, se oscurezca todo para
+  elegir el track."* He is right, and the full argument is at
+  `_uploadBuildComplete` (state.js) where the predicate lives. Two measurements
+  settled it:
+
+  - **The row contradicted itself.** Upload Build's row HOLDS the build pill,
+    which draws a green check and the filename (`build-pill has-build`), while
+    its own disc beside it stayed a bare `ios-step-num`. One row, two answers,
+    six pixels apart.
+  - **Gate 3 was unreachable, and gate 2 pointed at the lie.** With Upload Build
+    incomplete, `submitStepClick` refused at gate 2 and spotlighted that row —
+    so pressing Submit answered "finish this step" by dimming the whole card
+    around the one row that looks finished.
+
+  **A step disc answers for what the step CONTAINS**, and that is the whole
+  rule: v6.29's argument is explicitly "the step now literally contains the
+  question", which is true of the pane and false of the grid, where shape 4 put
+  the picker in the card's own chrome two rows above the list. So the predicate
+  reads the flag — not as a special case, but as how it asks where the picker
+  currently lives. The destination did not stop being required; it stopped
+  being a checklist item and became a property of the PRESS.
+
+  **AND GATE 3 COULD NOT ASK FOR IT — third instance of the one shape.** Its
+  branch tested `openStep[pid] !== 'uploadBuild'`, a fact about the PANE, and
+  then called `toggleStepSection`, whose first line is `if (layout === 'modal')
+  return openStepModal(…)`. Measured: pressing Submit with no track OPENED THE
+  UPLOAD BUILD MODAL and spotlighted nothing. It asks the DOM now — the chip
+  either is in the document or it is not, which is true in both arms with no
+  flag at all.
+
+  Measured end to end on a card: build in, no track → 4/4 with the disc
+  `is-done` and Submit `submit-step-ready`; press Submit → no modal, card
+  `is-spotlight` with the head and all five step rows at **.18**, the release
+  block at **1** and the chip `is-spotlit` at 1; choose the track from there →
+  spotlight cleared, gate returns `true`, Submit ready. The inline arm verified
+  unchanged (false without a track, true with) and a platform with no
+  `PLATFORM_TRACKS` entry still finishes on the binary alone.
 
 - Steam's tile mark measures 98.96% of the shared canvas against 90.84% for
   every other logo — its own export, left as authored. One line to bring it
