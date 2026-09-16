@@ -7037,11 +7037,38 @@ Division of labor:
 Typical workflow:
 1. Describe changes to Claude in Cowork — Claude edits the files (no git).
 2. Test locally: `python3 -m http.server 8080` → open `http://localhost:8080`
-3. Publish: `./ship.sh "v5.xx — description of change"` (commits, pulls, pushes).
+3. Publish: `./ship.sh` (commits, pulls, pushes).
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
 
-Include the version number in the ship note: `./ship.sh "v6.26 — description of change"`.
+### The commit message comes from `.ship-message` (v6.58)
+
+**Claude's last act on a batch of edits is to write `.ship-message`** at the
+repo root, and the contributor then runs `./ship.sh` with no argument. Format:
+
+```
+v6.xx — subject line, under 72 characters
+<blank line>
+As long an explanation of the build as the change deserves. Paragraphs,
+bullets, whatever the change needs. This is what the log will carry.
+```
+
+`ship.sh` commits it with `-F`, so the first line becomes the commit title on
+GitHub and everything under it the description. The file is gitignored and is
+CONSUMED on a successful push (renamed `.ship-message.sent`), so a bare run can
+never re-publish the last build's description under a new one.
+
+- **The version in the subject must match `index.html`'s footer badge.** `ship.sh`
+  checks, and falls back to a file list rather than describing the wrong build.
+- `./ship.sh "your own subject"` still works and still wins. Claude's note is
+  set aside unused rather than left for a later bare run to pick up.
+- No note at all is not an error: it publishes with `vX.YZ — update (n files)`
+  and the changed-file list as the body.
+- A failed push leaves the note in place for the retry.
+
+Claude writes this file; it does not run git. Ending a batch of edits means
+writing `.ship-message` and saying "run `./ship.sh`" — not handing over a
+one-line subject to paste, which is what this replaced.
 
 ### `ship.sh` REBASES, so `--ours` is the OTHER person's side
 

@@ -17,3 +17,9 @@ _to_delete/
 # this repo is published via GitHub Pages, and third-party key art shouldn't
 # ship with it. Drop assets in here to test; nothing under it gets committed.
 test-assets/
+
+# The build's own commit description, handed to `./ship.sh` (see Git Workflow
+# in CLAUDE.md). Written per build and consumed on a successful push — it
+# belongs in the commit message, not in the tree.
+.ship-message
+.ship-message.sent
