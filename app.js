@@ -3125,10 +3125,40 @@ let _stepModalRerenderPending = false;
    closes it. Keyed on focus, a closing editor has already lost it and the
    render goes through, while an editor that is OPENING has just taken it and
    the render waits. */
+/* AN OPEN DROPDOWN IS A LIVE INTERACTION TOO (v6.51), and this is the case the
+   pointer flag cannot cover.
+
+   swSelect's open state is a bare `.is-open` DOM class and nothing else —
+   closeAllDropdowns says so in as many words ("purely transient DOM classes,
+   never read back by render"). So the pill is clicked, `.is-open` goes on,
+   pointerUP fires immediately and clears _stepModalPointerDown, and the list
+   then sits open with no guard at all while the user reads it. Any background
+   render arriving in that window rebuilds #step-modal-body, swSelect re-emits
+   the wrapper WITHOUT `.is-open`, and the list vanishes mid-reach — or worse,
+   survives visually but every .loc-dd-item under the cursor is a fresh node,
+   so the click lands on nothing. That is the "intermittent, hard to pick
+   anything out of a dropdown" report: intermittent precisely because it
+   depends on whether a completion happens to land during the second or two
+   the list is open.
+
+   It bites hardest right after adding supported languages to a scraped title,
+   which is the sequence that reported it: each language fires three localized
+   checks (description, listing, achievements), every one of which ends in
+   _deferredRerenderStepModal, so the modal is being asked to rebuild itself
+   repeatedly for several seconds — exactly while the developer is trying to
+   use the Localizations step's own pickers.
+
+   Deliberately NOT scoped to #submit-modal, matching the inline-input check
+   above: a false positive costs only a deferral that the very next pointerup
+   flushes, while a miss costs a lost click. Self-clearing for the same
+   reason the editor case is — swSelectChoose and the document handler both
+   run closeAllDropdowns on `click`, which lands BEFORE the pointerup flush's
+   setTimeout(0), so by the time the pending render runs the class is gone. */
 function _stepModalInteractionActive() {
   return _stepModalPointerDown
       || Date.now() < _stepModalScrollingUntil
-      || !!document.querySelector('.ias-inline-input:focus');
+      || !!document.querySelector('.ias-inline-input:focus')
+      || !!document.querySelector('.sw-select-wrap.is-open, #loc-primary-wrap.is-open');
 }
 
 function _flushPendingStepModalRerender() {

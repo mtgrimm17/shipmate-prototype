@@ -3646,11 +3646,18 @@ function _chkGroups() {
   // Screenshots: the Assets grid itself, scraped or uploaded — the item says
   // "Upload screenshots" and this is the array that section renders from.
   const hasScreenshots = (ups.screenshots || []).length > 0;
-  // Trailer: either door counts, per request — a video file dropped into
-  // Assets (state.uploads.trailer, which carries {name,size} immediately and
-  // gains its pool .ref asynchronously, so test the slot and not the ref) or
-  // a YouTube link typed into the URL field beside it.
-  const hasTrailer = !!ups.trailer || !!(fd.trailerUrl && fd.trailerUrl.trim());
+  // Trailer: any door counts, per request — a video file dropped into Assets
+  // (state.uploads.trailer, which carries {name,size} immediately and gains
+  // its pool .ref asynchronously, so test the slot and not the ref), a
+  // YouTube link typed into the URL field beside it, or a trailer SCRAPED
+  // from the picked title. That last one lands in its own slot
+  // (state.uploads.steamTrailer, a plain {name,thumbnail,hlsUrl} that is
+  // never adopted into the asset pool — see selectPicklistItem) rather than
+  // in `trailer`, which is why it was missed: the Assets section shows a
+  // trailer, so the checklist has to agree that one exists.
+  const hasTrailer = !!ups.trailer
+                  || !!ups.steamTrailer
+                  || !!(fd.trailerUrl && fd.trailerUrl.trim());
   return [
     { group: t('guide.group.details') || 'Details', view: 'details', items: [
       { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
