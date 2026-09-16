@@ -1242,6 +1242,64 @@ function _paneSteps(pid) {
   return _visiblePlatformSteps(pid).filter(s => !s.isSubmit);
 }
 
+/* ── "The developer actually opened this" ─────────────────────────────────
+   Some steps can read as finished purely from their answers, which is wrong
+   for a questionnaire whose answers Shipmate INFERRED on the developer's
+   behalf: every question can carry a confident machine answer nobody has
+   looked at, and the card would go green announcing work that hasn't been
+   reviewed. STEP_REQUIRES_VISIT names the steps that additionally need the
+   section to have been opened at least once.
+
+   Deliberately keyed per PLATFORM as well as per step, not per step alone.
+   Mac App Store shares iOS's content-rating answers wholesale (see
+   isMacSectionComplete's own delegation), so an answers-only flag would let
+   opening iOS's questionnaire silently tick Mac App Store's card too — two
+   separate cards, two separate confirmations.
+
+   Set by markStepSectionSeen from the two places a step can be opened —
+   openStepModal and toggleStepSection (app.js) — and read here rather than
+   inside isIOSSectionComplete and friends, which stay purely about answers:
+   Product Page Preview's own completeness reads those same functions (see
+   the 'storePreview' arms), and it was never asked to wait on a visit. */
+const STEP_REQUIRES_VISIT = new Set(['contentRating']);
+
+function isStepSectionSeen(pid, stepId) {
+  return !!(state.stepSectionSeen && state.stepSectionSeen[pid] && state.stepSectionSeen[pid][stepId]);
+}
+
+function markStepSectionSeen(pid, stepId) {
+  if (!pid || !stepId) return;
+  if (!state.stepSectionSeen) state.stepSectionSeen = {};
+  if (!state.stepSectionSeen[pid]) state.stepSectionSeen[pid] = {};
+  state.stepSectionSeen[pid][stepId] = true;
+}
+
+/* IS THIS PLATFORM'S STEP DONE? — one answer, and now genuinely one.
+   The per-platform isXxxSectionComplete switch was written out twice, here
+   and as _paneComplete (render.js), and the two had already drifted apart on
+   which platforms they special-cased. They are the same question, so this is
+   the one that answers it: _paneComplete now delegates here, and
+   platformStepCount below uses it instead of calling each isXxx directly —
+   which also means the visit gate above can't be satisfied on the card while
+   being ignored by the Submit button's own allRequired count. */
+function platformSectionComplete(pid, stepId) {
+  if (!stepVisitSatisfied(pid, stepId)) return false;
+  return _platformAnswersComplete(pid, stepId);
+}
+
+function stepVisitSatisfied(pid, stepId) {
+  return !STEP_REQUIRES_VISIT.has(stepId) || isStepSectionSeen(pid, stepId);
+}
+
+function _platformAnswersComplete(pid, stepId) {
+  if (pid === 'android')    return isAndroidSectionComplete(stepId);
+  if (pid === 'steam')      return isSteamSectionComplete(stepId);
+  if (pid === 'macos_full') return isMacFullSectionComplete(stepId);
+  if (pid === 'macos')      return isMacSectionComplete(stepId);
+  if (pid === 'ios')        return isIOSSectionComplete(stepId);
+  return state.platformStepStatus?.[pid]?.[stepId] === 'complete';
+}
+
 function platformStepCount(platformId) {
   const p = PLATFORMS[platformId];
   // Binary build upload is required for submit unlock on iOS/Android/Steam
@@ -1249,7 +1307,7 @@ function platformStepCount(platformId) {
   // iOS: completion is computed from submission answers, not manual task status
   if (platformId === 'ios') {
     const steps = _visiblePlatformSteps(platformId);
-    const complete = steps.filter(s => isIOSSectionComplete(s.id)).length;
+    const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     // uploadBuild step completion already requires hasBuild, so no separate hasBuild check needed
     return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
   }
@@ -1260,7 +1318,7 @@ function platformStepCount(platformId) {
   // showing 0 of N complete on its dashboard card.
   if (platformId === 'macos') {
     const steps = _visiblePlatformSteps(platformId);
-    const complete = steps.filter(s => isMacSectionComplete(s.id)).length;
+    const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
   }
   // Mac App Store Full: completion is computed from its own
@@ -1270,17 +1328,17 @@ function platformStepCount(platformId) {
   // this platform's steps either.
   if (platformId === 'macos_full') {
     const steps = _visiblePlatformSteps(platformId);
-    const complete = steps.filter(s => isMacFullSectionComplete(s.id)).length;
+    const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
   }
   // Android: completion is computed from androidSubmitAnswers
   if (platformId === 'android') {
-    const complete = p.steps.filter(s => isAndroidSectionComplete(s.id)).length;
+    const complete = p.steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   // Steam: completion is computed from steamSubmitAnswers
   if (platformId === 'steam') {
-    const complete = p.steps.filter(s => isSteamSectionComplete(s.id)).length;
+    const complete = p.steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
   }
   const required = p.steps.filter(s => !s.isSubmit);
@@ -3479,6 +3537,16 @@ const state = {
   mktWebFlipTarget:         null,
   // Tracks which sub-sections the user has actually visited (gates "done" state)
   storePreviewSectionSeen:  { ios: {}, macos: {}, macos_full: {}, android: {}, steam: {}, web: {} },
+
+  /* The same idea one level up: which STEPS (not preview sub-sections) the
+     developer has opened, as `{ [platformId]: { [stepId]: true } }`. Gates the
+     steps in STEP_REQUIRES_VISIT — see its own comment further up this file for
+     why an inferred questionnaire must not go green unlooked-at, and why this is
+     keyed per platform rather than per step. Written only by
+     markStepSectionSeen, read only by isStepSectionSeen. Left as a bare {} and
+     filled lazily rather than pre-seeded per platform like the line above,
+     since platform ids come and go with activePlatforms. */
+  stepSectionSeen:          {},
 
   // Which required element (Title/Subtitle/Content/Business/Screenshots/Data)
   // currently has the animated "needs attention" glow on the App Store/Mac

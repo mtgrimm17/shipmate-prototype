@@ -376,6 +376,12 @@ async function toggleStepSection(pid, stepId) {
   }
 
   state.submission.openStep[pid] = stepId;
+  // Expanding the row in the inline pane is the same visit the modal records
+  // at the top of openStepModal — see STEP_REQUIRES_VISIT (state.js). Distinct
+  // from stepSaveAttempted above, which means "closed at least once" and only
+  // drives risk dots; this fires on OPEN, so a step opened and left open still
+  // counts as looked at.
+  markStepSectionSeen(pid, stepId);
 
   /* `state.stepModal` IS "WHICH STEP AM I IN", NOT "IS A MODAL OPEN" — and the
      pane has to keep it current even though it opens no modal.
@@ -2573,6 +2579,11 @@ function removeMacFullReviewAttachment() {
 }
 
 async function openStepModal(pid, stepId) {
+  // Opening the step IS the visit — recorded before any of the per-platform
+  // branches below, every one of which returns early, so this would otherwise
+  // have to be repeated in five places (and be forgotten in the sixth).
+  // Gates the steps in STEP_REQUIRES_VISIT; a no-op for every other step.
+  markStepSectionSeen(pid, stepId);
   // Always reset storePreview sub-section — never restore last flip position
   if (stepId === 'storePreview') {
     if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = {};
@@ -6204,6 +6215,27 @@ function _syncProjectBarTitle(value) {
 }
 
 function syncField(field, value) {
+  /* EDITING THE TITLE INVALIDATES EVERYTHING SHIPMATE FETCHED FOR THE OLD ONE.
+     Scraped art, screenshots and the trailer preview all describe whatever
+     game was last resolved from the picklist; the moment the developer types
+     over that title by hand, they describe a game this project is no longer
+     about. Clearing only on picklist selection left exactly that hole — type
+     a different name and the previous game's screenshots stayed in Assets
+     indefinitely, with nothing on screen admitting where they came from.
+
+     Guarded three ways because this runs on every keystroke: only for the
+     title field, only when the text actually changed (oninput fires for
+     arrow keys and re-selection of the same value too), and only re-rendering
+     when something was genuinely removed. Manual uploads are untouched —
+     see _smClearAllScrapedAssets. selectPicklistItem does NOT come through
+     here (it assigns state.formData.title directly), so picking a title runs
+     that function's own call instead of this one and the two never double up. */
+  if (field === 'title' && state.formData[field] !== value) {
+    if (_smClearAllScrapedAssets()) {
+      if (typeof _refreshScreenshotGrid === 'function') _refreshScreenshotGrid();
+      if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+    }
+  }
   state.formData[field] = value;
   // Keep platform privacy URLs in sync when the global field is updated
   if (field === 'privacyUrl') {
@@ -7157,6 +7189,56 @@ function _smClearAutoScreenshots() {
   });
 }
 
+/* EVERY SCRAPED ASSET, GONE — because the game they described is gone.
+
+   The two clearers above are per-slot and were called piecemeal: picking a
+   new title cleared the four Key Art slots by name, and screenshots only got
+   cleared indirectly, later, inside whichever _fillScreenshotGridFrom* call
+   happened to run. That left two ways to keep a dead game's art: pick a title
+   whose Steam fetch then fails (no fill runs, so the previous game's
+   screenshots stay), or edit the title by hand (nothing cleared at all,
+   because only the picklist had a clearing path).
+
+   So this is the whole sweep, and it ends with a pass over the pool itself
+   rather than a list of slot names. A named-slot list can only ever delete
+   what someone remembered to name — the pool knows what it actually holds,
+   and `origin` already records how each record got there ('upload' when the
+   developer chose it, 'steam'/'igdb' when Shipmate fetched it). Anything not
+   uploaded by hand described the old title and goes.
+
+   MANUAL UPLOADS SURVIVE, which is the one invariant here: smIsOwn/origin is
+   what separates them, and a developer's own screenshot is never collateral
+   for a title edit. smRemove does the rest of the bookkeeping — it deletes
+   the pool record AND nulls every state.uploads slot pointing at it AND
+   filters both screenshot arrays — so no slot is left holding a dangling ref.
+
+   Returns whether it actually removed anything, so callers on a hot path
+   (every keystroke in the title field) can skip their re-render when there
+   was nothing to clear. */
+function _smClearAllScrapedAssets() {
+  if (!state.uploads) state.uploads = {};
+  const before = (state.assets || []).length;
+  const hadSteamTrailer = !!state.uploads.steamTrailer;
+
+  ['steamCapsuleImage', 'steamHeaderImage', 'steamKeyArtCapsule', 'steamKeyArtHero']
+    .forEach(_smClearAutoField);
+  _smClearAutoScreenshots();
+  if (Array.isArray(state.uploads.screenshots)) {
+    state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
+  }
+  // Never adopted into the pool — a plain { name, thumbnail, hlsUrl } lifted
+  // straight off Steam's movies[0], so there is no record for smRemove to
+  // find and the slot has to be nulled directly.
+  state.uploads.steamTrailer = null;
+
+  // The sweep. .slice() because smRemove splices the array being walked.
+  (state.assets || []).slice()
+    .filter(a => a && a.origin && a.origin !== 'upload')
+    .forEach(a => smRemove(a.id));
+
+  return hadSteamTrailer || (state.assets || []).length !== before;
+}
+
 function selectPicklistItem(igdbId) {
   const item = (state.titlePicklist || []).find(x => x.id === igdbId);
   if (!item) return;
@@ -7214,20 +7296,14 @@ function selectPicklistItem(igdbId) {
   // (comparing against state.formData.title) rejects a late write for the
   // old game anyway, but clearing here means the user never sees the old
   // game's auto-filled art flash on screen in the meantime either.
+  // Now the whole sweep rather than the four Key Art slots by name — this
+  // also takes the screenshot grid and the trailer preview, and finishes on
+  // the asset pool itself so nothing scraped for the previous title survives
+  // in the Assets library. See _smClearAllScrapedAssets for the argument;
+  // manual uploads are still protected by exactly the same smIsOwn/origin
+  // test the four named calls used to apply.
   state.uploads = state.uploads || {};
-  _smClearAutoField('steamCapsuleImage');
-  _smClearAutoField('steamHeaderImage');
-  _smClearAutoField('steamKeyArtCapsule');
-  _smClearAutoField('steamKeyArtHero');
-  // Trailer preview has no manual-upload variant at all (unlike the four Key
-  // Art slots above, which keep a manual dataUrl upload if the developer set
-  // one) — it's purely derived from whichever title is currently selected,
-  // so it's always safe to clear unconditionally here. Also unlike those
-  // four, it's never adopted into the shared asset pool at all (it's a
-  // plain { name, thumbnail, hlsUrl } preview object — see its own comment,
-  // state.js), so there's no orphaned pool record to worry about here; a
-  // bare null is already the complete fix.
-  state.uploads.steamTrailer = null;
+  _smClearAllScrapedAssets();
   // Per product decision: picking a new title always resets Mac App Store's
   // Game Center Achievements — unlike the Key Art slots above, a manually
   // entered achievement is NOT preserved across a title switch, since a new
@@ -19755,6 +19831,21 @@ async function openStorePreviewSection(pid, target) {
 
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
   state.storePreviewFlipTarget[pid] = target;
+  /* Product Page Preview is a SECOND DOOR onto the same questionnaires, and a
+     visit through it counts. Flipping to Content lands on exactly the content
+     rating section the step modal would have shown, so gating the step on
+     "opened from the Submission card" alone would tell a developer who just
+     reviewed every question in the preview that they still haven't looked at
+     it. Mapped rather than passed through because the flip targets have their
+     own vocabulary ('content'/'data') and the steps have theirs — and Google
+     Play calls its data step 'dataSafety' where the Apple platforms call
+     theirs 'privacy', so 'data' resolves against the platform rather than to
+     one fixed id. */
+  const flipStepId = target === 'content' ? 'contentRating'
+                   : target === 'business' ? 'business'
+                   : target === 'data' ? (pid === 'android' ? 'dataSafety' : 'privacy')
+                   : null;
+  if (flipStepId) markStepSectionSeen(pid, flipStepId);
   /* The panel that is about to appear starts at ITS top, not at the offset the
      page you were reading happened to be scrolled to. */
   if (typeof scrollContentToTop === 'function') scrollContentToTop();

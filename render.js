@@ -3517,26 +3517,106 @@ function buildPerfInsights() {
   return buildPerfPanel('Insights & alerts', `<div class="perf-insights">${chips}</div>`, { id: 'perf-box-insights', mod: 'perf-panel--insights' });
 }
 
-/* ── EXPERIMENT: persistent left-pane checklist with a progress ring ──
-   Rough concept test — mixes a few real state signals with placeholders. */
+/* ── Persistent left-pane checklist with a progress ring ──────────────────
+   Started as a concept test that mixed a few real state signals with
+   hardcoded placeholders — `done: true` on items nobody had done, `done:
+   false` on items you couldn't complete if you tried. The Details and
+   Platforms groups read real state now; Marketing and Performance are still
+   placeholders, and are still marked as such.
+
+   Every predicate below is evaluated eagerly on each call, and _chkGroups is
+   called fresh on every renderGuide/renderChecklist (no memoisation), so
+   these must stay cheap — they are all set lookups and array scans over
+   state that is already in memory. */
+
+/* The platforms a Submission-group item is answerable for: the ones the
+   developer actually activated AND that genuinely carry the step in question.
+   Both halves matter. Filtering by activePlatforms alone would ask Steam for
+   a data-safety answer it has no step for; not filtering at all would let an
+   item sit green because no platform disagreed with it.
+
+   `[]` is the important return: "every platform has done it" is vacuously
+   true over an empty list, which is precisely how the old placeholders
+   managed to show a finished checklist for a project with no platforms at
+   all. Callers below all require a non-empty list before anything ticks. */
+function _chkPlatformsWithStep(stepIds) {
+  const want = new Set([].concat(stepIds));
+  return [...(state.activePlatforms || [])].filter(pid => {
+    const p = PLATFORMS[pid];
+    if (!p) return false;
+    return (_visiblePlatformSteps(pid) || p.steps || []).some(s => want.has(s.id));
+  });
+}
+
+/* Which of {stepIds} a given platform actually has — a platform answers for
+   the data step it owns ('privacy' on Apple, 'dataSafety' on Google Play),
+   not for both. */
+function _chkPlatformStepId(pid, stepIds) {
+  const want = new Set([].concat(stepIds));
+  const p = PLATFORMS[pid];
+  if (!p) return null;
+  const hit = (_visiblePlatformSteps(pid) || p.steps || []).find(s => want.has(s.id));
+  return hit ? hit.id : null;
+}
+
+/* "Done on every platform that has it, and at least one does." Runs each
+   platform's own step id through platformSectionComplete (state.js), so the
+   checklist agrees with the step cards rather than re-deriving completeness
+   from the answer objects — including the STEP_REQUIRES_VISIT gate, which is
+   what makes "visited at least once AND fully answered" hold here too. */
+function _chkEveryPlatformComplete(stepIds) {
+  const pids = _chkPlatformsWithStep(stepIds);
+  if (!pids.length) return false;
+  return pids.every(pid => {
+    const stepId = _chkPlatformStepId(pid, stepIds);
+    return !!stepId && platformSectionComplete(pid, stepId);
+  });
+}
+
+/* Submitted on every activated platform. Same "at least one" guard as
+   _chkEveryPlatformComplete, for the same reason. */
+function _chkAllPlatformsSubmitted() {
+  const pids = [...(state.activePlatforms || [])];
+  if (!pids.length) return false;
+  return pids.every(pid => state.platformStepStatus?.[pid]?.['submit'] === 'complete');
+}
+
 function _chkGroups() {
   const fd = state.formData || {};
+  const ups = state.uploads || {};
   const plats = state.activePlatforms ? state.activePlatforms.size : 0;
+  // Screenshots: the Assets grid itself, scraped or uploaded — the item says
+  // "Upload screenshots" and this is the array that section renders from.
+  const hasScreenshots = (ups.screenshots || []).length > 0;
+  // Trailer: either door counts, per request — a video file dropped into
+  // Assets (state.uploads.trailer, which carries {name,size} immediately and
+  // gains its pool .ref asynchronously, so test the slot and not the ref) or
+  // a YouTube link typed into the URL field beside it.
+  const hasTrailer = !!ups.trailer || !!(fd.trailerUrl && fd.trailerUrl.trim());
   return [
     { group: t('guide.group.details') || 'Details', view: 'details', items: [
       { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
       { label: t('guide.item.desc') || 'Write a description',          section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
       { label: t('guide.item.platforms') || 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
+      // Languages sits ABOVE countries by request: Distribution's own
+      // presets read the primary/supported languages chosen here, so the
+      // checklist now walks the developer through them in the order the data
+      // actually flows rather than the order the sub-tabs happen to sit in.
+      { label: t('guide.item.localizations') || 'Select target languages', section: 'localization', anchor: 'ob-lang-list-wrap', done: !!state.localizationSeen },
       { label: t('guide.item.countries') || 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
-      { label: t('guide.item.localizations') || 'List localizations',  section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
-      { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
-      { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
+      { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: hasScreenshots },
+      { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: hasTrailer },
     ] },
     { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
-      { label: t('guide.item.contentRatings') || 'Set content ratings',    done: true },
-      { label: t('guide.item.dataSafety') || 'Data-safety disclosures',    done: true },
-      { label: t('guide.item.storePages') || 'Build store pages',          done: false },
-      { label: t('guide.item.submitBuilds') || 'Submit builds for review', done: false },
+      { label: t('guide.item.contentRatings') || 'Set content ratings',    done: _chkEveryPlatformComplete('contentRating') },
+      { label: t('guide.item.dataSafety') || 'Complete data safety disclosures', done: _chkEveryPlatformComplete(['privacy', 'dataSafety']) },
+      { label: t('guide.item.storePages') || 'Build store pages',          done: _chkEveryPlatformComplete(['storePreview', 'storePreviewPrototype']) },
+      // Submit has no isXxxSectionComplete arm on any platform — it is
+      // recorded straight onto platformStepStatus by _doFinalSubmit (app.js),
+      // which is the flag every other submit-state reader tests too. Applies
+      // to every active platform, not only those listing an explicit submit
+      // step, since that flag is what gets written regardless.
+      { label: t('guide.item.submitBuilds') || 'Submit builds for review', done: _chkAllPlatformsSubmitted() },
     ] },
     { group: t('guide.group.marketing') || 'Marketing', view: 'broadcast', items: [
       { label: t('guide.item.announcement') || 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
@@ -6075,11 +6155,16 @@ function _appStoreSectionRisk(pid, sectionId) {
    builder's note is explicit that Web and the consoles have no equivalent of
    the App Store questionnaire's scoring, so a row with nothing to say says
    nothing. Returning a string rather than null keeps every caller on one shape. */
+/* Now a one-line delegation to platformSectionComplete (state.js) rather than
+   a fourth copy of the same platform switch. That function is where the
+   STEP_REQUIRES_VISIT gate lives, so the card, the pane, the modal and
+   platformStepCount's own Submit-unlocking count all answer this question
+   identically — previously the count called each isXxxSectionComplete
+   directly, which would have let a step read "done" on the card while the
+   visit gate was ignored by the button. Same per-platform answers as before
+   for every step outside that set. */
 function _paneComplete(pid, stepId) {
-  if (pid === 'android')    return isAndroidSectionComplete(stepId);
-  if (pid === 'steam')      return isSteamSectionComplete(stepId);
-  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') return _appStoreSectionComplete(pid, stepId);
-  return state.platformStepStatus?.[pid]?.[stepId] === 'complete';
+  return platformSectionComplete(pid, stepId);
 }
 
 function _paneRisk(pid, stepId) {
@@ -6546,7 +6631,19 @@ function renderStepModal() {
     (stepId === 'privacy') ||
     (stepId === 'storePreview' && (platformId === 'ios' || platformId === 'macos')
       && state.storePreviewFlipTarget?.[platformId] === 'data');
-  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (state.showHighlights ? ' is-validating' : '');
+  /* Mac App Store's Game Center, at Product Page Preview's width by request.
+     The two are one surface from the developer's seat — Achievements is a
+     card ON the preview (buildMacStorePreviewSection's achievementsHtml) and
+     clicking it opens this, so the modal jumping from 1000px down to the
+     default 680 read as landing somewhere else entirely rather than one level
+     deeper. Its own modifier rather than reusing .submit-modal-mac-spp, for
+     the same reason .submit-modal-privacy-wide is separate: that class also
+     carries sidebar flex/scroll overrides (.mac-spp-sidebar) that have
+     nothing to drive here. Scoped to 'macos' as asked — macos_full's Game
+     Center is a different, more elaborate surface (leaderboards) and wasn't
+     part of the request. */
+  const isMacGameCenter = stepId === 'gameCenter' && platformId === 'macos';
+  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (isMacGameCenter ? ' submit-modal-mac-gc' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];

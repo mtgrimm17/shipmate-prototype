@@ -13096,6 +13096,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-mac-spp {
   max-width: 1000px;
 }
+/* Mac App Store Game Center — the SAME 1000 as .submit-modal-mac-spp directly
+   above, and that is the whole point of the rule: Achievements is a card on
+   the Product Page Preview and opens from it, so the two modals are one
+   surface a level apart and must not change size between them. Deliberately
+   its own selector rather than being added to the mac-spp rule, since that
+   class carries sidebar flex/scroll overrides further down this file which
+   would have nothing to act on in Game Center's plain step body. If the
+   preview's width ever moves, move this with it. */
+.submit-modal.submit-modal-mac-gc {
+  max-width: 1000px;
+}
 /* ios/macos Data Collection Questions (buildPrivacyMatrix). See
    renderStepModal's own isPrivacyWide comment for why this is a separate class
    rather than reusing .submit-modal-mac-spp — no sidebar flex/scroll overrides
