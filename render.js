@@ -4015,6 +4015,65 @@ function renderChecklist() {
     ${buildChkCalendar()}`;
 }
 
+/* ── A STEP TICKS ITSELF ───────────────────────────────────────────────────
+   The checklist's predicates were always live — `_chkGroups` recomputes every
+   row from state on every call, and it is called fresh by both renderers. What
+   was missing is anybody CALLING them when an answer changes.
+
+   `renderGuide` has ~20 callers and none of them is the one that matters:
+   every answer handler in the app repaints through `reRenderStepModal`
+   (app.js), which paints the step body and stops. So the guide kept whatever
+   it was rendered with when you entered the tab. Finish Data Collection
+   Questions on both Apple platforms and `_chkDataSafetyDone()` returns true on
+   the very next call — the column just never made that call, and the row sat
+   grey. Clicking the row "fixed" it because `chkGoStep` navigates, and
+   navigating renders. That is the whole bug: the user was pressing a button to
+   trigger a repaint, and reading it as the button being what completes a step.
+
+   SIGNATURE-GATED, because the fix has to survive being called from a
+   keystroke handler. `renderGuide` rebuilds this column with innerHTML and
+   remounts Shippy; doing that per character typed would be visible. So the
+   done-state of every row is reduced to a short string and compared with the
+   last one — identical means nothing to repaint, and the common case (typing
+   inside a section that is already complete, or still incomplete) costs one
+   `_chkGroups()` pass over state that is already in memory. Labels are in the
+   signature as well as ticks, so a row APPEARING or disappearing (the
+   Localizations row, conditional on supporting languages) repaints too.
+
+   Both surfaces are refreshed from the one entry point: the right-hand guide
+   and the left-hand `#app-checklist`, which draws the same groups plus a
+   progress ring. */
+let _chkDoneSignature = null;
+
+function _chkSignature() {
+  try {
+    return _chkGroups()
+      .map(g => g.items.map(i => `${i.label}:${i.done ? 1 : 0}`).join(','))
+      .join('|');
+  } catch (_) { return null; }   // mid-boot, before state is seeded
+}
+
+/* THE SIGNATURE IS STAMPED BY THE PAINT, NOT BY THE CHECK — and getting that
+   backwards is a bug worth naming, because it fails in the direction that is
+   hardest to see. renderGuide has ~20 other callers; if only this function
+   recorded what it had seen, a repaint from any of them would leave the cached
+   signature describing something OTHER than what is on screen, and the very
+   next comparison could match a stale value and skip a repaint that was
+   needed. Measured: adding a supporting language (which adds the Localizations
+   row) through a direct renderGuide, then removing it, left the row on screen
+   for good — the signature had gone out and come back to the same string while
+   the DOM had only made the first half of that trip.
+   So renderGuide sets it, every time, from the same state it is about to
+   paint; this function only ever reads it. */
+function refreshGuideCompletion(force) {
+  if (typeof _chkGroups !== 'function' || typeof renderGuide !== 'function') return;
+  const sig = _chkSignature();
+  if (sig === null) return;
+  if (!force && sig === _chkDoneSignature) return;
+  renderGuide();                                   // stamps _chkDoneSignature
+  if (document.getElementById('app-checklist')) renderChecklist();
+}
+
 /* EXPERIMENT: persistent right guide column — renders the designer's Shippy
    panel for the active tab (falls back to a minimal placeholder). */
 // The Shippy guide is now the CURRENT tab's helper: the tab's banner text on
@@ -4029,6 +4088,9 @@ const GUIDE_CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
 function renderGuide() {
   const el = document.getElementById('app-guide');
   if (!el) return;
+  // What this paint is about to show — see refreshGuideCompletion's note for
+  // why the stamp lives here and not there.
+  _chkDoneSignature = _chkSignature();
   const view = state.activeView;
 
   /* The Calendar tab hands this column to its own checklist: the guide's job
@@ -5211,6 +5273,10 @@ function buildDashboardAnnounceCta() {
 }
 
 function renderDashboard() {
+  // The guide column is rendered beside these cards and reads the same
+  // completion predicates they do — keep the two in step. No-op unless
+  // something actually moved (refreshGuideCompletion).
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
   const el = document.getElementById('dashboard');
   if (!el) return;
 
@@ -7318,6 +7384,18 @@ function renderStepModal() {
 
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
+
+  /* RENDERING A STEP CAN COMPLETE ONE, so the checklist is refreshed on the way
+     out as well as on the way in. Three of the preview's required elements are
+     "you have been here" flags — storePreviewSectionSeen, written by
+     buildStorePreviewFlipSection while it BUILDS the sub-section's HTML, and
+     stepSectionSeen, written by openStepModal — which means the visit becomes
+     true partway through this paint, after reRenderStepModal's own refresh has
+     already run. Data safety is the visible case: flipping to Data Collection
+     Questions on the second Apple platform is the moment _chkDataSafetyDone()
+     turns true, and without this line the row waited for whatever repainted
+     next. No-op unless the done-state actually moved. */
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
 }
 
 /* ── Documentation Pane helpers ─────────────────────────── */
@@ -10127,7 +10205,17 @@ function buildStorePreviewSection() {
   const contentDone     = isIOSSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
   const dataDone        = !!(seenSections.data && isIOSSectionComplete('privacy'));
-  const screenshotsDone = !!(seenSections.screenshots && isIOSSectionComplete('screenshots'));
+  /* ADJUST SCREENSHOTS IS DONE WHEN THERE ARE SCREENSHOTS. It used to also
+     require `seenSections.screenshots` — opening the editor at least once —
+     which is the right gate for a questionnaire Shipmate answered on the
+     developer's behalf and the wrong one here: nothing is inferred, the shots
+     are already visible in the row above, and they arrive pre-populated from
+     Game Details - Assets. The editor is for CURATING them, which is optional
+     by this section's own design (see isIOSSectionComplete's 'screenshots'
+     arm), so requiring a visit asked the developer to confirm a choice they
+     had already made somewhere else. Emptying the listing still reads as not
+     done — that check lives in the isXxxSectionComplete arm and is untouched. */
+  const screenshotsDone = isIOSSectionComplete('screenshots');
   // Description is a plain text field, same as Title/Subtitle — done once it
   // has any text other than the pre-populated placeholder copy, regardless
   // of whether that text arrived from direct editing here or was filled in
@@ -10894,7 +10982,8 @@ function buildMacStorePreviewSection() {
      white-space: nowrap), so the longer string costs nothing. */
   const getLabel        = businessDone ? price : 'Set price';
   const dataDone        = !!(seenSections.data && isMacSectionComplete('privacy'));
-  const screenshotsDone = !!(seenSections.screenshots && isMacSectionComplete('screenshots'));
+  // Same rule as the App Store preview's own — see its note.
+  const screenshotsDone = isMacSectionComplete('screenshots');
   // Description is a plain text field, same as Title/Subtitle — done once it
   // has any text other than the pre-populated placeholder copy, regardless
   // of whether that text arrived from direct editing here or was filled in
@@ -13971,11 +14060,25 @@ function computeIOSAgeRating() {
 function buildExportComplianceSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
-  // Respect the Unanswered/All filter — hide this section when usesEncryption is answered
-  const answered     = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
-  const collapseMode = answered !== null;
-  const showAll      = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
-  if (collapseMode && !showAll && answered.has('usesEncryption')) return '';
+  /* THE UNANSWERED FILTER DOES NOT REACH THIS SECTION ANY MORE, and the App
+     Store is why. This used to early-return '' whenever the platform's filter
+     snapshot contained `usesEncryption` — and takeFilterSnapshot (app.js) adds
+     that id the moment the field has any value at all, including the value the
+     shared questionnaire inference writes without the developer ever seeing the
+     question. The App Store takes that snapshot (its inference runs from the
+     Product Page Preview's Content section); Mac App Store, in practice, does
+     not. So the very same Business Questions section showed the cryptography
+     question on Mac App Store and had NOTHING where it should be on the App
+     Store — reported as "App Store - Business Questions is missing the
+     cryptography question", which is exactly what it looked like.
+
+     The filter is Content Rating's tool: thirty-odd inferred questions where
+     hiding the settled ones is the whole point of the view. Business Questions
+     is three fields, one of which IS this one — there is nothing to declutter,
+     and a required question that vanishes because something answered it for you
+     is the opposite of what a review surface is for. Tax Category keeps its own
+     hide (buildBusinessSection) because that one is gated on
+     `humanConfirmed` — the developer actually picked it. */
 
   let followUp = '';
   if (a.usesEncryption === 'yes') {
@@ -14203,10 +14306,15 @@ function buildIapSection(pid = 'ios') {
   // (and their localizations) disappear entirely the moment hasIAP was
   // answered and the view was collapsed to "Unanswered" — the exact
   // opposite of what this filter is for.
-  const bsAnswered = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
-  const bsCollapse = bsAnswered !== null;
-  const bsShowAll  = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
-  const hideIAPQuestion = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
+  /* NOT FILTERED EITHER — same reason, same report. See
+     buildExportComplianceSection's note directly above: the snapshot contains
+     'hasIAP' as soon as anything writes a value, so on the App Store this hid
+     the question and left the In-App Purchases block with only its heading,
+     while Mac App Store showed it in full. Kept as a named constant rather
+     than deleting the branch outright because the comment below it — about
+     NOT letting this flag reach the saved products list — is the bug this
+     section has already been fixed for once, and it should stay readable. */
+  const hideIAPQuestion = false;
 
   const iapProducts = a.iapProducts || [];
 
@@ -17293,6 +17401,11 @@ function buildCQQuestion(q) {
 }
 
 function renderCQModal() {
+  // Content Rating answers reach the Submission checklist's "Set content
+  // ratings" row, and this pane repaints through its own renderer rather than
+  // reRenderStepModal — so the same no-op-unless-it-moved refresh goes here
+  // too. See refreshGuideCompletion's own note.
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
   const modal = document.getElementById('cq-modal');
   if (!modal) return;
   modal.classList.toggle('is-validating', !!state.showHighlights);

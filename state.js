@@ -1250,11 +1250,20 @@ function _paneSteps(pid) {
    reviewed. STEP_REQUIRES_VISIT names the steps that additionally need the
    section to have been opened at least once.
 
-   Deliberately keyed per PLATFORM as well as per step, not per step alone.
-   Mac App Store shares iOS's content-rating answers wholesale (see
-   isMacSectionComplete's own delegation), so an answers-only flag would let
-   opening iOS's questionnaire silently tick Mac App Store's card too — two
-   separate cards, two separate confirmations.
+   Deliberately keyed per PLATFORM as well as per step, not per step alone —
+   but a platform's visit can COUNT FOR ITS TWIN, which is what
+   SHARED_VISIT_PLATFORMS below says and why this stayed per-platform rather
+   than collapsing to a bare step id.
+
+   This used to read "two separate cards, two separate confirmations", and that
+   was the wrong unit. Mac App Store does not have its own content-rating
+   questionnaire to confirm: isMacSectionComplete('contentRating') delegates
+   straight to the App Store's, and IOS_MAC_SHARED_ANSWER_FIELDS routes every
+   write to the same state.iosSubmitAnswers. There is ONE questionnaire, so
+   asking the developer to open it twice asks them to confirm the same answers
+   a second time and tells them nothing new — it just left "Set content
+   ratings" unticked with no visible reason, since both cards were already
+   showing the rating those answers produced.
 
    Set by markStepSectionSeen from the two places a step can be opened —
    openStepModal and toggleStepSection (app.js) — and read here rather than
@@ -1262,6 +1271,26 @@ function _paneSteps(pid) {
    Product Page Preview's own completeness reads those same functions (see
    the 'storePreview' arms), and it was never asked to wait on a visit. */
 const STEP_REQUIRES_VISIT = new Set(['contentRating']);
+
+/* WHOSE VISIT COUNTS. Platforms listed together in one group answer a step
+   from the SAME stored answers, so opening it on any one of them is the review
+   for all of them. Keyed by step rather than declared globally because sharing
+   is a property of the answers, not of the platforms: ios/macos share content
+   rating (isMacSectionComplete delegates) and nothing else here.
+
+   macos_full is deliberately absent. Per PLATFORMS.macos_full's "fully
+   independent" decision, isMacFullSectionComplete never delegates to the App
+   Store's answers — it reads state.macFullSubmitAnswers — so its content-rating
+   questionnaire really is a second one and really does need its own look. */
+const SHARED_VISIT_PLATFORMS = {
+  contentRating: [['ios', 'macos']],
+};
+
+function _stepVisitPeers(pid, stepId) {
+  const groups = SHARED_VISIT_PLATFORMS[stepId];
+  if (!groups) return [pid];
+  return groups.find(g => g.includes(pid)) || [pid];
+}
 
 function isStepSectionSeen(pid, stepId) {
   return !!(state.stepSectionSeen && state.stepSectionSeen[pid] && state.stepSectionSeen[pid][stepId]);
@@ -1288,7 +1317,8 @@ function platformSectionComplete(pid, stepId) {
 }
 
 function stepVisitSatisfied(pid, stepId) {
-  return !STEP_REQUIRES_VISIT.has(stepId) || isStepSectionSeen(pid, stepId);
+  if (!STEP_REQUIRES_VISIT.has(stepId)) return true;
+  return _stepVisitPeers(pid, stepId).some(p => isStepSectionSeen(p, stepId));
 }
 
 function _platformAnswersComplete(pid, stepId) {
@@ -1842,6 +1872,40 @@ function computeIOSSectionRisk(sectionId) {
   return 'NONE';
 }
 
+/* ── "Every required element on the page", not four of the eight ──────────
+   Product Page Preview draws its own required-elements list (ALL_ELEMENTS,
+   render.js) and it has eight entries: Title, Subtitle, Business, Content,
+   Adjust Screenshots, Description, Achievements (optional) and Data
+   Collection. The step's completeness only ever asked FOUR of them — the
+   sections you flip to — so a listing with no Subtitle at all reported the
+   step done, the card went green, and the preview underneath it was still
+   glowing at an empty field. The Submission checklist inherits that answer
+   through _chkEveryPlatformComplete, so "Build store pages" ticked too.
+
+   The three plain text fields are the missing half, and they are read through
+   the SAME accessors the preview reads (_iasFieldValue / _masFieldValue, which
+   route Title/Subtitle to the App Store's shared storage via
+   MAS_SHARED_LISTING_FIELDS) so the tick and the glow cannot disagree about
+   what is filled in. Primary language only: a supporting language's
+   translation is the Localizations step's business, not this one's.
+
+   Guarded because state.js loads before app.js — on the very first call
+   during boot the accessors may not exist yet, and the raw formData fields are
+   the same answer for the primary language. */
+const STORE_LISTING_REQUIRED_FIELDS = ['title', 'subtitle', 'description'];
+
+function _storeListingTextComplete(pid) {
+  const fd   = state.formData || {};
+  const lang = fd.primaryLanguage || 'en';
+  const read = (pid === 'macos' && typeof _masFieldValue === 'function') ? _masFieldValue
+             : (typeof _iasFieldValue === 'function') ? _iasFieldValue
+             : null;
+  return STORE_LISTING_REQUIRED_FIELDS.every(f => {
+    const v = read ? read(f, lang) : fd[f];
+    return !!(v || '').trim();
+  });
+}
+
 function isIOSSectionComplete(sectionId) {
   // Upload Build step is complete when a build is uploaded and not processing
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('ios');
@@ -1884,12 +1948,15 @@ function isIOSSectionComplete(sectionId) {
   // silently show as complete.
   if (sectionId === 'localizations') return !!state.iosLocalizationsSeen;
 
-  // storePreview is complete when all 4 sub-sections are done
+  // storePreview is complete when every required element on the page is —
+  // the four sub-sections you flip to AND the three text fields you type in
+  // (see _storeListingTextComplete above for why those were the missing half).
   if (sectionId === 'storePreview') {
     return isIOSSectionComplete('contentRating') &&
            isIOSSectionComplete('privacy') &&
            isIOSSectionComplete('business') &&
-           isIOSSectionComplete('screenshots');
+           isIOSSectionComplete('screenshots') &&
+           _storeListingTextComplete('ios');
   }
 
   // Questionnaire (legacy — kept for backward compat)
@@ -1957,10 +2024,9 @@ function isIOSSectionComplete(sectionId) {
     return a.selectedCountries.length > 0;
   }
 
-  if (sectionId === 'storePreview') {
-    // Complete once the user has opened and reviewed the Store Preview
-    return !!state.iosStorePreviewSeen;
-  }
+  // (An older `return !!state.iosStorePreviewSeen` arm sat here. It was
+  // unreachable — the real 'storePreview' branch above returns first — so it
+  // was a trap for anyone editing it expecting a behaviour change.)
 
   return false;
 }
@@ -2068,11 +2134,16 @@ function isMacSectionComplete(sectionId) {
     return isIOSSectionComplete(sectionId);
   }
 
+  // Same eight-element bar as the App Store's own — see
+  // _storeListingTextComplete. Title/Subtitle resolve to the App Store's
+  // shared storage and Description to Mac's own, exactly as this preview
+  // reads them.
   if (sectionId === 'storePreview') {
     return isMacSectionComplete('contentRating') &&
            isMacSectionComplete('privacy') &&
            isMacSectionComplete('business') &&
-           isMacSectionComplete('screenshots');
+           isMacSectionComplete('screenshots') &&
+           _storeListingTextComplete('macos');
   }
 
   if (sectionId === 'questionnaire') {
@@ -2100,9 +2171,7 @@ function isMacSectionComplete(sectionId) {
     return a.selectedCountries.length > 0;
   }
 
-  if (sectionId === 'storePreview') {
-    return !!state.macStorePreviewSeen;
-  }
+  // (Unreachable twin of the iOS arm above, removed for the same reason.)
 
   return false;
 }

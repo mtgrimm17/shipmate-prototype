@@ -693,6 +693,10 @@ function _repaintSubStepBody() {
   // The listener died with the old innerHTML; the cue has to be re-armed for
   // the same reason _smModalFades is re-armed after every modal render.
   _subScrollCue();
+
+  // Same reason as renderStepModal's own tail — see the note there. This is the
+  // inline pane's paint, and the seen-flags are written while its HTML is built.
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
   return true;
 }
 
@@ -3290,6 +3294,20 @@ function toggleIOSSection(sectionId) {
    are openStepModal's own per-platform paints (there the modal genuinely IS the
    surface) and the fallback below. */
 function reRenderStepModal() {
+  /* THE CHECKLIST REPAINTS WITH THE STEP. This is the one hook every answer
+     handler in the app already calls — four platforms, a dozen builders,
+     hundreds of call sites — which is exactly why teaching the inline pane
+     about itself belonged here too (see the note below). The Shippy Checklist
+     reads the same answers those handlers just changed, so it belongs on the
+     same hook: without it the column only ever refreshed on navigation, and a
+     step you had just finished stayed grey until you clicked it.
+
+     First, and outside every early return below — each of the three surfaces
+     this function can paint returns as soon as it has painted one, so anything
+     that has to happen on EVERY repaint has to happen before them.
+     refreshGuideCompletion is a no-op unless the done-state actually moved. */
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
+
   // The Content rating questionnaire also lives inline in the Game Details pane
   // (not just the legacy step modal). When it's showing there, re-render just
   // that pane in place so every questionnaire interaction updates.
@@ -7174,9 +7192,20 @@ function syncField(field, value) {
   if (FIELD_INPUT_MAP[field]) _setInputComplete(FIELD_INPUT_MAP[field], !!(value?.trim()));
   // Update section rails reactively
   updateObSectionStates();
-  // Reactively refresh the Shippy Guide checklist (a field gaining/losing a
-  // value flips its checkbox) — event-driven, not polling.
-  if (typeof renderGuide === 'function') renderGuide();
+  /* Reactively refresh the Shippy Guide checklist (a field gaining/losing a
+     value flips its checkbox) — event-driven, not polling.
+
+     Through refreshGuideCompletion rather than renderGuide, because "flips its
+     checkbox" is the whole of what this line wants and renderGuide is the
+     expensive way to get it: this runs on EVERY KEYSTROKE, and it was tearing
+     down and rebuilding the guide column — innerHTML plus a Shippy remount —
+     once per character, to change nothing at all on the 60 characters of a
+     title after the first. The gated call compares the done-state of every row
+     against what is on screen and returns without touching the DOM unless one
+     actually moved, which for this field is the first character typed and the
+     last one deleted. Same behaviour, paid for once instead of per key. */
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
+  else if (typeof renderGuide === 'function') renderGuide();
 }
 
 function charCount(countId, value, max) {

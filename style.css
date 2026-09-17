@@ -8918,7 +8918,22 @@ body.viewing-splash .app-subnav { display: none; }
    `businessDone` is the same gate the label and the pinned bar's disc read, so
    the shape, the word and the tick cannot disagree about whether this is
    answered. */
-.mac-spp-page .ias-get-btn { width: var(--spp-well-w); }
+/* THE DERIVED WIDTH IS A TARGET, NOT A FLOOR. `--spp-well-w` is one sixth of
+   the page's own width (see the token's note above), and the arithmetic that
+   made it 109.8 assumed "the modal is a fixed 1000" — which it is not once the
+   browser window is narrower than the design width. At a half-screen window the
+   page measures ~466, the tile drops to 66 and the pill to 62, while the label
+   inside it is `white-space: nowrap` and needs 92.7: the text ran straight out
+   of the blue pill and collided with "In-App Purchases" beside it.
+
+   `min-width: max-content` keeps the derived width wherever there is room — so
+   the alignment this rule exists for, Set price sharing the Content well's
+   column, is untouched at every width where it was ever true — and stops the
+   box shrinking past its own label everywhere else. A field that is wider than
+   its column reads as a wide field; a label hanging outside its button reads as
+   broken. The `.is-priced` arm below is already `width: auto` (Apple's pill is
+   as wide as the word in it) and is unaffected either way. */
+.mac-spp-page .ias-get-btn { width: var(--spp-well-w); min-width: max-content; }
 .mac-spp-page .ias-get-btn.is-priced {
   width: auto;
   margin-left: 10px;
