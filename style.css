@@ -10216,9 +10216,9 @@ textarea.loc-review-field.ias-inline-input {
 }
 .ias-meta-bot--action { color: var(--accent); font-weight: 600; }
 
-/* ── Element focus (App Store/Mac App Store Product Page Preview only —
-   buildStorePreviewSection/buildMacStorePreviewSection, ALL_ELEMENTS/
-   _sppFooterNav, render.js) ──
+/* ── Element focus (App Store Product Page Preview only —
+   buildStorePreviewSection, ALL_ELEMENTS/_sppGlowCls, render.js; the Mac
+   preview deleted its whole copy of this in v6.40) ──
    A required element (Title, Subtitle, Content, Business, Adjust
    Screenshots, Description, Answer Data Collection Questions) that still
    needs attention but ISN'T the one currently in focus gets is-spp-static instead of the
@@ -10578,40 +10578,13 @@ textarea.loc-review-field.ias-inline-input {
 }
 .spp-nav-btn:hover { opacity: 0.85; }
 
-/* ── Required-element prev/next footer navigator (App Store/Mac App Store
-   Product Page Preview only — _sppFooterNav, render.js) — replaces the old
-   single "Next required" spp-nav-label/spp-nav-btn pair above for these two
-   previews only. Mac App Store Full and Android/Steam's own Product Page
-   Previews keep that original pair untouched, still sitting inside the same
-   shared .spp-nav-bar container. Both arrows always render (so the footer
-   never reflows depending on position); an arrow with nothing to move to
-   gets .is-disabled instead of disappearing. ── */
-.spp-nav-arrow {
-  display: flex; align-items: center; gap: 6px;
-  background: none; border: none; padding: 4px 2px;
-  font-size: 12px; font-weight: 600; color: var(--text-dim);
-  cursor: pointer; max-width: 45%;
-}
-.spp-nav-arrow span {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.spp-nav-arrow:hover:not(.is-disabled) { color: var(--text); }
-.spp-nav-arrow--next { margin-left: auto; }
-.spp-nav-arrow.is-disabled {
-  color: var(--text-faint); opacity: 0.4; cursor: not-allowed;
-}
-/* Name of the element currently in focus, centered in the footer regardless
-   of how wide the prev/next labels on either side of it are — absolutely
-   positioned against .spp-nav-bar's own position:sticky (any non-static
-   position value works as the containing block for this), rather than
-   relying on flex distribution, which would only center it when both side
-   buttons happened to be equal width. */
-.spp-nav-current {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  font-size: 12px; font-weight: 600; color: var(--text);
-  max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  pointer-events: none;
-}
+/* THE PREV / NEXT FOOTER STEPPER IS GONE, and `.spp-nav-arrow` /
+   `.spp-nav-arrow--next` / `.spp-nav-current` went with it. It served the two
+   Apple previews only; Mac moved to the pinned section nav and the App Store
+   followed, so `_sppFooterNav` lost its last caller and was deleted rather than
+   left dormant (see its former home in render.js). `.spp-nav-bar` above stays —
+   Mac App Store Full, Google Play and Steam still draw their own older "Next
+   required" pair inside it, which never used any of these three. */
 
 /* ── "Edit Screenshots" inline link ── */
 .spp-edit-link {
@@ -13720,6 +13693,22 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-mac-spp {
   max-width: 1000px;
 }
+/* THE APP STORE PREVIEW KEEPS THE BASE 680, AND ITS PINNED NAV SCROLLS INSTEAD.
+   A `:has(.spp-pinned--sticks)` rule took it to `1000px + var(--sm-bar)` for one
+   version, derived honestly — eight pills and seven separators measure 919 in
+   English, plus 16 of bar padding, 48 of scroller padding, the 11px lane and the
+   modal's two borders = 996 — and it was the wrong thing to buy with. Jaco:
+   *"has cambiado el ancho del modal, déjalo como estaba antes, y que el top bar
+   sea scrolleable como un marquee."*
+
+   THE MODAL IS NOT THE BAR'S TO SPEND. `.ias-page` has never had a width of its
+   own, so widening the modal widened the store drawing 619 → 950 — the page paid
+   for the navigator's row. The row already had the right answer written into it
+   (`overflow-x: auto`, and its own note calls that "the backstop for a language
+   that outgrows it"); all it needed was to be the FIRST answer rather than the
+   last, plus the two things a hidden-scrollbar strip owes anyone looking at it:
+   an edge that says there is more, and the lit pill brought into view.
+   See `.spp-pinned-row`. */
 /* Mac App Store Game Center — the SAME 1000 as .submit-modal-mac-spp directly
    above, and that is the whole point of the rule: Achievements is a card on
    the Product Page Preview and opens from it, so the two modals are one
@@ -14021,6 +14010,68 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   flex: none;
   padding: 10px 0 9px;
 }
+/* ── AND ON THE APP STORE IT REALLY IS PINNED, so the name is true again on one
+   of the two surfaces. Jaco: *"hay un persistent container arriba… quiero que
+   vayas a iOS App Store y hagas lo mismo."*
+
+   THE PARAGRAPH ABOVE IS NOT WRONG, IT IS ABOUT THE OTHER ARRANGEMENT. Mac hands
+   its scrolling to `.mac-spp-main`, so nothing passes under the bar and an
+   offset would be a claim that is not true. The App Store preview is the
+   ORDINARY case every other step uses — `.submit-modal-scroll` is the scroller
+   and the whole product page travels under this bar — so "persistent" there
+   costs exactly what `.cr-pinned` pays: sticky, opaque, and a fade at the
+   boundary. The builder says which one it is in (`sticks`, `_sppPinnedNav`),
+   because CSS cannot derive it.
+
+   IT IS `.cr-pinned`'S MECHANICS WHOLESALE rather than a second solution to a
+   solved problem — that bar is the same kind of object, a strip above a step's
+   body that says something about the whole of it, and this one was literally
+   built from it before it moved out of the Mac scroller.
+
+   - BLEED AND PAY BACK. `margin: 0 -24px` takes the box out to the scroller's
+     own edges and the 24px of padding puts the row back on the content column,
+     so the opaque ground covers the full width and nothing can slide past it in
+     the gutters. The floating container inside stays exactly the 619 it is
+     without this.
+   - THE BAR OWNS ALL THE SPACE ABOVE IT, because sticky measures from the
+     MARGIN box: with the scroller's own top padding still in place the bar would
+     come to rest that many pixels below the scrollport and the page would slide
+     through the strip between. The scroller gives the padding up and the bar
+     pays it back as its own — opaque, so the gap above is identical at rest and
+     pinned. `--sm-body-pad-top` is declared on the scroller and read here, one
+     number with two consumers exactly as that bar's note says.
+   - z-index 5: over the page, under the modal's own chrome. */
+.spp-pinned--sticks {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel);
+  margin: 0 -24px;
+  padding: calc(10px + var(--sm-body-pad-top)) 24px 9px;
+}
+.submit-modal-scroll:has(.spp-pinned--sticks) { padding-top: 0; }
+/* The page dissolves as it goes under the bar rather than being cut by it —
+   `.cr-pinned::after`'s own fade and its own stops, re-hung at this bar's bottom
+   edge, which is the real boundary between what is pinned and what scrolls. The
+   Mac bar has none and needs none: nothing crosses it. */
+.spp-pinned--sticks::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  height: 36px;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(20,20,20,0.96) 0%,
+    rgba(20,20,20,0.72) 30%,
+    rgba(20,20,20,0.34) 55%,
+    rgba(20,20,20,0.10) 78%,
+    rgba(20,20,20,0) 100%);
+}
+/* An opaque pinned bar already says "there is more above", and better than a
+   fade does since it covers the page outright. Two of them stacked only made
+   the bar's own top edge muddy — and here the modal's fade would paint straight
+   over the pills. Same rule, same reason, as the `:has(.cr-pinned)` one. */
+.submit-modal-body-wrap:has(.spp-pinned--sticks) .submit-modal-fade-top { display: none; }
 /* THE FLOATING CONTAINER, and it is `.cr-pinned-bar`'s, not a new object: the
    same white 15% fill, the same 1px ring drawn INSIDE it rather than as a
    border, and radii that nest. A border would clip the background to the border
@@ -14130,13 +14181,44 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    `flex-start` by spec, so an overflowing row still starts at its left edge and
    the first pill stays reachable — the exact case `safe center` had to be
    spelled out for. */
+/* AND ON THE APP STORE THE ROW REALLY DOES SCROLL, so it has to say so. Eight
+   pills want 919 and the 680 modal's bar offers 603 — that is not a language
+   outgrowing its headroom, it is the ordinary English state, so `overflow-x:
+   auto` stops being a backstop and becomes the mechanism.
+
+   THE FADE IS A MASK, NOT AN OVERLAY, AND THAT IS THE LOAD-BEARING CHOICE. A
+   gradient painted over the ends would have to be the colour of what it covers,
+   and this bar has TWO grounds — white 12% over `--panel` at rest and the green
+   `.is-complete` fill — so it would be two values to keep in step, and wrong the
+   day a third state arrives. A mask fades the PILLS THEMSELVES to transparent
+   and knows nothing about what is behind them, which is the same preference the
+   panel bloom was rebuilt under: prefer the treatment that cannot depend on its
+   ground.
+
+   IT IS OFF BY DEFAULT AT BOTH ENDS, driven by `.is-more-l` / `.is-more-r` from
+   `_sppPinnedFades` (app.js) — the modal's own fades' rule, stated positively so
+   the resting state at each end needs no class. A permanent fade on the first
+   pill would be dimming a pill for no reason: at `0px` the stop lands on the
+   edge and the mask is fully opaque, so an un-scrollable row is untouched.
+   24px, which is twice a pill's own 12 of padding — long enough that a label
+   dissolves rather than being cut, short enough that no whole pill is lost. */
 .spp-pinned-row {
   display: flex; gap: 0;
   align-items: center;
   justify-content: space-between;
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
+  --spp-fade-l: 0px;
+  --spp-fade-r: 0px;
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0, #000 var(--spp-fade-l),
+    #000 calc(100% - var(--spp-fade-r)), transparent 100%);
+          mask-image: linear-gradient(to right,
+    transparent 0, #000 var(--spp-fade-l),
+    #000 calc(100% - var(--spp-fade-r)), transparent 100%);
 }
+.spp-pinned-row.is-more-l { --spp-fade-l: 24px; }
+.spp-pinned-row.is-more-r { --spp-fade-r: 24px; }
 /* `.app-subtab-sep`'s rule, at this row's own type size — and RE-TUNED FOR THIS
    GROUND the same way the pills below it were, for the same reason. That rule is
    `--text-faint` at 50%, which is right on the near-black the Game Details

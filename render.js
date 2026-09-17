@@ -7330,6 +7330,12 @@ function renderStepModal() {
      be seen by comparing two renders. See _sppCelebrate (app.js). */
   if (typeof _sppCelebrate === 'function') requestAnimationFrame(_sppCelebrate);
 
+  /* And the same contract again for the row that scrolls sideways inside it: a
+     fresh node starts at `scrollLeft: 0` with no listener, so both the end fades
+     and the lit pill's own position have to be re-solved after the paint. See
+     `_sppPinnedArm` (app.js). */
+  if (typeof _sppPinnedArm === 'function') requestAnimationFrame(_sppPinnedArm);
+
   /* And the same argument one level finer: the return pop diffs each element
      against what it last looked like, so it can only run after a paint. Its
      twin — the commit sweep — is deliberately NOT here: it fires at commit time
@@ -9556,8 +9562,8 @@ function _iasAllPreviewLangCodes() {
    (every one except Achievements); the one optional element has no
    completion concept of its own; it's just as fully navigable but never
    blocks or drives the default focus below. Exactly one element is ever
-   "in focus" at a time, and the footer's prev/next navigator
-   (_sppFooterNav) always walks the complete, unfiltered eight-element list
+   "in focus" at a time, and the pinned section nav at the top of the page
+   (_sppPinnedNav) always walks the complete, unfiltered eight-element list
    — nothing ever drops out of it, whether done, required, or optional.
 
    The focused element's glow is one of three colors, all layered on top of
@@ -9604,23 +9610,22 @@ function _sppIsFocused(pid, elements, id) {
   return elements[_sppFocusIndex(pid, elements)]?.id === id;
 }
 
-// Prev/next footer navigator — replaces the old single "Next required"
-// button. Always renders both arrows so the footer's layout never shifts;
-// an arrow with nothing to move to (already at the first/last element)
-// renders disabled/greyed with no label rather than wrapping around to the
-// other end. Callers now always pass the complete, unfiltered ALL_ELEMENTS
-// list (required and optional, done and not) — the bar itself no longer
-// ever disappears, since navigation should always reach every interactive
-// element on the preview. The `if (!elements.length)` guard below is just
-// defensive now.
 /* ── THE PINNED SECTION NAV ───────────────────────────────────────────────────
-   The Mac preview's navigator, and the replacement for `_sppFooterNav` below on
-   that one surface. The footer was a PREV / CURRENT / NEXT stepper: it could
+   Both Apple previews' navigator, and it ate `_sppFooterNav` whole — the Mac
+   preview first, and the App Store's own on Jaco's ask that the two behave the
+   same. The footer was a PREV / CURRENT / NEXT stepper: it could
    only say where you were and offer the two places either side of it, so
    reaching Data privacy from Title meant pressing next seven times, and the
    seven names in between were never on screen at once. A pinned row of pills is
    the whole map — every section addressable in one press, and the page's own
    order printed along the top of it.
+
+   THE FOOTER IS DELETED RATHER THAN LEFT DORMANT. With the App Store moved over
+   it had no caller at all, and a builder nobody calls is a control waiting to be
+   switched back on — the argument the dev bar was removed under. `.spp-nav-bar`
+   itself SURVIVES: Mac Full, Google Play and Steam still render their own older
+   "Next required" pair inside it. Only the three rules that were the stepper's
+   alone (`.spp-nav-arrow`, its `--next` and `.spp-nav-current`) went with it.
 
    PRESSING ONE IS `setStorePreviewFocus`, NOT A NEW SCROLLER. That function
    already moves focus AND scrolls `[data-spp-el="<id>"]` into view (app.js), so
@@ -9629,8 +9634,19 @@ function _sppIsFocused(pid, elements, id) {
    footer's arrows called the same function; only the shape of the control
    changed.
 
-   `short` where a label is a sentence — see the note on ALL_ELEMENTS. */
-function _sppPinnedNav(pid, elements) {
+   `short` where a label is a sentence — see the note on ALL_ELEMENTS.
+
+   `sticks` IS A FACT ABOUT WHAT SCROLLS UNDER THE BAR, NOT ABOUT WHICH STORE
+   THIS IS, which is why it is a parameter and not a platform test. Mac hands
+   its scrolling to `.mac-spp-main`, so the bar is a plain row of the modal's
+   flex column with nothing passing beneath it — `position` and an opaque ground
+   would both be claims that are not true (the long version is at `.spp-pinned`
+   in style.css). The App Store preview scrolls on the modal body itself, the
+   ordinary arrangement every other step uses, so the whole page really does
+   travel under this bar and it has to be sticky and opaque to stay the
+   "persistent container" it is drawn as. Only the builder knows which
+   arrangement it is in, so only the builder can say. */
+function _sppPinnedNav(pid, elements, sticks) {
   if (!elements.length) return '';
   const cur = elements[_sppFocusIndex(pid, elements)]?.id;
   /* THE `|` BETWEEN THEM IS `.app-subnav`'s, NOT A NEW IDEA. Eight transparent
@@ -9765,37 +9781,17 @@ function _sppPinnedNav(pid, elements) {
      left empty is fine, which is exactly the distinction `required` makes and
      `bad` does not. */
   const allRequiredDone = elements.every(e => (!e.required || e.done) && !e.bad);
-  /* TWO BOXES. `.cr-pinned`'s third was a sticky opaque strip so the page could
-     not show through the gap between a floating container's rounded edge and
-     the scrollport — and nothing scrolls under this bar any more, so
-     `.spp-pinned` is just the row's padding. See the CSS for the rest. */
+  /* TWO BOXES ON MAC, AND `.cr-pinned`'S THIRD ONE BACK AGAIN ON iOS. That bar
+     has an outer sticky opaque strip so the page cannot show through the gap
+     between a floating container's rounded edge and the scrollport. Mac needs
+     none of it — nothing scrolls under the bar there, so `.spp-pinned` is just
+     the row's padding — and the App Store preview needs all of it, which is
+     exactly what `sticks` turns on. See the CSS for the rest. */
   return `
-    <div class="spp-pinned">
+    <div class="spp-pinned${sticks ? ' spp-pinned--sticks' : ''}">
       <div class="spp-pinned-bar${allRequiredDone ? ' is-complete' : ''}">
         <div class="spp-pinned-row">${pills}</div>
       </div>
-    </div>`;
-}
-
-function _sppFooterNav(pid, elements) {
-  if (!elements.length) return '';
-  const idx     = _sppFocusIndex(pid, elements);
-  const current = elements[idx];
-  const prev    = idx > 0 ? elements[idx - 1] : null;
-  const next    = idx < elements.length - 1 ? elements[idx + 1] : null;
-  const arrowLeft  = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const arrowRight = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  return `
-    <div class="spp-nav-bar">
-      <button type="button" class="spp-nav-arrow${prev ? '' : ' is-disabled'}"
-        ${prev ? `onclick="setStorePreviewFocus('${pid}','${prev.id}')"` : 'disabled'}>
-        ${arrowLeft}<span>${prev ? escHtml(prev.label) : ''}</span>
-      </button>
-      <span class="spp-nav-current">${current ? escHtml(current.label) : ''}</span>
-      <button type="button" class="spp-nav-arrow spp-nav-arrow--next${next ? '' : ' is-disabled'}"
-        ${next ? `onclick="setStorePreviewFocus('${pid}','${next.id}')"` : 'disabled'}>
-        <span>${next ? escHtml(next.label) : ''}</span>${arrowRight}
-      </button>
     </div>`;
 }
 
@@ -10221,8 +10217,8 @@ function buildStorePreviewSection() {
   }
 
   // All eight focusable elements, top-down/left-to-right — drives both the
-  // focus glow (_sppIsFocused, below) and the footer's prev/next navigator
-  // (_sppFooterNav), which now always walks this same complete list
+  // focus glow (_sppIsFocused, below) and the pinned section nav at the top of
+  // the preview (_sppPinnedNav), which walks this same complete list
   // unfiltered. What's New used to be a ninth entry here, between
   // Achievements and Answer Data Collection Questions — removed along with
   // its section (hidden by request; see the removed ias-wn-section markup's
@@ -10231,15 +10227,26 @@ function buildStorePreviewSection() {
   // first-not-done fallback scan skips over it and never parks default
   // focus on the optional element; it plays no other role, since optional
   // elements have no real completion state of their own.
+  /* `short` AND `bad` ARRIVED WITH THE PINNED BAR, and both are the Mac twin's
+     — see its own ALL_ELEMENTS for the arguments, which are about the CONTROL
+     rather than about the store and so hold identically here.
+     Short version: `short` is only on the two entries whose `label` is a
+     sentence, because "Adjust Screenshots" and "Answer Data Collection
+     Questions" read fine after an arrow and not at all inside a pill, and the
+     other six already have names rather than a copy of their own label. `bad`
+     is only on the three sections that can be answered AND wrong — free text
+     against a character limit — and it is the SAME `*OverLimit` boolean the
+     field itself wears as `is-over-limit` further down, so the magenta box and
+     the red disc cannot disagree about one string. */
   const ALL_ELEMENTS = [
-    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw },
-    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw },
+    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw,       bad: titleOverLimit },
+    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw,    bad: subtitleOverLimit },
     { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
     { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
-    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone },
-    { id: 'description',  label: 'Description',                       required: true,  done: descDone },
+    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone,  short: 'Screenshots' },
+    { id: 'description',  label: 'Description',                       required: true,  done: descDone,         bad: descOverLimit },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
   ];
   // Additive glow class for any focusable element (required or optional).
   // Not focused: a required-not-done element gets the static/duller box;
@@ -10376,7 +10383,31 @@ function buildStorePreviewSection() {
 
         <div class="ias-section-divider"></div>`;
 
+  /* THE NAVIGATOR IS AT THE TOP NOW, AND BOTH OF THEM COULD NOT STAND. Jaco:
+     *"quiero que vayas a ios app store, y hagas lo mismo en la store page de
+     app store normal, que sigue teniendo el paradigma antiguo con navegación en
+     el footer."*
+
+     The footer was PREV / CURRENT / NEXT: it could name where you were and
+     offer the two places either side, so reaching Data privacy from Title meant
+     pressing next seven times and the seven names in between were never on
+     screen together. A pinned row of pills is the whole map — every section in
+     one press, in the page's own order, with a disc each saying what is still
+     outstanding, which is the "estado general" half of the ask and the half a
+     stepper cannot do at all.
+
+     It REPLACES the footer rather than joining it, for the reason the Mac
+     preview already recorded: the two drive the same `storePreviewFocus`, so a
+     press in one silently moves the other — one list with two controls
+     reporting different positions.
+
+     It sits ABOVE `.ias-device-wrap`, so it is the first child of the step
+     body and therefore the full width of the modal's content column, the way
+     Mac's is a sibling of its shell. `sticks` is the difference between the two
+     surfaces and is argued at `_sppPinnedNav`. */
   return `
+    ${_sppPinnedNav(pid, ALL_ELEMENTS, true)}
+
     <div class="ias-device-wrap">
       <!-- "App Store Preview" badge, "Reflects your submission data" note, and
            the "Localizations" button are all hidden here by request — only
@@ -10496,8 +10527,6 @@ function buildStorePreviewSection() {
 
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
-
-    ${_sppFooterNav(pid, ALL_ELEMENTS)}
   `;
 }
 

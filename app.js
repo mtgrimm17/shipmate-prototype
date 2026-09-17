@@ -5692,6 +5692,62 @@ function _sppCelebrate() {
   bar.addEventListener('animationend', () => bar.classList.remove('is-celebrating'), { once: true });
 }
 
+/* ── THE PINNED NAV SCROLLS SIDEWAYS, AND THAT COSTS TWO SMALL THINGS ─────
+   Eight pills want 919px and the App Store preview's 680 modal gives the row
+   603, so `overflow-x: auto` is the ordinary state rather than the backstop its
+   own CSS note calls it. A strip with its scrollbar hidden — deliberately, since
+   4px of bar under a row of pills reads as damage — then owes the reader the two
+   things the bar would otherwise have said.
+
+   ONE: WHICH ENDS HAVE MORE. `.is-more-l` / `.is-more-r` drive a mask on the row
+   (see `.spp-pinned-row`), stated positively so a row that fits carries neither
+   and is untouched. The 1px of slack is the same allowance `_macShotsArrows`
+   takes: `scrollLeft` is fractional on a scaled pane and an exact comparison
+   flickers across a smooth scroll.
+
+   TWO: THE LIT PILL HAS TO BE ON SCREEN. `setStorePreviewFocus` re-renders, so
+   the row is a fresh node at `scrollLeft: 0` — press Data privacy and the page
+   travels correctly to a section whose own pill is 300px off the right-hand end.
+   `_sppPinnedReveal` puts it back, and it is deliberately NOT centred: a nav is
+   read as a sequence, so the cheapest correct move is the one that brings the
+   pill just inside the edge it fell off and leaves the row alone when it is
+   already visible. The 24 clears the mask's own fade, or the pill you were sent
+   to arrives half dissolved.
+
+   `behavior: 'smooth'` is allowed here against this file's standing preference
+   for `_smScrollTo`, and the reason is the one that rule turns on: this is a
+   single element with no nested scroller under it and no ambiguity about which
+   box an engine would pick, which is the entire failure `_smScrollTo` exists to
+   remove. Nothing to disagree about between two browsers.
+
+   ARMED FROM `renderStepModal` (render.js) for `_smModalFades`'s own contract —
+   the modal is rebuilt with innerHTML and the old row's listener goes with it —
+   and a no-op on every other step, since it looks for the row and leaves. */
+function _sppPinnedFades(row) {
+  if (!row) return;
+  const max = row.scrollWidth - row.clientWidth;
+  row.classList.toggle('is-more-l', row.scrollLeft > 1);
+  row.classList.toggle('is-more-r', row.scrollLeft < max - 1);
+}
+
+function _sppPinnedReveal(row) {
+  const pill = row && row.querySelector('.spp-pin.is-on');
+  if (!pill) return;
+  const r = row.getBoundingClientRect(), p = pill.getBoundingClientRect();
+  /* 24 = the mask's own fade width, so the pill lands clear of it rather than
+     flush against an edge that is busy dissolving. */
+  if (p.left   < r.left  + 24) row.scrollBy({ left: p.left - r.left - 24,   behavior: 'smooth' });
+  else if (p.right > r.right - 24) row.scrollBy({ left: p.right - r.right + 24, behavior: 'smooth' });
+}
+
+function _sppPinnedArm() {
+  const row = document.querySelector('.spp-pinned-row');
+  if (!row) return;
+  _sppPinnedFades(row);
+  _sppPinnedReveal(row);
+  row.addEventListener('scroll', () => _sppPinnedFades(row), { passive: true });
+}
+
 /* ── TWO CONFIRMATIONS, AND THEY ANSWER DIFFERENT QUESTIONS ──────────────
    Both are Jaco's, lifted from the questionnaire prototype:
    1. *"nice animation of glimmering green on input text once I leave the field
@@ -21319,7 +21375,7 @@ function toggleBinFindingFix(pid) {
 
 // Moves the App Store/Mac App Store Product Page Preview's required-element
 // focus (state.storePreviewFocus, state.js) to `elementId`, in response to
-// clicking the footer's prev/next arrow (_sppFooterNav, render.js). Stays on
+// pressing a pill in the pinned section nav (_sppPinnedNav, render.js). Stays on
 // the Product Page Preview itself — unlike openStorePreviewSection below,
 // this never flips to a sub-section, it only moves which required element
 // carries the animated "needs attention" glow.
@@ -21481,6 +21537,11 @@ function _sppFocusHere(pid, elementId) {
   if (cur === -1) return;
   pills.forEach((p, i) => p.classList.toggle('is-on', i === cur));
   seps.forEach((s, k) => s.classList.toggle('is-off', k === cur - 1 || k === cur));
+  /* The row can be scrolled sideways (see `_sppPinnedArm`), so moving the mark
+     without moving the row can light a pill that is off the end — the one case
+     where "it touches the DOM, it does not render" still owes a second write.
+     Reveal only; the fades follow from its own `scroll` listener. */
+  if (typeof _sppPinnedReveal === 'function') _sppPinnedReveal(row);
 }
 
 function setStorePreviewFocus(pid, elementId) {

@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.81** &rarr; next is **v6.82**.
+Current version: **v6.82** &rarr; next is **v6.83**.
 
 ---
 
@@ -3096,8 +3096,126 @@ flush layout first"), `prefers-reduced-motion` (deliberate — it also switches
 this spotlight off), and a stale cache, since `?v=` is the only cache key these
 files have.
 
-**iOS keeps the footer stepper and gets none of this on purpose:** PREV / NEXT
-moves you exactly one section, so you already know where you arrived.
+~~**iOS keeps the footer stepper and gets none of this on purpose:** PREV / NEXT
+moves you exactly one section, so you already know where you arrived.~~ — **iOS
+HAS THE BAR NOW (v6.82); see the section below.** That sentence was only ever
+about the SPOTLIGHT, which iOS still does not get (`_sppSpotlight` returns early
+without a `.mac-spp-shell`) because its own focus glow already marks where you
+landed.
+
+### And the App Store preview got the same bar (v6.82)
+
+Jaco: *"quiero que eches un vistazo a mac app store, store page review. Hay un
+persistent container arriba, que te permite navegar entre las secciones y ver el
+estado general. Quiero que vayas a ios app store, y hagas lo mismo en la store
+page de app store normal, que sigue teniendo el paradigma antiguo con navegación
+en el footer."*
+
+**`_sppFooterNav` IS DELETED, not left dormant.** The App Store was its last
+caller, so a builder nobody calls is a control waiting to be switched back on —
+the dev bar's argument. Three CSS rules went with it (`.spp-nav-arrow`, its
+`--next`, `.spp-nav-current`) and **`.spp-nav-bar` SURVIVED**: Mac App Store
+Full, Google Play and Steam all still draw their own older "Next required" pair
+inside it, which never used any of the three. Verified after — Mac Full and
+Android still print `.spp-nav-label` + `.spp-nav-btn`, zero arrows anywhere.
+
+**THE TWO PREVIEWS SHARE THE BUILDER AND DIFFER IN ONE PARAMETER, AND THE
+PARAMETER IS ABOUT SCROLLING RATHER THAN ABOUT APPLE.** Mac hands its scrolling
+to `.mac-spp-main`, so nothing passes under its bar and the note at `.spp-pinned`
+is right to have deleted `position` and the opaque ground — "a sticky offset on
+an element nothing scrolls past is a claim that is no longer true". The App Store
+preview is the ORDINARY arrangement every other step uses: `.submit-modal-scroll`
+is the scroller and the whole product page really does travel under the bar.
+Measured before touching anything: 673px of overflow on that element, `overflow-y:
+scroll`, the page itself not a scroller at all. So `sticks` turns the third box
+back on, and only the builder can know which arrangement it is in.
+
+**IT IS `.cr-pinned`'S MECHANICS WHOLESALE**, which is what this bar was built
+from before it moved out of the Mac scroller — the same kind of object, a strip
+above a step's body that says something about the whole of it. Four pieces, all
+that bar's:
+
+- **bleed and pay back** (`margin: 0 -24px` / `padding: … 24px`), so the opaque
+  ground covers the scroller's full width and nothing can slide past in the
+  gutters. The floating container inside stays exactly the 950 it would be
+  without it — measured identical to `.ias-device-wrap`, same x, same width.
+- **the scroller gives up its top padding and the bar pays it back**
+  (`:has(.spp-pinned--sticks)` + `calc(10px + var(--sm-body-pad-top))`), because
+  sticky measures from the MARGIN box: left in place, the bar rests that many
+  pixels below the scrollport and rows slide through the strip between. Measured
+  0.00 at rest and 0.00 pinned, at `scrollTop` 400 and at the end.
+- **a 36px fade at its bottom edge**, the page dissolving as it goes under rather
+  than being cut. Mac has none and needs none.
+- **the modal's own top fade off**, `.cr-pinned`'s reason exactly — and here with
+  a sharper one, since it would paint straight over the pills.
+
+**THE MODAL IS `1000px + var(--sm-bar)`, AND THE WIDTH IS THE PART TO ARGUE
+WITH.** Eight pills and seven separators measure **919** in English and the 680px
+base modal offered **603** — 316 short, with Data privacy off the end, which
+defeats the "ver el estado general" half of the ask outright. Nothing tunable
+closes that: the per-pill chrome alone (a 15px disc, 24px of padding) plus the
+separators is ~408 of the 603, so eight labels would have had 24px each.
+
+So the width is derived, and it lands on Mac's own number by a different route —
+**the requirement is a property of the eight sections, not of either store**:
+
+```
+    919  the pills plus the separators
+  +  16  .spp-pinned-bar's own 8px padding
+  +  48  .submit-modal-scroll's side padding
+  +  11  --sm-bar, the lane this surface reserves and Mac does not
+  +   2  the modal's 1px borders
+  = 996
+```
+
+Written as `1000 + var(--sm-bar)` rather than a flat 1000 so the two BARS get the
+same 15px of headroom rather than the two MODALS the same number — the pills are
+the thing being sized and the modal is what is left over. Measured: modal 1011,
+row box 934, natural content 919, **headroom 15**, identical to Mac's.
+
+**`:has()` RATHER THAN A MODAL CLASS**, so the width is derived from the thing
+that needs it — and it gets the flip case free. Flipping into Content / Business
+/ Data replaces the body with `buildStorePreviewFlipSection`, which carries no
+bar, so the modal returns to 680 on its own; `isMacSpp` has to state that by hand
+in render.js. Verified: 1011 un-flipped, **680** flipped, no bar either time.
+
+**THE COST, STATED RATHER THAN HIDDEN: the store page goes 619 → 950.**
+`.ias-page` has never had a width of its own — it is whatever the modal gives it
+— so widening the modal widens the drawing. It was already a long way from a
+phone's 390 at 619. If that ever wants capping, the number is the Mac preview's
+own store column (754), not a fresh one.
+
+**WHAT CAME FOR FREE, because it was all written platform-agnostically:**
+`_sppCelebrate` reads `.spp-pinned-bar` and derives the pid off a pill's own
+handler, so the green bar and its one-shot sweep work here with no change —
+verified firing on the render that completes it and **not** on a re-render while
+already complete. `_sppFocusHere` already bailed on a missing row with the
+comment *"iOS and Mac Full carry the footer stepper, not this bar"*; now it
+finds one, so clicking straight into a field moves the pill with no render —
+verified same node, pill moved, state written. And `bad` works: an over-limit
+title turns its disc `rgb(255,59,118)` with a cross and the title
+"Title — over the character limit", back to pending when fixed.
+
+**STILL OPEN, AND IT IS THE v6.40 TRAP IN REVERSE:** iOS keeps the full
+five-class `_sppGlowCls`, so a focused element now wears the lit pill AND an
+animated halo — measured, Title lit in the bar with `is-spp-focused-done` and
+`spp-focus-pulse-green` on the field. "You are here" said twice, which is exactly
+what v6.40 deleted on Mac. **It is deliberately NOT swept here**, because that
+helper also carries `is-spp-static`, the amber ring that is iOS's ONLY mark for
+"this field is unfinished and yours to edit" — Mac could drop it because the same
+change gave every field a well, and iOS has no well. The two halves have to land
+together or the page ends up with no affordance at all, which is the mistake v6.40
+was written to avoid. Splitting the helper (keep `is-spp-static`, drop the three
+focus classes) is the one-line version if it is wanted on its own.
+
+**One probe note, and it is this file's own lesson in a new shape.** A trace of a
+real pill press reported `scrollTop` flat at 0 for 1400ms — the travel apparently
+not happening — and the rig was innocent: `renderStepModal` rebuilds the modal's
+whole markup, so a `.submit-modal-scroll` captured before the press is a DETACHED
+node, and a detached node reports `scrollHeight` and `clientHeight` of **0**.
+Re-queried fresh each sample, the same press travels 7 → 577 in 14 interpolated
+steps, monotone, landing the target centred to **0.1px**. **Re-query anything the
+modal owns after a render; do not hold a reference across one.**
 
 ### The Mac sidebar's glyphs are the real art now
 
@@ -8366,9 +8484,22 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.81** → next is **v6.82**. (v6.29 – v6.31 are Mark's
+Current version: **v6.82** → next is **v6.83**. (v6.29 – v6.31 are Mark's
 Distribution work, and **v6.42 and v6.48 are Adam's** — shipped in parallel and
 touching none of this.)
+
+**AND v6.83 – v6.90 ARE LOCAL CACHE-BUSTS, WHICH IS THE TENTH TIME.** Live was
+read as **v6.81** by both of this section's cheap doors — `.ship-message.sent`
+sitting on disk with no unconsumed `.ship-message` beside it (so the push really
+landed), and a fetch of the live page with a throwaway query on it, which is the
+step the fetch must never skip. So 6.82 was the next free number and is what this
+batch takes.
+
+The pinned-nav work was MEASURED at 6.88 – 6.90 because this pane had already
+been served 6.74 – 6.87 in earlier sessions, and **a number this session has
+already used is not a cache-bust**. None of 6.83 – 6.90 has ever been served to
+a cold browser, so shipping at 6.82 costs nothing; what is poisoned is this pane
+only, and anything further that needs measuring here has to start above 6.90.
 
 **AND THE LIVE NUMBER CAN BE READ WITHOUT GIT — FETCH THE PAGE.** Everything
 above agonises over Claude not being able to see `origin/main`, and the whole
