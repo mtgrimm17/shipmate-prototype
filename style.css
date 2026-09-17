@@ -12118,12 +12118,33 @@ a.mac-spp-link-row.is-live:focus-visible {
    currentColor and no fill instead: on a selected chip the badge comes out in
    the chip's blue, on an unselected one in its dim grey, and it follows any
    future recolouring of those chips without a rule of its own.
-   The compound selectors outrank .tooltip-icon.is-warned. */
+   The compound selectors outrank .tooltip-icon.is-warned.
+
+   AND .ob-dist-excluded-chip IS IN THIS LIST BECAUSE IT IS THE SAME BADGE
+   (v6.75). Jaco: "en los REGULATION pills en distribution, salen con estilo
+   gris viejo." The Regulation chips render through _obRegTipIconHtml, the
+   same helper as the market rows — that function's own note says it is
+   shared "so the two never drift into looking or behaving differently", and
+   the CSS is where they drifted: only .ob-dist-row-chip and .loc-chip were
+   named, so these fell through to the GENERIC badge and wore the opaque
+   --panel-3 fill on a selected blue chip. Which is precisely the "grey hole
+   punched through the blue" this block was written to remove — the old look,
+   surviving in the one place the selector list forgot. Measured before:
+   market row transparent / rgb(82,186,255) / .55 against the regulation chip
+   at rgb(36) fill, rgb(58) ring, rgb(85) ink, opacity 1.
+
+   A shared BUILDER does not make a shared LOOK: the markup came from one
+   function and the paint came from a list of three class names. When a
+   helper is factored out so two surfaces agree, the CSS list is the other
+   half of that promise and has to name both. */
 .ob-dist-row-chip .tooltip-icon,
 .ob-dist-row-chip .tooltip-icon.is-warned,
+.ob-dist-excluded-chip .tooltip-icon,
+.ob-dist-excluded-chip .tooltip-icon.is-warned,
 .loc-chip .tooltip-icon,
 .loc-chip .tooltip-icon.is-warned,
 .loc-chip .sw-tip-chip-badge,
+.ob-dist-excluded-chip .sw-tip-chip-badge,
 .ob-dist-row-chip .sw-tip-chip-badge {
   background: transparent;
   border-color: currentColor;
@@ -12136,6 +12157,8 @@ a.mac-spp-link-row.is-live:focus-visible {
    comes forward. color-mix because currentColor cannot carry an alpha. */
 .ob-dist-row-chip .tooltip-anchor:hover .tooltip-icon,
 .ob-dist-row-chip .tooltip-anchor:hover .tooltip-icon.is-warned,
+.ob-dist-excluded-chip .tooltip-anchor:hover .tooltip-icon,
+.ob-dist-excluded-chip .tooltip-anchor:hover .tooltip-icon.is-warned,
 .loc-chip .tooltip-anchor:hover .tooltip-icon,
 .loc-chip .tooltip-anchor:hover .tooltip-icon.is-warned {
   border-color: currentColor;
@@ -12155,6 +12178,36 @@ a.mac-spp-link-row.is-live:focus-visible {
   color: var(--text-dim);
   line-height: 1.55;
   margin-bottom: 10px;
+}
+
+/* SHIPMATE FOUND SOMETHING — the invitation replaced by a result.
+
+   #31DC80 is the app's DONE green (the tick's, the Release button's), not
+   --green's older #4ade80, and it is forced by the colour table rather than
+   picked: a scrape that happened is finished work.
+
+   AND IT IS THE GAME TITLE LABEL'S OWN BOX, NOT A PARAGRAPH. Jaco: "ponlo en
+   mayúsculas, para que cuadre exacto con la altura y tamaño de GAME TITLE, y
+   que el dropwell empiece a la misma altura que el field input text de game
+   title." The two sub-tabs are one card, so what the eye reads across a tab
+   switch is whether the big box under the first line starts in the same place
+   — and a 12px paragraph at 1.55 over 10px of margin does not land where an
+   11px label over 8 does.
+
+   Every value below is MEASURED off `.ob-form .form-label` in Basic Info
+   rather than picked: 11px / 400 / uppercase / 0.55px of tracking / an 18px
+   line, plus `.gi-head`'s own 8px underneath. Re-measure that label if it ever
+   moves; the whole point is that these two are the same object in two colours.
+   `text-transform` rather than shouting in the locale file, so zh-CN — which
+   has no case — is unaffected and the string stays a sentence. */
+.asset-guidance.is-found {
+  color: #31DC80;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.55px;
+  line-height: 18px;
+  margin-bottom: 8px;
 }
 
 .asset-dropzone {
@@ -21889,6 +21942,24 @@ body.viewing-splash #app-guide { display: none; }
   font-size: 11px; line-height: 18px; color: #5A615D;
 }
 
+/* THE SLOT SPEAKS ONCE, ON ARRIVAL (v6.78).
+
+   `is-done` takes #31DC80, the same DONE green the Assets line one sub-tab
+   over takes for the same claim: Shipmate went and got the description and it
+   is in the box below. Green everywhere in this app is one finished thing
+   marked against others that are not, and that is exactly what an import is.
+
+   THERE IS NO LOADING STATE HERE ANY MORE. v6.76 put the wait in this row and
+   gave it the spinner; v6.78 moved both into the field itself (see
+   `.gi-desc-wait` below), so the row is silent until the arrival and the two
+   marks can never be up at once. Its rules are DELETED rather than left
+   dormant — a rule nothing can reach is a mark waiting to be switched back on,
+   and this one would put a second spinner on screen the day something sets the
+   class. Nothing about the box changes in either state, so the row cannot grow
+   under the label: measured, the pane is 463 and the Description field's top
+   285 in all three states (empty, loading, done). */
+.ob-form .gi-head .gi-import-note.is-done { color: #31DC80; }
+
 /* ── Typable fields ──────────────────────────────────── */
 .ob-form .form-input {
   width: 100%; border: 1px solid var(--field-stroke); border-radius: var(--field-radius); background: var(--inp-bg);
@@ -21903,6 +21974,59 @@ body.viewing-splash #app-guide { display: none; }
   line-height: 1.5; display: block;
 }
 .ob-form .form-input::placeholder { color: rgba(255, 255, 255, .25); }
+
+/* THE WAIT SITS ON THE DESCRIPTION'S FIRST LINE (v6.78)
+
+   Jaco: *"no sé si el loading debería estar en la primera línea del input box,
+   como para que sea más obvio que algo está sucediendo."* The empty thing is
+   the FIELD, so the sentence lands exactly where the text is about to land —
+   see `_giDescWaitHtml` (render.js) for why it is an overlay and not the
+   `placeholder` attribute (a placeholder cannot hold a spinner).
+
+   EVERY OFFSET IS THE TEXTAREA'S OWN BOX, WRITTEN AS THE SUM. The field is
+   `border: 1px` with `padding: 12px 16px`, so the first line starts at
+   `1 + 12` down and `1 + 16` in; the line-height is the field's 1.5 on 13px,
+   so the words sit ON that line rather than near it. Change
+   `.ob-form textarea.form-input` and these follow by reading, which is the
+   whole reason they are not 13 and 17.
+
+   IT COSTS NO LAYOUT: absolutely positioned, so it cannot move the group, and
+   `pointer-events: none`, so clicking the words still puts a caret in the
+   field.
+
+   AND TYPING DISMISSES IT FROM CSS. The rule is gated on `:placeholder-shown`,
+   so the overlay exists only while the field is genuinely empty — somebody who
+   starts writing while the request is out is never shown a sentence over their
+   own words, and there is no handler to remember. `.is-waiting` is the only
+   thing JS touches (`_setDescLoading`), and it does two jobs from one class:
+   it shows this and it turns the placeholder transparent, so the two can never
+   stack. */
+.gi-desc-group { position: relative; }
+.gi-desc-group .gi-desc-wait { display: none; }
+.gi-desc-group.is-waiting .form-input::placeholder { color: transparent; }
+.gi-desc-group.is-waiting .form-input:placeholder-shown + .gi-desc-wait {
+  display: flex; align-items: center; gap: 8px;
+  position: absolute; pointer-events: none;
+  top: calc(1px + 12px); left: calc(1px + 16px); right: calc(1px + 16px);
+  font-family: var(--mono); font-weight: 400; font-size: 13px;
+  line-height: 1.5; color: var(--text-dim);
+}
+/* The ring is `.build-proc-spin`, the one "Analyzing binary…" already spins,
+   borrowed rather than drawn so "in flight" cannot acquire a second dialect.
+   TWO COLOURS ARE LOCAL AND NOTHING ELSE IS: it is authored in amber, which is
+   right where it lives — a build being processed is work waiting on you — and
+   wrong here, where the colour table reserves amber for exactly that and this
+   is only Shipmate fetching. The lit arc takes `currentColor`, so it IS the
+   sentence's colour through one lever rather than two; the unlit ring is the
+   fields' own white `.14`. */
+.gi-desc-group .gi-desc-wait .build-proc-spin {
+  flex: none;
+  border-color: rgba(255, 255, 255, .14);
+  border-top-color: currentColor;
+}
+.gi-desc-group .gi-desc-wait-txt {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .ob-form .form-input:hover {
   border-color: #4A4F4D; background-color: var(--inp-bg-hover);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .02);

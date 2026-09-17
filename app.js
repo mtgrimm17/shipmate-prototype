@@ -5594,11 +5594,20 @@ function _masCommitGlimmer(input) {
   if (!val || !val.trim()) return;                  // nothing committed to confirm
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
   if (input._masGlimmering) return;                 // blur and click can both fire
-  input._masGlimmering = true;
 
   const SWEEP = 280, FADE = 320;
   const px = v => parseFloat(v) || 0;
   const r = input.getBoundingClientRect();
+  /* A FIELD WITH NO BOX CANNOT BE CONFIRMED. The overlay is pinned to the
+     input's rect, so on a field that is rendered but not shown — Game Details
+     draws all four sub-tabs and CSS reveals one — that rect is 0×0 and this
+     would paint a zero-size box at the top-left of the window. Only reachable
+     since v6.78 gave this function a second caller that fires from a fetch
+     rather than from a gesture: a blur only happens on something you can see.
+     `state` already carries the value, so the sub-tab draws it filled in when
+     you arrive; there is simply nothing to sweep. */
+  if (r.width < 1 || r.height < 1) return;
+  input._masGlimmering = true;
   const s = getComputedStyle(input);
   const isArea = input.tagName === 'TEXTAREA';
   /* The overlay renders from the top, so a textarea scrolled down would sweep
@@ -7738,6 +7747,23 @@ function _giRenderImportNote() {
   slot.innerHTML = _giImportNote();
 }
 
+/* One field, two marks that can never both be up. The flag is transient by
+   design — never persisted, never read by anything but these two — so a reload
+   during a fetch cannot leave the form claiming to be collecting something.
+
+   IT TOUCHES THE DOM, IT DOES NOT RENDER, which is `gcalWaitHover`'s rule and
+   is load-bearing here for a sharper reason: `renderDetails` rebuilds this pane
+   with innerHTML, so a render would throw away a half-typed title and its caret
+   every time a request started or finished. Both halves are already in the
+   markup — the import slot is emitted empty and the wait overlay is emitted in
+   both states — so this is one write and one class. */
+function _setDescLoading(on) {
+  state.descLoading = !!on;
+  _giRenderImportNote();
+  document.getElementById('ob-desc-group')
+    ?.classList.toggle('is-waiting', state.descLoading);
+}
+
 function _triggerScenarioSearch() {
   const title = (state.formData.title || '').trim();
   if (!title) {
@@ -8134,7 +8160,7 @@ function selectPicklistItem(igdbId) {
   // its own comment), and IGDB's summary is used immediately only when
   // there's no Steam app id for this title at all.
   const hasSteamAppId = !!item.steamAppId;
-  if (!hasSteamAppId && item.summary) _fillDescriptionField(item.summary);
+  if (!hasSteamAppId && item.summary) _fillDescriptionField(item.summary, 'IGDB');
   _fillScreenshotGridFromIgdb(item.screenshots || []);
   // No Steam app id for this title — go straight to IGDB's own screenshots
   // rather than leaving the grid empty (item.screenshots above is always []
@@ -8217,7 +8243,16 @@ function selectPicklistItem(igdbId) {
   // failure handling is needed here; each function also has its own
   // stale-title guard, so no wrapping guard is needed here either.
   if (hasSteamAppId) {
-    _applySteamAboutData(item.steamAppId, item.name, item);
+    /* THE WAIT IS STATED IN THE DESCRIPTION'S OWN LABEL ROW — see _giImportNote.
+       Wrapped at the CALL SITE rather than inside _applySteamAboutData, which
+       returns early from four places: `.finally` catches every one of them,
+       including a throw, where four hand-written clears would be an inventory
+       to keep. Only the Steam path gets it, because only the Steam path waits:
+       the no-app-id branch fills Description from IGDB's summary synchronously
+       above, and a spinner for something already on screen is noise. */
+    _setDescLoading(true);
+    Promise.resolve(_applySteamAboutData(item.steamAppId, item.name, item))
+      .finally(() => _setDescLoading(false));
     _applySteamHeroBanner(item.steamAppId, item.name);
     _applySteamAchievements(item.steamAppId, item.name);
   }
@@ -8327,7 +8362,26 @@ function _applySteamCapsuleFromCover(url, expectedTitle) {
    Steam fetch failed → IGDB; Steam fetch succeeded → Steam), so both
    sources fill the Description field and screenshot grid the same way. */
 
-function _fillDescriptionField(text) {
+/* THE NOTE NAMES WHERE THE TEXT CAME FROM, SO THE WRITER IS WHAT RECORDS IT
+   (v6.78). Jaco: *"la descripción la cogemos o bien de Steam o bien de IGDB,
+   así que quiero que olvides el mensaje ese de Imported from Steam · Google
+   Play · App Store y pongas solo Imported from Steam o IGDB."*
+
+   The old note read `liveSearch.allStores` — the platforms the GAME is listed
+   on, which is what activates the platform tiles. That is a different fact
+   from where this paragraph was fetched, and printing it beside the
+   Description said "Imported from App Store · Google Play" about text that
+   came from exactly one place and never from either of those.
+
+   THE SOURCE IS A FACT ABOUT THE WRITE, so it is stamped by the one function
+   that writes — the same shape as `smAdopt`'s `origin` on an asset. Four call
+   sites fill this field and each of them KNOWS which it is (IGDB's summary
+   when there is no Steam page, Steam's About This Game when the fetch lands,
+   IGDB again on either Steam failure), so the argument is never a guess. A
+   note that derived it afterwards would be re-deducing at read time something
+   the writer had in its hand. */
+function _fillDescriptionField(text, source) {
+  state.descSource = source || null;
   state.formData.description = text || '';
   _wsPropagateAboutGame(text || '');
   _macFullPropagateDescription(text || '');
@@ -8335,6 +8389,27 @@ function _fillDescriptionField(text) {
   if (descEl) {
     descEl.value = text || '';
     charCount('ob-desc-count', text || '', 4000);
+    /* AND THE ARRIVAL SWEEPS GREEN (v6.78)
+       `_masCommitGlimmer` is the Mac preview's own confirmation — each letter
+       starts green and fades to its colour on a left-to-right stagger — and it
+       has never once fired for a field SHIPMATE filled, only for text you typed
+       yourself. Which is the wrong way round: a field you type confirms itself,
+       because you are looking at the words as they appear, where text that
+       arrives from a fetch lands in a box you were not watching. This is the
+       stronger of the two cases and it was the unused one.
+
+       IT GOES HERE BECAUSE THIS IS THE ONE DOOR. Both of `selectPicklistItem`'s
+       branches fill through this function — Steam when there is a linked page,
+       IGDB when there is not — so one call covers every source, and any source
+       added later is covered by construction. The alternative is a call beside
+       each branch, which is the inventory this file keeps paying for.
+
+       NOT on `_setDescLoading(false)`, which is where it first looks like it
+       belongs: that runs on a failed fetch too, and a green sweep across an
+       empty box would celebrate nothing having happened. The glimmer's own
+       guards do the rest — empty text, reduced motion and a field with no box
+       (a hidden sub-tab) all return before anything is drawn. */
+    _masCommitGlimmer(descEl);
   }
   _iasTriggerAutoTranslate('description', text || '');
 }
@@ -8346,6 +8421,15 @@ function _refreshScreenshotGrid() {
   // has to redraw it or the files arrive invisibly.
   if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
   updateObSectionStates();
+}
+
+// The guidance line is the one part of the Assets pane that changes without
+// anything being dropped — a Steam scrape fills the library from elsewhere.
+// Called from renderAssetLibrary, which is the single repaint every door
+// into the pool already goes through.
+function _renderAssetsGuidance() {
+  const el = document.getElementById('ob-assets-guidance');
+  if (el && typeof _assetsGuidanceHtml === 'function') el.outerHTML = _assetsGuidanceHtml();
 }
 
 // Mirrors an auto-import batch (IGDB or Steam — see
@@ -9120,10 +9204,13 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
       supportedLanguages:     Array.isArray(data.supportedLanguages) ? data.supportedLanguages : [],
     };
 
+    /* The source is stamped per BRANCH, never once for the function: a Steam
+       fetch that comes back without an About This Game section still lands
+       here, and the text it fills with is IGDB's. */
     if (aboutGameText) {
-      _fillDescriptionField(aboutGameText);
+      _fillDescriptionField(aboutGameText, 'Steam');
     } else if (fallbackItem && fallbackItem.summary) {
-      _fillDescriptionField(fallbackItem.summary);
+      _fillDescriptionField(fallbackItem.summary, 'IGDB');
     }
     // Social links, straight off this same response — see
     // _applySteamSocialLinks for what this replaced.
@@ -9258,7 +9345,7 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
       _checkSteamLocalizedAchievements(lang);
     });
   } else {
-    if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary);
+    if (fallbackItem && fallbackItem.summary) _fillDescriptionField(fallbackItem.summary, 'IGDB');
     // Steam scraping failed for this title — fall back to IGDB's own
     // screenshots (fallbackItem.screenshots is always [] now — the picklist
     // search backend doesn't return screenshots; see _igdbSearchRaw,
@@ -21790,6 +21877,12 @@ function renderAssetLibrary() {
   if (el) el.innerHTML = _smLibraryHTML();
   const cov = document.getElementById('sm-coverage');
   if (cov) cov.innerHTML = _smCoverageHTML();
+  /* The line above the well counts the same pool this list draws, so it is
+     repainted HERE rather than at each of the nine call sites that change the
+     library — an inventory of consequences goes stale the first time a tenth
+     door starts writing to the pool. It no-ops on the Website builder, which
+     renders its own copy of #sm-library and has no guidance line. */
+  _renderAssetsGuidance();
   _smDropwellFit();
 }
 
@@ -22051,6 +22144,35 @@ function _smDropwellSolve(dz) {
    <img>, and playback needs hls.js — see smZoomSteamTrailer). */
 const SM_STEAM_TRAILER_ID = '__steam-trailer';
 
+/* THE GROUP THAT CAN GROW SORTS LAST (v6.78)
+   Jaco: *"intenta evitar 3 líneas en este caso, si hay espacio, mete el video
+   en la fila de key art si se necesita."*
+
+   THE WELL WRAPS GREEDILY, SO A WIDE GROUP STRANDS EVERYTHING AFTER IT. At an
+   850px panel the row is ~763 wide, and the case he screenshotted is key art
+   (2) ~214 + portrait ~30 + screenshot (8) ~660 + video ~75. Line 1 takes the
+   first two and has ~489 left — not enough for 660 — so Screenshot goes to
+   line 2 and leaves ~73 there, and Video needs ~75. **It misses by two
+   pixels**, and the answer to that is not two pixels: the same folder with one
+   more screenshot, or a slightly narrower panel, breaks somewhere else.
+
+   The asymmetry is in the model. `smAssetKind` can only ever produce MANY of
+   one kind — a developer ships eight screenshots and one icon, one logotype,
+   one trailer; key art runs to two or three. So there is exactly one group
+   whose width is unbounded, and putting it LAST is what lets every small group
+   pack onto line 1 with the wide one taking a line of its own. Two lines, from
+   a statement about the data rather than from a measurement of one folder.
+
+   `other` rides along because it is the classifier's fall-through and is
+   unbounded for the same reason.
+
+   IT IS A LAYOUT ORDER AND SO IT LIVES HERE, not in `SM_KINDS` (assets.js),
+   which is the model's list of kinds and is read by the classifier's own
+   tests. Reordering that constant would state a fact about a flex row in the
+   file that decides what a file IS. Anything not named here keeps SM_KINDS'
+   order, so a new kind appears where the model puts it. */
+const SM_WELL_LAST = ['screenshot', 'other'];
+
 function _smLibraryHTML() {
   const pool = state.assets || [];
   const steamTrailer = (state.uploads && state.uploads.steamTrailer) || null;
@@ -22068,7 +22190,8 @@ function _smLibraryHTML() {
       src: steamTrailer.thumbnail, w: 16, h: 9,
     }]);
   }
-  const groups = SM_KINDS.map(k => [k, byKind[k]]).filter(([, l]) => l.length);
+  const order = SM_KINDS.filter(k => !SM_WELL_LAST.includes(k)).concat(SM_WELL_LAST);
+  const groups = order.map(k => [k, byKind[k] || []]).filter(([, l]) => l.length);
   return `<div class="sm-wells">${groups.map(([k, list]) => `
     <div class="sm-well">
       ${/* THE COUNT IS IN PARENTHESES, NOT AFTER A MIDDOT (v6.74). Jaco: *"en

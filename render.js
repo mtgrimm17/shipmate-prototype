@@ -224,11 +224,12 @@ function buildAboutTab() {
             <span class="gi-import-slot" id="ob-desc-import">${_giImportNote()}</span>
             <div class="char-count" id="ob-desc-count">${(fd.description || '').length}/4000</div>
           </div>
-          <div class="form-group">
+          <div class="form-group gi-desc-group${state.descLoading ? ' is-waiting' : ''}" id="ob-desc-group">
             <textarea class="form-input" id="ob-desc" rows="5" required
                       placeholder="${t('ob.field.desc.placeholder') || 'Tell players what makes your game worth their time...'}"
                       oninput="syncField('description', this.value); charCount('ob-desc-count', this.value, 4000)"
                       onblur="_iasTriggerAutoTranslate('description', this.value)"></textarea>
+            ${_giDescWaitHtml()}
           </div>
         </div>
       </div>
@@ -738,13 +739,148 @@ function buildTitlePicklist() {
    one repaint, called beside `_renderScenarioSection` so the two halves cannot
    disagree about whether an import happened. */
 function _giImportNote() {
+  /* THIS ROW IS SILENT WHILE THE FETCH IS IN FLIGHT, AND THAT IS A CORRECTION
+     TO v6.76. Jaco: "no sé si el loading debería estar en la primera línea del
+     input box, como para que sea más obvio que algo está sucediendo."
+
+     v6.76 put the wait HERE, on the argument that the slot which later says
+     where the text came FROM should be the one that says it is on its way —
+     "one line changing rather than two places to look". The relationship is
+     real and it answered the wrong question. **The empty thing is the FIELD**,
+     and a note in an 18px row above it is a caption about a box, where the
+     box's own first line is where you are already looking. A spinner is also
+     the one mark that has to be found before it can reassure, so putting it in
+     the quietest register in the app, at the far end of the smallest row,
+     spends it.
+
+     ONE MARK AT A TIME is what makes this a move rather than an addition. The
+     wait is now drawn inside the textarea (`_giDescWaitHtml` below) and this
+     slot says nothing until there is something to report, so the two never
+     appear together and the row speaks exactly once — on arrival, in green.
+     Two spinners for one fetch would be the "two marks on one object" this file
+     has refused on the Submit row's border, the metadata strip's second rule
+     and the calendar's rings. */
+  if (state.descLoading) return '';
   const ls = state.liveSearch;
   if (!ls || ls.status !== 'done' || !ls.confirmed) return '';
-  const storeLabels = { ios: 'App Store', steam: 'Steam', android: 'Google Play', egs: 'Epic', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PlayStation' };
-  const stores = (ls.allStores || []).map(pid => storeLabels[pid] || pid);
-  if (!stores.length) return '';
+  /* IT NAMES THE SOURCE OF THIS TEXT, AND THERE ARE ONLY EVER TWO (v6.78).
+     Jaco: *"la descripción la cogemos o bien de Steam o bien de IGDB, así que
+     quiero que olvides el mensaje ese de Imported from Steam · Google Play ·
+     App Store y pongas solo Imported from Steam o IGDB."*
+
+     It used to print `liveSearch.allStores` through a store-label map — the
+     platforms the GAME is listed on, which is what lights the platform tiles.
+     Beside the Description that is a different fact wearing this one's words:
+     a paragraph fetched from exactly one place, claiming three, two of which
+     Shipmate has never read a description from in its life.
+
+     `state.descSource` is stamped by `_fillDescriptionField` (app.js), the one
+     door every fill goes through, so the note reports what really happened
+     rather than deducing it — including the case the old line could not have
+     got right either way, a Steam page with no About This Game section, which
+     lands IGDB's summary and now says so.
+
+     No map and no join: two values, each already the name it prints.
+
+     AND IT IS GREEN (v6.76). Jaco: "que debería estar en verde." The Assets
+     line's own argument one sub-tab over: Shipmate went and got something and
+     it is here — finished work, which is exactly what #31DC80 means everywhere
+     else in this app. The register is untouched (11px mono, the counter's
+     size), so the colour is the only thing carrying it.
+
+     The `title` keeps the one fact the two words leave out — that the platform
+     tiles were lit by the same import — rather than restating what is already
+     on screen. */
+  const src = state.descSource;
+  if (!src) return '';
   return `
-    <span class="gi-import-note" title="Imported from ${escHtml(stores.join(' · '))} — description and platforms filled in.">Imported from ${escHtml(stores.join(' · '))}</span>`;
+    <span class="gi-import-note is-done" title="Description and platforms filled in from ${escHtml(src)}.">Imported from ${escHtml(src)}</span>`;
+}
+
+/* THE WAIT IS DRAWN ON THE FIELD'S FIRST LINE (v6.78)
+   Jaco: *"no sé si el loading debería estar en la primera línea del input box,
+   como para que sea más obvio que algo está sucediendo."*
+
+   **IT GOES WHERE THE TEXT IS ABOUT TO GO**, which is the whole argument. The
+   thing that is empty is the box, so the box is where you are looking, and the
+   sentence lands exactly on the line the description will occupy a second
+   later — the wait and the result in one place rather than a caption above a
+   box and then the box.
+
+   **NOT THE `placeholder` ATTRIBUTE**, which is the obvious cheap version and
+   cannot carry a spinner: a placeholder is one run of text with no children,
+   so a ring beside it is impossible. It is an overlay instead, and the
+   placeholder is turned transparent under it so the two cannot stack.
+
+   **IT COSTS NO LAYOUT AND NO NUMBERS OF ITS OWN.** Absolutely positioned
+   inside the field's own group, offset by the textarea's border plus its
+   padding — written as those two sums in the CSS, so a change to
+   `.ob-form textarea.form-input` carries this with it — and `line-height`
+   matched to the field's, so the sentence sits on the first line rather than
+   near it. `pointer-events: none`: clicking where the words are still puts a
+   caret in the field.
+
+   **TYPING DISMISSES IT, FROM CSS.** The rule is gated on
+   `:placeholder-shown`, so the overlay exists only while the field is really
+   empty — someone who starts writing while the request is out is not shown a
+   sentence over their own words, and there is no handler to remember. The
+   element is emitted in BOTH states, so `_setDescLoading` toggles one class on
+   the group rather than inserting and removing a node.
+
+   `role="status"` and not `aria-hidden`: this is the only statement that the
+   fetch is happening, so it is not decoration. */
+function _giDescWaitHtml() {
+  return `<div class="gi-desc-wait" role="status"><span class="build-proc-spin"
+    ></span><span class="gi-desc-wait-txt">${escHtml(t('ob.desc.collecting'))}</span></div>`;
+}
+
+/* WHAT SHIPMATE FOUND, WHERE THE INVITATION USED TO BE.
+
+   The Assets guidance is a sentence about the TOOL — drop things here, the
+   classifier sorts them — and that is exactly right while the well is empty
+   and nobody has told Shipmate anything. Once a Steam page has been scraped
+   it is the wrong sentence: the well is not empty, the files came from
+   somewhere you did not drop them, and nothing on screen says so.
+
+   THE COUNT ONLY, NEVER THE KINDS. "(6 screenshots, 2 key art…)" was the
+   obvious next clause and it is the one thing this line must not do: v6.74
+   removed the file-type list from the guidance for precisely this reason —
+   the library ten pixels below prints those kinds back as group labels with
+   their own counts, so naming them here is the same inventory twice, one of
+   them hypothetical. The number is the fact the library does NOT state.
+
+   GREEN, and #31DC80 is forced rather than chosen: the colour table gives
+   three meanings, and a scrape that happened is DONE — not amber's "this
+   needs you", not red's "wrong". Violet was the other candidate and is
+   wrong by this app's own rule: violet means a change Shipmate is
+   PROPOSING, and these assets are already in the library with nothing to
+   accept. (--green is #4ade80, the older tab green; the tick's own #31DC80
+   is what "done" means on every newer surface.)
+
+   The SOURCE is read off the pool rather than off state.liveSearch, because
+   origin is stamped on each record at adoption (smAdopt) and survives a
+   search widget that has been confirmed away. 'upload' is yours; anything
+   else arrived on its own. */
+function _assetsFoundText() {
+  if (typeof smPool !== 'function') return '';
+  const fetched = smPool().filter(a => a && a.origin && a.origin !== 'upload');
+  if (!fetched.length) return '';
+  const origins = new Set(fetched.map(a => a.origin));
+  const where = origins.has('steam')
+    ? t(origins.size > 1 ? 'ob.assets.found.both' : 'ob.assets.found.steam')
+    : t('ob.assets.found.igdb');
+  return t(fetched.length === 1 ? 'ob.assets.found_one' : 'ob.assets.found',
+           { n: fetched.length, where });
+}
+
+/* One function returns the whole element, so the class and the text cannot
+   be computed from two separate calls and disagree. `_renderAssetsGuidance`
+   (app.js) replaces it wholesale on an import — the node carries no
+   listeners, so outerHTML is the honest repaint. */
+function _assetsGuidanceHtml() {
+  const found = _assetsFoundText();
+  return `<div class="asset-guidance${found ? ' is-found' : ''}" id="ob-assets-guidance">${
+    escHtml(found || t('ob.assets.guidance'))}</div>`;
 }
 
 /* ── Store search result widget ──────────────────────── */
@@ -1434,7 +1570,9 @@ function buildAssetsTab() {
 
               `.ob-section-hdr`'s rule is untouched: Distribution, Localization
               and Steam Assets all still draw one. */''}
-        <div class="asset-guidance">${t('ob.assets.guidance')}</div>
+        ${/* The invitation, or — once a store page has been scraped — what
+              Shipmate found there. See `_assetsFoundText`. */''}
+        ${_assetsGuidanceHtml()}
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
           ${/* The amber "still needed" state keys off SCREENSHOTS only, not on
                 anything the well swallowed: a trailer is optional and always

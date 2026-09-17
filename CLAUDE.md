@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.49**
+Current version: **v6.75** &rarr; next is **v6.76**.
 
 ---
 
@@ -5351,6 +5351,27 @@ onto the next control. Verified: cancel → `g-tip--danger` with
 `rgba(255,105,150,.96)` ink; the gear one hover later → base bubble, zero
 gradient, `rgb(58,58,58)` border, and the class gone.
 
+**AND THE REGULATION CHIPS WORE THE OLD BADGE (v6.75).** Jaco: *"en los
+REGULATION pills en distribution, salen con estilo gris viejo."* The BUBBLE was
+right all along — measured, a real hover draws `.g-tip` at 230 with the tip's
+full text. What was old was the **`?` itself**: a selected Regulation chip is
+blue, and its badge came out `rgb(36)` fill / `rgb(58)` ring / `rgb(85)` ink —
+an opaque grey disc punched through the blue, against the market row's
+transparent `rgb(82,186,255)` at `.55`.
+
+**A SHARED BUILDER IS NOT A SHARED LOOK.** Both chips render through
+`_obRegTipIconHtml`, whose own note says it is shared *"so the two never drift
+into looking or behaving differently"* — and the CSS is where they drifted: the
+badge-inside-a-chip block names `.ob-dist-row-chip` and `.loc-chip` and nothing
+else, so these fell through to the generic `.tooltip-icon`. That block exists to
+remove exactly this ("a grey hole through the blue with a `?` you can barely
+read"), and it was still there in the one place the selector list forgot.
+`.ob-dist-excluded-chip` joins both lists — the resting rule and the hover.
+Measured after: selected chip transparent / `rgb(82,186,255)` / `.55`, identical
+to the market row to the digit; unselected `rgb(160)`; hovered, the ring fills
+with its own blue at `.95`. **When a helper is factored out so two surfaces
+agree, the CSS list is the other half of that promise.**
+
 **Still on `title`: the release block's `version` and `build 42`.** They are
 labels rather than controls, so they were left; the two header BUTTONS are what
 moved, because a row where one control hints instantly and its neighbour takes a
@@ -7124,6 +7145,39 @@ Still only past one: a group of one screenshot saying "(1)" is a count with
 nothing to count against. Measured: `Screenshot (5)`, zero middots in the
 library, card still **577.99**.
 
+**AND THE GROUP THAT CAN GROW SORTS LAST, SO THE WELL NEVER REACHES A THIRD
+LINE (v6.75).** Jaco: *"intenta evitar 3 líneas en este caso, si hay espacio,
+mete el video en la fila de key art si se necesita."*
+
+**IT MISSES BY TWO PIXELS, AND THAT IS WHY THE FIX IS NOT TWO PIXELS.** Measured
+at an 850px panel the row is **757** wide and the folder he screenshotted is
+Key art (2) **158.3**, Portrait art **85.8**, Screenshot (8) **660.3**, Video
+**158.3**. In `SM_KINDS` order line 1 takes the first two (274.1) and cannot
+seat 660.3, so Screenshot drops to line 2 and leaves ~67 there — and Video needs
+158.3. Three lines, with **483 of empty row on line 1**. A tuned gap or a
+slightly smaller thumb would fix that one folder and break the next one.
+
+**THE ASYMMETRY IS IN THE MODEL.** `smAssetKind` can only ever produce MANY of
+one kind: a developer ships eight or twelve screenshots and exactly one icon,
+one logotype, one trailer, two or three pieces of key art. So there is a single
+group whose width is unbounded, and putting it LAST lets every small group pack
+onto line 1 with the wide one taking a line of its own. **Two lines from a
+statement about the data, not from a measurement of one folder.** `other` rides
+along because it is the classifier's fall-through and is unbounded for the same
+reason.
+
+**IT IS A LAYOUT ORDER AND SO IT LIVES IN `_smLibraryHTML`** (`SM_WELL_LAST`),
+not in `SM_KINDS` (assets.js), which is the model's list of kinds and is read by
+the classifier's own tests. Reordering that constant would state a fact about a
+flex row in the file that decides what a file IS. Anything not named in
+`SM_WELL_LAST` keeps SM_KINDS' order, so a new kind appears where the model puts
+it rather than at the end.
+
+Measured on his folder: order Key art → Portrait art → Video → Screenshot, tops
+**369 / 369 / 369 / 454** — **2 lines**, against the same widths replayed in the
+old order giving **3**. Card still **578**, the well absorbing the change
+because the library lives inside it (v6.74).
+
 **AND THE GUIDANCE NAMES WHAT YOU ARE DROPPING.** Jaco: *"quítame el 'drop
 everything here' — 'Drop your assets here'."* That opening was written when the
 well's whole argument was that it takes any file at all, so it said something
@@ -7278,6 +7332,193 @@ deliberately and worth deciding rather than sweeping — converting them would
 fire an instant bubble on every pass of the pointer across the library, which
 is exactly the noise the privacy table's cell tooltips were removed for in
 v6.67. The × earns one because it names a GESTURE; a thumbnail's is a caption.
+
+**AND THE LINE SAYS WHAT SHIPMATE FOUND, ONCE THERE IS SOMETHING TO SAY
+(v6.75).** Jaco: *"si sí ha scrappeado de steam, podríamos decir: Shipmate was
+able to find x assets… en verde."* The guidance is a sentence about the TOOL —
+drop things here, the classifier sorts them — which is right while the well is
+empty and wrong the moment a Steam page has been scraped: the well is not
+empty, the files came from somewhere you did not drop them, and nothing said
+so. `_assetsFoundText` (render.js) counts the pool's non-`upload` records and
+names their origin; `_assetsGuidanceHtml` returns the whole element, so the
+class and the text cannot be computed twice and disagree.
+
+**THE COUNT ONLY, NEVER THE KINDS.** "(6 screenshots, 2 key art…)" was the
+obvious next clause and is the one thing this line must not do — v6.74 removed
+the file-type list from this very paragraph because the library ten pixels
+below prints those kinds back as group labels with their own counts. The number
+is the fact the library does NOT state.
+
+**AND IT IS THE GAME TITLE LABEL'S OWN BOX, NOT A PARAGRAPH.** Jaco: *"en
+mayúsculas, para que cuadre exacto con la altura y tamaño de GAME TITLE, y que
+el dropwell empiece a la misma altura que el field input text de game title."*
+The four sub-tabs are ONE CARD, so what the eye reads across a tab switch is
+whether the big box under the first line starts in the same place — and a 12px
+paragraph at 1.55 over 10 of margin does not land where an 11px label over 8
+does. Every value is MEASURED off `.ob-form .form-label`: 11 / 400 / uppercase
+/ 0.55px / an 18px line, plus `.gi-head`'s own 8 underneath. Measured:
+guidance at **0** and **18** tall, well at **26** — identical to GAME TITLE's
+label (0 / 18) and its input (26); pane 463 and card 577.99 on both sub-tabs.
+`text-transform` rather than shouting in the locale file, so zh-CN — which has
+no case — is unaffected and the string stays a sentence.
+
+**Green, and #31DC80 is forced rather than chosen**: a scrape that happened is
+DONE. Violet was the other candidate and is wrong by this file's own rule —
+violet is a change Shipmate is PROPOSING, and these assets are already in the
+library with nothing to accept. (`--green` is the older `#4ade80`; the tick's
+own #31DC80 is what done means on every newer surface.)
+
+**The repaint lives in `renderAssetLibrary`**, not at the nine call sites that
+change the pool: the line counts the same records that list draws, and an
+inventory of consequences goes stale the first time a tenth door starts
+writing. It no-ops on the Website builder, which renders its own `#sm-library`
+and has no guidance line.
+
+**AND THE WAIT IS DRAWN ON THE DESCRIPTION'S FIRST LINE (v6.75).**
+Jaco: *"durante el tiempo en el que está cargándose el texto de descripción…
+debería haber un progreso poniendo, Shipmate is collecting the description."*
+Then, looking at the first pass: *"no sé si el loading debería estar en la
+primera línea del input box, como para que sea más obvio que algo está
+sucediendo."* Both passes ship in this one version — the first never went live —
+so what follows is one entry with its own correction inside it.
+
+**THE FIRST PASS PUT IT IN THE LABEL ROW AND THAT ANSWERED THE WRONG
+QUESTION.** Its
+argument was that the slot which later says where the text came FROM should be
+the one that says it is on its way — "one line changing rather than two places
+to look" — and the relationship is real. But **the empty thing is the FIELD**,
+so a note in an 18px row above it is a caption about a box while the box's own
+first line is where you are already looking. A spinner is also the one mark that
+has to be FOUND before it can reassure, and the label row is the quietest
+register in the app at the far end of the smallest row: exactly where a spinner
+is worth least.
+
+**NOT THE `placeholder` ATTRIBUTE**, which is the obvious cheap version and
+cannot carry a ring — a placeholder is one run of text with no children. It is
+an overlay (`_giDescWaitHtml`, render.js) with the placeholder turned
+transparent under it, so the two can never stack.
+
+**EVERY OFFSET IS THE TEXTAREA'S OWN BOX, WRITTEN AS THE SUM.** The field is
+`border: 1px` with `padding: 12px 16px`, so the overlay is `calc(1px + 12px)`
+down and `calc(1px + 16px)` in, at the field's own `line-height: 1.5` — the
+words sit ON the first line rather than near it, and changing
+`.ob-form textarea.form-input` carries this with it. Measured **13 / 17** from
+the field's top-left corner, which is those two sums.
+
+**AND TYPING DISMISSES IT FROM CSS.** The rule is gated on `:placeholder-shown`,
+so the overlay exists only while the field is genuinely empty — somebody who
+starts writing while the request is out is never shown a sentence over their own
+words, and there is no handler to remember to write. `.is-waiting` on the group
+is the only thing JS touches, and it does two jobs from one class: it shows this
+and it hides the placeholder.
+
+**ONE MARK AT A TIME is what makes this a MOVE rather than an addition.** The
+label row is silent while `descLoading` is true and speaks only on arrival, so
+the two never appear together — two spinners for one fetch would be the "two
+marks on one object" this file has refused on the Submit row's border, the
+metadata strip's second rule and the calendar's rings. The first pass's
+`is-loading` rules are **deleted, not left dormant**, for the dev bar's reason: a rule
+nothing can reach would put a second spinner on screen the day something sets
+the class.
+
+`_setDescLoading` **touches the DOM, it does not render** (`gcalWaitHover`'s
+rule), and here for a sharper reason than usual: `renderDetails` rebuilds this
+pane with innerHTML, so a render would throw away a half-typed title and its
+caret every time a request started or finished. Both halves are already in the
+markup — the import slot is emitted empty and the overlay in both states — so it
+is one write and one class.
+
+Measured across empty → loading → done → after: the pane **463** and the
+Description field's top **285** at every sample, so nothing can grow under the
+label; the overlay in `rgb(160,160,160)` with `pointer-events: none`, the
+placeholder at `rgba(0,0,0,0)`, `role="status"`; the ring spinning
+`build-proc-rotate 0.7s` with its lit arc on the sentence's own colour against a
+white `.14` ring; and typing into the field while loading leaves the overlay at
+`display: none`.
+
+The parts of the first pass that are unchanged, because the plumbing was never
+what moved:
+
+Picking a Steam-linked title DEFERS the Description fill until
+`_applySteamAboutData` settles, deliberately — filling from IGDB first would
+flash a shorter text and then replace it (see `hasSteamAppId` in
+`selectPicklistItem`). That deferral is right and it is also a SILENCE: for as
+long as the request is out the field is empty and nothing says anything is
+coming.
+
+- **Wrapped at the CALL SITE with `.finally`**, not inside `_applySteamAboutData`,
+  which returns early from four places: one `.finally` catches every one of
+  them including a throw, where four hand-written clears would be an inventory.
+  `_setDescLoading` is the one writer.
+- **Only the Steam path gets it**, because only the Steam path waits — the
+  no-app-id branch fills from IGDB's summary synchronously, and a spinner for
+  something already on screen is noise.
+- **Only the ARRIVAL is green.** `is-done` takes #31DC80, the Assets line's own
+  colour for the same claim. A fetch in flight is not done, not an alert and not
+  wrong, so the wait wears text colours — which is all the colour table has left
+  for it.
+- **The flag is transient by design** — never persisted, never read by anything
+  but these two marks — so a reload mid-fetch cannot leave the form claiming to
+  be collecting something.
+- **And the string has no subject** — *"Collecting the description…"*, not
+  "Shipmate is collecting…" — because the spinner carries that half, and the
+  slot's other state says "Imported from Steam" with no subject either.
+
+**AND THE NOTE NAMES WHERE THE TEXT CAME FROM, WHICH IS NOT WHERE THE GAME IS
+SOLD (v6.75).** Jaco: *"la descripción la cogemos o bien de Steam o bien de
+IGDB, así que quiero que olvides el mensaje ese de Imported from Steam · Google
+Play · App Store y pongas solo Imported from Steam o IGDB."*
+
+It printed `liveSearch.allStores` through a store-label map — **the platforms
+the GAME is listed on**, which is the field that lights the platform tiles.
+Beside the Description that is a different fact wearing this one's words: a
+paragraph fetched from exactly one place, claiming three, two of which Shipmate
+has never read a description from in its life. The search RESULT card two
+inches up still prints `allStores` and is right to, because there the question
+really is where the game is sold.
+
+**THE SOURCE IS A FACT ABOUT THE WRITE, so the writer is what records it.**
+`state.descSource` is stamped by `_fillDescriptionField` (app.js) — the one
+door every fill goes through — the same shape as `smAdopt`'s `origin` on an
+asset. All four call sites KNOW which it is (IGDB's summary when there is no
+Steam page, Steam's About This Game when the fetch lands, IGDB again on either
+Steam failure), so the argument is never a guess, and a note that deduced it
+afterwards would be re-deriving at read time something the writer had in its
+hand. **It is stamped per BRANCH, never once per function**: a Steam fetch that
+comes back with no About This Game section fills from IGDB, which is the case
+the old line could not have got right in either direction and which now says so.
+
+No map and no join: two values, each already the name it prints.
+
+**AND THE ARRIVAL SWEEPS GREEN (v6.75).** `_masCommitGlimmer` — the Mac
+preview's own confirmation, each letter starting green and fading to its colour
+on a left-to-right stagger — had never once fired for a field SHIPMATE filled,
+only for text you typed yourself. Which is the wrong way round: **a field you
+type confirms itself**, because you are watching the words appear, where text
+that arrives from a fetch lands in a box you were not looking at. This is the
+stronger of the two cases and it was the unused one.
+
+- **It goes in `_fillDescriptionField` because that is the ONE door.** Both of
+  `selectPicklistItem`'s branches fill through it, so one call covers every
+  source and any source added later is covered by construction — the alternative
+  being a call beside each branch, which is the inventory this file keeps paying
+  for.
+- **NOT on `_setDescLoading(false)`**, which is where it first looks like it
+  belongs: that runs on a failed fetch too, and a green sweep across an empty
+  box would celebrate nothing having happened.
+- **The glimmer gained a zero-rect guard**, and only this made it reachable. The
+  overlay is pinned to the input's rect, and Game Details draws all four
+  sub-tabs with CSS revealing one — so a fill that lands while you are on
+  Assets would have painted a 0×0 box at the top-left of the window. Not
+  reachable before, because a blur only ever happens on something you can see.
+  `state` already carries the value, so the sub-tab draws it filled in when you
+  arrive; there is simply nothing to sweep.
+
+Measured end to end: **"Imported from Steam"** in `rgb(49,220,128)`, 125.4 wide,
+with the platform fact kept in the `title` rather than restated on screen;
+"Imported from IGDB" on the other arm; silent with no source. The sweep created
+**115** `.flash-char` spans in `rgb(49,220,128)` on an overlay matching the
+field's own box to **0.00 / 0.00 / 0.00**, and **zero** left behind after.
 
 **AND THE TWO LANGUAGE LABELS GAINED THEIR NOUN.** Jaco: *"en languages, cambia
 primary por primary language y supported por supported languages."* One key
@@ -7626,9 +7867,9 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.49** → next is **v6.50**, then **v6.51**, etc. (v6.29 –
-v6.31 are Mark's Distribution work, and **v6.42 and v6.48 are Adam's** —
-shipped in parallel and touching none of this.)
+Current version: **v6.75** → next is **v6.76**. (v6.29 – v6.31 are Mark's
+Distribution work, and **v6.42 and v6.48 are Adam's** — shipped in parallel and
+touching none of this.)
 
 **AND THE LIVE NUMBER CAN BE READ WITHOUT GIT — FETCH THE PAGE.** Everything
 above agonises over Claude not being able to see `origin/main`, and the whole
@@ -7650,6 +7891,26 @@ Jaco: *"primero checkeamos porque Adam ha pusheado."* Fetched: **v6.48**, so
 from now on** — it costs one request and it retires the guess. The skip-if-unsure
 rule stays for the case the fetch cannot answer (the site down, a private repo,
 a deploy still in flight), where it is still the right default.
+
+**AND THIS BATCH COLLAPSED 6.78 → v6.75, WHICH IS THE SIXTH TIME.** Jaco:
+*"vamos a pushear esto a v6.75."* Fetched before renumbering, exactly as the
+habit below says: the footer badge reads **v6.48**, so every number from 6.49 up
+has been minted by EDITING and none of them has bytes behind it. 6.75 > 6.48, so
+the key still only goes UP — the one thing that makes a renumber safe.
+
+**The numbers this session burnt are all local cache-busts.** 6.74 through 6.78
+were each needed to get the pane to fetch a fresh `app.js` / `render.js`, which
+is this section's ONE EXCEPTION working as written. The cost is the cosmetic one
+this section opens with: 6.76 – 6.78 are gaps with nothing behind them.
+
+**AND THE HEADINGS WERE RELABELLED HERE, AGAINST THE USUAL RULE.** Every earlier
+renumber kept its edit-time labels because they marked decisions made across
+real sessions. These three did not: 6.76 and 6.78 are one afternoon's work on
+one surface, and the "v6.76 → v6.78" on the description's wait was a correction
+inside a single unpublished batch rather than a version anyone could have run.
+So the entry keeps the correction and states it as a first pass, and there is no
+live v6.76 to go looking for. **Keep the labels when they are a history; collapse
+them when they are only a cache key.**
 
 **AND THE WELL BATCH COLLAPSED 6.82 → v6.74, WHICH IS THE FIFTH TIME.** Jaco:
 *"v6.74 por favor."* Fetched before touching a line: **live is v6.48**, so every
