@@ -4631,6 +4631,44 @@ field on this journey writes as you leave it; a crop that needed confirming woul
 be the one thing here you could lose by closing the modal. It bakes 350ms after
 you stop moving, so a drag is one write rather than sixty.
 
+**AND FOR FIVE VERSIONS IT LOST THE LAST EDIT — LEAVING IS A COMMIT (v6.66).**
+Jaco: *"the zooming on the modal doesn't keep the preview when I go back to the
+store, so changes are not kept."*
+
+Reproduced exactly: zoom and leave inside the 350ms window and
+`crops[shotId]` is **never written at all** — the store row redraws the original
+and the crop is gone. The sentence above is what makes it obvious in hindsight:
+*"a crop that needed confirming would be the one thing here you could lose by
+closing the modal"* — and that is precisely what a debounce nothing flushes
+turns the auto-save back into.
+
+**The debounce is right and is not what changed.** One write per drag rather
+than sixty is still the point. What was missing is the other half of a deferred
+write: **anything that ends the gesture has to flush it.** Switching shots
+already knew that (`_shotEdCommit()` fires before the swap); the two doors OUT
+of the step did not.
+
+`_shotEdFlush()` clears the timer and commits if anything is pending, and it is
+called from **`openStepModal` and `closeStepModal`** — the two exits, both
+single doors. In `openStepModal` it goes above the per-platform branches for
+that function's own stated reason: every one of them returns early, so anything
+that must happen on every open has to happen before them *"or be forgotten in
+the sixth"*.
+
+**AND IT WAS INVISIBLE TO EVERY MEASUREMENT THE EDITOR SHIPPED WITH, because
+they all slept first.** The batch note above reads "auto-commit baking a real
+dataURL 350ms later" — a probe that waits out the debounce is testing the timer,
+not the exit. **When a write is deferred, the test has to be the path that does
+NOT wait.** Same family as the scroll-restore bug, which repaired itself under
+any probe that read `scrollTop`.
+
+Verified on macos, four paths: zoom → straight back to the store preview → crop
+saved at z 3 with a real bake and the store row drawing **17591** bytes rather
+than the original's 399; zoom → `closeStepModal` at once → saved at 1.8; the
+ordinary waited path unchanged at 2.4; and **opening and leaving with no edit
+writes nothing** — `crops` still empty, so the flush cannot manufacture a crop
+out of a visit.
+
 **A REMOTE SCREENSHOT TAINTS THE CANVAS and that is stated rather than
 swallowed.** An IGDB image through the proxy makes `toDataURL` throw, so there is
 no baked preview: the TRANSFORM is still saved and re-applies in the editor, and

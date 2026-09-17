@@ -2801,6 +2801,14 @@ function removeMacFullReviewAttachment() {
 }
 
 async function openStepModal(pid, stepId) {
+  // A PENDING CROP IS FLUSHED ON THE WAY OUT, and it sits here for this
+  // function's own stated reason: every per-platform branch below returns
+  // early, so anything that has to happen on EVERY open has to happen before
+  // them or be forgotten in the sixth. Leaving the Screenshots editor — back to
+  // the store preview, or to any other step — is the end of the gesture, and a
+  // debounced write that nothing flushes is a write that is simply dropped.
+  // No-op unless something is pending; see _shotEdFlush.
+  _shotEdFlush();
   // Opening the step IS the visit — recorded before any of the per-platform
   // branches below, every one of which returns early, so this would otherwise
   // have to be repeated in five places (and be forgotten in the sixth).
@@ -2933,6 +2941,12 @@ async function openStepModal(pid, stepId) {
 }
 
 function closeStepModal() {
+  /* THE OTHER DOOR OUT, and it takes the same flush as openStepModal — the ×,
+     Save & Close and Escape all land here, and a crop you made 200ms before
+     pressing one of them is still sitting in a timer. Same no-op-unless-pending
+     guarantee; this is the exit the file's own "every other field writes as you
+     leave it" was always talking about. */
+  _shotEdFlush();
   /* The read-only lock lives for one visit. Clearing it here rather than on
      open is what lets a submitted card and a live one coexist: the flag is
      set by the one entry point that should lock (openSubmittedStep) and
@@ -14926,6 +14940,37 @@ function _shotEdCommit() {
      pointer. The thumbnail is already live (`_shotEdLiveThumb`); the dashboard
      behind the modal is what needs repainting. */
   renderDashboard();
+}
+
+/* LEAVING IS A COMMIT, AND THE DEBOUNCE IS WHAT HID THAT (v6.66).
+   Jaco: *"the zooming on the modal doesn't keep the preview when I go back to
+   the store, so changes are not kept."*
+
+   Reproduced exactly: zoom, then leave inside the 350ms window and
+   `crops[shotId]` is never written at all — the store row redraws the original
+   and the crop is gone. Wait out the debounce first and everything is correct,
+   which is why every measurement this editor shipped with passed: they all
+   slept before reading.
+
+   **The debounce is right and is not what changes.** `_shotEdScheduleCommit`
+   exists so a drag is ONE write rather than sixty, and that argument is
+   untouched. What was missing is the other half of it: a deferred write has to
+   be FLUSHED by anything that ends the gesture, or the last one is simply
+   dropped. Switching shots already knew this (`_shotEdCommit()` fires before
+   the swap) — the two doors OUT of the step did not.
+
+   So this is the editor's own "auto-save, because there is nothing for an Apply
+   button to mean" finally holding at the one moment it has to: **every other
+   field on this journey writes as you leave it**, and until now this one wrote
+   350ms after you stopped moving and only if you were still there.
+
+   Called from `openStepModal` and `closeStepModal` — the two ways out, both
+   single doors, so no per-platform branch can forget it. It is a no-op unless
+   something is pending: `_shotEdCommit` guards on `dirty`, so the ordinary exit
+   costs one cleared timer and no render. */
+function _shotEdFlush() {
+  clearTimeout(_shotEdCommitT);
+  if (_shotEd.dirty && _shotEd.shotId) _shotEdCommit();
 }
 
 function _shotEdReset() {
