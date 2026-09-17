@@ -1663,9 +1663,12 @@ function _chkOpenStep(pid, stepId, flip) {
       return;
     }
     /* Data Collection Questions: open the preview and turn it over, exactly as
-       its own "Answer Data Collection Questions" element does. openStorePreviewSection
-       records the visit too (markStepSectionSeen), which is half of what makes
-       the checklist row able to tick at all — see _chkDataSafetyDone. */
+       its own "Answer Data Collection Questions" element does.
+       openStorePreviewSection records the visit too (markStepSectionSeen).
+       That visit no longer gates the checklist row — _chkDataSafetyDone reads
+       the answers alone now, see its own note — but it still clears the
+       preview's own review prompt, which is the surface the developer is about
+       to be looking at. */
     if (flip) {
       if (typeof openStepModal === 'function') openStepModal(pid, stepId);
       if (typeof openStorePreviewSection === 'function') openStorePreviewSection(pid, flip);
@@ -1686,6 +1689,29 @@ function _chkOpenStep(pid, stepId, flip) {
     row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     if (typeof openStepModal === 'function') openStepModal(pid, stepId);
   });
+}
+
+/* WHAT THE ROW ITSELF CLAIMS, which is not always what its target step
+   claims. For most rows the two are the same question asked twice — "Set
+   content ratings" is done exactly when every platform's contentRating step
+   is — and for those this changes nothing.
+
+   Data safety is the row where they come apart, and it comes apart by design:
+   Data Collection Questions is a SECTION of the Product Page Preview, so the
+   ring lands on the preview step (see CHK_GLOW_STEPS.dataSafety), and that
+   step covers Title, Subtitle, Screenshots, Business and Content as well. The
+   disclosure can be finished while the preview around it is not. Reading the
+   target step's state there told the developer their completed data safety
+   still needed them. */
+function _chkRowDone(key) {
+  if (typeof _chkGroups !== 'function') return false;
+  try {
+    for (const g of _chkGroups()) {
+      const row = g.items.find(i => i.step === key);
+      if (row) return !!row.done;
+    }
+  } catch (_) { /* mid-boot */ }
+  return false;
 }
 
 function chkGoStep(key) {
@@ -1720,8 +1746,14 @@ function chkGoStep(key) {
      Deliberately every target rather than the incomplete subset here: with
      nothing incomplete, the subset is empty, and the whole point of the green
      pass is showing the set that IS done. */
+  /* GREEN IS THE ROW'S ANSWER, NOT THE STEP'S. Either the row says it is done
+     — which for data safety can be true while the preview it rings is not, see
+     _chkRowDone — or every target step is done and there is nothing left to
+     point at. Both are "this is finished"; both ring green on every target,
+     because with nothing outstanding the outstanding subset is empty and the
+     whole point of the green pass is showing the set that IS done. */
   const outstanding = targets.filter(t => !_chkStepDone(t.pid, t.stepId));
-  if (!outstanding.length) { _chkPulseTargets(targets, 'done'); return; }
+  if (_chkRowDone(key) || !outstanding.length) { _chkPulseTargets(targets, 'done'); return; }
   /* On a single platform the row has exactly one thing it could be pointing
      at, so it pulses that one whatever its state — and its state is already
      covered by the green branch above. */
@@ -2984,23 +3016,36 @@ async function openStepModal(pid, stepId) {
 
   state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
 
-  // Open overlay immediately so user sees something
-  renderStepModal();
-  // Mark Store Page Preview as visited before rendering
+  /* THE FLAGS GO IN BEFORE THE PAINT, WHICH IS WHAT THEIR OWN COMMENTS ALWAYS
+     SAID — "Mark Store Page Preview as visited before rendering", "Mark
+     Localizations as visited before rendering" — while both blocks sat AFTER
+     the renderStepModal() call they were describing.
+
+     Nothing repaints after them. A step with inference re-renders when the
+     call comes back, and localizations has none, so `macLocalizationsSeen`
+     became true the moment the modal opened and then waited for some unrelated
+     render to be believed. Symptom: open Localizations on every platform,
+     finish everything the step asks for, and "Complete localizations" stays
+     grey on the Shippy Checklist — the predicate really was true, and the two
+     surfaces that read it had both already been painted one line earlier.
+     (This is why the v6.78 completion refresh on renderStepModal's tail could
+     not catch it: the flag was written after the tail had run.)
+
+     toggleStepSection — the inline pane's opener — already writes them in this
+     order, so this is the modal path catching up with the pane's. */
   if (stepId === 'storePreview') {
     if (pid === 'macos')      state.macStorePreviewSeen     = true;
     else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
     else                      state.iosStorePreviewSeen     = true;
   }
-  // Mark Localizations as visited before rendering — same "seen" gate as
-  // Store Page Preview above (isIOSSectionComplete/isMacSectionComplete/
-  // isMacFullSectionComplete, state.js), so it only counts as complete once
-  // the developer has actually opened it.
   if (stepId === 'localizations') {
     if (pid === 'macos')      state.macLocalizationsSeen     = true;
     else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
     else                      state.iosLocalizationsSeen     = true;
   }
+
+  // Open overlay immediately so user sees something
+  renderStepModal();
 
   document.getElementById('submit-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';

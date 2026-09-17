@@ -3826,15 +3826,31 @@ function _chkEveryPlatformComplete(stepIds) {
    unticked on every project that didn't activate the hidden Mac App Store
    Full, which is the only platform with a real card step for it.
 
-   It asks each preview directly instead, using the exact expression that
-   preview's own required-elements list uses for its `dataDone` — section
-   visited AND questionnaire complete — so the checklist and the preview's own
-   amber "needs attention" ring can't disagree. Steam is deliberately absent:
-   its data section is a privacy-policy URL field, not a disclosure
-   questionnaire, and counting it would let the row tick on a URL. */
+   It asks each preview directly instead. Steam is deliberately absent: its data
+   section is a privacy-policy URL field, not a disclosure questionnaire, and
+   counting it would let the row tick on a URL.
+
+   ANSWERS ONLY — THE VISIT IS NOT PART OF THE BAR ANY MORE (by request). The
+   two Apple entries used to be `storePreviewSectionSeen[pid].data && complete`,
+   deliberately the same expression the preview's own `dataDone` uses, so that
+   this row and the preview's amber ring could not disagree. That pairing is
+   given up here on purpose, and it is worth being explicit about which half
+   moved: this row now asks only "is every required question answered on every
+   platform that has them", and the preview's own "Answer Data Collection
+   Questions" element still asks "and have you looked at it", because those are
+   two different claims. The checklist tracks the submission's readiness; the
+   preview's ring is a prompt to review what Shipmate may have filled in for
+   you. A developer whose privacy URL came from onboarding and whose
+   collects-data answer came from inference has a complete disclosure and a
+   row that now says so.
+
+   Its click has been taught the same thing — see chkGoStep's tone, which reads
+   this row's done-state rather than the Product Page Preview step it points
+   at, so a finished data disclosure rings green even though the preview around
+   it is not finished. */
 const CHK_DATA_DONE = {
-  ios:        () => !!(state.storePreviewSectionSeen?.ios?.data   && isIOSSectionComplete('privacy')),
-  macos:      () => !!(state.storePreviewSectionSeen?.macos?.data && isMacSectionComplete('privacy')),
+  ios:        () => isIOSSectionComplete('privacy'),
+  macos:      () => isMacSectionComplete('privacy'),
   macos_full: () => isMacFullSectionComplete('privacy'),
   android:    () => isAndroidSectionComplete('dataSafety'),
 };
