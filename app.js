@@ -4069,6 +4069,36 @@ function _enqueueTranslateTask(taskFn) {
     if (tip) tip.classList.remove('is-visible');
   }
 
+  /* REDRAW A BUBBLE THAT IS ALREADY UP, FROM ITS ANCHOR (v6.81).
+     A hint is normally a constant — the control means one thing and says it —
+     but a HOLD is a control whose meaning changes halfway through: "Hold to
+     delete" is an instruction until you start, and a report of what is
+     happening after. The thumbnail's × rewrites its own `data-tip` mid-gesture
+     and calls this.
+
+     **It redraws FROM THE ANCHOR rather than taking a string**, which is what
+     stops it becoming a second `smTipAt`: the anchor is already the one thing
+     that knows the text and the tone, so a caller cannot put a word in the
+     bubble that the control does not also carry in its `data-tip` for the next
+     ordinary hover. And it re-runs the whole of `showTip`, which means the box
+     is re-MEASURED — the bubble shrink-wraps its text (v6.72), so a longer or
+     shorter word must move the box or it drifts off the button it points at.
+
+     **Silent when nothing is on screen.** A hold can be started from a click
+     with no hover behind it (touch, or a pointer that entered on the press),
+     and raising a tooltip nobody asked for would be this app putting a label
+     on a gesture rather than on a control. */
+  window.smTipRefresh = function (anchor) {
+    const tip = document.getElementById('g-tip');
+    if (!tip || !anchor || !tip.classList.contains('is-visible')) return;
+    showTip(anchor);
+  };
+
+  /* Published for the one case the pointer cannot answer: an anchor that is
+     REMOVED while its tooltip is up never fires `mouseout`, so something has
+     to take the bubble down on its behalf. */
+  window.hideGlobalTip = hideTip;
+
   /* THE ATTRIBUTE IS THE TOOLTIP; THE CLASS IS THE LAYOUT (v6.70).
      `.tooltip-anchor` sets four layout properties (inline-flex, align-items,
      vertical-align, relative) that a SPAN IN PROSE needs and a 30px icon
@@ -21800,13 +21830,21 @@ function _smDropwellFit() {
   const wells = document.querySelector('#sm-library .sm-wells');
 
   if (dz) {
-    let lines = 0;
-    if (wells) {
-      const tops = new Set();
-      wells.querySelectorAll('.sm-well').forEach(w => tops.add(Math.round(w.offsetTop)));
-      lines = tops.size;
-    }
-    dz.classList.toggle('is-tight', lines >= 2);
+    /* NO LINE COUNTING ANY MORE (v6.74). This used to count the library's
+       wrapped flex lines and switch `is-tight` at two, because the library sat
+       BELOW the well and its second row was what pushed the card over. It sits
+       INSIDE the well now, so the pane's height stops depending on how many
+       rows the folder makes and there is nothing left to condition on — the
+       well is one number, always. The counting, the class and its rule went
+       together rather than being left switched off.
+
+       THE SOLVE STILL CANNOT FEED BACK ON ITSELF, and the reason CHANGED with
+       the markup, so it is worth restating rather than inheriting: it used to
+       be that the well was a sibling ABOVE the library and wrapping is decided
+       by width. Now the library is the well's own child — and what the solve
+       writes is still the well's HEIGHT, while `.sm-wells` wraps against its
+       WIDTH, which is the well's content box and is untouched by any of this.
+       The observer therefore cannot be re-triggered by the thing it triggers. */
 
     /* THE SOLVE WAITS A FRAME, AND THE FIRST VERSION DID NOT — that is the
        whole of why it silently never wrote. `renderAssetLibrary` runs inside
@@ -21825,7 +21863,7 @@ function _smDropwellFit() {
       requestAnimationFrame(() => {
         _smFitPending = false;
         const el = document.getElementById('ob-screenshot-dropzone');
-        if (el) _smDropwellSolve(el, el.classList.contains('is-tight'));
+        if (el) _smDropwellSolve(el);
       });
     }
   }
@@ -21843,12 +21881,20 @@ function _smDropwellFit() {
   }
 }
 
-/* ── AND THE TIGHT HEIGHT IS SOLVED AGAINST BASIC INFO, NEVER TYPED ───────
+/* ── THE WELL'S HEIGHT IS SOLVED AGAINST BASIC INFO, NEVER TYPED ──────────
    Jaco: *"quiero que me claves la altura con respecto a la card de basic info
    en el caso de doble fila, para que sea perfecto."* 576 was only ever a
    STAND-IN for that card — measured, Basic Info is 578 and the 144 landed
    Assets on 576.19, so the two were 1.8 apart and the number he actually
    wanted was never the one he could name.
+
+   **AND IN v6.74 IT STOPPED BEING CONDITIONAL, WHICH IS A SIMPLIFICATION THIS
+   FUNCTION GETS FOR FREE.** The library moved inside the well, so the pane no
+   longer grows with the folder and there is no "double row" case to solve for:
+   ONE height, always, and it is still this measurement rather than the 334 in
+   the CSS. The `tight` argument and the early `removeProperty` went with the
+   class — everything below is unchanged, because the arithmetic never cared
+   which state asked for it.
 
    **Same shape as `_sizeLangSearchList`, one pane over**, and for the same
    reason that function gives: 578 is what Basic Info happens to be today and
@@ -21858,9 +21904,9 @@ function _smDropwellFit() {
 
    **BOTH READINGS ARE PANE TO PANE**, so the sub-tab rail, the Prev/Next row
    and the panel's padding cancel: match the panes and the CARDS match, with no
-   arithmetic about the 115 of chrome anywhere in here. A `--gi-drop-h-tight`
-   of 144 stays in the CSS as the value this solves to today; the inline
-   property is what makes it exact.
+   arithmetic about the 115 of chrome anywhere in here. A `--gi-drop-h` of 334
+   stays in the CSS as the value this solves to today; the inline property is
+   what makes it exact.
 
    **THE CORRECTION IS A DELTA, WHICH IS WHY IT CANNOT OSCILLATE.** It measures
    the overshoot with the well at its CURRENT height and takes that off the
@@ -21878,7 +21924,7 @@ function _smDropwellFit() {
    Skipped entirely while the pane is hidden: `getBoundingClientRect` on a
    `display: none` pane is 0, and a delta against 0 would write nonsense. The
    next render on the way into Assets does it. */
-function _smDropwellSolve(dz, tight) {
+function _smDropwellSolve(dz) {
   /* THE SOLVED VALUE LIVES ON THE ROOT, NOT ON THE WELL — and the first
      version put it on the well, which is why it kept measuring right and
      landing back at 144. `renderDetails` rebuilds the pane with innerHTML, so
@@ -21891,7 +21937,6 @@ function _smDropwellSolve(dz, tight) {
      Same class of mistake as the renamed selector two sections up: the code
      was correct about the NUMBER and wrong about WHERE it was kept. */
   const root = document.documentElement;
-  if (!tight) { root.style.removeProperty('--gi-drop-h-tight'); return; }
 
   const pane = dz.closest('.gd-pane');
   if (!pane || !pane.getBoundingClientRect().height) return;   // hidden: not now
@@ -21918,19 +21963,61 @@ function _smDropwellSolve(dz, tight) {
      Third time this file has been bitten by reading a transitioned property in
      the turn that set it (`.prv-box`'s hover, the card's own height). The rule:
      if you are going to measure a property you just wrote, take the transition
-     off first — and put it back, or the well stops easing for good. */
-  const prevT = dz.style.transition, prevM = dz.style.minHeight;
-  dz.style.transition = 'none';
-  dz.style.minHeight = '0px';
+     off first — and put it back, or the well stops easing for good.
+
+     **AND THE PROBE IS MEASURED OUT OF FLOW, WHICH IS THE HALF THAT MAKES IT
+     INVISIBLE (v6.76).** Jaco: *"al clicar Assets, veo cómo se redimensiona la
+     card en real time en vez de estar ya cargada en su dimensión
+     correspondiente."* Sampled every frame across a real tab switch, the card
+     went **578 → 451.8 → 578 over ~260ms**: it COLLAPSED and eased back up.
+
+     451.8 was this probe. Dropping the well to its content for one frame is
+     invisible on the WELL — that transition is off and the restore is flushed —
+     but `.sec-panel` carries `transition: all`, so the CARD saw a 126px change,
+     started its own ease and was still easing long after the well had snapped
+     back. The probe was correct and its BLAST RADIUS was not.
+
+     **Freezing the card's transition too was the obvious fix and did not work**,
+     which is worth keeping: with `transition: none` on the panel the collapse
+     merely became instant, and restoring the transition let it ease back up
+     from 451.8 anyway — measured, still twelve dipped frames. You cannot fix a
+     layout change by hiding its animation; the ancestor must never see it.
+
+     So the well is taken OUT OF FLOW for the read — `position: absolute` with
+     its width pinned to the px it already had, so wrapping is identical and
+     nothing above it can move. That is `_gdPaneHeight`'s own mechanism, one
+     element down, and this file's standing answer to "measure something without
+     showing the measurement". `visibility: hidden` because an absolutely
+     positioned box still paints.
+
+     **AND THE RESTORE HAS TO BE FLUSHED BEFORE THE TRANSITION COMES BACK, which
+     is the third and actual cause.** Measured frame by frame, `--gi-drop-h` was
+     `333.81px` the whole way through and the WELL still read 207.6 — its own
+     content height — for six frames before easing up to 333.8 over ~250ms. So
+     nothing was wrong with the number; the well was ANIMATING out of the probe.
+
+     The old sequence restored `min-height` and `transition` together and only
+     then flushed, so at the moment the browser next computed style the element
+     had `transition: all .2s` AND a height that had just changed from 207.6 —
+     which is a transition trigger, textbook. The probe was invisible and its
+     EXIT was not.
+
+     Restore the geometry, flush while the transition is still off, and only
+     then give it back. Three steps that have to stay in that order. */
+  const prevCss = dz.getAttribute('style') || '';
+  const w = dz.getBoundingClientRect().width;
+  dz.style.cssText = prevCss +
+    ';transition:none;position:absolute;visibility:hidden;min-height:0;' +
+    'width:' + w + 'px;box-sizing:border-box;';
   const floor = dz.getBoundingClientRect().height;
-  if (prevM) dz.style.minHeight = prevM; else dz.style.removeProperty('min-height');
-  if (prevT) dz.style.transition = prevT; else dz.style.removeProperty('transition');
-  void dz.offsetHeight;                       // flush, so the restore does not ease
+  dz.style.cssText = prevCss + ';transition:none;';   // back in flow, still frozen
+  void dz.offsetHeight;                               // …and the browser agrees
+  if (prevCss) dz.setAttribute('style', prevCss); else dz.removeAttribute('style');
 
   const want = Math.max(floor, cur - delta);
-  const now = parseFloat(root.style.getPropertyValue('--gi-drop-h-tight'));
+  const now = parseFloat(root.style.getPropertyValue('--gi-drop-h'));
   if (Math.abs(want - (now || 0)) < 0.5) return;   // already solved — write nothing
-  root.style.setProperty('--gi-drop-h-tight', want.toFixed(2) + 'px');
+  root.style.setProperty('--gi-drop-h', want.toFixed(2) + 'px');
 }
 
 /* THE WELL'S CONTENTS, IN THE SHAPE OF THE NAV PROTOTYPE.
@@ -21984,8 +22071,24 @@ function _smLibraryHTML() {
   const groups = SM_KINDS.map(k => [k, byKind[k]]).filter(([, l]) => l.length);
   return `<div class="sm-wells">${groups.map(([k, list]) => `
     <div class="sm-well">
+      ${/* THE COUNT IS IN PARENTHESES, NOT AFTER A MIDDOT (v6.74). Jaco: *"en
+            vez de un punto separando la descripción (screenshots · 2) que esté
+            justo después entre paréntesis."* The middot is a SEPARATOR — it
+            holds two things apart and says they are peers, which is what made
+            `SCREENSHOTS · 2` read as a list of two facts rather than as one
+            label carrying its own count. Brackets say the number belongs to
+            the word, and they cost no space to say it.
+
+            The privacy table made this exact move for the same reason (see
+            "AND THE COUNT CAME BACK AGAINST THE NAME, IN PARENTHESES" in
+            CLAUDE.md), so this is the app agreeing with itself rather than a
+            second idea: one plain space, because the brackets carry their own
+            side bearings and a wider gap re-opens the hole the middot left.
+
+            Still only past one — a group of one screenshot saying "(1)" is a
+            count with nothing to count against. */''}
       <div class="sm-well-h">${escHtml(SM_KIND_SHORT[k] || k)}${
-        list.length > 1 ? ` <span>· ${list.length}</span>` : ''}</div>
+        list.length > 1 ? ` <span>(${list.length})</span>` : ''}</div>
       <div class="sm-well-row">
         ${list.map(a => `
           ${/* A THUMBNAIL AT 90px CANNOT BE JUDGED, which is the whole reason
@@ -22066,9 +22169,36 @@ function smHoldStart(ev, id) {
   if (!thumb) return;
   smHoldCancel();
   thumb.classList.add('is-arming');
-  _smHold = { thumb, t: setTimeout(() => {
+
+  /* THE HINT BECOMES A REPORT WHILE THE BAR RUNS (v6.81). Jaco: *"se podría
+     actualizar el tooltip cuando estoy borrando a Deleting..."* — and the
+     reason it is right is the one this control was built on: the × is the only
+     thing on screen that says what the gesture IS, so during the gesture it
+     should say what is HAPPENING. "Hold to delete" is an instruction, and an
+     instruction you are already following is the shape this file keeps
+     refusing (the locked Submit row printing a gesture for a shut door, one
+     face over).
+
+     It is written onto the BUTTON's own `data-tip` rather than pushed into the
+     bubble, so there is still exactly one place the hint lives: an ordinary
+     hover a second later reads the same attribute and gets the same answer.
+     The ellipsis is the app's own — SUBMITTING…, CANCELING SUBMISSION — a
+     single glyph, and the word matches the `aria-label`'s verb rather than the
+     quieter "remove" this control gave up in v6.68. */
+  const btn = ev.currentTarget;
+  const tipWas = btn.dataset.tip;
+  btn.dataset.tip = 'Deleting…';
+  if (typeof smTipRefresh === 'function') smTipRefresh(btn);
+
+  _smHold = { thumb, btn, tipWas, t: setTimeout(() => {
     _smHold = null;
     thumb.classList.remove('is-arming');
+    /* AND THE BUBBLE GOES WITH THE BUTTON. `renderAssetLibrary` replaces this
+       node, so `mouseout` never fires on it — without this, "Deleting…" is
+       left floating over a thumbnail that no longer exists until the pointer
+       happens to cross another anchor. The one case where a hover tooltip has
+       to be taken down by something other than the pointer leaving. */
+    if (typeof hideGlobalTip === 'function') hideGlobalTip();
     // The scraped trailer is not a pool record (see _smLibraryHTML) — removing
     // it means dropping the scrape, not calling smRemove with an id smGet
     // would never find.
@@ -22088,6 +22218,15 @@ function smHoldCancel() {
   if (!_smHold) return;
   clearTimeout(_smHold.t);
   _smHold.thumb.classList.remove('is-arming');
+  /* Put the instruction back, and redraw it if the pointer is still there —
+     letting go is an undo, so the control has to return to saying what it
+     would do rather than what it was doing. Restored from what was CAPTURED
+     rather than re-typed, so the string exists once (in `_smLibraryHTML`) and
+     a future change to it cannot leave this function printing the old one. */
+  if (_smHold.btn) {
+    _smHold.btn.dataset.tip = _smHold.tipWas;
+    if (typeof smTipRefresh === 'function') smTipRefresh(_smHold.btn);
+  }
   _smHold = null;
 }
 

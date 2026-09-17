@@ -7048,6 +7048,106 @@ well's own three lines and is held at **140.79**, so the card overshoots Basic
 Info rather than the well collapsing. Correct, visible, and not a case this card
 is designed for.
 
+**AND ALL OF THAT IS RETIRED — THE LIBRARY MOVED INSIDE THE WELL (v6.74).**
+Jaco's own second version, offered against the conditional one and better:
+*"el dropwell no cambia, simplemente los thumbnails reducen un poco de tamaño y
+se incluyen dentro del dropwell, en su parte baja"*, then *"el pocillo debería
+medir algo como 300 o 350px de altura mínimo."*
+
+**IT REMOVES THE PROBLEM RATHER THAN TIMING THE FIX.** Every version above is
+arithmetic on a pane that is an empty invitation PLUS a growing list — so the
+card's height was a function of how many files you had, and `is-tight` was a
+way of shrinking one box at exactly the moment the other appeared. Inside, the
+library spends the well's OWN room: one box, and the card is the same height
+with nothing in it as with a folder in it.
+
+**334 IS HIS RANGE AND THE CARD'S NUMBER AT THE SAME TIME**, which is why it is
+not a pick. The empty pane was 304.19 with a 175 well; swap the well for W and
+drop the library's own 95px block and the card is `304.19 − 175 + W + 115`.
+Basic Info is 578, so **W = 333.81** — inside the 300–350 he asked for, and the
+value that clavas the card. `_smDropwellSolve` still writes the exact one, so it
+survives `--gi-desc-h` moving; the 334 in the CSS is the starting value.
+
+| biblioteca | card | pocillo | vs Basic Info |
+|---|---|---|---|
+| vacía | 577.99 | 333.81 | −0.01 |
+| una línea de grupos | 577.99 | 333.81 | −0.01 |
+| **dos líneas de grupos** | **577.99** | **333.81** | **−0.01** |
+| un grupo, catorce miniaturas | 577.99 | 333.81 | −0.01 |
+
+**AND IT CANNOT OVERFLOW AT THE REAL WIDTH, BY CONSTRUCTION RATHER THAN BY
+LUCK.** `SM_KINDS` has **seven** kinds and that is the ceiling on groups — the
+classifier cannot produce an eighth — and seven wrap to two lines on an 850px
+panel, measured at **170** against the 285.8 of content the well holds. The
+prompt gives way first (its box is 112.8 for 61.6 of ink, so ~51 of slack before
+anything has to grow), which is what `.asset-dropzone-prompt` is for.
+
+**`stopPropagation` ON THE LIBRARY IS LOAD-BEARING, NOT DEFENSIVE.** The well's
+own `onclick` opens the file dialog, so without it every press on a thumbnail,
+a group label or the air between them would ALSO open a file picker — a delete
+button that asks you to upload something. Verified: a real click on a thumbnail
+opens it **0** times, on a group label **0**, on the prompt **1**. The drop and
+dragover handlers are deliberately left to bubble, because dropping a file onto
+the thumbnails is still dropping it into the well.
+
+**50 → 42 on the thumb, scoped to this dropzone.** Smaller because the box is
+shared now; the max-width, the checkerboard and the absolutely-positioned × all
+scale with it, so the height is the only number that moves. The Website builder
+renders its own `#sm-library` with the same classes and is not inside a well —
+hence the ID in the selector, this file's own recurring lesson about a value
+measured against one target.
+
+**`is-tight`, `--gi-drop-h-tight` and the line counting are DELETED**, not
+switched off: with the library inside, the pane's height no longer depends on
+how the folder wraps, so there is nothing to condition on. A rule that can never
+fire is a mechanism waiting to be turned back on.
+
+**THE ONE HONEST EDGE, MEASURED RATHER THAN HIDDEN:** clamp the panel to 560 and
+seven groups wrap to FOUR lines (391 tall), so the well grows to 513.59 and the
+card to 794.97 against Basic Info's 590 — **205 over**. `min-height` is doing
+what it says, which is what he asked for. If the card has to be constant at any
+width the lever is `overflow-y: auto` on `#sm-library` inside the well, not a
+smaller number.
+
+**AND THE GROUP COUNT IS IN PARENTHESES, NOT AFTER A MIDDOT.** Jaco: *"en vez de
+un punto separando la descripción (screenshots · 2) que esté justo después entre
+paréntesis."* A middot is a **separator** — it holds two things apart and says
+they are peers, so `SCREENSHOTS · 2` read as a list of two facts rather than as
+one label carrying its own count. Brackets say the number belongs to the word,
+and they cost no space to say it.
+
+**The privacy table made this exact move for the same reason** (see "AND THE
+COUNT CAME BACK AGAINST THE NAME, IN PARENTHESES"), so this is the app agreeing
+with itself rather than a second idea — one plain space, because the brackets
+carry their own side bearings and a wider gap re-opens the hole the middot left.
+Still only past one: a group of one screenshot saying "(1)" is a count with
+nothing to count against. Measured: `Screenshot (5)`, zero middots in the
+library, card still **577.99**.
+
+**AND THE GUIDANCE NAMES WHAT YOU ARE DROPPING.** Jaco: *"quítame el 'drop
+everything here' — 'Drop your assets here'."* That opening was written when the
+well's whole argument was that it takes any file at all, so it said something
+about the TOOL rather than about your folder: *everything* is the classifier
+boasting. **"Drop your assets here" names the thing in your hands, and the
+sentence after it still does the boasting**, which is where it belongs. One key
+in `en.json` — `render.js` reads it through `t()` with no inline fallback, so
+there was no second place to update.
+
+**AND THE LIST WENT WITH IT** — *"— screenshots, app icons, key art, logos and
+video"*, Jaco's second pass. It was the SAME BOAST one clause further on: an
+inventory of file types is the classifier showing its work, and it arrives
+before the sentence that explains why any of it matters. **It is also answered
+by the well itself**, which prints exactly those kinds back as group labels the
+moment you drop anything — so the paragraph was naming the categories and the
+library was naming them again, ten pixels apart, one of them hypothetical.
+*"Drop your assets here."* and then the whole of the promise.
+
+**zh-CN moves with it** rather than being left listing 截图、应用图标、主视觉图…
+under an English line that no longer does: the key is one sentence and two
+locales, and a locale that says more than the original is the same drift as one
+that says less. `把素材拖到这里。` It costs no layout — the paragraph was two
+lines and still is, **37.2**, so the card holds at 577.99.
+
 **THE PAIR IS UNTIED, AND RE-READING THE OLD NOTE IS WHAT ALLOWED IT.** The
 well read `--gi-desc-h` so *"the pair cannot drift"*, on the argument that
 *"read on one screen a 118px well beside a 175px field looks like an
@@ -7103,6 +7203,53 @@ since it is drawn on the picture.
 Measured with a real hover: `data-tip` present, `title` gone, bubble reading
 **Hold to delete** at 126.8 wide (shrink-wrapped, v6.72's rule) and centred on
 the button to **0.1px**.
+
+**AND IT BECOMES A REPORT WHILE THE BAR RUNS (v6.81).** Jaco: *"se podría
+actualizar el tooltip cuando estoy borrando a Deleting…"* A hint is normally a
+constant, because a control means one thing and says it — **a HOLD is the
+exception**: "Hold to delete" is an INSTRUCTION until you start and a
+description of nothing once you have. Printing an instruction you are already
+following is the shape this file refuses one face over (the locked Submit row
+naming a gesture for a shut door).
+
+**It is written onto the BUTTON's own `data-tip`, not pushed into the bubble**,
+so the hint still lives in exactly one place: an ordinary hover a second later
+reads the same attribute and gets the same answer, and no caller can put a word
+on screen the control does not also carry. `smTipRefresh(anchor)` then redraws
+the open bubble FROM that anchor — which is what stops it becoming a second
+`smTipAt`, and it re-runs the whole of `showTip`, so the box is **re-measured**:
+the bubble shrink-wraps (v6.72), and 127 → 91 has to move the box or it drifts
+off the 20px button it points at. Silent when nothing is on screen, because a
+hold can start with no hover behind it and a tooltip nobody asked for would be
+labelling a gesture rather than a control.
+
+**AND THE BUBBLE HAS TO BE TAKEN DOWN BY HAND WHEN THE HOLD COMPLETES.**
+`renderAssetLibrary` replaces the button, so `mouseout` never fires on it —
+without `hideGlobalTip()` the word "Deleting…" is left floating over a
+thumbnail that no longer exists until the pointer happens to cross another
+anchor. The one case on this surface where a hover tooltip ends by something
+other than the pointer leaving.
+
+Measured: hover **Hold to delete** at 127 wide, centred on the button to
+**0.00**; pointerdown → **Deleting…** at 91, still `g-tip--danger`, still
+centred to **0.00**, the thumb `is-arming`; release → the attribute and the
+bubble both back to *Hold to delete*; a completed hold → one asset gone, the
+bubble hidden, card still **577.99**.
+
+**AND THE WELL'S BOTTOM PADDING IS ITS SIDE PADDING.** Jaco: *"baja los
+thumbnails para igualar su padding izquierda y abajo."* `.asset-dropzone` is
+authored `24px 20px`, which was right for a box holding three centred lines:
+the top and bottom were air around a paragraph and **nothing had ever touched
+the sides**. With the library inside, the bottom-left corner has a thumbnail
+against both edges — measured **left 21.5, bottom 25.5** — and 4px of
+difference in the one corner the eye reads as a box sitting crooked in itself.
+
+`padding-bottom: 20px`, which is the side padding rather than a new number, so
+it is exact rather than "about 5". The top keeps its 24 and nothing notices:
+the prompt is `flex: 1` and centres in whatever is left, so it moves 2px, and
+`_smDropwellSolve` re-solves against Basic Info either way. Measured:
+**21.50 / 21.50** on the thumbnails' left and bottom, labels on the same 21.5,
+card **577.99**, well **333.8**.
 
 **AND THE WHOLE GESTURE IS THE CANCEL HOLD'S RED (v6.73).** Jaco: *"para borrar,
 coge el mismo color rojito de 'cancelling submission' de las platform cards. Y
@@ -7503,6 +7650,26 @@ Jaco: *"primero checkeamos porque Adam ha pusheado."* Fetched: **v6.48**, so
 from now on** — it costs one request and it retires the guess. The skip-if-unsure
 rule stays for the case the fetch cannot answer (the site down, a private repo,
 a deploy still in flight), where it is still the right default.
+
+**AND THE WELL BATCH COLLAPSED 6.82 → v6.74, WHICH IS THE FIFTH TIME.** Jaco:
+*"v6.74 por favor."* Fetched before touching a line: **live is v6.48**, so every
+number from 6.49 up was minted by EDITING and not one of them has bytes behind
+it — the library-inside-the-well work alone burnt 6.74 through 6.82 getting
+itself testable. 6.74 > 6.48, so the key still only goes UP, which is the one
+thing that makes a renumber safe.
+
+**The fetch is what turns this from a guess into a fact**, and it is the whole
+reason that habit is written down: the sections below reason at length about
+Claude being unable to read `origin/main`, and the live page answers the only
+question that matters in one request. It also corrected this file's own
+assumption — several entries above talk as though live had moved past 6.60.
+
+**One thing it costs locally, and it is the cache trap in reverse:** this
+session has already served `?v=6.74` to the pane while testing, so that number
+is NOT a cache-bust here any more. It does not matter for the publish (a cold
+browser has never seen it), and it does mean any further measuring in this
+session needs a number above 6.82 rather than a re-load of this one. The note
+headings keep their edit-time labels, as always.
 
 **AND v6.63 – v6.67 WERE BURNT ON THE PANE'S OWN CACHE, WHICH IS THE ONE
 EXCEPTION WORKING AS WRITTEN.** Live was v6.62 and this batch should have been

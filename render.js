@@ -1445,19 +1445,40 @@ function buildAssetsTab() {
                  ondragover="event.preventDefault(); this.classList.add('is-over')"
                  ondragleave="this.classList.remove('is-over')"
                  ondrop="handleMediaDrop(event); this.classList.remove('is-over')">
-              <div class="asset-dropzone-icon">↑</div>
-              <div class="asset-dropzone-label">${t('ob.media.drop_label') || 'Drop screenshots, key art or your trailer here'}</div>
-              <div class="asset-dropzone-hint">${t('ob.media.drop_hint') || 'PNG, JPG or MP4 · Multiple files accepted'}</div>
+              ${/* THE PROMPT IS ITS OWN BOX NOW, because the well has a second
+                    tenant. It takes the free space and centres itself in it, so
+                    the arrow sits in the middle of whatever is left above the
+                    library rather than in the middle of the whole well — which
+                    with an empty library is the same place it always was, and
+                    with a full one is the only reading that does not put the
+                    invitation behind the files. One wrapper, scoped by the
+                    dropzone's ID: `.asset-dropzone-*` is also Steam's two, the
+                    Website builder's and every press-kit key-art box. */''}
+              <div class="asset-dropzone-prompt">
+                <div class="asset-dropzone-icon">↑</div>
+                <div class="asset-dropzone-label">${t('ob.media.drop_label') || 'Drop screenshots, key art or your trailer here'}</div>
+                <div class="asset-dropzone-hint">${t('ob.media.drop_hint') || 'PNG, JPG or MP4 · Multiple files accepted'}</div>
+              </div>
+              ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS — now
+                    INSIDE the well rather than under it. The classifier reads
+                    each file's dimensions and transparency, so a wrong guess is
+                    cheapest to correct right here, with the file under the
+                    pointer. Video is the one thing it cannot label yet — see
+                    handleMediaFiles in app.js.
+
+                    **`stopPropagation` IS LOAD-BEARING, not defensive.** The
+                    well's own `onclick` opens the file dialog, so without it
+                    every press on a thumbnail, a group label or the air between
+                    them would ALSO open a file picker — a delete button that
+                    asks you to upload something. The drop and dragover handlers
+                    are deliberately left to bubble: dropping a file onto the
+                    thumbnails is still dropping it into the well, which is what
+                    the whole box now looks like. */''}
+              <div id="sm-library" onclick="event.stopPropagation()">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
               <input type="file" id="ob-screenshot-input" multiple accept="image/*,video/*" style="display:none"
                      onchange="handleMediaFiles(this.files); this.value=''">
             </div>
           </div>
-          ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS. The
-                classifier reads each file's dimensions and transparency, so a
-                wrong guess is cheapest to correct right here, with the file
-                under the pointer. Video is the one thing it cannot label yet —
-                see handleMediaFiles in app.js. */''}
-          <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
           ${/* NO SEPARATE ROW FOR THE TRAILER. It used to get a full-width
                 "🎬 name — 12.3 MB — Remove" bar of its own, which is what a
                 dropped video looked like: a horizontal slab rather than a

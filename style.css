@@ -390,8 +390,11 @@
      when the library below it wraps to a second line. Derived: the card tops
      out at 576 with 143.81 here, and 144 costs 0.19px nobody can see. The
      long version is at `#ob-screenshot-dropzone` in this file. */
-  --gi-drop-h:       175px;
-  --gi-drop-h-tight: 144px;
+  /* The Assets well. 334 rather than 175 since v6.74, because the asset
+     library now lives INSIDE it — see `#ob-screenshot-dropzone` for why that
+     number is the card's and his 300–350 at once. Solved exactly at runtime by
+     `_smDropwellSolve`; this is the starting value. */
+  --gi-drop-h:       334px;
   --cta-bg:       #212028;
   --cta-bg-hover: #453C5A;
   --cta-blob:     #A078FF;
@@ -12204,28 +12207,84 @@ a.mac-spp-link-row.is-live:focus-visible {
    ACROSS A TAB SWITCH: you remember the big field, you change tab, the well is
    shorter. Real, and much cheaper than the note claimed.
 
-   **THE WELL ONLY GIVES THE ROOM UP WHEN SOMETHING NEEDS IT.** Jaco: *"solo
-   cambiamos el pocillo si añado 2 líneas de assets, porque si no, se mantiene
-   en su tamaño."* That is the whole design and it is better than a flat 144:
-   an empty Assets tab has nothing to be tight for, so the well keeps the 175 it
-   was given for its own sake, and the SECOND LINE of the library is what buys
-   its own space out of the box directly above it.
+   **AND FOR ONE VERSION THE WELL SHRANK INSTEAD (v6.68, RETIRED IN v6.74).**
+   Jaco: *"solo cambiamos el pocillo si añado 2 líneas de assets, porque si no,
+   se mantiene en su tamaño."* An `is-tight` class took the well 175 → 145.81
+   the moment the library wrapped onto a second line, so the ONE case that
+   needed the room was the one that paid for it. It measured correctly and it
+   is gone, because his second version removes the problem rather than timing
+   the fix: with the library inside the well there is no second block for the
+   pane to grow by, so there is nothing to condition on. Kept as the record of
+   why the number below is what it is. */
+/* ── AND THEN THE LIBRARY MOVED INSIDE IT, WHICH RETIRES EVERYTHING ABOVE
+      (v6.74) ───────────────────────────────────────────────────────────────
+   Jaco's own second version, against the conditional one: *"el dropwell no
+   cambia, simplemente los thumbnails reducen un poco de tamaño y se incluyen
+   dentro del dropwell, en su parte baja"*, and then *"el pocillo debería medir
+   algo como 300 o 350px de altura mínimo."*
 
-   144, not the exact 143.81 that lands on 576.00 — two tenths nothing reads,
-   against a number the next person can hold in their head. The content is 61.6
-   of ink (arrow 28, label 18.2, hint 15.4), so even tight it keeps ~41 of air
-   above and below against the 57 it has at rest.
+   **IT IS ONE BOX INSTEAD OF TWO, AND THAT IS WHAT MAKES THE CARD CONSTANT.**
+   The old arrangement was a well that said "drop here" and, under it, a
+   separate block showing what you had dropped — so the pane's height was the
+   sum of an empty invitation and a growing list, and every file you added
+   pushed the card. Inside, the library spends the well's OWN room: the card is
+   the same height with nothing in it and with a folder in it, which is the
+   thing the conditional version was reaching for by shrinking the well at
+   exactly the moment the list appeared. This gets there without a state.
 
-   `is-tight` is written by `_smDropwellFit` (app.js) because CSS cannot count
-   wrapped flex lines — see that function for why it cannot feed back on
-   itself. */
+   **334 IS HIS RANGE AND THE CARD'S NUMBER AT THE SAME TIME**, which is why it
+   is not a pick. The empty pane was 304.19 with a 175 well; swap the well for
+   W and drop the library's own 95px block and the card is
+   `304.19 − 175 + W + 115`. Basic Info is 578, so W = **333.81** — inside the
+   300–350 he asked for, and the value that clavas the card. `_smDropwellSolve`
+   still writes the exact one at runtime (see app.js), so it survives
+   `--gi-desc-h` moving; this is the starting value.
+
+   **`is-tight` IS GONE, not switched off.** Its whole job was to buy back 31px
+   when the library wrapped, and the library no longer costs the pane anything —
+   a rule that can never fire is a mechanism waiting to be turned back on, which
+   is the argument the dev bar was deleted under. */
 .ob-form #ob-screenshot-dropzone {
   min-height: var(--gi-drop-h);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* AND THE BOTTOM PADDING IS THE SIDE PADDING (v6.81). Jaco: *"baja los
+     thumbnails para igualar su padding izquierda y abajo con respecto al
+     cajetín."* `.asset-dropzone` is authored `24px 20px`, which was right for
+     a box holding three centred lines and nothing else — there the top and
+     bottom are air around a paragraph and the sides never had anything
+     touching them. With the library inside, the well's bottom edge and its
+     left edge BOTH have thumbnails against them, and a row of pictures 24
+     from the floor and 20 from the wall reads as sitting crooked in its box.
+     Measured: library left 21.5, bottom 25.5 — the 4px is the padding's own
+     asymmetry, not a margin anywhere.
+
+     So the number is the SIDE padding rather than a new one, which is what
+     makes it exact rather than "about 5": the corner the eye actually reads is
+     the bottom-left, and now both of its gaps are the same 20. The top keeps
+     its 24 and nothing notices — the prompt is `flex: 1` and centres in
+     whatever is left, so it moves 2px. `_smDropwellSolve` re-solves the well
+     against Basic Info either way, so the card does not move at all. */
+  padding-bottom: 20px;
 }
-.ob-form #ob-screenshot-dropzone.is-tight { min-height: var(--gi-drop-h-tight); }
+/* The invitation takes the free space and centres in it; the library keeps its
+   natural height at the bottom. `justify-content: center` on the WELL would
+   have centred the pair as one lump and left the files floating mid-box. */
+.ob-form #ob-screenshot-dropzone .asset-dropzone-prompt {
+  flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
+}
+/* The library is a LIST inside a centred box, so it takes its own alignment
+   back — the well centres its text, and a column of group labels centred over
+   ragged rows of thumbnails reads as a poster rather than as an inventory. */
+.ob-form #ob-screenshot-dropzone #sm-library { text-align: left; width: 100%; }
+.ob-form #ob-screenshot-dropzone .sm-wells { margin-top: 16px; }
+/* 50 → 42. Smaller because the box is now shared: at 50 two lines of groups
+   plus their labels came to 190 of the well's 334 and the prompt was squeezed
+   into the rest. The max-width and the checkerboard scale with the box and the
+   × is absolutely positioned inside it, so 42 is the only number that moves.
+   SCOPED: the Website builder renders its own `#sm-library` with the same
+   classes, and that one is not inside a well. */
+.ob-form #ob-screenshot-dropzone .sm-thumb { height: 42px; }
 
 /* Grid sits below the dropzone as a sibling — not inside ob-req-group */
 .asset-grid { margin-top: 10px; }
@@ -22879,7 +22938,13 @@ body.sm-picker-open { overflow: hidden; }
    not look like seven questions. */
 .sm-thumb-x {
   position: absolute; top: 5px; right: 5px; z-index: 2;
-  width: 20px; height: 20px; border-radius: 50%; border: 0;
+  /* A ROUNDED SQUARE, NOT A DISC (v6.79). Jaco: *"¿puede ser el botoncico de x
+     de borrar cuadradico con bordes redondeados?"* — and it agrees with what it
+     sits on: the thumbnail is a 9px-rounded rectangle, so a circle on its
+     corner was the only round thing in a grid of soft boxes. 6px is the app's
+     own micro-button proportion (8 on a 30px box, `.task-modal-close` and the
+     platform card's gear) read at 20, rather than a fresh number. */
+  width: 20px; height: 20px; border-radius: 6px; border: 0;
   background: rgba(0,0,0,.65); color: #fff; font-size: 13px; line-height: 1;
   cursor: pointer; opacity: 0; transition: opacity .13s; font-family: inherit;
   /* Without this a press-and-hold on a touch screen scrolls the panel instead
