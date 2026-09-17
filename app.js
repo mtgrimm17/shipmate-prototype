@@ -21760,6 +21760,177 @@ function renderAssetLibrary() {
   if (el) el.innerHTML = _smLibraryHTML();
   const cov = document.getElementById('sm-coverage');
   if (cov) cov.innerHTML = _smCoverageHTML();
+  _smDropwellFit();
+}
+
+/* ── THE DROP WELL GIVES ROOM BACK WHEN THE LIBRARY WRAPS ─────────────────
+   Jaco: *"solo cambiamos el pocillo si añado 2 líneas de assets, porque si no,
+   se mantiene en su tamaño."* The Assets card was asked to top out at 576 and
+   the well is the only number left to spend — but spending it unconditionally
+   would shrink an EMPTY tab's well for a row that is not there. So the second
+   line of the library buys its own space out of the box directly above it, and
+   one line leaves the well at the 175 it was given for its own sake.
+
+   **IT IS MEASURED, BECAUSE CSS CANNOT COUNT WRAPPED FLEX LINES.** `:has()`
+   can ask what exists and not how it landed: whether `.sm-wells` wraps depends
+   on the WIDTH and on how wide each group happens to be — a Screenshot group
+   with five thumbs is ~480 and a lone Icon is ~89 — so the number of GROUPS
+   does not predict the number of LINES either. Counting distinct `offsetTop`s
+   is asking the layout the only question that has a true answer. They are
+   siblings, so they share an offsetParent and the comparison needs no origin.
+
+   **AND IT CANNOT FEED BACK ON ITSELF, which is what makes the observer safe.**
+   What the class changes is the well's HEIGHT, and the well is a sibling ABOVE
+   the library; wrapping is decided by WIDTH alone, so nothing this writes can
+   change what it just measured. The one real loop is the observer's own: a
+   `ResizeObserver` fires once on `observe()`, so re-arming inside its callback
+   would call itself forever — hence the node guard. Re-arming at all is the
+   `_smModalFades` contract: `#sm-library` is rebuilt with innerHTML, so the
+   node being watched is replaced out from under it.
+
+   The observer is what covers a WINDOW RESIZE, which is the case a render hook
+   alone would miss entirely: nothing re-renders, the row rewraps, and the card
+   would keep a height solved for the other count. */
+let _smWellsRO = null;
+let _smWellsNode = null;
+let _smFitPending = false;
+
+function _smDropwellFit() {
+  const dz = document.getElementById('ob-screenshot-dropzone');
+  const wells = document.querySelector('#sm-library .sm-wells');
+
+  if (dz) {
+    let lines = 0;
+    if (wells) {
+      const tops = new Set();
+      wells.querySelectorAll('.sm-well').forEach(w => tops.add(Math.round(w.offsetTop)));
+      lines = tops.size;
+    }
+    dz.classList.toggle('is-tight', lines >= 2);
+
+    /* THE SOLVE WAITS A FRAME, AND THE FIRST VERSION DID NOT — that is the
+       whole of why it silently never wrote. `renderAssetLibrary` runs inside
+       the render that built this pane, and at that moment the measurement it
+       needs is not available yet: the solve took its early out and nothing
+       ever came back, because the ResizeObserver only fires when `.sm-wells`
+       changes and that had already happened. Measured, calling the same
+       function by hand one beat later wrote 145.81 and landed the card on
+       577.99 — right logic, wrong moment.
+
+       One pending flag, so a render plus an observer fire in the same tick
+       solve once. It cannot recurse: what the solve writes is the WELL's
+       height, and nothing it reads is a function of that. */
+    if (!_smFitPending) {
+      _smFitPending = true;
+      requestAnimationFrame(() => {
+        _smFitPending = false;
+        const el = document.getElementById('ob-screenshot-dropzone');
+        if (el) _smDropwellSolve(el, el.classList.contains('is-tight'));
+      });
+    }
+  }
+
+  /* Only when the NODE changed — see above. A repeat on the same element is a
+     no-op rather than a re-observe, or the callback re-triggers itself. */
+  if (wells !== _smWellsNode) {
+    if (_smWellsRO) _smWellsRO.disconnect();
+    _smWellsNode = wells;
+    _smWellsRO = null;
+    if (wells && typeof ResizeObserver === 'function') {
+      _smWellsRO = new ResizeObserver(() => _smDropwellFit());
+      _smWellsRO.observe(wells);
+    }
+  }
+}
+
+/* ── AND THE TIGHT HEIGHT IS SOLVED AGAINST BASIC INFO, NEVER TYPED ───────
+   Jaco: *"quiero que me claves la altura con respecto a la card de basic info
+   en el caso de doble fila, para que sea perfecto."* 576 was only ever a
+   STAND-IN for that card — measured, Basic Info is 578 and the 144 landed
+   Assets on 576.19, so the two were 1.8 apart and the number he actually
+   wanted was never the one he could name.
+
+   **Same shape as `_sizeLangSearchList`, one pane over**, and for the same
+   reason that function gives: 578 is what Basic Info happens to be today and
+   is a function of `--gi-desc-h`, the title row and the platform grid — the
+   kind of literal this file has watched go stale three times.
+   `_gdPaneHeight('gamedetails')` reads the real pane instead.
+
+   **BOTH READINGS ARE PANE TO PANE**, so the sub-tab rail, the Prev/Next row
+   and the panel's padding cancel: match the panes and the CARDS match, with no
+   arithmetic about the 115 of chrome anywhere in here. A `--gi-drop-h-tight`
+   of 144 stays in the CSS as the value this solves to today; the inline
+   property is what makes it exact.
+
+   **THE CORRECTION IS A DELTA, WHICH IS WHY IT CANNOT OSCILLATE.** It measures
+   the overshoot with the well at its CURRENT height and takes that off the
+   well, so one pass converges by construction; measuring again returns 0 and
+   the sub-pixel guard then writes nothing. And the `ResizeObserver` watches
+   `.sm-wells`, whose box does not change when the well above it does — so the
+   thing that triggers this cannot be moved by it.
+
+   **THE FLOOR IS MEASURED, NOT PICKED.** `min-height` below the content is a
+   no-op, so a well asked for less than its three lines simply stops shrinking
+   and the card overshoots — visible and correct, but the number written should
+   not be a fiction. It reads the natural height with the floor removed for one
+   frame, the way `_sizeLangSearchList` measures its room, and clamps there.
+
+   Skipped entirely while the pane is hidden: `getBoundingClientRect` on a
+   `display: none` pane is 0, and a delta against 0 would write nonsense. The
+   next render on the way into Assets does it. */
+function _smDropwellSolve(dz, tight) {
+  /* THE SOLVED VALUE LIVES ON THE ROOT, NOT ON THE WELL — and the first
+     version put it on the well, which is why it kept measuring right and
+     landing back at 144. `renderDetails` rebuilds the pane with innerHTML, so
+     **the dropzone is a different node after every render** (verified:
+     `dz === previous` is false), and an inline property written on the old one
+     goes out with it. On the root it survives the render, and a freshly built
+     well inherits the solved height on its first paint rather than flashing
+     the CSS default and easing down to it.
+
+     Same class of mistake as the renamed selector two sections up: the code
+     was correct about the NUMBER and wrong about WHERE it was kept. */
+  const root = document.documentElement;
+  if (!tight) { root.style.removeProperty('--gi-drop-h-tight'); return; }
+
+  const pane = dz.closest('.gd-pane');
+  if (!pane || !pane.getBoundingClientRect().height) return;   // hidden: not now
+  if (typeof _gdPaneHeight !== 'function') return;
+
+  const target = _gdPaneHeight('gamedetails');
+  if (!target) return;
+
+  const cur = dz.getBoundingClientRect().height;
+  const delta = pane.getBoundingClientRect().height - target;
+
+  /* The floor: what the three lines need on their own.
+
+     **THE TRANSITION HAS TO BE SWITCHED OFF FOR THIS READ, and leaving it on
+     is what made the whole solve write the wrong number.** `.asset-dropzone`
+     carries `transition: all 0.2s`, so dropping `min-height` to 0 does not
+     resize the box — it STARTS AN ANIMATION, and the rect read on the next
+     line is the animation's first frame, i.e. the height it already had.
+     Measured: the floor came back **175**, so `Math.max(floor, …)` clamped the
+     answer to exactly the value it was trying to move away from, the solve
+     "converged" on 175 and the card sat 29px over Basic Info with a root
+     variable that looked like it was working.
+
+     Third time this file has been bitten by reading a transitioned property in
+     the turn that set it (`.prv-box`'s hover, the card's own height). The rule:
+     if you are going to measure a property you just wrote, take the transition
+     off first — and put it back, or the well stops easing for good. */
+  const prevT = dz.style.transition, prevM = dz.style.minHeight;
+  dz.style.transition = 'none';
+  dz.style.minHeight = '0px';
+  const floor = dz.getBoundingClientRect().height;
+  if (prevM) dz.style.minHeight = prevM; else dz.style.removeProperty('min-height');
+  if (prevT) dz.style.transition = prevT; else dz.style.removeProperty('transition');
+  void dz.offsetHeight;                       // flush, so the restore does not ease
+
+  const want = Math.max(floor, cur - delta);
+  const now = parseFloat(root.style.getPropertyValue('--gi-drop-h-tight'));
+  if (Math.abs(want - (now || 0)) < 0.5) return;   // already solved — write nothing
+  root.style.setProperty('--gi-drop-h-tight', want.toFixed(2) + 'px');
 }
 
 /* THE WELL'S CONTENTS, IN THE SHAPE OF THE NAV PROTOTYPE.
@@ -21848,8 +22019,24 @@ function _smLibraryHTML() {
                  referencing it — so the gesture is made deliberately hard to
                  do by accident instead. The bar IS the confirmation dialogue,
                  and it costs a second and a half rather than a round trip. */''}
-            <button class="sm-thumb-x" aria-label="Hold to remove ${escHtml(a.name)}"
-                    title="Hold to remove"
+            ${/* THE APP'S BUBBLE, NOT THE BROWSER'S. This carried a bare
+                  `title`, which sits for about a second and then draws in the
+                  SYSTEM's style — and it is the one control here whose whole
+                  problem is that nobody can guess the gesture, so it was also
+                  the slowest hint in the library. `data-tip` is the trigger
+                  (see initGlobalTooltip): the ATTRIBUTE is the tooltip and the
+                  `.tooltip-anchor` class is only layout, which this 20px
+                  absolutely-positioned button must not take.
+
+                  DELETE, not remove, and both strings say it. `smRemove` drops
+                  the record and every slot referencing it with no undo behind
+                  it — which is the whole reason the gesture is a hold — so the
+                  quieter verb was the one place this control understated what
+                  it does. The `aria-label` keeps the file's name because the
+                  accessible name has to say WHICH thumbnail; the bubble does
+                  not, since it is drawn on the picture. */''}
+            <button class="sm-thumb-x" aria-label="Hold to delete ${escHtml(a.name)}"
+                    data-tip="Hold to delete" data-tip-tone="danger"
                     onclick="event.stopPropagation()"
                     onpointerdown="smHoldStart(event, '${a.id}')"
                     onpointerup="smHoldCancel()" onpointerleave="smHoldCancel()"

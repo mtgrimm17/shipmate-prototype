@@ -1415,10 +1415,25 @@ function buildAssetsTab() {
               guidance had the same problem: it described reformatting
               screenshots for each store and said nothing about the sorting,
               which is the part that does the work. */''}
-        ${/* Repeats the sub-tab on purpose — unlike Distribution and Languages
-              (whose matching headers were removed by request), Assets keeps
-              its header. */''}
-        <div class="ob-section-hdr">${t('ob.section.assets') || 'Assets'}</div>
+        ${/* ~~Repeats the sub-tab on purpose~~ — AND THE HEADER IS GONE NOW,
+              which makes Assets agree with Distribution and Languages instead
+              of being the one pane that names itself twice. Jaco: "quita la
+              palabra assets."
+
+              The sub-tab rail already prints ASSETS, lit, two inches above —
+              so the word was the pane repeating the control that opened it,
+              and the guidance paragraph underneath is what actually says what
+              this pane is FOR. Same argument every other removed heading in
+              this app was made under: the thing is already named by its
+              position.
+
+              It is worth 30px of card, which is the reason it came up at all:
+              18 of line plus the 12 of `margin-bottom` the rule carries. The
+              id stays on the SECTION (`ob-sec-screenshots`) — the rail keys
+              off that, never off the heading — so nothing else moved.
+
+              `.ob-section-hdr`'s rule is untouched: Distribution, Localization
+              and Steam Assets all still draw one. */''}
         <div class="asset-guidance">${t('ob.assets.guidance')}</div>
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
           ${/* The amber "still needed" state keys off SCREENSHOTS only, not on

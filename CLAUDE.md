@@ -6880,6 +6880,258 @@ center` rather than more padding, because the padding is precisely what those
 variants override. Measured: both boxes **175.0**, the well's three lines
 centred with **51.7** of air above and below.
 
+**AND THE ASSETS CARD WAS ASKED FOR A NUMBER, WHICH IS WHY THIS ENTRY LEADS
+WITH A TABLE (v6.67).** Jaco: *"¿podríamos hacer que la card de assets midiera
+576 en su máxima expansión, suponiendo 2 filas de previews de thumbnails?"*
+
+**THE CARD IS THE PANE PLUS 115**, measured — `.sec-panel` against
+`.gd-pane--assets`, the difference being the sub-tab rail, the Prev/Next row
+and the panel's padding. Every figure below is the CARD, at a 850px panel.
+
+**AND "2 FILAS" IS TWO DIFFERENT NUMBERS, which is the half the question could
+not know.** The library groups by KIND (`_smLibraryHTML`, app.js) — Screenshot,
+Key art, Logotype, Icon, Video — and each group is a label over its own row, so
+a second line of THUMBNAILS and a second line of GROUPS are different events
+with different costs:
+
+| biblioteca | antes | **después** |
+|---|---|---|
+| vacía | 449.19 | **419.19** |
+| una línea de grupos | 544.19 | **514.19** |
+| un grupo que envuelve a 2 filas | 603.19 | **573.19** |
+| dos líneas de grupos | 647.19 | **607.19** |
+
+The realistic maximum is the LAST row, not the third: a project with
+screenshots, key art and a logo already draws three groups, and four or more
+wrap. So 576 was 27 short of the cheap reading and **71 short of the real one**,
+and the two changes below buy 40 of that.
+
+**WHAT THE 429 OF PANE WAS MADE OF**, since that is what any further ask has to
+come out of: heading 18, guidance paragraph 37.2, dropwell **175**, library 77
+(18 of label + 9 + 50 of thumbnail), YouTube row 58, and ~64 of margins. The
+dropwell is `--gi-desc-h` and is deliberately tied to the description box
+(above), so it is the one number here that cannot be spent locally.
+
+**THE HEADING WENT, AND ASSETS WAS THE LAST PANE NAMING ITSELF TWICE.** Jaco:
+*"quita la palabra assets."* Distribution and Languages lost theirs by request
+already, so this was the one Game Details pane still printing the name of the
+sub-tab that opened it, lit, two inches above. Worth **30** — 18 of line plus
+`.ob-section-hdr`'s own `margin-bottom: 12`. The rail keys off the SECTION's id
+(`ob-sec-screenshots`), never off the heading, so nothing else moved; and the
+rule keeps one live consumer (Compliance Questions), so it is not dead.
+
+What carries the pane's meaning now is the guidance paragraph under it, which
+is the half that was doing the work anyway — the heading said *Assets* and the
+paragraph says what the well does with what you drop in it.
+
+**AND THE ROW GAP IS 16, WITH A FLOOR THAT IS NOT ZERO.** Jaco: *"juntar un
+poquito las dos filas de thumbnails en vertical."* `.sm-wells` was `gap: 26px
+30px`, both axes tuned as one pair back when it rarely wrapped.
+
+**The floor is the gap INSIDE a group.** A group is a label over a row at 9px,
+so the distance BETWEEN groups has to outrank that clearly or a second-line
+label reads as a caption of the thumbnails above it rather than as the name of
+the ones below. Measured down the range: 16 pays back 10, 12 pays 14, 8 pays 18
+— and 8 is *smaller than the bond it has to beat*, so the column comes apart.
+16 keeps the ~2:1 the original 26/9 had. **The COLUMN gap stays 30**: groups
+side by side are told apart by horizontal air and nothing about that changed.
+
+**576 IS REACHED IN ONE OF THE TWO READINGS AND NOT THE OTHER**, stated rather
+than rounded away: a single group wrapping now measures **573.19**, 2.8 under
+the number asked for; two lines of groups measures **607.19**, 31 over. The
+remaining 31 exists and is priced — the guidance paragraph is 37.2 — but
+removing it would leave the pane with no sentence at all, which is why it was
+not taken.
+
+**If the number has to be exact whatever the project holds, the lever is not
+arithmetic** — it is `max-height: 576` on the card with the library scrolling
+inside, because the count of groups is a property of the developer's folder and
+no sum over it stays true.
+
+One thing it reaches that was not asked for: the Website builder renders the
+same `#sm-library` (render.js 8303), so its library takes the tighter gap too.
+Same component, same argument; noted rather than scoped.
+
+**AND THE CARD ANIMATES ITS HEIGHT, WHICH IS A MEASUREMENT TRAP.**
+`.sec-panel` carries `transition: all`, so a read taken on the next
+`requestAnimationFrame` after a change samples the CURVE, not the layout — a
+sweep of six gap values came back **578 for every one of them**, including the
+baseline, which reads exactly like a rule that is not applying. Settle 500ms
+before measuring anything on this card. Same family as `.prv-box`'s `.12s`
+transition lying about a hover, one surface over.
+
+**AND 578 IS THE VALUE IT PASSES THROUGH, which is worse than a wrong number.**
+A second sweep at 650ms still caught three of five cases mid-curve — same 578,
+plus a dropwell reading **0** — so the settle is not a constant either: a
+`renderDetails()` inside a chain of awaits queues work the next timer does not
+wait for. **Measure one case per evaluation and read it TWICE**, 500ms apart,
+and treat the pair agreeing as the test. Every figure below is stable across
+700ms and 1200ms.
+
+**AND THE WELL GIVES ITS ROOM UP ONLY WHEN THE LIBRARY WRAPS (v6.68).** Jaco:
+*"solo cambiamos el pocillo si añado 2 líneas de assets, porque si no, se
+mantiene en su tamaño."* — and the option he picked over killing the YouTube row
+(70px, but `#ob-trailer-url` is the ONLY door to `formData.trailerUrl`, which
+the press kit reads) and over cutting the description (which the well's shared
+token would have dragged onto a second sub-tab).
+
+| biblioteca | card | pocillo | contra Basic Info (578) |
+|---|---|---|---|
+| vacía | 419.19 | 175 | −158.81 |
+| una línea de grupos | 514.19 | 175 | −63.81 |
+| un grupo que envuelve | 573.19 | 175 | −4.81 |
+| **dos líneas de grupos** | **577.99** | **145.8** | **−0.01** |
+
+**IT IS CONDITIONAL, AND THAT IS BETTER THAN THE FLAT 144 THE ARITHMETIC
+ASKED FOR.** An empty Assets tab has nothing to be tight for, so the well keeps
+the 175 it was given for its own sake and **the second line buys its own space
+out of the box directly above it**. The one case that needed the 31px is the
+only one that pays it: a single group wrapping already measures 573.19 and is
+left alone.
+
+**AND THE TIGHT HEIGHT IS SOLVED AGAINST BASIC INFO, NOT TYPED (v6.72).** Jaco:
+*"quiero que me claves la altura con respecto a la card de basic info en el caso
+de doble fila, para que sea perfecto."* **576 was only ever a stand-in for that
+card** — measured, Basic Info is **578** and the round 144 landed Assets on
+576.19, so the two were 1.8 apart and the number he actually wanted was never
+the one either of us could name. `--gi-drop-h-tight` is a starting value in the
+CSS now and `_smDropwellSolve` (app.js) writes the real one.
+
+**Same shape as `_sizeLangSearchList`, one pane over**, and for that function's
+own reason: 578 is what Basic Info happens to be today and is a function of
+`--gi-desc-h`, the title row and the platform grid — the kind of literal this
+file has watched go stale three times. **Both readings are PANE TO PANE**, so
+the sub-tab rail, the Prev/Next row and the panel's padding cancel: match the
+panes and the cards match, with no arithmetic about the 115 of chrome anywhere
+in the function.
+
+**THE CORRECTION IS A DELTA, WHICH IS WHY IT CANNOT OSCILLATE.** It measures the
+overshoot with the well at its CURRENT height and takes that off the well, so
+`want = cur − (pane − target)` is invariant at any instant of the transition and
+one pass converges by construction; the second pass finds 0 and writes nothing.
+Measured: **577.99 against Basic Info's 578 — 0.01 apart**, stable across 900ms
+and 1400ms, with the well at 145.8 and the root variable at `145.81px`.
+
+**THREE BUGS ON THE WAY, AND ALL THREE REPORTED SUCCESS.** Worth keeping
+together, because each one measured correctly and did nothing:
+
+1. **It ran before the pane could be measured.** `renderAssetLibrary` fires
+   inside the render that builds the pane, so the solve took an early out and
+   nothing came back — the `ResizeObserver` only fires when `.sm-wells` changes
+   and that had already happened. Calling the same function by hand one beat
+   later wrote the right number. It is deferred to a `requestAnimationFrame`
+   now, with one pending flag so a render plus an observer fire in the same tick
+   solve once.
+2. **It wrote onto a node that gets replaced.** `renderDetails` rebuilds the
+   pane with innerHTML, so the dropzone is a **different element after every
+   render** (verified: `dz === previous` is false) and an inline property went
+   out with the old one. The solved value lives on the ROOT now, which also
+   means a freshly built well inherits it on its first paint instead of flashing
+   the CSS default and easing down to it.
+3. **AND THE FLOOR LIED, WHICH IS THE ONE WORTH CARRYING.** `.asset-dropzone`
+   carries `transition: all 0.2s`, so setting `min-height: 0` to measure the
+   content does not resize the box — **it starts an animation**, and the rect
+   read on the next line is that animation's first frame. The floor came back
+   **175**, so `Math.max(floor, …)` clamped the answer to exactly the value the
+   solve was trying to move away from: it "converged" on 175, the root variable
+   looked like it was working, and the card sat 29px over Basic Info. The read
+   is wrapped in `transition: none` now, restored with a flush.
+
+   **Third time this file has been bitten by reading a property in the turn that
+   set it** — `.prv-box`'s hover and this card's own animated height are the
+   other two. The rule: if you are going to measure something you just wrote,
+   take the transition off first, and put it back.
+
+**The floor is real and does its job at the narrow end.** Measured with the
+panel clamped to 430px: the library wraps, the solve asks for less than the
+well's own three lines and is held at **140.79**, so the card overshoots Basic
+Info rather than the well collapsing. Correct, visible, and not a case this card
+is designed for.
+
+**THE PAIR IS UNTIED, AND RE-READING THE OLD NOTE IS WHAT ALLOWED IT.** The
+well read `--gi-desc-h` so *"the pair cannot drift"*, on the argument that
+*"read on one screen a 118px well beside a 175px field looks like an
+accident"*. Measured: **they are never on one screen.** The description is in
+`.gd-pane--gamedetails` and the well in `.gd-pane--assets` — two sub-tabs of
+one card that cannot both be shown. So the shared token bought a consistency
+ACROSS A TAB SWITCH, not an adjacency, which is a far cheaper thing to spend.
+`--gi-drop-h` starts at the same 175; only the TIGHT value is its own.
+
+**AND CSS CANNOT COUNT WRAPPED FLEX LINES, so `_smDropwellFit` (app.js) does.**
+`:has()` can ask what exists, not how it landed — and the number of GROUPS does
+not predict the number of LINES either, since a Screenshot group with five
+thumbs is ~480 wide against a lone Icon's ~89. It counts distinct `offsetTop`s
+(siblings, so they share an offsetParent and the comparison needs no origin)
+and toggles `is-tight`.
+
+- **It cannot feed back on itself**, which is what makes the observer safe:
+  the class changes the well's HEIGHT, the well is a sibling ABOVE the library,
+  and wrapping is decided by WIDTH alone. Nothing it writes can change what it
+  just measured.
+- **The `ResizeObserver` is what covers a WINDOW RESIZE** — the case a render
+  hook alone misses entirely: nothing re-renders, the row rewraps, and the card
+  would keep a height solved for the other count. Verified with no render at
+  all: narrowing the panel to 430 took it to two lines, `is-tight`, 144, and
+  widening it back returned 175.
+- **Re-armed only when the NODE changed.** `#sm-library` is rebuilt with
+  innerHTML (the `_smModalFades` contract), so the watched node is replaced —
+  but a `ResizeObserver` fires once on `observe()`, so re-arming inside its own
+  callback calls itself forever. The node guard is the whole of that.
+
+One honest edge, measured rather than hidden: below ~350px of panel the well
+reads **156.2** rather than 144, because its own three lines wrap and the
+CONTENT is taller than the floor. Correct — `min-height` stops being what
+decides — and not a case this card is designed for.
+
+**AND THE THUMBNAIL × SPEAKS IN THE APP'S BUBBLE (v6.68).** Jaco: *"al hoverear
+sobre la X de thumbnails, ponme el tooltip de hold to delete."* It carried a
+bare `title`, so the one control in the library whose whole problem is that
+nobody can guess the gesture was also the slowest hint in it — v6.71's finding
+arriving on the surface it had not swept.
+
+`data-tip` rather than `.tooltip-anchor`, for that entry's own reason: **the
+attribute is the tooltip and the class is only layout**, and this is a 20px
+absolutely-positioned button that must not take `position: relative`.
+
+**DELETE, NOT REMOVE, and both strings say it.** `smRemove` drops the record
+and every slot referencing it with no undo behind it — which is why the gesture
+is a hold in the first place — so the quieter verb was the one place this
+control understated what it does. The `aria-label` keeps the file's name
+because the accessible name has to say WHICH thumbnail; the bubble does not,
+since it is drawn on the picture.
+
+Measured with a real hover: `data-tip` present, `title` gone, bubble reading
+**Hold to delete** at 126.8 wide (shrink-wrapped, v6.72's rule) and centred on
+the button to **0.1px**.
+
+**AND THE WHOLE GESTURE IS THE CANCEL HOLD'S RED (v6.73).** Jaco: *"para borrar,
+coge el mismo color rojito de 'cancelling submission' de las platform cards. Y
+que el hover tooltip también tenga el mismo estilo exacto."* Measured, this
+control was drawn in **`rgba(220,60,60)` and `rgba(214,54,54)` — a red that
+appears nowhere else in the app**, invented here because this was the first
+destructive hold built after the card's. The two are the same idea (press and
+hold to destroy, let go to undo) in two colours, and the card's is the one with
+a vocabulary behind it: the sweep, the CANCELING SUBMISSION line and the card's
+own edge all carry `#ff3b78`.
+
+All three go to it — the ×'s hover and armed fills and the thumbnail's burn bar
+— and the bubble takes `data-tip-tone="danger"`, the same attribute the withdraw
+button uses, so a control and its own hint are one colour rather than two. **The
+burn keeps its `.55` against the card sweep's `.22`**: that bar crosses a 400px
+card and this one covers a 50px thumbnail sitting on a photograph, so the alpha
+is what makes it read. One hue, two sizes.
+
+Measured: hover `rgba(255,59,120,.9)`, armed `.95`, burn `.55`; the bubble
+`rgba(255,59,120,.14)` over `rgb(28,28,28)` with a `.32` border and
+`rgba(255,105,150,.96)` ink — identical to the withdraw hint's — and the tone
+class gone on the next anchor.
+
+**Still on `title`: the seven THUMBNAILS themselves** (`name · w×h`). Left
+deliberately and worth deciding rather than sweeping — converting them would
+fire an instant bubble on every pass of the pointer across the library, which
+is exactly the noise the privacy table's cell tooltips were removed for in
+v6.67. The × earns one because it names a GESTURE; a thumbnail's is a caption.
+
 **AND THE TWO LANGUAGE LABELS GAINED THEIR NOUN.** Jaco: *"en languages, cambia
 primary por primary language y supported por supported languages."* One key
 each in `en.json` and nothing else — `render.js` reads them through `t()` with

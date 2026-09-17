@@ -384,6 +384,14 @@
      room over; shrinking this field again would be paying for them a third
      time. */
   --gi-desc-h:    175px;   /* height of the description box — measured, not derived */
+  /* The Assets drop well, which read `--gi-desc-h` until v6.67. It starts at
+     the same 175 on purpose — the pair is still one idea — and only the TIGHT
+     value is its own, because the well is the one box that can give room back
+     when the library below it wraps to a second line. Derived: the card tops
+     out at 576 with 143.81 here, and 144 costs 0.19px nobody can see. The
+     long version is at `#ob-screenshot-dropzone` in this file. */
+  --gi-drop-h:       175px;
+  --gi-drop-h-tight: 144px;
   --cta-bg:       #212028;
   --cta-bg-hover: #453C5A;
   --cta-blob:     #A078FF;
@@ -12181,13 +12189,43 @@ a.mac-spp-link-row.is-live:focus-visible {
    `min-height` plus centring rather than more padding: the padding is what the
    `-sm` and keyart variants override, so growing it would have been a number
    two other rules then have to fight. The three lines stay in the middle of the
-   box at any height. */
+   box at any height.
+
+   **AND IT HAS ITS OWN TOKEN NOW (v6.67), WHICH UNTIES THE PAIR ABOVE.** The
+   card was asked to top out at 576 and the only number left to spend was this
+   one; reading `--gi-desc-h` would have taken the description down with it, on
+   two sub-tabs, to pay for a row that appears on one.
+
+   The paragraph above is what had to be re-read, and it is weaker than it
+   sounds: *"read on one screen"* — measured, they are never on one screen. The
+   description lives in `.gd-pane--gamedetails` and this well in
+   `.gd-pane--assets`, two sub-tabs of the same card that cannot both be shown.
+   So what the shared token bought was not an adjacency, it was a consistency
+   ACROSS A TAB SWITCH: you remember the big field, you change tab, the well is
+   shorter. Real, and much cheaper than the note claimed.
+
+   **THE WELL ONLY GIVES THE ROOM UP WHEN SOMETHING NEEDS IT.** Jaco: *"solo
+   cambiamos el pocillo si añado 2 líneas de assets, porque si no, se mantiene
+   en su tamaño."* That is the whole design and it is better than a flat 144:
+   an empty Assets tab has nothing to be tight for, so the well keeps the 175 it
+   was given for its own sake, and the SECOND LINE of the library is what buys
+   its own space out of the box directly above it.
+
+   144, not the exact 143.81 that lands on 576.00 — two tenths nothing reads,
+   against a number the next person can hold in their head. The content is 61.6
+   of ink (arrow 28, label 18.2, hint 15.4), so even tight it keeps ~41 of air
+   above and below against the 57 it has at rest.
+
+   `is-tight` is written by `_smDropwellFit` (app.js) because CSS cannot count
+   wrapped flex lines — see that function for why it cannot feed back on
+   itself. */
 .ob-form #ob-screenshot-dropzone {
-  min-height: var(--gi-desc-h);
+  min-height: var(--gi-drop-h);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
+.ob-form #ob-screenshot-dropzone.is-tight { min-height: var(--gi-drop-h-tight); }
 
 /* Grid sits below the dropzone as a sibling — not inside ob-req-group */
 .asset-grid { margin-top: 10px; }
@@ -22782,7 +22820,24 @@ body.sm-picker-open { overflow: hidden; }
    the icon is square and the logotype is a long thin sliver shows what the
    classifier saw, so a file in the wrong group reads as a wrong shape before
    anybody gets to the label. */
-.sm-wells { display: flex; flex-wrap: wrap; gap: 26px 30px; margin-top: 18px; }
+/* THE ROW GAP IS 16, AND ITS FLOOR IS THE GAP INSIDE A GROUP. Jaco: "juntar
+   un poquito las dos filas de thumbnails en vertical." It was 26 — set when
+   this wrapped rarely and the two axes were tuned as one pair — and a second
+   line of groups costs the card a full 26 + 77 before a single extra
+   thumbnail is drawn.
+
+   It cannot simply go as low as it likes. A group is a LABEL over a row at 9px
+   (`.sm-well` below), so the distance BETWEEN groups has to outrank that
+   distance clearly, or a second-line label reads as a caption of the thumbs
+   above it rather than as the name of the ones below. At 8 it is smaller than
+   the bond it has to beat and the column comes apart; 16 keeps the ratio near
+   the 2:1 the original 26/9 had while paying back 10px of card. The COLUMN gap
+   stays 30 — groups sitting side by side are told apart by horizontal air and
+   nothing about that changed.
+
+   Measured, two lines of groups: card 647.19 → 637.19 on this alone, and
+   617.19 → 607.19 with the ASSETS heading also gone. */
+.sm-wells { display: flex; flex-wrap: wrap; gap: 16px 30px; margin-top: 18px; }
 .sm-well { display: flex; flex-direction: column; gap: 9px; }
 /* Font, size and colour come from the shared label rule; this keeps only what
    is its own. The count inside it stays a touch quieter than the word. */
@@ -22833,8 +22888,16 @@ body.sm-picker-open { overflow: hidden; }
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .sm-thumb:hover .sm-thumb-x, .sm-thumb-x:focus-visible { opacity: 1; }
-.sm-thumb-x:hover { background: rgba(220,60,60,.9); }
-.sm-thumb.is-arming .sm-thumb-x { opacity: 1; background: rgba(220,60,60,.95); }
+/* THE RED IS THE CANCEL HOLD'S, #ff3b78 (v6.72). Jaco: *"para borrar, coge el
+   mismo color rojito de 'cancelling submission' de las platform cards."* These
+   three were `rgba(220,60,60)` / `rgba(214,54,54)` — a red that appears NOWHERE
+   ELSE in the app, invented here because this was the first destructive hold
+   built after the card's. The two gestures are the same idea (press and hold to
+   destroy, let go to undo) and were painted in two different colours; the card's
+   is the one with the vocabulary behind it — the sweep, the CANCELING SUBMISSION
+   line, the card's own edge and now this button's tooltip all carry it. */
+.sm-thumb-x:hover { background: rgba(255,59,120,.9); }
+.sm-thumb.is-arming .sm-thumb-x { opacity: 1; background: rgba(255,59,120,.95); }
 
 /* THE HOLD. Filling left to right over the file itself, not in a bar
    somewhere else, because the thing being destroyed is the thing that should
@@ -22848,7 +22911,11 @@ body.sm-picker-open { overflow: hidden; }
    honest reading: nothing happened. */
 .sm-thumb-burn {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  border-radius: inherit; background: rgba(214,54,54,.55);
+  /* Same hue as the × above and as the card's own sweep. The ALPHA stays at
+     .55 rather than the card's .22: that bar crosses a 400px card and this one
+     covers a 50px thumbnail sitting on a photograph, so it needs the weight to
+     read at all. One colour, two sizes. */
+  border-radius: inherit; background: rgba(255,59,120,.55);
   transform: scaleX(0); transform-origin: left center;
 }
 .sm-thumb.is-arming .sm-thumb-burn {
