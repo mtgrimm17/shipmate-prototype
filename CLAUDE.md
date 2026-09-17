@@ -6568,6 +6568,55 @@ Measured at a true 1280×700: box **123.5** (exactly 5 lines), button bottom
 on a 1280×800. That 23 is not in this token: `.step-nav-row` spends **46** on
 `margin-top: 26` + `padding-top: 20` for one horizontal rule.
 
+**AND IT IS 175 NOW (v6.62), WHICH SPENDS THAT WHOLE ARGUMENT.** Jaco, looking
+at it: *"amplíame la altura de la descripción a 175px, que ahora está muy
+enana."* Everything above is right about how the box is BUILT and was solving
+for one number too few: it made "the Languages button fits without scrolling"
+the entire brief, and five lines of a 4000-character store description is a slot
+rather than a field.
+
+**The cost is measured rather than waved at**: the button's bottom goes
+**677.3 → 712** against a footer top of **654**, so 23px behind becomes 58. And
+that puts the real bug back where this note already said it was — **46 of the 58
+is `.step-nav-row`'s own margin plus padding**, spent on one horizontal rule, and
+the rest is `.app-footer` being `position: fixed` with nothing reserving its
+height. Fix either and 175 clears with room; shrinking this field again pays for
+those two a third time.
+
+**175 is written as a literal, and the lines form is what it gives up.** It is
+7.64 lines — `(175 − 26) / 19.5` — so the eighth is 64% visible, a sliced row
+along the bottom edge. That is exactly what stating the height in LINES was
+protecting against, and it is knowingly traded for the number he measured off
+the screen. Eight clean lines is **182** and seven is **162.5**: if that slice
+ever reads as a fault rather than as "there is more below", those are the two
+numbers and the token goes back to `calc(n * 19.5px + 26px)`.
+
+**AND THE ASSETS DROP WELL READS THE SAME TOKEN.** Jaco: *"que el cajetín de
+dropwell de assets también mida 175, por consistencia."* Those are the two big
+empty boxes of that form — one where you type the copy, one where you drop the
+pictures — and on one screen a 118px well beside a 175px field reads as an
+accident rather than as two different kinds of thing. It takes
+`min-height: var(--gi-desc-h)` rather than a second 175, so the pair cannot
+drift.
+
+**Scoped to `#ob-screenshot-dropzone` by ID, deliberately.** `.asset-dropzone`
+is also Steam's two (one already `-sm` at a smaller padding), the Website
+builder's and every `pk-keyart-box--*`, which are sized by the ART THEY HOLD —
+the class would have stretched all of them to 175. Same trap this file has
+recorded three times: a value measured against one target, applied to the
+selector that happened to be open. And it is `min-height` + `justify-content:
+center` rather than more padding, because the padding is precisely what those
+variants override. Measured: both boxes **175.0**, the well's three lines
+centred with **51.7** of air above and below.
+
+**AND THE TWO LANGUAGE LABELS GAINED THEIR NOUN.** Jaco: *"en languages, cambia
+primary por primary language y supported por supported languages."* One key
+each in `en.json` and nothing else — `render.js` reads them through `t()` with
+no inline fallback, so there was no second place to update. Worth noting that
+**zh-CN already said 主要语言 / 支持语言** — *primary language*, *supported
+languages* — so English was the one locale still printing the bare adjective.
+Measured: both labels one line at 18px, no wrap.
+
 **AND PREV / NEXT ARE THE MODAL'S FOOTER BUTTON — WHICH DISSOLVES THE COLOUR
 QUESTION RATHER THAN ANSWERING IT.** Jaco: *"deberían tener el mismo formato que
 los botones de los modales, con stroke gradientado y el fill transparente. Tengo
@@ -7084,6 +7133,35 @@ from.
 git checkout --theirs index.html splash.html && git add index.html splash.html
 GIT_EDITOR=true git rebase --continue && git push
 ```
+
+**AND THE CONFLICT IS THE THIRD WAY TO READ THE LIVE NUMBER WITHOUT GIT.** The
+fetch above is the first and `.git/config` the second; this one is free,
+because a conflicted file **prints both sides in the working tree** — a plain
+file read, no command. `<<<<<<< HEAD` is `origin/main`'s version of those
+fifteen lines and the `>>>>>>>` half is yours, so one grep answers the only
+question the resolution depends on: *did the other side take my number?*
+
+That is what `--theirs` silently assumes and cannot check. It is the right
+default and it is only right while the other side's number is LOWER. v6.49 hit
+this: Adam pushed `e9a92d1` after the fetch that had cleared 6.49, so the fetch
+was stale by the time the rebase ran — and the markers said HEAD was still
+**6.48** on all fifteen lines, i.e. his push touched `app.js`, `render.js` and
+`style.css` and never bumped. 6.49 was still free, `--theirs` was still right,
+and this time it was *known* rather than assumed.
+
+**If HEAD's side is EQUAL TO OR HIGHER than yours, stop** — `--theirs` would
+publish new bytes under a key browsers already hold, which is the whole failure
+the Versioning section exists to prevent. Go up past both and rewrite all
+fifteen lines before continuing.
+
+```bash
+grep -A1 '^<<<<<<< HEAD' index.html | grep -o 'v\?[0-9]\+\.[0-9]\+'
+```
+
+Resolving by hand is also fine and is what happened here — the hunks are only
+version strings, so editing them out is as safe as `checkout --theirs` and
+leaves you having read what you kept. Then `git add` both files and continue as
+above; skip the `checkout` line.
 
 Getting it backwards is silent and expensive: you would publish new bytes under
 a number already live, which is precisely the diverged-cache failure the

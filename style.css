@@ -352,10 +352,38 @@
 
      Re-derive rather than nudging if the type moves: 19.5 is `13px × 1.5`, both
      stated at `.ob-form textarea.form-input`, and 26 is that rule's padding plus
-     the shared 1px border. The box does not grow (`resize: none`), so five lines
-     is what you see and the rest scrolls inside it — which is generous against
-     the three the Mac preview shows before "more". */
-  --gi-desc-h:    calc(5 * 19.5px + 26px);   /* height of the description box */
+     the shared 1px border. The box does not grow (`resize: none`), so the line
+     count is what you see and the rest scrolls inside it.
+
+     AND FIVE LINES WAS TOO FEW ON THE SCREEN IT WAS DESIGNED FOR. Jaco, looking
+     at it: *"amplíame la altura de la descripción a 175px, que ahora está muy
+     enana."* The arithmetic above is still right about how the box is built and
+     was wrong about the ONE number it was solving for — it made "the Languages
+     button fits without scrolling" the whole brief, and a store description is
+     the longest thing anyone types in this app. Five lines of a 4000-character
+     field is a slot, not a field.
+
+     175 IS A MEASUREMENT OFF THE SCREEN, SO IT IS WRITTEN AS ONE. It is 7.64
+     lines — `(175 − 26) / 19.5` — which is the one thing the lines form was
+     protecting against: the eighth line is 64% visible, a sliced row of text
+     along the bottom edge. Eight clean lines is 182 and seven is 162.5; if that
+     slice ever reads as a fault rather than as "there is more below", those are
+     the two numbers, and the token goes back to `calc(n * 19.5px + 26px)`.
+
+     WHAT IT COSTS, MEASURED RATHER THAN WAVED AT: at a true 1280×700 the
+     Languages button's bottom goes **677.3 → 712** against a footer top of
+     **654**. It was already 23px behind that fixed footer and is now 58, so the
+     fold argument that chose 123.5 is SPENT — the box is no longer the lever
+     that makes the button reachable on a small window.
+
+     Which puts the real bug back where the note above said it was. 46 of that
+     58 is `.step-nav-row`'s own `margin-top: 26` + `padding-top: 20`, spent on
+     one horizontal rule, and the last 46px of every view in this app is
+     permanently covered because `.app-footer` is `position: fixed` and nothing
+     reserves its height. Fix either of those and the button clears at 175 with
+     room over; shrinking this field again would be paying for them a third
+     time. */
+  --gi-desc-h:    175px;   /* height of the description box — measured, not derived */
   --cta-bg:       #212028;
   --cta-bg-hover: #453C5A;
   --cta-blob:     #A078FF;
@@ -12103,6 +12131,32 @@ a.mac-spp-link-row.is-live:focus-visible {
   background: var(--inp-bg);
   cursor: pointer;
   transition: all 0.2s;
+}
+
+/* GAME DETAILS' OWN WELL IS THE DESCRIPTION BOX'S HEIGHT. Jaco: *"que el
+   cajetín de dropwell de assets también mida 175, por consistencia."* Those two
+   are the two big empty boxes of that form — one where you type the store copy,
+   one where you drop the pictures — and read on one screen a 118px well beside
+   a 175px field looks like an accident rather than like two things of different
+   kinds. It reads `--gi-desc-h` rather than repeating 175, so the pair cannot
+   drift: move the description and the well follows.
+
+   SCOPED TO THIS ONE WELL BY ID, and that is deliberate rather than lazy.
+   `.asset-dropzone` is also Steam's two (one of them already `-sm` at a smaller
+   padding), the Website builder's, and every `pk-keyart-box--*` — which are
+   sized by the ART THEY HOLD and would each grow to 175 for no reason. Same
+   trap this file has recorded three times: a value measured against one target,
+   applied to the selector that happened to be open.
+
+   `min-height` plus centring rather than more padding: the padding is what the
+   `-sm` and keyart variants override, so growing it would have been a number
+   two other rules then have to fight. The three lines stay in the middle of the
+   box at any height. */
+.ob-form #ob-screenshot-dropzone {
+  min-height: var(--gi-desc-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 /* Grid sits below the dropzone as a sibling — not inside ob-req-group */
