@@ -14835,7 +14835,8 @@ function _impQueueResolve(batchSel, idx) { _impPendingSelect = { batchSel, idx, 
    it. Driving it with element.animate() and pinning `startTime = 0` puts every
    newly created node at the same phase by definition: the pulse looks like one
    continuous breath across renders because it IS one clock. Same trick, and the
-   same reason, as shippyBreathe (render.js).
+   same reason, as Shippy's own breath (`bob()` in shippy-live.js; it was
+   `shippyBreathe` in render.js until the live rig took the node over).
 
    It changes only light — opacity between the tab's resting .2 and .62. Nothing
    moves: a 28px circle that grows is a control asking to be pressed, which is

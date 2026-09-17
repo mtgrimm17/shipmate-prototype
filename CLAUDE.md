@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.77** &rarr; next is **v6.78**.
+Current version: **v6.80** &rarr; next is **v6.81**.
 
 ---
 
@@ -96,27 +96,107 @@ The discs differ (20px on a card and in the guide, 16px in the collapsed
 rail), so a fixed size lands at a different fraction of each; at 100% the ink
 is 38.3% of the disc everywhere and the stroke scales with it.
 
-### Shippy is two layers
+### Shippy is the live rig (v6.80)
 
-`.guide-mascot` (z-index 0) sits behind the opaque `.guide-card` and is
-cropped by it; `.guide-tentacles` (z-index 2) sits in front. The tentacles are
-static PNGs and the illusion rests on one number: **tent.png's only pure
-horizontal edge is at 57.57% of its height** (y=700 of 1216, measured with an
-alpha scan), and that line must land on the card's top border. So the offset is
-derived — `top = -(height × --shippy-tent-flat)` with the height derived from
-the width — and no size change can knock it off. Don't expose it as a control.
+`shippy-live.js` (`SHIPPY_LIVE`), `.guide-mascot.is-live` (style.css),
+`shippyLayersHTML()` / `mountShippy()` (render.js). Jaco: *"en otro chat
+contigo he estado trabajando en pulir un poco el shippy que tenemos en el
+shippy pane. Con sus propias animaciones etc. investiga los archivos y
+reemplázamelo."* The port is from his `shippy-live-recipe.md`, whose CSS and
+JS were diffed line by line against the tested bench (`shippy-live.html`)
+before a line was copied: every rig line in the recipe exists verbatim in the
+bench, and everything the bench has on top is its control panel.
 
-The breath is built by `shippyBreathe()` (render.js), not in CSS, with
-`startTime = 0` on the document timeline. `renderGuide()` rebuilds this column
-with innerHTML, so a CSS animation restarts from 0% on every tab change; one
-shared clock puts every new node at the same phase by definition. A negative
-`animation-delay` computed from a captured clock was tried and measurably
-drifted ~2px per tab change.
+**WHAT REPLACED WHAT.** The flat `shippy-body.png` plus two static
+`shippy-tentacle.png` spans became one procedural SVG: 14 pieces, 5 arms of 14
+joints each, a click ladder (alert → tantrum behind the card → wave on
+return), boredom stretches at 26–40s, two-mode gaze (follows the pointer near
+the panel, the editor's 9px loop far from it), irregular blinking, bubbles
+with a synthesised blup. `is-png`, `.guide-tentacles`, all `--shippy-tent-*`,
+`--shippy-cx` and `--shippy-bob`/`-bob-t` are GONE — with them went the
+57.57%-flat-edge registration trick and `shippyBreathe()`, whose reasons are
+recorded at their new homes. The two PNGs are still on disk, unreferenced.
+The `::after` bloom survives with `--shippy-cx` written out as its sum
+(`--shippy-inset + --shippy-w / 2`), same number, no orphan token.
+
+**TWO INVIOLABLE RULES CARRIED FROM THE RECIPE, verbatim:** *"Nunca
+`letter-spacing`. En ningún sitio, nunca."* and *"Ninguna medida está
+inventada"* — pieces, radii, colours, poses and gestures are literally the
+editor's, and the three `FIT` numbers (s 1.38, cx 255.9, cy 219.6) come from
+four measurements of the old PNG that all agree. Don't retune any of it here.
+
+**WHAT THE PORT CHANGED, and it is only ever structure** (the long form is
+shippy-live.js's own header): it is an IIFE, because the bench declares
+`el`, `f`, `clamp`, `build`, `arms`, `host`, `nodes`, `R`, `blink`… at top
+level and every one collides with this app; the SVG node is OWNED and
+RE-PARENTED (OCTO's pattern) because `renderGuide()` rebuilds the column with
+innerHTML; there is no `#shippy` id, `mount()` is handed the node; the click
+listener lives on the SVG, which is never thrown away, not on the host, which
+is; and the bob is `element.animate()` pinned to `startTime = 0` instead of
+the recipe's `@keyframes`, for shippyBreathe's own documented reason — a CSS
+animation on a re-parented node restarts at 0%. Verified across
+details → calendar → dashboard: the SAME node all the way (`===`), bob still
+`startTime 0, running`, one mascot, one svg.
+
+**`hidden` → `is-hiding`, `flee` → `is-fleeing`, AND THIS WAS A MEASURED BUG,
+NOT A STYLE PREFERENCE.** Jaco: *"la animación de aparecer y desaparecer del
+pulpo… ahora desaparece sin más."* This app has a global
+`.hidden { display: none !important }` (style.css ~428) that the bench page
+never had, so the tantrum's class DELETED the box instead of sliding it behind
+the card — and it hid from the obvious probes: with `hidden` on, even an
+INLINE `transform: translateY(64%)` computed to `none`, because a
+display:none box has nothing to transform. The tell that broke it open was
+exactly that impossible reading. The rule this leaves: **a class name ported
+from a standalone page is a collision candidate against every global utility
+in the app it lands in** — grep the name before keeping it. Measured after the
+rename: flee 0 → 77.2px in ~360ms accelerating, return 77.2 → 0 in ~700ms
+easing, `display: block` at every sample.
+
+**The tantrum's classes are mirrored in the module (`cls`) and re-applied by
+`mount()`**, because they live on the host and the host is replaced by every
+render — a tab change mid-tantrum was the one way to strand him floating over
+the panel with the sulk still running.
+
+**The "near" zone reads `.app-guide`** (via `host.closest`), not the bench's
+`#guide`; it is the panel UNION the octopus, so approaching his face counts
+as paying attention. Exposed controls: `--shippy-inset` (32px), `--shippy-w`
+(57px), `--shippy-body-top` (−58.5px), `--body-rot`, `--sh-bob` (16, in
+CANVAS units so rescaling the octopus does not change the movement); in JS,
+`IDLE_MIN`/`IDLE_VAR` and `NEAR` (150px). The recipe's §6 table of what
+breaks if touched (draw order `armsback → cabeza → arms → top`, suckers at a
+CONTINUOUS chain position, the mouth painted in ONE place, head rotation
+moving the arm anchors, poses interpolated not rebuilt, the relax delay
+derived from the idle interval, `--shippy-air: 300`) is reproduced as
+comments at each site in shippy-live.js.
+
+**There are still two octopuses in this repo, now both procedural.**
+shippy.js's OCTO drives the `.sm-mascot` panels (`mountShippyPanel`, three
+views) and the splash has its own layered one; SHIPPY_LIVE is the guide's.
+Reconciling them means redoing those surfaces — shippy.js's own header note,
+still true.
+
+**Measured end to end at 6.86 in the pane** (ships as v6.80): box 57 × 120.56
+(= 57 × 1083/512), inset 32.00 from the panel, the crown exactly **58.5px**
+above the card's top edge (`--shippy-body-top` to the hundredth, so the AIR
+compensation is exact); 14 pieces, 2 back arms + 3 front, `#sh-skin` the only
+pointer target with the host at `pointer-events: none`; a real click →
+pose B + damped head shake (`rotate(-1.42 0 240)` sampled mid-decay), the
+mouth's O (stroke-width 17 → 23.48) and bubbles on screen; three rapid clicks
+→ tantrum, verified with the full class/transform trace above; zero console
+errors on a cold load.
+
+**One probe note, and it is the coordinate-frame lesson in a new shape.** A
+click-ladder trace showed TWO tantrums for one batch of three clicks, and the
+rig was innocent: a capture-phase click log showed the pane delivered the
+batch TWICE — at 13/23/31ms and again at 7854/8028/8214 — and three rapid
+clicks are precisely the panic gesture, so the octopus panicked correctly
+both times. **When a behaviour fires twice, count the INPUTS before reading
+the state machine.**
 
 **`.app-guide` must stay positioned.** Below 1100px a media query used to set
 `position: static`, which took it out of the positioning chain and left the
-mascot, the tentacles and the `::after` bloom resolving against `<body>` —
-hundreds of pixels from their card. It is `relative` there now.
+mascot and the `::after` bloom resolving against `<body>` — hundreds of
+pixels from their card. It is `relative` there now.
 
 ### Colour has meanings
 
@@ -8231,7 +8311,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.77** → next is **v6.78**. (v6.29 – v6.31 are Mark's
+Current version: **v6.80** → next is **v6.81**. (v6.29 – v6.31 are Mark's
 Distribution work, and **v6.42 and v6.48 are Adam's** — shipped in parallel and
 touching none of this.)
 
@@ -8481,6 +8561,18 @@ Mark was not shipping that day, which is the check that made 6.39 free.
 v6.60, v6.62 …) and are deliberately NOT rewritten.** They are the order the
 decisions were made in, which is what makes them readable as a history; all of
 them shipped together in v6.39. Don't go looking for a live v6.55.
+
+**AND THE SHIPPY BATCH COLLAPSED 6.86 → v6.80, WHICH IS THE NINTH TIME — AND
+THE NUMBER IS JACO'S, NOT THE NEXT FREE ONE.** Live is v6.77, read off
+`.ship-message.sent` (the cheap, uncacheable way this section prescribes), so
+6.78 was free and is what this batch was headed for. Jaco: *"necesito que me
+lo pushees en v6.80."* 6.80 > 6.77 and nothing has ever been served under
+6.78 – 6.80, so the key still only goes UP, which is the one thing that makes
+any renumber safe; 6.78 and 6.79 join the gaps with nothing behind them. The
+work was MEASURED at 6.85 – 6.86 because this pane had already been served
+6.74 – 6.84 in earlier sessions — a number this session has already used is
+not a cache-bust — so anything further needing a measurement here starts
+above 6.86.
 
 **AND THE ADD-PLATFORM BATCH COLLAPSED 6.84 → v6.77, WHICH IS THE EIGHTH TIME.**
 Jaco: *"can you push this to 6.77?"*

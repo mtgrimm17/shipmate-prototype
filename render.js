@@ -4871,91 +4871,45 @@ function _guideCalDayPanel(byDay) {
     </div>`;
 }
 
-/* ── SHIPPY, IN TWO LAYERS ───────────────────────────────────────────────────
+/* ── SHIPPY, IN ONE LAYER ────────────────────────────────────────────────────
    The guide card is opaque and sits at z-index 1, so it crops whatever is
    behind it at its own top edge — no clip-path needed, unlike the retired
-   glass `.sm-panel`.
+   glass `.sm-panel`. The octopus (z-index 0) is entirely behind it and only
+   what rises above that edge is ever seen.
 
-     BACK  (.guide-mascot, z-index 0)  head and body. Only the 73px above the
-           card's edge is ever seen; the card covers the rest.
-     FRONT (.guide-tentacles, z-index 2, above the card) the two tentacles
-           lying ON the card.
-
-   THE CROP IS THE WHOLE TRICK. The front layer's box starts exactly at the
-   card's top edge and hides its overflow, so a tentacle slid upwards is cut
-   off precisely along that edge. A straight cut on an arbitrary line reads as
-   a clipping bug; a straight cut that lands on the card's own border reads as
-   the tentacle passing behind it. That is why one drawing serves for both
-   halves of the illusion, and why `--shippy-tent-rise` can be tuned without
-   asking for new art.
+   IT USED TO BE TWO, and the second layer is what the live rig removes.
+   `.guide-tentacles` sat at z-index 2, ABOVE the card, holding two static
+   tentacle PNGs whose own flat edge was landed on the card's top border so
+   they read as resting on the panel. That was the right answer for a drawing
+   that could not move; the rig's five arms really are drawn, so there is
+   nothing left to fake and nothing that has to go in front of the card.
 
    Two call sites render this column (the Calendar branch above and the main
    one), which is exactly the split that let the Web platform card drift onto
-   old markup — so both go through here. */
-const SHIPPY_PNG = true;   // prototype: PNG art rather than the procedural SVG
+   old markup — so both go through here.
 
+   NO ID, deliberately, although the recipe this is ported from mounts on
+   `#shippy`: shippy.js's own note explains that this repo wraps three views
+   and anything carrying an id in a rendered column exists more than once.
+   `SHIPPY_LIVE.mount()` is handed the node instead. */
 function shippyLayersHTML() {
-  return `<div class="guide-mascot${SHIPPY_PNG ? ' is-png' : ''}"></div>`
-       + `<div class="guide-tentacles" aria-hidden="true">`
-       +   `<span class="guide-tent guide-tent--l"></span>`
-       +   `<span class="guide-tent guide-tent--r"></span>`
-       + `</div>`;
+  return `<div class="guide-mascot is-live"></div>`;
 }
 
-/* THE BREATH DOES NOT RESTART ON EVERY TAB CHANGE.
+/* SHIPPY_LIVE owns a single SVG node and re-parents it, so re-rendering the
+   guide moves the octopus into the fresh host without rebuilding it — the same
+   thing OCTO does next door, and the reason all of the rig's state (pose,
+   gaze, blink, the click ladder) lives in that module's closures rather than
+   in the DOM. Collapsed the card is 52px wide, so the mascot is left out of
+   that branch; the rig's rAF checks `isConnected` and stops solving arms for
+   an octopus that is not in the document.
 
-   renderGuide() rebuilds this column with innerHTML, which throws away the
-   mascot's DOM node and builds a new one — and an animation on a brand-new
-   element starts at its beginning, so Shippy jerked back to the bottom of his
-   breath every time you switched tabs.
-
-   The answer is the DOCUMENT TIMELINE. An animation created through
-   element.animate() can have its startTime set, and document.timeline is one
-   shared monotonic clock for the whole page. Anchoring every new node's
-   animation to startTime 0 puts them all at the same phase by definition:
-   whatever the old node was doing, the new one is doing the same thing at the
-   same instant. There is no seam to hide.
-
-   I tried the negative-animation-delay trick first — delay -1.4s starts a
-   2.8s cycle halfway in — computing the phase from a clock captured at load.
-   Measured, it still jumped about 2px per tab change; the arithmetic and the
-   element's real phase disagreed. The timeline needs no arithmetic, which is
-   why it is right: nothing to get wrong.
-
-   Keeping the node alive would be the other answer, and it is the one OCTO
-   uses, but it does not survive innerHTML — a node removed from the document
-   and re-inserted has its animations reset too. */
-function shippyBreathe(node) {
-  if (!node || typeof node.animate !== 'function') return;
-  // Someone who has asked their system for less movement gets none.
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  const cs   = getComputedStyle(node);
-  const rise = parseFloat(cs.getPropertyValue('--shippy-bob')) || 0;
-  const secs = parseFloat(cs.getPropertyValue('--shippy-bob-t')) || 0;
-  if (!rise || !secs) return;
-
-  node.getAnimations().forEach(a => a.cancel());
-  const anim = node.animate(
-    [{ transform: 'translateY(0)' },
-     { transform: `translateY(${-rise}px)` },
-     { transform: 'translateY(0)' }],
-    { duration: secs * 1000, iterations: Infinity, easing: 'ease-in-out' },
-  );
-  /* The whole point: phase comes from the shared clock, not from when this
-     node happened to be born. */
-  try { anim.startTime = 0; } catch (e) { /* not yet on a timeline; harmless */ }
-}
-window.shippyBreathe = shippyBreathe;   // the editor re-applies after a change
-
-/* OCTO owns a single SVG node and re-parents it, so re-rendering the guide
-   moves the octopus into the fresh host without restarting its animation.
-   Collapsed the card is 48px wide, so the mascot is left out of that branch.
-   In PNG mode the SVG is not mounted at all — mounting it and hiding it in CSS
-   would leave its requestAnimationFrame loop redrawing an invisible octopus. */
+   `shippyBreathe()` went with the PNG. Its argument did not: the breath is
+   still built with element.animate() at `startTime = 0`, inside shippy-live.js
+   where the node now lives, because re-parenting restarts a CSS animation at
+   0% exactly as innerHTML did. */
 function mountShippy(el) {
-  if (SHIPPY_PNG) { shippyBreathe(el.querySelector('.guide-mascot')); return; }
-  if (typeof OCTO !== 'undefined') OCTO.mount(el.querySelector('.guide-mascot'));
+  if (typeof SHIPPY_LIVE !== 'undefined') SHIPPY_LIVE.mount(el.querySelector('.guide-mascot'));
 }
 
 /* ── EXPERIMENT: Netflix-style top-nav sub-tab drawer ──

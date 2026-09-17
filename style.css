@@ -3175,134 +3175,87 @@ body.viewing-splash .app-subnav { display: none; }
 }
 .guide-card::-webkit-scrollbar { width: 0; height: 0; }   /* Chrome, Safari */
 
-/* Shippy hangs off the top-right corner, behind the card. The card is opaque,
+/* Shippy hangs off the top of the column, behind the card. The card is opaque,
    so everything below its top edge is simply covered — no clipping needed.
-   Sizing and offsets are shippy.js's mascot{} values, kept in sync by eye. */
-/* width comes from --shippy-w, whose default IS the historical 83px — the
-   literal was here before the variable existed, and leaving it meant the
-   body-width control moved the box's height (which the PNG rule derives from
-   the variable) while its width stayed put, so the art squashed instead of
-   scaling. One source for the number. */
+   The box is placed by --shippy-inset / --shippy-body-top and sized by
+   --shippy-w; `top` is set by the .is-live rule below, which has to compensate
+   for the canvas's own air. */
 .guide-mascot {
   position: absolute; z-index: 0; pointer-events: none;
-  left: var(--shippy-inset); top: -73px; width: var(--shippy-w);
+  left: var(--shippy-inset); width: var(--shippy-w);
 }
-.guide-mascot svg { width: 100%; height: auto; display: block; }
 
-/* ── Shippy's two layers ──────────────────────────────────────────────────
-   Every number below is measured off the supplied art rather than chosen,
-   so re-exporting the art means re-measuring rather than nudging:
+/* ── SHIPPY VIVO ──────────────────────────────────────────────────────────
+   The flat PNG is replaced by the SVG rig in the SAME BOX: same --shippy-*
+   variables, same position. Everything below is cut from shippy-live.html,
+   which is where it was tuned; shippy-live.js carries the rig and the notes
+   on what breaks if any of it is touched.
 
-     body.png  512 × 783. The silhouette splits into arms at y=619 (79.1%
-               down); above that is head and body. Aspect 0.654.
-     tent.png  1280 × 1216, aspect 1.053. Its ink fills the canvas — both
-               files are already trimmed, so no padding to compensate for.
+   WHAT WENT WITH THE PNG, and it is not a tidy-up — none of it has anything
+   left to describe. The two `.guide-tent` spans and their layer, `is-png`,
+   `--shippy-tent-w` / `-spread` / `-flat` / `-h`, `--shippy-cx` (the centre
+   the two tentacles hung off) and `--shippy-bob` / `-bob-t` (shippyBreathe's
+   values). The arms are the rig's five now, drawn.
 
-   THE FOUR PLACEMENT VALUES ARE JACO'S, set by eye in the shippy-editor
-   panel (shippy-editor.js, `?shippy=1` or Ctrl+Alt+S) and pasted here. They
-   are a design decision, so they are not re-derived: earlier passes tried to
-   compute the tentacle's size from body.png's own arms (42.6% of the body)
-   and its spread from the eyes' outer edge (45.1px), and both were wrong for
-   this art — tent.png is not a copy of those arms, it is chunkier and
-   proportionally taller (aspect 1.05 against the arm's 1.33). Measurement
-   settles where the flat edge lands; taste settles how big and how far out.
-
-   --shippy-tent-flat is the exception and stays measured — see its note.  */
+   THE ONE MEASUREMENT THAT DIED WITH THEM, recorded because it took an alpha
+   scan to find and would have to be redone if the PNGs ever come back:
+   tent.png's only pure horizontal edge was at y=700 of 1216 — 57.57% down —
+   and landing that line on the card's top border is what made a tentacle read
+   as resting on the panel rather than cut out of it.  */
 :root {
-  /* Scaled to 0.85 of the 63px pass, so the four placement values keep the
-     proportions that were settled by eye rather than being re-judged one at
-     a time: 63→54, 65→55, 17→14.5, 38→32. */
-  --shippy-w:           54px;                       /* the mascot box */
-  --shippy-body-top:    -55px;                      /* how far the head rises */
-  --shippy-tent-w:      14.5px;                     /* 26.9% of the body */
-  --shippy-tent-spread: 32px;                       /* centre → each tentacle */
-  /* LEFT, NOT RIGHT. The inset is measured from the panel's left edge now, so
-     --shippy-cx is a left offset and the tentacles are placed with `left`.
-     The collapse chevron lives at the card's top-right, which the right-hand
-     tentacle used to sit under; on this side nothing shares the space. */
-  --shippy-inset:       26px;                       /* panel's left edge → box */
-  --shippy-cx:          calc(var(--shippy-inset) + var(--shippy-w) / 2);
-
-  /* THE BREATH. Amplitude and period come from the procedural octopus this
-     replaces (shippy.js, D.P): bob 9 units on a 659-unit viewBox at
-     bobFreq 0.24Hz. At the old render size those 9 units were ±1.45px over a
-     4.17s cycle, so 2px/4.2s here is the same movement a touch more present —
-     which is what "subtle but there" asked for.
-     Only the BODY breathes. The tentacles are resting on the panel, so they
-     hold still: a tentacle that rose and fell with the body would read as
-     sliding on the surface, and it would also drag the flat edge off the
-     border, which is the one thing that must not move. */
-  --shippy-bob:         2px;
-  --shippy-bob-t:       2.8s;
-
-  /* DERIVED — do not hand-edit these two, and do not expose them as controls.
-     THE ART'S OWN FLAT EDGE IS THE REGISTRATION LINE: tent.png has exactly one
-     pure horizontal run, 360px long at x 920→1279, at y=700 of 1216 — 57.57%
-     down the canvas. Landing that line on the card's top border is what makes
-     the tentacle read as resting on the panel rather than cut out of it.
-     Because the offset is a fraction of the height and the height is a
-     fraction of the width, the anchor survives any change to the size above:
-     there is no combination of values that can knock it off the border.
-     (Measured with an alpha scan for the longest run of columns sharing a
-     bottom edge. Re-export the art and re-run it.) */
-  --shippy-tent-flat:   0.5757;
-  --shippy-tent-h:      calc(var(--shippy-tent-w) * 1216 / 1280);
+  /* Medidos en el prototipo. El cuerpo va suelto: sitio, tamaño y giro, sin
+     depender de nada. */
+  --shippy-inset:       32px;     /* panel's left edge → box */
+  --shippy-w:           57px;     /* the mascot box */
+  --shippy-body-top:    -58.5px;  /* how far the head rises */
+  --body-rot:           0deg;     /* the body's own tilt */
 }
 
-/* PNG mode: the body as a background image in the --shippy-w box. `bottom`
-   anchoring is deliberate — the art's own bottom is where the arms are, and
-   that is the end whose distance to the card's edge has to stay fixed while
-   the box's height follows the art's aspect. */
-.guide-mascot.is-png {
-  top: var(--shippy-body-top);
-  height: calc(var(--shippy-w) * 783 / 512);        /* the art's own aspect */
-  background: url('Assets/Shippy/shippy-body.png') center bottom / 100% auto no-repeat;
-  /* The breath is NOT declared here. It is built by shippyBreathe() in
-     render.js so its phase can be pinned to the document timeline — a CSS
-     animation on a node that innerHTML has just recreated always starts at
-     0%, which made Shippy snap back to the bottom of his breath on every tab
-     change. --shippy-bob and --shippy-bob-t above are still where the values
-     live; that function reads them off this element. */
+/* El PNG plano se sustituye por un SVG en la MISMA caja. Lo único que cambia
+   es que el lienzo sube --shippy-air por encima de la cabeza, que es el aire
+   por donde suben las pompas; por eso el top compensa esa subida y la cabeza
+   no se mueve. */
+.guide-mascot.is-live {
+  --shippy-air: 300;              /* en unidades del lienzo */
+  /* El vaivén va en unidades del LIENZO, no en píxeles de pantalla, así que no
+     cambia al reescalar el bicho. Los 9 del editor son unidades de RIG, y el
+     rig va dentro a escala 1,38 → 12,4 de lienzo. Sube a 16 porque a este
+     tamaño —57px de ancho— 12 no se leen.
+     It is read by shippy-live.js rather than consumed by a @keyframes: the
+     breath is built with element.animate() and pinned to startTime 0, for
+     shippyBreathe()'s own reason — a CSS animation on a node that has just
+     been re-parented into a freshly rendered guide restarts at 0%. */
+  --sh-bob: 16;
+  top: calc(var(--shippy-body-top) - var(--shippy-w) * var(--shippy-air) / 512);
+  height: calc(var(--shippy-w) * (783 + var(--shippy-air)) / 512);
+  background: none;
+  /* El giro del cuerpo pivota sobre la barriga, no sobre la esquina del
+     lienzo: si no, girar 10° lo manda a tomar viento. 50% 60% cae cerca de
+     donde nacen los brazos, que es de donde se inclinaría un pulpo.
+     Dos curvas distintas: al volver tarda más que al huir. Huir es un
+     respingo, asomarse otra vez es pensárselo. */
+  transform-origin: 50% 60%;
+  transform: rotate(var(--body-rot));
+  transition: transform .72s cubic-bezier(.45, 0, .25, 1);
 }
-.guide-mascot.is-png svg { display: none; }
+.guide-mascot.is-live svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* Sólo el dibujo recibe el clic, no su caja: si la caja entera fuese pulsable,
+   habría un rectángulo invisible de 57×82 comiéndose los clics del panel. */
+.guide-mascot.is-live #sh-skin { pointer-events: auto; cursor: pointer; }
 
-/* The front layer: a zero-height line at the card's own top edge — .guide-card
-   is the first in-flow child of .app-guide, so the two coincide.
+/* Esconderse: se hunde por detrás de la card y vuelve. La card ya lo tapa,
+   así que basta con bajarlo su propia altura.
+   `is-hiding` / `is-fleeing`, NOT the recipe's `hidden` / `flee`: this app has
+   a global `.hidden { display: none !important }` (line ~428), so the bench's
+   class name here deleted the box instead of sliding it — the tantrum was a
+   cut, not a dive. Measured: with `hidden` on, even an inline transform
+   computed to `none`, because a display:none box has nothing to transform. */
+.guide-mascot.is-live.is-fleeing { transition: transform .3s cubic-bezier(.4, 0, .9, .6); }
+.guide-mascot.is-live.is-hiding { transform: translateY(64%) rotate(var(--body-rot)); }
 
-   NO CROP HERE, deliberately. The first attempt clipped this layer's overflow
-   to hide whatever rose above the card's edge, which put the tentacles inside
-   the panel looking like they had been cut out of it. They are not inside it,
-   they rest ON it: the art already carries its own flat edge, and the whole
-   job is to land that edge on the border. Clipping anything would cut the part
-   that is supposed to show above the line. */
-.guide-tentacles {
-  position: absolute; z-index: 2; pointer-events: none;
-  left: 0; right: 0; top: 0; height: 0;
+@media (prefers-reduced-motion: reduce) {
+  .guide-mascot.is-live { transition: none; }
 }
-.guide-tent {
-  position: absolute;
-  /* the flat edge, on the border */
-  top: calc(-1 * var(--shippy-tent-h) * var(--shippy-tent-flat));
-  width: var(--shippy-tent-w); height: var(--shippy-tent-h);
-  background: url('Assets/Shippy/shippy-tentacle.png') center / contain no-repeat;
-}
-/* Symmetric for now, as agreed: one drawing, mirrored. The art's own flat cut
-   is on its right, so the unmirrored copy goes on the head's left. */
-.guide-tent--l {
-  left: calc(var(--shippy-cx) - var(--shippy-tent-spread) - var(--shippy-tent-w) / 2);
-}
-.guide-tent--r {
-  left: calc(var(--shippy-cx) + var(--shippy-tent-spread) - var(--shippy-tent-w) / 2);
-  transform: scaleX(-1);
-}
-/* ONLY THE HEAD CLEARS THE EDGE.
-   The card is opaque and sits at z-index 1, so it already crops this layer at
-   its own top edge — and what used to show above that line was not just the
-   head but the tips of the procedural arms, cut off flat. Those flat nubs are
-   what the front tentacle layer replaces, so they come off here. The arms
-   still exist and still animate; they are simply not drawn in the layer that
-   peeks. Drop this rule to get them back. */
-.guide-mascot #octo-arms { display: none; }
 
 /* The tell that the card is glass and Shippy is behind it: a soft purple bloom
    where his body meets the top edge. Painted OVER the card (z-index 2, above
@@ -3312,11 +3265,16 @@ body.viewing-splash .app-subnav { display: none; }
    Anchored to .app-guide, which is the positioning context, and centred on
    the mascot rather than on a hard-coded corner — it moved to the left with
    him, and a bloom left behind on the right would have been a glow with
-   nothing glowing. Centred by construction: --shippy-cx is the body's centre
-   line, minus half this box's own width. */
+   nothing glowing. Centred by construction: the body's centre line is the
+   inset plus half the box, minus half this box's own width.
+   (It used to read `--shippy-cx`, which was that same sum named. That token
+   existed for the two tentacle PNGs, which hung off it; with them gone this
+   was its only consumer, so the sum is written out rather than a token kept
+   alive for one caller.) */
 .app-guide::after {
   content: ''; position: absolute; z-index: 2; pointer-events: none;
-  left: calc(var(--shippy-cx) - 48px); top: -20px; width: 96px; aspect-ratio: 1;
+  left: calc(var(--shippy-inset) + var(--shippy-w) / 2 - 48px);
+  top: -20px; width: 96px; aspect-ratio: 1;
   border-radius: 50%; background: var(--sm-blob); opacity: .18; filter: blur(28px);
 }
 /* Collapsed the card is 52px wide — a bloom that size would swamp it. */
