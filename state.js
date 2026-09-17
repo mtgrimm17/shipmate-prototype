@@ -3338,7 +3338,11 @@ const state = {
   /* Submission: ONE platform at a time — a strip of platform tabs over a single
      pane, where the steps expand inline instead of opening the step modal.
 
-       addOpen   the "+ Add platform" picker, unchanged from the card grid
+       addOpen   the "Add platform" dropdown hanging off the sub-nav pill
+                 (buildSubnavAddPlatform, render.js). Opening and closing it
+                 does not render — the flag exists so a repaint that happens
+                 WHILE it is open re-emits it open, and so closeAllDropdowns
+                 has one thing to clear.
        tab       which platform's pane is showing. NEVER read directly — go
                  through submissionTab(), which heals a stale id (the selected
                  platform can be deactivated, or the project switched) rather

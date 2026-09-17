@@ -540,6 +540,8 @@
   "nav.details": "Game Details",
   "nav.assets": "Assets",
   "nav.submit": "Submission",
+  "sub.addPlatform": "Add platform",
+  "sub.addPlatform.none": "Every available platform is already activated.",
   "nav.spread": "Marketing",
   "nav.performance": "Analysis",
   "ob.media.drop_label": "Drop screenshots, key art or your trailer here",

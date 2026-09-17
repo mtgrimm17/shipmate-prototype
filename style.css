@@ -56,6 +56,12 @@
      different value there and the nav group's right edge stops lining up with
      the panel below it. */
   --split-gap:      16px;
+  /* The guide column's width. A literal in two places until now — .app-guide
+     and the header's .tb-right, which mirrors the columns below it — and a
+     third consumer made it worth naming: the sub-nav row's own right-hand
+     control has to land on the CONTENT panel's right edge, and the only thing
+     standing between the two is this column plus the gap above. */
+  --guide-w:        290px;
   /* Height of the sub-tab band above the split. Shared so the sticky guide can
      pin exactly where it already sits. */
   --subnav-h:       66px;
@@ -2387,6 +2393,94 @@ body.viewing-splash .app-subnav { display: none; }
 .app-subtab:hover + .app-subtab-sep,
 .app-subtab-sep:has(+ .app-subtab:hover) { visibility: hidden; }
 
+/* ── ADD PLATFORM, AT THE OTHER END OF THIS ROW ──────────────────────────────
+   The button inside is `.app-subtab.is-on` and nothing else — the fill, the
+   white ink, the 10/18 padding, the radius and the masked gradient stroke all
+   come from the rules above and from the shared ::after list at the end of
+   this file. There is deliberately no `.subnav-add` rule that paints anything:
+   "exactamente igual que una pill seleccionada" is only guaranteed while this
+   control has nothing of its own to drift with. What the wrapper adds is WHERE.
+
+   IT LANDS ON THE CONTENT PANEL'S RIGHT EDGE, WHICH IS NOT THIS ROW'S.
+   `.app-subnav` is `.app-split`'s box — it spans all three columns, so its own
+   right edge sits out past the guide. The panel's does not, and the difference
+   is exactly the guide column plus the split's gap. Written as that sum rather
+   than as the 306 it currently equals, so either token can move.
+
+   The pill's BORDER BOX is what lands there, which is the mirror of what
+   .app-subnav > .app-subtab:first-child does at the other end (see its note:
+   "that inset plus a zero margin on the first item is what puts the active
+   pill's border box exactly on the panel's left edge, with its label 18px
+   inside"). The row's own --content-inset padding supplies the last term.
+
+   Vertical centring needs no rule at all: this is a flex item of a row that is
+   already `align-items: center`, so the pill and the word "Submission" share a
+   centre by construction. That is the reason the control lives in this row and
+   not inside #dashboard, where it would have to fake it with an offset. */
+.subnav-add-wrap {
+  position: relative;
+  margin-left: auto;
+  /* Measured by _subnavAddSolve (app.js) — the fallback is the ordinary
+     three-column arrangement, so a cold first paint is already right and the
+     solve only confirms it. See that function for why it cannot be a constant. */
+  margin-right: var(--subnav-add-gap, calc(var(--guide-w) + var(--split-gap)));
+}
+/* THE `+` IS THE ONLY THING `.subnav-add` DECLARES, AND IT DECLARES NO PAINT.
+   Jaco: "debería quizás tener un + a la izquierda de add platform." The button
+   becomes a flex row to seat two children — layout for its own content, which
+   is not the same as a look: no fill, no ink, no radius, no border here, so the
+   pill still cannot drift from a real selected sub-tab.
+
+   The glyph is sized so it CANNOT decide the pill's height: `line-height: 1`
+   on a box whose own line box is shorter than the label's, so the label goes
+   on deciding and the row is the same 40.5px it is everywhere else in this
+   nav. Measured against a live `.app-subtab.is-on` rather than assumed. */
+.subnav-add { display: flex; align-items: center; gap: 7px; }
+.subnav-add-plus { font-size: 16px; line-height: 1; font-weight: 400; }
+/* ── THE PAGE STEPS BACK, AND THE FIRST CLICK OUT ONLY CLOSES ────────────────
+   Jaco: "quizás podría oscurecer el resto de plataformas mientras está el menú
+   desplegado, y si clico fuera, solo sal, no vayas al contenido sobre el que
+   haya clicado."
+
+   ONE OBJECT ANSWERS BOTH, which is why this is a scrim and not a dim plus a
+   guard. Without it the menu floats over a page at full strength and the press
+   that dismisses it ALSO lands on whatever was underneath — measured, four
+   clicks aimed at closing the menu activated three platforms and opened a card
+   between them. A dim alone would have left that intact, and a swallow alone
+   would have been an invisible dead zone over a page that still looked live.
+   The scrim is the same fact stated once: while the menu is up, the page is
+   not what you are pointing at.
+
+   IT IS A PSEUDO-ELEMENT, so there is no node to insert, position and remove —
+   the crop stage's 9999px shadow argument, with the difference that decides it
+   here: a box-shadow is not hit-testable and this has to catch the click. It
+   costs no layout (fixed) and nothing can be left behind if a render lands
+   while it is open.
+
+   `rgba(0,0,0,.45)` over .25s is `.nav-dim`'s, the page dim this app already
+   wrote for a drawer open over the content. Borrowed rather than picked, and
+   borrowed rather than REVIVED: that rule has no element in the document any
+   more, and reaching for a dead class would be switching a mechanism back on
+   to get at a number.
+
+   Opacity plus pointer-events rather than `display`, because the fade is half
+   of what makes the page read as stepping back rather than being replaced —
+   and `pointer-events: none` at rest is what keeps a full-viewport box from
+   sitting over the app the other 99% of the time. */
+.subnav-add-wrap::before {
+  content: ''; position: fixed; inset: 0; z-index: 299;
+  background: rgba(0, 0, 0, .45);
+  opacity: 0; pointer-events: none; transition: opacity .25s ease;
+}
+.subnav-add-wrap.is-open::before { opacity: 1; pointer-events: auto; }
+/* THE PILL STAYS LIT ABOVE IT. Dimming the one control the menu belongs to
+   would say the menu came from nowhere — and it has to stay pressable, because
+   pressing it again is how you close it. `.app-subtab` is already positioned
+   (see the shared ::after list's companion rule), so this is a z-index and
+   nothing else: no fill, no ink, no second state to drift from the real
+   selected pill. */
+.subnav-add-wrap.is-open .subnav-add { z-index: 301; }
+
 /* Marketing's own segmented bar, which this row now duplicates. Hidden rather
    than deleted so it's one line to bring back.
    Game Details needs no equivalent: its five sections (GD_SUBS) had no in-page
@@ -2405,7 +2499,7 @@ body.viewing-splash .app-subnav { display: none; }
    Sticky also keeps it a containing block, which Shippy's absolute placement
    needs. */
 .app-guide {
-  width: 290px; flex: none; align-self: flex-start; min-width: 0; box-sizing: border-box;
+  width: var(--guide-w); flex: none; align-self: flex-start; min-width: 0; box-sizing: border-box;
   position: sticky; top: calc(var(--subnav-h) + var(--main-gap));
 }
 /* keep the header's dropdowns painting above the checklist pane */
@@ -2424,7 +2518,7 @@ body.viewing-splash .app-subnav { display: none; }
 }
 .tb-left-spacer { flex: 1; min-width: 12px; }
 .tb-right {
-  width: 290px; flex: none; height: 100%;
+  width: var(--guide-w); flex: none; height: 100%;
   /* Chip and avatar are one unit: the chip takes every spare pixel (flex:1
      below) and the avatar rides right behind it, 12px away, always. Nothing in
      between can push them apart. */
@@ -4456,7 +4550,66 @@ body.viewing-splash .app-subnav { display: none; }
 .step-nav-finish:hover { background: #b184f5; color: #fff; border-color: #b184f5; }
 .step-nav-finish::after { display: none; }
 
-/* Submission "+ Add platform" → a simple list of available platforms. */
+/* ── THE ADD PLATFORM DROPDOWN ───────────────────────────────────────────────
+   Hangs off the sub-nav pill (.subnav-add-wrap, up beside .app-subtab) and is
+   the app's own dropdown, borrowed from .loc-dropdown rather than invented:
+   same #1c1c1c ground, same 1px --border-hover edge, same shadow, same
+   `min-width: 100%` + `width: max-content` pair — that pair is load-bearing
+   for the same reason it is there, since these rows carry a mark AND a name
+   and shrink-to-fit collapses to the floor the moment a row has two children.
+
+   RIGHT-ALIGNED, because its trigger is. `left: 0` would hang the menu off the
+   panel's right edge and out over the guide column.
+
+   It is the ONLY thing `visibility` could not have done: the list has to be in
+   the document in both states so opening costs no render (see toggleAddPlatform),
+   and `display: none` is what keeps a closed menu from reserving a box in a row
+   that is 66px tall. */
+.subnav-add-menu {
+  display: none;
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 100%; width: max-content; max-width: 320px;
+  padding: 6px;
+  background: #1c1c1c;
+  border: 1px solid var(--border-hover);
+  border-radius: 12px;
+  max-height: 340px; overflow-y: auto;
+  z-index: 300;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+}
+.subnav-add-wrap.is-open .subnav-add-menu { display: block; }
+/* THE MENU IS THE BOX, SO THE ROWS ARE NOT. `.add-plat-item` was drawn for a
+   full-width list sitting on the page, where each row needed its own fill and
+   edge to be an object at all; inside a bordered popover that is a box in a
+   box, which this app refuses everywhere else. The row keeps its layout and
+   gives up its paint — `.loc-dd-item`'s arrangement, reached by overriding
+   rather than by a second class, so the markup stays one thing. */
+.subnav-add-menu .add-plat-list { gap: 2px; }
+.subnav-add-menu .add-plat-item {
+  background: transparent; border-color: transparent;
+  border-radius: 8px; padding: 9px 10px;
+  font-size: 13px; color: var(--text-dim);
+}
+.subnav-add-menu .add-plat-item:not(.is-coming-soon):hover {
+  background: rgba(255, 255, 255, .06);
+  border-color: transparent;
+  color: var(--text);
+}
+.subnav-add-menu .add-plat-item.is-coming-soon:hover {
+  background: transparent; border-color: transparent;
+}
+/* `.add-plat-cta` is not hidden here, it is NOT EMITTED — the row used to end
+   in a violet "+ Add" and the menu does not print one, because every row adds
+   and the pill you pressed to open it already said the verb. Its rule is
+   deleted with its last call site rather than switched off in this scope; a
+   `display: none` here would have been a control waiting to come back. */
+.subnav-add-empty {
+  padding: 10px 10px 11px; max-width: 240px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* Submission "Add platform" → a simple list of available platforms. */
 .add-plat-list { display: flex; flex-direction: column; gap: 8px; }
 .add-plat-item {
   display: flex; align-items: center; gap: 12px; width: 100%;
@@ -4468,7 +4621,6 @@ body.viewing-splash .app-subnav { display: none; }
 .add-plat-item:hover { border-color: var(--purple); background: rgba(159, 104, 240, .06); }
 .add-plat-item svg, .add-plat-item img { width: 18px; height: 18px; flex: none; }
 .add-plat-name { flex: 1; }
-.add-plat-cta { font-size: 12px; font-weight: 700; color: var(--purple); }
 /* Coming soon (egs/psn/xbox/nintendo — see PLATFORMS.comingSoon, state.js):
    same dimmed/inert/locked treatment as Basic Info's Select Platforms grid
    (.ob-form .platform-tile:disabled + .ob-plat-lock, further below) restated
@@ -4488,26 +4640,12 @@ body.viewing-splash .app-subnav { display: none; }
   gap: 14px;
 }
 .dash-column .active-card { width: 100%; }
-/* The add banner and the picker it opens aren't cards — they span the row. */
-.dash-column > .dash-add-banner,
-.dash-column > .dash-add-picker { grid-column: 1 / -1; }
 .dash-add-head { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin-bottom: 14px; }
-
-/* Always-present "+ Add platform" banner + the picker it toggles open. */
-.dash-add-banner {
-  display: flex; align-items: center; justify-content: center; gap: 9px;
-  width: 100%; padding: 20px; border-radius: 12px; cursor: pointer;
-  background: transparent; border: 1.5px dashed var(--border-hover);
-  color: var(--text-dim); font-family: var(--mono); font-size: 14px; font-weight: 700;
-  letter-spacing: .02em; transition: border-color .15s, color .15s, background .15s;
-}
-.dash-add-banner:hover,
-.dash-add-banner.is-open {
-  border-color: var(--purple); color: var(--purple);
-  background: rgba(159, 104, 240, .06);
-}
-.dash-add-banner-plus { font-size: 19px; line-height: 1; }
-.dash-add-picker { margin-top: 2px; }
+/* `.dash-add-banner`, `.dash-add-banner-plus` and `.dash-add-picker` are GONE,
+   not left dormant — the dev bar's argument. The dashed banner and the inline
+   picker were the card grid's own door to "+ Add platform"; the sub-nav pill
+   is drawn above the split in both presentations, so that arm no longer needs
+   one and a rule nothing can reach is a control waiting to be switched back on. */
 
 /* Submission and Analysis have no sub-tabs — hide their title-bar chevrons. */
 #nav-dashboard .bar-nav-chev,
@@ -5075,7 +5213,10 @@ body.viewing-splash .app-subnav { display: none; }
   margin-bottom: 6px;
 }
 
-.dash-empty-desc { font-size: 13px; color: var(--text-faint); }
+/* `.dash-empty-desc` went with the inline picker's "every available platform is
+   already activated" line — the menu prints that in `.subnav-add-empty`, which
+   is sized for a popover rather than for a full-width column. Deleted with its
+   last call site, same reason as `.add-plat-cta`. */
 
 /* Active platform cards grid */
 .active-cards-grid {
@@ -23412,20 +23553,27 @@ body.sm-picker-open { overflow: hidden; }
    the joint between a tab and the pane, and the fold.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* FOUR TABS PLUS THE ADD TAB, IN WHATEVER WIDTH THE PANE HAS.
+/* FOUR TABS, IN WHATEVER WIDTH THE PANE HAS.
 
    A fixed 236px was right about tabs not resizing with how many siblings they
-   have, and wrong about the number: four of them plus the add tab overran the
-   content column and slid under the Shippy Guide. The width is derived instead
-   — the row, minus the add tab, minus the four gaps, over four — so it is still
-   STATIC with respect to platform count (one platform's tab is the same size as
-   each of four) and DYNAMIC with respect to the space actually available.
+   have, and wrong about the number: four of them overran the content column and
+   slid under the Shippy Guide. The width is derived instead — the row, minus
+   the gaps between four tabs, over four — so it is still STATIC with respect to
+   platform count (one platform's tab is the same size as each of four) and
+   DYNAMIC with respect to the space actually available.
+
+   THE ADD SQUARE'S 64px LANE WENT WITH THE SQUARE. `--sub-add-w` was subtracted
+   here to reserve room for `.sub-tab-add` at the end of the row, and the gap
+   count was 4 for the same reason — four tabs and an add tab is four gaps. With
+   the add control moved up into the sub-nav row there are four tabs and three
+   gaps, and the 64 belongs to nothing. Both terms are corrections rather than
+   tuning: leaving them would hold a lane open for a button that no longer
+   exists.
 
    Five or more platforms will overflow this row on purpose; a way to reach them
    is a separate decision and not one to pre-empt with a squeeze that would make
    four look wrong to buy room for a sixth. */
 .sub-tabs {
-  --sub-add-w: 64px;
   --sub-tab-gap: 8px;
   display: flex;
   align-items: stretch;
@@ -23445,7 +23593,7 @@ body.sm-picker-open { overflow: hidden; }
      platform resized every tab already on screen. A folder tab is a fixed
      thing; the strip gets longer, the tabs do not get thinner. */
   flex: none;
-  width: calc((100% - var(--sub-add-w) - 4 * var(--sub-tab-gap)) / 4);
+  width: calc((100% - 3 * var(--sub-tab-gap)) / 4);
   min-width: 0;
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, .08);
@@ -23580,43 +23728,12 @@ body.sm-picker-open { overflow: hidden; }
 }
 .sub-dash.is-done { background: #31DC80; }
 
-/* The add button is the tab strip's own square, and it wears the dashed edge
-   .dash-add-banner used to — same invitation, a quarter of the width. */
-/* IT IS A TAB, AND IT KEEPS A TAB'S SHAPE WHETHER OR NOT IT IS THE ONE OPEN.
-   Rounded at the top, square at the bottom, always — exactly like the four
-   platform tabs beside it. It went to an all-round rectangle for a version on
-   the grounds that square bottom corners looked odd sitting on the pane, and
-   that was solving the wrong problem: the oddity was that the shape CHANGED
-   with state. A tab that reshapes itself when selected is a different object
-   appearing in the same slot. Selection is colour and border here, the same as
-   everywhere else in this strip. */
-.sub-tab-add {
-  flex: none;
-  width: var(--sub-add-w, 64px);
-  align-self: stretch;
-  background: transparent;
-  border: 1.5px dashed rgba(255, 255, 255, .18);
-  border-radius: var(--panel-radius, 12px) var(--panel-radius, 12px) 0 0;
-  color: var(--text-faint);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  transition: border-color .12s, color .12s, background .12s;
-}
-.sub-tab-add:hover {
-  border-color: rgba(255, 255, 255, .34);
-  color: var(--text);
-  background: var(--surface-hover, rgba(255, 255, 255, .06));
-}
-/* Open: the violet it wears in the design, and no bottom edge — the same one
-   change a selected platform tab makes, which is what joins it to the pane. No
-   radius change, because the shape does not move. */
-.sub-tab-add.is-open {
-  background: var(--panel-2, var(--panel));
-  border-color: rgba(159, 104, 240, .55);
-  border-bottom-color: transparent;
-  color: var(--text);
-}
+/* THE ADD SQUARE HAS LEFT THE STRIP. `.sub-tab-add` was a dashed 64px tab at
+   the end of this row, and its three rules are deleted rather than left behind
+   for the dev bar's reason. Add platform is a selected sub-nav pill now, up
+   beside the word "Submission" — see `.subnav-add-wrap`. The strip is four
+   folder tabs and nothing else, which is also why the width formula above
+   stopped reserving a lane for it. */
 
 /* ── The pane ─────────────────────────────────────────────────────────────── */
 .sub-pane-wrap { position: relative; }

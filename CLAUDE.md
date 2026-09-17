@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.76** &rarr; next is **v6.77**.
+Current version: **v6.77** &rarr; next is **v6.78**.
 
 ---
 
@@ -1805,6 +1805,176 @@ apart, `smCardState(pid, 'accepted')` holds one, `smCardState(pid, 'off')`
 returns to the steps face. It writes the same state a real submit writes, so it
 is the real card, not a mock. These faces went a long time unexamined because
 reaching them took every step, an account, a track and a press.
+
+### Add platform is a selected sub-nav pill (v6.77)
+
+`buildSubnavAddPlatform()` (render.js), `.subnav-add-*` (style.css),
+`toggleAddPlatform` / `_subnavAddSolve` (app.js). Jaco: *"que reconviertas el
+add platform button, en un boton que sea exactamente igual que una pill
+seleccionada tipo ASSETS, o Distribution. Y que lo pongas en el panel central de
+contenido, alineado a la derecha y centrado verticalmente con la palabra
+submission. Y que al clicar, salga un desplegable que me permita elegir las
+plataformas. Si salgo, se comprime."*
+
+**IT IS `.app-subtab.is-on`, NOT A COPY OF IT.** "Exactamente igual" is a
+requirement a class satisfies by construction and a reproduction cannot: the
+fill, the white ink, the 10/18 padding, `--pill-radius` and the masked gradient
+stroke all come from that rule and from the shared `::after` selector list at
+the end of style.css. `.subnav-add` declares **no paint at all** — only
+`display: flex` and a gap, to seat the `+` beside the label. Diffed against a
+live `.app-subtab.is-on` on Game Details: **zero differences** across
+background, colour, padding, radius, border, font and position, and zero across
+the `::after`'s content, inset, padding, gradient and `mask-composite`.
+
+**THE WORD "SUBMISSION" IS THE SUB-NAV ROW, so the pill lives there.**
+`renderAppSubnav` prints `.app-subnav-title` into `#app-subnav`, a flex row
+already at `align-items: center` — which makes "centrado verticalmente con la
+palabra submission" a fact of the layout rather than a number anyone has to keep
+true. Measured 0.00 at every width tested. Anywhere else (inside `#dashboard`,
+say) it would be a different box on a different line and would need an offset to
+fake it.
+
+**THE RIGHT MARGIN IS SOLVED, AND A CONSTANT WAS WRONG IN TWO REAL STATES.**
+`.app-subnav` is `.app-split`'s box — it spans all three columns — so the
+content panel's right edge is the row's minus whatever the guide is taking. It
+shipped as `calc(var(--guide-w) + var(--split-gap))` and measured **−306**
+below 1100px, where `.app-split` wraps and the guide drops UNDER the content,
+and would have been **238 out** with `.app-guide.is-collapsed` (52px). Three
+arrangements; a constant is right in one.
+
+`_subnavAddSolve` (app.js) reads the sub-nav row's padding box against
+`#dashboard`'s and writes the difference to `--subnav-add-gap` — **content box
+to content box, so nothing in it knows about `--content-inset`, the split's gap
+or the guide's width**. Same shape as `_sizeLangSearchList` asking Basic Info
+for its height rather than carrying a 463. The CSS keeps the three-column sum
+as the `var()` FALLBACK rather than 0, so a cold first paint is already right in
+the ordinary case.
+
+- **The `ResizeObserver` is on `#dashboard` itself**, which is the one box that
+  moves in every case at issue — window resize, guide collapse, the 1100px wrap
+  — and, the case a solve-on-render alone gets wrong, **the view being SHOWN**.
+  Arriving at Submission renders the row before the panel has a box, so the
+  solve correctly bails and nothing re-runs it; measured, the pill sat 306px
+  inside until the next unrelated repaint. It cannot loop: what it writes is a
+  margin inside the sub-nav row and nothing there can change the panel's width.
+- Measured in all three: gap **306.00** three-column, **68.00** collapsed
+  (52 + 16), **0.00** wrapped — `rightDelta` **0.00** in every one, with the
+  pill 40.5 tall throughout.
+
+**THE DROPDOWN IS THE APP'S OWN, AND IT DOES NOT RENDER.** `.subnav-add-menu`
+takes `.loc-dropdown`'s ground, edge, shadow and its `min-width: 100%` +
+`width: max-content` pair — that pair is load-bearing for the same reason it is
+there, since a row carrying a mark AND a name collapses to the floor under
+shrink-to-fit. Right-aligned, because its trigger is.
+
+Opening and closing is `toggleAddPlatform`, and it **touches the DOM, it does
+not render** — the `gcalWaitHover` / `_sppFocusHere` rule, with a sharper reason
+here: rendering would rebuild the pane underneath and throw away an expanded
+step for the sake of showing four platforms. The markup is emitted in both
+states, so a class is the whole of it. `state.submission.addOpen` is still
+written, for `_locsToggleSettingsMenu`'s reason: something else may render while
+it is open (`activatePlatform` does), and a menu whose only record is a DOM
+class would vanish on that repaint.
+
+`closeAllDropdowns` clears both the flag and the class, which is what makes *"si
+salgo, se comprime"* true for free — that function is already bound to document
+click. `toggleAddPlatform` therefore has to `stopPropagation`, or the press that
+opens the menu closes it on the same click; same shape as `toggleSwSelect`.
+
+**THE SCRIM ANSWERS TWO ASKS AT ONCE.** Jaco, mid-build: *"quizás podría
+oscurecer el resto de plataformas mientras está el menú desplegado, y si clico
+fuera, solo sal, no vayas al contenido sobre el que haya clicado."* Measured
+before it existed, four clicks aimed at dismissing the menu activated three
+platforms and opened a card between them — the dismissal was also a press on
+whatever was underneath.
+
+**A dim alone would have left that intact and a swallow alone would have been an
+invisible dead zone over a page that still looked live.** One object states it
+once: while the menu is up, the page is not what you are pointing at.
+`.subnav-add-wrap::before` — a pseudo-element, so there is no node to insert,
+position and remove (the crop stage's 9999px shadow argument, with the
+difference that decides it here: a box-shadow is not hit-testable and this has
+to catch the click). `rgba(0,0,0,.45)` over .25s is `.nav-dim`'s, the page dim
+this app already wrote for a drawer over content — **borrowed rather than
+REVIVED**, since that rule has no element in the document any more and reaching
+for a dead class to get at a number is switching a mechanism back on.
+
+The pill takes `z-index: 301` above the scrim's 299: dimming the one control the
+menu belongs to would say the menu came from nowhere, and it has to stay
+pressable because pressing it again is how you close it. Verified: a real click
+on a step row 120px below the menu targets `subnav-add-wrap`, the menu closes,
+`openStep` is unchanged, `stepModal` is empty and no platform is activated.
+
+**LIT ONLY WHILE IT IS THE ONLY THING TO DO.** Jaco: *"solo estar tan luminoso
+si no hay nada seleccionado, si no, podría estar un poco más sutil?"* The answer
+costs no new values, because the object already has two states and this is what
+they mean: `.app-subtab.is-on` is the selected pill, `.app-subtab` bare is the
+same pill unselected — transparent, white 50% ink, hovering to the same fill. So
+"subtle" is not a third treatment, it is this control in its other state, and
+"exactamente igual que una pill" holds in both.
+
+Which one is **a fact about the page, not about this button**: with no platform
+activated the tab has nothing on it and adding one is the only act available,
+which is this file's standing rule — *the mark is for what is outstanding*. Once
+there are cards to read, a full selected pill would make the invitation the
+loudest thing in a band whose subject is the word "Submission". Being OPEN
+deliberately does not light it: the scrim already makes it the only thing at
+full strength, and a fill arriving with the menu would be a second mark saying
+what the dimming says — and would have to be a new CSS state, since opening does
+not render.
+
+**THE `+` DECIDES NOTHING ABOUT THE PILL'S HEIGHT.** `line-height: 1` on a
+16px glyph whose own line box is shorter than the label's, so the label goes on
+deciding: measured **40.5 with and without**, and the pill is 40.5 in the empty
+state, the filled state and the open state alike.
+
+**IT REPLACED TWO CONTROLS AND THREE DELETIONS FOLLOWED.** The `+` square at the
+end of the platform strip (`.sub-tab-add`) and the picker that REPLACED the pane
+while it was open — in BOTH arms, plus `.dash-add-banner`, the door the card
+grid had been given when it had none. One control in the sub-nav row serves both
+presentations, so the layout flag no longer has to carry an add affordance at
+all. Gone rather than dormant, the dev bar's argument: `.sub-tab-add`'s three
+rules, `.dash-add-banner`'s three, `.dash-add-picker`, `.dash-add-banner-plus`,
+and `.add-plat-cta` / `.dash-empty-desc` with their last call sites.
+
+Four things that had to move with them, each a fact that had been true of the
+old picker and stopped being true of a dropdown:
+
+- **`--sub-add-w` and the gap count.** `.sub-tab`'s width was
+  `(100% − 64px − 4 × gap) / 4` — four tabs and an add tab is four gaps. It is
+  `(100% − 3 × gap) / 4` now: measured, four tabs at **176.5** summing with
+  their gaps to the strip's 730 exactly, last tab's right edge on the strip's.
+- **The selected tab stays lit.** `buildSubmissionTabs` read
+  `addOpen ? null : submissionTab()` on the argument that "with the picker open
+  there IS no pane, and a lit tab over an empty surface claims a platform is
+  showing when the add list is". True of a picker that replaced the pane; the
+  pane is still there behind a dropdown, so going dark would be the strip
+  disagreeing with the surface underneath it.
+- **`buildSubmissionPane`'s early return** (`if (addOpen) return ''`) went for
+  the same reason. Blanking the page to ask a one-press question is a cost that
+  no longer has to be paid.
+- **`toggleAddPlatform` stopped clearing the tab, the settings face and every
+  open step.** All three existed so that closing the picker "does not spring the
+  old pane back open with a half-read step inside it". A dropdown takes nothing
+  away, so there is nothing to put back. `selectPlatformTab`'s
+  `&& !state.submission.addOpen` went with them — a press on the tab you are
+  already on would otherwise scroll the content to top for a tab you never left.
+
+`activatePlatform` and `deactivatePlatform` both gained a `renderAppSubnav()`,
+because the menu lives in a row `renderDashboard` does not touch — the trap
+`_doFinalSubmit` and `setLaunchDate` are already written under for the guide
+column. Without it the platform you just added stays listed as available.
+
+**`--guide-w` is a token now**, 290 having been a literal in `.app-guide` and in
+the header's `.tb-right`; a third consumer made it worth naming.
+
+Measured end to end at three widths and in both arms: pill right edge on the
+panel's to **0.00**, vertical centre on "Submission" to **0.00**, zero style
+differences against a real selected sub-tab, a real click opening the menu
+(right-aligned to the pill to 0.00, 6px under it, z 300 over a scrim at 299), a
+real click on a menu row activating that platform and selecting its tab, a real
+click outside closing the menu and touching nothing, four tabs and no add square
+in the inline arm, and `lit` true with zero platforms and false with any.
 
 ### The guide's other face is the month
 
@@ -8061,7 +8231,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.76** → next is **v6.77**. (v6.29 – v6.31 are Mark's
+Current version: **v6.77** → next is **v6.78**. (v6.29 – v6.31 are Mark's
 Distribution work, and **v6.42 and v6.48 are Adam's** — shipped in parallel and
 touching none of this.)
 
@@ -8311,6 +8481,30 @@ Mark was not shipping that day, which is the check that made 6.39 free.
 v6.60, v6.62 …) and are deliberately NOT rewritten.** They are the order the
 decisions were made in, which is what makes them readable as a history; all of
 them shipped together in v6.39. Don't go looking for a live v6.55.
+
+**AND THE ADD-PLATFORM BATCH COLLAPSED 6.84 → v6.77, WHICH IS THE EIGHTH TIME.**
+Jaco: *"can you push this to 6.77?"*
+
+**Live is v6.76, read the cheap way this section now prescribes** — off
+`.ship-message.sent` sitting on disk beside an unconsumed `.ship-message`,
+rather than off a fetch that can be served from a cache. So 6.77 is the next
+free number and the key still only goes UP, which is the one thing that makes a
+renumber safe.
+
+The work was MEASURED at 6.84 because 6.77 – 6.80 were burnt in this pane while
+the previous batch was being tested (a number this session has already served is
+not a cache-bust) and the add-platform work needed four more loads to see the
+CSS and the JS land. **None of those eight has bytes behind it**, so shipping at
+6.77 costs nothing: a cold browser has never seen any of them, and what is
+poisoned is this pane only — anything further that needs measuring here has to
+start above 6.84.
+
+**The section heading was relabelled with it**, against the usual rule, for the
+reason the v6.76 renumber states: 6.81 – 6.84 were not decisions taken across
+sessions, they were four cache keys inside one afternoon on one surface. Keep
+the labels when they are a history; collapse them when they are only a cache
+key. 6.77 – 6.83 are gaps with nothing behind them, which is the cosmetic cost
+this section opens with.
 
 Update the version in **three places**:
 1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)

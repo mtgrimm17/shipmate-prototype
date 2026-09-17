@@ -4938,6 +4938,101 @@ function renderSubnav() {
    is only made invisible (.is-off -> visibility:hidden), because dropping the
    element would collapse its box and shove the rest of the row sideways every
    time the selection moved. */
+/* ── ADD PLATFORM IS A SELECTED SUB-NAV PILL, IN THE SUB-NAV ROW ─────────────
+   Jaco: "que reconviertas el add platform button en un botón que sea
+   exactamente igual que una pill seleccionada tipo ASSETS o Distribution, y
+   que lo pongas en el panel central de contenido, alineado a la derecha y
+   centrado verticalmente con la palabra submission."
+
+   THE WORD "SUBMISSION" IS THIS ROW, so the pill has to live here and nowhere
+   else. `.app-subnav-title` is emitted by this function into `#app-subnav`, a
+   flex row with `align-items: center` — which is what makes "vertically
+   centred with the word" a fact of the layout rather than a number anybody has
+   to keep true. Anywhere else (inside `#dashboard`, say) it would be in a
+   different box on a different line and would need an offset to fake it.
+
+   IT IS LITERALLY `.app-subtab.is-on`, not a copy of it. "Exactamente igual"
+   is a requirement the class satisfies by construction: the fill
+   (`--chip-fill`), the white label, the 10/18 padding, `--pill-radius` and —
+   the part that matters most — the masked gradient stroke, which comes from
+   the shared `::after` selector list at the end of style.css rather than being
+   redrawn here. That list's own note is explicit that joining it is the only
+   way "the same stroke" stays true after the next change. So this control
+   cannot drift from Distribution and Assets: it IS them.
+
+   The one thing `.subnav-add-wrap` adds is WHERE — `margin-left: auto` plus a
+   right margin of exactly the guide column, so the pill's border box lands on
+   the content panel's right edge, the mirror of what the first sub-tab's
+   border box does on its left edge. See its rule in style.css.
+
+   It replaces two controls rather than joining them: the `+` square at the end
+   of the platform strip and the picker that REPLACED the pane when it opened.
+   A dropdown is the honest shape for "choose one of these" — it does not cost
+   you the page you were reading to ask. */
+function buildSubnavAddPlatform() {
+  /* The same `inactive` derivation renderDashboard used: everything with a
+     PLATFORMS entry that is not already on and not hidden. HIDDEN_PLATFORMS is
+     filtered here (never offer one) where activePlatforms is not (a hidden one
+     already on keeps its tab) — same asymmetry as before. */
+  const inactive = PLATFORM_ORDER.filter(pid =>
+    PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
+  const open = !!(state.submission && state.submission.addOpen);
+  /* COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo) get the same dimmed, inert,
+     locked row Basic Info's Select Platforms grid gives their tiles. */
+  const lockSVG = `<svg class="add-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
+  const rows = inactive.map(pid => {
+    const label = (PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
+    /* THE MEASURED MARKS, like everywhere else — smMarkFor handles the id
+       aliases (egs→epic, macos→ios) and returns null for the two platforms
+       with no measured art yet (Xbox, Nintendo), which fall through to
+       platformIcon()'s own monochrome path. */
+    const icon = smMarkFor(pid, 18)
+      || ((typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '');
+    if (COMING_SOON_PLATFORMS.has(pid)) {
+      return `<button type="button" class="add-plat-item is-coming-soon" disabled title="Coming soon">
+        ${icon}<span class="add-plat-name">${label}</span>${lockSVG}
+      </button>`;
+    }
+    return `<button type="button" class="add-plat-item" onclick="activatePlatform('${pid}')">
+      ${icon}<span class="add-plat-name">${label}</span>
+    </button>`;
+  }).join('');
+  const body = inactive.length
+    ? `<div class="add-plat-list">${rows}</div>`
+    : `<div class="subnav-add-empty">${t('sub.addPlatform.none') || 'Every available platform is already activated.'}</div>`;
+  const label = t('sub.addPlatform') || 'Add platform';
+  /* LIT ONLY WHILE IT IS THE ONLY THING TO DO. Jaco: "solo estar tan luminoso
+     si no hay nada seleccionado, si no, podría estar un poco más sutil".
+
+     The answer costs no new values, because the object already has two states
+     and this is what they mean. `.app-subtab.is-on` is the app's SELECTED pill;
+     `.app-subtab` bare is the same pill unselected — transparent, white 50%
+     ink, hovering to the same fill. So "subtle" is not a third treatment, it is
+     this control in its other state, and "exactamente igual que una pill" holds
+     in both.
+
+     WHICH ONE IS A FACT ABOUT THE PAGE, not about this button: with no platform
+     activated the Submission tab has nothing on it and adding one is the only
+     act available, which is the file's own standing rule — THE MARK IS FOR WHAT
+     IS OUTSTANDING. Once there are cards to read, the invitation is no longer
+     the point and a full selected pill would make it the loudest thing in a
+     band whose subject is the word "Submission".
+
+     Being OPEN deliberately does not light it. The scrim already makes it the
+     only thing at full strength on the page, and a fill that arrives with the
+     menu would be a second mark saying what the dimming says — and would have
+     to be a new CSS state, since opening does not render. */
+  const lit = state.activePlatforms.size === 0;
+  return `
+    <div class="subnav-add-wrap${open ? ' is-open' : ''}" id="subnav-add-wrap">
+      <button class="app-subtab${lit ? ' is-on' : ''} subnav-add" type="button" id="subnav-add-btn"
+              onclick="toggleAddPlatform(event)"
+              aria-haspopup="true" aria-expanded="${open}"
+              title="${label}" aria-label="${label}"><span class="subnav-add-plus" aria-hidden="true">+</span>${label}</button>
+      <div class="subnav-add-menu" role="menu">${body}</div>
+    </div>`;
+}
+
 function renderAppSubnav() {
   const el = document.getElementById('app-subnav');
   if (!el) return;
@@ -4959,7 +5054,21 @@ function renderAppSubnav() {
       || CAL_VIEW_NAME[state.activeView] || '';
     const curSub = list.find(s => s.id === data.cur);
     const text = (curSub ? (t('subtab.' + curSub.id) || curSub.label) : '') || tabLabel;
-    el.innerHTML = text ? `<span class="app-subnav-title">${text}</span>` : '';
+    /* Submission is the one tab with something to put at the other end of this
+       row — see buildSubnavAddPlatform. Emitted here rather than beside the
+       list branch below because Submission has no sub-sections and so always
+       lands in title mode; the Ctrl+D debug toggle drops every tab in here
+       too, which is why the test is the VIEW and not the mode. */
+    const addPill = state.activeView === 'dashboard' ? buildSubnavAddPlatform() : '';
+    el.innerHTML = (text ? `<span class="app-subnav-title">${text}</span>` : '') + addPill;
+    /* The pill's right margin is measured against the content panel — see
+       _subnavAddSolve. Deferred a frame because #dashboard is laid out by
+       renderDashboard, which on a view change has not necessarily run yet, and
+       a rect read before layout is the "flush first" trap this file already
+       pays for on scroll restores. Guarded: render.js loads before app.js. */
+    if (addPill && typeof _subnavAddSolve === 'function') {
+      requestAnimationFrame(() => { _subnavAddArm(); _subnavAddSolve(); });
+    }
     return;
   }
   el.innerHTML = list.map((s, i) => {
@@ -5113,8 +5222,6 @@ function renderDashboard() {
   // just below); if one were somehow already active on a project (state
   // predating the hide), its card stays right where it already is.
   const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
-  const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
-  const addOpen  = !!(state.submission && state.submission.addOpen);
 
   /* ONE platform's pane, not every platform's card. buildActiveCard and the
      four builders under it are still here and still correct — they are what
@@ -5122,48 +5229,16 @@ function renderDashboard() {
      the Submission tab no longer draws a grid of them. See buildSubmissionTabs. */
   const tab = submissionTab();
 
-  // Always-present "+ Add platform" banner; clicking it reveals the picker.
-  // COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo — declared further below,
-  // already the source of truth two other call sites filter against) get the
-  // same treatment as Epic/PlayStation's locked tiles in Basic Info's Select
-  // Platforms grid (buildObPlatTilesHTML): greyed out, "+ Add" swapped for a
-  // lock icon, disabled (no onclick), "Coming soon" on hover via title.
-  const addPlatLockSVG = `<svg class="add-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
-  const picker = addOpen ? `
-    <div class="dash-add-picker">
-      ${inactive.length
-        ? `<div class="add-plat-list">${inactive.map(pid => {
-            const label = (PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
-            /* THE MEASURED MARKS, like everywhere else. This picker was still
-               on platformIcon(), which returns the brand PNGs from
-               Assets/Platform_Icons — a .webp for Google Play, a .png for
-               Steam — whitened by a CSS filter. Those are the files the tiles
-               and the card headers stopped using when the marks were reframed
-               onto one 39×37 canvas, so this list was the last place showing
-               the old artwork: different sizes, different optical weights, and
-               Epic's export dragging its invisible artboard rect along.
-               smMarkFor handles the id aliases (egs→epic, macos→ios) and
-               returns null for the two platforms with no measured art yet
-               (Xbox, Nintendo), which fall through to platformIcon() — now
-               their own monochrome PLATFORM_ICONS SVG path too (see
-               PLATFORM_ASSET's own note, top of file), not a raster PNG. */
-            const icon  = smMarkFor(pid, 18)
-              || ((typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '');
-            if (COMING_SOON_PLATFORMS.has(pid)) {
-              return `<button type="button" class="add-plat-item is-coming-soon" disabled title="Coming soon">
-                ${icon}
-                <span class="add-plat-name">${label}</span>
-                ${addPlatLockSVG}
-              </button>`;
-            }
-            return `<button class="add-plat-item" onclick="activatePlatform('${pid}')">
-              ${icon}
-              <span class="add-plat-name">${label}</span>
-              <span class="add-plat-cta">+ Add</span>
-            </button>`;
-          }).join('')}</div>`
-        : `<div class="dash-empty-desc">Every available platform is already activated.</div>`}
-    </div>` : '';
+  /* THE ADD CONTROL IS NOT DRAWN HERE ANY MORE — see buildSubnavAddPlatform.
+     It moved up into the sub-nav row, beside the word "Submission", as a
+     selected sub-nav pill with a dropdown hanging off it. What left this
+     function is the `+` square at the end of the strip, the dashed banner the
+     modal arm carried, and the picker BOTH arms drew inline — a list that took
+     the pane's place while it was open, which is what the dropdown replaces.
+
+     One control for both arms rather than one each: the sub-nav row is drawn
+     above the split in every presentation, so the flag below no longer has to
+     carry an add affordance of its own. */
 
   /* THE FLAG NOW COVERS THE PRESENTATION, NOT JUST THE ROW'S CLICK.
 
@@ -5188,52 +5263,24 @@ function renderDashboard() {
      untouched by construction — see the hook in state.js. This is a way to LOOK
      at the other one, which is the whole point of having a flag.
 
-     The picker rides along in both arms: "+ Add platform" is not part of either
-     presentation's argument and removing it from one would make that arm a
-     worse version of the app rather than an older one. */
+     THE ADD CONTROL IS NO LONGER EITHER ARM'S PROBLEM. This paragraph used to
+     read "the picker rides along in both arms… removing it from one would make
+     that arm a worse version of the app rather than an older one", and it was
+     solving a problem that has since gone away: the pill lives in the sub-nav
+     row, which is drawn above the split in every presentation, so neither arm
+     has to carry one. `.dash-add-banner` — the door this arm was given when it
+     had none — goes with it. */
   const modalMode = state.submission?.layout === 'modal';
-
-  /* AND THE GRID NEEDS ITS OWN DOOR TO THE PICKER.
-
-     `addOpen` is toggled by `toggleAddPlatform()`, and in the tab-strip
-     presentation the only thing that calls it is the `+` square at the end of
-     the strip (`.sub-tab-add`, in buildSubmissionTabs). This arm does not draw
-     the strip — so without a control of its own, `addOpen` could never become
-     true here and "+ Add platform" was simply unreachable, which is exactly how
-     it was reported.
-
-     The banner is the same story as `dash-column` one comment up: `.dash-add-banner`
-     has SIX live rules in style.css and zero uses in this file, so what was
-     deleted was the markup and not the design. Reinstated verbatim against
-     those rules — the dashed edge, the `is-open` state, the `+` in its own span
-     because the rule spaces two flex children by 9px. Mark's own note beside
-     `.sub-tab-add` names it as the thing that square replaced: "the dashed edge
-     .dash-add-banner used to — same invitation, a quarter of the width."
-
-     It sits AFTER the cards, which is a judgement rather than a recovered fact:
-     the markup that would have said so is gone, and the CSS only pins it to the
-     full width of the grid (`grid-column: 1 / -1`), not to an end. Cards first
-     then "add another" is the ordinary shape of an add affordance in a grid. If
-     it belongs above, it is a one-line move. */
-  const addBanner = `
-    <button class="dash-add-banner${addOpen ? ' is-open' : ''}" type="button"
-            onclick="toggleAddPlatform()" aria-expanded="${addOpen}"
-            title="Add platform" aria-label="Add platform">
-      <span class="dash-add-banner-plus">+</span>Add platform
-    </button>`;
 
   el.innerHTML = modalMode ? `
     <div class="sec-solo">
       <div class="dash-column">
         ${active.map(pid => buildActiveCard(pid)).join('')}
-        ${addBanner}
-        ${picker}
       </div>
     </div>` : `
     <div class="sec-solo">
       ${buildSubmissionTabs(active)}
       <div class="sub-pane-wrap">
-        ${picker}
         ${buildSubmissionPane(tab)}
       </div>
     </div>`;
@@ -5261,13 +5308,14 @@ function renderDashboard() {
    trap the guide's day-panel rows hit — see "Treat the panel as the only
    surface there is" in CLAUDE.md. role/tabindex/aria put the semantics back. */
 function buildSubmissionTabs(active) {
-  /* NOTHING IS LIT WHILE THE PICKER IS UP. submissionTab() falls back to the
-     first active platform on every read, which is what stops the pane ever
-     going blank — but with the picker open there IS no pane, and a lit tab over
-     an empty surface claims a platform is showing when the add list is. The
-     fallback is right for the pane and wrong for the strip, so the strip asks
-     the raw value here rather than the healed one. */
-  const sel = state.submission?.addOpen ? null : submissionTab();
+  /* THE SELECTED TAB STAYS LIT WHILE THE ADD LIST IS UP, and it did not used
+     to. This read `addOpen ? null : submissionTab()` on the argument that "with
+     the picker open there IS no pane, and a lit tab over an empty surface
+     claims a platform is showing when the add list is" — true of a picker that
+     REPLACED the pane, and false of the dropdown that replaced it. The pane is
+     still there, still that platform's, still being read behind the menu; going
+     dark would be the strip disagreeing with the surface underneath it. */
+  const sel = submissionTab();
   const tabs = active.map(pid => {
     const isOn = pid === sel;
     /* THE GEAR AND THE POWER RIDE THE SELECTED TAB ONLY. They act on one
@@ -5312,9 +5360,6 @@ function buildSubmissionTabs(active) {
   return `
     <div class="sub-tabs" role="tablist">
       ${tabs}
-      <button class="sub-tab-add${state.submission?.addOpen ? ' is-open' : ''}" type="button"
-              onclick="toggleAddPlatform()"
-              title="Add platform" aria-label="Add platform">+</button>
     </div>`;
 }
 
@@ -5358,13 +5403,16 @@ function _subTabDashes(pid) {
    that id. Renaming it here would have meant rewriting five handlers to gain
    nothing. */
 function buildSubmissionPane(pid) {
-  /* THE PICKER REPLACES THE PANE, it does not sit on top of it. Pressing "+"
-     is a question about which platform to add, and leaving the platform you
-     were filling in expanded underneath made the picker read as a popover over
-     work you were still doing — two surfaces asking for attention, one of them
-     stale. Collapsing everything is what makes the press feel like a move to a
-     different place rather than an interruption. */
-  if (state.submission?.addOpen) return '';
+  /* THE ADD LIST NO LONGER COSTS YOU THIS PANE. There was an early return
+     here, on the argument that "leaving the platform you were filling in
+     expanded underneath made the picker read as a popover over work you were
+     still doing". It was right about the object and the object changed: that
+     picker was a full-width list taking the pane's place in the column, so it
+     had to be one or the other. The add control is now a pill in the sub-nav
+     row with a real dropdown under it — small, above everything, and gone the
+     moment you look away — so "a popover over work you were still doing" is
+     exactly what it is meant to be, and blanking the page to ask a one-press
+     question is the cost that no longer has to be paid. */
   if (!pid) {
     return `<div class="sub-pane-empty">No platforms yet — add one to start a submission.</div>`;
   }

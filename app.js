@@ -298,22 +298,101 @@ if (document.fonts?.ready) {
 function perfSetPeriod(id) { state.performance.period = id; renderPerformance(); }
 /* §6 — Analysis section folders + Submission platform folders */
 function perfSetSection(id) { state.performance.section = id; renderPerformance(); renderSubnav(); }
-/* Submission: toggle the "+ Add platform" picker at the bottom of the column. */
-/* OPENING THE PICKER CLOSES EVERYTHING ELSE. The pane it replaces is
-   suppressed in buildSubmissionPane; what has to happen HERE is the state
-   behind it — no tab lit, no section expanded, no settings face — so that
-   closing the picker again does not spring the old pane back open with a
-   half-read step inside it. Adding a platform (activatePlatform) is what
-   selects the next tab, so the strip is never left with nothing chosen for
-   longer than the picker is up. */
-function toggleAddPlatform() {
-  state.submission.addOpen = !state.submission.addOpen;
-  if (state.submission.addOpen) {
-    state.submission.tab      = null;
-    state.submission.settings = null;
-    state.submission.openStep = {};
+/* Submission: the "Add platform" dropdown hanging off the sub-nav pill.
+
+   IT TOUCHES THE DOM, IT DOES NOT RENDER — and that is a requirement rather
+   than an optimisation. Opening a menu is not a state change about the
+   submission; rendering here would rebuild the pane underneath it, which on
+   this tab means throwing away an expanded step and its scroll for the sake of
+   showing a list of four platforms. Same rule as gcalWaitHover and
+   _sppFocusHere. The MARKUP is already in the document (buildSubnavAddPlatform
+   emits the menu in both states), so a class is the whole of it.
+
+   `state.submission.addOpen` is still written, for the reason
+   _locsToggleSettingsMenu writes its flag: nothing renders on open or close,
+   but something else might render WHILE it is open (activatePlatform does),
+   and a menu whose only record is a DOM class would vanish on that repaint —
+   or, worse, be re-emitted open after it had been dismissed.
+
+   THIS IS ALSO WHAT USED TO BLANK THE PAGE. The old picker replaced the pane,
+   so this function cleared the tab, the settings face and every open step so
+   that closing it again "does not spring the old pane back open with a
+   half-read step inside it". A dropdown takes nothing away, so there is
+   nothing to put back and none of those three lines has a job any more.
+
+   The event is required: closeAllDropdowns is bound to document click (see the
+   listener at the bottom of this file), so without stopping propagation the
+   press that opens this menu would immediately close it again. Same shape as
+   toggleSwSelect. */
+/* ── THE PILL'S RIGHT MARGIN IS SOLVED, NOT TYPED ────────────────────────────
+   `.subnav-add-wrap` has to put the pill's border box on the CONTENT panel's
+   right edge, and the sub-nav row's own box reaches past it — the row is
+   `.app-split`'s width, which spans all three columns. The distance between
+   the two is whatever the guide column is currently taking.
+
+   IT SHIPPED AS `calc(var(--guide-w) + var(--split-gap))` AND THAT IS WRONG IN
+   TWO REAL STATES, both measured: below 1100px `.app-split` wraps and the
+   guide drops UNDER the content, so the lane is 0 and the pill sat 306px
+   inside the panel; and `.app-guide.is-collapsed` is 52px, which would have
+   left it 238 out. Three arrangements, and a constant can only be right in one
+   of them. The CSS could enumerate all three — a media query plus a
+   `body:has(#app-guide.is-collapsed)` — and that restates the 1100 breakpoint
+   and the 52 in a second place, which is how two copies of a number start to
+   disagree. This asks the layout instead, the way _sizeLangSearchList asks
+   Basic Info for its height rather than carrying a 463.
+
+   BOTH READINGS ARE CONTENT-BOX TO CONTENT-BOX, so nothing here knows about
+   --content-inset, the split's gap or the guide's width: the row's padding box
+   against the panel's, and the difference is the answer by definition. Add a
+   fourth column tomorrow and this still lands.
+
+   The CSS keeps the three-column sum as its FALLBACK rather than 0, so the
+   first paint of a cold load is already correct in the ordinary case and the
+   solve only ever confirms it. */
+let _subnavAddGapLast = null;
+let _subnavAddArmed = false;
+function _subnavAddSolve() {
+  const row   = document.getElementById('app-subnav');
+  const panel = document.getElementById('dashboard');
+  if (!row || !panel || !document.getElementById('subnav-add-wrap')) return;
+  const pr = panel.getBoundingClientRect();
+  if (!pr.width) return;   // the panel is hidden — nothing to align to
+  const rowRight   = row.getBoundingClientRect().right - parseFloat(getComputedStyle(row).paddingRight);
+  const panelRight = pr.right - parseFloat(getComputedStyle(panel).paddingRight);
+  const gap = Math.max(0, rowRight - panelRight);
+  if (_subnavAddGapLast !== null && Math.abs(gap - _subnavAddGapLast) < 0.5) return;
+  _subnavAddGapLast = gap;
+  document.documentElement.style.setProperty('--subnav-add-gap', gap.toFixed(2) + 'px');
+}
+/* Armed ONCE on `#dashboard` itself, which is static markup and is the one box
+   that moves in every case at issue: a window resize, the guide collapsing, the
+   1100px wrap — and, the case a solve-on-render alone gets wrong, the view
+   being SHOWN. Arriving at Submission renders the sub-nav row before the panel
+   has a box (`.hidden` until the view switch lands), so the solve correctly
+   bails and there is nothing left to re-run it; measured, the pill sat 306px
+   inside the panel until the next unrelated repaint. The observer fires on the
+   0 → N transition and closes that by itself.
+
+   Observing what you measure would normally risk a loop. It cannot here: what
+   this writes is a margin on an item inside the sub-nav row, and nothing in
+   that row can change the content panel's width. */
+function _subnavAddArm() {
+  if (_subnavAddArmed || typeof ResizeObserver !== 'function') return;
+  const panel = document.getElementById('dashboard');
+  if (!panel) return;
+  _subnavAddArmed = true;
+  new ResizeObserver(() => _subnavAddSolve()).observe(panel);
+}
+
+function toggleAddPlatform(event) {
+  if (event) event.stopPropagation();
+  const wasOpen = !!(state.submission && state.submission.addOpen);
+  closeAllDropdowns();
+  if (!wasOpen) {
+    state.submission.addOpen = true;
+    document.getElementById('subnav-add-wrap')?.classList.add('is-open');
+    document.getElementById('subnav-add-btn')?.setAttribute('aria-expanded', 'true');
   }
-  renderDashboard();
 }
 
 /* ═══ THE SUBMISSION PANE (v6.29) ════════════════════════════════════════════
@@ -325,16 +404,18 @@ function toggleAddPlatform() {
 
 function selectPlatformTab(pid) {
   if (!state.activePlatforms.has(pid)) return;
-  if (state.submission.tab === pid && !state.submission.addOpen) return;   // SET, not toggle — see setGuideFace
+  /* SET, not toggle — see setGuideFace. The `&& !addOpen` this carried was for
+     the picker that blanked the pane: pressing the tab you were already on had
+     to be able to bring it back. A dropdown never took it away, and the press
+     closes the menu on its own through closeAllDropdowns, so re-rendering here
+     would be a scroll-to-top for a tab you never left. */
+  if (state.submission.tab === pid) return;
   state.submission.tab = pid;
   state.stepModal = null;
   /* Settings belong to the platform you were on. Moving to another tab and
      finding its steps replaced by an account face you opened somewhere else
      is the pane remembering a detour you had already left. */
   state.submission.settings = null;
-  /* The picker is about "which platform do I add", which is not the question
-     you are asking the instant you pick one to work on. */
-  state.submission.addOpen = false;
   scrollContentToTop();
   renderDashboard();
 }
@@ -6631,6 +6712,11 @@ function activatePlatform(platformId) {
   state.submission.tab     = platformId;
   state.submission.addOpen = false;
   renderDashboard();
+  /* The add menu lives in the sub-nav row, which renderDashboard() does not
+     touch — the same trap _doFinalSubmit and setLaunchDate are both written
+     under for the guide column. Without this the platform you just added stays
+     listed as available, and the menu redraws open next time. */
+  if (typeof renderAppSubnav === 'function') renderAppSubnav();
   // Shippy's platform item lives in the Details view, which renderDashboard()
   // never touches. Without this the checklist stays stale until something
   // else on the Details tab happens to fire a recalculation.
@@ -6651,6 +6737,9 @@ function deactivatePlatform(platformId) {
   if (state.submission?.tab === platformId) state.submission.tab = null;
   if (state.submission?.openStep) delete state.submission.openStep[platformId];
   renderDashboard();
+  // A platform switched off becomes available again, so the add menu's list
+  // has changed — same reason as activatePlatform's own call.
+  if (typeof renderAppSubnav === 'function') renderAppSubnav();
   updateObSectionStates();   // same reason as activatePlatform
 }
 
@@ -16444,6 +16533,15 @@ function closeAllDropdowns() {
   state.macFullReviewSettingsOpen = false;
   state.macFullIapLocSettingsOpen = false;
   state.macFullAchLocSettingsOpen = false;
+  /* Submission's "Add platform" menu (toggleAddPlatform above). Same treatment
+     as the five flags just above and for the same reason: the class is what is
+     on screen and the flag is what survives a re-render, so closing has to
+     clear both or the next unrelated repaint re-emits it open. This is also
+     what makes "si salgo, se comprime" true for free — clicking anywhere else
+     on the page reaches this through the document listener. */
+  if (state.submission) state.submission.addOpen = false;
+  document.getElementById('subnav-add-wrap')?.classList.remove('is-open');
+  document.getElementById('subnav-add-btn')?.setAttribute('aria-expanded', 'false');
 }
 
 /* ── Language picker ─────────────────────────────────── */

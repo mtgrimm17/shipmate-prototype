@@ -538,6 +538,8 @@
   "ob.dist.preset.everywhere_except_cn": "除中国大陆外全球",
   "nav.details": "游戏详情",
   "nav.submit": "提交",
+  "sub.addPlatform": "添加平台",
+  "sub.addPlatform.none": "所有可用平台均已启用。",
   "nav.spread": "宣传推广",
   "nav.performance": "数据表现",
   "ob.media.drop_label": "将截图、主视觉图或预告片拖到此处",
