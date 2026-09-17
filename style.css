@@ -10452,12 +10452,14 @@ textarea.loc-review-field.ias-inline-input {
    strip while a ring lit one picture.
 
    The CURSOR goes with it for the same reason and comes back from the row
-   (`.mac-spp-shots-row { cursor: pointer }`), so the pointer is continuous
+   (`.spp-shots-row { cursor: pointer }`), so the pointer is continuous
    across the well rather than appearing only over the pictures.
 
    iOS and Mac Full keep both: there the frames really are the click target. */
 .mac-spp-page .ias-shot-frame,
-.mac-spp-page .ias-shot-frame:hover {
+.mac-spp-page .ias-shot-frame:hover,
+.ios-spp-page .ias-shot-frame,
+.ios-spp-page .ias-shot-frame:hover {
   cursor: inherit;
   border-color: var(--border);
   box-shadow: none;
@@ -11077,8 +11079,8 @@ textarea.loc-review-field.ias-inline-input {
 /* The ROW is the well and stacks its two parts; the STRIP is the flex line the
    row used to be, so the scroller's `flex: 1` and the chevron's lane are
    untouched — the ask simply sits above them. */
-.mac-spp-shots-row { display: block; }
-.mac-spp-shots-strip { display: flex; align-items: center; }
+.spp-shots-row { display: block; }
+.spp-shots-strip { display: flex; align-items: center; }
 
 /* A SHOT FILLS ITS FRAME, AND THE EDITOR IS WHAT MADE THAT TRUE (v6.42).
    `.ias-shot-img` is `height: 100%; width: auto` — the image keeps its own
@@ -11139,7 +11141,7 @@ textarea.loc-review-field.ias-inline-input {
    scroller's `gap` and the air around the pair has to match the air between
    them. The frames absorb it (`(100% − 16px) / 2` of whatever box they get), so
    nothing else moves. */
-.mac-spp-page .mac-spp-shots-row {
+.mac-spp-page .spp-shots-row, .ios-spp-page .spp-shots-row {
   /* `1px + 16px`, and the 1 is not a fudge: `.ias-editable` carries
      `border: 1px solid transparent`, so the description's copy really starts
      one pixel further in than `.ias-section`'s padding says. Measured at a flat
@@ -11152,12 +11154,15 @@ textarea.loc-review-field.ias-inline-input {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
   transition: box-shadow .12s ease;
 }
-.mac-spp-page .mac-spp-shots-row.is-shots-done {
+.mac-spp-page .spp-shots-row.is-shots-done,
+.ios-spp-page .spp-shots-row.is-shots-done {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
   background: var(--spp-well-fill-done);
 }
-.mac-spp-page .mac-spp-shots-row:hover,
-.mac-spp-page .mac-spp-shots-row.is-shots-done:hover {
+.mac-spp-page .spp-shots-row:hover,
+.mac-spp-page .spp-shots-row.is-shots-done:hover,
+.ios-spp-page .spp-shots-row:hover,
+.ios-spp-page .spp-shots-row.is-shots-done:hover {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24);
   background: var(--spp-well-fill);
 }
@@ -11192,9 +11197,9 @@ textarea.loc-review-field.ias-inline-input {
    the reviewed carousel is the screenshots at full strength — the value, plain,
    the way the rest of the page shows an answered field. The WELL still carries
    the press: its `.08` ring, its hover and the row's pointer are untouched. */
-.mac-spp-shots-strip { position: relative; }
-.mac-spp-page .mac-spp-shots-row { cursor: pointer; }
-.mac-spp-shots-veil {
+.spp-shots-strip { position: relative; }
+.mac-spp-page .spp-shots-row, .ios-spp-page .spp-shots-row { cursor: pointer; }
+.spp-shots-veil {
   position: absolute;
   inset: 0;
   display: grid;
@@ -11203,7 +11208,7 @@ textarea.loc-review-field.ias-inline-input {
   border-radius: 6px;
   background: rgba(10, 10, 10, .58);
 }
-.mac-spp-shots-veil-label {
+.spp-shots-veil-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
@@ -11267,13 +11272,14 @@ textarea.loc-review-field.ias-inline-input {
    The general form, and this file has it twice already (the disc's pending
    fill, the separator's alpha): a value that is right for the target you were
    looking at is not thereby right for the selector you wrote it on. */
-.mac-spp-page .spp-just-changed {
+.mac-spp-page .spp-just-changed, .ios-spp-page .spp-just-changed {
   position: relative;
   z-index: 30;
   animation: sppJustChanged .6s ease both;
 }
 /* Content's cell is the one target with no radius of its own — see above. */
-.mac-spp-page .ias-meta-cell--action.spp-just-changed { border-radius: var(--field-radius); }
+.mac-spp-page .ias-meta-cell--action.spp-just-changed,
+.ios-spp-page .ias-meta-cell--action.spp-just-changed { border-radius: var(--field-radius); }
 @keyframes sppJustChanged {
   0%   { transform: scale(1);    box-shadow: 0 0 0 9999px rgba(0,0,0,0),    0 0 0 0 rgba(49,220,128,0); }
   32%  { transform: scale(1.03); box-shadow: 0 0 0 9999px rgba(0,0,0,.30),  0 0 0 2px rgba(49,220,128,.7), 0 0 14px rgba(49,220,128,.32); }
@@ -11283,7 +11289,8 @@ textarea.loc-review-field.ias-inline-input {
 /* Content is the one target whose mark is an `::after` rather than its own box,
    so the pop would scale a cell that draws nothing and leave the well behind.
    The pseudo-element rides along instead. */
-.mac-spp-page .ias-meta-cell--action.spp-just-changed::after {
+.mac-spp-page .ias-meta-cell--action.spp-just-changed::after,
+.ios-spp-page .ias-meta-cell--action.spp-just-changed::after {
   box-shadow: inset 0 0 0 1px rgba(49,220,128,.7);
 }
 /* `padding-right: 0` is load-bearing and was the first thing this got wrong.
@@ -11292,7 +11299,11 @@ textarea.loc-review-field.ias-inline-input {
    23.5px of the third frame sat in that lane: the sliver moved, it did not
    go. The air to the right of the second frame is the arrow's lane now, which
    is also what the real store shows. */
-.mac-spp-shots-row .mac-spp-shots-scroll {
+/* Generalised from `.spp-shots-row .mac-spp-shots-scroll`: the row supplies
+   the horizontal padding now, on both previews, and each keeps its own frame
+   geometry below (Mac's two 16:10 landscape captures, the App Store's
+   fixed-height portrait ones). Mac's own rule was already exactly this. */
+.spp-shots-row .ias-shots-scroll {
   flex: 1; min-width: 0;
   padding-left: 0; padding-right: 0;
 }

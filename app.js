@@ -5946,7 +5946,7 @@ function _sppJustChanged() {
     let filled;
     if (id === 'content')          filled = el.classList.contains('ias-meta-cell--seen');
     else if (id === 'data')        filled = !el.classList.contains('ias-privacy-block--ask');
-    else if (id === 'screenshots') filled = !!el.closest('.mac-spp-shots-row.is-shots-done');
+    else if (id === 'screenshots') filled = !!el.closest('.spp-shots-row.is-shots-done');
     else                           filled = el.textContent.trim() !== 'Set price';
 
     const prev = seen[id];
@@ -5956,7 +5956,7 @@ function _sppJustChanged() {
     /* The cell's mark is its `::after` well, so the pop has to land on the box
        that PAINTS — on Content the cell itself draws nothing. Every other
        target is its own painted box. */
-    const mark = id === 'screenshots' ? el.closest('.mac-spp-shots-row') : el;
+    const mark = id === 'screenshots' ? el.closest('.spp-shots-row') : el;
     mark.classList.add('spp-just-changed');
     mark.addEventListener('animationend',
       () => mark.classList.remove('spp-just-changed'), { once: true });

@@ -10104,18 +10104,18 @@ function buildStorePreviewSection() {
       </div>`;
 
   // Show all selected shots (no cap) — scroll container handles overflow.
-  // Each frame (placeholder or real) is its own click target straight to
-  // the Screenshots section — Adjust Screenshots' own button below this
-  // carousel is hidden now (by request), so the shots themselves are the
-  // only way in; see .ias-shots-scroll's own data-spp-el/glow class,
-  // screenshotsArea below, for where the "required, not done" ring that
-  // button used to carry now lives instead.
+  /* THE FRAMES ARE NOT THE BUTTON — THE WELL IS, the same conclusion the Mac
+     preview reached and for the same reason. Each frame carried its own
+     onclick, so the carousel read as three separate targets and picking one
+     screenshot looked like it meant something. It does not: the step you land
+     in adjusts the whole set. One veil over the strip, one press. (Mac Full
+     keeps its per-frame handlers — it has no well and no veil.) */
   const shotHtml = shots.length > 0
     ? shots.map(s =>
-        `<div class="ias-shot-frame" onclick="openStorePreviewSection('${pid}','screenshots')"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
+        `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
-        `<div class="ias-shot-frame ias-shot-empty" onclick="openStorePreviewSection('${pid}','screenshots')"><span>${lbl}</span></div>`
+        `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
       ).join('');
 
   const _infoRowHtml = r => `
@@ -10329,13 +10329,42 @@ function buildStorePreviewSection() {
       <div class="ias-meta-top">—</div>
     </div>`;
 
-  // Screenshots area — always show shots; full-width Select/Edit button below
-  // Adjust Screenshots' own button (below the carousel) is hidden now, by
-  // request — the shots themselves are the click target instead (see
-  // shotHtml, above), so the "required, not done" glow ring that button
-  // used to carry moves onto the carousel container itself.
+  /* Screenshots area — the Mac preview's strip, shape for shape, because this
+     is the one required element on the page whose treatment had not caught up
+     with the rest of it (v6.92 shared the wells and the spotlight; the
+     carousel kept its old per-frame targets and no well at all).
+
+     WHAT IT IS: the ROW is the well and the single press target; the STRIP is
+     the positioning context; the VEIL is paint (pointer-events: none) laid
+     over the shots while they are unreviewed, carrying the one word the store
+     itself never prints here. The real product page has no screenshots
+     heading, so there is no store word to borrow and an invented one would be
+     Shipmate writing on the drawing — the veil says it by covering the thing
+     it is about instead.
+
+     AND THE VEIL BELONGS TO THE UNREVIEWED STATE ONLY. It is not drawn once
+     screenshotsDone, rather than receding to 0 and returning on hover: its
+     whole sentence is "you have not looked at these yet", which stops being
+     true the moment you have, and a wash over finished work would re-ask an
+     answered question. The WELL keeps the press either way — its ring drops to
+     .08 and its hover still comes up to .24, exactly like every other answered
+     field on this page.
+
+     The frame GEOMETRY is deliberately not copied. Mac fits two 16:10
+     landscape captures because that is what a Mac game's screenshots are;
+     these are iPhone portrait shots at a fixed height, which is what this
+     store shows. Matching the treatment is the ask, not matching the
+     proportions of a different device. */
   const screenshotsArea = `
-    <div class="ias-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
+    <div class="spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
+         onclick="openStorePreviewSection('${pid}','screenshots')"
+         title="Adjust Screenshots">
+      <div class="spp-shots-strip">
+        <div class="ias-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
+        ${screenshotsDone ? '' : `
+        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Adjust Screenshots</span></div>`}
+      </div>
+    </div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
       <span>iPhone, iPad</span>
@@ -11256,13 +11285,13 @@ function buildMacStorePreviewSection() {
   // hover — the shots are the value once you have looked at them, and a wash
   // over finished work is the page telling you something it already told you.
   const screenshotsArea = `
-    <div class="mac-spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
+    <div class="spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
          onclick="openStorePreviewSection('${pid}','screenshots')"
          title="Adjust Screenshots">
-      <div class="mac-spp-shots-strip">
+      <div class="spp-shots-strip">
         <div class="ias-shots-scroll mac-spp-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
         ${screenshotsDone ? '' : `
-        <div class="mac-spp-shots-veil"><span class="mac-spp-shots-veil-label">Adjust Screenshots</span></div>`}
+        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Adjust Screenshots</span></div>`}
       </div>
     </div>
     <div class="ias-device-compat">
