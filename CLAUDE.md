@@ -1542,10 +1542,81 @@ is back to the state change plus the close, which is what it was before v6.39;
 the beat that "gives the advance something to be the end of" belongs to the
 gesture, not to the commit.
 
-The label stays "Submit" with `title` / `aria-label` **"Hold to submit"** — the
-cancel button's own convention (`title="Hold to cancel submission"`), one
-pattern rather than two. The fill teaches the rest: a short press starts the bar
-and snaps it back, which is a safe thing to discover.
+~~The label stays "Submit"~~ — **IT SAYS THE GESTURE ONCE THE GESTURE EXISTS
+(v6.63).** The sentence this replaces was *"the fill teaches the rest: a short
+press starts the bar and snaps it back, which is a safe thing to discover"*, and
+that was the whole bet: that the row would teach its own gesture to anyone who
+pressed it. Jaco, relaying feedback: *"se siente un poco confuso porque nada te
+dice que tienes que pulsar para submit."*
+
+**MEASURED, THE ROW SAID NOTHING, AND THE FILL COULD NOT HAVE TAUGHT ANYTHING
+BECAUSE NOBODY PRESSES WHAT DOES NOT LOOK PRESSABLE.** Every channel was spent
+drawing it as a sixth step:
+
+- the "ready" fill is `rgba(47,220,128,.04)` over the card's `rgb(20,20,20)` →
+  **rgb(21,28,24)**, luminance 20 → 26.2: **6.2 points out of 255**;
+- `border-top-width` is **0** — the green top border this file elsewhere credits
+  `.submit-step-ready` with went in v6.62, because it followed the 8px radius and
+  curled into hooks, and the divider above it went in the same batch. So the
+  three marks that said "ready" became one, and it is the weakest;
+- the name is 15px/500 in `rgb(245,245,245)` — **identical to a finished step's**;
+- the disc is still the pending `rgba(255,255,255,.07)` with a grey digit while
+  the five above are solid `rgb(49,220,128)`: the one row you must press is the
+  only one that looks unfinished;
+- it is the **only row with no chevron**, so the trailing column says "this opens
+  something" five times and then says nothing where the act is;
+- and the only statement of the hold was a `title`, i.e. a tooltip you find by
+  hovering the thing you do not know is pressable.
+
+**THE LABEL CHANGES WITH THE STATE, WHICH IS WHY IT IS NOT A RENAME.** Jaco:
+*"cuando todos los pasos están completados y ya vas a poder submitear, el texto
+cambia a Hold to Submit."* Locked, the row is a NAME — the last item of a
+checklist, and printing a gesture you cannot perform yet is an instruction for a
+shut door. Ready, it is the only act on the card, so it stops naming itself and
+says what to do. Same shape as the store pill reading "Set price" until Business
+is answered and `GET` after: **what is empty says so, what is available says how**.
+
+It costs no geometry: at 15px IBM Plex Mono "Hold to Submit" is **126px** in the
+308.5 the row leaves after its disc, against "Improve Your Submission" at 296.5 —
+so the longest name in the list is still some other row's. Measured across
+locked → ready: row **354.5 × 50** in both, no clipping.
+
+Four strings rather than two (`step.submit.hold` / `step.web.submit.hold`, en and
+zh-CN), because the two existing labels already go through `t()` and a hard-coded
+English pair beside them would be the one place this control is not translatable.
+The `title` / `aria-label` keep the same words rather than being dropped: they are
+the ACCESSIBLE name, and the visible label being identical is the point.
+
+**TITLE CASE — "Hold to Submit", not "Hold to submit"** (Jaco: *"Submit con
+mayúscula"*). The verb is the button's own NAME, the one the locked row prints
+and the one the whole app calls this step, so lower-casing it inside the
+instruction would make the row read as a sentence about some other control. Web
+takes **"Hold to Deploy"** for the same reason. All four places carry the same
+string — the two locale keys and the `title` / `aria-label` fallbacks — so the
+accessible name and the visible label cannot drift apart.
+
+**THE SUBMITTED ARM IS DELIBERATELY THE LOCKED ONE.** `submitDone || stepLocked`
+prints the plain name, so once the platform has been sent the row is a finished
+step called Submit, not an instruction for something already done.
+
+**AND THE CLICK WAS THE OTHER CANDIDATE — read this before reaching for it.**
+Jaco weighed two: the label, or *"lo convertimos en un clic, que después hace la
+animación"*. The click is what anyone expects of a button saying Submit and needs
+no discovering, which is exactly the complaint — but it is also **precisely what
+this section replaced**, a click that launched 1100ms you could not stop, with
+the abandonable bar on the reversible act and the unabandonable one on the
+irreversible act. It would also demote the fill: a bar tied to a thumb is a clock
+whose hands you are holding, and the same bar over a decision already taken is a
+loading screen. The honest case for it is that the second chance is not lost —
+the submitted card's own cancel hold can still withdraw it. The label was chosen
+because **the complaint is about discovery, not about the mechanism**, and
+changing the gesture to fix a label pays too much.
+
+**STILL OPEN, AND IT IS THE HALF THE LABEL DOES NOT BUY:** the weight. The six
+points of luminance and the pending grey disc are untouched, so the row reads as
+pressable only once you have read the words. That is the backlog's *"make the
+Submit button celebratory"* and the two levers measured here are the Release
+button's solid `#2fdc80` and the disc going green.
 
 Verified end to end: mid-hold the card carries `is-submitting` with SUBMITTING…
 in it; released at 400ms nothing is flipped, no `.sub-state-sending` is left and
@@ -5118,6 +5189,96 @@ resolves the src so no caller has to know the difference. Verified: with the slo
 empty and one `kind: 'icon'` asset in the pool, the preview draws the real image
 and the placeholder is gone.
 
+### A hint is the app's bubble, never the browser's (v6.71–72)
+
+`initGlobalTooltip` (app.js) and `.g-tip` (style.css). Jaco, pointing at the
+submitted card's withdraw button: *"el tooltip tarda muchísimo en salir, debería
+ser tan inmediato como los tooltip de la tabla de data privacy."*
+
+**IT WAS NOT A SLOW TOOLTIP, IT WAS A DIFFERENT ONE.** That button carried a
+bare `title`, which every browser sits on for about a second and then draws in
+the SYSTEM's style. Measured, the platform card was the last surface in the app
+still doing that — **zero `.tooltip-anchor` on a card and four plain `title`s**
+(gear, cancel, version, build) — so the hint that names a gesture nobody can
+guess was also the slowest and the least like the rest of the product.
+
+**THE ATTRIBUTE IS THE TOOLTIP; THE CLASS IS THE LAYOUT.** The obvious fix is to
+add `.tooltip-anchor`, and that rule sets FOUR layout properties written for a
+span in prose — `inline-flex`, `align-items`, `vertical-align` and
+`position: relative`. The last is the trap this file has now paid for twice (it
+REPLACES `sticky` on the privacy headings; here the gear carries an absolutely
+positioned alert dot). So the delegated handler accepts `.tooltip-anchor,
+[data-tip]` instead: `showTip` has always read `dataset.tip` FIRST, which means
+the attribute was already the real trigger and the class was only coming along
+for the ride. Checked before widening it — **every `data-tip` in the codebase
+was already on a `.tooltip-anchor`**, so nothing becomes a tooltip by accident,
+and a control can now take the instant bubble with NO CSS and therefore no way
+for its geometry to move. Measured: both buttons still 30 × 30, `display: flex`,
+`position: static`, on the same x.
+
+`aria-label` stays and only `title` goes — the accessible name is a different
+job, and `title` was never doing it.
+
+**AND THE BOX SHRINK-WRAPS AND CENTRES (v6.72).** Jaco: *"que el texto esté
+centrado, que no sobre ancho en los tooltips."* `.g-tip` was a hard
+`width: 230px`, sized for the 35 data-type descriptions — paragraphs beside a
+"?" — so "Hold to cancel submission" sat in a box nearly twice its length with
+the words stranded at the left, and the bubble read as misaligned **even though
+its box was centred on the button to the pixel**.
+
+**The nudge variant had already made this exact argument** — its own note says
+"two words in that box leave most of it empty and the text stranded on the left"
+— and solved it for itself. The base simply takes the same answer rather than
+staying the one shape that still needed the exception.
+
+`width: max-content` capped at the old **230** rather than the nudge's `nowrap`:
+a one-line hint shrinks to its own text, and anything long enough to have needed
+the 230 wraps at exactly the width it always did. Verified: a real 130-character
+description still measures **230 wide**, so the paragraphs are untouched by
+construction and only the short ones moved.
+
+**THE WIDTH IS MEASURED IN JS, AND THAT IS THE LOAD-BEARING HALF.** `showTip`
+centred against the CONSTANT `TIP_W = 230`; with the box free to shrink, that
+constant parks a 206px bubble as though it were 230 and pushes it left of the
+thing it points at, by half the slack. It reads `offsetWidth` now — after the
+text AND the classes are set, or it measures the previous tooltip — the way it
+already read `offsetHeight`. Measured: both bubbles centred on their button to
+**0.00 / 0.1**, at 206 and 213.2 against the old flat 230.
+
+The cost, stated rather than hidden: a MULTI-LINE tooltip is now centred prose.
+That is right for the one-liners this was asked for and arguable for Apple's
+descriptions; `text-align: left` on a `:has()` or a length test is the lever if
+it ever reads badly.
+
+**AND THE WITHDRAW HINT WEARS THE WITHDRAW COLOUR.** Jaco: *"el tooltip de hold
+to cancel submission que sea rojizo."* `#ff3b78` is not a new hue — it is the
+cancel hold's own, already shared by the sweep, the CANCELING SUBMISSION line
+and the card's red edge. So the bubble joins a signal that exists rather than
+adding a fifth colour: point at the button and the hint is already the colour
+the card is about to turn.
+
+It is the nudge's TWO-LAYER construction, copied rather than approximated, for
+that variant's own stated reason: a single translucent background lets the card's
+edge and the page show through, and a bubble floating above the layout must not
+be transparent to it. Opaque `--panel-2` base, the tint laid over it as a flat
+gradient. It does NOT take the nudge's `nowrap` or padding — those belong to a
+two-word prompt, and this is the base bubble with a tone on it.
+
+**Driven by `data-tip-tone="danger"` on the ANCHOR**, not by a selector naming
+the button: the bubble is one shared element and the anchor is the only thing
+that knows what the hint is about. And the class is **reset on every show**, for
+the same reason `g-tip--nudge` is — otherwise a red tooltip follows the pointer
+onto the next control. Verified: cancel → `g-tip--danger` with
+`rgba(255,59,120,.14)` over `rgb(28,28,28)`, a `.32` border and
+`rgba(255,105,150,.96)` ink; the gear one hover later → base bubble, zero
+gradient, `rgb(58,58,58)` border, and the class gone.
+
+**Still on `title`: the release block's `version` and `build 42`.** They are
+labels rather than controls, so they were left; the two header BUTTONS are what
+moved, because a row where one control hints instantly and its neighbour takes a
+second is the "two controls in one role behaving differently" this file refuses
+elsewhere.
+
 ### A preset that cannot answer without the network is not an answer (v6.43)
 
 Jaco: *"si elijo varias casillas como cloud save, leaderboards, no guarda el
@@ -6583,6 +6744,38 @@ the rest is `.app-footer` being `position: fixed` with nothing reserving its
 height. Fix either and 175 clears with room; shrinking this field again pays for
 those two a third time.
 
+**AND HALF OF THAT DEBT IS PAID — THE FOOTER RULE IS GONE (v6.64).** Jaco: *"veo
+que hay 38px entre la última parte del content y una raya divisoria horizontal
+abajo en cada card. Esa raya divisoria, ¿siempre tiene sentido? Pregunto, porque
+no la tenemos en ningún sitio."*
+
+Right on both counts, and the second is the argument rather than the spacing.
+Measured, it was **the only footer rule left in the app** — 1px of
+`rgb(42,42,42)` with 26 above and 21 below — on a surface that had already
+dropped every other one it had: the step modal's header and footer borders
+(v6.11), its section headers (*"a line said 'a group starts here' with a graphic
+element… position says it more quietly"*), the Mac preview's metadata strip, the
+Submit row's divider, the calendar's launch-day rule. Each came off for the same
+sentence; this one had simply never been looked at.
+
+**The `padding-top` is DELETED rather than kept as spacing**, which is the same
+two-part removal the launch-day row made — *"both extras are deleted rather than
+zeroed — the margin, and the `padding-top` the border needed"*. It existed to
+hold the content off the rule, and `margin-top: 26` is already the distance.
+
+So the paragraph above pays out: the button's bottom goes **712 → 691** against
+the same 654, and **58px behind the footer becomes 37**. The other 46 is still
+`.app-footer` being `position: fixed` with nothing reserving its height, and that
+is now the whole of the remaining debt rather than half of it.
+
+**The one thing it could have broken did not.** `_sizeLangSearchList` solves the
+open picker against Basic Info, and its own note says both readings are PANE TO
+PANE *"so the sub-nav, the step-nav row and the panel's padding cancel — the
+card's chrome can move, the divider question included, without touching this"*.
+Written before the divider went and verified after it: at 1280×700, Basic Info
+**463**, Languages closed **286.39**, open **463.00** — delta **0.00**, with the
+list at 131.61. That is what a derived number is for.
+
 **175 is written as a literal, and the lines form is what it gives up.** It is
 7.64 lines — `(175 − 26) / 19.5` — so the eighth is 64% visible, a sliced row
 along the bottom edge. That is exactly what stating the height in LINES was
@@ -6616,6 +6809,92 @@ no inline fallback, so there was no second place to update. Worth noting that
 **zh-CN already said 主要语言 / 支持语言** — *primary language*, *supported
 languages* — so English was the one locale still printing the bare adjective.
 Measured: both labels one line at 18px, no wrap.
+
+**THE FOUR SUB-TABS ARE ONE CARD, SO OPENING THE LANGUAGE SEARCH STOPS AT BASIC
+INFO'S HEIGHT (v6.63).** Jaco: *"coge la altura de la card de basic info y que
+en languages, si doy al +, al expandirse el cajetín, la card ocupe en total los
+mismos px de alto."* Measured, the expanded pane was **511.4 against Basic
+Info's 463** — the card grew past the tallest thing it had ever been, for a list
+whose max-height (180) was a round number nobody had solved against anything.
+
+**THE NUMBER IS SOLVED AT THE PRESS, NEVER TYPED** (`_sizeLangSearchList`,
+app.js), and both halves of that are the point:
+
+- **The target is MEASURED, not a literal.** 463 is what Basic Info happens to
+  be today and is a function of `--gi-desc-h` (175), the title row and the
+  platform grid — exactly the shape of value this file has watched go stale
+  three times. `_gdPaneHeight('gamedetails')` reads the real pane instead.
+- **The room is measured too**, by collapsing the list to zero and reading what
+  is left, so no arithmetic about the wrap's 8px margin, its two borders or its
+  27px input appears anywhere. Change any of them and this still lands.
+- **Both readings are PANE TO PANE**, so the sub-nav, the step-nav row and the
+  panel's padding cancel. The card's chrome can move — the divider question
+  below included — without touching this.
+- **Sub-pixel**, deliberately: `Math.round` put the card 0.4px over, and
+  rounding here is rounding the card.
+
+**A HIDDEN PANE MEASURES 0, WHICH IS THE ONE MECHANISM WORTH READING.**
+`renderDetails` renders all three panes every time and CSS shows one with
+`display: none`, so the pane you need is in the DOM and has no box.
+`_gdPaneHeight` lays it out for one frame **out of flow and invisible**
+(`position: absolute; visibility: hidden`) with its width stated explicitly —
+width is the only thing an absolutely positioned box would otherwise get wrong
+and the only input the height depends on. Nothing on screen moves, nothing
+flashes, and the style attribute is removed rather than left empty.
+
+Measured at v6.68: Basic Info **599**, Languages closed **422.39**, open
+**599.00** — delta **0.00** — on first open, on reopen, and after clearing a
+filter; the list lands at **131.61** and still scrolls (640 of content); and
+Distribution (717.09) and Assets (488.78) are untouched. Note Basic Info is NOT
+the tallest sub-tab — Distribution is — so this matches the pane he named, not
+a maximum.
+
+**ARROWS AND ENTER IN THE LANGUAGE SEARCH (v6.63).** Jaco: *"si estoy buscando
+idiomas y toco las teclas, deberías dejarme bajar y subir por si quisiera
+seleccionar con flechas + enter también."* `langSearchKey` (app.js).
+
+**It adds a POINTER to a row, not a second way of choosing.** The list is
+already a column of real `<button>`s, so Enter calls `.click()` on the active
+one rather than re-implementing `addLangFromSearch` — the two doors cannot
+drift, and selecting still closes the picker exactly as a click always has.
+
+- **Nothing is active until you press an arrow.** Every keystroke rebuilds the
+  list, so a surviving highlight would point at whichever row lands in that slot
+  next; and a pre-lit first row turns a bare Enter into a language you never
+  looked at. From nothing, Down takes the first and Up the last — the two ends
+  you are reaching for — and it wraps from then on.
+- **The highlight is the HOVER's own paint** (`.lang-search-item.is-active`,
+  `--panel-3`), because it answers the same question the pointer does. NOT the
+  selection blue, which on this row already means *that language is in your
+  set*; the rule is declared before `.is-on` so an already-selected row keeps
+  its blue label and only gains the fill.
+- **The reveal is scrolled BY HAND on the one box that scrolls.**
+  `scrollIntoView` picks its own scroller and this list sits inside the modal's
+  and the page's — "The travel is ours, not the browser's" one surface over.
+  There is nothing to animate: the row is one line away.
+- **In RECTS, not `offsetTop`.** This list is not positioned, so its rows'
+  offsetParent is `.ob-q` two boxes up: the first version wrapped to the top and
+  left the scroller at **146**. A rect difference assumes nothing about which
+  ancestor the numbers are relative to.
+
+Verified with real key events: Down/Up walk and wrap (0 → 19 → 0), the scroller
+follows and clamps (0 at the top, 509 against a 508 maximum at the bottom),
+typing clears the highlight, Enter with nothing aimed is a no-op, and Enter on
+an aimed row writes `pl`, draws the Polish chip and closes the picker. Escape
+closes it too and the card returns to 422.39.
+
+**AND THE TIP MOVED UNDER PRIMARY LANGUAGE (v6.63).** Jaco: *"cambiame el orden
+del tip de languages, ponlo debajo de primary language en vez de encima."* It
+opened the sub-tab, which made it read as a preamble to the page — and what it
+is about is SUPPORTED languages, shipping more of them. Between the two fields
+it is the sentence that explains the question underneath it.
+
+**It costs no height**: the 60.4px box and its own 16px gap moved as one piece
+and the 36px `.ob-q` margin above it was already there, so the closed pane
+measures 422.39 before and after. The asymmetry is the point — **36 above, 16
+below** — because the smaller gap is what binds it to the field it is talking
+about. It now lives in `buildObLangList` rather than in the section, so
+`updateObLangListWrap` repaints it with the picker.
 
 **AND PREV / NEXT ARE THE MODAL'S FOOTER BUTTON — WHICH DISSOLVES THE COLOUR
 QUESTION RATHER THAN ANSWERING IT.** Jaco: *"deberían tener el mismo formato que
@@ -6894,6 +7173,19 @@ Jaco: *"primero checkeamos porque Adam ha pusheado."* Fetched: **v6.48**, so
 from now on** — it costs one request and it retires the guess. The skip-if-unsure
 rule stays for the case the fetch cannot answer (the site down, a private repo,
 a deploy still in flight), where it is still the right default.
+
+**AND v6.63 – v6.67 WERE BURNT ON THE PANE'S OWN CACHE, WHICH IS THE ONE
+EXCEPTION WORKING AS WRITTEN.** Live was v6.62 and this batch should have been
+v6.63 — but the number had to move five times to be testable, and once for a
+reason worth carrying: **the pane had already fetched `render.js?v=6.64` at an
+earlier point in the same session**, so bumping BACK to a number it had seen
+served the stale file while `app.js` came back fresh. The tell was
+`buildObLangList.toString()` not containing the attribute that was plainly in
+the file — this file's own "check the running function, not the file", one
+layer out: it is the URL that is cached, so **a number you have already used is
+not a cache-bust**. Collapsing to 6.63 was the tidier option and was refused for
+that reason: 6.63 – 6.67 are poisoned locally, and the cost of skipping them is
+the cosmetic one this section opens with. Ships as **v6.68**.
 
 **AND THE WHOLE 6.45 – 6.70 RUN COLLAPSED BACK TO v6.45, WHICH IS THE THIRD
 TIME THIS FILE RECORDS THE SAME MOVE.** Jaco: *"necesito que lo pusheemos a

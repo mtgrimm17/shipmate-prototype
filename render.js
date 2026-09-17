@@ -294,19 +294,8 @@ function buildDistributionTab() {
               stay as-is; only the rendered header text changed (previously)
               and is now gone entirely. */''}
 
-        ${/* By request, this one line is styled as a Shipmate Tip (.sw-tip-box
-              — see buildAndroidStubSection for the same plain icon+text usage)
-              rather than the prose treatment (.asset-guidance) Distribution's
-              and Assets' own opening lines still use — see the "PROSE, NOT A
-              BOX" note below, in Distribution: that reasoning still holds for
-              those, this is a deliberate, scoped exception for this one. */''}
-        <div class="sw-tip-box" style="margin-bottom:16px;">
-          <div class="sw-tip-box-row">
-            ${SM_INFO_ICON}
-            <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
-          </div>
-        </div>
-
+        ${/* The tip moved INTO the picker, under Primary Language — see
+              buildObLangList. */''}
         <div id="ob-lang-list-wrap">${buildObLangList()}</div>
       </div>
 
@@ -1301,6 +1290,30 @@ function buildObLangList() {
         </div>
       </div>
 
+      ${/* THE TIP SITS UNDER PRIMARY LANGUAGE, NOT OVER THE WHOLE SECTION.
+            Jaco: "cambiame el orden del tip de languages, ponlo debajo de
+            primary language en vez de encima." It opened the sub-tab, which
+            made it read as a preamble to the page — and what it is about is
+            SUPPORTED languages: shipping more of them. Between the two fields
+            it is the sentence that explains the question underneath it.
+
+            It costs no height: the 60.4px box and its 16px gap moved as one
+            piece, and the 36px `.ob-q` margin above it was already there. The
+            asymmetry is the point — 36 above, 16 below — because the smaller
+            gap is what binds it to the field it is talking about.
+
+            Styled as a Shipmate Tip (.sw-tip-box — see buildAndroidStubSection
+            for the same plain icon+text usage) rather than the prose treatment
+            (.asset-guidance) Distribution's and Assets' opening lines still
+            use — see the "PROSE, NOT A BOX" note in Distribution: that
+            reasoning still holds for those, this is a scoped exception. */''}
+      <div class="sw-tip-box" style="margin-bottom:16px;">
+        <div class="sw-tip-box-row">
+          ${SM_INFO_ICON}
+          <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
+        </div>
+      </div>
+
       <div class="ob-q">
         <div class="gi-head">
           <span class="form-label">${t('ob.loc.supported')}</span>
@@ -1315,6 +1328,7 @@ function buildObLangList() {
             <input class="lang-search-input" id="lang-search-input" type="text"
                    placeholder="${t('ob.field.lang_search.placeholder')}"
                    oninput="filterLangSearch(this.value)"
+                   onkeydown="langSearchKey(event)"
                    onclick="event.stopPropagation()">
             <div class="lang-search-list" id="lang-search-list"></div>
           </div>
@@ -5693,7 +5707,7 @@ function _gearBtn(onclick, label, active, alert) {
   return `
     <button class="${cls}" type="button"
             onclick="event.stopPropagation();${onclick}"
-            title="${label}" aria-label="${label}">
+            data-tip="${label}" aria-label="${label}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5714,13 +5728,26 @@ function _gearBtn(onclick, label, active, alert) {
    It ASKS. Deactivating is reversible by pressing the tile again; withdrawing
    from review is not, so the press opens a question inside the card rather
    than doing it. */
+/* THE HINT IS THE APP'S OWN BUBBLE, NOT THE OS's (v6.70). Jaco: *"el tooltip
+   tarda muchísimo en salir, debería ser tan inmediato como los tooltip de la
+   tabla de data privacy."* Right, and it was not a slow tooltip — it was a
+   DIFFERENT ONE: a bare `title`, which every browser sits on for about a
+   second and then draws in the system's own style. The card header was the
+   one place in the app still doing that (measured: zero `.tooltip-anchor` on
+   a card, four plain `title`s), so the hint that names a gesture nobody can
+   guess was also the slowest hint in the product.
+   `data-tip` instead — the delegated handler fires on `mouseover`, so it is
+   instant by construction — and `aria-label` stays, because it is the
+   ACCESSIBLE name and `title` was never doing that job. The class is
+   deliberately NOT added: see the note at initGlobalTooltip. */
 function _cancelSubBtn(pid) {
   return `
     <button class="active-card-power active-card-cancelsub" type="button"
             onpointerdown="event.stopPropagation();cancelHoldStart('${pid}', this)"
             onpointerup="cancelHoldEnd()" onpointerleave="cancelHoldEnd()" onpointercancel="cancelHoldEnd()"
             onclick="event.stopPropagation()"
-            title="Hold to cancel submission" aria-label="Hold to cancel submission">
+            data-tip="Hold to cancel submission" data-tip-tone="danger"
+            aria-label="Hold to cancel submission">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
         <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -6218,6 +6245,38 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      row's ready/locked state depends on a destination having been chosen. */
   const trackPicker = '';
 
+  /* THE ROW SAYS THE GESTURE THE MOMENT THE GESTURE IS AVAILABLE (v6.63).
+     Jaco, relaying feedback: *"se siente un poco confuso porque nada te dice
+     que tienes que pulsar para submit"* — and measured, that was exactly true.
+     The only statement of the hold was a `title`, i.e. a tooltip you have to
+     find by hovering the thing you already do not know is pressable, and
+     everything else drew this as a sixth step: 15px/500 in the same white as a
+     finished step's name, the pending grey disc while the five above are solid
+     green, no chevron where all five have one, and a "ready" fill of
+     `rgba(47,220,128,.04)` that composites to **6.2 points of luminance** over
+     the card. One instruction, in the one place nobody looks.
+
+     **IT CHANGES WITH THE STATE, WHICH IS WHY IT IS NOT JUST A RENAME.** Jaco:
+     *"cuando todos los pasos están completados y ya vas a poder submitear, el
+     texto cambia a Hold to Submit."* Locked, the row is a NAME — the last item
+     of a checklist, and printing a gesture you cannot perform yet is an
+     instruction for a door that is shut. Ready, it is the one act on the card,
+     so it stops naming itself and says what to do. The label appears exactly
+     when it becomes true, which is the same shape as the store pill saying
+     "Set price" until Business is answered and `GET` after.
+
+     It costs no geometry: measured at 15px IBM Plex Mono, "Hold to Submit" is
+     126px in the 308.5 the row leaves after the disc, well under the 296.5 of
+     "Improve Your Submission" — so the longest name in the list is still some
+     other row's.
+
+     The `title` and `aria-label` keep the same words rather than being dropped.
+     They are the ACCESSIBLE name; the visible label being identical is the
+     point, not a duplication. */
+  const submitLabel = submitDone || stepLocked
+    ? (isWeb ? (t('step.web.submit')      || 'Deploy')         : (t('step.submit')      || 'Submit'))
+    : (isWeb ? (t('step.web.submit.hold') || 'Hold to Deploy') : (t('step.submit.hold') || 'Hold to Submit'));
+
   return `
     <div class="ios-step-card ios-step-card--inline submit-step-card ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
          id="${pid}-step-card-submit"
@@ -6225,11 +6284,11 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
          onpointerup="submitHoldEnd()"
          onpointerleave="submitHoldEnd()"
          onpointercancel="submitHoldEnd()"
-         title="${submitDone ? '' : (isWeb ? 'Hold to deploy' : 'Hold to submit')}"
-         aria-label="${submitDone ? '' : (isWeb ? 'Hold to deploy' : 'Hold to submit')}">
+         title="${submitDone ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}"
+         aria-label="${submitDone ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}">
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
-        <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
+        <div class="ios-step-name">${submitLabel}</div>
       </div>
       ${submitDone ? '' : trackPicker}
     </div>`;

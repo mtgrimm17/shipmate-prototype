@@ -4020,16 +4020,27 @@ function _enqueueTranslateTask(taskFn) {
        way out is what makes the reset unconditional: whatever state the last
        caller left, a hover tooltip always starts from the base shape. */
     tip.classList.remove('g-tip--nudge');
+    /* THE TONE IS THE ANCHOR'S, AND IT IS RESET EVERY TIME for the same reason
+       the nudge class is: the bubble is ONE element shared by every hint in the
+       app, so whatever the last hover left has to be dropped before this one is
+       drawn, or a red tooltip would follow the pointer onto the next control. */
+    tip.classList.toggle('g-tip--danger', anchor.dataset.tipTone === 'danger');
     tip.classList.add('is-visible');
 
     const r = anchor.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const th = tip.offsetHeight;
+    /* MEASURED, NOT THE CONSTANT. The box shrink-wraps its text now (see
+       .g-tip in style.css), so centring against a fixed 230 would push a short
+       bubble left of the control it belongs to — by half the slack, which on
+       "Hold to Submit" is most of the box. Read after the text and the classes
+       are set, or it measures the PREVIOUS tooltip. */
+    const tw = tip.offsetWidth || TIP_W;
 
     // Horizontal: center on anchor, clamp to viewport
-    let left = r.left + r.width / 2 - TIP_W / 2;
-    left = Math.max(MARGIN, Math.min(left, vw - TIP_W - MARGIN));
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(MARGIN, Math.min(left, vw - tw - MARGIN));
 
     // Vertical: prefer above; fall back to below
     let top = r.top - th - 8;
@@ -4044,12 +4055,28 @@ function _enqueueTranslateTask(taskFn) {
     if (tip) tip.classList.remove('is-visible');
   }
 
+  /* THE ATTRIBUTE IS THE TOOLTIP; THE CLASS IS THE LAYOUT (v6.70).
+     `.tooltip-anchor` sets four layout properties (inline-flex, align-items,
+     vertical-align, relative) that a SPAN IN PROSE needs and a 30px icon
+     button does not — and `position: relative` in particular is the trap this
+     file has already paid for twice (it REPLACES `sticky` on the privacy
+     headings, and the gear carries an alert dot). So the selector accepts
+     either: showTip has always read `dataset.tip` first, which means the
+     attribute was already the real trigger and the class was only ever coming
+     along for the ride.
+
+     Nothing new becomes a tooltip by accident — checked, every `data-tip` in
+     the codebase was already on a `.tooltip-anchor`, so this widens the door
+     without adding a single anchor today. What it buys is that a control can
+     take the app's INSTANT bubble with no CSS at all, and therefore with no
+     way for its geometry to move. */
+  const TIP_SEL = '.tooltip-anchor, [data-tip]';
   document.addEventListener('mouseover', e => {
-    const anchor = e.target.closest('.tooltip-anchor');
+    const anchor = e.target.closest(TIP_SEL);
     if (anchor) showTip(anchor);
   });
   document.addEventListener('mouseout', e => {
-    const anchor = e.target.closest('.tooltip-anchor');
+    const anchor = e.target.closest(TIP_SEL);
     if (anchor && !anchor.contains(e.relatedTarget)) hideTip();
   });
   document.addEventListener('scroll', hideTip, true);
@@ -19733,6 +19760,32 @@ function toggleObDistExpand(btn) {
 
 /* ── Language type-ahead search ──────────────────────── */
 
+/* Height of one Game Details pane, whether or not it is the one on screen.
+   All three panes are rendered every time (see renderDetails) and CSS shows
+   one with `display: none` on the other two, so a hidden pane measures 0 and
+   has to be laid out to be read. It is taken OUT OF FLOW and left invisible
+   for the one frame that takes — nothing on screen moves and nothing flashes
+   — with its width stated explicitly, because that is the only thing an
+   absolutely positioned box would otherwise get wrong and the only input the
+   height depends on. */
+function _gdPaneHeight(name) {
+  const pane = document.querySelector('.gd-pane--' + name);
+  if (!pane) return 0;
+  if (getComputedStyle(pane).display !== 'none') return pane.getBoundingClientRect().height;
+
+  const shown = [...document.querySelectorAll('.gd-pane')]
+    .find(p => getComputedStyle(p).display !== 'none');
+  const w = (shown || pane.parentElement).getBoundingClientRect().width;
+
+  const prev = pane.getAttribute('style');
+  pane.style.cssText = (prev || '') +
+    ';display:block;position:absolute;visibility:hidden;pointer-events:none;width:' + w + 'px';
+  const h = pane.getBoundingClientRect().height;
+  if (prev) pane.setAttribute('style', prev); else pane.removeAttribute('style');
+  if (pane.getAttribute('style') === '') pane.removeAttribute('style');  // leave nothing behind
+  return h;
+}
+
 function toggleLangSearch(event) {
   event.stopPropagation();
   const wrap = document.getElementById('lang-search-wrap');
@@ -19743,9 +19796,41 @@ function toggleLangSearch(event) {
   } else {
     wrap.classList.remove('hidden');
     filterLangSearch('');
+    _sizeLangSearchList();
     const input = document.getElementById('lang-search-input');
     if (input) { input.value = ''; input.focus(); }
   }
+}
+
+/* OPENING THE SEARCH MUST NOT MAKE THE CARD TALLER THAN BASIC INFO'S.
+   Jaco: "que al expandirse el cajetín, la card ocupe en total los mismos
+   px de alto". The four sub-tabs are one card seen four ways, so the tallest
+   of them is the card's height and nothing should overshoot it — expanded,
+   this pane measured 511.4 against Basic Info's 463.
+
+   The list's max-height is SOLVED, never typed. The target comes from
+   measuring the Basic Info pane rather than from a literal, so it cannot go
+   stale the next time --gi-desc-h or the platform grid moves (this file has
+   paid for a measured literal going stale more than once); and the room the
+   list may take is read by collapsing it to zero and measuring what is left,
+   so no arithmetic about the wrap's margin, borders or input height appears
+   here at all. Both readings are PANE to PANE, so the chrome around them —
+   the sub-nav, the step-nav row, the panel's padding — cancels, and this
+   stays correct if any of that changes. */
+function _sizeLangSearchList() {
+  const wrap = document.getElementById('lang-search-wrap');
+  const list = document.getElementById('lang-search-list');
+  const pane = wrap && wrap.closest('.gd-pane');
+  if (!wrap || !list || !pane) return;
+
+  const target = _gdPaneHeight('gamedetails');
+  if (!target) { list.style.maxHeight = ''; return; }   // fall back to the CSS max
+
+  list.style.maxHeight = '0px';
+  const base = pane.getBoundingClientRect().height;     // open, with the list collapsed
+  /* Kept sub-pixel on purpose: rounding here is rounding the CARD, and at
+     .5 either way the two sub-tabs stop measuring the same. */
+  list.style.maxHeight = Math.max(96, target - base).toFixed(2) + 'px';
 }
 
 function filterLangSearch(query) {
@@ -19769,6 +19854,7 @@ function filterLangSearch(query) {
 
   if (results.length === 0) {
     list.innerHTML = '<div class="lang-search-empty">No languages found</div>';
+    _langSearchActive = -1;
     return;
   }
 
@@ -19779,6 +19865,74 @@ function filterLangSearch(query) {
       ${isOn ? '<span class="lang-search-check">✓</span>' : ''}
     </button>`;
   }).join('');
+  /* Every keystroke rebuilds this list, so the highlight cannot survive one —
+     and must not: it would point at whichever row happens to land in that
+     slot next. NOTHING is active until you press an arrow (see langSearchKey),
+     which is also what keeps a bare Enter from adding a language you never
+     looked at. */
+  _langSearchActive = -1;
+}
+
+/* ── Arrows and Enter in the language search ─────────── */
+/* Jaco: "si estoy buscando idiomas y toco las teclas, deberías dejarme bajar
+   y subir por si quisiera seleccionar con flechas + enter también."
+
+   The list is already a column of real <button>s, so this adds a POINTER to
+   one of them rather than a second way of choosing: Enter does exactly what
+   clicking the active row does — `.click()`, not a copy of its handler — so
+   the two doors cannot drift, and adding still closes the picker the way a
+   click always has.
+
+   The highlight is the HOVER's own paint (see .lang-search-item.is-active),
+   because it answers the same question the pointer does: this is the row you
+   would take. It is not the selection blue, which on this row already means
+   something else — that language is in your supported set. */
+let _langSearchActive = -1;
+
+function langSearchKey(event) {
+  const list = document.getElementById('lang-search-list');
+  if (!list) return;
+  const items = [...list.querySelectorAll('.lang-search-item')];
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    document.getElementById('lang-search-wrap')?.classList.add('hidden');
+    return;
+  }
+  if (event.key === 'Enter') {
+    if (_langSearchActive < 0 || !items[_langSearchActive]) return;   // nothing aimed at
+    event.preventDefault();
+    items[_langSearchActive].click();
+    return;
+  }
+  const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+  if (!step || !items.length) return;
+  event.preventDefault();                 // or the caret walks the query instead
+
+  /* From nothing, Down takes the first and Up the last — the two ends you are
+     reaching for. After that it wraps, so the list has no dead end. */
+  _langSearchActive = _langSearchActive < 0
+    ? (step === 1 ? 0 : items.length - 1)
+    : (_langSearchActive + step + items.length) % items.length;
+
+  items.forEach((el, i) => el.classList.toggle('is-active', i === _langSearchActive));
+  _langSearchReveal(list, items[_langSearchActive]);
+}
+
+/* Scrolled BY HAND on the one box that scrolls. `scrollIntoView` picks its own
+   scroller and this list sits inside the modal's and the page's, so the same
+   press could move any of the three — the reason `_smScrollTo` exists. Here
+   there is nothing to animate either: the row is one line away. */
+/* Measured in RECTS, not `offsetTop`: this list is not positioned, so its rows'
+   offsetParent is `.ob-q` two boxes up and their offsetTop is an offset from
+   something else entirely — the first version wrapped to the top and left the
+   scroller at 146. A rect difference needs no assumption about which ancestor
+   the numbers are relative to. */
+function _langSearchReveal(list, el) {
+  if (!el) return;
+  const lr = list.getBoundingClientRect(), er = el.getBoundingClientRect();
+  if (er.top < lr.top)         list.scrollTop += er.top - lr.top;
+  else if (er.bottom > lr.bottom) list.scrollTop += er.bottom - lr.bottom;
 }
 
 function addLangFromSearch(code) {

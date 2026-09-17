@@ -2163,6 +2163,11 @@ body {
   transition: background 0.1s, color 0.1s;
 }
 .lang-search-item:hover { background: var(--panel-3); color: var(--text); }
+/* The keyboard's own "you are aimed at this" (langSearchKey in app.js) — the
+   HOVER's paint rather than a mark of its own, because it answers the same
+   question the pointer does. Declared BEFORE .is-on so a language already in
+   the set keeps its blue label and only gains the fill. */
+.lang-search-item.is-active { background: var(--panel-3); color: var(--text); }
 .lang-search-item.is-on { color: var(--sel-color); }
 
 .lang-search-check {
@@ -4336,7 +4341,32 @@ body.viewing-splash .app-subnav { display: none; }
 /* Prev / Next step buttons at the bottom of a step. Purple palette (a Shipmate
    action) but softened — a translucent purple fill with light-purple text, not
    stark white on solid purple. */
-.step-nav-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border); }
+/* ── THE FOOTER RULE IS GONE, AND THE PADDING IT NEEDED WENT WITH IT ───────
+   Jaco: *"veo que hay 38px entre la última parte del content y una raya
+   divisoria horizontal abajo en cada card. Esa raya divisoria, ¿siempre tiene
+   sentido? Pregunto, porque no la tenemos en ningún sitio."*
+
+   Right on both counts, and the second is the argument. Measured, it was the
+   ONLY footer rule left in the app — 1px of `rgb(42,42,42)` with 26 above and
+   21 below — on a surface that had already dropped every other one it had: the
+   step modal's header and footer borders (v6.11), its section headers
+   (*"position says it more quietly"*), the Mac preview's metadata strip, the
+   Submit row's divider, the calendar's launch-day rule. Each of those came off
+   for the same sentence and this one had simply never been looked at.
+
+   **The `padding-top` is DELETED rather than kept as spacing.** It existed to
+   hold the content off the rule; with no rule there is nothing to clear, and
+   `margin-top: 26` is already the distance — the same two-part removal the
+   calendar's launch-day row made (*"both extras are deleted rather than
+   zeroed — the margin, and the padding-top the border needed"*).
+
+   And it pays a debt this file names twice. `--gi-desc-h`'s note says the
+   Languages button sits **58px behind the fixed footer** at 175px, and that
+   *"46 of the 58 is `.step-nav-row`'s own margin plus padding, spent on one
+   horizontal rule"*. Twenty of those come back here. The other half is
+   `.app-footer` being `position: fixed` with nothing reserving its 46px, which
+   is still open and is the next thing to fix if this ever has to clear. */
+.step-nav-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 26px; }
 /* ── PREV / NEXT ARE THE MODAL'S FOOTER BUTTON, AND THE COLOUR QUESTION
    DISSOLVES RATHER THAN GETTING AN ANSWER ─────────────────────────────────
    Jaco: *"los botones de siguiente / previous del game details deberían tener
@@ -15933,10 +15963,34 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 
 /* ── Global fixed-position tooltip ──────────────────── */
 
+/* IT SHRINK-WRAPS AND IT CENTRES (v6.71). Jaco: *"que el texto esté centrado,
+   que no sobre ancho en los tooltips."* The box was a hard `width: 230px`
+   because it was written for the 35 data-type descriptions — paragraphs beside
+   a "?" — so "Hold to cancel submission" sat in a box nearly twice its own
+   length with the words stranded at the left, and the bubble read as misaligned
+   even though its BOX was centred on the button to the pixel.
+
+   **The nudge variant had already made this exact argument** ("two words in
+   that box leave most of it empty and the text stranded on the left") and
+   solved it for itself; the base is simply taking the same answer rather than
+   staying the one shape that still needed the exception.
+
+   `max-content` capped at the old 230 rather than `nowrap`: a one-line hint
+   shrinks to its own text, and anything long enough to have needed the 230
+   still wraps at exactly the width it always did — so the paragraphs are
+   untouched by construction and only the short ones move.
+
+   THE WIDTH IS MEASURED IN JS, WHICH IS THE LOAD-BEARING HALF. `showTip`
+   centred against a CONSTANT 230; with the box free to shrink, that constant
+   would park a 120px bubble as though it were 230 and push it left of the
+   thing it points at. It reads `offsetWidth` now, the way it already read
+   `offsetHeight`. */
 .g-tip {
   position: fixed;
   z-index: 9999;
-  width: 230px;
+  width: max-content;
+  max-width: 230px;
+  text-align: center;
   padding: 8px 12px;
   border-radius: 8px;
   background: var(--panel-2, #1c1f2b);
@@ -15985,6 +16039,33 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-color: rgba(255, 184, 107, .30);
   color: rgba(255, 184, 107, .95);
   box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
+
+/* THE WITHDRAW HINT WEARS THE WITHDRAW COLOUR (v6.71). Jaco: *"y el tooltip de
+   hold to cancel submission que sea rojizo."* `#ff3b78` is not a new hue — it
+   is the cancel hold's own, the one the sweep, the CANCELING SUBMISSION line
+   and the card's red edge already share. So the bubble joins a signal that
+   exists rather than adding a fifth colour: point at the button and the hint
+   is already the colour the card will turn.
+
+   It is the NUDGE's two-layer construction, copied rather than approximated,
+   for that variant's own stated reason: a single translucent background lets
+   the card's edge and the page show through, and a bubble floating above the
+   layout must not be transparent to it. Opaque `--panel-2` base, the tint laid
+   over it as a flat gradient, so the strength stays legible as what it is
+   (.14) instead of being composited by hand into a hex nobody can trace.
+
+   It does NOT take the nudge's `nowrap` or its padding: those belong to a
+   two-word prompt, and this is the base bubble with a tone on it — the shape
+   is the tooltip's, only the colour is the state's. Driven by
+   `data-tip-tone="danger"` on the anchor rather than by a selector naming the
+   button, because the bubble is shared and the ANCHOR is the only thing that
+   knows what it is about. */
+.g-tip.g-tip--danger {
+  background-color: var(--panel-2, #1c1c1c);
+  background-image: linear-gradient(rgba(255, 59, 120, .14), rgba(255, 59, 120, .14));
+  border-color: rgba(255, 59, 120, .32);
+  color: rgba(255, 105, 150, .96);
 }
 
 /* ── Submit button — incomplete state ────────────────── */
