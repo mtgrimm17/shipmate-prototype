@@ -5595,14 +5595,14 @@ function _masCommitGlimmer(input) {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
   if (input._masGlimmering) return;                 // blur and click can both fire
 
-  const SWEEP = 280, FADE = 320;
+  const FADE = 320;
   const px = v => parseFloat(v) || 0;
   const r = input.getBoundingClientRect();
   /* A FIELD WITH NO BOX CANNOT BE CONFIRMED. The overlay is pinned to the
      input's rect, so on a field that is rendered but not shown — Game Details
      draws all four sub-tabs and CSS reveals one — that rect is 0×0 and this
      would paint a zero-size box at the top-left of the window. Only reachable
-     since v6.78 gave this function a second caller that fires from a fetch
+     since v6.75 gave this function a second caller that fires from a fetch
      rather than from a gesture: a blur only happens on something you can see.
      `state` already carries the value, so the sub-tab draws it filled in when
      you arrive; there is simply nothing to sweep. */
@@ -5643,16 +5643,61 @@ function _masCommitGlimmer(input) {
     overflow: 'hidden', pointerEvents: 'none', zIndex: '9999',
   });
 
-  const chars = Array.from(val), n = chars.length;
-  chars.forEach((ch, i) => {
+  /* THE STAGGER IS SPREAD OVER WHAT YOU CAN SEE, NOT OVER THE STRING (v6.76).
+     Jaco: *"el description field da como un flashazo"*, and *"el glimmer debería
+     ser más lento porque solo debería ser percibido en la parte que es visible,
+     los 175px del input field, aunque la descripción sea mucho más larga."*
+
+     Both halves are one bug and the arithmetic says so. The delay was
+     `i / (n − 1) × SWEEP` over the WHOLE value, so on a 1500-character store
+     blurb in a box that shows ~300 of them the visible band was crossed in
+     `280 × 300/1500` = **56ms** and the remaining 224 were spent sweeping text
+     that is scrolled out of sight. 56ms across eight lines is not a wave, it is
+     a flash — and it is the same flash however long the description is, getting
+     worse the more there is to celebrate. **A sweep is a fact about the VIEWPORT,
+     not about the value.**
+
+     So the spans are laid down first and the rate is solved from the last one
+     that FITS: `offsetTop` past the content box is where the eye stops, and
+     everything after it keeps the same per-character rate rather than a second
+     one — off screen it costs nothing and it means there is one number, not a
+     visible run and a hidden run that disagree.
+
+     They get `.flash-char` only in that second pass. Pausing them and restarting
+     with a delay is the obvious shape and is exactly the per-engine behaviour
+     this file refuses: adding the class is what starts the animation, so the
+     delay is read once, at the start, by every browser.
+
+     AND THE SWEEP IS PER LINE, WHICH IS WHAT MAKES IT SLOWER HERE AND NOT
+     ELSEWHERE. 280 is one line's crossing — the Assets found line, and every
+     single-line field on the Mac preview, are unchanged by construction. A
+     paragraph is a wave travelling down as well as across, so each further
+     visible line adds 80, capped at 900: measured, the description's 175px shows
+     ~8 lines, which is 840. */
+  const chars = Array.from(val), spans = [];
+  chars.forEach(ch => {
     if (ch === '\n') { fx.appendChild(document.createElement('br')); return; }
     const sp = document.createElement('span');
-    sp.className = 'flash-char';
     sp.textContent = ch;
-    sp.style.animationDelay = Math.round((i / Math.max(1, n - 1)) * SWEEP) + 'ms';
     fx.appendChild(sp);
+    spans.push(sp);
   });
   document.body.appendChild(fx);
+
+  const padT = px(s.paddingTop), bT = px(s.borderTopWidth);
+  const contentH = r.height - bT - px(s.borderBottomWidth) - padT - px(s.paddingBottom);
+  const lineH = (isArea && px(s.lineHeight)) || contentH || 1;
+  let vis = spans.length;
+  for (let i = 0; i < spans.length; i++) {
+    if (spans[i].offsetTop - bT - padT >= contentH) { vis = i; break; }
+  }
+  const lines = Math.max(1, Math.round(contentH / lineH));
+  const SWEEP = Math.min(900, 280 + 80 * (lines - 1));
+  const rate = SWEEP / Math.max(1, vis - 1);
+  spans.forEach((sp, i) => {
+    sp.style.animationDelay = Math.round(i * rate) + 'ms';
+    sp.classList.add('flash-char');
+  });
   setTimeout(() => { fx.remove(); input._masGlimmering = false; }, SWEEP + FADE + 80);
 }
 
@@ -8363,7 +8408,7 @@ function _applySteamCapsuleFromCover(url, expectedTitle) {
    sources fill the Description field and screenshot grid the same way. */
 
 /* THE NOTE NAMES WHERE THE TEXT CAME FROM, SO THE WRITER IS WHAT RECORDS IT
-   (v6.78). Jaco: *"la descripción la cogemos o bien de Steam o bien de IGDB,
+   (v6.75). Jaco: *"la descripción la cogemos o bien de Steam o bien de IGDB,
    así que quiero que olvides el mensaje ese de Imported from Steam · Google
    Play · App Store y pongas solo Imported from Steam o IGDB."*
 
@@ -8389,7 +8434,7 @@ function _fillDescriptionField(text, source) {
   if (descEl) {
     descEl.value = text || '';
     charCount('ob-desc-count', text || '', 4000);
-    /* AND THE ARRIVAL SWEEPS GREEN (v6.78)
+    /* AND THE ARRIVAL SWEEPS GREEN (v6.75)
        `_masCommitGlimmer` is the Mac preview's own confirmation — each letter
        starts green and fades to its colour on a left-to-right stagger — and it
        has never once fired for a field SHIPMATE filled, only for text you typed
@@ -8427,9 +8472,125 @@ function _refreshScreenshotGrid() {
 // anything being dropped — a Steam scrape fills the library from elsewhere.
 // Called from renderAssetLibrary, which is the single repaint every door
 // into the pool already goes through.
+/* AND AN IDENTICAL REPAINT IS NOT A REPAINT (v6.76). Jaco: *"no veo el glimmer
+   verde de la 'Shipmate found…'"*. `outerHTML` replaces the node whatever it is
+   being replaced WITH, and this line is repainted by every door into the pool —
+   `renderDetails` alone reaches `renderAssetLibrary` twice, and anything that
+   touches an asset reaches it again a frame or two later. So a sweep laid down
+   on entering the pane was being thrown away by a render that changed nothing,
+   with `assetsFoundSwept` already spent: the celebration existed for one frame
+   and could never come back.
+
+   The rAF inside `_assetsFoundGlimmer` coalesces repaints INSIDE one tick and
+   cannot help across ticks — that is the whole gap this closes. Comparing the
+   string is the honest test rather than a second flag: if the sentence has not
+   changed there is nothing to draw, and the spans mid-animation are exactly the
+   thing worth not destroying. It also removes DOM churn nobody asked for. */
+let _assetsGuidanceHtmlLast = null;
 function _renderAssetsGuidance() {
   const el = document.getElementById('ob-assets-guidance');
-  if (el && typeof _assetsGuidanceHtml === 'function') el.outerHTML = _assetsGuidanceHtml();
+  if (el && typeof _assetsGuidanceHtml === 'function') {
+    const html = _assetsGuidanceHtml();
+    if (html !== _assetsGuidanceHtmlLast) {
+      _assetsGuidanceHtmlLast = html;
+      el.outerHTML = html;
+    }
+  }
+  _assetsFoundGlimmer();
+}
+
+/* AND THE FOUND LINE SWEEPS GREEN THE FIRST TIME YOU SEE IT (v6.76)
+   Jaco: *"cuando entremos en assets, el 'SHIPMATE FOUND X…' puedas animármelo
+   con el glimmer verde, para que sea todavía más celebratorio la primera vez
+   que entra."*
+
+   **THE KEYFRAMES ALREADY FIT, AND THAT IS WHY THIS IS A CALL RATHER THAN A
+   DESIGN.** `charToOwn` runs `#8FF0BF` → `#31DC80` → hold → `inherit`, written
+   as "the celebration colour, then the element's own colour". On the Mac
+   preview's fields `inherit` is white and the green IS the news; here the line
+   is ALREADY `#31DC80`, so the middle stop is where it rests and **the pale
+   opening is the whole of the sweep** — a shimmer travelling across green text
+   rather than a colour change. One animation, two surfaces, no second dialect.
+
+   **IT PAINTS THE ELEMENT, IT DOES NOT CLONE IT**, which is the opposite of
+   `_masCommitGlimmer` and for that function's own stated reason. That one is a
+   `position: fixed` overlay because the render which turns an editor back into
+   a display element is DEFERRED and can be deferred indefinitely — so it could
+   not wait for a node to exist. This line has no editor and no deferral: it is
+   a plain div that `_renderAssetsGuidance` has just written, so the spans go
+   straight in and the copied metrics — that overlay's one real cost — are not
+   paid at all.
+
+   **THE FLANK IS "VISIBLE AND NOT YET CELEBRATED", NOT "PRESENT".**
+   `renderDetails` draws all three panes and CSS reveals one, so a Steam scrape
+   that lands while you are on Basic Info would otherwise sweep a line nobody
+   can see and leave nothing for the moment you arrive — the zero-rect trap the
+   description's own glimmer had to be guarded against, one surface over. The
+   test is `offsetParent`, which asks the DOM whether the thing is drawable
+   rather than asking the router which sub-tab is open: the pane can move, be
+   renamed or gain a fourth sibling without this line caring.
+
+   **Keyed on the TEXT, so it fires again when the sentence really changes** —
+   scrape three more assets and the new count is a new fact worth a sweep,
+   where a bare boolean would celebrate once and then go quiet for the rest of
+   the session. Transient by design, like `descSource`: never persisted, so a
+   reload gets its one celebration back.
+
+   **AND IT IS DEFERRED A FRAME, WHICH IS NOT AN OPTIMISATION.** Measured,
+   entering the sub-tab repaints this line **twice** in one tick — `renderDetails`
+   hydrates the pane and the well's own solve repaints it again. Run
+   synchronously, the first pass laid the spans down and the second replaced the
+   node with fresh `outerHTML`, taking them with it; the flag was set by then, so
+   the sweep was created and destroyed inside one frame and nothing was ever on
+   screen. **A flag that says "done" after an animation that was thrown away is
+   worse than no flag**, because it also spends the one celebration there was.
+   One pending flag plus a `requestAnimationFrame` coalesces any number of
+   repaints in a tick into one sweep on whichever node survives them — the same
+   shape `_smDropwellSolve` uses, and for the same reason. */
+let _assetsGlimmerQueued = false;
+function _assetsFoundGlimmer() {
+  if (_assetsGlimmerQueued) return;
+  _assetsGlimmerQueued = true;
+  requestAnimationFrame(() => { _assetsGlimmerQueued = false; _assetsFoundGlimmerRun(); });
+}
+function _assetsFoundGlimmerRun() {
+  const el = document.getElementById('ob-assets-guidance');
+  if (!el || !el.classList.contains('is-found')) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const text = (el.textContent || '').trim();
+  if (!text) return;
+  if (state.assetsFoundSwept === text) return;   // already celebrated this one
+  if (!el.offsetParent) return;                  // drawn, but on a hidden sub-tab
+  state.assetsFoundSwept = text;
+
+  const SWEEP = 280, FADE = 320;
+  const chars = Array.from(el.textContent);
+  el.textContent = '';
+  chars.forEach((ch, i) => {
+    const sp = document.createElement('span');
+    sp.className = 'flash-char';
+    sp.textContent = ch;
+    sp.style.animationDelay = Math.round((i / Math.max(1, chars.length - 1)) * SWEEP) + 'ms';
+    el.appendChild(sp);
+  });
+  /* The spans are swapped back for plain text, the same tidy-up the overlay
+     does by removing itself — and it is safe at any moment because `charToOwn`
+     ends on `inherit`, so the last frame already IS the resting colour. Guarded
+     on `isConnected`: a repaint mid-sweep replaces this node wholesale, which
+     takes the spans with it and leaves nothing to restore. */
+  /* AND A SWEEP THAT DID NOT SURVIVE ITS FIRST FRAME GIVES THE FLAG BACK
+     (v6.76). The guard above makes an identical repaint a no-op, but a full
+     `renderDetails` rebuilds this pane with innerHTML and takes the spans with
+     it whatever they say — and the flag was already set, so the one celebration
+     was spent on an animation nobody saw. Checking that the spans are still on
+     screen one frame later is the difference between "done" and "drawn": the
+     next repaint sweeps instead of going quiet for the rest of the session. */
+  requestAnimationFrame(() => {
+    if (!el.isConnected || !el.querySelector('.flash-char')) state.assetsFoundSwept = null;
+  });
+  setTimeout(() => {
+    if (el.isConnected && el.querySelector('.flash-char')) el.textContent = chars.join('');
+  }, SWEEP + FADE + 80);
 }
 
 // Mirrors an auto-import batch (IGDB or Steam — see
@@ -22041,6 +22202,28 @@ function _smDropwellSolve(dz) {
   const cur = dz.getBoundingClientRect().height;
   const delta = pane.getBoundingClientRect().height - target;
 
+  /* THE CHEAPEST PROBE IS THE ONE THAT DOES NOT RUN (v6.76). Jaco: *"cuando
+     entro en assets, veo el dropwell redibujarse."*
+
+     Everything below takes the well OUT OF FLOW for a frame to read its floor,
+     and the long note above is the history of making that invisible. It is
+     invisible and it is still not free: it forces two extra layouts on the pane
+     on EVERY repaint of the library, and this function runs on every one of
+     them — entering the pane alone reaches it twice.
+
+     And on all but the first it has nothing to do. The solved value lives on
+     the ROOT, so it survives the render that rebuilt the well: arriving in
+     Assets a second time the card already matches Basic Info and `delta` is
+     zero. **A measurement taken to decide a number that cannot move is the
+     whole of the redraw.** So the exit moves ABOVE the probe — the guard that
+     was at the bottom only ever saved the write.
+
+     `now` has to exist for this to be safe: with nothing solved yet a zero
+     delta is a coincidence (the CSS 334 happening to fit), not an answer, and
+     the floor still has to be read once. */
+  const solved = parseFloat(root.style.getPropertyValue('--gi-drop-h'));
+  if (solved && Math.abs(delta) < 0.5) return;
+
   /* The floor: what the three lines need on their own.
 
      **THE TRANSITION HAS TO BE SWITCHED OFF FOR THIS READ, and leaving it on
@@ -22059,7 +22242,7 @@ function _smDropwellSolve(dz) {
      off first — and put it back, or the well stops easing for good.
 
      **AND THE PROBE IS MEASURED OUT OF FLOW, WHICH IS THE HALF THAT MAKES IT
-     INVISIBLE (v6.76).** Jaco: *"al clicar Assets, veo cómo se redimensiona la
+     INVISIBLE (v6.75).** Jaco: *"al clicar Assets, veo cómo se redimensiona la
      card en real time en vez de estar ya cargada en su dimensión
      correspondiente."* Sampled every frame across a real tab switch, the card
      went **578 → 451.8 → 578 over ~260ms**: it COLLAPSED and eased back up.
@@ -22108,9 +22291,31 @@ function _smDropwellSolve(dz) {
   if (prevCss) dz.setAttribute('style', prevCss); else dz.removeAttribute('style');
 
   const want = Math.max(floor, cur - delta);
-  const now = parseFloat(root.style.getPropertyValue('--gi-drop-h'));
-  if (Math.abs(want - (now || 0)) < 0.5) return;   // already solved — write nothing
+  if (Math.abs(want - (solved || 0)) < 0.5) return;   // already solved — write nothing
+
+  /* AND THE WRITE ITSELF IS NOT EASED (v6.76), which is the other half of the
+     redraw. The probe was made invisible three times over and the ANSWER was
+     left to animate: the well carries `transition: all .2s` and the card
+     `transition: all`, so the first solve of a session — the CSS 334 moving to
+     the measured height — was 200ms of a box growing under the line that has
+     just been told to celebrate. The sweep and the resize ran in the same
+     window, which is why one of them was not being seen.
+
+     The same three steps the probe's exit uses, on the two elements that can
+     see this change: freeze, write, flush while still frozen, then give the
+     transition back. By the time it comes back the geometry has settled, so
+     there is nothing left to trigger. `.sec-panel` is named as well as the well
+     because it is the box whose ease is the visible one — freezing only the
+     child leaves the parent animating to the same number. */
+  const panel = dz.closest('.sec-panel');
+  const dzCss = dz.getAttribute('style') || '';
+  const pnCss = panel ? panel.getAttribute('style') || '' : '';
+  dz.style.cssText = dzCss + ';transition:none;';
+  if (panel) panel.style.cssText = pnCss + ';transition:none;';
   root.style.setProperty('--gi-drop-h', want.toFixed(2) + 'px');
+  void dz.offsetHeight;
+  if (dzCss) dz.setAttribute('style', dzCss); else dz.removeAttribute('style');
+  if (panel) { if (pnCss) panel.setAttribute('style', pnCss); else panel.removeAttribute('style'); }
 }
 
 /* THE WELL'S CONTENTS, IN THE SHAPE OF THE NAV PROTOTYPE.
@@ -22144,7 +22349,7 @@ function _smDropwellSolve(dz) {
    <img>, and playback needs hls.js — see smZoomSteamTrailer). */
 const SM_STEAM_TRAILER_ID = '__steam-trailer';
 
-/* THE GROUP THAT CAN GROW SORTS LAST (v6.78)
+/* THE GROUP THAT CAN GROW SORTS LAST (v6.75)
    Jaco: *"intenta evitar 3 líneas en este caso, si hay espacio, mete el video
    en la fila de key art si se necesita."*
 

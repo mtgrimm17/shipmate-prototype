@@ -740,10 +740,10 @@ function buildTitlePicklist() {
    disagree about whether an import happened. */
 function _giImportNote() {
   /* THIS ROW IS SILENT WHILE THE FETCH IS IN FLIGHT, AND THAT IS A CORRECTION
-     TO v6.76. Jaco: "no sé si el loading debería estar en la primera línea del
+     TO THE FIRST PASS. Jaco: "no sé si el loading debería estar en la primera línea del
      input box, como para que sea más obvio que algo está sucediendo."
 
-     v6.76 put the wait HERE, on the argument that the slot which later says
+     The first pass put the wait HERE, on the argument that the slot which later says
      where the text came FROM should be the one that says it is on its way —
      "one line changing rather than two places to look". The relationship is
      real and it answered the wrong question. **The empty thing is the FIELD**,
@@ -763,7 +763,7 @@ function _giImportNote() {
   if (state.descLoading) return '';
   const ls = state.liveSearch;
   if (!ls || ls.status !== 'done' || !ls.confirmed) return '';
-  /* IT NAMES THE SOURCE OF THIS TEXT, AND THERE ARE ONLY EVER TWO (v6.78).
+  /* IT NAMES THE SOURCE OF THIS TEXT, AND THERE ARE ONLY EVER TWO (v6.75).
      Jaco: *"la descripción la cogemos o bien de Steam o bien de IGDB, así que
      quiero que olvides el mensaje ese de Imported from Steam · Google Play ·
      App Store y pongas solo Imported from Steam o IGDB."*
@@ -782,7 +782,7 @@ function _giImportNote() {
 
      No map and no join: two values, each already the name it prints.
 
-     AND IT IS GREEN (v6.76). Jaco: "que debería estar en verde." The Assets
+     AND IT IS GREEN (v6.75). Jaco: "que debería estar en verde." The Assets
      line's own argument one sub-tab over: Shipmate went and got something and
      it is here — finished work, which is exactly what #31DC80 means everywhere
      else in this app. The register is untouched (11px mono, the counter's
@@ -797,7 +797,7 @@ function _giImportNote() {
     <span class="gi-import-note is-done" title="Description and platforms filled in from ${escHtml(src)}.">Imported from ${escHtml(src)}</span>`;
 }
 
-/* THE WAIT IS DRAWN ON THE FIELD'S FIRST LINE (v6.78)
+/* THE WAIT IS DRAWN ON THE FIELD'S FIRST LINE (v6.75)
    Jaco: *"no sé si el loading debería estar en la primera línea del input box,
    como para que sea más obvio que algo está sucediendo."*
 

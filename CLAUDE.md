@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.75** &rarr; next is **v6.76**.
+Current version: **v6.76** &rarr; next is **v6.77**.
 
 ---
 
@@ -7178,6 +7178,158 @@ Measured on his folder: order Key art → Portrait art → Video → Screenshot,
 old order giving **3**. Card still **578**, the well absorbing the change
 because the library lives inside it (v6.74).
 
+**AND THE FOUND LINE SWEEPS GREEN THE FIRST TIME YOU SEE IT (v6.76).** Jaco:
+*"cuando entremos en assets, el 'SHIPMATE FOUND X…' puedas animármelo con el
+glimmer verde, para que sea todavía más celebratorio la primera vez que entra."*
+
+**THE KEYFRAMES ALREADY FIT, WHICH IS WHY THIS IS A CALL RATHER THAN A DESIGN.**
+`charToOwn` runs `#8FF0BF` → `#31DC80` → hold → `inherit`, authored as "the
+celebration colour, then the element's own colour". On the Mac preview's fields
+`inherit` is white and the green IS the news; here the line is ALREADY #31DC80,
+so the middle stop is where it rests and **the pale opening is the whole of the
+sweep** — a shimmer travelling across green text rather than a colour change.
+Measured mid-animation: `rgb(143,240,191)` on 5–6 of the 43 letters at any
+frame, a band moving left to right. One animation, two surfaces, no second
+dialect.
+
+**IT PAINTS THE ELEMENT, IT DOES NOT CLONE IT** — the opposite of
+`_masCommitGlimmer`, and for that function's own stated reason. That one is a
+`position: fixed` overlay because the render which turns an editor back into a
+display element is DEFERRED and can be deferred indefinitely, so it could not
+wait for a node to exist. This line has no editor and no deferral, so the spans
+go straight in and the copied metrics — that overlay's one real cost — are not
+paid at all.
+
+**THE FLANK IS "VISIBLE AND NOT YET CELEBRATED", NOT "PRESENT".**
+`renderDetails` draws all three panes and CSS reveals one, so a Steam scrape
+landing while you are on Basic Info would otherwise sweep a line nobody can see
+and leave nothing for the moment you arrive — the zero-rect trap the
+description's own glimmer had to be guarded against, one surface over. The test
+is `offsetParent`, which asks the DOM whether the thing is drawable rather than
+asking the router which sub-tab is open. Verified: on Basic Info the line exists,
+`offsetParent` is null, zero spans and the flag is **not** set.
+
+**AND IT IS DEFERRED A FRAME, WHICH IS NOT AN OPTIMISATION.** Measured, entering
+the sub-tab repaints this line **twice** in one tick — `renderDetails` hydrates
+the pane and the well's own solve repaints it again. Run synchronously the first
+pass laid the spans down and the second replaced the node with fresh
+`outerHTML`, taking them with it; the flag was set by then, so the sweep was
+created and destroyed inside one frame and nothing ever reached the screen.
+**A flag that says "done" after an animation that was thrown away is worse than
+no flag**, because it also spends the one celebration there was. One pending
+flag plus a `requestAnimationFrame` coalesces any number of repaints in a tick
+into one sweep on whichever node survives them — `_smDropwellSolve`'s own shape,
+for the same reason.
+
+Keyed on the TEXT rather than a boolean, so scraping three more assets is a new
+fact worth a new sweep; transient like `descSource`, so a reload gets its one
+celebration back. Measured end to end: hidden → 0 spans and no flag; entering →
+43 spans running `charToOwn` staggered 0 → 280ms; after → 0 spans, plain text,
+`rgb(49,220,128)`; a re-render while already swept → **no second sweep**; the
+line's top (163) and height (18) identical at every sample.
+
+**AND FOR ONE VERSION IT WAS NEVER SEEN, BECAUSE AN IDENTICAL REPAINT IS STILL A
+REPAINT (v6.76).** Jaco: *"no veo el glimmer verde de la 'Shipmate found…'"*.
+The rAF above coalesces repaints inside ONE tick and cannot help across ticks —
+and `outerHTML` replaces the node whatever it is being replaced *with*. Every
+door into the pool reaches `renderAssetLibrary`, so a sweep laid down on entering
+the pane was being thrown away a frame or two later by a render that changed
+nothing, with `assetsFoundSwept` already spent: the celebration existed briefly
+and could never come back.
+
+Two fixes, and the first is the one that generalises. **`_renderAssetsGuidance`
+compares the STRING and writes nothing when it matches** — the honest test rather
+than a second flag, since if the sentence has not changed there is nothing to
+draw and the spans mid-animation are exactly the thing worth not destroying. It
+also removes DOM churn nobody asked for. **And the flag is given back if the
+sweep did not survive its first frame**: a full `renderDetails` rebuilds the pane
+with innerHTML and takes the spans with it whatever the guard says, so one rAF
+later this checks they are still connected and clears `assetsFoundSwept` if they
+are not. *"Done" and "drawn" are different claims*, and only the second is worth
+spending a celebration on.
+
+Measured on a real tab switch with ten scraped assets: **44 spans running across
+32 frames**, the line back to plain text after, and zero left behind.
+
+**AND A RULE SEPARATES THE INVITATION FROM THE INVENTORY (v6.76).** Jaco:
+*"quizás también una divisoria horizontal en el dropwell, justo encima de los
+thumbnails, como para espaciar la zona de subida. Y que el 'Drop your assets
+here' + icono, todo ese pack, esté verticalmente centrado en el área restante."*
+
+**THIS FILE HAS REMOVED FIVE HORIZONTAL RULES AND THIS ONE IS THE CASE THEY WERE
+NOT.** Each of those came off because a boundary was ALREADY drawn and the line
+said it twice — the step modal's header and footer had the fade, the Submit row
+had its own fill, the Mac strip had the rule above it, the launch-day row had the
+block's own end, the privacy header had an opaque band. Here the well is ONE box
+holding two different KINDS of thing: an invitation to add files, and the list of
+the files there are. Nothing else separates them, and position cannot, because
+both halves are centred in the same box. v6.74 put the library inside the well
+precisely so the card would stop growing with the folder, and the cost it took on
+was exactly this — a prompt floating above an inventory with no edge between.
+
+**IT SPANS THE CONTENT COLUMN, NOT THE WELL.** A rule carried to the well's own
+rounded border meets that border at both ends, which reads as a crack across the
+box rather than a division inside it. So it is a `border-top` on the library,
+inset by the well's own 20px padding — the column the thumbnails and their labels
+already sit on. Measured 21.5 in from both edges.
+
+**`:not(:empty)` IS LOAD-BEARING.** `_smLibraryHTML` returns the empty string
+with nothing in the pool, so that element is in the DOM and blank on a fresh
+project, and a rule across an empty well would divide the invitation from
+nothing — the "a mark whose only content is the question itself" failure the
+screenshots veil was rebuilt under. Verified: empty pool → `border-top-width: 0`.
+
+**THE CLEARANCE IS PAID ONCE.** `.sm-wells` carried `margin-top: 16`, which was
+what held the groups off the prompt; with a rule between them that margin and the
+rule's padding would both be spending the same gap — the guide wait-list's
+"container gap paid twice" in a smaller box. The margin goes to 0 and the 18px
+under the rule is the only number.
+
+**AND THE PROMPT ALREADY CENTRED IN WHAT IS LEFT**, which is the half that needed
+no change: it is `flex: 1 1 auto` with its own `justify-content: center`, so it
+takes every pixel the library does not. The rule lands where the library begins,
+so "the remaining area" is the area above it **by construction** rather than by
+arithmetic — nothing has to know how many groups wrapped. Measured: the prompt's
+centre sits **0.75px** off the centre of the band above the rule, which is the
+well's own 24/20 padding asymmetry and not a second decision.
+
+**AND THE WELL STOPPED REDRAWING ON THE WAY IN (v6.76).** Jaco: *"cuando entro
+en assets, veo el dropwell redibujarse."* Two causes, and the first is that a
+measurement was being taken to decide a number that could not move.
+
+**THE CHEAPEST PROBE IS THE ONE THAT DOES NOT RUN.** `_smDropwellSolve` takes
+the well out of flow for a frame to read its floor, and the long note at that
+function is the history of making that invisible — three passes, all correct.
+Invisible is not free: it forces two extra layouts on the pane on EVERY repaint
+of the library, and entering Assets alone reaches it twice. And on all but the
+first it has nothing to do, because **the solved value lives on the ROOT and
+survives the render that rebuilt the well** — arriving a second time the card
+already matches Basic Info and `delta` is zero. So the early exit moved ABOVE
+the probe; the guard that was at the bottom only ever saved the write. It is
+gated on something already being solved, because with nothing written yet a zero
+delta is the CSS 334 happening to fit rather than an answer.
+
+**AND THE WRITE ITSELF WAS EASED, which is the other half.** The probe was made
+invisible three times over and the ANSWER was left to animate: the well carries
+`transition: all .2s` and the card `transition: all`, so the first solve of a
+session was 200ms of a box growing under the line that had just been told to
+celebrate — **which is also why the found line's sweep was not being seen**. The
+two ran in the same window. It takes the same three steps that function's own
+exit uses, on the two elements that can see the change: freeze, write, flush
+while still frozen, then give the transition back. `.sec-panel` is named as well
+as the well because it is the box whose ease is the visible one — freezing only
+the child leaves the parent animating to the same number.
+
+Measured frame by frame across a real tab switch, with the card sampled every
+frame for 450ms: the first entry is **two distinct heights** (557 → 590, one
+step, no interpolation) against the twelve dipped frames this function's own
+note recorded, and the **second and third entries are ONE height for every
+sampled frame — 590, exactly Basic Info's**. No probe, no write, no ease.
+
+**And the divider costs the card nothing**, because `_smDropwellSolve` absorbs
+it: measured with two lines of groups, Basic Info **475** and Assets **475** —
+delta **0.00** — with the well at 367 and the card stable across two reads.
+
 **AND THE GUIDANCE NAMES WHAT YOU ARE DROPPING.** Jaco: *"quítame el 'drop
 everything here' — 'Drop your assets here'."* That opening was written when the
 well's whole argument was that it takes any file at all, so it said something
@@ -7519,6 +7671,48 @@ with the platform fact kept in the `title` rather than restated on screen;
 "Imported from IGDB" on the other arm; silent with no source. The sweep created
 **115** `.flash-char` spans in `rgb(49,220,128)` on an overlay matching the
 field's own box to **0.00 / 0.00 / 0.00**, and **zero** left behind after.
+
+**AND IT WAS A FLASH, BECAUSE THE STAGGER WAS SPREAD OVER THE STRING AND NOT
+OVER THE BOX (v6.76).** Jaco: *"el description field da como un flashazo"*, and
+in the same breath the diagnosis — *"el glimmer debería ser más lento porque
+solo debería ser percibido en la parte que es visible, los 175px del input
+field, aunque la descripción sea mucho más larga."*
+
+**The two complaints are one bug and the arithmetic says so.** The delay was
+`i / (n − 1) × 280` across the whole VALUE, so a 1539-character blurb in a box
+showing 616 of them crossed the visible band in `280 × 616/1539` = **112ms** and
+spent the other 168 sweeping text that is scrolled out of sight. 112ms over
+eight lines is not a wave, it is a flash — and it gets worse the longer the
+description, i.e. the more there is to celebrate. **A sweep is a fact about the
+VIEWPORT, not about the value**, which is the same sentence as the editor's
+*"the RATIO is a fact about the STORE, not about the picture"*, one surface over.
+
+So the spans are laid down FIRST and the rate is solved from the last one that
+fits — `offsetTop` past the content box is where the eye stops — with everything
+after it continuing at that same per-character rate rather than getting a second
+one. Off screen that costs nothing, and it means there is one number rather than
+a visible run and a hidden run that disagree.
+
+**They take `.flash-char` only in that second pass.** Pausing them and
+restarting with a delay is the obvious shape and is exactly the per-engine
+behaviour this file refuses: adding the class is what CREATES the animation, so
+the delay is read once, at the start, by every browser. Without the class they
+are plain spans and lay out identically, so the measurement is of the real thing.
+
+**AND THE SWEEP IS PER LINE, WHICH IS WHAT MAKES IT SLOWER HERE AND NOWHERE
+ELSE.** 280 is one line's crossing, so the Assets found line and every
+single-line field on the Mac preview are unchanged **by construction** rather
+than by being excluded. A paragraph is a wave travelling down as well as across,
+so each further VISIBLE line adds 80, capped at 900. Measured: the description's
+175px box shows exactly 8 lines at 13/1.5, so `280 + 80 × 7` = **840**, and the
+last visible character's delay is 840 to the millisecond. 112 → 840 is 7.5×
+slower on the part you can see, with the same constant meaning the same thing on
+both surfaces.
+
+Measured across both: description 1539 chars / 1539 spans, overlay 633 × 175 on
+the field's own box, contentH 149, 8 lines, last visible index **615** at
+**840ms**, delays monotone, last span 2101 (off screen, unread); a synthetic
+single-line input at 17 characters still ends at **280**.
 
 **AND THE TWO LANGUAGE LABELS GAINED THEIR NOUN.** Jaco: *"en languages, cambia
 primary por primary language y supported por supported languages."* One key
@@ -7867,7 +8061,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.75** → next is **v6.76**. (v6.29 – v6.31 are Mark's
+Current version: **v6.76** → next is **v6.77**. (v6.29 – v6.31 are Mark's
 Distribution work, and **v6.42 and v6.48 are Adam's** — shipped in parallel and
 touching none of this.)
 
@@ -7892,7 +8086,49 @@ from now on** — it costs one request and it retires the guess. The skip-if-uns
 rule stays for the case the fetch cannot answer (the site down, a private repo,
 a deploy still in flight), where it is still the right default.
 
-**AND THIS BATCH COLLAPSED 6.78 → v6.75, WHICH IS THE SIXTH TIME.** Jaco:
+**AND A CONSUMED `.ship-message` IS THE FOURTH WAY TO READ THE LIVE NUMBER — AND
+THE ONLY ONE THAT CANNOT BE CACHED.** The glimmer batch was written on the
+belief that v6.75 had not shipped, because a fetch of the live page came back
+**v6.48**. It was wrong: the page was served from an HTTP cache, and the second
+fetch one minute later — same URL plus a throwaway query — read **v6.75**.
+
+**The local filesystem had already said so, for free.** `ship.sh` renames the
+note to `.ship-message.sent` **only on a successful push**; a failed push leaves
+it in place for the retry. So the file being gone is a fact about the push that
+needs no network at all, and it is available in the ~30s window before Pages has
+even deployed — where the fetch, by construction, cannot answer.
+
+So the order to use is: **`.ship-message.sent` first** (did I push?), then the
+fetch (what is live?), and **bust the fetch's cache with a query** when the two
+disagree. Had the wrong reading been acted on, this batch would have published
+new bytes under a key browsers already held — the exact failure the Versioning
+section exists to prevent, arriving through the one door it had not considered.
+
+It ships as **v6.76**, the next number after live. 6.77 and 6.78 were served to
+the pane while measuring, so they are not cache-busts in this session any more —
+which costs nothing for the publish (a cold browser has never seen either) and
+means the NEXT thing that needs testing has to bump past 6.79 rather than
+re-loading one of them.
+
+**AND IT DID — THE THREE FIXES BELOW WERE MEASURED AT 6.80 AND SHIP AS v6.76.**
+The description's stagger, the found line's survival and the well's probe all
+had to be seen in the pane, and that is exactly the rule the paragraph above
+states: a number this session has already served is not a cache-bust, so testing
+had to start above 6.79. Jaco: *"necesito que sea 6.76."*
+
+**And 6.76 is still free, which is the only thing that matters.** `.ship-message`
+was still sitting unconsumed when the three landed — `ship.sh` renames it only on
+a successful push — so **v6.76 was never pushed** and nothing has ever been
+served under it. Live is v6.75, 6.76 > 6.75, and the key only goes UP. The two
+batches publish together as one version, which is this section's opening rule
+rather than an exception to it.
+
+**What it costs is local and temporary**: 6.76 through 6.80 have all been served
+to this pane, so none of them is a cache-bust here any more and the next thing
+needing a measurement has to start above 6.80. A cold browser has seen none of
+them, so the publish pays nothing. Seventh time this file records the move.
+
+**AND THE EARLIER BATCH COLLAPSED 6.78 → v6.75, WHICH IS THE SIXTH TIME.** Jaco:
 *"vamos a pushear esto a v6.75."* Fetched before renumbering, exactly as the
 habit below says: the footer badge reads **v6.48**, so every number from 6.49 up
 has been minted by EDITING and none of them has bytes behind it. 6.75 > 6.48, so

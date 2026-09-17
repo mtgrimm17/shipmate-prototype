@@ -12330,7 +12330,53 @@ a.mac-spp-link-row.is-live:focus-visible {
    back — the well centres its text, and a column of group labels centred over
    ragged rows of thumbnails reads as a poster rather than as an inventory. */
 .ob-form #ob-screenshot-dropzone #sm-library { text-align: left; width: 100%; }
-.ob-form #ob-screenshot-dropzone .sm-wells { margin-top: 16px; }
+/* AND A RULE SEPARATES THE INVITATION FROM THE INVENTORY (v6.76)
+   Jaco: *"quizás también una divisoria horizontal en el dropwell, justo encima
+   de los thumbnails, como para espaciar la zona de subida. Y que el 'Drop your
+   assets here' + icono, todo ese pack, esté verticalmente centrado en el área
+   restante."*
+
+   **THIS FILE HAS REMOVED FIVE HORIZONTAL RULES AND THIS ONE IS THE CASE THEY
+   WERE NOT.** Each of those came off because a boundary was ALREADY drawn and
+   the line said it twice — the step modal's header and footer had the fade, the
+   Submit row had its own fill, the metadata strip had the rule above it, the
+   launch-day row had the block's own end. Here the well is ONE box holding two
+   different kinds of thing: an invitation to add files and a list of the files
+   there are. Nothing else separates them — v6.74 put the library inside the
+   well precisely so the card would stop growing, and the cost it took on was
+   that the prompt ended up floating above an inventory with no edge between
+   them. Position cannot say this one, because both halves are centred in the
+   same box.
+
+   **IT SPANS THE CONTENT COLUMN, NOT THE WELL.** A rule carried to the well's
+   own rounded border meets that border at both ends, which reads as a crack
+   across the box rather than as a division inside it — so it is a `border-top`
+   on the library, inset by the well's own 20px padding, the same column the
+   thumbnails and their labels already sit on.
+
+   **`:not(:empty)` IS LOAD-BEARING.** `_smLibraryHTML` returns the empty string
+   with nothing in the pool, so this element is in the DOM and blank on a fresh
+   project — and a rule across an empty well would divide the invitation from
+   nothing at all, which is the "a mark whose only content is the question
+   itself" failure the screenshots veil was rebuilt under.
+
+   **THE CLEARANCE IS PAID ONCE.** `.sm-wells` had `margin-top: 16`, which is
+   what held the groups off the prompt; with a rule between them that margin and
+   this padding would both be spending the same gap — the guide wait-list's
+   "container gap paid twice" in a smaller box. The margin goes to 0 and the
+   padding under the rule is the only number.
+
+   **AND THE PROMPT ALREADY CENTRES IN WHAT IS LEFT**, which is the half that
+   needed no change: it is `flex: 1 1 auto` with its own `justify-content:
+   center`, so it takes every pixel the library does not and centres its three
+   lines in exactly that. The rule lands where the library begins, so "the
+   remaining area" is the area above it by construction rather than by
+   arithmetic — nothing here has to know how many groups wrapped. */
+.ob-form #ob-screenshot-dropzone #sm-library:not(:empty) {
+  border-top: 1px solid rgba(255, 255, 255, .07);
+  padding-top: 18px;
+}
+.ob-form #ob-screenshot-dropzone .sm-wells { margin-top: 0; }
 /* 50 → 42. Smaller because the box is now shared: at 50 two lines of groups
    plus their labels came to 190 of the well's 334 and the prompt was squeezed
    into the rest. The max-width and the checkerboard scale with the box and the
@@ -21942,15 +21988,15 @@ body.viewing-splash #app-guide { display: none; }
   font-size: 11px; line-height: 18px; color: #5A615D;
 }
 
-/* THE SLOT SPEAKS ONCE, ON ARRIVAL (v6.78).
+/* THE SLOT SPEAKS ONCE, ON ARRIVAL (v6.75).
 
    `is-done` takes #31DC80, the same DONE green the Assets line one sub-tab
    over takes for the same claim: Shipmate went and got the description and it
    is in the box below. Green everywhere in this app is one finished thing
    marked against others that are not, and that is exactly what an import is.
 
-   THERE IS NO LOADING STATE HERE ANY MORE. v6.76 put the wait in this row and
-   gave it the spinner; v6.78 moved both into the field itself (see
+   THERE IS NO LOADING STATE HERE ANY MORE. The first pass put the wait in this row
+   and gave it the spinner; this one moved both into the field itself (see
    `.gi-desc-wait` below), so the row is silent until the arrival and the two
    marks can never be up at once. Its rules are DELETED rather than left
    dormant — a rule nothing can reach is a mark waiting to be switched back on,
@@ -21975,7 +22021,7 @@ body.viewing-splash #app-guide { display: none; }
 }
 .ob-form .form-input::placeholder { color: rgba(255, 255, 255, .25); }
 
-/* THE WAIT SITS ON THE DESCRIPTION'S FIRST LINE (v6.78)
+/* THE WAIT SITS ON THE DESCRIPTION'S FIRST LINE (v6.75)
 
    Jaco: *"no sé si el loading debería estar en la primera línea del input box,
    como para que sea más obvio que algo está sucediendo."* The empty thing is
@@ -23062,7 +23108,7 @@ body.sm-picker-open { overflow: hidden; }
    not look like seven questions. */
 .sm-thumb-x {
   position: absolute; top: 5px; right: 5px; z-index: 2;
-  /* A ROUNDED SQUARE, NOT A DISC (v6.79). Jaco: *"¿puede ser el botoncico de x
+  /* A ROUNDED SQUARE, NOT A DISC (v6.75). Jaco: *"¿puede ser el botoncico de x
      de borrar cuadradico con bordes redondeados?"* — and it agrees with what it
      sits on: the thumbnail is a 9px-rounded rectangle, so a circle on its
      corner was the only round thing in a grid of soft boxes. 6px is the app's
