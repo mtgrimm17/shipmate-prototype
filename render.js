@@ -6272,20 +6272,52 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
 
      The `title` and `aria-label` keep the same words rather than being dropped.
      They are the ACCESSIBLE name; the visible label being identical is the
-     point, not a duplication. */
-  const submitLabel = submitDone || stepLocked
+     point, not a duplication.
+
+     **AND THE TEST IS `readyToSubmit`, NOT `stepLocked` — v6.64 shipped the
+     wrong one and Jaco caught it in a sentence:** *"el botón submit cambia a
+     Hold to Submit cuando todavía me queda el Tracking que seleccionar. No
+     debería pasar."*
+
+     Exactly right, and it is this entry's own argument used against itself.
+     `stepLocked` is `locked || !connected` — the STEPS and the account, and
+     nothing about the destination. But `submitStepClick` refuses on THREE
+     gates, and gate 3 is the track: press a row reading "Hold to Submit" with
+     no track chosen and the hold does not start, it spotlights the chip up in
+     the release block. So the row was printing a gesture that cannot be
+     performed — *"an instruction for a door that is shut"*, four paragraphs
+     up, on the one state that paragraph did not enumerate.
+
+     **The right test was already computed and already documented as doing
+     this.** `readyToSubmit` is `connected && !locked && !!selTrack && !
+     submitDone` — the hold's own three gates — and its comment two screens up
+     says it *"still decides ready-vs-locked below"*. It did not: nothing read
+     it. A variable whose note claims a job it does not have is the same
+     failure as the fill that called itself the cancel hold run forward.
+
+     **The green fill moves with the label**, because they make one claim. The
+     row is `.submit-step-ready` on the same test now, so a card with four
+     ticks and no destination is a LOCKED Submit row — which is true, and which
+     leaves the card's only lit thing the track chip the gate points at.
+
+     The `submitDone` arm is untouched on purpose: a submitted row is a
+     finished step, and `readyToSubmit` is false there by construction, so it
+     is branched before this test rather than through it. */
+  const canHold = readyToSubmit;
+
+  const submitLabel = submitDone || !canHold
     ? (isWeb ? (t('step.web.submit')      || 'Deploy')         : (t('step.submit')      || 'Submit'))
     : (isWeb ? (t('step.web.submit.hold') || 'Hold to Deploy') : (t('step.submit.hold') || 'Hold to Submit'));
 
   return `
-    <div class="ios-step-card ios-step-card--inline submit-step-card ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
+    <div class="ios-step-card ios-step-card--inline submit-step-card ${submitDone ? 'is-complete' : ''} ${submitDone ? (stepLocked ? 'submit-step-locked' : 'submit-step-ready') : (canHold ? 'submit-step-ready' : 'submit-step-locked')}"
          id="${pid}-step-card-submit"
          onpointerdown="submitHoldStart('${pid}', this, event)"
          onpointerup="submitHoldEnd()"
          onpointerleave="submitHoldEnd()"
          onpointercancel="submitHoldEnd()"
-         title="${submitDone ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}"
-         aria-label="${submitDone ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}">
+         title="${submitDone || !canHold ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}"
+         aria-label="${submitDone || !canHold ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}">
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
         <div class="ios-step-name">${submitLabel}</div>

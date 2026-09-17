@@ -1599,6 +1599,46 @@ accessible name and the visible label cannot drift apart.
 prints the plain name, so once the platform has been sent the row is a finished
 step called Submit, not an instruction for something already done.
 
+**AND THE TEST WAS THE WRONG ONE — v6.64 SHIPPED IT AND v6.65 FIXES IT.** Jaco,
+on the live build: *"el botón submit cambia a Hold to Submit cuando todavía me
+queda el Tracking que seleccionar. No debería pasar."*
+
+**It is this entry's own argument used against itself.** `stepLocked` is
+`locked || !connected` — the STEPS and the account, and nothing about the
+destination. `submitStepClick` refuses on THREE gates and the third is the
+track: press a row reading "Hold to Submit" with no track and the hold does not
+start, it spotlights the chip up in the release block. So the row was printing
+a gesture that cannot be performed, which is precisely *"an instruction for a
+door that is shut"* — the sentence three paragraphs up, on the one state it did
+not enumerate.
+
+**The right test was already computed and already CLAIMED to be doing this.**
+`readyToSubmit` is `connected && !locked && !!selTrack && !submitDone` — the
+hold's own three gates — and its comment says it *"still decides ready-vs-locked
+below"*. Nothing read it. **A variable whose note claims a job it does not have
+is the same failure as the fill that called itself the cancel hold run
+forward**, and this file has now recorded that shape three times.
+
+**The green fill moves with the label**, because they are one claim: four ticks
+and no destination is a LOCKED row, which is true, and it leaves the track chip
+the only lit thing on the card when gate 3 points at it. The `submitDone` arm is
+branched BEFORE this test rather than through it — `readyToSubmit` is false once
+sent, and a finished step must keep the paint it had.
+
+Measured on macos, all four states: no track → "Submit" / `submit-step-locked`,
+and the gate returns **false** with `is-spotlight` on the card and `is-spotlit`
+on the chip; track chosen → "Hold to Submit" / `submit-step-ready` at
+`rgba(47,220,128,.04)`; a step taken away with the track still set → back to
+"Submit" / locked at 2/4; restored → ready again.
+
+**One probe note, and it is the coordinate-frame lesson in another shape.** The
+first run of this reported `gate: true` with no track — the bug apparently not
+reproducing — because the delete and the call were split across two turns and a
+render in between had re-seeded the track. Measured in ONE turn it is `false`
+every time. **A state you clear in one probe is not still cleared in the next
+one**; if a gate has to be tested, clear, assert and call inside a single
+evaluation.
+
 **AND THE CLICK WAS THE OTHER CANDIDATE — read this before reaching for it.**
 Jaco weighed two: the label, or *"lo convertimos en un clic, que después hace la
 animación"*. The click is what anyone expects of a button saying Submit and needs
