@@ -3065,7 +3065,7 @@ function makeBlankUploads() {
     // auto-populated. Auto-fill sources:
     //   - steamCapsuleImage ("Capsule Image", 231×87) ← Steam's own
     //     appdetails.capsule_image, fetched by _applySteamAboutData in
-    //     app.js (same fetchSteamAppDetails call already used for
+    //     app.js (same fetchShipmateGame call already used for
     //     Description/Developer/About This Game/Screenshots/Genres).
     //   - steamHeaderImage ("Header Image", 460×215) ← Steam's own
     //     appdetails.header_image, fetched the same way.

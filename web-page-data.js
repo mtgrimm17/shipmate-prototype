@@ -49,7 +49,8 @@
        set in type, which is a finished-looking page and not a hole. The
        cheap fix is not a file upload — it is persisting the Steam app id
        (see below), because logo.png is then one probe away.
-     · THE STEAM APP ID. _igdbFetchSteamAppId resolves it, hands it to three
+     · THE STEAM APP ID. The picklist search returns it (steam_id), and it
+       is handed to three
        functions, and drops it (app.js:3510-3524). Persisting it as
        `webSite.steamAppId` costs one line and buys the logotype, the
        portrait, and a real store link for the buy button.

@@ -3501,13 +3501,26 @@ function _deferredRerenderStepModal() {
    Steam has no unified Localizations step at all — its review section exists
    only as a flip off the Store Page Preview - Prototype step — so it maps
    with unifiedStep null and its own five fields' state key. */
+/* THREE SCREENS SHOW A STORE-PAGE LOCALIZATION, NOT TWO (v6.63).
+
+   The unified Localizations step, the Store Page Preview turned over to its
+   own "Localizations" flip, and — the one this list was missing — the preview
+   NOT turned over at all, which draws whichever language its own dropdown has
+   selected. `flip: null` is exactly that state, and needs no new machinery:
+   _locFlipOnScreen compares against storePreviewFlipTarget, which IS null for
+   a step that hasn't been turned over. */
+const LOC_STORE_PAGE_SCREENS = [
+  { stepId: 'storePreview', flip: 'localization' },
+  { stepId: 'storePreview', flip: null },
+];
+
 const LOC_SURFACE = {
   ios: {
     unifiedStep: 'localizations',
     viewKey: 'iosLocsView',
     views: {
       storePage:    { fieldKey: 'locReviewField',   modeKey: 'locReviewMode',       defaultField: 'title',
-                      screens: [{ stepId: 'storePreview', flip: 'localization' }] },
+                      screens: LOC_STORE_PAGE_SCREENS },
       iaps:         { fieldKey: 'iapLocField',      modeKey: 'iapLocMode',          defaultField: 'name',
                       itemFn: () => _iapLocEffectiveIapId(),
                       screens: [{ stepId: 'storePreview', flip: 'iapLocalizations' }] },
@@ -3521,7 +3534,7 @@ const LOC_SURFACE = {
     viewKey: 'macLocsView',
     views: {
       storePage:    { fieldKey: 'masLocReviewField', modeKey: 'masLocReviewMode',   defaultField: 'title',
-                      screens: [{ stepId: 'storePreview', flip: 'localization' }] },
+                      screens: LOC_STORE_PAGE_SCREENS },
       iaps:         { fieldKey: 'masIapLocField',    modeKey: 'masIapLocMode',      defaultField: 'name',
                       itemFn: () => _masIapLocEffectiveIapId(),
                       screens: [{ stepId: 'storePreview', flip: 'iapLocalizations' }] },
@@ -3535,7 +3548,7 @@ const LOC_SURFACE = {
     viewKey: 'macFullLocsView',
     views: {
       storePage:    { fieldKey: 'macFullLocReviewField', modeKey: 'macFullLocReviewMode', defaultField: 'title',
-                      screens: [{ stepId: 'storePreview', flip: 'localization' }] },
+                      screens: LOC_STORE_PAGE_SCREENS },
       iaps:         { fieldKey: 'macFullIapLocField',    modeKey: 'macFullIapLocMode',    defaultField: 'name',
                       itemFn: () => _macFullIapLocEffectiveIapId(),
                       screens: [{ stepId: 'storePreview', flip: 'iapLocalizations' }] },
@@ -8029,14 +8042,14 @@ function selectPicklistItem(igdbId) {
   // "About This Game" / screenshots — Steam's own store-page copy and full
   // screenshot set is generally more complete and current than IGDB's
   // community-submitted summary/screenshots for a title
-  // that's actually live on Steam. That fetch (fetchSteamAppDetails in claude.js, via
-  // _cors()/proxy.cors.sh) is async, so _applySteamAboutData fills these
+  // that's actually live on Steam. That fetch (fetchShipmateGame in claude.js,
+  // against Shipmate's own /game endpoint) is async, so _applySteamAboutData fills these
   // fields in shortly after this function returns, not immediately; if the
   // fetch fails, it falls back to filling from IGDB's own summary/
   // screenshots (via the same helpers used in the no-Steam-app-id branch
   // below) rather than leaving the About section and screenshot grid empty.
   // Having item.steamAppId in hand up front doesn't mean Steam data has
-  // arrived yet, since fetchSteamAppDetails itself is still async — fill
+  // arrived yet, since fetchShipmateGame itself is still async — fill
   // the screenshot grid baseline from IGDB immediately so it isn't left
   // blank, then let Steam's own screenshots upgrade it once that resolves.
   //
@@ -8117,8 +8130,8 @@ function selectPicklistItem(igdbId) {
   // claude.js), so there's no separate app-id lookup to make anymore. This
   // used to resolve the app id with a follow-up query (_igdbFetchSteamAppId,
   // claude.js) straight to IGDB itself via IGDB_ENDPOINT/_cors() — that
-  // function still exists (kept as a documented fallback should this
-  // endpoint's steam_id ever prove unreliable) but is no longer called from
+  // function was deleted in v6.62, having had no callers since, and is no
+  // longer called from
   // here, which removes both the extra network round-trip and this call's
   // dependency on the same _cors()/proxy.cors.sh path the Steam appdetails/
   // store-page fetches below still separately rely on.
@@ -8357,10 +8370,11 @@ function _applyIgdbScreenshotFallback(igdbId, expectedTitle) {
 }
 
 /* Runs after selectPicklistItem when the picked title has a linked Steam
-   page (item.steamAppId). Fetches Steam's own appdetails (via
-   fetchSteamAppDetails in claude.js, over corsproxy.io — verified live and
-   already working for IGDB itself) and, on success, replaces IGDB as the
-   source of truth for this game's:
+   page (item.steamAppId). Fetches the title's Steam data (via
+   fetchShipmateGame in claude.js, against Shipmate's own /game endpoint —
+   this used to call Steam's appdetails through a free CORS proxy, replaced
+   in v6.50) and, on success, replaces IGDB as the source of truth for this
+   game's:
      - About section Description ← Steam's about_the_game (HTML flattened to
        blank-line-separated paragraphs, same conversion as the Web platform
        Description below — NOT Steam's short_description, which is only a
@@ -8433,8 +8447,8 @@ function _steamTrailerFromMovies(movies) {
    translation of the primary text — so it's used instead, whenever it's
    available.
 
-   Steam's appdetails endpoint accepts an `l=<language>` query param
-   (fetchSteamAppDetails, claude.js) using Steam's OWN language codes,
+   /game accepts a `lang=<language>` query param (fetchShipmateGame,
+   claude.js) taking Steam's OWN language codes,
    which don't match Shipmate's ISO-ish codes (OB_LANG_NAMES, render.js) —
    STEAM_LOCALIZATION_LANG_MAP bridges the two. Steam has no store-page
    localization support at all for Malay or Hebrew as of this writing, so
@@ -8660,7 +8674,7 @@ async function _checkSteamLocalizedDescriptionInner(lang) {
 // Localization Review fields (Title/Short Description/Developer/Publisher/
 // About This Game — buildSteamLocalizationReviewSection, render.js) rather
 // than the App Store's own Description. Kept as a fully separate function
-// with its own fetchSteamAppDetails(appId, steamLang) call rather than
+// with its own fetchShipmateGame(appId, steamLang) call rather than
 // folded into _checkSteamLocalizedDescription, even though the two request
 // the exact same response for the same appId+lang: keeping them apart means
 // this newer, less-tested code path can never risk the already-shipped iOS
@@ -9239,9 +9253,11 @@ function _applySteamSocialLinks(links) {
 
 /* Pre-populates Mac App Store's Game Center > Achievements section
    (state.macGameCenterAchievements — see its own comment, state.js) from
-   Steam's public global achievement stats page (fetchSteamAchievementsPage /
-   _parseSteamAchievements, claude.js) the moment a Steam-linked title is
-   picked from the IGDB picklist. Follows the same fire-and-forget,
+   /game's own `achievements` array (fetchShipmateGame / _shipmateAchievements,
+   claude.js) the moment a Steam-linked title is picked from the IGDB
+   picklist. This used to scrape Steam's public global achievement stats page;
+   /game replaced it in v6.50 and carries a stable `identifier` and a stated
+   `hidden` that the scrape never had. Follows the same fire-and-forget,
    stale-title-guarded pattern as _applySteamAboutData/_applySteamHeroBanner/
    _applySteamSocialLinks above — but, per product decision, does NOT follow
    their "never overwrite existing content" convention: selectPicklistItem
@@ -10319,7 +10335,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _locReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _locReviewRefreshBackTranslation(field, lang, '');
     });
-    _locDeferredRerender('ios', 'storePage', field, null);
+    _locDeferredRerenderStorePage(field, field === 'title' ? 'title' : false);
     return;
   }
 
@@ -10335,7 +10351,7 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
   // `eligible` above).
   state.iasTranslatePendingLangs = state.iasTranslatePendingLangs || {};
   state.iasTranslatePendingLangs[field] = eligible.slice();
-  _locDeferredRerender('ios', 'storePage', field, null);
+  _locDeferredRerenderStorePage(field, field === 'title' ? 'title' : false);
 
   // Mark every language this request is about to translate as in flight
   // for `text`, so a call triggered again before this one resolves (e.g.
@@ -10475,7 +10491,7 @@ Rules:
   // clearing this doesn't affect that.
   state.iasTranslatePendingLangs[field] = [];
 
-  _locDeferredRerender('ios', 'storePage', field, null);
+  _locDeferredRerenderStorePage(field, field === 'title' ? 'title' : false);
 }
 
 // Read-only lookup for render.js (never mutates state) — whether `lang` is
@@ -10657,32 +10673,21 @@ function _masFieldAutoTranslateEnabled(field) {
 // sync — only ever called with field='description'|'releaseNotes' (Title/
 // Subtitle bypass to _iasSetFieldValue before reaching here), so no
 // shared/independent branching is needed inside this function itself.
-// Whether the Mac App Store's own Product Page Preview is currently open,
-// showing the un-flipped preview itself (not one of its flipped sub-sections
-// like Content Questions/Screenshots/etc.), AND previewing a non-primary
-// language — i.e. whether _masTriggerAutoTranslate's status line
-// (_masStatusLine, render.js — only ever visible for a non-primary preview
-// language) or the translated field text itself could actually be showing
-// right now. Guards _masTriggerAutoTranslate's reRenderStepModal() calls:
-// those fully replace #step-modal-body's DOM node (renderStepModal,
-// render.js), which is harmless while nothing it shows is changing, but
-// destroys any in-progress scroll/trackpad-momentum on the real, visible
-// preview when the user is actively scrolling it — the reported "unable to
-// scroll properly" bug. Selecting a language in Game Details - Localization
-// triggers a translation pass for every already-authored field
-// (toggleObLang → _propagateAllLocalizationFeatures → _masPropagateAllFields),
-// whose completion can land seconds later while the user has since moved on
-// to actually viewing the preview — but almost always still viewing the
-// PRIMARY language, for which this status line never shows at all, so most
-// of those re-renders were pure wasted DOM churn with nothing to show for
-// it. Skipping them entirely when they'd be invisible fixes the scroll
-// interruption without needing surgical DOM patching for the rarer visible
-// case, which still falls back to the normal full re-render below.
-function _masPreviewNeedsTranslateRefresh() {
-  if (state.stepModal?.platformId !== 'macos' || state.stepModal?.stepId !== 'storePreview') return false;
-  if (state.storePreviewFlipTarget?.macos) return false;
-  return _masEffectivePreviewLang() !== (state.formData.primaryLanguage || 'en');
-}
+//
+// RETIRED: _masPreviewNeedsTranslateRefresh lived here (v6.63). It asked "is
+// the Mac store preview open, un-flipped, and showing a non-primary language?"
+// and wrapped all three of this function's repaint requests — a hand-rolled
+// version of the visibility test _locDeferredRerender now does properly for
+// every surface (see LOC_SURFACE, whose own comment already noted that it
+// generalised this predicate).
+//
+// Keeping both was not redundant, it was a bug. The predicate required
+// stepId === 'storePreview', so on the unified LOCALIZATIONS step it was
+// always false and the completion repaint was never requested at all: the
+// spinners went up when the translation started and stayed up indefinitely,
+// with the finished text sitting in state behind them. That is the reported
+// "loading animation never ends" for Description and What's New. Deleted
+// rather than widened — one visibility test, in one place.
 
 async function _masTriggerAutoTranslate(field, primaryValue) {
   if (!_masFieldAutoTranslateEnabled(field)) return;
@@ -10738,7 +10743,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _masLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _masLocReviewRefreshBackTranslation(field, lang, '');
     });
-    if (_masPreviewNeedsTranslateRefresh()) _locDeferredRerender('macos', 'storePage', field, null);
+    _locDeferredRerender('macos', 'storePage', field, null);
     return;
   }
 
@@ -10753,7 +10758,7 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
     if (!ml.localizedStoreText[lang]) ml.localizedStoreText[lang] = _masBlankLocalizedText();
     ml.localizedStoreText[lang][inFlightKey] = text;
   });
-  if (_masPreviewNeedsTranslateRefresh()) _locDeferredRerender('macos', 'storePage', field, null);
+  _locDeferredRerender('macos', 'storePage', field, null);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
@@ -10838,7 +10843,7 @@ Rules:
   }
   state.masTranslatePendingLangs[field] = [];
 
-  if (_masPreviewNeedsTranslateRefresh()) _locDeferredRerender('macos', 'storePage', field, null);
+  _locDeferredRerender('macos', 'storePage', field, null);
 }
 
 function _masRetryTranslate(field) {
@@ -16251,9 +16256,9 @@ function _masIapLocToggleSettingsMenu(event) {
    achievement imported from Steam (a.fromSteam, set by
    _applySteamAchievements above) can have a GENUINE Steam-authored
    translation for Display Name/Earned Description, sourced from Steam's
-   own public achievement stats page fetched with a `l=<language>` query
-   param (fetchSteamAchievementsPage, claude.js — verified live that Steam
-   genuinely translates that page, not just its own chrome around it) — see
+   own achievement text fetched with a `lang=<language>` query param
+   (fetchShipmateGame, claude.js — verified live that Steam genuinely
+   translates these, not just the chrome around them) — see
    _checkSteamLocalizedAchievements below. That real, developer-written text
    is preferred over an AI (Claude) translation of the primary text, the
    same "Steam beats AI, until the developer edits the primary field again"

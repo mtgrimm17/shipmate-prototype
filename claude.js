@@ -405,11 +405,18 @@ const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
    since that path also needed an IGDB/Twitch key the browser shouldn't
    hold. _cors()/IGDB_ENDPOINT and the Twitch token flow are still used —
    by the Steam appdetails/store-page fetches further down, by
-   _igdbFetchSteamAppId's single-item follow-up lookup (also below — the
-   results _igdbSearchRaw hands back don't carry a Steam app ID, so
-   selectPicklistItem, app.js, resolves it this way once a title is
-   picked), and as the fallback wiring if IGDB_SEARCH_ENDPOINT itself ever
-   needs to be pointed back at a full direct-IGDB search. */
+   _igdbFetchScreenshots' single-item follow-up lookup (also below — the
+   results _igdbSearchRaw hands back carry no screenshots, so a title with no
+   Steam app id fills its grid this way), and as the fallback wiring if
+   IGDB_SEARCH_ENDPOINT itself ever needs to be pointed back at a full
+   direct-IGDB search.
+
+   THAT ONE LOOKUP IS NOW THE ONLY LIVE USE OF THE PROXY (v6.62). Everything
+   else that went through it has been deleted: Steam's appdetails and
+   achievements-stats endpoints, the store page's HTML, and
+   _igdbFetchSteamAppId. What is left is a documented JSON API rather than a
+   scrape — but it is still a free proxy with no SLA, and the IGDB/Twitch
+   client secret travels through it. */
 const _cors = (u) => 'https://proxy.cors.sh/' + u;
 const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
 const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
@@ -509,7 +516,7 @@ async function _getIgdbToken() {
   // browser refuses to hand the response back to this code, and fetch()
   // rejects with a generic "Failed to fetch"/TypeError. That's the actual
   // bug behind "IGDB screenshot fallback silently does nothing" — every
-  // caller (_igdbFetchSteamAppId AND _igdbFetchScreenshots) starts by
+  // caller (_igdbFetchScreenshots) starts by
   // awaiting this function, so a broken token fetch here breaks BOTH: Steam
   // App ID resolution never succeeds either, meaning `_applyIgdbScreenshotFallback`
   // itself was ALSO already failing for its own IGDB API call — see
@@ -678,12 +685,12 @@ async function _igdbSearchRaw(title) {
       // testing — e.g. "Hade: Forbidden Levels", igdb_id 172092, steam_id
       // "875410"), so a title can have a truthy steamAppId here even when
       // `platforms` doesn't list "steam". Kept as a string, matching the
-      // type `_igdbFetchSteamAppId` below already returns (both ultimately
-      // trace back to a Steam app id parsed out of a URL). This is now the
-      // sole source of a title's Steam app id for the picklist flow —
+      // type the retired `_igdbFetchSteamAppId` follow-up query used to
+      // return (both ultimately trace back to a Steam app id parsed out of
+      // a URL). This is the sole source of a title's Steam app id —
       // selectPicklistItem (app.js) drives Steam enrichment straight off
-      // this field and no longer makes the separate _igdbFetchSteamAppId
-      // follow-up query (below) to resolve it.
+      // this field, which is why that query had no callers left to lose
+      // when it was deleted in v6.62.
       steamAppId: g.steam_id ? String(g.steam_id) : null,
       // Real IGDB blurb text, not the empty string an earlier revision of
       // IGDB_SEARCH_ENDPOINT's comment assumed this always was — the `|| ''`
@@ -699,57 +706,21 @@ async function _igdbSearchRaw(title) {
   }).filter(g => g.id && Number.isFinite(g.id));
 }
 
-/* Resolves a single title's Steam app ID by IGDB id — goes straight to IGDB
-   itself via IGDB_ENDPOINT/_cors(), asking for just one game's websites, and
-   pulls the appid out of the Steam website URL via IGDB_WEBSITE_URL_PATTERNS
-   (the same table _igdbSearchRaw's predecessor used — IGDB's website
-   `category` field has been unreliable, see that table's comment).
-   NOT currently called anywhere — selectPicklistItem (app.js) used to call
-   this as a follow-up once a title was picked, back when IGDB_SEARCH_ENDPOINT's
-   results didn't carry a Steam app id at all. Now that endpoint returns one
-   directly (steam_id, wired into item.steamAppId — see _igdbSearchRaw
-   above), selectPicklistItem drives Steam enrichment off that instead,
-   which also avoids this function's own dependency on _cors()/proxy.cors.sh
-   (the same dead-proxy path documented above). Left in place, still
-   working as designed, as a fallback this codebase can call again if
-   IGDB_SEARCH_ENDPOINT's steam_id ever proves unreliable.
-   Returns null for "no linked Steam page" (not an error); only throws for a
-   real fetch/auth failure. */
-async function _igdbFetchSteamAppId(igdbId) {
-  const token = await _getIgdbToken();
-  const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Client-ID':     IGDB_CLIENT_ID,
-      'Authorization': 'Bearer ' + token,
-      'Content-Type':  'text/plain',
-    },
-    body: `fields websites.url; where id = ${Number(igdbId)};`,
-  });
-
-  if (res.status === 401) {
-    _igdbAccessToken = null;               // invalidate and let caller retry
-    throw new Error('IGDB auth expired — please retry');
-  }
-  if (!res.ok) throw new Error('IGDB website lookup failed (' + res.status + ')');
-
-  const games = await res.json();
-  const game  = games[0];
-  if (!game) return null;
-
-  const steamPattern = IGDB_WEBSITE_URL_PATTERNS.find(p => p.pid === 'steam').re;
-  const steamSite = (game.websites || []).find(w => w.url && steamPattern.test(w.url));
-  if (!steamSite) return null;
-  const m = steamSite.url.match(/\/app\/(\d+)/);
-  return m ? m[1] : null;
-}
+/* ── THE IGDB APP-ID FOLLOW-UP IS NO LONGER NEEDED (v6.62) ────────────────
+   _igdbFetchSteamAppId used to resolve a picked title's Steam app ID with a
+   second, single-item query straight to IGDB through the CORS proxy, because
+   the old search results carried no Steam id. IGDB_SEARCH_ENDPOINT — our own
+   backend — returns `steam_id` on the search result itself now, wired into
+   item.steamAppId, so selectPicklistItem has the id before it needs it and
+   this has had no callers since. Deleted rather than kept as fallback wiring,
+   for the same reason as the Steam endpoints above. */
 
 /* Resolves a single title's screenshots by IGDB id — a small, targeted
    follow-up query used once a title is picked (selectPicklistItem, app.js)
    whenever Steam scraping doesn't produce screenshots for that title: no
    Steam link at all, the Steam app-ID/appdetails lookup itself failed, or
    Steam succeeded but simply has none listed for this game. Same reasoning
-   as _igdbFetchSteamAppId just above: IGDB_SEARCH_ENDPOINT's results never
+   as the app-id lookup that used to sit above: IGDB_SEARCH_ENDPOINT's results never
    carry screenshots (see _igdbSearchRaw), so this goes straight to IGDB
    itself via IGDB_ENDPOINT/_cors() for just this one game. Returns [] for
    "no screenshots" (not an error); only throws for a real fetch/auth
@@ -948,38 +919,24 @@ function _shipmateFormatPrice(game) {
   }
 }
 
-/* ── Steam appdetails — short description, developer, "About This Game",
-   and screenshots ─────────────────────────────────────────────────────
-   store.steampowered.com/api/appdetails is undocumented (no official
-   Steamworks Web API reference page, no key required) but stable — it's
-   the same data backing the store page itself, and is what most
-   third-party Steam-library tools rely on. Requires a CORS proxy from the
-   browser since store.steampowered.com doesn't send permissive CORS
-   headers — see _cors() above for which proxy and why. Used by
-   _applySteamAboutData (app.js).
+/* ── STEAM'S OWN ENDPOINTS ARE NO LONGER CALLED EITHER (v6.62) ────────────
+   Deleted from here: fetchSteamAppDetails (store.steampowered.com/api/appdetails)
+   and fetchSteamAchievementsPage (steamcommunity.com/stats/<appid>/achievements),
+   with _parseSteamAchievements, the regex that read that page's markup.
 
-   Optional `lang` (a Steam API language code, e.g. 'french', 'schinese' —
-   see STEAM_LOCALIZATION_LANG_MAP, app.js) requests appdetails localized
-   into that language via Steam's own `l=` query param, used by
-   _checkSteamLocalizedDescription (app.js) to fetch a supporting language's
-   localized "About This Game" (about_the_game) copy, and by
-   _checkSteamLocalizedListing (app.js) to fetch that same language's
-   localized Title/Short Description/Developer/Publisher/About This Game for
-   Steam's own Localization Review. Steam does not error
-   for a language it has no real translation for — it silently falls back
-   to the game's default listing language instead, so a caller requesting a
-   specific language must compare the result's about_the_game against the
-   default-language baseline itself to tell "genuinely localized" from
-   "silently fell back". */
-async function fetchSteamAppDetails(appId, lang) {
-  const langParam = lang ? `&l=${encodeURIComponent(lang)}` : '';
-  const res = await _fetchWithTimeout(_cors(`https://store.steampowered.com/api/appdetails?appids=${appId}${langParam}`));
-  if (!res.ok) throw new Error('Steam appdetails fetch failed (' + res.status + ')');
-  const json = await res.json();
-  const entry = json && json[appId];
-  if (!entry || !entry.success || !entry.data) throw new Error('Steam appdetails: no data for app ' + appId);
-  return entry.data;
-}
+   All three were superseded in v6.50, when every Steam-sourced field moved onto
+   Shipmate's own /game endpoint — the listing, the localized prose, and the
+   achievements, which /game returns with a stable `identifier` and a stated
+   `hidden` that the scraped page never had. They had sat here with no callers
+   since, and they were the last Steam traffic pointed at a free third-party
+   CORS proxy.
+
+   Two reasons not to keep them as a fallback. They are not one: appdetails is
+   the endpoint whose unreliable `l=` handling the localization code was written
+   around in the first place, so falling back to it would mean falling back to
+   the bug. And a proxy with no SLA in the path of a retired code path is a
+   liability nobody is watching — the first anyone would learn it had broken is
+   when someone tried to use it. Recoverable from git history. */
 
 /* ── THE STEAM STORE PAGE'S HTML IS NO LONGER READ (v6.61) ────────────────
    Three functions lived here and all three are gone: fetchSteamStorePage,
@@ -1002,102 +959,6 @@ async function fetchSteamAppDetails(appId, lang) {
    is that the store page's markup is no longer part of this app's contract
    with Steam. Recoverable from git history if `links` ever leaves the
    endpoint. */
-
-/* ── Steam global achievement stats page ──────────────────────────────
-   steamcommunity.com/stats/<appid>/achievements is Steam's own public,
-   no-login-required page listing every achievement in a game alongside
-   the percentage of all players who've unlocked it — a COMPLETELY
-   SEPARATE page from both appdetails (fetchSteamAppDetails above, which
-   has no achievement data at all) and the store page itself
-   (fetchSteamStorePage). Requires the same CORS proxy as those (see
-   _cors() above) since steamcommunity.com doesn't send permissive CORS
-   headers either. Used by _applySteamAchievements (app.js) to pre-populate
-   Mac App Store's Game Center > Achievements section
-   (state.macGameCenterAchievements) the moment a Steam-linked title is
-   picked from the IGDB picklist.
-
-   Optional `lang` (a Steam API language code, e.g. 'french', 'schinese' —
-   see STEAM_LOCALIZATION_LANG_MAP, app.js) requests this same page
-   localized into that language via Steam's own `l=` query param, used by
-   _checkSteamLocalizedAchievements (app.js) to source genuine
-   developer-authored translations for achievement Display Name/Earned
-   Description, the same way fetchSteamAppDetails' own `lang` param does for
-   the store listing. Verified live (Celeste, appid 504230, `?l=french`):
-   the page's achievement names/descriptions and its own chrome ("Total des
-   succès", "Succès généraux") both come back genuinely translated, not just
-   echoed in English. Steam does not error for a language it has no real
-   translation for — same as appdetails, it silently falls back to the
-   game's default listing language instead, so a caller requesting a
-   specific language must compare the result against a default-language
-   baseline to tell "genuinely localized" from "silently fell back". */
-async function fetchSteamAchievementsPage(appId, lang) {
-  const langParam = lang ? `?l=${encodeURIComponent(lang)}` : '';
-  const res = await _fetchWithTimeout(_cors(`https://steamcommunity.com/stats/${appId}/achievements${langParam}`));
-  if (!res.ok) throw new Error('Steam achievements page fetch failed (' + res.status + ')');
-  return await res.text();
-}
-
-/* Parses the achievements page's own markup (see fetchSteamAchievementsPage
-   above) — verified live against Celeste (504230, 32/32 rows parsed
-   correctly) and Stardew Valley (413150, 49/49 rows parsed correctly,
-   correctly flagging its two well-known secret achievements "Legend" and
-   "Fector's Challenge" as Hidden) via a real browser session, since this
-   markup can't be reached from this codebase's own dev/CI tooling. Each
-   achievement is one `<div class="achieveRow ">` block containing an
-   `.achieveImgHolder > img`, an `.achieveTxtHolder` with an `.achieveFill`
-   progress-bar div (whose inline `width:NN%` style is a ROUNDED INTEGER —
-   deliberately not used for `percent` below), an `.achievePercent` div
-   holding the real one-decimal percentage text, and an `.achieveTxt` with
-   the `<h3>` name and an `<h5>` description. The `<h5>` is present when the
-   achievement isn't flagged "hidden" in Steamworks, and empty
-   (`<h5></h5>`) otherwise — confirmed against both games above — the one
-   signal this public page gives us for Hidden, used by
-   _applySteamAchievements (app.js). Deliberately split on the repeating
-   "achieveRow" marker rather than matched with a single balanced regex
-   (like _parseSteamSocialLinks above) — each row nests multiple divs of its
-   own, which a regex can't reliably bound without a real HTML parser, while
-   splitting just needs the next occurrence of the same marker (or end of
-   document, for the last row) as its natural boundary. Same "best-effort
-   scrape of undocumented, changeable markup" caveat as fetchSteamStorePage's
-   own comment — returns [] rather than throwing on a totally unrecognized
-   page shape, and simply skips any individual block missing a name. Returns
-   an array of { name, description, iconUrl, percent } in the same order the
-   page itself lists them (highest-unlocked-first). */
-function _parseSteamAchievements(html) {
-  if (!html) return [];
-  const decode = s => (s || '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const rows = html.split(/<div class="achieveRow/).slice(1);
-  const out = [];
-  for (const row of rows) {
-    const imgMatch  = row.match(/<img[^>]*\bsrc="([^"]+)"/);
-    const nameMatch = row.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
-    const descMatch = row.match(/<h5[^>]*>([\s\S]*?)<\/h5>/);
-    // Anchored to the .achievePercent div specifically — NOT a bare
-    // "first NN.N%-shaped number in the row" scan, which would actually
-    // match the earlier .achieveFill progress-bar's rounded-integer
-    // `style="width: NN%"` first (e.g. "70%" instead of the real "70.7%"),
-    // confirmed live against Celeste's own markup above.
-    const pctMatch  = row.match(/achievePercent"[^>]*>\s*([\d.]+)\s*%/);
-    const name = decode(nameMatch && nameMatch[1]);
-    if (!name) continue; // malformed/unrecognized block — skip rather than push a nameless achievement
-    out.push({
-      name,
-      description: decode(descMatch && descMatch[1]),
-      iconUrl: imgMatch ? imgMatch[1] : '',
-      percent: pctMatch ? parseFloat(pctMatch[1]) : null,
-    });
-  }
-  return out;
-}
 
 // Steam's "about_the_game" field is a fragment of raw store-page HTML
 // (<br>/<p> tags, the occasional list, HTML entities) rather than plain
