@@ -6,7 +6,7 @@ Shipmate is a web app that helps game developers prepare and submit their games 
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.80** &rarr; next is **v6.81**.
+Current version: **v6.81** &rarr; next is **v6.82**.
 
 ---
 
@@ -192,6 +192,61 @@ batch TWICE — at 13/23/31ms and again at 7854/8028/8214 — and three rapid
 clicks are precisely the panic gesture, so the octopus panicked correctly
 both times. **When a behaviour fires twice, count the INPUTS before reading
 the state machine.**
+
+**AND THE BLOOM IS PAINTED, NOT FILTERED (v6.81) — A SAFARI-ONLY BUG THE RIG
+EXPOSED.** Jaco: *"se marca una máscara que hace que el destello que tenemos
+dentro del panel, para fingir transparencia, se corta al salir y esconderse
+Shippy"*, and then the half that named the cause: *"creo que solo pasa en
+safari, en chrome no."*
+
+**MEASURED IN CHROMIUM, NOTHING CLIPPED IT** — `.app-guide` is `overflow:
+visible` with no `clip-path` and no `contain`. That was the whole finding, and
+it is this file's opening heading arriving again: Claude measures in one engine
+and Jaco develops in the other, so a clean measurement here is not an
+exoneration.
+
+**A FILTER PAINTS OUTSIDE ITS OWN BOX, WHICH IS WHAT MAKES IT FRAGILE.** The
+bloom was a 96px disc at `filter: blur(28px)`; rendered into a canvas and read
+radially, it reaches **120px from the centre** against a 48px radius, and its
+centre only ever gets to **76.86%** of the nominal alpha (a blur spreads ink,
+so it never paints solid). The engine therefore needs a layer BIGGER than the
+element — and WebKit re-rasterises that layer when a neighbour is promoted,
+which is exactly what the tantrum does (`transform` on `.guide-mascot`),
+re-rasterising to the element's own bounds. The overspill is guillotined and
+what is left is a hard rectangle. **The "mask" is a layer edge, not a clip in
+this file.** The PNG never triggered it because it never animated a transform.
+
+So the blur goes and the same light is DRAWN: a `radial-gradient` is ordinary
+paint — no filter, no mask, no compositing operation, nothing outside the box
+to lose — so the bug is unreachable in every engine rather than fixed in one.
+That is the standing preference at *"The travel is ours, not the browser's"*,
+applied to paint instead of to scrolling.
+
+**THE STOPS ARE THE OLD BLUR'S OWN PROFILE, MEASURED.** 1.000 / .9286 / .7347
+/ .4847 / .2602 / .1071 / .0357 / .0051 at r 0 / 16 / 32 / 48 / 64 / 80 / 96 /
+112, each × the .7686 peak, on a 240px box at `closest-side`. Diffed against
+the retired treatment across the whole radius: **max deviation .0144** of
+normalised alpha, which after the untouched `opacity: .18` is **.0026** on
+screen — a fraction of one luminance point out of 255. The box grew 96 → 240
+and `top` went −20 → −92 so the CENTRE does not move: 168 in both, measured,
+and still on the mascot's own centre x to 0.00. `opacity: .18` stays the one
+brightness lever, and `--sm-blob`'s hex is written out because a gradient needs
+per-stop alpha where the token is a flat colour — the token keeps its other
+consumer and is still where the hue is decided.
+
+**AND A FADE WAS BUILT FIRST AND REVERTED, which is the conduct rule again.**
+The first answer made the bloom fade out with the dive (`:has(.is-hiding)`),
+on the argument that a glow with nothing glowing is the bloom's own recorded
+failure. It measured correctly — .18 → 0 in ~315ms on the flee's curve, back
+over ~730ms — and it was **not what was asked**: the complaint is that the
+glow is CUT, not that it should leave. Removing the symptom by removing the
+thing is not a fix, and it would have left the real layer bug live for the
+next filtered element. Offered separately instead.
+
+**The rule this leaves: a `filter` next to anything that animates a transform
+is a Safari layer bug waiting to happen.** There are three more in this file
+(`--cta-blob` at ~22413, the `--sm-blob` twin at ~21896, and the `backdrop-filter`s).
+None sits beside a transform today; if one ever does, this is the fix.
 
 **`.app-guide` must stay positioned.** Below 1100px a media query used to set
 `position: static`, which took it out of the positioning chain and left the
@@ -8311,7 +8366,7 @@ So: no extra step at the terminal. A fetch is worth it only when someone who
 CAN run git is picking the number and happens to know the other side has been
 shipping that day.
 
-Current version: **v6.80** → next is **v6.81**. (v6.29 – v6.31 are Mark's
+Current version: **v6.81** → next is **v6.82**. (v6.29 – v6.31 are Mark's
 Distribution work, and **v6.42 and v6.48 are Adam's** — shipped in parallel and
 touching none of this.)
 
@@ -8566,9 +8621,17 @@ them shipped together in v6.39. Don't go looking for a live v6.55.
 THE NUMBER IS JACO'S, NOT THE NEXT FREE ONE.** Live is v6.77, read off
 `.ship-message.sent` (the cheap, uncacheable way this section prescribes), so
 6.78 was free and is what this batch was headed for. Jaco: *"necesito que me
-lo pushees en v6.80."* 6.80 > 6.77 and nothing has ever been served under
-6.78 – 6.80, so the key still only goes UP, which is the one thing that makes
-any renumber safe; 6.78 and 6.79 join the gaps with nothing behind them. The
+lo pushees en v6.80."* 6.80 > 6.77, so the key still only goes UP, which is
+the one thing that makes any renumber safe.
+
+**AND 6.79 TURNED OUT NOT TO BE A GAP — the rebase is what said so.** This
+note first claimed nothing had been served under 6.78 – 6.80. `ship.sh`
+conflicted on all fifteen version lines and the markers read **v6.79 on the
+HEAD side**: somebody else had shipped it while this batch was being written,
+which is precisely the check "`ship.sh` REBASES" prescribes and the reason it
+prescribes reading the markers rather than trusting `--theirs` blind. HEAD's
+number was LOWER than ours, so `--theirs` was still right and 6.80 was still
+free. **6.78 is the only real gap.** Read the conflict, never assume it. The
 work was MEASURED at 6.85 – 6.86 because this pane had already been served
 6.74 – 6.84 in earlier sessions — a number this session has already used is
 not a cache-bust — so anything further needing a measurement here starts
@@ -8599,7 +8662,7 @@ key. 6.77 – 6.83 are gaps with nothing behind them, which is the cosmetic cost
 this section opens with.
 
 Update the version in **three places**:
-1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (14 of them)
+1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (**15** of them since v6.80 added `shippy-live.js`)
 2. `index.html` — the footer badge: `<span class="app-footer-version" id="app-footer-version">vX.XX</span>`
 3. `splash.html` — the version badge text (around line 1366)
 
@@ -8741,7 +8804,7 @@ Versioning section exists to prevent. **Verify before continuing** — the count
 of `?v=` must match the new number, not the old one:
 
 ```bash
-grep -o '?v=[0-9.]*' index.html | sort | uniq -c   # expect 14 of the new one
+grep -o '?v=[0-9.]*' index.html | sort | uniq -c   # expect 15 of the new one
 ```
 
 `GIT_EDITOR=true` is the second half. `ship.sh` opens `$EDITOR` for the commit

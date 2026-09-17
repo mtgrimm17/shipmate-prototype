@@ -3271,11 +3271,57 @@ body.viewing-splash .app-subnav { display: none; }
    existed for the two tentacle PNGs, which hung off it; with them gone this
    was its only consumer, so the sum is written out rather than a token kept
    alive for one caller.) */
+/* IT IS PAINTED, NOT FILTERED — AND THAT IS A SAFARI FIX (v6.81).
+   Jaco: *"se marca una máscara que hace que el destello… se corta al salir y
+   esconderse Shippy"*, and then the half that named the cause: *"creo que solo
+   pasa en safari, en chrome no."*
+
+   It was `background: var(--sm-blob); opacity: .18; filter: blur(28px)` on a
+   96px disc. **A filter paints far outside its own box** — measured, this one
+   reaches 120px from the centre against a 48px radius — so the engine has to
+   give it a layer bigger than the element. WebKit re-rasterises that layer
+   when a NEIGHBOUR is promoted, which is exactly what the octopus's dive does
+   (`transform` on `.guide-mascot`), and it re-rasterises to the element's own
+   bounds: the blur's overspill is guillotined and what is left is a hard
+   rectangle. That is the "mask" — it is the layer's edge, not a clip in this
+   file. Chromium keeps the outset, which is why nothing showed here.
+
+   So the blur goes and the same light is DRAWN. A radial-gradient is ordinary
+   paint: no filter, no mask, no compositing operation, nothing outside the box
+   to lose — the bug is unreachable in every engine rather than fixed in one.
+   This file's standing preference, stated at "The travel is ours": prefer a
+   mechanism with no per-engine behaviour over one that has to be verified in
+   an engine nobody here can drive.
+
+   **THE STOPS ARE MEASURED, NOT EYEBALLED.** The old disc was rendered into a
+   canvas at `blur(28px)` and its radial alpha read off: the centre only ever
+   reached **76.86%** of the nominal alpha (a blur spreads the ink, so it never
+   paints solid) and it died at **120px**. Hence a 240px box, `closest-side`,
+   and stops carrying that profile — 1.000 / .9286 / .7347 / .4847 / .2602 /
+   .1071 / .0357 / .0051 at r 0 / 16 / 32 / 48 / 64 / 80 / 96 / 112, each times
+   the .7686 peak. `opacity: .18` is untouched and stays the one brightness
+   lever. Re-render and re-read if the blur is ever wanted back.
+
+   The box grew 96 → 240 and the offsets move with it so the CENTRE does not:
+   it was `top: -20` on a 96 box (centre y 28) and is `top: -92` on a 240 one
+   (centre y 28). `--sm-blob`'s hex is written out here because a gradient
+   needs per-stop alpha and the token is a flat colour; the token keeps its
+   other consumer and is still where the hue is decided. */
 .app-guide::after {
   content: ''; position: absolute; z-index: 2; pointer-events: none;
-  left: calc(var(--shippy-inset) + var(--shippy-w) / 2 - 48px);
-  top: -20px; width: 96px; aspect-ratio: 1;
-  border-radius: 50%; background: var(--sm-blob); opacity: .18; filter: blur(28px);
+  left: calc(var(--shippy-inset) + var(--shippy-w) / 2 - 120px);
+  top: -92px; width: 240px; aspect-ratio: 1;
+  opacity: .18;
+  background: radial-gradient(closest-side,
+    rgba(202,165,255,.769)   0%,
+    rgba(202,165,255,.714)  13.33%,
+    rgba(202,165,255,.565)  26.67%,
+    rgba(202,165,255,.373)  40%,
+    rgba(202,165,255,.200)  53.33%,
+    rgba(202,165,255,.082)  66.67%,
+    rgba(202,165,255,.027)  80%,
+    rgba(202,165,255,.004)  93.33%,
+    rgba(202,165,255,0)    100%);
 }
 /* Collapsed the card is 52px wide — a bloom that size would swamp it. */
 .app-guide.is-collapsed::after { display: none; }
