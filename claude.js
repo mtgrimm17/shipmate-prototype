@@ -981,107 +981,27 @@ async function fetchSteamAppDetails(appId, lang) {
   return entry.data;
 }
 
-/* ── Steam store page HTML — social media links ───────────────────────
-   Steam's appdetails JSON (fetchSteamAppDetails above) has NO field for a
-   game's social media links (Discord/X/YouTube/etc.) — confirmed by fetching
-   a real appdetails response directly and inspecting every field at every
-   nesting level, during this project's own social-links research. Nor does
-   any documented Steamworks Web API interface expose them (checked
-   IStoreService and ISteamApps specifically — neither has a matching
-   method). That data only exists rendered server-side into the store
-   page's own HTML, sourced from the developer's Steamworks "Store Page
-   Admin" settings — so getting it means fetching and parsing that HTML
-   directly, unlike every other Steam-sourced field in this app (all of
-   which come from the stable, JSON-shaped appdetails endpoint). This is
-   inherently more fragile than the rest of this file: Valve can change the
-   store page's markup at any time with no notice and no deprecation
-   window, unlike a documented/stable API. Used by _applySteamSocialLinks
-   (app.js). */
-async function fetchSteamStorePage(appId, lang) {
-  const langParam = lang ? `?l=${encodeURIComponent(lang)}` : '';
-  const res = await _fetchWithTimeout(_cors(`https://store.steampowered.com/app/${appId}/${langParam}`));
-  if (!res.ok) throw new Error('Steam store page fetch failed (' + res.status + ')');
-  return await res.text();
-}
+/* ── THE STEAM STORE PAGE'S HTML IS NO LONGER READ (v6.61) ────────────────
+   Three functions lived here and all three are gone: fetchSteamStorePage,
+   which pulled https://store.steampowered.com/app/<id>/ through a free
+   third-party CORS proxy, and the two regex parsers that read its markup —
+   _parseSteamSocialLinks (the "Find Community" row) and
+   _parseSteamMetaDescription (the og:description meta tag).
 
-/* Extracts and HTML-entity-decodes the store page's own short-description
-   text out of its raw HTML (see fetchSteamStorePage above) — used as a
-   fallback source for Localization Review's Short Description field
-   (_checkSteamLocalizedListing, app.js) when Steam's /api/appdetails JSON
-   endpoint doesn't return a genuinely localized short_description for a
-   given `l=` language (confirmed live: some store pages correctly localize
-   their own rendered <meta name="description">/<meta property="og:description">
-   tags for a language even when the JSON endpoint's short_description for
-   that same `l=` comes back empty or identical to the default-language
-   text — this endpoint is undocumented/unstable like every other
-   store-page-HTML scrape in this file, see fetchSteamStorePage's own
-   comment). Prefers og:description (Steam always populates this one),
-   falls back to the plain name="description" meta tag. Reuses the same
-   small HTML-entity table _steamHtmlToParagraphLines uses below, since a
-   meta content="..." attribute can carry the same escaped entities as
-   the page's other rendered text does. Returns '' (never throws) if
-   neither meta tag is present, matching this file's "best-effort" scraping
-   convention for undocumented markup. */
-function _parseSteamMetaDescription(html) {
-  if (!html) return '';
-  const decode = s => s
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-  const ogMatch = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]*)"/i)
-    || html.match(/<meta[^>]*content="([^"]*)"[^>]*property="og:description"/i);
-  if (ogMatch && ogMatch[1]) return decode(ogMatch[1]);
-  const nameMatch = html.match(/<meta[^>]*name="description"[^>]*content="([^"]*)"/i)
-    || html.match(/<meta[^>]*content="([^"]*)"[^>]*name="description"/i);
-  if (nameMatch && nameMatch[1]) return decode(nameMatch[1]);
-  return '';
-}
+   Social links were the last thing that needed them. /game returns `links`
+   as [{name, url}] now — the exact shape that regex produced — so
+   _applySteamSocialLinks (app.js) reads it off the response it already has,
+   instead of a second request against undocumented markup Valve can change
+   without notice or deprecation window. _parseSteamMetaDescription had no
+   other source of HTML to parse and went with the fetch; the job it existed
+   for (a localized short description when appdetails' own came back
+   untranslated) is covered by /game's own `summary` on a lang= call.
 
-/* Parses the store page's "Find Community"-style social-links row out of
-   its raw HTML (see fetchSteamStorePage above). Confirmed live against Go
-   Ape Ship!'s real store page (appid 4037180, saved and inspected directly
-   during this project's own social-links research): each social link is
-   an <a class="linkbar" href="..." ... data-tooltip-text="...">, containing
-   a <span class="social_account">Name</span> after its icon SVG — e.g.:
-     <a class="linkbar" href="https://steamcommunity.com/linkfilter/?u=https%3A%2F%2Fdiscord.gg%2FkGFbw4MtnG"
-        target="_blank" rel=" noopener" class="ttip" data-tooltip-text="https://discord.gg/kGFbw4MtnG">
-       <svg>...</svg><span class="social_account">Discord</span><img ... alt="External">
-     </a>
-   The data-tooltip-text + social_account combination is what distinguishes
-   a social link from this exact same row's other .linkbar entries ("Visit
-   the website", "View privacy policy", "View update history", "Read
-   related news") — none of those carry either attribute, so they're
-   correctly excluded without needing a separate exclusion list. Most
-   social hrefs are wrapped in Steam's own
-   https://steamcommunity.com/linkfilter/?u=<url-encoded-target> redirect
-   (unwrapped back to the real target URL here) — but not all of them are:
-   on the same real page, Reddit and YouTube came through as plain direct
-   URLs with no linkfilter wrapper at all, so both forms are handled.
-   Returns an array of { name, url } in the same left-to-right order Steam
-   itself lists them, or [] if the row is missing/empty/unparseable (a
-   malformed-HTML guard, not just "no links configured") rather than
-   throwing — again, this markup is NOT a documented API and can change
-   without notice. Deliberately a single regex pass, not a real HTML
-   parser, matching this file's existing "best-effort, developer can always
-   edit the result" philosophy (see _steamHtmlToParagraphLines below). */
-function _parseSteamSocialLinks(html) {
-  const re = /<a class="linkbar" href="([^"]+)"[^>]*data-tooltip-text="[^"]*"[^>]*>[\s\S]*?<span class="social_account">([^<]+)<\/span>/g;
-  const links = [];
-  let m;
-  while ((m = re.exec(html || ''))) {
-    let url = m[1];
-    const wrapped = url.match(/^https:\/\/steamcommunity\.com\/linkfilter\/\?u=(.+)$/);
-    if (wrapped) {
-      try { url = decodeURIComponent(wrapped[1]); } catch (e) { /* malformed encoding — fall back to the wrapped URL as-is */ }
-    }
-    const name = (m[2] || '').trim();
-    if (name && url) links.push({ name, url });
-  }
-  return links;
-}
+   Deleted rather than left unreachable: a scraper nothing calls is still a
+   scraper the next person has to reason about, and the point of this change
+   is that the store page's markup is no longer part of this app's contract
+   with Steam. Recoverable from git history if `links` ever leaves the
+   endpoint. */
 
 /* ── Steam global achievement stats page ──────────────────────────────
    steamcommunity.com/stats/<appid>/achievements is Steam's own public,

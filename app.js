@@ -8135,7 +8135,6 @@ function selectPicklistItem(igdbId) {
   if (hasSteamAppId) {
     _applySteamAboutData(item.steamAppId, item.name, item);
     _applySteamHeroBanner(item.steamAppId, item.name);
-    _applySteamSocialLinks(item.steamAppId, item.name);
     _applySteamAchievements(item.steamAppId, item.name);
   }
 
@@ -8747,8 +8746,9 @@ async function _checkSteamLocalizedListingInner(lang) {
   // og:description/description meta tags) for a language this JSON field
   // comes back empty, or identical to the default-language text, for. When
   // that happens, fall back to scraping that meta tag directly off the
-  // store page itself (see fetchSteamStorePage/_parseSteamMetaDescription,
-  // claude.js) before giving up on this language's Short Description.
+  // store page itself (via a meta-tag parse that no longer exists — see
+  // claude.js where the store-page scrape used to be) before giving up on
+  // this language's Short Description.
   /* THE STORE-PAGE HTML FALLBACK IS GONE, and it was a workaround for a bug
      this endpoint doesn't have. /api/appdetails didn't reliably honour its
      own `l=` for short_description — a page could render a correctly
@@ -9040,6 +9040,9 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     } else if (fallbackItem && fallbackItem.summary) {
       _fillDescriptionField(fallbackItem.summary);
     }
+    // Social links, straight off this same response — see
+    // _applySteamSocialLinks for what this replaced.
+    _applySteamSocialLinks(data.links);
     if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
     // Publisher — same "join Steam's list" treatment as Developer above,
     // just a different appdetails field (a game can, and often does, have
@@ -9193,56 +9196,45 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
   reRenderStepModal();
 }
 
-/* Runs after selectPicklistItem when the picked title has a linked Steam
-   page (item.steamAppId). Pre-populates Factsheet > Developer > Links'
-   social-links list (state.webSite.links) from the Steam store page's own
-   "Find Community" section — a COMPLETELY SEPARATE fetch from
-   _applySteamAboutData's appdetails JSON call above (fetchSteamStorePage
-   fetches the store page's raw HTML instead; see the long comment on it
-   and on _parseSteamSocialLinks, both in claude.js, for why: appdetails
-   has no field for social links at all, confirmed by inspecting a real
-   response directly, nor does any documented Steamworks Web API interface
-   expose them — this data only exists rendered into the store page's own
-   HTML). Fire-and-forget, same convention as
-   _applySteamHeroBanner/_applySteamCapsuleFromCover: any failure (no store
-   page, section missing, Steam changed their markup — this parse is NOT
-   against a documented/stable API, unlike appdetails) just leaves Links
-   untouched rather than blocking or clearing anything. Same stale-title
-   guard as those two. Only overwrites the existing links list once the
-   fetch+parse actually succeeds AND finds at least one link — matching the
-   "only overwrite a field if Steam actually has content for it" guard
-   _applySteamAboutData uses for Developer/Publisher/Genres above, so a
-   flaky fetch or a page with no social links configured never wipes out
-   links the developer already added by hand. When it does apply, it
-   REPLACES the whole list (not merges/appends) — same "Steam is the
-   source of truth once a title links to a Steam page" convention as
-   Developer/Publisher/Genres. */
-async function _applySteamSocialLinks(appId, expectedTitle) {
-  let links = null;
-  try {
-    const html = await fetchSteamStorePage(appId);
-    links = _parseSteamSocialLinks(html);
-  } catch (e) {
-    console.warn('[Steam Social Links] failed to fetch/parse store page for app', appId, e);
-    // Still worth a (low-key) heads-up rather than pure silence — this is
-    // fire-and-forget by design (see comment above) since a failure here is
-    // routinely just "no social links on this store page", but a genuine
-    // proxy/network failure looks identical to that from the developer's
-    // seat with nothing shown at all. Only surfaced if the title is still
-    // the one this fetch was for, same guard as the success path below.
-    if ((state.formData.title || '').trim() === (expectedTitle || '').trim()) {
-      bcToast(`Couldn't load Steam's social links for "${expectedTitle}" — add them manually under Factsheet if needed.`);
-    }
-    return;
-  }
+/* Fills Factsheet > Developer > Links (state.webSite.links) from the picked
+   title's social media links.
 
-  // Stale guard — bail if the user has since picked a different title.
-  if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
-  if (!links || !links.length) return;
+   NO LONGER A SCRAPE (v6.61). This used to be the one place in the app that
+   parsed Steam's store-page HTML: appdetails had no field for social links,
+   no documented Steamworks interface exposed them, and /game did not carry
+   them either — so it fetched https://store.steampowered.com/app/<id>/ through
+   a free third-party CORS proxy and ran a regex over the "Find Community" row.
+   That was a second network round trip on an undocumented markup contract
+   Valve could change without notice, and it was the last thing keeping the
+   store page's HTML in this app at all.
 
+   /game returns `links` now — [{name, url}], exactly the shape the regex used
+   to produce — so this is a read off the response _applySteamAboutData already
+   has. No extra request, no proxy, no parse. Confirmed live against Hades
+   (appid 1145360): Facebook, X, YouTube.
+
+   TAKEN FROM THE BASELINE RESPONSE ONLY, deliberately. `links` is absent from
+   some localized responses, so reading it off a lang= call could blank a list
+   the baseline had filled — the same reason genres/supportedLanguages/
+   releaseDate.date are baseline-only (see fetchShipmateGame, claude.js).
+
+   Everything the old version guarded against still holds. Only overwrites once
+   Steam actually has links, matching the "only overwrite a field if Steam has
+   content for it" rule Developer/Publisher/Genres follow, so a title with no
+   socials configured never wipes out links the developer added by hand. When
+   it does apply it REPLACES the whole list rather than merging — Steam is the
+   source of truth once a title is linked. The stale-title guard is its
+   caller's now (_applySteamAboutData checks before any of its writes), which
+   is stricter than this function having its own: there is no longer a separate
+   fetch that could resolve against a title the developer has since changed. */
+function _applySteamSocialLinks(links) {
+  if (!Array.isArray(links)) return;
+  const clean = links
+    .filter(l => l && String(l.name || '').trim() && String(l.url || '').trim())
+    .map(l => ({ id: generateId('link'), name: String(l.name).trim(), url: String(l.url).trim() }));
+  if (!clean.length) return;
   if (!state.webSite) state.webSite = {};
-  state.webSite.links = links.map(l => ({ id: generateId('link'), name: l.name, url: l.url }));
-  reRenderStepModal();
+  state.webSite.links = clean;
 }
 
 /* Pre-populates Mac App Store's Game Center > Achievements section

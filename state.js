@@ -3635,19 +3635,18 @@ const state = {
     // Array of { id, name, url } — social-media links the developer can
     // freely add/remove by hand (addWebLink/removeWebLink/setWebLinkField,
     // app.js; id minted via generateId('link')). Auto-populated (when the
-    // picked title links to a Steam page) from the Steam store page's own
-    // "Find Community" section — see _applySteamSocialLinks in app.js and
-    // fetchSteamStorePage/_parseSteamSocialLinks in claude.js. Unlike every
-    // other Steam-sourced field on this object, this ISN'T from Steam's
-    // appdetails JSON API (which has no field for social links at all,
-    // confirmed by inspecting a real response directly) — it's scraped
-    // from the store page's raw HTML instead, since that's the only place
-    // this data exists. More fragile than the rest of this file as a
-    // result: Valve can change that markup without notice, unlike a
-    // documented/stable API — a fetch/parse failure just leaves this list
-    // untouched (never auto-cleared), same guard as
-    // developer/publisher/genres above/below only overwriting when Steam
-    // actually has content.
+    // picked title links to a Steam page) from /game's own `links` field —
+    // see _applySteamSocialLinks in app.js.
+    //
+    // This used to be the app's one exception: appdetails had no field for
+    // social links at all, so it was scraped out of the store page's raw
+    // HTML, which made it the most fragile Steam-sourced value here. /game
+    // carries them now, as [{name, url}], so it is an ordinary read off the
+    // same response every other field on this object comes from, and the
+    // scrape is gone (v6.61 — see claude.js where those three functions
+    // used to be). Only overwritten when Steam actually has links, same
+    // guard as developer/publisher/genres above/below, so a title with none
+    // configured never clears links added by hand.
     links: [],
     // Free text. Auto-populated (when the picked title links to a Steam
     // page) from Steam's appdetails 'publishers' list, joined — see
