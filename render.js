@@ -7252,10 +7252,13 @@ function renderStepModal() {
       </div>
       ${isSubPanel ? '' : `
       <div class="submit-modal-header-actions">
-        <!-- The Mac App Store Product Page Preview's language switcher only
-             — its own request, see _macSppLangDropdownHTML. iOS and Mac Full
-             keep theirs in the scrollable body, unchanged. -->
-        ${(platformId === 'macos' && stepId === 'storePreview') ? _macSppLangDropdownHTML() : ''}
+        <!-- The two Apple Product Page Previews' language switchers. Both sit
+             here, left of the ×, because the ask is "above the top bar" and the
+             pinned section nav is the first thing inside the body — see
+             _iasSppLangDropdownHTML / _macSppLangDropdownHTML. Mac Full and
+             Steam keep theirs in the scrollable body, unchanged. -->
+        ${(stepId === 'storePreview' && platformId === 'macos') ? _macSppLangDropdownHTML() : ''}
+        ${(stepId === 'storePreview' && platformId === 'ios')   ? _iasSppLangDropdownHTML() : ''}
         <button class="task-modal-close" onclick="closeStepModal()">×</button>
       </div>`}
     </div>
@@ -10248,30 +10251,41 @@ function buildStorePreviewSection() {
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
   ];
-  // Additive glow class for any focusable element (required or optional).
-  // Not focused: a required-not-done element gets the static/duller box;
-  // everything else (done required, or any optional element) gets '' — its
-  // own existing done/plain styling is untouched. Focused: yellow
-  // (is-spp-focused) for a required-not-done element, green
-  // (is-spp-focused-done) for a required-already-done element, purple
-  // (is-spp-focused-optional) for Achievements/What's New.
-  const _sppGlowCls = id => {
-    const el = ALL_ELEMENTS.find(e => e.id === id);
-    if (!el) return '';
-    const focused = _sppIsFocused(pid, ALL_ELEMENTS, id);
-    if (!el.required) return focused ? ' is-spp-focused-optional' : '';
-    if (!focused) return el.done ? '' : ' is-spp-static';
-    return el.done ? ' is-spp-focused-done' : ' is-spp-focused';
-  };
+  /* THE GLOW BOXES ARE GONE FROM THIS PAGE (by request), the same deletion the
+     Mac preview took in v6.40 and for the same reason — this preview now says
+     what it has to say the way Mac's does, and the two surfaces no longer wear
+     two vocabularies for one idea. The helper is DELETED rather than left
+     returning '', which is the rule Mac's own note set: a helper that can only
+     return the empty string is a call site pretending to have a decision.
+
+     WHAT REPLACES WHAT, because each ring was answering a real question and
+     none of them is simply dropped:
+       - the "required, still empty" ring -> the WELL. An empty field is a dark
+         socket with a .14 stroke; a filled one recedes to
+         --spp-well-fill-done with .08. "Unfinished" is now a property of the
+         box the value goes in rather than a ring pulsing beside it.
+       - the hover accents -> the well's stroke coming up to .24. Approaching
+         any editable thing brightens the thing itself.
+       - the focused ring ("this is the one the nav is pointing at") -> the
+         SPOTLIGHT. _sppSpotlight dims the rest of the page for the length of
+         the travel plus a beat, which answers "where did I just land" without
+         borrowing the colour that means "unfinished".
+       - Achievements' purple focus ring -> nothing. It marked an optional
+         element as the focus target; the spotlight marks it the same way it
+         marks every other.
+
+     _sppIsFocused survives and is still read by the pinned nav below to light
+     its pill: where-you-are is still tracked, it is simply no longer drawn on
+     the page as a ring. */
 
   // Age meta cell — always clickable; glows when not done (animated if
   // focused, static otherwise), green hover when done
   const ageCell = contentDone
-    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
+    ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-label-top ias-meta-bot--action">Content</div>
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
@@ -10279,10 +10293,10 @@ function buildStorePreviewSection() {
        </div>`;
 
   // Price/Business meta cell is gone from the meta strip (by request) — the
-  // Get button itself (ias-header-cta, below) is now the required element
-  // that glows for Business/carries navigation to Business Questions, so
-  // there's no separate cell duplicating that. businessDone/_sppGlowCls
-  // ('business') live on, just applied to the Get button instead.
+  // Get button itself (ias-header-cta, below) is the element that carries
+  // navigation to Business Questions, so there's no separate cell duplicating
+  // that. businessDone lives on and drives the button's own label/state; the
+  // ring it used to wear went with every other one (see the note above).
 
   // Developer meta cell — decorative only (no developer-logo data tracked
   // anywhere in Shipmate yet), a generic placeholder icon matching the
@@ -10321,7 +10335,7 @@ function buildStorePreviewSection() {
   // shotHtml, above), so the "required, not done" glow ring that button
   // used to carry moves onto the carousel container itself.
   const screenshotsArea = `
-    <div class="ias-shots-scroll${_sppGlowCls('screenshots')}" data-spp-el="screenshots">${shotHtml}</div>
+    <div class="ias-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
       <span>iPhone, iPad</span>
@@ -10338,7 +10352,7 @@ function buildStorePreviewSection() {
   // ring silently had nowhere to render before, on the rare occasion it was
   // both done and in focus.
   const privacySection = dataDone
-    ? `<div class="ias-privacy-block${_sppGlowCls('data')}" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+    ? `<div class="ias-privacy-block" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
          <div class="ias-section-head-row">
            <span class="ias-section-head">App Privacy</span>
            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -10347,7 +10361,7 @@ function buildStorePreviewSection() {
          ${privacyHtml}
          <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>
        </div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, '');
 
   // Achievements widget — App Store (ios) only (this builder is also reused,
   // unmodified, for android/steam/egs/psn/xbox/switch's own Product Page
@@ -10361,7 +10375,7 @@ function buildStorePreviewSection() {
   // would show for a game with none.
   const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.saved) : [];
   const achievementsHtml = `
-        <div class="ias-section ias-achv-section${_sppGlowCls('achievements')}" data-spp-el="achievements" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
+        <div class="ias-section ias-achv-section" data-spp-el="achievements" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
           <div class="ias-achv-card">
@@ -10408,31 +10422,29 @@ function buildStorePreviewSection() {
   return `
     ${_sppPinnedNav(pid, ALL_ELEMENTS, true)}
 
-    <div class="ias-device-wrap">
-      <!-- "App Store Preview" badge, "Reflects your submission data" note, and
-           the "Localizations" button are all hidden here by request — only
-           the preview-language dropdown remains. justify-content is forced to
-           flex-end inline (rather than editing .ias-label-row's own
-           space-between, which Steam's own preview header — further below,
-           buildStoreFlipSection — still relies on) so the lone remaining
-           control stays right-aligned instead of collapsing to the start. -->
-      <div class="ias-label-row" style="justify-content:flex-end;">
-        <div class="ias-label-right">
-          <div class="ias-locs-lang-group">
-            ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
-          </div>
-        </div>
-      </div>
+    <div class="ias-device-wrap spp-spot-host">
+      <!-- "App Store Preview" badge, "Reflects your submission data" note and
+           the "Localizations" button are all hidden here by request, and the
+           language dropdown has now followed Mac's up into the modal's own
+           header, left of its × — see _iasSppLangDropdownHTML and
+           renderStepModal. With the last control gone the whole
+           .ias-label-row goes with it rather than staying as an empty band.
 
+           NOTE: no backticks in this comment — it lives inside a template
+           literal, and one backtick here ends the string (see mac-spp-get-row's
+           own comment for the same trap). spp-spot-host is what _sppSpotlight
+           (app.js) dims: the pinned nav's press lands the eye here, and this
+           wrap is to this preview what .mac-spp-shell is to Mac's — the box
+           that holds the page and nothing else. -->
       <div class="ias-page ios-spp-page">
 
         <!-- ── Header ── -->
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${_sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             <!-- GET now sits beneath the Title/Subtitle stack, matching the
@@ -10452,7 +10464,7 @@ function buildStorePreviewSection() {
                  longer has) back down to the reference layout's own tight
                  spacing — see .is-spp-done, style.css. -->
             <div class="ias-header-cta${businessDone ? ' is-spp-done' : ''}">
-              <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
+              <span class="spp-get-glow-wrap">
                 <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
               </span>
               ${iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
@@ -10487,7 +10499,7 @@ function buildStorePreviewSection() {
 
         <!-- ── Description ── -->
         <div class="ias-section">
-          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${_sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
                onclick="startIasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
@@ -10650,6 +10662,34 @@ const LOC_STEP_SETTINGS_ROWS_SHARED_TITLE = [
    Split out to its own function so renderStepModal can reach it without
    duplicating buildMacStorePreviewSection's option-list logic, since the
    header is built before (and independently of) the body. */
+/* THE APP STORE'S SWITCHER MOVES UP TOO, and it is the Mac one's twin rather
+   than a second design — same control, same `auto` width, same right-aligned
+   panel, reading iOS's own option list and setter. By request: the dropdown
+   belongs ABOVE the pinned section nav, and the only chrome above that nav is
+   the modal's own header, which is exactly where Mac put its own.
+
+   Two functions rather than one parameterised by pid because the two previews
+   answer with different state — `_iasLangHasOverLimitField` /
+   `setIasPreviewLang` against `state.formData`, `_masLangHasOverLimitField` /
+   `setMasPreviewLang` against `state.macAppStoreListing` — and a pid switch
+   inside one builder would be three conditionals to save four lines. Mac Full
+   and Steam keep theirs in the scrollable body, untouched. */
+function _iasSppLangDropdownHTML() {
+  const fd = state.formData;
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangOptions = [previewPrimaryLang, ...previewSupportedLangs].map(l => ({
+    value: l,
+    label: OB_LANG_NAMES[l] || l,
+    warning: _iasLangHasOverLimitField(l),
+  }));
+  return `<div class="ias-locs-lang-group">
+            ${swSelect('ias-preview-lang', _iasEffectivePreviewLang(), previewLangOptions, 'setIasPreviewLang', 'auto', 'right')}
+          </div>`;
+}
+
 function _macSppLangDropdownHTML() {
   const fd = state.formData;
   const previewPrimaryLang = fd.primaryLanguage || 'en';
@@ -11341,7 +11381,7 @@ function buildMacStorePreviewSection() {
           its natural height and the shell takes the rest — and it needs no
           `sticky` at all, because nothing scrolls past it any more. */''}
     ${_sppPinnedNav(pid, ALL_ELEMENTS)}
-    <div class="mac-spp-shell">
+    <div class="mac-spp-shell spp-spot-host">
       ${_buildMacSppSidebar(titleRaw)}
       <div class="mac-spp-main">
       <div class="ias-device-wrap">

@@ -6718,7 +6718,8 @@ body.viewing-splash .app-subnav { display: none; }
    simply where a page stops looking switched off. The RELATIONSHIP is what to
    preserve if it moves again — the marked section at full, everything else
    clearly behind it, and the sidebar a further step back (below). */
-.mac-spp-shell.is-spotlight .mac-spp-page > *:not(.is-spotlit):not(:has(.is-spotlit)) {
+.spp-spot-host.is-spotlight .mac-spp-page > *:not(.is-spotlit):not(:has(.is-spotlit)),
+.spp-spot-host.is-spotlight .ios-spp-page > *:not(.is-spotlit):not(:has(.is-spotlit)) {
   opacity: .5;
 }
 /* ── AND THE HEADER GOES ONE LEVEL DEEPER, BECAUSE IT HOLDS THREE TARGETS ──
@@ -6747,8 +6748,8 @@ body.viewing-splash .app-subnav { display: none; }
    the only target in it — there is nothing to disambiguate, the argument above
    applies unchanged, and dimming five text cells to point at the sixth in a
    73px band is fussier than the well already sitting on it. */
-.mac-spp-shell.is-spotlight .ias-header:has(.is-spotlit) > *:not(.is-spotlit):not(:has(.is-spotlit)),
-.mac-spp-shell.is-spotlight .ias-header-meta:has(.is-spotlit) > *:not(.is-spotlit):not(:has(.is-spotlit)) {
+.spp-spot-host.is-spotlight .ias-header:has(.is-spotlit) > *:not(.is-spotlit):not(:has(.is-spotlit)),
+.spp-spot-host.is-spotlight .ias-header-meta:has(.is-spotlit) > *:not(.is-spotlit):not(:has(.is-spotlit)) {
   opacity: .5;
 }
 /* THE SIDEBAR DIMS PROPORTIONALLY, NOT TO THE SAME NUMBER. It already rests at
@@ -6758,13 +6759,16 @@ body.viewing-splash .app-subnav { display: none; }
    preview is built to avoid. .42 × .35 = .147, so .15: it recedes by the same
    FACTOR the page does and keeps its place in the order. Re-derive it if the
    page's number moves again: `.42 × .5 = .21`. */
-.mac-spp-shell.is-spotlight .mac-spp-sidebar { opacity: .21; }
+.spp-spot-host.is-spotlight .mac-spp-sidebar { opacity: .21; }
 /* On the elements themselves, not only on the dimmed state, so the page goes
    down and comes back on one curve. Matches the card's .22s exactly — two
    surfaces borrowing one mechanism should not travel at two speeds. */
 .mac-spp-page > *,
 .mac-spp-page .ias-header > *,
 .mac-spp-page .ias-header-meta > *,
+.ios-spp-page > *,
+.ios-spp-page .ias-header > *,
+.ios-spp-page .ias-header-meta > *,
 .mac-spp-sidebar {
   transition: opacity .22s ease;
 }
@@ -8180,14 +8184,14 @@ body.viewing-splash .app-subnav { display: none; }
    deliberately untouched, as are Localization Review and IAP Loc, whose
    fields reuse this class on a `--panel-2` card where a #0a0a0a well would
    be a much heavier step than it is here. */
-.mac-spp-page .ias-editable {
+.mac-spp-page .ias-editable, .ios-spp-page .ias-editable {
   background: var(--bg);
   border-color: rgba(255, 255, 255, .14);
   border-radius: var(--field-radius);
   margin: -4px -10px; padding: 4px 10px;
   transition: border-color .12s ease, background-color .12s ease;
 }
-.mac-spp-page .ias-editable:hover {
+.mac-spp-page .ias-editable:hover, .ios-spp-page .ias-editable:hover {
   background: var(--bg);
   border-color: rgba(255, 255, 255, .24);
 }
@@ -8485,18 +8489,23 @@ body.viewing-splash .app-subnav { display: none; }
    is Mac Full's and iOS's state, unreachable here (this preview's done state is
    `.ias-privacy-block`), and it belongs to those surfaces. */
 .mac-spp-page .spp-section-btn,
-.mac-spp-page .ias-privacy-block {
+.mac-spp-page .ias-privacy-block,
+.ios-spp-page .spp-section-btn,
+.ios-spp-page .ias-privacy-block {
   background: var(--bg);
   border-radius: var(--field-radius);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
   transition: box-shadow .12s ease, background-color .12s ease;
 }
 .mac-spp-page .spp-section-btn:hover,
-.mac-spp-page .ias-privacy-block:hover {
+.mac-spp-page .ias-privacy-block:hover,
+.ios-spp-page .spp-section-btn:hover,
+.ios-spp-page .ias-privacy-block:hover {
   background: var(--bg);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24);
 }
-.mac-spp-page .spp-section-btn:hover { transform: none; }
+.mac-spp-page .spp-section-btn:hover,
+.ios-spp-page .spp-section-btn:hover { transform: none; }
 
 /* ── AND ACHIEVEMENTS WEARS ONE TOO, ON THE SAME LEFT EDGE AS EVERYTHING ──
    Jaco: *"¿tan difícil es que alrededor de achievements me crees el mismo tipo
@@ -8556,7 +8565,8 @@ body.viewing-splash .app-subnav { display: none; }
    tie would hand it the win. Three classes settles it by weight rather than by
    source order, which is the same reason `.ias-page.mac-spp-page .ias-app-name`
    is written that way. */
-.ias-page.mac-spp-page .ias-achv-section {
+.ias-page.mac-spp-page .ias-achv-section,
+.ias-page.ios-spp-page .ias-achv-section {
   /* 0 on the sides puts the box on the page's own 441 (the alignment note
      above); the vertical pair is `--spp-well-gap`, because this well is the
      one that has no section padding OUTSIDE it to stand on — see "A well
@@ -8571,7 +8581,8 @@ body.viewing-splash .app-subnav { display: none; }
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
   transition: box-shadow .12s ease, background-color .12s ease;
 }
-.ias-page.mac-spp-page .ias-achv-section:hover {
+.ias-page.mac-spp-page .ias-achv-section:hover,
+.ias-page.ios-spp-page .ias-achv-section:hover {
   background: var(--spp-well-fill);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24);
 }
@@ -8581,11 +8592,11 @@ body.viewing-splash .app-subnav { display: none; }
    752), and its authored `width: 100%` is a resolved length that negative
    margins would merely SHIFT. So it states the width it wants, and the 32 is the
    two 16s it is pulling out. Third sighting of that trap today. */
-.mac-spp-page .ias-privacy-block {
+.mac-spp-page .ias-privacy-block, .ios-spp-page .ias-privacy-block {
   margin-left: -16px;
   margin-right: -16px;
 }
-.mac-spp-page .spp-section-btn {
+.mac-spp-page .spp-section-btn, .ios-spp-page .spp-section-btn {
   margin-left: -16px;
   margin-right: -16px;
   width: calc(100% + 32px);
@@ -8645,20 +8656,22 @@ body.viewing-splash .app-subnav { display: none; }
    render.js), so the ASK arm has to put the outstanding `.14` back explicitly.
    Same halving as the text fields and the Content cell; the modifier is just
    where the test moved to. */
-.mac-spp-page .ias-privacy-block {
+.mac-spp-page .ias-privacy-block, .ios-spp-page .ias-privacy-block {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
   background: var(--spp-well-fill-done);
 }
 /* The ask arm is the one privacy state that is still outstanding, so it keeps
    the socket along with its `.14` ring — the fill and the stroke recede
    together or they say two different things about one box. */
-.mac-spp-page .ias-privacy-block.ias-privacy-block--ask {
+.mac-spp-page .ias-privacy-block.ias-privacy-block--ask,
+.ios-spp-page .ias-privacy-block.ias-privacy-block--ask {
   background: var(--spp-well-fill);
 }
 /* Both classes on the selector, not just the modifier: at two each they would
    tie with the `.08` rule above and source order would decide. The file's own
    standing lesson, fourth time. */
-.mac-spp-page .ias-privacy-block.ias-privacy-block--ask {
+.mac-spp-page .ias-privacy-block.ias-privacy-block--ask,
+.ios-spp-page .ias-privacy-block.ias-privacy-block--ask {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
 }
 /* ── APP PRIVACY IS THE SAME OBJECT AS ACHIEVEMENTS ───────────────────
@@ -8683,12 +8696,13 @@ body.viewing-splash .app-subnav { display: none; }
    the one column this box now shares with Achievements. Content keeps its
    pencil for the opposite reason: that cell has no heading and no room for one,
    so the pencil is the only thing saying the value opens elsewhere. */
-.mac-spp-page .ias-privacy-block { padding: 14px 16px; }
+.mac-spp-page .ias-privacy-block, .ios-spp-page .ias-privacy-block { padding: 14px 16px; }
 .mac-spp-page .ias-privacy-block .ias-section-head {
   font-size: 20px; font-weight: 700; color: var(--text);
 }
-.mac-spp-page .ias-privacy-ask { color: var(--text-dim); }
-.mac-spp-page .ias-privacy-block--ask:hover .ias-privacy-ask { color: var(--text); }
+.mac-spp-page .ias-privacy-ask, .ios-spp-page .ias-privacy-ask { color: var(--text-dim); }
+.mac-spp-page .ias-privacy-block--ask:hover .ias-privacy-ask,
+.ios-spp-page .ias-privacy-block--ask:hover .ias-privacy-ask { color: var(--text); }
 
 /* ── A WELL KEEPS ITS DISTANCE FROM A DIVIDER, AND IT IS ONE NUMBER ────
    Jaco: *"¿hay alguna forma de que siempre dejes al menos 15px entre los
@@ -8732,7 +8746,7 @@ body.viewing-splash .app-subnav { display: none; }
    above — one control with two different clearances, for a margin written
    when nothing below it was drawing a box. Zeroed here only; iOS and Mac
    Full keep it. */
-.mac-spp-page {
+.mac-spp-page, .ios-spp-page {
   /* The clearance between any well and any divider. */
   --spp-well-gap: 16px;
 
@@ -8763,13 +8777,17 @@ body.viewing-splash .app-subnav { display: none; }
      page, which is under the floor anything on this surface reads at — measured
      against the grid's own 4px-dot and 4px-band findings — and ten against the
      empty well, which is the contrast that matters. */
+  /* How far the Content well sits inside its cell. Read by the cell's own
+     ::after and by Mac's tile math (--spp-tile, further down). */
+  --spp-well-inset: 2px;
+
   --spp-well-fill: var(--bg);          /* outstanding: a socket */
   --spp-well-fill-done: rgb(18,18,18); /* answered: all but the page itself */
 }
 .mac-spp-page .ias-section:not(.ias-achv-section):not(:has(.mac-spp-desc-row)) {
   padding-block: var(--spp-well-gap);
 }
-.mac-spp-page .spp-section-btn { margin-bottom: 0; }
+.mac-spp-page .spp-section-btn, .ios-spp-page .spp-section-btn { margin-bottom: 0; }
 /* Achievements' own half of this is written into its rule above rather than
    here, because that rule already declares `margin` and two rules setting one
    property on one selector is how a pair drifts. */
@@ -8804,8 +8822,10 @@ body.viewing-splash .app-subnav { display: none; }
    field and is a different object. A 57px divider would make the strip a
    table with ruled columns, which is exactly the "bordered band" the bottom
    rule was removed for. */
-.mac-spp-page .ias-meta-cell--action { position: relative; }
-.mac-spp-page .ias-meta-cell--action::after {
+.mac-spp-page .ias-meta-cell--action,
+.ios-spp-page .ias-meta-cell--action { position: relative; }
+.mac-spp-page .ias-meta-cell--action::after,
+.ios-spp-page .ias-meta-cell--action::after {
   content: ''; position: absolute; inset: -14px var(--spp-well-inset); z-index: 0;
   border-radius: var(--field-radius);
   background: var(--bg);
@@ -8813,26 +8833,32 @@ body.viewing-splash .app-subnav { display: none; }
   transition: box-shadow .12s ease;
   pointer-events: none;
 }
-.mac-spp-page .ias-meta-cell--action:hover::after {
+.mac-spp-page .ias-meta-cell--action:hover::after,
+.ios-spp-page .ias-meta-cell--action:hover::after {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24);
 }
 /* Answered recedes — the text fields' `:not(.ias-placeholder)` rule in the
    same halving. `.ias-meta-cell--seen` is Content's own "you have answered
    this" class, so the test is already there and needs no new state. */
-.mac-spp-page .ias-meta-cell--seen::after {
+.mac-spp-page .ias-meta-cell--seen::after,
+.ios-spp-page .ias-meta-cell--seen::after {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
   background: var(--spp-well-fill-done);
 }
-.mac-spp-page .ias-meta-cell--seen:hover::after {
+.mac-spp-page .ias-meta-cell--seen:hover::after,
+.ios-spp-page .ias-meta-cell--seen:hover::after {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24);
   background: var(--spp-well-fill);
 }
 /* The content has to clear the well, or the pseudo-element paints over it —
    a positioned ::after beats static children, the same trap the calendar's
    wait band hit with its digit. */
-.mac-spp-page .ias-meta-cell--action > * { position: relative; z-index: 1; }
+.mac-spp-page .ias-meta-cell--action > *,
+.ios-spp-page .ias-meta-cell--action > * { position: relative; z-index: 1; }
 .mac-spp-page .ias-meta-cell--action:hover,
-.mac-spp-page .ias-meta-cell--seen:hover { background: transparent !important; }
+.mac-spp-page .ias-meta-cell--seen:hover,
+.ios-spp-page .ias-meta-cell--action:hover,
+.ios-spp-page .ias-meta-cell--seen:hover { background: transparent !important; }
 
 /* ── THE HEADER'S FIELDS SHARE THE CONTENT WELL'S COLUMN ───────────────
    Jaco: *"¿podemos alinear título y subtítulo para que sus input fields estén
@@ -8891,7 +8917,10 @@ body.viewing-splash .app-subnav { display: none; }
   container-type: inline-size;
   --spp-strip-pad:  12px;  /* .ias-meta-strip's own side padding */
   --spp-div-box:     9px;  /* .ias-meta-divider: 1px of rule + 4px of margin each side */
-  --spp-well-inset:  2px;  /* how far the Content well sits inside its cell */
+  /* --spp-well-inset moved up to the shared well block (it is a property of
+     the well, and the App Store page needs it for the same Content cell)
+     — still read here by the tile math below, which resolves against
+     whatever that block declared. */
   --spp-tile: calc((100cqw - 2 * var(--spp-strip-pad) - 5 * var(--spp-div-box)) / 6);
   --spp-well-w: calc(var(--spp-tile) - 2 * var(--spp-well-inset));
 }
@@ -8948,7 +8977,9 @@ body.viewing-splash .app-subnav { display: none; }
    is two and a tie would be settled by source order — the same reason
    `.ias-page.mac-spp-page .ias-app-name` carries its 14px that way. */
 .ias-page.mac-spp-page .ias-app-name,
-.ias-page.mac-spp-page .ias-app-subtitle { margin-inline: 0; }
+.ias-page.mac-spp-page .ias-app-subtitle,
+.ias-page.ios-spp-page .ias-app-name,
+.ias-page.ios-spp-page .ias-app-subtitle { margin-inline: 0; }
 /* ── THE PILL DROPS 20, AND THE ICON CARRIES THE 30 ───────────────────
    Jaco: *"puedes bajar la pill de precio como 20px. La distancia entre el icono
    y la primera línea divisoria horizontal de las tiles debe ser 30px, así que
@@ -9091,10 +9122,11 @@ body.viewing-splash .app-subnav { display: none; }
    returned false. Whatever the cause, `:focus-within` is the purpose-built
    selector for "the focus is inside me", needs no child combinator, and has no
    invalidation edge to be wrong about. Don't swap it back. */
-.mac-spp-page .ias-editing:not(.is-over-limit):focus-within {
+.mac-spp-page .ias-editing:not(.is-over-limit):focus-within,
+.ios-spp-page .ias-editing:not(.is-over-limit):focus-within {
   border-color: #0a84ff;
 }
-.mac-spp-page .ias-editing > .ias-inline-input {
+.mac-spp-page .ias-editing > .ias-inline-input, .ios-spp-page .ias-editing > .ias-inline-input {
   background: transparent; border: none; outline: none;
 }
 /* ── OVER THE LIMIT IS ONE BOX TOO ────────────────────────────────────
@@ -9120,10 +9152,11 @@ body.viewing-splash .app-subnav { display: none; }
 
    `.is-over-limit` outranks `:focus-within`'s blue by source order here, both
    at the same specificity — deliberately, since an error outranks a focus. */
-.mac-spp-page .ias-editing > .ias-inline-input.is-over-limit {
+.mac-spp-page .ias-editing > .ias-inline-input.is-over-limit,
+.ios-spp-page .ias-editing > .ias-inline-input.is-over-limit {
   outline: none; background: transparent;
 }
-.mac-spp-page .ias-editable.is-over-limit {
+.mac-spp-page .ias-editable.is-over-limit, .ios-spp-page .ias-editable.is-over-limit {
   background: var(--bg);
   border-color: var(--magenta);
 }
@@ -9193,7 +9226,8 @@ body.viewing-splash .app-subnav { display: none; }
    it, it just goes blue. The Content cell and Data privacy take the same step
    through their own answered states (below), so "answered recedes" is one idea
    across all five fields rather than a text-field special case. */
-.mac-spp-page .ias-editable:not(.ias-placeholder):not(.is-over-limit) {
+.mac-spp-page .ias-editable:not(.ias-placeholder):not(.is-over-limit),
+.ios-spp-page .ias-editable:not(.ias-placeholder):not(.is-over-limit) {
   border-color: rgba(255, 255, 255, .08);
   background: var(--spp-well-fill-done);
 }
@@ -9203,8 +9237,10 @@ body.viewing-splash .app-subnav { display: none; }
    than on the editor's own class so the stale, committed textarea the deferred
    render has not removed yet falls out of it by itself, the same reason the
    blue is tied there. */
-.mac-spp-page .ias-editable:focus-within { background: var(--spp-well-fill); }
-.mac-spp-page .ias-editable:not(.ias-placeholder):hover {
+.mac-spp-page .ias-editable:focus-within,
+.ios-spp-page .ias-editable:focus-within { background: var(--spp-well-fill); }
+.mac-spp-page .ias-editable:not(.ias-placeholder):hover,
+.ios-spp-page .ias-editable:not(.ias-placeholder):hover {
   border-color: rgba(255, 255, 255, .24);
 }
 /* …and it has to carry the well's BOX too, not just its fill. The textarea is
@@ -9214,7 +9250,7 @@ body.viewing-splash .app-subnav { display: none; }
    you clicked Description. Two pixels, and the same rule as everywhere else on
    this surface: the box a field occupies is identical whether you are reading
    it or typing in it. Measured 0 after. */
-.mac-spp-page textarea.ias-inline-input {
+.mac-spp-page textarea.ias-inline-input, .ios-spp-page textarea.ias-inline-input {
   background: var(--bg);
   border-radius: var(--field-radius);
   border-color: rgba(255, 255, 255, .14);   /* the resting well — see :focus below */
@@ -9224,7 +9260,7 @@ body.viewing-splash .app-subnav { display: none; }
    textarea is the well and carries the blue itself. Same `:focus` gate, same
    reason — a committed textarea the deferred render has not removed yet must
    read as a field you are not in. */
-.mac-spp-page textarea.ias-inline-input:focus { border-color: #0a84ff; }
+.mac-spp-page textarea.ias-inline-input:focus, .ios-spp-page textarea.ias-inline-input:focus { border-color: #0a84ff; }
 
 .ias-placeholder { animation: ias-meta-pulse 2s ease-in-out infinite; }
 /* "What's New" is optional for a first submission (only required for updates),
@@ -10360,7 +10396,10 @@ textarea.loc-review-field.ias-inline-input {
    the selector list you were working from.** */
 .mac-spp-page .ias-meta-cell--action,
 .mac-spp-page .ias-placeholder,
-.mac-spp-page .spp-section-btn { animation: none; }
+.mac-spp-page .spp-section-btn,
+.ios-spp-page .ias-meta-cell--action,
+.ios-spp-page .ias-placeholder,
+.ios-spp-page .spp-section-btn { animation: none; }
 /* What's New used to be a plain .ias-section here (unlike every other glow
    target, which gets a rounded ring for free from its own base class —
    .ias-editable/.ias-meta-cell--action/.spp-section-btn/.ias-achv-section

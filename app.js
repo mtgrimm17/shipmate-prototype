@@ -6116,10 +6116,16 @@ function _smSpotlight(card, targets, ms) {
 
    iOS keeps the footer stepper and gets none of this on purpose: PREV / NEXT
    moves you exactly one section, so you already know where you arrived. */
+/* ONE HOST CLASS, TWO PREVIEWS. This looked for `.mac-spp-shell` by name, so
+   the locator existed on exactly one of the two Apple previews — the App Store
+   had the same eight-pill nav, the same press, the same long travel, and
+   nothing to say "here" when you arrived. `spp-spot-host` is carried by
+   Mac's shell and by the App Store's own `.ias-device-wrap` (render.js), which
+   is the same box on that surface: it holds the page and nothing else. */
 function _sppSpotlight(target) {
-  const shell = target && target.closest('.mac-spp-shell');
-  if (!shell) return;
-  _smSpotlight(shell, [target], 900);
+  const host = target && target.closest('.spp-spot-host');
+  if (!host) return;
+  _smSpotlight(host, [target], 900);
 }
 
 /* THE SUBMIT ROW'S ONE HANDLER. Every press of the row lands here, whether or
