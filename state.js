@@ -3081,10 +3081,11 @@ function storeReviewPhase(platformId, phase) {
   return store[phase] || store.in_review || STORE_REVIEW.ios.in_review;
 }
 
-/* THE MARKETING NUDGE SPEAKS THE PLATFORM'S OWN LANGUAGE (v6.99).
+/* THE MARKETING NUDGE SPEAKS THE PLATFORM'S OWN LANGUAGE (v7.00).
 
    Mark: "maybe we could use language that is platform specific to help it make
-   sense on the card."
+   sense on the card", and then the sentence itself — "Work this Mac release
+   into a marketing plan".
 
    IT IS ALSO THE ANSWER TO THE MULTIPLICATION v6.56 REMOVED THIS BUTTON FOR.
    That version's strongest argument was that one card says the line once and
@@ -3094,53 +3095,70 @@ function storeReviewPhase(platformId, phase) {
    count of things you are actually waiting on. The generic line was what made
    repetition read as a bug.
 
-   WHAT THE COPY IS ALLOWED TO PROMISE is bounded by what Marketing actually
-   is: an announcement composer whose storefront row auto-syncs from your
-   active platforms, a landing page built from your own metadata, and ranked
-   press and creator lists ("Find the press most likely to cover…", "Find the
-   creators who already care about games like yours"). So the frame is going
-   and WINNING PLAYERS OVER, which is a fair description of all four tabs. It
-   deliberately does not promise featuring pitches, pre-registration or
-   wishlist campaigns — none of which Marketing has.
+   THE SENTENCE NAMES THE RELEASE, NOT THE AUDIENCE, and that is the correction
+   this version makes. An earlier pass went with "Go win over Mac players →",
+   which Mark rejected. He is right, and the reason is worth keeping: the card
+   is about a BUILD you just sent, so "this Mac release" is the thing already
+   on screen and the line simply tells you what to do with it. "Win over
+   players" is a different, vaguer subject that the card never raised.
 
-   ONE FRAME, ONE BESPOKE LINE. Every store gets "Go win over <its own
-   players>", because a shared shape reads as one idea that knows where it is
-   and scales to a platform added later, where nine hand-written sentences
-   read as arbitrary. Steam is the single exception and earns it: wishlists
-   are Steam's actual pre-launch currency — the number that drives its
-   visibility — and no other store has an equivalent a developer thinks in.
+   "Work X into a plan" is also the honest verb for where it lands. Marketing
+   is an announcement composer whose storefront row auto-syncs from your active
+   platforms, a landing page built from your own metadata, and two ranked
+   discovery lists (press and creators) — a place you go to PLAN, which is
+   exactly what the sentence promises. It deliberately does not promise
+   featuring pitches, pre-registration or wishlist campaigns; Marketing has
+   none of those, and a link that oversells its destination is worse than a
+   generic one.
 
-   THE AUDIENCE, NOT THE STORE. "iPhone players" rather than "App Store
-   players": you market to people, and the store's own name is already on the
-   card twice (the header and the status line). Naming it a third time would
-   be the "two marks on one object" this file keeps refusing, in words.
+   ONE FRAME, ONE NOUN. Only the platform's own word is stored, because nine
+   near-identical sentences would be nine edits the next time the frame moves —
+   the inventory problem this file keeps paying for. A store that ever needs a
+   bespoke line gets an override in `subNudgeCopy` below, not a ninth copy of
+   the frame here.
 
-   It must NOT restate the wait — no "Steam has it" — for the same reason.
-   The card's status line says that already.
+   THE WORDS ARE THE DEVELOPER'S, NOT THE STORE'S — "Mac", not "Mac App
+   Store"; "Switch", not "Nintendo eShop". You ship a Mac release; the store's
+   own name is already on this card twice (the header and the status line),
+   and a third would be the "two marks on one object" this file keeps refusing,
+   in words. It must not restate the wait either — no "Steam has it" — for the
+   same reason.
 
-   Keep them SHORT. This prints at 12px mono on a card that is ~400px wide,
-   and the arrow is part of the string's length. Anything much past the
-   Steam line starts to wrap, and a wrapped nudge reads as a paragraph. */
-const SUB_NUDGE_COPY = {
-  steam:      'Turn this wait into wishlists',
-  ios:        'Go win over iPhone players',
-  macos:      'Go win over Mac players',
-  macos_full: 'Go win over Mac players',
-  android:    'Go win over Android players',
-  egs:        'Go win over PC players',
-  psn:        'Go win over PlayStation players',
-  xbox:       'Go win over Xbox players',
-  nintendo:   'Go win over Switch players',
-  web:        'Go send players to your page',
+   MEASURED, because the frame is long and the arrow counts. 12px IBM Plex
+   Mono advances exactly 7.2px a character, and the card's text column is
+   376px at 1280 and 1512, 372 at 960, 442 at 1100 (where the guide drops
+   below and the cards widen). Against the narrowest of those, 372:
+
+       Steam       338.4    Mac / iOS / web   324.0    Android   352.8
+
+   — every platform that can reach this card today, with ~20px to spare on the
+   longest. `egs` (374.4) and `psn` (381.6) do NOT fit at 372 and would wrap to
+   two lines; both are in COMING_SOON_PLATFORMS and cannot own a submitted card
+   yet, so the natural word is kept rather than contorted for an unreachable
+   case. If either ever ships, shorten its noun here — that is the one line to
+   change, and a wrapped nudge reads as a paragraph. */
+const SUB_NUDGE_PLATFORM = {
+  steam:      'Steam',
+  ios:        'iOS',
+  macos:      'Mac',
+  macos_full: 'Mac',
+  android:    'Android',
+  egs:        'Epic Games',
+  psn:        'PlayStation',
+  xbox:       'Xbox',
+  nintendo:   'Switch',
+  web:        'web',
 };
 
-/* The fallback is the line this button carried from the day it was built
-   until v6.56 — so a platform added to PLATFORMS without a line here still
-   says something true rather than nothing. `web` is listed above and never
-   reaches this: its card is always `live`, and the nudge only draws on
-   `in_review`. It is kept for the day that changes. */
+/* The fallback is the line this button carried from the day it was built until
+   v6.56, so a platform added to PLATFORMS without a word above still says
+   something true rather than naming itself `undefined`. `web` is listed and
+   never reaches this anyway: its card is always `live` and the nudge only
+   draws on `in_review`. Kept for the day that changes. */
 function subNudgeCopy(platformId) {
-  return SUB_NUDGE_COPY[platformId] || 'Quiet time. Go plan your launch';
+  const name = SUB_NUDGE_PLATFORM[platformId];
+  return name ? `Work this ${name} release into a marketing plan`
+              : 'Quiet time. Go plan your launch';
 }
 
 function platformTrackLabel(platformId, trackId) {

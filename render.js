@@ -20521,7 +20521,7 @@ function buildSubmittedCard(pid, flipData) {
             note, which says in as many words that violet on this card belongs
             to the one link that sends you somewhere else).
 
-            THE WORDS ARE THE PLATFORM'S OWN (SUB_NUDGE_COPY, state.js), and
+            THE WORDS ARE THE PLATFORM'S OWN (SUB_NUDGE_PLATFORM, state.js), and
             that is what makes three cards in review read as three invitations
             rather than one sentence printed three times — the multiplication
             v6.56 removed this button for. The table is where the reasoning
