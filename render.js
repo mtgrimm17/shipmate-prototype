@@ -20478,9 +20478,15 @@ function buildSubmittedCard(pid, flipData) {
             `.gcal-lede-go` uses for the identical sentence, and the colour
             this card already reserves for it (see the disclosure toggle's own
             note, which says in as many words that violet on this card belongs
-            to the one link that sends you somewhere else). */''}
+            to the one link that sends you somewhere else).
+
+            THE WORDS ARE THE PLATFORM'S OWN (SUB_NUDGE_COPY, state.js), and
+            that is what makes three cards in review read as three invitations
+            rather than one sentence printed three times — the multiplication
+            v6.56 removed this button for. The table is where the reasoning
+            and the length limit live; this line only prints it. */''}
       ${phase === 'in_review'
-        ? `<button class="sub-nudge" onclick="setView('broadcast')">Quiet time. Go plan your launch &rarr;</button>`
+        ? `<button class="sub-nudge" onclick="setView('broadcast')">${escHtml(subNudgeCopy(pid))} &rarr;</button>`
         : ''}
       ${action}
     </div>`;

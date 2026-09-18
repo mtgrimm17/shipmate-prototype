@@ -3094,6 +3094,68 @@ function storeReviewPhase(platformId, phase) {
   return store[phase] || store.in_review || STORE_REVIEW.ios.in_review;
 }
 
+/* THE MARKETING NUDGE SPEAKS THE PLATFORM'S OWN LANGUAGE (v6.99).
+
+   Mark: "maybe we could use language that is platform specific to help it make
+   sense on the card."
+
+   IT IS ALSO THE ANSWER TO THE MULTIPLICATION v6.56 REMOVED THIS BUTTON FOR.
+   That version's strongest argument was that one card says the line once and
+   three platforms in review say it three times identically on one screen —
+   "noise proportional to the number of platforms". Three DIFFERENT lines are
+   not that: they are three specific invitations, and the count of them is the
+   count of things you are actually waiting on. The generic line was what made
+   repetition read as a bug.
+
+   WHAT THE COPY IS ALLOWED TO PROMISE is bounded by what Marketing actually
+   is: an announcement composer whose storefront row auto-syncs from your
+   active platforms, a landing page built from your own metadata, and ranked
+   press and creator lists ("Find the press most likely to cover…", "Find the
+   creators who already care about games like yours"). So the frame is going
+   and WINNING PLAYERS OVER, which is a fair description of all four tabs. It
+   deliberately does not promise featuring pitches, pre-registration or
+   wishlist campaigns — none of which Marketing has.
+
+   ONE FRAME, ONE BESPOKE LINE. Every store gets "Go win over <its own
+   players>", because a shared shape reads as one idea that knows where it is
+   and scales to a platform added later, where nine hand-written sentences
+   read as arbitrary. Steam is the single exception and earns it: wishlists
+   are Steam's actual pre-launch currency — the number that drives its
+   visibility — and no other store has an equivalent a developer thinks in.
+
+   THE AUDIENCE, NOT THE STORE. "iPhone players" rather than "App Store
+   players": you market to people, and the store's own name is already on the
+   card twice (the header and the status line). Naming it a third time would
+   be the "two marks on one object" this file keeps refusing, in words.
+
+   It must NOT restate the wait — no "Steam has it" — for the same reason.
+   The card's status line says that already.
+
+   Keep them SHORT. This prints at 12px mono on a card that is ~400px wide,
+   and the arrow is part of the string's length. Anything much past the
+   Steam line starts to wrap, and a wrapped nudge reads as a paragraph. */
+const SUB_NUDGE_COPY = {
+  steam:      'Turn this wait into wishlists',
+  ios:        'Go win over iPhone players',
+  macos:      'Go win over Mac players',
+  macos_full: 'Go win over Mac players',
+  android:    'Go win over Android players',
+  egs:        'Go win over PC players',
+  psn:        'Go win over PlayStation players',
+  xbox:       'Go win over Xbox players',
+  nintendo:   'Go win over Switch players',
+  web:        'Go send players to your page',
+};
+
+/* The fallback is the line this button carried from the day it was built
+   until v6.56 — so a platform added to PLATFORMS without a line here still
+   says something true rather than nothing. `web` is listed above and never
+   reaches this: its card is always `live`, and the nudge only draws on
+   `in_review`. It is kept for the day that changes. */
+function subNudgeCopy(platformId) {
+  return SUB_NUDGE_COPY[platformId] || 'Quiet time. Go plan your launch';
+}
+
 function platformTrackLabel(platformId, trackId) {
   const t = (PLATFORM_TRACKS[platformId] || []).find(t => t.id === trackId);
   return t ? t.label : (trackId === 'production' ? 'Production' : trackId);
