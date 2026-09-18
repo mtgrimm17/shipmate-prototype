@@ -13828,31 +13828,18 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    would have nothing to act on in a plain step body. If the preview's width
    ever moves, move this with it.
 
-   RENAMED FROM `.submit-modal-mac-gc` when Business Questions asked for the
-   same width for the same reason. Two identical rules would have been two
-   places to forget, so the class is named for the CLAIM — a sub-surface of the
-   Mac preview, at the preview's width — rather than for the first step that
-   made it. renderStepModal's `isMacPreviewSub` is the one flag that sets it.
-   `.submit-modal` transitions max-width, so equal numbers mean no resize on
-   the way in or out. */
+   GAME CENTER IS ALONE HERE AGAIN (v7.06). v7.02 folded Business Questions in
+   and renamed this from `.submit-modal-mac-gc` to name the CLAIM rather than
+   the first step making it; v7.03 added Content and Data Questions and v7.04
+   Adjust Screenshots. All of that is reverted by request and only Game Center
+   is left, so the rule is back to the one surface it was written for. The NAME
+   is kept: only the width was asked to go back, and the claim it describes — a
+   sub-surface of the Mac preview, at the preview's width — is still exactly
+   what Game Center is. renderStepModal's `isMacPreviewSub` is the one flag that
+   sets it. `.submit-modal` transitions max-width, so equal numbers mean no
+   resize on the way in or out of THIS door; every other door resizes again,
+   which is the behaviour being restored. */
 .submit-modal.submit-modal-mac-sub {
-  max-width: 1000px;
-}
-/* ── AND WHEN A SURFACE IS BOTH ────────────────────────────────────────
-   Mac's Data Collection Questions wears BOTH classes and needs both for
-   different reasons: `.submit-modal-privacy-wide` carries the layout this body
-   depends on — the `.ios-q-row` reset, the flex/scroll column under
-   `.prv-nlp-wrap` — while `.submit-modal-mac-sub` carries the width it now
-   takes from the preview it flipped out of.
-
-   So the class is kept and only the WIDTH is settled here. Three classes, which
-   beats both two-class rules regardless of which lands later in the file — the
-   alternative was dropping privacy-wide on Mac and re-homing its layout rules,
-   which is a lot of moving parts to win an argument about one number.
-
-   The App Store is untouched: it never gets `mac-sub`, so its data table keeps
-   the 807 it was measured for. */
-.submit-modal.submit-modal-privacy-wide.submit-modal-mac-sub {
   max-width: 1000px;
 }
 /* ios/macos Data Collection Questions (buildPrivacyMatrix). See
@@ -14086,14 +14073,6 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
      margin and puts it back as its own padding, so the two have to agree — as a
      literal they silently disagreed the first time this moved. */
   --sm-body-pad-top: 6px;
-  /* THE SAME TRICK FOR THE OTHER END (v7.05). `.shot-ed-dock` sticks to the
-     bottom of this scrollport, and a sticky `bottom: 0` lands on the CONTENT
-     edge — so the 4px of padding below it stayed a live gap with the page
-     scrolling through it, which on a screenshot reads as a sliver of the
-     picture under the thumbnail strip. The dock reaches into it with a
-     negative offset and pays it back as its own padding, which only works if
-     the two agree about the number. Same reason the top one is a token. */
-  --sm-body-pad-bottom: 4px;
   flex: 1;
   /* THE LANE IS RESERVED WHETHER OR NOT THERE IS A THUMB. With `auto`, the
      scrollbar appears the moment the content outgrows the box and takes its
@@ -14115,7 +14094,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   overflow-y: scroll; overflow-x: hidden;
   scrollbar-gutter: stable;
   /* No `scrollbar-color` — see the ::-webkit-scrollbar note below. */
-  padding: var(--sm-body-pad-top) 24px var(--sm-body-pad-bottom);
+  padding: var(--sm-body-pad-top) 24px 4px;
   min-height: 0;
 }
 /* Forcing the track on means macOS stops using its overlay scrollbar and paints
@@ -20277,52 +20256,6 @@ body.is-splash .ai-disclaimer { display: none; }
 .shot-ed-empty:hover .asset-dropzone-icon { color: var(--text); }
 
 /* ── The toolbar ──────────────────────────────────────────────────────── */
-/* ── The dock ─────────────────────────────────────────────────────────────
-   THE ZOOM ROW AND THE STRIP STICK TO THE BOTTOM OF THE SCROLLER, so the two
-   controls this editor cannot be used without are never off the fold. See
-   buildScreenshotsSection's own comment for why v7.04's widening made that a
-   problem and why the answer is not a shorter stage.
-
-   `bottom: 0` against `.submit-modal-scroll`, which is the scrollport. On a
-   tall window the content does not overflow, nothing sticks, and this is an
-   ordinary block in the flow — the dock costs nothing where the problem does
-   not exist, which is the whole reason it is sticky rather than a fixed rail.
-
-   OPAQUE, because the picture scrolls UNDER it. `var(--panel)` is the modal's
-   own fill (`.submit-modal`), so the dock reads as the sheet rather than as a
-   panel laid on it. The bleed is the scroller's own 24px side padding, given
-   back as a negative margin and re-paid as padding: without it the fill stops
-   at the content column and a 24px strip of screenshot shows down each side.
-
-   The fade is a pseudo-element above the fill rather than a border: a hard
-   line across a photograph reads as a crop, and this is a surface the picture
-   passes behind. Same move `.submit-modal-scroll`'s own pinned bar makes.
-
-   `z-index` over the stage only — the stage sets no z-index of its own, so 2
-   is enough to clear it and low enough to stay under the modal's chrome. */
-.shot-ed-dock {
-  position: sticky;
-  bottom: calc(-1 * var(--sm-body-pad-bottom, 4px));
-  z-index: 2;
-  margin: 0 -24px;
-  padding: 10px 24px var(--sm-body-pad-bottom, 4px);
-  background: var(--panel);
-}
-.shot-ed-dock::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: 14px;
-  pointer-events: none;
-  background: linear-gradient(to top, var(--panel), transparent);
-}
-/* The toolbar's own top margin is what separates it from the stage, and inside
-   a sticky box a margin sits OUTSIDE the fill — so the gap is paid as the
-   dock's padding instead and the toolbar gives it up. Nothing moves on a tall
-   window; the 10px is the same 10px. */
-.shot-ed-dock > .shot-ed-toolbar { margin-top: 0; }
 .shot-ed-toolbar {
   display: flex;
   align-items: center;

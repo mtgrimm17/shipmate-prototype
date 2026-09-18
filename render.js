@@ -7170,84 +7170,36 @@ function renderStepModal() {
      nothing to drive here. Scoped to 'macos' as asked — macos_full's Game
      Center is a different, more elaborate surface (leaderboards) and wasn't
      part of the request. */
-  /* AND BUSINESS QUESTIONS TAKES THE SAME WIDTH, for the same reason and now
-     through the same flag (by request: "so that transitioning between the two
-     sections looks smoother"). Business is reached by flipping the preview over
-     — `storePreview` + a `business` flip target, the same door Content and Data
-     Questions use — so the developer is one level deeper inside a surface they
-     were just looking at, and dropping 1000 → 680 on the way in read as landing
-     somewhere else. `.submit-modal` transitions `max-width`, so with the two
-     equal there is no resize to watch at all.
+  /* BUSINESS QUESTIONS DOES NOT TAKE IT, AND NEITHER DOES ANYTHING ELSE (v7.06,
+     by request: revert to v7.02, then revert the Business Questions width to
+     what it was before v7.02). So this flag is back to the one step it was
+     written for, and Game Center is once again the only surface that claims the
+     preview's width.
 
-     One flag rather than a second identical one: Game Center and Business
-     Questions make the SAME claim — a sub-surface of the Mac preview, at the
-     preview's width, with none of `.submit-modal-mac-spp`'s sidebar
-     flex/scroll overrides to act on. The class is named for the claim now
-     rather than for the first step that made it.
+     WHAT v7.02 ARGUED, AND WHY IT IS GONE. It folded Business Questions in on
+     the grounds that the flip is one surface a level deeper — "so that
+     transitioning between the two sections looks smoother" — and v7.03 then
+     extended that to Content and Data Questions and v7.04 to Adjust
+     Screenshots, on the rule that every door out of the preview should land at
+     the same width. The argument was consistent; it is simply not the one being
+     kept. Business, Content, Data and Screenshots all flip back to 680, which
+     means the modal resizes on the way in and out again. That is the behaviour
+     being asked for, not an oversight.
 
-     Data Questions is deliberately NOT folded in: its width is DERIVED from the
-     table it holds (807, see .submit-modal-privacy-wide) rather than borrowed
-     from the preview, and it was re-derived away from 1000 on purpose. */
-  /* AND CONTENT AND DATA QUESTIONS JOIN THEM, by request — so every door out of
-     the Mac preview lands at the preview's width and the flip stops resizing
-     entirely.
+     ONE THING v7.02 LEFT BEHIND ON PURPOSE: the class is still named
+     `.submit-modal-mac-sub` rather than the `.submit-modal-mac-gc` it was
+     called before. Only the WIDTH was asked to go back, and renaming it would
+     mean inventing the old identifier from memory across two files to no
+     effect. The name still describes what is left — a sub-surface of the Mac
+     preview, at the preview's width — and Game Center is that.
 
-     BOTH DOORS, NOT JUST THE FLIP, on this file's own rule: v6.52 widened the
-     standalone `privacy` STEP to the flip's width because "it is the same
-     builder, the same markup and the same table, so it is the same surface
-     reached by a different route and it takes the same width." Mac reaches its
-     Data Collection Questions from the preview AND from the Data Safety card
-     step (v6.95), and its Content Questions from the preview AND from the
-     Content Rating card step. Widening one door only would draw the same
-     section at two sizes depending on how you arrived.
-
-     SCOPED TO macos, which is what was asked and also all that makes sense: the
-     App Store's own preview is 680, so there is no transition to smooth there,
-     and iOS keeps the derived 807 its data table was measured for.
-
-     WORTH KNOWING, because it reverses a measurement: 807 is not a picked
-     number — it is 748 of table plus its chrome, re-derived DOWN from 1000 in
-     v6.49/v6.52 precisely because 1000 was wider than the table needs. On Mac
-     that derivation now loses to the transition, deliberately; the table sits
-     in a roomier box than it would choose for itself. iOS still holds the
-     derived width, so the measurement is not lost, just no longer the only
-     consideration on the one surface that flips out of a 1000px page.
-
-     AND ADJUST SCREENSHOTS, THE LAST DOOR, by request — and the one where the
-     resize was never only cosmetic. `_shotEdWatchWidth` (app.js) documents what
-     the shrink did here: the stage is armed on the first frame of the flip, at
-     which point the modal is still 1000 and the stage measures 939, so the crop
-     frame was solved at 939 x 587 and pinned in inline pixels; the modal then
-     animated down to 680 around it, leaving 619 x 587 of a 939-wide frame
-     visible — ratio 1.05, which is what *"la primera vez que se abre el modal
-     de los screenshots, la preview es cuadrada"* was. A `ResizeObserver` made
-     the geometry a function of the width rather than a snapshot of it, and that
-     stays (a window resize still moves the width); with the two modals equal it
-     simply has nothing to do on the way in. The bug's transient value, 939 x
-     587, is now the settled one.
-
-     THE STAGE GROWS WITH THE MODAL ON PURPOSE: it is the modal's full width by
-     this editor's own brief (*"que me muestres la preview ocupando todo el
-     ancho del modal"*), so 619 x 387 becomes 939 x 587 rather than a 619 box
-     centred in a wider sheet.
-
-     AND THAT HEIGHT IS THE PRICE, MEASURED AND NAMED RATHER THAN HIDDEN: the
-     stage is 200px taller, and the modal is not (`height: clamp(560px, 88vh,
-     860px)`), so the room comes out of what sits below it. On a 1050-tall
-     viewport the zoom toolbar and the thumbnail strip still clear the fold; at
-     1440 x 900 the strip opens entirely below it, and at 1280 x 800 the toolbar
-     does too. Capping the canvas would fix it — `_shotEdGeometry`'s `full:
-     false` arm already centres a frame narrower than its canvas, which is what
-     a capped landscape stage is — but a height cap is a different change from a
-     width, so it is stated here and not smuggled in. */
-  const macFlip = platformId === 'macos' ? state.storePreviewFlipTarget?.['macos'] : null;
-  const isMacPreviewSub =
-    (platformId === 'macos') &&
-    (stepId === 'gameCenter' ||
-     stepId === 'privacy' || stepId === 'contentRating' ||
-     (stepId === 'storePreview' &&
-      (macFlip === 'business' || macFlip === 'content' ||
-       macFlip === 'data'     || macFlip === 'screenshots')));
+     WHAT THIS COSTS, SO IT IS NOT REDISCOVERED: `_shotEdWatchWidth` (app.js)
+     documents that the 1000 -> 680 shrink on the Screenshots flip is what made
+     the crop preview open square, because the stage is armed on the first frame
+     of the animation. Its `ResizeObserver` is what actually fixes that and is
+     untouched, so the bug does not come back with the resize; the width is
+     simply a function again rather than a constant. */
+  const isMacPreviewSub = (platformId === 'macos') && (stepId === 'gameCenter');
   modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (isMacPreviewSub ? ' submit-modal-mac-sub' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
@@ -20324,38 +20276,16 @@ function buildScreenshotsSection(pid) {
 
       ${stage}
 
-      <!-- THE CONTROLS DOCK TO THE BOTTOM OF THE SCROLLER (v7.05), and the
-           wrapper exists only so the two of them stick as one. v7.04 widened
-           this modal to the preview's 1000 and the stage is the modal's width
-           by this editor's brief, so the picture went 619x387 -> 939x587 while
-           the modal did not grow (its height is a clamp on the viewport): on a
-           1440x900 screen the strip opened entirely below the fold and at
-           1280x800 the zoom row did too. You could not see which screenshot
-           you were editing, or reach the + to add one, without scrolling away
-           from the thing you were editing it in.
-
-           NOT BY CAPPING THE STAGE, which was the obvious answer and is the
-           wrong one: the cap has to come off the room the scroller has, and on
-           a 720-tall window that room is 317px -- so the picture would come out
-           507x317, SMALLER than the 619x387 it had before this modal was ever
-           widened. A fix for the widening that undoes the widening is not a
-           fix. _shotEdGeometry stays exactly as it was.
-
-           The two controls that must never be out of reach are the zoom row and
-           the strip; the note and the Restore row are occasional and stay in
-           flow below. -->
-      <div class="shot-ed-dock">
-        <div class="shot-ed-toolbar${sel ? '' : ' is-off'}">
-          <div class="shot-ed-zoom">
-            <span class="shot-ed-zoom-label">Zoom</span>
-            <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
-                   min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
-          </div>
-          <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
+      <div class="shot-ed-toolbar${sel ? '' : ' is-off'}">
+        <div class="shot-ed-zoom">
+          <span class="shot-ed-zoom-label">Zoom</span>
+          <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
+                 min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
         </div>
-
-        <div class="shot-ed-strip" id="shot-ed-strip">${thumbs}${addSlot}</div>
+        <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
       </div>
+
+      <div class="shot-ed-strip" id="shot-ed-strip">${thumbs}${addSlot}</div>
 
       ${pool.length === 0 && shots.length === 0 ? `
       <p class="shot-ed-note">No screenshots uploaded yet — add them here, or under Assets in Game Details.</p>` : ''}
