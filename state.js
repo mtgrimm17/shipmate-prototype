@@ -828,6 +828,26 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',            label: 'Upload Build'                            },
       { id: 'contentRating',          label: 'Content Rating',        hasInference: true },
+      /* DATA SAFETY AND LOCALIZATIONS ARE STUBS HERE, and deliberately so —
+         see buildSteamDataSafetySection / buildSteamLocalizationsSection
+         (render.js), which render a heading and a Shipmate Tip through the
+         shared buildStepStubSection and nothing else.
+
+         They exist as STEPS rather than as nothing because the row is the
+         thing being asked for: every other store in this prototype walks
+         ratings -> data -> localizations -> store page, and Steam walking
+         ratings -> store page made it the one platform whose checklist
+         silently skipped two of the four questions a submission has to
+         answer. A stub row states the question and admits it has no answer
+         yet; an absent row states neither.
+
+         Both mark complete on first visit (isSteamSectionComplete, below),
+         which is the same visit-based gate storePreviewPrototype and
+         improveSubmission already use — honest for a placeholder, because
+         "you have seen this" is the only claim a stub can truthfully make.
+         When either grows real questions, that arm is what changes. */
+      { id: 'dataSafety',             label: 'Data Safety'                             },
+      { id: 'localizations',          label: 'Localizations'                           },
       { id: 'storePreviewPrototype',  label: 'Store Page Preview'                      },
       { id: 'improveSubmission',      label: 'Improve Your Submission'                 },
     ],
@@ -956,6 +976,33 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
+      /* DATA SAFETY IS BACK AS A STEP, and nothing had to be built for it —
+         which is the tell that it was only ever missing its row.
+         buildAndroidDataSafetySection (render.js), the dispatch arm that
+         calls it (_stepBodyFor), isAndroidSectionComplete('dataSafety'),
+         computeAndroidSectionRisk('dataSafety') and the ANDROID_DATA_TYPES
+         taxonomy were all live the whole time; the only door was flipping
+         the Store Listing Preview over to its "Answer Data Collection
+         Questions" face.
+
+         That asymmetry was visible in two places and both now resolve by
+         themselves. CHK_GLOW_STEPS.dataSafety (app.js) already listed
+         'dataSafety' ahead of the preview steps and carried a comment
+         saying Google Play has no such row and falls through to a flip —
+         with the row back it stops flipping and points at the step, like
+         every other checklist entry. And the Shippy Checklist's own
+         CHK_DATA_DONE (render.js) had to ask each preview directly rather
+         than asking a card step.
+
+         Same position as the App Store's: immediately after Content Rating,
+         which is the order the checklist already walks.
+
+         LOCALIZATIONS IS A STUB (buildAndroidLocalizationsSection,
+         render.js) — see the Steam steps above for why a placeholder row
+         beats an absent one, and for what its visit-based completeness
+         arm is admitting. */
+      { id: 'dataSafety',        label: 'Data Safety'                                  },
+      { id: 'localizations',     label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Store Listing Preview'                        },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
@@ -1231,10 +1278,67 @@ function _uploadBuildComplete(pid) {
   return !!(state.selectedTracks || {})[pid];
 }
 
+/* ONE PLACE THAT STAMPS "YOU HAVE SEEN THIS", AND THERE WERE TWO.
+
+   Several steps are complete on first visit rather than on any answer —
+   Product Page Preview, Localizations, and now Steam's two stubs — so the
+   openers have to stamp a flag on the way in. That stamping was written out
+   longhand in BOTH openers (openStepModal and the inline pane's own opener),
+   and the two copies had already drifted: one ended `else if (pid === 'ios')`
+   and the other ended in a bare `else`, i.e. a catch-all that wrote
+   `iosLocalizationsSeen` for whatever platform was passed.
+
+   That catch-all was harmless only for as long as ios/macos/macos_full were
+   the only platforms with a Localizations step. They are not any more, and it
+   would have had Google Play's Localizations row silently tick the App
+   Store's flag — a step on one platform completing a step on another.
+
+   So the stamping is one function and the openers call it. Adding a
+   visit-based step means one arm here rather than two edits that can
+   disagree, which is this file's standing argument against an inventory.
+
+   It writes and returns nothing; the callers already render after it. */
+function _markStepVisited(pid, stepId) {
+  if (stepId === 'storePreview') {
+    if (pid === 'web') { if (state.platformStepStatus?.web) state.platformStepStatus.web.storePreview = 'complete'; }
+    else if (pid === 'macos')      state.macStorePreviewSeen     = true;
+    else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
+    else if (pid === 'ios')        state.iosStorePreviewSeen     = true;
+    else if (pid === 'android')    state.androidSubmitAnswers.storePreviewSeen = true;
+  }
+  if (stepId === 'storePreviewPrototype' && pid === 'steam') {
+    state.steamSubmitAnswers.storePreviewPrototypeSeen = true;
+  }
+  if (stepId === 'localizations') {
+    if (pid === 'macos')           state.macLocalizationsSeen     = true;
+    else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
+    else if (pid === 'android')    state.androidSubmitAnswers.localizationsSeen = true;
+    else if (pid === 'steam')      state.steamSubmitAnswers.localizationsSeen   = true;
+    else                           state.iosLocalizationsSeen     = true;
+  }
+  if (stepId === 'dataSafety' && pid === 'steam') {
+    state.steamSubmitAnswers.dataSafetySeen = true;
+  }
+}
+
+/* THE LOCALIZATIONS RULE IS ABOUT THE STEP, NOT ABOUT APPLE.
+
+   This used to name ios/macos/macos_full explicitly, because those were the
+   only three platforms with a 'localizations' step. Steam and Google Play
+   have one now, and the reason the row hides has nothing to do with which
+   store it belongs to: a Localizations step is ABOUT the languages you chose
+   in Game Details, so with none chosen there is nothing for it to be about —
+   on any store. Naming the platforms would have been a list that goes stale
+   the next time a platform gains the step, which is this file's own recurring
+   lesson about inventories.
+
+   So the pid check is gone and the condition is the one that was always
+   doing the work. It is a no-op for a platform with no such step, since the
+   filter then removes nothing. */
 function _visiblePlatformSteps(pid) {
   const p = PLATFORMS[pid];
   if (!p) return [];
-  if ((pid === 'ios' || pid === 'macos' || pid === 'macos_full') && !(state.formData.localizations || []).length) {
+  if (!(state.formData.localizations || []).length) {
     return p.steps.filter(s => s.id !== 'localizations');
   }
   return p.steps;
@@ -2523,6 +2627,9 @@ function makeBlankAndroidAnswers() {
     dataPerType:              {},
     // Store Preview
     storePreviewSeen:         false,
+    // Localizations — stub step, complete on first view. Google Play's own
+    // Data Safety above is fully modelled; this one is not yet.
+    localizationsSeen:        false,
     // Improve Your Submission — marks complete on first view
     improveSubmissionSeen:    false,
   };
@@ -2550,6 +2657,12 @@ function isAndroidSectionComplete(sectionId) {
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.androidSubmitAnswers.improveSubmissionSeen;
+  /* Visit-based, because it is a stub — see PLATFORMS.android.steps. It is
+     deliberately NOT folded into the storePreview or questionnaire roll-ups
+     below: those gate a real thing on its real prerequisites, and hanging
+     them on a placeholder would let a step that asks nothing block one that
+     asks plenty. */
+  if (sectionId === 'localizations') return !!state.androidSubmitAnswers.localizationsSeen;
 
   if (sectionId === 'storePreview') {
     return isAndroidSectionComplete('contentRating') &&
@@ -5112,6 +5225,10 @@ function makeBlankSteamAnswers() {
     // this prototype — so edits/removals made in
     // buildSteamLanguagesEditSection (render.js) stick.
     languages:          null,
+    // Data Safety and Localizations — stub steps, complete on first view.
+    // See PLATFORMS.steam.steps for why they are rows rather than nothing.
+    dataSafetySeen:     false,
+    localizationsSeen:  false,
     // Improve Your Submission — marks complete on first view
     improveSubmissionSeen: false,
   };
@@ -5126,6 +5243,12 @@ function isSteamSectionComplete(sectionId) {
   }
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
   if (sectionId === 'storePreviewPrototype') return !!state.steamSubmitAnswers.storePreviewPrototypeSeen;
+  /* Both visit-based, because both are stubs — see PLATFORMS.steam.steps for
+     why the rows exist at all, and why "you have seen this" is the only claim
+     either can honestly make yet. Kept out of the questionnaire roll-up below
+     for isAndroidSectionComplete's own stated reason. */
+  if (sectionId === 'dataSafety')    return !!state.steamSubmitAnswers.dataSafetySeen;
+  if (sectionId === 'localizations') return !!state.steamSubmitAnswers.localizationsSeen;
 
   if (sectionId === 'questionnaire') {
     return isSteamSectionComplete('contentRating') &&

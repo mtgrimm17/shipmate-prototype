@@ -499,17 +499,7 @@ async function toggleStepSection(pid, stepId) {
     if (pid === 'macos')      seedMacAppStoreListing();
     if (pid === 'macos_full') seedMacFullAppStoreListing();
   }
-  if (stepId === 'storePreview') {
-    if (pid === 'web' && state.platformStepStatus?.web) state.platformStepStatus.web.storePreview = 'complete';
-    else if (pid === 'macos')      state.macStorePreviewSeen     = true;
-    else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
-    else if (pid === 'ios')        state.iosStorePreviewSeen     = true;
-  }
-  if (stepId === 'localizations') {
-    if (pid === 'macos')           state.macLocalizationsSeen     = true;
-    else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
-    else                           state.iosLocalizationsSeen     = true;
-  }
+  _markStepVisited(pid, stepId);
 
   const step = PLATFORMS[pid].steps.find(s => s.id === stepId);
   if (!state.submission.infer) state.submission.infer = {};
@@ -1548,13 +1538,22 @@ const CHK_GLOW_STEPS = {
   /* Whichever door the platform has. App Store, Mac App Store and Mac App Store
      Full all carry a real 'privacy' row now, and it sits BEFORE 'storePreview'
      in each of their step lists — _chkPlatformStepId takes the first id the
-     platform's own order offers, so those three land on the step. Google Play
-     has no such row: its data safety is still a section of the Store Listing
-     Preview, so it falls through to that step with a flip to 'data', the same
-     door openStorePreviewSection opens from inside the preview. The `flip` is
-     applied only when the resolved step IS a preview (CHK_PREVIEW_STEPS), which
-     is what keeps the three step-carrying platforms from being sent through a
-     flip they no longer need. */
+     platform's own order offers, so those three land on the step.
+
+     GOOGLE PLAY AND STEAM NOW LAND ON A STEP TOO, and nothing here had to
+     change for it. This comment used to read "Google Play has no such row:
+     its data safety is still a section of the Store Listing Preview, so it
+     falls through to that step with a flip to 'data'" — true until those two
+     platforms gained a 'dataSafety' row (PLATFORMS.android.steps /
+     PLATFORMS.steam.steps, state.js). Because the resolution is "first id
+     this platform's own order offers" rather than a list of which platforms
+     have which door, the new rows are picked up by construction and the flip
+     simply stops being reached.
+
+     The `flip` stays, and is still load-bearing for any platform that carries
+     a preview but no data row. It is applied only when the resolved step IS a
+     preview (CHK_PREVIEW_STEPS), which is what keeps the step-carrying
+     platforms from being sent through a flip they no longer need. */
   dataSafety:        { stepIds: ['privacy', 'dataSafety', 'storePreview', 'storePreviewPrototype'], flip: 'data' },
   storePages:        { stepIds: ['storePreview', 'storePreviewPrototype'] },
   improveSubmission: { stepIds: ['improveSubmission'] },
@@ -3036,17 +3035,13 @@ async function openStepModal(pid, stepId) {
      not catch it: the flag was written after the tail had run.)
 
      toggleStepSection — the inline pane's opener — already writes them in this
-     order, so this is the modal path catching up with the pane's. */
-  if (stepId === 'storePreview') {
-    if (pid === 'macos')      state.macStorePreviewSeen     = true;
-    else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
-    else                      state.iosStorePreviewSeen     = true;
-  }
-  if (stepId === 'localizations') {
-    if (pid === 'macos')      state.macLocalizationsSeen     = true;
-    else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
-    else                      state.iosLocalizationsSeen     = true;
-  }
+     order, so this is the modal path catching up with the pane's.
+
+     Both openers now stamp through _markStepVisited (state.js) rather than
+     each spelling the branches out; the ORDER this comment is about is
+     unchanged, only the duplication is gone. See that function for what the
+     two hand-written copies had already drifted into. */
+  _markStepVisited(pid, stepId);
 
   // Open overlay immediately so user sees something
   renderStepModal();
@@ -19994,7 +19989,23 @@ function confirmCreateRelease() {
   // Store Page Preview step correctly shows as incomplete on the new release.
   state.iosStorePreviewSeen                        = false;
   state.androidSubmitAnswers.storePreviewSeen      = false;
-  state.steamSubmitAnswers.storePreviewSeen        = false;
+  /* STEAM'S STEP IS GATED ON `storePreviewPrototypeSeen`, AND THIS LINE
+     RESET `storePreviewSeen`. Both fields are real — makeBlankSteamAnswers
+     produces each of them — which is exactly why this survived: it is not a
+     typo that throws, it is a reset aimed at the wrong one of two
+     similarly-named flags.
+
+     `storePreviewSeen` is READ NOWHERE on Steam (checked: two writes, zero
+     reads; `isSteamSectionComplete` only ever asks for
+     `storePreviewPrototypeSeen`). So this cleared a field nothing consults
+     and left the one the step actually depends on standing — cutting a new
+     release inherited the previous release's Store Page Preview tick, on
+     Steam and only on Steam.
+
+     The vestigial field is deliberately left alone rather than swept: its
+     other write is inside buildSteamStorePreviewSection, i.e. a mutation in
+     a render function, and untangling that is its own change. */
+  state.steamSubmitAnswers.storePreviewPrototypeSeen = false;
 
   // Localizations is driven by the same kind of "seen" flag (isIOSSection
   // Complete/isMacSectionComplete/isMacFullSectionComplete, state.js) —
@@ -20003,6 +20014,12 @@ function confirmCreateRelease() {
   state.iosLocalizationsSeen                       = false;
   state.macLocalizationsSeen                       = false;
   state.macFullLocalizationsSeen                   = false;
+  // Google Play's and Steam's Localizations, and Steam's Data Safety, are
+  // stub steps on the same visit-based gate — so they reset for the same
+  // reason. See PLATFORMS.steam.steps (state.js).
+  state.androidSubmitAnswers.localizationsSeen     = false;
+  state.steamSubmitAnswers.localizationsSeen       = false;
+  state.steamSubmitAnswers.dataSafetySeen          = false;
 
   closeNewReleaseModal();
   renderDashboard();

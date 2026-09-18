@@ -1438,7 +1438,7 @@ function buildObLangList() {
             asymmetry is the point — 36 above, 16 below — because the smaller
             gap is what binds it to the field it is talking about.
 
-            Styled as a Shipmate Tip (.sw-tip-box — see buildAndroidStubSection
+            Styled as a Shipmate Tip (.sw-tip-box — see buildStepStubSection
             for the same plain icon+text usage) rather than the prose treatment
             (.asset-guidance) Distribution's and Assets' opening lines still
             use — see the "PROSE, NOT A BOX" note in Distribution: that
@@ -3868,6 +3868,14 @@ const CHK_DATA_DONE = {
   macos:      () => isMacSectionComplete('privacy'),
   macos_full: () => isMacFullSectionComplete('privacy'),
   android:    () => isAndroidSectionComplete('dataSafety'),
+  /* Steam's is a stub and answers on first visit — see PLATFORMS.steam.steps
+     (state.js). It is listed anyway rather than left out: _chkDataSafetyDone
+     filters this map and requires EVERY listed platform to be done, so an
+     omitted platform is not counted as incomplete, it is counted as not
+     having the question — which for Steam is no longer true. A row that
+     ignored Steam would go green on a Steam-only project that had never
+     opened the step. */
+  steam:      () => isSteamSectionComplete('dataSafety'),
 };
 
 function _chkDataSafetyDone() {
@@ -7025,6 +7033,7 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
     else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
+    else if (stepId === 'localizations')      body = buildAndroidLocalizationsSection();
     else if (stepId === 'business')           body = buildAndroidBusinessSection();
   } else if (platformId === 'steam') {
     if (stepId === 'storePreviewPrototype')   body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
@@ -7033,6 +7042,8 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
     else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
+    else if (stepId === 'dataSafety')         body = buildSteamDataSafetySection();
+    else if (stepId === 'localizations')      body = buildSteamLocalizationsSection();
     else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
   } else if (platformId === 'web') {
@@ -17788,8 +17799,22 @@ function buildAndroidContentRatingSection() {
   return `<div class="giarc-root">${GOOGLE_IARC_TOP_LEVEL_KEYS.map((key, i) => renderGIARCQuestion(key, 1, i + 1)).join('')}</div>`;
 }
 
-/* Stub section for steps not yet implemented */
-function buildAndroidStubSection(title, note) {
+/* STUB SECTION FOR STEPS NOT YET IMPLEMENTED — ONE SHAPE, ANY PLATFORM.
+
+   Renamed from buildAndroidStubSection, which had no callers at all and was
+   Android-named only because Android is where it was written. Steam and
+   Google Play's new Data Safety / Localizations rows are its first real
+   consumers and neither is more Android's than the other's, so the name says
+   what it is instead of where it came from. (One comment further up this file
+   still referenced the old name as a styling precedent; it moved with it.)
+
+   A stub is deliberately not a blank body: it names the step and states, in
+   the app's own Shipmate Tip, that there is nothing to answer yet. A step
+   that opens onto nothing reads as broken, where one that says so reads as
+   unfinished — the same distinction the screenshots editor's empty stage and
+   the "not yet" checklist states are built on. `note` is the honest half and
+   should say what WILL be asked here, not merely that something will. */
+function buildStepStubSection(title, note) {
   return `
     <div class="ios-section-head">${title}</div>
     <div class="sw-tip-box" style="margin-bottom:16px;">
@@ -17798,6 +17823,42 @@ function buildAndroidStubSection(title, note) {
         <span class="sw-tip-text">${note}</span>
       </div>
     </div>`;
+}
+
+/* GOOGLE PLAY AND STEAM'S PLACEHOLDER STEPS.
+
+   Three of them, and what they have in common is the reason they exist:
+   every store in this prototype now walks ratings -> data -> localizations
+   -> store page, so a platform missing one of those rows was a platform
+   whose checklist quietly skipped a question a real submission has to
+   answer. See PLATFORMS.steam.steps / PLATFORMS.android.steps (state.js).
+
+   Google Play's DATA Safety is NOT here — it is fully built
+   (buildAndroidDataSafetySection, below) and only ever lacked its step row.
+
+   Each names what it will ask rather than saying "coming soon", so the row
+   is worth opening once even while it is a stub. All three mark complete on
+   first visit; the arms that do that are in isAndroidSectionComplete /
+   isSteamSectionComplete and are what change when any of these grows teeth. */
+function buildSteamDataSafetySection() {
+  return buildStepStubSection(
+    'Data Safety',
+    'Steam asks for a privacy policy URL, and for a disclosure of what your game collects, whenever it gathers player data — through accounts, analytics, telemetry or a third-party SDK. Those questions will be asked here. Nothing is required of you yet.'
+  );
+}
+
+function buildSteamLocalizationsSection() {
+  return buildStepStubSection(
+    'Localizations',
+    'Your Steam store page can carry a translated name, description and feature list per language, separately from the interface, audio and subtitle support you set on the Store Page Preview. Reviewing those translations will happen here. Nothing is required of you yet.'
+  );
+}
+
+function buildAndroidLocalizationsSection() {
+  return buildStepStubSection(
+    'Localizations',
+    'Google Play lets you localize your listing per language — title, short description, full description and graphics — with the store falling back to your default language wherever a translation is missing. Reviewing those translations will happen here. Nothing is required of you yet.'
+  );
 }
 
 /* Android Store Listing — review metadata */
