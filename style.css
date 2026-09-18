@@ -13838,6 +13838,23 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal.submit-modal-mac-sub {
   max-width: 1000px;
 }
+/* ── AND WHEN A SURFACE IS BOTH ────────────────────────────────────────
+   Mac's Data Collection Questions wears BOTH classes and needs both for
+   different reasons: `.submit-modal-privacy-wide` carries the layout this body
+   depends on — the `.ios-q-row` reset, the flex/scroll column under
+   `.prv-nlp-wrap` — while `.submit-modal-mac-sub` carries the width it now
+   takes from the preview it flipped out of.
+
+   So the class is kept and only the WIDTH is settled here. Three classes, which
+   beats both two-class rules regardless of which lands later in the file — the
+   alternative was dropping privacy-wide on Mac and re-homing its layout rules,
+   which is a lot of moving parts to win an argument about one number.
+
+   The App Store is untouched: it never gets `mac-sub`, so its data table keeps
+   the 807 it was measured for. */
+.submit-modal.submit-modal-privacy-wide.submit-modal-mac-sub {
+  max-width: 1000px;
+}
 /* ios/macos Data Collection Questions (buildPrivacyMatrix). See
    renderStepModal's own isPrivacyWide comment for why this is a separate class
    rather than reusing .submit-modal-mac-spp — no sidebar flex/scroll overrides

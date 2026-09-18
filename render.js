@@ -7188,10 +7188,37 @@ function renderStepModal() {
      Data Questions is deliberately NOT folded in: its width is DERIVED from the
      table it holds (807, see .submit-modal-privacy-wide) rather than borrowed
      from the preview, and it was re-derived away from 1000 on purpose. */
+  /* AND CONTENT AND DATA QUESTIONS JOIN THEM, by request — so every door out of
+     the Mac preview lands at the preview's width and the flip stops resizing
+     entirely.
+
+     BOTH DOORS, NOT JUST THE FLIP, on this file's own rule: v6.52 widened the
+     standalone `privacy` STEP to the flip's width because "it is the same
+     builder, the same markup and the same table, so it is the same surface
+     reached by a different route and it takes the same width." Mac reaches its
+     Data Collection Questions from the preview AND from the Data Safety card
+     step (v6.95), and its Content Questions from the preview AND from the
+     Content Rating card step. Widening one door only would draw the same
+     section at two sizes depending on how you arrived.
+
+     SCOPED TO macos, which is what was asked and also all that makes sense: the
+     App Store's own preview is 680, so there is no transition to smooth there,
+     and iOS keeps the derived 807 its data table was measured for.
+
+     WORTH KNOWING, because it reverses a measurement: 807 is not a picked
+     number — it is 748 of table plus its chrome, re-derived DOWN from 1000 in
+     v6.49/v6.52 precisely because 1000 was wider than the table needs. On Mac
+     that derivation now loses to the transition, deliberately; the table sits
+     in a roomier box than it would choose for itself. iOS still holds the
+     derived width, so the measurement is not lost, just no longer the only
+     consideration on the one surface that flips out of a 1000px page. */
+  const macFlip = platformId === 'macos' ? state.storePreviewFlipTarget?.['macos'] : null;
   const isMacPreviewSub =
     (platformId === 'macos') &&
     (stepId === 'gameCenter' ||
-     (stepId === 'storePreview' && state.storePreviewFlipTarget?.[platformId] === 'business'));
+     stepId === 'privacy' || stepId === 'contentRating' ||
+     (stepId === 'storePreview' &&
+      (macFlip === 'business' || macFlip === 'content' || macFlip === 'data')));
   modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (isMacPreviewSub ? ' submit-modal-mac-sub' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
