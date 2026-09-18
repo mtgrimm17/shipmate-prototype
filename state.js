@@ -845,6 +845,23 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
+      /* DATA SAFETY IS A STEP NOW, not only a face of the Product Page Preview.
+         The questions were always here — isIOSSectionComplete('privacy'), the
+         same ones Mac App Store Full has carried as its own 'App Privacy' row
+         all along — but the only door was flipping the preview over, which is
+         why the Shippy Checklist's own row had to ask each preview directly
+         (see CHK_DATA_DONE, render.js) instead of asking a card step like every
+         other row does.
+
+         Immediately after Content Rating, which is what "after Content Rating
+         and before Product Page Preview" resolves to once you notice
+         Localizations sits between those two: this is the order the checklist
+         already walks (ratings -> data safety -> localizations -> store pages)
+         and the order Mac App Store Full already lists. The preview keeps its
+         own "Answer Data Collection Questions" element — a second door, exactly
+         as Content Rating has had both a step and a preview cell for as long as
+         both have existed. */
+      { id: 'privacy',           label: 'Data Safety'                                  },
       { id: 'localizations',    label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
@@ -875,6 +892,23 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
+      /* DATA SAFETY IS A STEP NOW, not only a face of the Product Page Preview.
+         The questions were always here — isIOSSectionComplete('privacy'), the
+         same ones Mac App Store Full has carried as its own 'App Privacy' row
+         all along — but the only door was flipping the preview over, which is
+         why the Shippy Checklist's own row had to ask each preview directly
+         (see CHK_DATA_DONE, render.js) instead of asking a card step like every
+         other row does.
+
+         Immediately after Content Rating, which is what "after Content Rating
+         and before Product Page Preview" resolves to once you notice
+         Localizations sits between those two: this is the order the checklist
+         already walks (ratings -> data safety -> localizations -> store pages)
+         and the order Mac App Store Full already lists. The preview keeps its
+         own "Answer Data Collection Questions" element — a second door, exactly
+         as Content Rating has had both a step and a preview cell for as long as
+         both have existed. */
+      { id: 'privacy',           label: 'Data Safety'                                  },
       { id: 'localizations',    label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },

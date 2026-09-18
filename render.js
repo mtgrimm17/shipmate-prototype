@@ -3815,16 +3815,31 @@ function _chkEveryPlatformComplete(stepIds) {
   });
 }
 
-/* "COMPLETE DATA SAFETY DISCLOSURES", which had no way to ever tick.
+/* "COMPLETE DATA SAFETY DISCLOSURES", which once had no way to ever tick.
 
-   Data Collection Questions is NOT a step on any platform card — it is a
-   section of the Product Page Preview, reached by flipping it over
-   (openStorePreviewSection(pid,'data'), app.js). So asking
+   HISTORY, BECAUSE IT EXPLAINS THE SHAPE: Data Collection Questions used to be
+   no step on any card — only a face of the Product Page Preview, reached by
+   flipping it over (openStorePreviewSection(pid,'data'), app.js). So asking
    _chkPlatformsWithStep for 'privacy'/'dataSafety' found no platform carrying
    either id, got back [], and "done everywhere that has it, and at least one
-   does" is false over an empty list by design — this row sat permanently
-   unticked on every project that didn't activate the hidden Mac App Store
-   Full, which is the only platform with a real card step for it.
+   does" is false over an empty list by design — the row sat permanently
+   unticked on every project that hadn't activated the hidden Mac App Store
+   Full, the only platform with a real card step for it.
+
+   App Store and Mac App Store now carry a 'privacy' step of their own, so
+   three of these four are ordinary card steps and the row's CLICK resolves
+   against them like every other row's does (CHK_GLOW_STEPS.dataSafety, app.js —
+   'privacy' precedes 'storePreview' in both step lists, so those two land on
+   the step and Google Play still falls through to its preview with the 'data'
+   flip).
+
+   ITS DONE-STATE STAYS HERE ALL THE SAME, and Google Play is the reason. That
+   platform's data safety is still a section of its Store Listing Preview with
+   no step of its own, so a step-based test would either skip it — a Google Play
+   project would tick this row without ever answering the questions — or count
+   its whole preview, which is far more than data safety. The question this row
+   asks is "are the disclosures done", not "is a particular row ticked", so it
+   goes on asking each platform that HAS disclosures, directly.
 
    It asks each preview directly instead. Steam is deliberately absent: its data
    section is a privacy-policy URL field, not a disclosure questionnaire, and
@@ -3893,6 +3908,15 @@ function _chkGroups() {
   // Same test _visiblePlatformSteps uses to decide whether the platform cards
   // show a Localizations step at all (state.js).
   const hasLocalizations = (fd.localizations || []).length > 0;
+  /* The Data Safety row is CONDITIONAL, on the same fact its done-state reads:
+     a platform is in CHK_DATA_DONE exactly when it has data-collection
+     questions to answer — App Store, Mac App Store, Mac App Store Full and
+     Google Play. Steam's data section is a privacy-policy URL and is
+     deliberately not one of them (see _chkDataSafetyDone), so a Steam-only
+     project gets no row rather than a row it can never satisfy. Derived from
+     the map rather than from a hardcoded platform list, so the two can't
+     disagree about which stores this row is about. */
+  const hasDataSafety = [...(state.activePlatforms || [])].some(pid => CHK_DATA_DONE[pid]);
   return [
     { group: t('guide.group.details') || 'Details', view: 'details', items: [
       { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
@@ -3930,7 +3954,9 @@ function _chkGroups() {
     { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
       { label: t('guide.item.uploadBuild') || 'Upload build',              step: 'uploadBuild',   done: _chkEveryPlatformComplete('uploadBuild') },
       { label: t('guide.item.contentRatings') || 'Set content ratings',    step: 'contentRating', done: _chkEveryPlatformComplete('contentRating') },
+      ...(hasDataSafety ? [
       { label: t('guide.item.dataSafety') || 'Review data safety', step: 'dataSafety', done: _chkDataSafetyDone() },
+      ] : []),
       ...(hasLocalizations ? [
       { label: t('guide.item.platformLocalizations') || 'Complete localizations', step: 'localizations', done: _chkEveryPlatformComplete('localizations') },
       ] : []),

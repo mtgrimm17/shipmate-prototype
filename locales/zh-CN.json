@@ -134,6 +134,8 @@
   "step.android.storePreview": "商店列表预览",
   "step.contentRating": "内容分级",
   "step.privacy": "数据隐私",
+  "step.ios.privacy": "数据安全",
+  "step.macos.privacy": "数据安全",
   "step.business": "商业信息",
   "step.storePreview": "商店页面预览",
   "step.dataSafety": "数据安全",

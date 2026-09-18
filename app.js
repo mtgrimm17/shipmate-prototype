@@ -1545,13 +1545,16 @@ const CHK_GLOW_STEPS = {
   uploadBuild:       { stepIds: ['uploadBuild'] },
   contentRating:     { stepIds: ['contentRating'] },
   localizations:     { stepIds: ['localizations'] },
-  /* Data Collection Questions is a SECTION of the Product Page Preview, not a
-     card step — only Mac App Store Full carries a real 'privacy' row. So this
-     resolves to whichever the platform has: that row where it exists, and
-     otherwise the preview step with a flip to its 'data' section, which is the
-     same door openStorePreviewSection opens from inside the preview. The ring
-     therefore lands on the preview row on most platforms, which is the honest
-     answer — that IS where the questions live. */
+  /* Whichever door the platform has. App Store, Mac App Store and Mac App Store
+     Full all carry a real 'privacy' row now, and it sits BEFORE 'storePreview'
+     in each of their step lists — _chkPlatformStepId takes the first id the
+     platform's own order offers, so those three land on the step. Google Play
+     has no such row: its data safety is still a section of the Store Listing
+     Preview, so it falls through to that step with a flip to 'data', the same
+     door openStorePreviewSection opens from inside the preview. The `flip` is
+     applied only when the resolved step IS a preview (CHK_PREVIEW_STEPS), which
+     is what keeps the three step-carrying platforms from being sent through a
+     flip they no longer need. */
   dataSafety:        { stepIds: ['privacy', 'dataSafety', 'storePreview', 'storePreviewPrototype'], flip: 'data' },
   storePages:        { stepIds: ['storePreview', 'storePreviewPrototype'] },
   improveSubmission: { stepIds: ['improveSubmission'] },
@@ -1662,13 +1665,14 @@ function _chkOpenStep(pid, stepId, flip) {
       row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    /* Data Collection Questions: open the preview and turn it over, exactly as
-       its own "Answer Data Collection Questions" element does.
-       openStorePreviewSection records the visit too (markStepSectionSeen).
-       That visit no longer gates the checklist row — _chkDataSafetyDone reads
-       the answers alone now, see its own note — but it still clears the
-       preview's own review prompt, which is the surface the developer is about
-       to be looking at. */
+    /* Data Collection Questions on a platform that reaches them THROUGH its
+       preview — Google Play only, now that the Apple stores have their own
+       step: open the preview and turn it over, exactly as its own "Answer Data
+       Collection Questions" element does. openStorePreviewSection records the
+       visit too (markStepSectionSeen). That visit no longer gates the checklist
+       row — _chkDataSafetyDone reads the answers alone, see its own note — but
+       it still clears the preview's own review prompt, which is the surface the
+       developer is about to be looking at. */
     if (flip) {
       if (typeof openStepModal === 'function') openStepModal(pid, stepId);
       if (typeof openStorePreviewSection === 'function') openStorePreviewSection(pid, flip);
