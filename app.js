@@ -2199,6 +2199,45 @@ function _appStoreAnswers(pid, fieldId) {
   if (pid === 'macos' && fieldId && IOS_MAC_SHARED_ANSWER_FIELDS.has(fieldId)) return state.iosSubmitAnswers;
   return pid === 'macos' ? state.macSubmitAnswers : state.iosSubmitAnswers;
 }
+/* THE BASE PRICE, PER STORE. `price` is an ordinary independent field on each
+   Apple store's own answers object (makeBlankIOSAnswers, state.js) — these two
+   exist so the half-dozen readers do not each have to remember the seed
+   fallback, and so macos_full keeps reading the game-wide value it was always
+   documented as sharing.
+
+   The fallback is for the window before seedOnboardingToIOS has run for a
+   platform (it fills `price` from state.formData.price the first time that
+   platform is seeded). `?? ` and not `||`, because '' is a real answer. */
+function _appStorePrice(pid) {
+  if (pid !== 'ios' && pid !== 'macos') return state.formData.price || '';
+  const a = _appStoreAnswers(pid, 'price');
+  return a?.price ?? (state.formData.price || '');
+}
+
+function _setAppStorePrice(pid, value) {
+  if (pid !== 'ios' && pid !== 'macos') { state.formData.price = value; return; }
+  const a = _appStoreAnswers(pid, 'price');
+  if (a) a.price = value;
+  /* The App Store goes on writing the game-wide field. Every other surface that
+     shows "the price" — Game Details' metadata summary, computeRisk's free-game
+     test, the marketing page — is asking a question about the GAME, and the
+     phone listing is the reasonable answer to it. Mac's edits stay Mac's. */
+  if (pid === 'ios') state.formData.price = value;
+}
+
+/* The inline handler the Price field calls. Public name because it is written
+   into an `oninput` attribute, which resolves against window.
+
+   NO reRenderStepModal: this fires on every keystroke and a repaint would take
+   the caret with it — the same reason setIapProductField skips its own repaint
+   for `price` (see its `key !== 'price'` guard). The preview behind the modal
+   reads the value on its next paint, which is the flip back out of Business
+   Questions. */
+function setAppStorePrice(pid, value) {
+  _setAppStorePrice(pid, value);
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
+}
+
 function _appStoreAnswerMeta(pid, fieldId) {
   if (pid === 'macos_full') return state.macFullAnswerMeta;
   if (pid === 'macos' && fieldId && IOS_MAC_SHARED_ANSWER_FIELDS.has(fieldId)) return state.iosAnswerMeta;
@@ -2234,6 +2273,11 @@ function seedOnboardingToIOS(pid) {
   if (collectsAns.collectsData === null && state.questionAnswers.dataCollection !== null) {
     collectsAns.collectsData = state.questionAnswers.dataCollection;
     collectsMeta.collectsData = { humanConfirmed: true };
+  }
+  /* Seed once, then independent — the same contract seedMacAppStoreListing has
+     for the listing text. Only `null` is unseeded; '' is a real answer. */
+  if (bizAns.price === null || bizAns.price === undefined) {
+    bizAns.price = state.formData.price || '';
   }
   if (bizAns.selectedCountries.length === 0) {
     const langs = new Set([state.formData.primaryLanguage, ...state.formData.localizations]);
@@ -7153,7 +7197,14 @@ function roundPrice(inputEl) {
   const rounded = Math.round(val);
   const result = rounded > 0 ? (rounded - 0.01).toFixed(2) : val.toFixed(2);
   inputEl.value = result;
-  state.formData['price'] = result;
+  /* Through the accessor, and the pid comes off the input's own id
+     (`${pid}-price`, buildBusinessSection) rather than from the step modal —
+     this fires on blur, and a blur can land after the modal state has moved
+     on. Falls back to the App Store, which is where this field lived before it
+     was split. */
+  const pid = (inputEl.id || '').replace(/-price$/, '') || 'ios';
+  if (typeof _setAppStorePrice === 'function') _setAppStorePrice(pid, result);
+  else state.formData['price'] = result;
 }
 
 // Same "round to a .99 price" polish as the base game price (roundPrice

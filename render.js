@@ -9707,6 +9707,54 @@ function _sppIsFocused(pid, elements, id) {
    travel under this bar and it has to be sticky and opaque to stay the
    "persistent container" it is drawn as. Only the builder knows which
    arrangement it is in, so only the builder can say. */
+/* ── THE TOP BAR'S LIST, ONCE ─────────────────────────────────────────────
+   The eight required elements of an Apple Product Page Preview, and the ONLY
+   place they are enumerated. Both previews built this array inline, character
+   for character identical, and the step's own completeness predicate
+   (isIOSSectionComplete / isMacSectionComplete, state.js) re-derived a SUBSET
+   of it by hand — which is how the step came to report complete while the bar
+   above it still showed outstanding pills. Twice: v6.78 found Title, Subtitle
+   and Description missing from the predicate, and the Business pill was still
+   missing after it, because the pill asks `seen.business && complete` and the
+   predicate asked only `complete`.
+
+   So the bar and the tick now read the same eight lines. A future element is
+   added here and both surfaces get it; there is no second list to forget.
+
+   `lang` is the one thing the two callers legitimately disagree about. The BAR
+   describes the language the dropdown is showing, so it passes previewLang; the
+   STEP is about whether this listing can ship, which is the primary language's
+   business — a supporting language's translation belongs to the Localizations
+   step. Same rules, stated once, asked of whichever language the caller means. */
+function sppRequiredElements(pid, lang) {
+  const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
+  const fieldValue = pid === 'macos' ? _masFieldValue       : _iasFieldValue;
+  const seen       = state.storePreviewSectionSeen?.[pid] || {};
+  const val  = f => (fieldValue(f, lang) || '');
+  const over = f => val(f).length > IAS_FIELD_CHAR_LIMITS[f];
+  return [
+    { id: 'title',        label: 'Title',                            required: true,  done: !!val('title'),        bad: over('title') },
+    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!val('subtitle'),     bad: over('subtitle') },
+    { id: 'business',     label: 'Business',                          required: true,  done: !!(seen.business && complete('business')) },
+    { id: 'content',      label: 'Content',                           required: true,  done: complete('contentRating') },
+    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: complete('screenshots'),  short: 'Screenshots' },
+    { id: 'description',  label: 'Description',                       required: true,  done: !!val('description'),  bad: over('description') },
+    { id: 'achievements', label: 'Achievements',                      required: false, done: true },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: complete('privacy'),      short: 'Data privacy' },
+  ];
+}
+
+/* "Is every required element on this page satisfied" — the same expression
+   `_sppPinnedNav` uses for the bar's own is-complete state, so the step's tick
+   and the bar's cannot disagree. `bad` counts: an over-limit title is not a
+   listing you can submit, and the bar already refuses to call itself complete
+   with one. Defaults to the primary language; see sppRequiredElements. */
+function sppAllRequiredDone(pid, lang) {
+  const primary = (state.formData && state.formData.primaryLanguage) || 'en';
+  return sppRequiredElements(pid, lang || primary)
+    .every(e => (!e.required || e.done) && !e.bad);
+}
+
 function _sppPinnedNav(pid, elements, sticks) {
   if (!elements.length) return '';
   const cur = elements[_sppFocusIndex(pid, elements)]?.id;
@@ -9922,9 +9970,11 @@ function buildStorePreviewSection() {
   const shots = platformStoreShots(pid);
 
   const category  = escHtml(fd.genre || 'Games');
-  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
-  const price     = isFree ? 'GET' : `$${fd.price}`;
-  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  // This store's own base price — see buildBusinessSection's note on the split.
+  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const isFree    = !priceRaw || parseFloat(priceRaw) === 0 || priceRaw.trim() === '' || priceRaw.trim() === '0';
+  const price     = isFree ? 'GET' : `$${priceRaw}`;
+  const priceText = isFree ? 'Free' : `$${priceRaw}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
@@ -10273,11 +10323,10 @@ function buildStorePreviewSection() {
      had already made somewhere else. Emptying the listing still reads as not
      done — that check lives in the isXxxSectionComplete arm and is untouched. */
   const screenshotsDone = isIOSSectionComplete('screenshots');
-  // Description is a plain text field, same as Title/Subtitle — done once it
-  // has any text other than the pre-populated placeholder copy, regardless
-  // of whether that text arrived from direct editing here or was filled in
-  // from another section (e.g. Game Details).
-  const descDone        = !!descRaw;
+  // (`descDone` lived here. Its only consumer was this preview's ALL_ELEMENTS
+  //  entry, which now comes from sppRequiredElements — where the same test,
+  //  "any text at all, wherever it was typed", is stated once for both
+  //  previews. Removed rather than left assigned and unread.)
 
   // Section button helper — glows (animated if focused, static otherwise)
   // when incomplete, green check when done. glowCls is the is-spp-focused/
@@ -10329,16 +10378,10 @@ function buildStorePreviewSection() {
      against a character limit — and it is the SAME `*OverLimit` boolean the
      field itself wears as `is-over-limit` further down, so the magenta box and
      the red disc cannot disagree about one string. */
-  const ALL_ELEMENTS = [
-    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw,       bad: titleOverLimit },
-    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw,    bad: subtitleOverLimit },
-    { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
-    { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
-    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone,  short: 'Screenshots' },
-    { id: 'description',  label: 'Description',                       required: true,  done: descDone,         bad: descOverLimit },
-    { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
-  ];
+  // The eight required elements, from the one place they are listed — see
+  // sppRequiredElements. previewLang, because the bar describes the language
+  // the dropdown is currently showing.
+  const ALL_ELEMENTS = sppRequiredElements(pid, previewLang);
   /* THE GLOW BOXES ARE GONE FROM THIS PAGE (by request), the same deletion the
      Mac preview took in v6.40 and for the same reason — this preview now says
      what it has to say the way Mac's does, and the two surfaces no longer wear
@@ -10852,9 +10895,11 @@ function buildMacStorePreviewSection() {
   const shots = platformStoreShots(pid);
 
   const category  = escHtml(fd.genre || 'Games');
-  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
-  const price     = isFree ? 'GET' : `$${fd.price}`;
-  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  // This store's own base price — see buildBusinessSection's note on the split.
+  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const isFree    = !priceRaw || parseFloat(priceRaw) === 0 || priceRaw.trim() === '' || priceRaw.trim() === '0';
+  const price     = isFree ? 'GET' : `$${priceRaw}`;
+  const priceText = isFree ? 'Free' : `$${priceRaw}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
@@ -11141,11 +11186,10 @@ function buildMacStorePreviewSection() {
   const dataDone        = isMacSectionComplete('privacy');
   // Same rule as the App Store preview's own — see its note.
   const screenshotsDone = isMacSectionComplete('screenshots');
-  // Description is a plain text field, same as Title/Subtitle — done once it
-  // has any text other than the pre-populated placeholder copy, regardless
-  // of whether that text arrived from direct editing here or was filled in
-  // from another section (e.g. Game Details).
-  const descDone        = !!descRaw;
+  // (`descDone` lived here. Its only consumer was this preview's ALL_ELEMENTS
+  //  entry, which now comes from sppRequiredElements — where the same test,
+  //  "any text at all, wherever it was typed", is stated once for both
+  //  previews. Removed rather than left assigned and unread.)
 
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
@@ -11192,16 +11236,10 @@ function buildMacStorePreviewSection() {
      `is-over-limit` a few hundred lines down — one test, two consumers, so the
      magenta well and the red disc cannot disagree about the same string. See
      the `disc` helper in `_sppPinnedNav` for why this outranks `done`. */
-  const ALL_ELEMENTS = [
-    { id: 'title',        label: 'Title',                            required: true,  done: !!titleRaw,       bad: titleOverLimit },
-    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!subtitleRaw,    bad: subtitleOverLimit },
-    { id: 'business',     label: 'Business',                          required: true,  done: businessDone },
-    { id: 'content',      label: 'Content',                           required: true,  done: contentDone },
-    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: screenshotsDone,  short: 'Screenshots' },
-    { id: 'description',  label: 'Description',                       required: true,  done: descDone,         bad: descOverLimit },
-    { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: dataDone,         short: 'Data privacy' },
-  ];
+  // The eight required elements, from the one place they are listed — see
+  // sppRequiredElements. previewLang, because the bar describes the language
+  // the dropdown is currently showing.
+  const ALL_ELEMENTS = sppRequiredElements(pid, previewLang);
   /* NO AMBER ON THIS PAGE, AND FOCUS IS ONE MARK RATHER THAN THREE.
      The iOS twin of this function (buildStorePreviewSection above) still
      returns the full five-class set and is deliberately untouched; this is
@@ -14371,11 +14409,14 @@ function buildIapProductRow(p) {
 }
 
 // pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
-// Business answers (tax category — see buildContentRatingSection above).
-// Price (USD) is deliberately NOT independent: it's the one game-wide price
-// (state.formData.price) shared by every store that bills in a single base
-// price, same as the App Store Product Page Preview itself reads — Mac App
-// Store and App Store share Apple's one price, they don't get their own.
+/* Business answers (tax category — see buildContentRatingSection above).
+   PRICE (USD) IS PER STORE (by request). It used to be the one game-wide
+   `state.formData.price`, on the reasoning that "Mac App Store and App Store
+   share Apple's one price" — which is how Apple BILLS and is not how a
+   developer PRICES: a Mac build and a phone build routinely carry different
+   numbers, and these are two forms asking two stores. Through
+   _appStorePrice/_setAppStorePrice (app.js), which keep macos_full on the
+   game-wide value it is separately documented as sharing. */
 function buildBusinessSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
@@ -14397,7 +14438,7 @@ function buildBusinessSection(pid = 'ios') {
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
 
   const fd = state.formData;
-  const priceVal = fd.price || '';
+  const priceVal = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
 
   // Mac App Store Full only ever submits games, so its Tax Category is
   // hard-set to Games and shown as a locked field — no dropdown, and
@@ -14432,7 +14473,7 @@ function buildBusinessSection(pid = 'ios') {
       </label>
       <input class="form-input" id="${pid}-price" type="text" placeholder="e.g., 4.99 (or 0 for free)"
              value="${priceVal}"
-             oninput="syncField('price', this.value)"
+             oninput="setAppStorePrice('${pid}', this.value)"
              onblur="roundPrice(this)">
     </div>
     ${taxCategoryHTML}`;

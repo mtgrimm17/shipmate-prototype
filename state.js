@@ -1919,6 +1919,23 @@ function makeBlankIOSAnswers() {
     // isIOSSectionComplete below), same as a developer who's declared they
     // have IAP but hasn't named individual products yet.
     iapProducts:            [],
+    /* THE BASE PRICE IS PER APPLE STORE NOW, NOT PER GAME (by request). It was
+       `state.formData.price` on the reasoning that "Mac App Store and App Store
+       share Apple's one price" — which is how Apple bills, and is still not how
+       a developer prices: a Mac build and a phone build routinely carry
+       different numbers, and the two Business Questions sections are two forms.
+
+       `null` rather than '' because '' is a real answer here — it is what "free,
+       and I said so" looks like in this field — so a blank cannot double as
+       "never set". seedOnboardingToIOS fills it once per platform from the
+       game-wide value, and after that the two are independent in both
+       directions. NOT in IOS_MAC_SHARED_ANSWER_FIELDS, which is the whole
+       point: that Set is the list of answers the two stores give once.
+
+       state.formData.price stays, and the App Store still writes it — Game
+       Details' own summary, the risk scoring and the marketing page all read
+       one game-wide price and none of them is asking a per-store question. */
+    price:                  null,
     taxCategory:            'games',
     // Distribution
     selectedCountries:      [],
@@ -2049,38 +2066,22 @@ function computeIOSSectionRisk(sectionId) {
   return 'NONE';
 }
 
-/* ── "Every required element on the page", not four of the eight ──────────
-   Product Page Preview draws its own required-elements list (ALL_ELEMENTS,
-   render.js) and it has eight entries: Title, Subtitle, Business, Content,
-   Adjust Screenshots, Description, Achievements (optional) and Data
-   Collection. The step's completeness only ever asked FOUR of them — the
-   sections you flip to — so a listing with no Subtitle at all reported the
-   step done, the card went green, and the preview underneath it was still
-   glowing at an empty field. The Submission checklist inherits that answer
-   through _chkEveryPlatformComplete, so "Build store pages" ticked too.
+/* ── "Every required element on the page", and the page says which ────────
+   Product Page Preview draws its own required-elements list and the step's tick
+   has to agree with it. This used to re-derive a subset of that list by hand
+   here, and drifted from it twice — the second time on Business, whose pill
+   asks "answered AND you have looked at it" where this asked only "answered".
 
-   The three plain text fields are the missing half, and they are read through
-   the SAME accessors the preview reads (_iasFieldValue / _masFieldValue, which
-   route Title/Subtitle to the App Store's shared storage via
-   MAS_SHARED_LISTING_FIELDS) so the tick and the glow cannot disagree about
-   what is filled in. Primary language only: a supporting language's
-   translation is the Localizations step's business, not this one's.
+   So the list is no longer restated. sppRequiredElements / sppAllRequiredDone
+   (render.js) are the one enumeration, and both the bar and this predicate read
+   them. The previous half-fix — a local helper that checked the three text
+   fields — is gone with the drift it was patching.
 
-   Guarded because state.js loads before app.js — on the very first call
-   during boot the accessors may not exist yet, and the raw formData fields are
-   the same answer for the primary language. */
-const STORE_LISTING_REQUIRED_FIELDS = ['title', 'subtitle', 'description'];
-
-function _storeListingTextComplete(pid) {
-  const fd   = state.formData || {};
-  const lang = fd.primaryLanguage || 'en';
-  const read = (pid === 'macos' && typeof _masFieldValue === 'function') ? _masFieldValue
-             : (typeof _iasFieldValue === 'function') ? _iasFieldValue
-             : null;
-  return STORE_LISTING_REQUIRED_FIELDS.every(f => {
-    const v = read ? read(f, lang) : fd[f];
-    return !!(v || '').trim();
-  });
+   Guarded because state.js loads before render.js, and it fails CLOSED: an
+   un-loaded page reports the step incomplete for a frame rather than claiming a
+   listing is ready before anything has been measured. */
+function _sppStepComplete(pid) {
+  return (typeof sppAllRequiredDone === 'function') && sppAllRequiredDone(pid);
 }
 
 function isIOSSectionComplete(sectionId) {
@@ -2125,16 +2126,9 @@ function isIOSSectionComplete(sectionId) {
   // silently show as complete.
   if (sectionId === 'localizations') return !!state.iosLocalizationsSeen;
 
-  // storePreview is complete when every required element on the page is —
-  // the four sub-sections you flip to AND the three text fields you type in
-  // (see _storeListingTextComplete above for why those were the missing half).
-  if (sectionId === 'storePreview') {
-    return isIOSSectionComplete('contentRating') &&
-           isIOSSectionComplete('privacy') &&
-           isIOSSectionComplete('business') &&
-           isIOSSectionComplete('screenshots') &&
-           _storeListingTextComplete('ios');
-  }
+  // Complete when every required element in the top bar is — asked of the page
+  // itself rather than re-listed here. See _sppStepComplete above.
+  if (sectionId === 'storePreview') return _sppStepComplete('ios');
 
   // Questionnaire (legacy — kept for backward compat)
   if (sectionId === 'questionnaire') {
@@ -2311,17 +2305,10 @@ function isMacSectionComplete(sectionId) {
     return isIOSSectionComplete(sectionId);
   }
 
-  // Same eight-element bar as the App Store's own — see
-  // _storeListingTextComplete. Title/Subtitle resolve to the App Store's
-  // shared storage and Description to Mac's own, exactly as this preview
-  // reads them.
-  if (sectionId === 'storePreview') {
-    return isMacSectionComplete('contentRating') &&
-           isMacSectionComplete('privacy') &&
-           isMacSectionComplete('business') &&
-           isMacSectionComplete('screenshots') &&
-           _storeListingTextComplete('macos');
-  }
+  // Same eight-element bar as the App Store's own, asked of this page — see
+  // _sppStepComplete. Title/Subtitle resolve to the App Store's shared storage
+  // and Description to Mac's own, exactly as this preview reads them.
+  if (sectionId === 'storePreview') return _sppStepComplete('macos');
 
   if (sectionId === 'questionnaire') {
     return isMacSectionComplete('contentRating') &&
