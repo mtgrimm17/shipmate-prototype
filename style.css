@@ -20496,13 +20496,31 @@ body.is-splash .ai-disclaimer { display: none; }
 .sub-facts .rel-build { color: var(--text); }
 
 .sub-note { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
-/* `.sub-nudge` is GONE (v6.56) — rules and markup both, rather than left
-   switched off, which is this project's rule for a thing that lost its
-   argument. It was "Quiet time. Go plan your launch →", and the long version of
-   why is in `buildSubmittedCard` beside where it used to be printed: it is a
-   sentence about your TIME rather than about this build, so it belongs to the
-   calendar, and `_guideCalLede`'s own violet link now says it once instead of
-   once per platform in review. */
+/* `.sub-nudge` WAS GONE (v6.56) AND IS BACK (v6.99), by request — "Quiet time.
+   Go plan your launch →". The long version of both arguments is in
+   `buildSubmittedCard` beside where it is printed; the short one is that
+   v6.56's reasoning (it is a sentence about your TIME, so it belongs to the
+   calendar) was right about the sentence and wrong about the surface — the
+   guide is not always the face you are on, which its own note admitted and
+   then left unfixed.
+
+   It KEEPS the `_guideCalLede` copy rather than replacing it, so the same
+   invitation now exists twice and multiplies once per platform in review.
+   That is the known cost, not an oversight.
+
+   The values are the guide's link, because it is the same sentence: violet
+   (`--guide-mark`), mono, an arrow, no box. It is NOT the app's pill — a pill
+   here would compete with the Release button on the phase next door, and this
+   is an aside, not the card's act. `align-self: flex-start` so the hit area is
+   the words rather than the card's full width; margin-top matches the
+   toggle's own rhythm above it. */
+.sub-nudge {
+  align-self: flex-start; padding: 0; background: none; border: none;
+  cursor: pointer; font-family: var(--mono); font-size: 12px;
+  color: var(--guide-mark, #9f68f0); transition: color .12s;
+  margin-top: 10px;
+}
+.sub-nudge:hover { color: #c9a6ff; }
 
 /* ── SUBMITTING ───────────────────────────────────────────────────────────
    A green fill crosses the card while you HOLD Submit. It is the CANCEL HOLD
@@ -20728,11 +20746,16 @@ body.is-splash .ai-disclaimer { display: none; }
    act you have to stay put to complete. Dimming them still leaves them there to
    be aimed at. What stays, at .35, is only what remains TRUE while the bar
    runs: the progress, the store's sentence, the dates.
-   (This listed a third selector, `.sub-nudge`, until v6.56 — the Marketing
-   link, which now lives in the guide's month instead. The rule that governs it
-   there is the lede's own: it is not part of this card, so a cancel hold has
-   nothing to hide.) */
+   `.sub-nudge` IS THE THIRD AGAIN (v6.99). It was listed here until v6.56,
+   left when the link did, and comes back with it — for the list's own stated
+   reason rather than for symmetry: "go plan your launch" is an invitation to
+   go somewhere else, offered in the middle of an act you have to stay put to
+   complete, which is the identical case as the disclosure beside it. Dimming
+   it would still leave it there to be aimed at, and letting go of the hold is
+   how you cancel — so anything that can pull the pointer off the button has
+   to be gone, not quiet. */
 .submitted-card.is-cancelling .sub-state-note,
+.submitted-card.is-cancelling .sub-nudge,
 .submitted-card.is-cancelling .sub-steps-toggle { opacity: 0; pointer-events: none; }
 .submitted-card.is-cancelling .sub-segbar,
 .submitted-card.is-cancelling .sub-note,

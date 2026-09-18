@@ -20436,6 +20436,52 @@ function buildSubmittedCard(pid, flipData) {
             press a hunt. Here a different control moves as an ordinary
             consequence of the list growing, exactly as the Submit row would sit
             below a list that gained a step. */''}
+      ${/* THE MARKETING NUDGE IS BACK ON THE CARD (v6.99), BY REQUEST, AND
+            v6.56'S ARGUMENT AGAINST IT IS STILL ON THE RECORD.
+
+            Mark: "We used to have a link to the marketing section from within
+            the post-submission card. I liked that. Where'd it go?"
+
+            It went to the guide's month in v6.56, and the two reasons it went
+            were good ones: it is a sentence about your TIME rather than about
+            this build, which makes it the calendar's subject; and it
+            MULTIPLIES — one card says it once, three platforms in review say
+            it three times identically on one screen while the month says it
+            once. That multiplication is not fixed here and is the thing to
+            watch. It is the cost of having the link where you actually are.
+
+            What v6.56 got wrong was not the reasoning, it was the assumption
+            that the guide is always the surface you are on. Its own note
+            admitted the gap — "with the guide collapsed, or on the checklist
+            face, the invitation is nowhere" — and prescribed the collapsed
+            rail as the fix. That fix is still unbuilt, and until it is, the
+            card is the only place this is reliably reachable.
+
+            BOTH COPIES EXIST NOW, deliberately. `_guideCalLede`'s violet link
+            is untouched: the calendar is still where this belongs when you are
+            looking at the calendar. If the duplication ever reads as noise,
+            the thing to remove is whichever one you are NOT looking at when
+            the wait starts — which is an argument about the collapsed rail
+            again, not about this button.
+
+            `in_review` ONLY, which is the whole of its original gate: it is
+            the one phase with nothing to do in it, so it is the one phase
+            that should point somewhere else. On `accepted` there is a Release
+            button to press and an invitation to leave would compete with the
+            single act the card exists to offer — which is also why this sits
+            ABOVE `action` rather than after it. On a waiting card `action` is
+            empty, so this ends the card; on any other phase the store's own
+            verb still concludes it, and "the act is the last thing in the
+            card" holds unchanged.
+
+            Violet and an arrow, because it LEAVES — the same vocabulary
+            `.gcal-lede-go` uses for the identical sentence, and the colour
+            this card already reserves for it (see the disclosure toggle's own
+            note, which says in as many words that violet on this card belongs
+            to the one link that sends you somewhere else). */''}
+      ${phase === 'in_review'
+        ? `<button class="sub-nudge" onclick="setView('broadcast')">Quiet time. Go plan your launch &rarr;</button>`
+        : ''}
       ${action}
     </div>`;
 }
