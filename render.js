@@ -217,13 +217,19 @@ function buildAboutTab() {
         <div class="ob-q" id="ob-q-desc" data-answered="${fd.description?.trim() ? '1' : '0'}">
           <div class="gi-head">
             <label class="form-label" for="ob-desc">${t('ob.field.desc.label') || 'Description'}</label>
+            <!-- THE IMPORT NOTE LIVES IN THIS ROW, NOT ABOVE THE FIELD.
+                 The slot is always emitted, empty or not, so that confirming an
+                 import is a write into an element that already exists rather
+                 than a node appearing in the flow. See _giImportNote. -->
+            <span class="gi-import-slot" id="ob-desc-import">${_giImportNote()}</span>
             <div class="char-count" id="ob-desc-count">${(fd.description || '').length}/4000</div>
           </div>
-          <div class="form-group">
+          <div class="form-group gi-desc-group${state.descLoading ? ' is-waiting' : ''}" id="ob-desc-group">
             <textarea class="form-input" id="ob-desc" rows="5" required
                       placeholder="${t('ob.field.desc.placeholder') || 'Tell players what makes your game worth their time...'}"
                       oninput="syncField('description', this.value); charCount('ob-desc-count', this.value, 4000)"
                       onblur="_iasTriggerAutoTranslate('description', this.value)"></textarea>
+            ${_giDescWaitHtml()}
           </div>
         </div>
       </div>
@@ -271,7 +277,13 @@ function buildDistributionTab() {
     // see _obCountriesForPreset's 'selected_languages' case (app.js) for how
     // "spoken" is resolved to a country list.
     { id:'selected_languages',  label: t('ob.dist.preset.selected_languages') || 'Selected languages' },
-    { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'Minimize regulation' },
+    /* "No extra steps", not "Minimize regulation" (by request). The ID stays
+       `minimize_regulation`: it is written into every saved project's
+       `formData.distributionPreset` and read by _obCountriesForPreset (app.js)
+       and by buildObExcludedChips below, so renaming it would either break
+       those projects or need a migration for a label change. The id is the
+       filing name, the label is what the developer reads. */
+    { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'No extra steps' },
     { id:'custom',              label: t('ob.dist.preset.custom') || 'Custom' },
   ];
 
@@ -289,19 +301,8 @@ function buildDistributionTab() {
               stay as-is; only the rendered header text changed (previously)
               and is now gone entirely. */''}
 
-        ${/* By request, this one line is styled as a Shipmate Tip (.sw-tip-box
-              — see buildAndroidStubSection for the same plain icon+text usage)
-              rather than the prose treatment (.asset-guidance) Distribution's
-              and Assets' own opening lines still use — see the "PROSE, NOT A
-              BOX" note below, in Distribution: that reasoning still holds for
-              those, this is a deliberate, scoped exception for this one. */''}
-        <div class="sw-tip-box" style="margin-bottom:16px;">
-          <div class="sw-tip-box-row">
-            ${SM_INFO_ICON}
-            <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
-          </div>
-        </div>
-
+        ${/* The tip moved INTO the picker, under Primary Language — see
+              buildObLangList. */''}
         <div id="ob-lang-list-wrap">${buildObLangList()}</div>
       </div>
 
@@ -351,14 +352,33 @@ function buildDistributionTab() {
 
 /* ── Release Timing — platform review data & helpers ─── */
 
+/* **`macos` IS ITS OWN ROW NOW (v6.60), AND IT IS A NAMING FIX RATHER THAN A
+   TIMING ONE.** Mac had no entry, so every consumer of this table fell through
+   to `ios` — which is RIGHT about the number (it is App Store review, same
+   queue, same 2.2-day average) and wrong about the WORD. The calendar printed
+   "App Store decision expected" and the guide's lede printed "App Store" for a
+   submission whose own card says Mac App Store, three inches away. Worse with
+   both platforms out: two rows, same glyph (`macos → ios` is a deliberate alias
+   in `SM_TILE_MARK_ALIAS` — same mark, different label) under the same name,
+   and nothing on screen to tell them apart.
+
+   The days are iOS's ON PURPOSE and are duplicated rather than referenced:
+   this table is data, and a self-reference here would be the first expression
+   in it. If Apple's Mac review ever diverges from iOS's, this is the line that
+   changes and nothing else has to know.
+
+   `buildSubmittedCard` already special-cased `macos → ios` to get a number at
+   all; that fallback is now dead weight rather than load-bearing, and can go
+   whenever someone is in there. */
 const OB_PLATFORM_TIMING = {
-  ios:      { days: 2.2, color: '#60a5fa', label: 'App Store'   },
-  android:  { days: 4.3, color: '#4ade80', label: 'Google Play' },
-  steam:    { days: 7.1, color: '#38bdf8', label: 'Steam Store' },
-  egs:      { days: 3.0, color: '#e2e2e2', label: 'Epic Games'  },
-  xbox:     { days: 5.0, color: '#22c55e', label: 'Xbox'        },
-  nintendo: { days: 5.0, color: '#ef4444', label: 'Nintendo'    },
-  psn:      { days: 4.0, color: '#818cf8', label: 'PlayStation' },
+  ios:      { days: 2.2, color: '#60a5fa', label: 'App Store'     },
+  macos:    { days: 2.2, color: '#60a5fa', label: 'Mac App Store' },
+  android:  { days: 4.3, color: '#4ade80', label: 'Google Play'   },
+  steam:    { days: 7.1, color: '#38bdf8', label: 'Steam Store'   },
+  egs:      { days: 3.0, color: '#e2e2e2', label: 'Epic Games'    },
+  xbox:     { days: 5.0, color: '#22c55e', label: 'Xbox'          },
+  nintendo: { days: 5.0, color: '#ef4444', label: 'Nintendo'      },
+  psn:      { days: 4.0, color: '#818cf8', label: 'PlayStation'   },
 };
 
 function fmtDateShort(d) {
@@ -554,9 +574,10 @@ const OB_REG_TIPS = {
    this needs revisiting; every reader of "does this country have a
    tooltip" goes through regTip() below, so hiding it here is the one place
    that needs to change — that includes the Minimize Regulation preset's own
-   country list (_obCountriesForPreset, app.js) and its "Excluded" chips
-   (buildObExcludedChips below), which both read regTip() rather than
-   OB_REG_TIPS directly for exactly this reason. */
+   country list (_obCountriesForPreset, app.js) and the "Regulation:" chips
+   (buildObExcludedChips below, shown for several presets now — see its own
+   comment), which both read regTip() rather than OB_REG_TIPS directly for
+   exactly this reason. */
 const OB_REG_TIP_HIDDEN = new Set(['KR', 'BR', 'AU', 'JP', 'DE']);
 
 /** Regulatory tip: prefers locale key, falls back to OB_REG_TIPS const.
@@ -572,8 +593,8 @@ function regTip(code) {
 
 /* The "?" tooltip icon + anchor a country's regulatory tip renders as,
    shared by the Market list's own rows (buildObCountryChips) and the
-   Minimize Regulation preset's "Excluded" chips (buildObExcludedChips) so
-   the two never drift into looking or behaving differently. Returns ''
+   "Regulation:" chips (buildObExcludedChips) so the two never drift into
+   looking or behaving differently. Returns ''
    when the country has no (visible) tip. `event.stopPropagation()` keeps a
    click on the "?" from also toggling the country the icon sits inside. */
 function _obRegTipIconHtml(code, isOn) {
@@ -585,6 +606,26 @@ function _obRegTipIconHtml(code, isOn) {
 
 const _chevDown = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 const _chevUp   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
+
+// Small up/down glyph marking a column header as a sort toggle (Distribution's
+// countries-list "Market"/"Gamers (approx.)" headers — buildObCountryChips,
+// setObDistSort/app.js). currentColor, so it always matches whatever color
+// the label text itself is (.ob-dist-col-sort's own dim/hover/active
+// states) rather than needing its own color rules; .ob-dist-sort-icon
+// (style.css) dims it a bit further at rest so it reads as a quiet hint
+// rather than competing with the label text, then brightens to match on
+// hover/active same as the label does.
+const _sortIcon = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 3 17 9"/><polyline points="7 15 12 21 17 15"/></svg>`;
+
+// Single-chevron variants of _sortIcon, shown on whichever column is
+// currently driving the sort (buildObCountryChips's _sortIconFor) in place
+// of the neutral up/down hint — up = ascending (A→Z / smallest gamer count
+// first), down = descending (Z→A / biggest first). Same viewBox, size,
+// stroke and vertical centering as _sortIcon itself (each is just one of
+// its two chevrons, not redrawn from scratch), so toggling a column's
+// direction swaps the glyph in place with no size/position jump.
+const _sortIconAsc  = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 15 12 9 17 15"/></svg>`;
+const _sortIconDesc = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 15 17 9"/></svg>`;
 
 // Windows OS-compatibility glyph (Steam's own purchase-area icon row shows
 // this next to the Apple glyph — platformIcon('macos', size) — when a title
@@ -652,6 +693,202 @@ function buildTitlePicklist() {
   }).join('');
 }
 
+/* ── THE IMPORT NOTE IS META ABOUT THE DESCRIPTION, SO IT LIVES IN ITS LABEL
+   ROW ───────────────────────────────────────────────────────────────────────
+   Jaco: *"el 'Imported from Steam, Google Play etc' no debería mover ni el
+   cajetín de descripción, ni las plataformas ni cambiar el tamaño."*
+
+   IT WAS A BLOCK BETWEEN TWO FIELDS, so it could only ever push. `#ob-scenario
+   -wrap` sits in the flow between Title and Description, and the confirmed note
+   drew a 12px line with a 10px top margin inside it — so pressing "That's it!"
+   moved the description box, the platform grid and everything under them down
+   by its own height, in the same paint that filled them in. The three things
+   you had just asked for all jumped at once.
+
+   **The fix is not a smaller note, it is a slot that is already paid for.**
+   `.ob-form .gi-head` is a hard `height: 18px` — the row the label shares with
+   the character counter — so ANYTHING put in it costs zero layout by
+   construction, in every state, without a single number being tuned. That is
+   why the note goes there rather than being shrunk where it was.
+
+   **IT SITS 10px AFTER THE LABEL, NOT AGAINST THE COUNTER.** The first pass put
+   it left of the counter, on the argument that both are meta and should group
+   flush right — true about the REGISTER and wrong about what the note is
+   attached to. It says where this description came from, so it belongs to the
+   word DESCRIPTION; the counter measures what is in the box and keeps its own
+   `margin-left: auto` and its own right edge. That also makes this rule reach
+   nothing else: no `:has()`, no override on `.char-count`, every other
+   `.gi-head` in the app untouched by construction.
+
+   The register is still the counter's — 11px mono, the same `#5A615D`, one
+   value rather than a near-miss — because register says what KIND of thing this
+   is, not where it sits. The label above is the only heading in the row, and at
+   10px/700 uppercase against 11px mono nothing here competes with it.
+
+   **The tail is cut and that is the point of the move.** It used to end
+   "— description and platforms filled in", which is a sentence describing the
+   two things you can see: the box below it now has text in it and the platform
+   tiles are lit. This file has refused that shape repeatedly — a mark restating
+   what the surface already states. What is left is the one fact nothing else on
+   screen carries: WHICH stores it came from, with the full sentence surviving
+   as the `title`.
+
+   **AND NO CHECK.** Green is this app's word for DONE — a claim about a step
+   you finished — where an import is something that HAPPENED, which the sentence
+   already says in words. The mark also made the note a two-part object wanting
+   its own alignment, its own gap and its own shrink rule, beside a label that
+   is one run of text. One span now, and the only thing that can give way if the
+   row ever runs short is the tail of the store list.
+
+   The slot is emitted EMPTY when there is nothing to say, so confirming writes
+   into an element that already exists — `_giRenderImportNote` (app.js) is the
+   one repaint, called beside `_renderScenarioSection` so the two halves cannot
+   disagree about whether an import happened. */
+function _giImportNote() {
+  /* THIS ROW IS SILENT WHILE THE FETCH IS IN FLIGHT, AND THAT IS A CORRECTION
+     TO THE FIRST PASS. Jaco: "no sé si el loading debería estar en la primera línea del
+     input box, como para que sea más obvio que algo está sucediendo."
+
+     The first pass put the wait HERE, on the argument that the slot which later says
+     where the text came FROM should be the one that says it is on its way —
+     "one line changing rather than two places to look". The relationship is
+     real and it answered the wrong question. **The empty thing is the FIELD**,
+     and a note in an 18px row above it is a caption about a box, where the
+     box's own first line is where you are already looking. A spinner is also
+     the one mark that has to be found before it can reassure, so putting it in
+     the quietest register in the app, at the far end of the smallest row,
+     spends it.
+
+     ONE MARK AT A TIME is what makes this a move rather than an addition. The
+     wait is now drawn inside the textarea (`_giDescWaitHtml` below) and this
+     slot says nothing until there is something to report, so the two never
+     appear together and the row speaks exactly once — on arrival, in green.
+     Two spinners for one fetch would be the "two marks on one object" this file
+     has refused on the Submit row's border, the metadata strip's second rule
+     and the calendar's rings. */
+  if (state.descLoading) return '';
+  const ls = state.liveSearch;
+  if (!ls || ls.status !== 'done' || !ls.confirmed) return '';
+  /* IT NAMES THE SOURCE OF THIS TEXT, AND THERE ARE ONLY EVER TWO (v6.75).
+     Jaco: *"la descripción la cogemos o bien de Steam o bien de IGDB, así que
+     quiero que olvides el mensaje ese de Imported from Steam · Google Play ·
+     App Store y pongas solo Imported from Steam o IGDB."*
+
+     It used to print `liveSearch.allStores` through a store-label map — the
+     platforms the GAME is listed on, which is what lights the platform tiles.
+     Beside the Description that is a different fact wearing this one's words:
+     a paragraph fetched from exactly one place, claiming three, two of which
+     Shipmate has never read a description from in its life.
+
+     `state.descSource` is stamped by `_fillDescriptionField` (app.js), the one
+     door every fill goes through, so the note reports what really happened
+     rather than deducing it — including the case the old line could not have
+     got right either way, a Steam page with no About This Game section, which
+     lands IGDB's summary and now says so.
+
+     No map and no join: two values, each already the name it prints.
+
+     AND IT IS GREEN (v6.75). Jaco: "que debería estar en verde." The Assets
+     line's own argument one sub-tab over: Shipmate went and got something and
+     it is here — finished work, which is exactly what #31DC80 means everywhere
+     else in this app. The register is untouched (11px mono, the counter's
+     size), so the colour is the only thing carrying it.
+
+     The `title` keeps the one fact the two words leave out — that the platform
+     tiles were lit by the same import — rather than restating what is already
+     on screen. */
+  const src = state.descSource;
+  if (!src) return '';
+  return `
+    <span class="gi-import-note is-done" title="Description and platforms filled in from ${escHtml(src)}.">Imported from ${escHtml(src)}</span>`;
+}
+
+/* THE WAIT IS DRAWN ON THE FIELD'S FIRST LINE (v6.75)
+   Jaco: *"no sé si el loading debería estar en la primera línea del input box,
+   como para que sea más obvio que algo está sucediendo."*
+
+   **IT GOES WHERE THE TEXT IS ABOUT TO GO**, which is the whole argument. The
+   thing that is empty is the box, so the box is where you are looking, and the
+   sentence lands exactly on the line the description will occupy a second
+   later — the wait and the result in one place rather than a caption above a
+   box and then the box.
+
+   **NOT THE `placeholder` ATTRIBUTE**, which is the obvious cheap version and
+   cannot carry a spinner: a placeholder is one run of text with no children,
+   so a ring beside it is impossible. It is an overlay instead, and the
+   placeholder is turned transparent under it so the two cannot stack.
+
+   **IT COSTS NO LAYOUT AND NO NUMBERS OF ITS OWN.** Absolutely positioned
+   inside the field's own group, offset by the textarea's border plus its
+   padding — written as those two sums in the CSS, so a change to
+   `.ob-form textarea.form-input` carries this with it — and `line-height`
+   matched to the field's, so the sentence sits on the first line rather than
+   near it. `pointer-events: none`: clicking where the words are still puts a
+   caret in the field.
+
+   **TYPING DISMISSES IT, FROM CSS.** The rule is gated on
+   `:placeholder-shown`, so the overlay exists only while the field is really
+   empty — someone who starts writing while the request is out is not shown a
+   sentence over their own words, and there is no handler to remember. The
+   element is emitted in BOTH states, so `_setDescLoading` toggles one class on
+   the group rather than inserting and removing a node.
+
+   `role="status"` and not `aria-hidden`: this is the only statement that the
+   fetch is happening, so it is not decoration. */
+function _giDescWaitHtml() {
+  return `<div class="gi-desc-wait" role="status"><span class="build-proc-spin"
+    ></span><span class="gi-desc-wait-txt">${escHtml(t('ob.desc.collecting'))}</span></div>`;
+}
+
+/* WHAT SHIPMATE FOUND, WHERE THE INVITATION USED TO BE.
+
+   The Assets guidance is a sentence about the TOOL — drop things here, the
+   classifier sorts them — and that is exactly right while the well is empty
+   and nobody has told Shipmate anything. Once a Steam page has been scraped
+   it is the wrong sentence: the well is not empty, the files came from
+   somewhere you did not drop them, and nothing on screen says so.
+
+   THE COUNT ONLY, NEVER THE KINDS. "(6 screenshots, 2 key art…)" was the
+   obvious next clause and it is the one thing this line must not do: v6.74
+   removed the file-type list from the guidance for precisely this reason —
+   the library ten pixels below prints those kinds back as group labels with
+   their own counts, so naming them here is the same inventory twice, one of
+   them hypothetical. The number is the fact the library does NOT state.
+
+   GREEN, and #31DC80 is forced rather than chosen: the colour table gives
+   three meanings, and a scrape that happened is DONE — not amber's "this
+   needs you", not red's "wrong". Violet was the other candidate and is
+   wrong by this app's own rule: violet means a change Shipmate is
+   PROPOSING, and these assets are already in the library with nothing to
+   accept. (--green is #4ade80, the older tab green; the tick's own #31DC80
+   is what "done" means on every newer surface.)
+
+   The SOURCE is read off the pool rather than off state.liveSearch, because
+   origin is stamped on each record at adoption (smAdopt) and survives a
+   search widget that has been confirmed away. 'upload' is yours; anything
+   else arrived on its own. */
+function _assetsFoundText() {
+  if (typeof smPool !== 'function') return '';
+  const fetched = smPool().filter(a => a && a.origin && a.origin !== 'upload');
+  if (!fetched.length) return '';
+  const origins = new Set(fetched.map(a => a.origin));
+  const where = origins.has('steam')
+    ? t(origins.size > 1 ? 'ob.assets.found.both' : 'ob.assets.found.steam')
+    : t('ob.assets.found.igdb');
+  return t(fetched.length === 1 ? 'ob.assets.found_one' : 'ob.assets.found',
+           { n: fetched.length, where });
+}
+
+/* One function returns the whole element, so the class and the text cannot
+   be computed from two separate calls and disagree. `_renderAssetsGuidance`
+   (app.js) replaces it wholesale on an import — the node carries no
+   listeners, so outerHTML is the honest repaint. */
+function _assetsGuidanceHtml() {
+  const found = _assetsFoundText();
+  return `<div class="asset-guidance${found ? ' is-found' : ''}" id="ob-assets-guidance">${
+    escHtml(found || t('ob.assets.guidance'))}</div>`;
+}
+
 /* ── Store search result widget ──────────────────────── */
 function buildScenarioWidget() {
   const ls = state.liveSearch;
@@ -666,18 +903,10 @@ function buildScenarioWidget() {
       </div>`;
   }
 
-  // Confirmed import — compact success note
-  if (ls && ls.status === 'done' && ls.confirmed) {
-    const storeLabels = { ios: 'App Store', steam: 'Steam', android: 'Google Play', egs: 'Epic', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PlayStation' };
-    const stores = (ls.allStores || []).map(pid => storeLabels[pid] || pid);
-    return `
-      <div class="ob-search-confirm">
-        <svg viewBox="0 0 16 16" fill="none" width="13" height="13" aria-hidden="true" style="flex-shrink:0">
-          <path d="M3 8l3.5 3.5L13 5" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Imported from ${escHtml(stores.join(' · '))} — description and platforms filled in.</span>
-      </div>`;
-  }
+  // Confirmed import — the note has MOVED into the Description label row.
+  // Nothing is drawn here, so the widget's own box collapses to zero the
+  // moment you confirm: see _giImportNote for the whole argument.
+  if (ls && ls.status === 'done' && ls.confirmed) return '';
 
   // Found — result card
   if (ls && ls.status === 'done' && ls.found) {
@@ -781,14 +1010,42 @@ function _legacyScenarioWidget_unused() {
     </div>`;
 }
 
-/* ── Country row list ── first 10 always visible, rest collapsible ── */
-function buildObCountryChips() {
+/* ── Country row list ── one list, one collapse toggle ──────────────────
+   Used to be two nested collapses: the header (toggleObMarketSection)
+   hid/showed everything, and a "Show N more markets" button inside THAT
+   hid/showed just the countries past the first 10. Collapsed by request to
+   one control — the "Show N more markets" button now toggles the ENTIRE
+   list by itself and lives outside the thing it toggles (ob-dist-list-
+   controls, below), so it's never hidden along with it the way it used to
+   be as part of the body it sat inside. N is always IOS_COUNTRIES.length
+   now (every country, not just the ones past 10) — there's no longer a
+   separate "first 10" tier for it to describe. */
+function buildObCountryChips(forceExpanded) {
   const fd         = state.formData;
   const selected   = new Set(fd.selectedCountries || []);
   const maxGamers  = IOS_COUNTRIES[0]?.gamers || 1;
-  const extraCount = Math.max(0, IOS_COUNTRIES.length - 10);
+  const totalCount = IOS_COUNTRIES.length;
 
-  const buildRow = (c, i) => {
+  // The WHOLE list sorts by whichever column was last clicked, in whichever
+  // direction it's currently set to (state.obDistCountrySort = {by, dir};
+  // toggled by setObDistSort/app.js — clicking the active column flips dir,
+  // clicking the other one switches by and resets dir to that column's own
+  // default). Selected countries used to float to the top and each half was
+  // then sorted within itself; removed by request — a sort is expected to
+  // order the entire list, and bubbling the picked ones up made e.g. "sort
+  // by gamers" read as broken. Selection is still visible per row (.is-on /
+  // the chip), just no longer a grouping. A fresh sorted copy, not an
+  // in-place IOS_COUNTRIES.sort() — that array's own order is still the
+  // source the market map/other readers key off of gamer count for.
+  const sortState = state.obDistCountrySort || { by: 'name', dir: 'asc' };
+  const sortBy  = sortState.by === 'gamers' ? 'gamers' : 'name';
+  const sortDir = sortState.dir === 'desc' ? 'desc' : 'asc';
+  const sortedCountries = [...IOS_COUNTRIES].sort((a, b) => {
+    if (sortBy === 'gamers') return sortDir === 'desc' ? (b.gamers - a.gamers) : (a.gamers - b.gamers);
+    return sortDir === 'desc' ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
+  });
+
+  const buildRow = (c) => {
     const isOn   = selected.has(c.code);
     const barPct = Math.round((c.gamers / maxGamers) * 100);
     return `
@@ -805,74 +1062,131 @@ function buildObCountryChips() {
       </div>`;
   };
 
-  const topRows   = IOS_COUNTRIES.slice(0, 10).map(buildRow).join('');
-  const extraRows = IOS_COUNTRIES.slice(10).map(buildRow).join('');
+  const allRows = sortedCountries.map(buildRow).join('');
 
-  // The whole Market section (this function's entire return value, below the
-  // header) collapses behind the header by default — by request, so picking
-  // a preset doesn't immediately dump 190+ country rows into view. Clicking
-  // the header (toggleObMarketSection, app.js) expands/collapses it, same
-  // hidden-class mechanism as the "Show N more markets" sub-toggle just below
-  // it. Only exception: the Custom preset defaults it OPEN, since picking
-  // Custom is itself a request to go manually pick countries — collapsed by
-  // default there would just make the user re-open it immediately.
-  const marketDefaultOpen = fd.distributionPreset === 'custom';
+  // Collapsed by default — by request, so picking a preset doesn't
+  // immediately dump 55 country rows into view — except the Custom preset,
+  // which still opens it by default since picking Custom is itself a
+  // request to go manually pick countries. `forceExpanded` overrides this:
+  // _refreshCountryListInPlace (app.js) passes the list's CURRENT expanded
+  // state through it when rebuilding after a country toggle, so clicking a
+  // country never snaps an already-open list shut again.
+  const listOpen = typeof forceExpanded === 'boolean' ? forceExpanded : (fd.distributionPreset === 'custom');
 
+  const selectedCount = selected.size;
+  // Blue "Y selected" text next to the expand button — always visible once
+  // at least one country is picked, regardless of the list's own expanded/
+  // collapsed state (unlike the old "N selected ↓" badge this replaces,
+  // which only ever counted — and only ever showed for — countries selected
+  // among the below-the-fold "extra" rows). Rendered either way (never
+  // omitted outright) so _refreshCountryListInPlace can toggle `hidden`
+  // rather than needing to know how to re-insert it.
+  const selectedBadge = `<span class="ob-dist-selected-badge${selectedCount > 0 ? '' : ' hidden'}" id="ob-dist-selected-badge">${selectedCount} selected</span>`;
+
+  // Both header cells are click-to-sort now (setObDistSort, app.js) — each
+  // reorders the entire country list. .is-active marks whichever one drove
+  // the current sort, matching this pattern's own use elsewhere (e.g. the
+  // active preset pill) rather than inventing a new "which column" cue.
+  // Each header's icon reflects its own state: the active column shows a
+  // single chevron pointing the way it's currently sorted (up = ascending,
+  // down = descending) — clicking it again flips both the order and the
+  // chevron — while the inactive column keeps the neutral up/down _sortIcon
+  // hint, since it isn't sorted in either direction right now.
+  //
+  // The expand/collapse control + selected-count badge (.ob-dist-list-
+  // controls) used to sit in their own row below a dashed divider; by
+  // request they now live in this same header row, between the two column
+  // labels — .ob-dist-table-header's own space-between spreads the three
+  // items (label / controls / label) the same way it used to spread two,
+  // so this is a one-line change in layout, not a new one.
+  const _sortIconFor = (col) => sortBy === col ? (sortDir === 'desc' ? _sortIconDesc : _sortIconAsc) : _sortIcon;
   return `
-    <div class="ob-dist-table-header ob-dist-table-toggle" id="ob-market-toggle-header"
-         onclick="toggleObMarketSection()">
-      <span class="ob-dist-col-market">Market</span>
-      <span class="ob-dist-col-count">Gamers (approx) <span class="ob-market-chevron" id="ob-market-chevron">${marketDefaultOpen ? _chevUp : _chevDown}</span></span>
+    <div class="ob-dist-table-header" id="ob-market-toggle-header">
+      <span class="ob-dist-col-market ob-dist-col-sort${sortBy === 'name' ? ' is-active' : ''}" onclick="setObDistSort('name')">Market<span class="ob-dist-sort-icon">${_sortIconFor('name')}</span></span>
+      <div class="ob-dist-list-controls">
+        <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
+          ${listOpen ? `${_chevUp} Show fewer markets` : `${_chevDown} Show ${totalCount} more markets`}
+        </button>
+        ${selectedBadge}
+      </div>
+      <span class="ob-dist-col-count ob-dist-col-sort${sortBy === 'gamers' ? ' is-active' : ''}" onclick="setObDistSort('gamers')">Gamers (approx.)<span class="ob-dist-sort-icon">${_sortIconFor('gamers')}</span></span>
     </div>
-    <div class="ob-dist-market-body${marketDefaultOpen ? '' : ' hidden'}" id="ob-dist-market-body">
-      <div class="ob-dist-country-list" id="ob-dist-country-list">${topRows}</div>
-      ${extraCount > 0 ? (() => {
-        const hiddenSelected = IOS_COUNTRIES.slice(10).filter(c => selected.has(c.code)).length;
-        const badge = hiddenSelected > 0
-          ? `<span class="ob-dist-hidden-badge" title="${hiddenSelected} selected market${hiddenSelected > 1 ? 's' : ''} below — expand to review">${hiddenSelected} selected ↓</span>`
-          : '';
-        return `
-      <button class="ob-dist-expand-btn" id="ob-dist-expand-btn" onclick="toggleObDistExpand(this)">
-        ${_chevDown} Show ${extraCount} more markets${badge}
-      </button>
-      <div class="ob-dist-country-list hidden" id="ob-dist-country-list-extra">${extraRows}</div>`;
-      })() : ''}
+    <div class="ob-dist-market-body" id="ob-dist-market-body">
+      <div class="ob-dist-country-list${listOpen ? '' : ' hidden'}" id="ob-dist-country-list">${allRows}</div>
     </div>`;
 }
 
 /* ── Legacy alias ── */
 function buildObCountryList() { return buildObCountryChips(); }
 
-/* ── "Excluded" chips — Minimize Regulation preset only ──────────────────
-   Minimize Regulation's whole premise is "leave out every country with a
-   regulatory tooltip" (_obCountriesForPreset, app.js), which means the
-   moment it's picked, those countries drop out of view down in the Market
-   list below — exactly the ones a developer choosing this preset most
-   needs to be able to glance back at and reconsider. Surfaced right under
-   the preset pills instead, using the SAME clickable chip + tooltip pieces
-   the Market rows use (_obRegTipIconHtml, toggleObCountry) so reading a
-   tip and toggling a country both work identically in either place — laid
-   out in a wrapping horizontal row rather than the Market list's one-per-
-   row layout, since there's no gamer-count bar to make a full row worth
-   here and the whole point is scanning the set at a glance.
+/* ── "Regulation:" chips — visibility/contents depend on the active preset
+   ─────────────────────────────────────────────────────────────────────
+   Renamed from "Excluded" (by request) — that label only ever made sense
+   for Minimize Regulation, the one preset whose whole premise is leaving
+   these countries out. Now shown for three different reasons depending on
+   which distribution preset is active, keyed directly off
+   state.formData.distributionPreset (no more _minRegBase flag — that
+   existed only to keep this block on-screen through a Custom deviation
+   FROM Minimize Regulation specifically, which is now moot: Custom shows
+   the full list unconditionally, same as Minimize Regulation does, so
+   there's no longer a special case to track):
 
-   Always lists every tooltip-bearing country, regardless of whether the
-   user has already clicked one back on — an excluded country that vanished
-   the moment you un-excluded it would give you no way to reconsider a
-   second time (by request). `is-on` still marks which ones are currently
-   part of the selection, matching the Market list's own chips. */
+     - Everywhere / Minimize Regulation / Custom: these three have no
+       language-driven filtering logic of their own to lean on (Everywhere
+       and Custom can include or exclude any country by hand; Minimize
+       Regulation's own selection IS "every non-regulated country"), so
+       this shows the FULL set of regulated countries, `is-on` marking
+       which ones are currently part of the selection — same as this
+       block's old unconditional behavior, just no longer gated on having
+       specifically arrived via Minimize Regulation.
+     - English only / Selected languages / "{lang} only": these three
+       build their country list purely from language match
+       (_obCountriesForPreset, app.js) with no manual review step — so
+       this only ever shows the countries that happen to be BOTH regulated
+       AND already part of that language-matched selection (every chip
+       renders is-on, since by construction none of the others are ever in
+       it), and only appears at all if that intersection is non-empty.
+       Surfacing every OTHER regulated country here too would flag
+       countries the preset never intended to include in the first place.
+     - No preset chosen yet (null): nothing to show a regulation list
+       against — hidden, same as before.
+
+   Uses the SAME clickable chip + tooltip pieces the Market rows use
+   (_obRegTipIconHtml, toggleObCountry) so reading a tip and toggling a
+   country both work identically in either place — laid out in a wrapping
+   horizontal row rather than the Market list's one-per-row layout, since
+   there's no gamer-count bar to make a full row worth here and the whole
+   point is scanning the set at a glance. */
 function buildObExcludedChips() {
-  // _minRegBase (app.js: setObDistPreset, toggleObCountry), not a direct
-  // distributionPreset === 'minimize_regulation' check — the whole point of
-  // this list is to stay put while the user clicks countries back on/off
-  // to review them, and doing that snaps distributionPreset to 'custom'
-  // the moment the selection no longer matches the preset exactly. A check
-  // against distributionPreset itself would make the list vanish after the
-  // very first click, which defeats "review, then decide" for every
-  // country after the first.
-  if (!state.formData._minRegBase) return '';
+  const preset   = state.formData.distributionPreset;
   const selected = new Set(state.formData.selectedCountries || []);
-  const excluded = IOS_COUNTRIES.filter(c => regTip(c.code));
+
+  const ALWAYS_FULL_LIST = new Set(['everywhere', 'minimize_regulation', 'custom']);
+  const LANGUAGE_DRIVEN  = new Set(['english_only', 'primary_lang_only', 'selected_languages']);
+
+  /* THE HEADING SAYS WHICH SET THIS IS, and the two sets were already here —
+     the label just never distinguished them. A full-list preset shows every
+     country that carries an extra step, whether or not it is in the listing; a
+     language-driven one shows only the ones the chosen languages actually put
+     in the listing. "Regulation:" described neither, and on the language-driven
+     presets it read as the full regulatory picture when it is a subset of it.
+
+     Keyed off the same two Sets the country filter is, so the words and the
+     list can never disagree about what is being shown. primary_lang_only is in
+     the language-driven arm with the other two — it is the same kind of preset
+     (the request named English only and Selected languages, which are the two
+     that always exist; this one only appears when the primary language is not
+     English, and it is selected exactly the same way). */
+  let excluded, label;
+  if (ALWAYS_FULL_LIST.has(preset)) {
+    excluded = IOS_COUNTRIES.filter(c => regTip(c.code));
+    label = t('ob.dist.excluded') || 'Countries with extra steps:';
+  } else if (LANGUAGE_DRIVEN.has(preset)) {
+    excluded = IOS_COUNTRIES.filter(c => regTip(c.code) && selected.has(c.code));
+    label = t('ob.dist.excluded_selected') || 'Selected countries with extra steps:';
+  } else {
+    return '';
+  }
   if (!excluded.length) return '';
 
   const chips = excluded.map(c => {
@@ -886,7 +1200,7 @@ function buildObExcludedChips() {
 
   return `
     <div class="ob-dist-excluded" id="ob-dist-excluded-block">
-      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Excluded'}</div>
+      <div class="ob-dist-excluded-label">${label}</div>
       <div class="ob-dist-excluded-list">${chips}</div>
     </div>`;
 }
@@ -1133,6 +1447,30 @@ function buildObLangList() {
         </div>
       </div>
 
+      ${/* THE TIP SITS UNDER PRIMARY LANGUAGE, NOT OVER THE WHOLE SECTION.
+            Jaco: "cambiame el orden del tip de languages, ponlo debajo de
+            primary language en vez de encima." It opened the sub-tab, which
+            made it read as a preamble to the page — and what it is about is
+            SUPPORTED languages: shipping more of them. Between the two fields
+            it is the sentence that explains the question underneath it.
+
+            It costs no height: the 60.4px box and its 16px gap moved as one
+            piece, and the 36px `.ob-q` margin above it was already there. The
+            asymmetry is the point — 36 above, 16 below — because the smaller
+            gap is what binds it to the field it is talking about.
+
+            Styled as a Shipmate Tip (.sw-tip-box — see buildStepStubSection
+            for the same plain icon+text usage) rather than the prose treatment
+            (.asset-guidance) Distribution's and Assets' opening lines still
+            use — see the "PROSE, NOT A BOX" note in Distribution: that
+            reasoning still holds for those, this is a scoped exception. */''}
+      <div class="sw-tip-box" style="margin-bottom:16px;">
+        <div class="sw-tip-box-row">
+          ${SM_INFO_ICON}
+          <span class="sw-tip-text">${t('tip.distribution.languages') || 'Native language support can increase revenue 30–50% in secondary markets. Games with full localization consistently outperform English-only titles in non-English-speaking regions.'}</span>
+        </div>
+      </div>
+
       <div class="ob-q">
         <div class="gi-head">
           <span class="form-label">${t('ob.loc.supported')}</span>
@@ -1147,6 +1485,7 @@ function buildObLangList() {
             <input class="lang-search-input" id="lang-search-input" type="text"
                    placeholder="${t('ob.field.lang_search.placeholder')}"
                    oninput="filterLangSearch(this.value)"
+                   onkeydown="langSearchKey(event)"
                    onclick="event.stopPropagation()">
             <div class="lang-search-list" id="lang-search-list"></div>
           </div>
@@ -1199,18 +1538,15 @@ function _steamTrailerPreviewHTML(steamTrailer) {
 
 function buildAssetsTab() {
   const hasAndroid = state.activePlatforms.has('android');
-  // Auto-filled when the picked title (About section's IGDB picklist) has a
-  // linked Steam store page with at least one trailer — see
-  // _applySteamAboutData/_steamTrailerFromMovies in app.js, sourced from
-  // appdetails' own `movies` array. Shown beneath the manual upload
-  // dropzone/YouTube-URL fields below via the shared _steamTrailerPreviewHTML
-  // helper above (also used by the preview website's own "Trailers"
-  // sub-section, buildWebSitePreviewSection) — purely a compact reference
-  // of what's already live on the game's Steam page, it doesn't replace,
-  // block, or get overwritten by either of those, since a developer may
-  // still want to upload their own file or paste a different URL for
-  // Shipmate's own submission flow.
-  const steamTrailerHTML = _steamTrailerPreviewHTML(state.uploads.steamTrailer);
+  // BY REQUEST (v6.53): the auto-filled Steam trailer is no longer a block of
+  // its own here. It used to render through _steamTrailerPreviewHTML below the
+  // dropzone — large thumbnail, "🎬 <name> (from Steam)" caption — which
+  // presented the one asset Shipmate found for the developer as a different
+  // class of thing from the ones they dropped in themselves. It now appears in
+  // the library's Video well alongside any uploaded video, at the library's own
+  // thumbnail size and with no caption (_smLibraryHTML, app.js). The helper
+  // itself stays: the preview website's "Trailers" sub-section and the Steam
+  // Assets section both still use it, and both still want the caption.
   return `
     <div class="ob-form">
 
@@ -1236,11 +1572,28 @@ function buildAssetsTab() {
               guidance had the same problem: it described reformatting
               screenshots for each store and said nothing about the sorting,
               which is the part that does the work. */''}
-        ${/* Repeats the sub-tab on purpose — unlike Distribution and Languages
-              (whose matching headers were removed by request), Assets keeps
-              its header. */''}
-        <div class="ob-section-hdr">${t('ob.section.assets') || 'Assets'}</div>
-        <div class="asset-guidance">${t('ob.assets.guidance')}</div>
+        ${/* ~~Repeats the sub-tab on purpose~~ — AND THE HEADER IS GONE NOW,
+              which makes Assets agree with Distribution and Languages instead
+              of being the one pane that names itself twice. Jaco: "quita la
+              palabra assets."
+
+              The sub-tab rail already prints ASSETS, lit, two inches above —
+              so the word was the pane repeating the control that opened it,
+              and the guidance paragraph underneath is what actually says what
+              this pane is FOR. Same argument every other removed heading in
+              this app was made under: the thing is already named by its
+              position.
+
+              It is worth 30px of card, which is the reason it came up at all:
+              18 of line plus the 12 of `margin-bottom` the rule carries. The
+              id stays on the SECTION (`ob-sec-screenshots`) — the rail keys
+              off that, never off the heading — so nothing else moved.
+
+              `.ob-section-hdr`'s rule is untouched: Distribution, Localization
+              and Steam Assets all still draw one. */''}
+        ${/* The invitation, or — once a store page has been scraped — what
+              Shipmate found there. See `_assetsFoundText`. */''}
+        ${_assetsGuidanceHtml()}
         <div class="ob-q ob-q--rail-only" id="ob-q-screenshots" data-answered="${state.uploads.screenshots.length > 0 ? '1' : '0'}">
           ${/* The amber "still needed" state keys off SCREENSHOTS only, not on
                 anything the well swallowed: a trailer is optional and always
@@ -1251,19 +1604,40 @@ function buildAssetsTab() {
                  ondragover="event.preventDefault(); this.classList.add('is-over')"
                  ondragleave="this.classList.remove('is-over')"
                  ondrop="handleMediaDrop(event); this.classList.remove('is-over')">
-              <div class="asset-dropzone-icon">↑</div>
-              <div class="asset-dropzone-label">${t('ob.media.drop_label') || 'Drop screenshots, key art or your trailer here'}</div>
-              <div class="asset-dropzone-hint">${t('ob.media.drop_hint') || 'PNG, JPG or MP4 · Multiple files accepted'}</div>
+              ${/* THE PROMPT IS ITS OWN BOX NOW, because the well has a second
+                    tenant. It takes the free space and centres itself in it, so
+                    the arrow sits in the middle of whatever is left above the
+                    library rather than in the middle of the whole well — which
+                    with an empty library is the same place it always was, and
+                    with a full one is the only reading that does not put the
+                    invitation behind the files. One wrapper, scoped by the
+                    dropzone's ID: `.asset-dropzone-*` is also Steam's two, the
+                    Website builder's and every press-kit key-art box. */''}
+              <div class="asset-dropzone-prompt">
+                <div class="asset-dropzone-icon">↑</div>
+                <div class="asset-dropzone-label">${t('ob.media.drop_label') || 'Drop screenshots, key art or your trailer here'}</div>
+                <div class="asset-dropzone-hint">${t('ob.media.drop_hint') || 'PNG, JPG or MP4 · Multiple files accepted'}</div>
+              </div>
+              ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS — now
+                    INSIDE the well rather than under it. The classifier reads
+                    each file's dimensions and transparency, so a wrong guess is
+                    cheapest to correct right here, with the file under the
+                    pointer. Video is the one thing it cannot label yet — see
+                    handleMediaFiles in app.js.
+
+                    **`stopPropagation` IS LOAD-BEARING, not defensive.** The
+                    well's own `onclick` opens the file dialog, so without it
+                    every press on a thumbnail, a group label or the air between
+                    them would ALSO open a file picker — a delete button that
+                    asks you to upload something. The drop and dragover handlers
+                    are deliberately left to bubble: dropping a file onto the
+                    thumbnails is still dropping it into the well, which is what
+                    the whole box now looks like. */''}
+              <div id="sm-library" onclick="event.stopPropagation()">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
               <input type="file" id="ob-screenshot-input" multiple accept="image/*,video/*" style="display:none"
                      onchange="handleMediaFiles(this.files); this.value=''">
             </div>
           </div>
-          ${/* WHAT LANDED IN THE WELL, AND WHAT SHIPMATE THINKS IT IS. The
-                classifier reads each file's dimensions and transparency, so a
-                wrong guess is cheapest to correct right here, with the file
-                under the pointer. Video is the one thing it cannot label yet —
-                see handleMediaFiles in app.js. */''}
-          <div id="sm-library">${(typeof _smLibraryHTML === 'function') ? _smLibraryHTML() : ''}</div>
           ${/* NO SEPARATE ROW FOR THE TRAILER. It used to get a full-width
                 "🎬 name — 12.3 MB — Remove" bar of its own, which is what a
                 dropped video looked like: a horizontal slab rather than a
@@ -1273,7 +1647,6 @@ function buildAssetsTab() {
                 information twice. handleTrailerFiles still fills it wherever
                 it does exist (the Steam Assets section has its own), it just
                 is not here any more. */''}
-          ${steamTrailerHTML}
           <div class="asset-url-row">
             <label class="form-label" style="margin-bottom:6px;">${t('ob.field.trailer_url.label') || 'Or paste a YouTube URL'}</label>
             <input class="form-input" id="ob-trailer-url" type="url" placeholder="${t('ob.field.trailer_url.placeholder') || 'https://youtube.com/watch?v=...'}"
@@ -1469,16 +1842,13 @@ function renderProjectBar() {
     /* THE SLOT FIRST, THEN THE POOL — because there are two ways an icon gets
        into Shipmate and only one of them used to reach this chip.
 
-       state.uploads.appIcon is set by the dedicated icon uploader. But the
-       asset library's drop well takes ANY file and classifies it, so a
-       developer who drops their icon in there has unmistakably "added an icon
-       in Assets" — the tool even labels it Icon — while appIcon stays empty
-       and the chip kept showing its hole. Falling back to the pool's own icon
-       makes the two doors lead to the same place. The slot still wins when it
-       is set: that one was chosen for this job deliberately. */
-    const icon = state.uploads?.appIcon
-      || (typeof smPool === 'function' && smPool().find(a => a.kind === 'icon')) || null;
-    const src = icon ? (icon.src || _screenshotSrc(icon)) : '';
+       This chip is where that was worked out, and it is no longer where it
+       LIVES: the same fallback, written in place here, stayed false on the five
+       store previews for as long as it existed, which is how a rule ends up
+       true on one surface and wrong on five. It is `smAppIcon` / `smAppIconSrc`
+       in assets.js now — see their note for the argument — and this reads it
+       like everyone else. */
+    const src = typeof smAppIconSrc === 'function' ? smAppIconSrc() : '';
     selIcon.classList.toggle('empty', !src);
     selIcon.innerHTML = src ? `<img src="${src}" alt="">` : '';
   }
@@ -1629,10 +1999,15 @@ function shippyDistNotes() {
 
 function shippyAssetsNotes() {
   const shots = state.uploads.screenshots.length;
+  /* `smAppIcon`, not the slot — the guide was the loudest consumer of the
+     one-door bug: drop an icon in the asset library and it went on telling you
+     to "Upload an app icon", pointing at a job already done. A checklist that
+     nags about finished work is worse than one that is merely incomplete. */
+  const icon = typeof smAppIcon === 'function' ? smAppIcon() : state.uploads.appIcon;
   return smItem(shots > 0,
         shots ? `Screenshots <i>${shots}</i>` : smGo('Add screenshots', 2, '#ob-q-screenshots'), 'shots')
-    + smItem(!!state.uploads.appIcon,
-        state.uploads.appIcon ? 'App icon' : smGo('Upload an app icon', 2, '#ob-q-screenshots'), 'icon');
+    + smItem(!!icon,
+        icon ? 'App icon' : smGo('Upload an app icon', 2, '#ob-q-screenshots'), 'icon');
 }
 
 /* Broadcast and Performance have no checklist logic in this repo yet, so the
@@ -2288,11 +2663,11 @@ const TAB_HERO = {
   dashboard: { accent: '#4ade80', soft: 'rgba(74,222,128,.15)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`,
     title: 'Submit to every platform, the right way',
-    sub: 'Shipmate preps your content ratings, data disclosures, and store pages, then walks each store’s submission for you — Apple, Google, Steam, and the consoles.' },
+    sub: 'Shipmate helps prep your content ratings, data disclosures, and store pages, then completes each platform’s submission for you.' },
   broadcast: { accent: '#FF3B76', soft: 'rgba(255,59,118,.16)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a4 4 0 0 1 0 8"/><path d="M19 5a8 8 0 0 1 0 14"/></svg>`,
-    title: 'Announce your game everywhere at once',
-    sub: 'Write your update once. Shipmate reshapes it for each channel and posts to all of them together, so players find you wherever they look for indie games.' },
+    title: 'All the marketing tools you need, in one place',
+    sub: 'Push posts and media specced for every channel, connect with press and content creators, and build a marketing website in seconds.' },
   performance: { accent: '#fb923c', soft: 'rgba(251,146,60,.16)',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 4 3 5-7"/></svg>`,
     title: 'See how your game is performing',
@@ -2336,11 +2711,11 @@ function buildGdBox(idx, mod, inner) {
    no Continue button). Assets moved to its own tab. */
 /* ── Game Details tab: sub-tabs (Game Details / Distribution / Localization / Assets) ── */
 const GD_SUBS = [
-  { id: 'gamedetails',  label: 'Basic info' },
+  { id: 'gamedetails',  label: 'Basic Info' },
   { id: 'localization', label: 'Languages' },
   { id: 'distribution', label: 'Distribution' },
   { id: 'assets',       label: 'Assets' },
-  // Order is Basic info -> Languages -> Distribution -> Assets, by request:
+  // Order is Basic Info -> Languages -> Distribution -> Assets, by request:
   // Languages moved before Distribution so its presets (which read the
   // primary/supported languages chosen here) come after they're filled in.
   // Content rating moved out of Game Details — it now lives as a dedicated step
@@ -2376,19 +2751,7 @@ function buildContentQuestionsPane() {
     const msgs = (typeof _getInferenceMsgs === 'function')
       ? _getInferenceMsgs(pid, 'questionnaire')
       : ['Reading your game details…', 'Matching against store policies…', 'Pre-filling answers…'];
-    body = `
-      <div class="inf-loading-screen cq-inline-loading">
-        <div class="inf-rings-wrap">
-          <div class="inf-ring inf-ring-1"></div>
-          <div class="inf-ring inf-ring-2"></div>
-          <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="inf-headline">Analyzing your game…</div>
-        <div class="inf-steps">
-          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
-        </div>
-      </div>`;
+    body = _infLoadingScreen('Analyzing your game…', msgs, 'cq-inline-loading');
   } else {
     const q = pid === 'ios'   ? buildContentRatingSection()
             : pid === 'steam' ? buildSteamContentRatingSection()
@@ -2404,7 +2767,7 @@ function renderDetails() {
   renderProjectBar();
   let section = (state.details && state.details.section) || 'gamedetails';
   // Content rating was removed from Game Details; normalize any stale/removed
-  // section (e.g. a saved 'content') back to Basic info so the tab never blanks.
+  // section (e.g. a saved 'content') back to Basic Info so the tab never blanks.
   if (!GD_SUBS.some(s => s.id === section)) {
     section = 'gamedetails';
     if (state.details) state.details.section = section;
@@ -2614,16 +2977,63 @@ function buildMktInfluencers() {
    and parks the undated items at the bottom — the point of those being to show
    that an item doesn't have to be scheduled to exist.
 
-   Colour is the item's origin, not its status: Submission items take the
-   Submission tab's accent and Marketing items take Marketing's, so the coding
-   is the one already used by the top-level navigation rather than a new one.
+   COLOUR IS THE ITEM'S STATUS, NOT ITS ORIGIN — and it used to be the other
+   way round. `CAL_KIND` carried a hue each: Submission green #4ADE80,
+   Marketing yellow #FACC15, borrowed from the top-level tabs. Meanwhile the
+   submitted card colours by STATE — #2fdc80 done, #FFD84D the store has it,
+   #FFB86B it is back with you, magenta rejected. Two vocabularies, the same
+   two hues, on two surfaces you can see at once: the month said "green =
+   this came from the Submission tab" three inches from a card saying "green =
+   finished", and it drew the REVIEW WAIT — the one thing on the month that is
+   nobody's achievement — as a green band.
+
+   So the month now speaks the app's own three-colour rule (green done, amber
+   this needs you, red wrong) plus the card's review yellow, and a task that is
+   merely pending wears no hue at all, because "not done yet" is information,
+   not a state. What you lose is the glance that separated a marketing beat
+   from a submission one. That was never legible in a 4px dot anyway, and the
+   day panel names every item in words.
+
+   The KIND did not go away — it is still a field, still cycled from the day
+   panel, and it is still what the popover and the legend name. It just stopped
+   being a colour and became a SHAPE, in the two places where a dot is all there
+   is room for: square for Submission, round for Marketing. Shape says what a
+   thing is, colour says how it is going.
    ══════════════════════════════════════════════════════════════════ */
 const CAL_KIND = {
-  /* Green is also what the launch-day block uses, so the legend stays true for
-     every submission item including that one. */
-  submission: { label: 'Submission', color: '#4ADE80' },   // --green
-  marketing:  { label: 'Marketing',  color: '#FACC15' },   // yellow, no token yet
+  submission: { label: 'Submission', shape: 'sq' },
+  marketing:  { label: 'Marketing',  shape: 'rd' },
 };
+
+/* The five states an item can be in, and the only source of colour on any
+   calendar surface. `todo` is deliberately not a hue: white at 55% is the
+   month's resting ink, so a month of unstarted work reads as a list rather
+   than as an alarm, and the two things that ARE happening — the wait and the
+   launch — are the only colour on it.
+   `waiting` is #FFD84D to the digit: it is the same constant the submitted
+   card's in-review segment uses, which is the whole point of the exercise. */
+const CAL_STATUS = {
+  todo:    'rgba(255,255,255,.55)',
+  waiting: '#FFD84D',                 // the store has it — .sub-seg.is-current
+  yours:   '#FFB86B',                 // accepted: it is back with you
+  bad:     '#ff3b78',                 // rejected
+  done:    '#2fdc80',
+  launch:  '#2fdc80',                 // the goal, and green is the app's done
+};
+
+/* An item's state. Ticked beats everything — a thing you have crossed off is
+   done whatever it was about — then the `status` a submission fact carries
+   from its phase (stamped in _calItems, where the phase is known), then the
+   default. Launch day is asked for separately because it is not a task and
+   cannot be "done" in the sense the others are. */
+function _calStatus(it) {
+  if (!it) return 'todo';
+  if (it.isLaunch) return 'launch';
+  if (typeof _calDone === 'function' && _calDone(it)) return 'done';
+  return CAL_STATUS[it.status] ? it.status : 'todo';
+}
+const _calColor = it => CAL_STATUS[_calStatus(it)] || CAL_STATUS.todo;
+const _calShape = it => (CAL_KIND[it && it.kind] || CAL_KIND.marketing).shape;
 
 /* Recurring. weekday is 0=Sun … 6=Sat, matching Date.getDay(). */
 const CAL_RECURRING = [
@@ -2662,6 +3072,29 @@ const _calToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t
    edit that moves the date doesn't orphan its own override. Everything
    downstream reads it.key rather than recomputing. */
 const _calKey = it => it.date ? `${it.id}@${_calISO(it.date)}` : it.id;
+
+/* ── A DERIVED ITEM IS A FACT, NOT A RECORD (v6.60) ──────────────────────────
+   `sent-<pid>`, `decide-<pid>` and `launch-day` are read off OTHER state — the
+   first two off `state.platformFlipped`, the third off `formData.releaseDate` —
+   where everything else on this calendar is either a constant or something
+   somebody typed into it. The three controls a day-panel row carries all write
+   to `state.calendar.*`, and on one of these every one of them is a lie:
+
+   - the **×** writes `calendar.hidden[key]`, which hides the ROW and changes
+     nothing about the submission. The band still crosses those days, the lede
+     still lists the store, the card still says IN REVIEW — so the month would
+     be contradicting itself on one screen. Jaco: *"no debería poder borrar los
+     'x platform decision expected'."*
+   - the **tick** writes `calendar.done[key]`. "Done" has no meaning for a day a
+     store is going to answer on; the store decides that, and when it does the
+     item stops being drawn by itself.
+   - the **kind dot** cycles Submission ⇄ Marketing on something that is a
+     submission by construction.
+
+   So the panel draws them read-only. The flag lives on the ITEM rather than
+   being sniffed from the key's prefix, because a prefix test is a second place
+   that has to know how ids are spelled. */
+const _calIsDerived = it => !!(it && it.derived);
 
 /* Stamps the key on each item, lays any override on top, and drops the ones
    that have been removed. Generated items have no record to edit at source, so
@@ -2738,9 +3171,59 @@ function _calItems(from, to, opts = {}) {
              lead, note: `${lead} days before launch · ~${timing.days}d review` };
   });
 
-  submissions.forEach(s => push({ ...s, date: _calDay(launch, -s.lead) }));
+  /* A PLAN ITEM BECOMES TWO FACTS THE MOMENT IT REALLY HAPPENS. Everything
+     above is a workback from the target launch — "Submit to the App Store, 5
+     days before". Once a platform has actually been submitted
+     (`state.platformFlipped[pid]`), that plan is history: it is replaced by the
+     day it WENT, and by the day its store is expected to answer.
+     Before this the calendar knew nothing about submitting. You could send a
+     build and the month would still be telling you to send it. */
+  const sent = state.platformFlipped || {};
+  submissions.forEach(s => {
+    const pid = s.id.slice('submit-'.length);
+    if (sent[pid]) return;                       // superseded by the two below
+    push({ ...s, date: _calDay(launch, -s.lead) });
+  });
+
+  Object.entries(sent).forEach(([pid, f]) => {
+    const timing = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+    const label  = timing.label;
+    const when   = f && f.time ? new Date(f.time) : _calToday();
+    /* THE PHASE IS THE COLOUR. This is the one place the calendar knows which
+       of the four phases a submission is in, so it is where the status gets
+       stamped — everything downstream just reads `it.status` through
+       _calColor and never has to look at `platformFlipped` again. The month
+       and the card therefore cannot disagree about what yellow means. */
+    const ph = (f && f.phase) || 'in_review';
+    const sentStatus = ph === 'accepted' ? 'yours'
+                     : ph === 'rejected' ? 'bad'
+                     : ph === 'live'     ? 'done'
+                     : 'waiting';
+    /* `derived: true` — see `_calIsDerived`. These two and Launch day are read
+       off other state (`platformFlipped`, `formData.releaseDate`) rather than
+       being records anyone typed here, so the day panel draws them as facts and
+       not as editable rows. */
+    push({ id: 'sent-' + pid, kind: 'submission', label: `Sent to ${label}`,
+           status: sentStatus, derived: true,
+           note: `Waiting on review · ~${timing.days}d`, go: { view: 'dashboard' },
+           date: new Date(when.getFullYear(), when.getMonth(), when.getDate()) });
+    /* The decision date is Mark's own `days` off the day it was sent — the same
+       number the workback above leads with, so the plan and the fact are drawn
+       from one table and cannot drift. `Math.ceil`, because a calendar has no
+       2.2nd of the month. Phases past the wait have had their answer, so they
+       print no expected date. */
+    if (ph === 'in_review') {
+      push({ id: 'decide-' + pid, kind: 'submission', isDecision: true,
+             status: 'waiting', derived: true,
+             label: `${label} decision expected`,
+             note: `Estimated from a ~${timing.days} day average review`,
+             go: { view: 'dashboard' },
+             date: _calDay(when, Math.ceil(timing.days)) });
+    }
+  });
+
   push({ id: 'launch-day', kind: 'submission', label: 'Launch day', isLaunch: true,
-         go: { view: 'dashboard' }, date: launch });
+         derived: true, go: { view: 'dashboard' }, date: launch });
 
   /* The undated ones are decorated too, because an override can have given one
      a date — dragging it onto a day does exactly that. Once it has one it stops
@@ -2813,7 +3296,7 @@ function buildCalendarMonth() {
           <div class="mcal-chips">
             ${shown.map(it => `
               <button class="mcal-chip${_calDone(it) ? ' is-done' : ''}${it.isLaunch ? ' is-launch' : ''}"
-                      style="--k:${CAL_KIND[it.kind].color}"
+                      style="--k:${_calColor(it)}"
                       data-key="${it.key}" draggable="true"
                       ondragstart="event.stopPropagation(); calDragStart(event, '${it.key}')"
                       ondragend="calDragEnd()"
@@ -2873,8 +3356,14 @@ function buildCalendarMonth() {
         </div>
       </div>
       <div class="mcal-legend">
-        ${Object.entries(CAL_KIND).map(([k, v]) =>
-          `<span class="mcal-key"><span class="mcal-key-dot" style="background:${v.color}"></span>${v.label}</span>`).join('')}
+        ${/* THE LEGEND EXPLAINS THE COLOUR, so when the colour stopped meaning
+              "which tab this came from" the legend had to stop saying that too.
+              It listed Submission and Marketing; it now lists the states, in the
+              order a submission passes through them. `todo` is not in it — a
+              legend entry for "no colour" is a line explaining the absence of a
+              mark, and the unmarked things are most of the month. */ ''}
+        ${[['waiting', 'In review'], ['yours', 'Needs you'], ['done', 'Done']].map(([s, label]) =>
+          `<span class="mcal-key"><span class="mcal-key-dot" style="background:${CAL_STATUS[s]}"></span>${label}</span>`).join('')}
         ${q ? `<button class="mcal-clearwk" onclick="calSearch('')">Filtered by “${escHtml(q)}” · clear</button>`
             : cal.selectedWeek ? `<button class="mcal-clearwk" onclick="calSelectWeek('${cal.selectedWeek}')">Showing one week · clear</button>`
             /* Teaches the one gesture nothing else announces. Rides in the
@@ -2941,8 +3430,14 @@ function _calDraftHTML() {
             to change, so its edit is kept as an override keyed on the
             occurrence (state.calendar.overrides) and laid on top on rebuild. */
   const editing = d.mode === 'edit';
+  /* The kind picker went NEUTRAL with the rest of it. Each pill used to wear
+     its kind's hue, which is exactly the claim that was retired: the hue now
+     belongs to the item's state, and a picker that paints a colour it does not
+     actually set is a lie you can see. `--k` stays as the selected-pill accent
+     — white, the app's ordinary "this one" — so the CSS underneath is
+     untouched and only the meaning changed. */
   const kinds = Object.entries(CAL_KIND).map(([k, v]) =>
-    `<button class="mcal-pop-kind${d.kind === k ? ' is-on' : ''}" style="--k:${v.color}"
+    `<button class="mcal-pop-kind${d.kind === k ? ' is-on' : ''}" style="--k:#fff"
              onclick="calDraftKind('${k}')">${v.label}</button>`).join('');
   const repeats = [
     { id: 'none',   label: 'One-off' },
@@ -3012,7 +3507,7 @@ function _calDetailHTML(d) {
                stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
-      <span class="mcal-pop-tag" style="--k:${kind.color}">${kind.label}</span>
+      <span class="mcal-pop-tag" style="--k:var(--text-dim)">${kind.label}</span>
       <h4 class="mcal-pop-h">${escHtml(d.text || '')}</h4>
       <div class="mcal-pop-when">${when}${repeats ? `<span class="mcal-pop-rep-note">${repeats}</span>` : ''}</div>
       ${d.note ? `<p class="mcal-pop-notetext">${escHtml(d.note).replace(/\n/g, '<br>')}</p>` : ''}
@@ -3065,7 +3560,7 @@ function buildCalChecklist() {
   const doneUndated = undated.filter(_calDone).length;
 
   const row = it => `
-    <button class="mcal-task${_calDone(it) ? ' is-done' : ''}${it.date ? '' : ' is-loose'}" style="--k:${CAL_KIND[it.kind].color}"
+    <button class="mcal-task${_calDone(it) ? ' is-done' : ''}${it.date ? '' : ' is-loose'}" style="--k:${_calColor(it)}"
             ${it.date ? '' : `draggable="true" ondragstart="calDragStart(event, '${it.key}')" ondragend="calDragEnd()"`}
             onclick="calOpenItem('${it.key}', event)"
             ${it.date ? `onmouseenter="calHiliteDay('${_calISO(it.date)}')" onmouseleave="calHiliteDay(null)"` : ''}>
@@ -3285,26 +3780,223 @@ function buildPerfInsights() {
   return buildPerfPanel('Insights & alerts', `<div class="perf-insights">${chips}</div>`, { id: 'perf-box-insights', mod: 'perf-panel--insights' });
 }
 
-/* ── EXPERIMENT: persistent left-pane checklist with a progress ring ──
-   Rough concept test — mixes a few real state signals with placeholders. */
+/* ── Persistent left-pane checklist with a progress ring ──────────────────
+   Started as a concept test that mixed a few real state signals with
+   hardcoded placeholders — `done: true` on items nobody had done, `done:
+   false` on items you couldn't complete if you tried. The Details and
+   Platforms groups read real state now; Marketing and Performance are still
+   placeholders, and are still marked as such.
+
+   Every predicate below is evaluated eagerly on each call, and _chkGroups is
+   called fresh on every renderGuide/renderChecklist (no memoisation), so
+   these must stay cheap — they are all set lookups and array scans over
+   state that is already in memory. */
+
+/* The platforms a Submission-group item is answerable for: the ones the
+   developer actually activated AND that genuinely carry the step in question.
+   Both halves matter. Filtering by activePlatforms alone would ask Steam for
+   a data-safety answer it has no step for; not filtering at all would let an
+   item sit green because no platform disagreed with it.
+
+   `[]` is the important return: "every platform has done it" is vacuously
+   true over an empty list, which is precisely how the old placeholders
+   managed to show a finished checklist for a project with no platforms at
+   all. Callers below all require a non-empty list before anything ticks. */
+function _chkPlatformsWithStep(stepIds) {
+  const want = new Set([].concat(stepIds));
+  return [...(state.activePlatforms || [])].filter(pid => {
+    const p = PLATFORMS[pid];
+    if (!p) return false;
+    return (_visiblePlatformSteps(pid) || p.steps || []).some(s => want.has(s.id));
+  });
+}
+
+/* Which of {stepIds} a given platform actually has — a platform answers for
+   the data step it owns ('privacy' on Apple, 'dataSafety' on Google Play),
+   not for both. */
+function _chkPlatformStepId(pid, stepIds) {
+  const want = new Set([].concat(stepIds));
+  const p = PLATFORMS[pid];
+  if (!p) return null;
+  const hit = (_visiblePlatformSteps(pid) || p.steps || []).find(s => want.has(s.id));
+  return hit ? hit.id : null;
+}
+
+/* "Done on every platform that has it, and at least one does." Runs each
+   platform's own step id through platformSectionComplete (state.js), so the
+   checklist agrees with the step cards rather than re-deriving completeness
+   from the answer objects — including the STEP_REQUIRES_VISIT gate, which is
+   what makes "visited at least once AND fully answered" hold here too. */
+function _chkEveryPlatformComplete(stepIds) {
+  const pids = _chkPlatformsWithStep(stepIds);
+  if (!pids.length) return false;
+  return pids.every(pid => {
+    const stepId = _chkPlatformStepId(pid, stepIds);
+    return !!stepId && platformSectionComplete(pid, stepId);
+  });
+}
+
+/* "COMPLETE DATA SAFETY DISCLOSURES", which once had no way to ever tick.
+
+   HISTORY, BECAUSE IT EXPLAINS THE SHAPE: Data Collection Questions used to be
+   no step on any card — only a face of the Product Page Preview, reached by
+   flipping it over (openStorePreviewSection(pid,'data'), app.js). So asking
+   _chkPlatformsWithStep for 'privacy'/'dataSafety' found no platform carrying
+   either id, got back [], and "done everywhere that has it, and at least one
+   does" is false over an empty list by design — the row sat permanently
+   unticked on every project that hadn't activated the hidden Mac App Store
+   Full, the only platform with a real card step for it.
+
+   App Store and Mac App Store now carry a 'privacy' step of their own, so
+   three of these four are ordinary card steps and the row's CLICK resolves
+   against them like every other row's does (CHK_GLOW_STEPS.dataSafety, app.js —
+   'privacy' precedes 'storePreview' in both step lists, so those two land on
+   the step and Google Play still falls through to its preview with the 'data'
+   flip).
+
+   ITS DONE-STATE STAYS HERE ALL THE SAME, and Google Play is the reason. That
+   platform's data safety is still a section of its Store Listing Preview with
+   no step of its own, so a step-based test would either skip it — a Google Play
+   project would tick this row without ever answering the questions — or count
+   its whole preview, which is far more than data safety. The question this row
+   asks is "are the disclosures done", not "is a particular row ticked", so it
+   goes on asking each platform that HAS disclosures, directly.
+
+   It asks each preview directly instead. Steam is deliberately absent: its data
+   section is a privacy-policy URL field, not a disclosure questionnaire, and
+   counting it would let the row tick on a URL.
+
+   ANSWERS ONLY — THE VISIT IS NOT PART OF THE BAR ANY MORE (by request). The
+   two Apple entries used to be `storePreviewSectionSeen[pid].data && complete`,
+   deliberately the same expression the preview's own `dataDone` uses, so that
+   this row and the preview's amber ring could not disagree. That pairing is
+   given up here on purpose, and it is worth being explicit about which half
+   moved: this row now asks only "is every required question answered on every
+   platform that has them", and the preview's own "Answer Data Collection
+   Questions" element still asks "and have you looked at it", because those are
+   two different claims. The checklist tracks the submission's readiness; the
+   preview's ring is a prompt to review what Shipmate may have filled in for
+   you. A developer whose privacy URL came from onboarding and whose
+   collects-data answer came from inference has a complete disclosure and a
+   row that now says so.
+
+   Its click has been taught the same thing — see chkGoStep's tone, which reads
+   this row's done-state rather than the Product Page Preview step it points
+   at, so a finished data disclosure rings green even though the preview around
+   it is not finished. */
+const CHK_DATA_DONE = {
+  ios:        () => isIOSSectionComplete('privacy'),
+  macos:      () => isMacSectionComplete('privacy'),
+  macos_full: () => isMacFullSectionComplete('privacy'),
+  android:    () => isAndroidSectionComplete('dataSafety'),
+  /* Steam's is a stub and answers on first visit — see PLATFORMS.steam.steps
+     (state.js). It is listed anyway rather than left out: _chkDataSafetyDone
+     filters this map and requires EVERY listed platform to be done, so an
+     omitted platform is not counted as incomplete, it is counted as not
+     having the question — which for Steam is no longer true. A row that
+     ignored Steam would go green on a Steam-only project that had never
+     opened the step. */
+  steam:      () => isSteamSectionComplete('dataSafety'),
+};
+
+function _chkDataSafetyDone() {
+  const pids = [...(state.activePlatforms || [])].filter(pid => CHK_DATA_DONE[pid]);
+  if (!pids.length) return false;
+  return pids.every(pid => {
+    try { return !!CHK_DATA_DONE[pid](); } catch (_) { return false; }
+  });
+}
+
+/* Submitted on every activated platform. Same "at least one" guard as
+   _chkEveryPlatformComplete, for the same reason. */
+function _chkAllPlatformsSubmitted() {
+  const pids = [...(state.activePlatforms || [])];
+  if (!pids.length) return false;
+  return pids.every(pid => state.platformStepStatus?.[pid]?.['submit'] === 'complete');
+}
+
 function _chkGroups() {
   const fd = state.formData || {};
+  const ups = state.uploads || {};
   const plats = state.activePlatforms ? state.activePlatforms.size : 0;
+  // Screenshots: the Assets grid itself, scraped or uploaded — the item says
+  // "Upload screenshots" and this is the array that section renders from.
+  const hasScreenshots = (ups.screenshots || []).length > 0;
+  // Trailer: any door counts, per request — a video file dropped into Assets
+  // (state.uploads.trailer, which carries {name,size} immediately and gains
+  // its pool .ref asynchronously, so test the slot and not the ref), a
+  // YouTube link typed into the URL field beside it, or a trailer SCRAPED
+  // from the picked title. That last one lands in its own slot
+  // (state.uploads.steamTrailer, a plain {name,thumbnail,hlsUrl} that is
+  // never adopted into the asset pool — see selectPicklistItem) rather than
+  // in `trailer`, which is why it was missed: the Assets section shows a
+  // trailer, so the checklist has to agree that one exists.
+  const hasTrailer = !!ups.trailer
+                  || !!ups.steamTrailer
+                  || !!(fd.trailerUrl && fd.trailerUrl.trim());
+  // Same test _visiblePlatformSteps uses to decide whether the platform cards
+  // show a Localizations step at all (state.js).
+  const hasLocalizations = (fd.localizations || []).length > 0;
+  /* The Data Safety row is CONDITIONAL, on the same fact its done-state reads:
+     a platform is in CHK_DATA_DONE exactly when it has data-collection
+     questions to answer — App Store, Mac App Store, Mac App Store Full and
+     Google Play. Steam's data section is a privacy-policy URL and is
+     deliberately not one of them (see _chkDataSafetyDone), so a Steam-only
+     project gets no row rather than a row it can never satisfy. Derived from
+     the map rather than from a hardcoded platform list, so the two can't
+     disagree about which stores this row is about. */
+  const hasDataSafety = [...(state.activePlatforms || [])].some(pid => CHK_DATA_DONE[pid]);
   return [
     { group: t('guide.group.details') || 'Details', view: 'details', items: [
       { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
       { label: t('guide.item.desc') || 'Write a description',          section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
       { label: t('guide.item.platforms') || 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
+      // Languages sits ABOVE countries by request: Distribution's own
+      // presets read the primary/supported languages chosen here, so the
+      // checklist now walks the developer through them in the order the data
+      // actually flows rather than the order the sub-tabs happen to sit in.
+      { label: t('guide.item.localizations') || 'Select target languages', section: 'localization', anchor: 'ob-lang-list-wrap', done: !!state.localizationSeen },
       { label: t('guide.item.countries') || 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
-      { label: t('guide.item.localizations') || 'List localizations',  section: 'localization', anchor: 'ob-lang-list-wrap',  done: !!state.localizationSeen },
-      { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: true },
-      { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: false },
+      { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: hasScreenshots },
+      { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: hasTrailer },
     ] },
+    /* THE SUBMISSION GROUP WALKS THE WHOLE CARD: Upload build, Content
+       ratings, Data safety, Localizations, Store pages, Improve, Submit.
+       Three of those were missing before v6.54, so the checklist could read
+       100% with no build uploaded and the submission never run through
+       Improve.
+
+       The order is the developer's, not the cards': Data safety sits ahead of
+       Localizations by request, because there is no point translating a
+       listing whose disclosures may still change it. It is the one place this
+       list deliberately does NOT follow the step order on the cards.
+
+       Localizations is CONDITIONAL, and on the same fact the platform cards
+       are: _visiblePlatformSteps (state.js) drops that step entirely from
+       ios/macos/macos_full when no supporting languages are selected, so a row
+       for it here would be a row pointing at nothing. Both read
+       formData.localizations, so they can't disagree.
+
+       `step` is what the row's click resolves against — see chkGoStep
+       (app.js): it either opens the one step it can name, or pulses the cards'
+       own rows to point at what is left to do. */
     { group: t('guide.group.platforms') || 'Platforms', view: 'dashboard', items: [
-      { label: t('guide.item.contentRatings') || 'Set content ratings',    done: true },
-      { label: t('guide.item.dataSafety') || 'Data-safety disclosures',    done: true },
-      { label: t('guide.item.storePages') || 'Build store pages',          done: false },
-      { label: t('guide.item.submitBuilds') || 'Submit builds for review', done: false },
+      { label: t('guide.item.uploadBuild') || 'Upload build',              step: 'uploadBuild',   done: _chkEveryPlatformComplete('uploadBuild') },
+      { label: t('guide.item.contentRatings') || 'Set content ratings',    step: 'contentRating', done: _chkEveryPlatformComplete('contentRating') },
+      ...(hasDataSafety ? [
+      { label: t('guide.item.dataSafety') || 'Review data safety', step: 'dataSafety', done: _chkDataSafetyDone() },
+      ] : []),
+      ...(hasLocalizations ? [
+      { label: t('guide.item.platformLocalizations') || 'Complete localizations', step: 'localizations', done: _chkEveryPlatformComplete('localizations') },
+      ] : []),
+      { label: t('guide.item.storePages') || 'Build store pages',          step: 'storePages',    done: _chkEveryPlatformComplete(['storePreview', 'storePreviewPrototype']) },
+      { label: t('guide.item.improveSubmission') || 'Improve your submission', step: 'improveSubmission', done: _chkEveryPlatformComplete('improveSubmission') },
+      // Submit has no isXxxSectionComplete arm on any platform — it is
+      // recorded straight onto platformStepStatus by _doFinalSubmit (app.js),
+      // which is the flag every other submit-state reader tests too. Applies
+      // to every active platform, not only those listing an explicit submit
+      // step, since that flag is what gets written regardless.
+      { label: t('guide.item.submitBuilds') || 'Submit builds for review', step: 'submit', done: _chkAllPlatformsSubmitted() },
     ] },
     { group: t('guide.group.marketing') || 'Marketing', view: 'broadcast', items: [
       { label: t('guide.item.announcement') || 'Write your announcement', section: 'announce', anchor: 'bc-msg', done: false },
@@ -3385,13 +4077,72 @@ function renderChecklist() {
         <div class="chk-group">
           <button class="chk-group-head${g.view === state.activeView ? ' is-current' : ''}" onclick="setView('${g.view}')">${g.group}</button>
           ${g.items.map(i => `
-            <button class="chk-item${i.done ? ' is-done' : ''}" onclick="chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')">
+            <button class="chk-item${i.done ? ' is-done' : ''}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${g.view}', '${i.anchor || ''}', '${i.section || ''}')`}">
               <span class="chk-box">${i.done ? '✓' : ''}</span>
               <span class="chk-label">${i.label}</span>
             </button>`).join('')}
         </div>`).join('')}
     </div>
     ${buildChkCalendar()}`;
+}
+
+/* ── A STEP TICKS ITSELF ───────────────────────────────────────────────────
+   The checklist's predicates were always live — `_chkGroups` recomputes every
+   row from state on every call, and it is called fresh by both renderers. What
+   was missing is anybody CALLING them when an answer changes.
+
+   `renderGuide` has ~20 callers and none of them is the one that matters:
+   every answer handler in the app repaints through `reRenderStepModal`
+   (app.js), which paints the step body and stops. So the guide kept whatever
+   it was rendered with when you entered the tab. Finish Data Collection
+   Questions on both Apple platforms and `_chkDataSafetyDone()` returns true on
+   the very next call — the column just never made that call, and the row sat
+   grey. Clicking the row "fixed" it because `chkGoStep` navigates, and
+   navigating renders. That is the whole bug: the user was pressing a button to
+   trigger a repaint, and reading it as the button being what completes a step.
+
+   SIGNATURE-GATED, because the fix has to survive being called from a
+   keystroke handler. `renderGuide` rebuilds this column with innerHTML and
+   remounts Shippy; doing that per character typed would be visible. So the
+   done-state of every row is reduced to a short string and compared with the
+   last one — identical means nothing to repaint, and the common case (typing
+   inside a section that is already complete, or still incomplete) costs one
+   `_chkGroups()` pass over state that is already in memory. Labels are in the
+   signature as well as ticks, so a row APPEARING or disappearing (the
+   Localizations row, conditional on supporting languages) repaints too.
+
+   Both surfaces are refreshed from the one entry point: the right-hand guide
+   and the left-hand `#app-checklist`, which draws the same groups plus a
+   progress ring. */
+let _chkDoneSignature = null;
+
+function _chkSignature() {
+  try {
+    return _chkGroups()
+      .map(g => g.items.map(i => `${i.label}:${i.done ? 1 : 0}`).join(','))
+      .join('|');
+  } catch (_) { return null; }   // mid-boot, before state is seeded
+}
+
+/* THE SIGNATURE IS STAMPED BY THE PAINT, NOT BY THE CHECK — and getting that
+   backwards is a bug worth naming, because it fails in the direction that is
+   hardest to see. renderGuide has ~20 other callers; if only this function
+   recorded what it had seen, a repaint from any of them would leave the cached
+   signature describing something OTHER than what is on screen, and the very
+   next comparison could match a stale value and skip a repaint that was
+   needed. Measured: adding a supporting language (which adds the Localizations
+   row) through a direct renderGuide, then removing it, left the row on screen
+   for good — the signature had gone out and come back to the same string while
+   the DOM had only made the first half of that trip.
+   So renderGuide sets it, every time, from the same state it is about to
+   paint; this function only ever reads it. */
+function refreshGuideCompletion(force) {
+  if (typeof _chkGroups !== 'function' || typeof renderGuide !== 'function') return;
+  const sig = _chkSignature();
+  if (sig === null) return;
+  if (!force && sig === _chkDoneSignature) return;
+  renderGuide();                                   // stamps _chkDoneSignature
+  if (document.getElementById('app-checklist')) renderChecklist();
 }
 
 /* EXPERIMENT: persistent right guide column — renders the designer's Shippy
@@ -3408,12 +4159,15 @@ const GUIDE_CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
 function renderGuide() {
   const el = document.getElementById('app-guide');
   if (!el) return;
+  // What this paint is about to show — see refreshGuideCompletion's note for
+  // why the stamp lives here and not there.
+  _chkDoneSignature = _chkSignature();
   const view = state.activeView;
 
   /* The Calendar tab hands this column to its own checklist: the guide's job
      there is the calendar's items, not a tab's setup tasks. Shippy still hangs
      off the top so the column doesn't change character. */
-  if (view === 'calendar' && !state.guideCollapsed) {
+  if (view === 'calendar') {
     el.classList.remove('is-collapsed');
     el.innerHTML = `${shippyLayersHTML()}${buildCalChecklist()}`;
     mountShippy(el);
@@ -3424,130 +4178,793 @@ function renderGuide() {
   const group = _chkGroups().find(g => g.view === view);
   const items = group ? group.items : [];
   const done = items.filter(i => i.done).length;
-  const collapsed = !!state.guideCollapsed;
-  el.classList.toggle('is-collapsed', collapsed);
 
-  // Collapsed: a one-icon-wide progress rail — a vertical run of status dots.
-  if (collapsed) {
-    const dots = items.map(i =>
-      `<button class="guide-mini-dot${i.done ? ' is-done' : ''}" title="${i.label}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">${i.done ? GUIDE_CHECK_SVG : ''}</button>`).join('');
-    el.innerHTML = `
-      <div class="guide-card guide-card--mini">
-        <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Expand guide" title="Expand guide">‹</button>
-        <div class="guide-mini-dots">${dots}</div>
-      </div>`;
-    return;
-  }
-
+  /* THE GUIDE NO LONGER COLLAPSES. There was a chevron top-right and a
+     one-icon-wide rail of status dots behind it, and the whole feature hung
+     off that one button: `toggleGuide` had exactly two callers, the chevron on
+     this face and the chevron on the rail, and nothing else ever wrote
+     `guideCollapsed`. So removing the chevron removed the only door in — the
+     rail could still render but nothing could ever ask it to, and its own
+     expand arrow would have sat in a view no one could reach.
+     It went whole rather than half: an unreachable branch left behind is the
+     same debt the dev bar was deleted to avoid. `state.guideCollapsed`,
+     `toggleGuide`, `GUIDE_CHEV_SVG` and the `.guide-card--mini` /
+     `.guide-mini-*` rules all went with it. The `is-collapsed` class is still
+     REMOVED above and below, defensively, because a stale one on a persisted
+     DOM node would hide the column outright. */
   // The current task = the first one not yet done (purple ring, per §4).
   const currentIdx = items.findIndex(i => !i.done);
   const tasks = items.map((i, idx) => {
     const cls = i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : '');
     return `
-    <button class="gd-task${cls}" onclick="chkGo('${view}','${i.anchor || ''}','${i.section || ''}')">
+    <button class="gd-task${cls}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
       <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
       <span class="gd-task-label">${i.label}</span>
     </button>`;
   }).join('');
   const TAB_NAME = { details: 'Game Details', dashboard: 'Submission', broadcast: 'Marketing', performance: 'Analysis' };
   const tabName = t('guide.tab.' + view) || TAB_NAME[view] || '';
+  /* THE CARD HAS TWO FACES, and the calendar replaces the tab's checklist
+     rather than sitting under it: 254px of inner width does not hold both, and
+     a month you have to scroll to is not a month you can read at a glance.
+     The eyebrow stays in both so the card never stops being the guide. */
+  const onCal = !!state.guideCal;
   el.innerHTML = `
     ${shippyLayersHTML()}
-    <div class="guide-card">
-      <button class="guide-collapse-btn" onclick="toggleGuide()" aria-label="Collapse guide" title="Collapse guide">›</button>
-      <div class="guide-eyebrow">${t('guide.eyebrow') || 'Shippy Guide'}</div>
+    <div class="guide-card${onCal ? ' guide-card--cal' : ''}">
+      ${/* THE EYEBROW NAMES THE FACE YOU ARE ON, and that is the label the
+            segmented control could never afford. Two words per half needed a
+            row of their own at 124px a side — ~34px of card height on BOTH
+            faces — so the halves went to icons. This puts the name back in the
+            one place the row already had room for it: the eyebrow was saying
+            "Shippy Guide" on both faces, which named the CARD and left the two
+            icons unlabelled.
+
+            "Calendar" rather than "Planner" because the app already calls that
+            surface a calendar everywhere else — the topbar tab, `SM_CAL_SVG`,
+            `state.guideCal` — and a second noun for one object is how two
+            names for the same thing start. One string either way. */''}
+      <div class="guide-eyebrow">${(onCal ? t('guide.eyebrow.cal') : t('guide.eyebrow.list')) || (onCal ? 'Shippy Calendar' : 'Shippy Checklist')}</div>
+      ${/* A REAL SEGMENTED CONTROL, and TWO ICONS is what lets it stay in the
+            header. It was one 26px icon button that flipped the face, which is
+            the shape for "do a thing", not for "pick which of two things you
+            are looking at" — the card has two faces and only one of them was
+            ever named.
+
+            Two icons rather than two words, and the width is why. The inner
+            column is 254 and the eyebrow is 16px uppercase mono, so "SHIPPY
+            GUIDE" eats ~115 of it. Labelled halves did not fit that row —
+            built and measured, they needed a row of their own at 124px a half
+            and cost ~34px of card height on BOTH faces. Two 26px icon halves
+            make a 60px track that sits in the corner the old single button had,
+            so the control gets its second state for free.
+
+            Each half carries its own title/aria-label, because an icon that is
+            one of two states has nothing else to say what it is. */''}
+      <div class="guide-faces" role="tablist">
+        <button type="button" class="guide-face guide-face--list${onCal ? '' : ' is-on'}" role="tab"
+                aria-selected="${onCal ? 'false' : 'true'}"
+                aria-label="Checklist" title="Checklist"
+                onclick="setGuideFace('list')">${GUIDE_LIST_SVG}</button>
+        <button type="button" class="guide-face guide-face--cal${onCal ? ' is-on' : ''}" role="tab"
+                aria-selected="${onCal ? 'true' : 'false'}"
+                aria-label="Month" title="Month"
+                onclick="setGuideFace('cal')">${SM_CAL_SVG}</button>
+      </div>
+      ${onCal ? buildGuideMiniCal() : `
       <div class="guide-title">${t('hero.' + view + '.title') || hero.title || ''}</div>
       <div class="guide-sub">${t('hero.' + view + '.sub') || hero.sub || ''}</div>
-      ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}
+      ${items.length ? `<div class="guide-tasks-head"><span>${tabName}</span><span>${done}/${items.length}</span></div><div class="guide-tasks">${tasks}</div>` : ''}`}
     </div>`;
   mountShippy(el);
 }
 
-/* ── SHIPPY, IN TWO LAYERS ───────────────────────────────────────────────────
+/* The calendar face wears the app's own calendar mark (`SM_CAL_SVG`, state.js)
+   — the same art the topbar's Calendar tab wears, rather than a second
+   calendar drawn from scratch. Its way back is a list glyph; that one has no
+   twin anywhere, so it is drawn here, filled rather than stroked to match. */
+const GUIDE_LIST_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 5.6h2.1v2.1H4V5.6Zm4.6 0H20v2.1H8.6V5.6ZM4 10.95h2.1v2.1H4v-2.1Zm4.6 0H20v2.1H8.6v-2.1ZM4 16.3h2.1v2.1H4v-2.1Zm4.6 0H20v2.1H8.6v-2.1Z"/></svg>`;
+
+/* `GUIDE_CHEV_SVG` went with the collapse feature. Its one lesson is kept
+   because it applies to every glyph in this app's chrome: a chevron must be a
+   PATH, not the text `›`. A character sits on a baseline, so centring it in a
+   flex box centres its line box and not its ink, and it rides a pixel or two
+   high at every size; an SVG's viewBox centre IS the ink's centre. The day
+   panel's fold chevron (`_guideCalDayPanel`) is drawn that way for the same
+   reason. */
+
+/* ── THE GUIDE'S MONTH ───────────────────────────────────────────────────────
+   A month at a glance in a 254px column: the numbers, and a dot under the days
+   that hold something. No chips, no drag, no week selection — all of that
+   already exists one tab away in `buildCalendarMonth`, and cramming it in here
+   would be a second, worse calendar rather than a window onto the same one.
+
+   It shares `state.calendar.monthOffset` with that view (so paging here pages
+   there, and `_calRerender` already repaints both), and it reads the same
+   `_calItems` / `_calGridStart` / `CAL_KIND`, so the two can never disagree
+   about what is on a day. Weeks start on Sunday because the full calendar
+   does — the reference this was drawn from starts on Monday, and matching it
+   would have put two different week starts in one app. */
+function buildGuideMiniCal() {
+  const first = _calMonth();
+  const start = _calGridStart(first);
+  const end   = _calDay(start, 41);
+  const today = _calToday();
+  const todayISO = _calISO(today);
+
+  const items = _calItems(start, end).filter(_calMatch);
+  const byDay = {};
+  items.forEach(it => { if (it.date) (byDay[_calISO(it.date)] ||= []).push(it); });
+
+  /* THE WAIT IS A SPAN, NOT TWO DOTS. A submission is two dated facts — the day
+     it went and the day an answer is expected — and between them sit days that
+     belong to it just as much: they are the wait. Two lone dots made the
+     calendar say "something on the 13th, something on the 16th" when what is
+     true is "the App Store has had this since the 13th".
+     So every day from sent through expected-decision is banded, and only while
+     the platform is still `in_review` — once a store has answered there is no
+     wait left to draw. Overlapping platforms make ONE band: the question a
+     glance asks is "am I waiting on anything today", not "on how many". */
+  const span = new Set();
+  /* BUT THE ENDS ARE NOT FUSED WITH IT, and running them off the union is the
+     bug this fixes (v6.56). The band is a UNION on purpose — "am I waiting on
+     anything today" — while the day an answer is due is a fact belonging to ONE
+     submission, and a union cannot hold two of them. `run-close` was derived as
+     `!span.has(tomorrow)`, so a wait whose decision day fell INSIDE a longer
+     wait simply lost its terminal: Steam out 11 → 19 with Mac out 14 → 17 drew
+     one filled box, on the 19th, and the month said nothing at all about the
+     17th. Two platforms, one answer.
+
+     This is the same lesson as `run-open`/`run-close` vs `span-start`/
+     `span-end` one level further in. That pair was separated because a WEEK
+     boundary is not a wait's end; this separates them because another wait's
+     span is not a wait's end either. The stroke is the union's; the terminals
+     are each submission's own, and they are collected here from `_calWaits`
+     directly.
+
+     A day where two waits are due gets ONE box — it is a mark on a DAY, and the
+     day panel is what names which stores. */
+  const due = new Set();
+  _calWaits().forEach(w => {
+    for (let d = new Date(w.from); d <= w.to; d = _calDay(d, 1)) span.add(_calISO(d));
+    due.add(_calISO(w.to));
+  });
+
+  /* ── OR THE SAME FACT AS ONE RULE PER SUBMISSION ──────────────────────────
+     The second presentation (`state.calWaitStyle === 'stripe'`). The band above
+     answers "am I waiting on anything today" and deliberately collapses every
+     wait into one stroke; this answers "on what", by giving each submission a
+     lane of its own under the number — and, because a lane belongs to exactly
+     one submission, something to press.
+
+     THE LANES ARE ORDERED ONCE, FOR THE WHOLE MONTH, not per day. A wait that
+     picked its row from the days it happens to cover would jump lanes the
+     moment another one started or ended beside it, and a run that changes row
+     mid-week is not a run. Sorted by send date, then by platform id so the
+     order is stable across renders. */
+  const stripes = state.calWaitStyle === 'stripe';
+  const lanes   = stripes ? _calWaitLanes() : [];
+  /* The lane block is reserved for EVERY cell, present or not, or a day that
+     gains a wait gets taller and shoves its row — the same rule the 4px dot
+     strip already lives by. Height derived from the count, never typed:
+     3px a strip with 2px between them. */
+  const laneH = lanes.length ? lanes.length * 3 + (lanes.length - 1) * 2 : 0;
+
+  const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const head = DOW.map(d => `<span class="gcal-dow">${d}</span>`).join('');
+
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const d    = _calDay(start, i);
+    const iso  = _calISO(d);
+    const out  = d.getMonth() !== first.getMonth();
+    const list = byDay[iso] || [];
+    const launch = list.some(it => it.isLaunch);
+    /* ONE DOT PER STATE, never one per item — a day with four marketing items
+       would otherwise grow a row of identical dots and push the grid around.
+       It used to be one per KIND, which answered "did this come from the
+       Marketing tab or the Submission tab"; a glance at a month asks "is
+       anything waiting on me today", and that is a state. Launch day is
+       neither: it takes the whole cell, as it does in the big calendar, so it
+       is excluded here rather than printing a green dot inside a green box. */
+    const states = [...new Set(list.filter(it => !it.isLaunch).map(_calStatus))];
+    /* An ESTIMATED day gets a hollow dot rather than a filled one, so a date
+       the app worked out and a date something really happened on are not the
+       same mark. A day holding both is filled — a fact outranks a guess. */
+    const estOnly = s => list.some(it => _calStatus(it) === s && it.isDecision)
+                      && !list.some(it => _calStatus(it) === s && !it.isDecision);
+    /* `--d` rather than a bare background, because the hollow variant draws the
+       same colour as an inset ring and hard-coded #4ADE80 for a year — so a
+       decision dot stayed green no matter what its state was. One custom
+       property, two treatments, no second copy of the colour. */
+    const dots = states.map(s => `<span class="gcal-dot${estOnly(s) ? ' is-est' : ''}" style="--d:${CAL_STATUS[s]}"></span>`).join('');
+    /* The band's ends are rounded and its middle is square, so consecutive days
+       read as one stroke. A ROW EDGE counts as an end: the band cannot flow
+       from Saturday to Sunday, it starts again on the next line — which is what
+       `i % 7` is doing here, not arithmetic on dates. */
+    /* THE ROUNDED CAP AND THE TERMINAL ARE TWO DIFFERENT QUESTIONS, and running
+       them off one test is the bug this would otherwise have shipped with.
+
+       `span-start` / `span-end` are about the RUN AS DRAWN: a row edge counts,
+       because the band cannot flow from Saturday to Sunday and has to round off
+       where the line breaks. `run-open` / `run-close` are about the WAIT: the
+       day it was sent and the day an answer is due, which a week boundary knows
+       nothing about. Sharing the test would have stuck a terminal on every
+       Saturday the band crossed — the calendar claiming a submission ended
+       there because the grid ran out of week.
+
+       (An `is-waited` class rode along here for two versions, marking the days
+       already spent so the band could fill toward its end. It went in v6.48 —
+       a calendar already says where today is, and the split restated position
+       in colour. The argument is kept in style.css beside the band.)
+
+       AND `run-close` NO LONGER COMES OFF THE BAND AT ALL — see `due` above. It
+       was `!closes`-shaped, which made a second wait's decision day invisible
+       whenever a longer wait was still running through it. The cap stays the
+       union's; the terminal is the submission's. */
+    const inSpan = span.has(iso);
+    const opens  = !span.has(_calISO(_calDay(d, -1)));
+    const closes = !span.has(_calISO(_calDay(d,  1)));
+    const spanCls = (!inSpan || stripes) ? '' :
+      ' in-span'
+      + ((i % 7 === 0 || opens)  ? ' span-start' : '')
+      + ((i % 7 === 6 || closes) ? ' span-end'   : '')
+      /* `opens` still decides the rounded cap through `span-start`, but it no
+         longer emits a class: the send day stopped taking a filled box in
+         v6.53. Only the day an answer is due fills — a date already behind you
+         cannot be acted on, and this grid does not draw a fact and a guess as
+         the same kind of mark. The long version is in style.css beside the
+         rule. */
+      + (due.has(iso) ? ' run-close' : '');
+
+    const base = `gcal-day${out ? ' is-out' : ''}${iso === todayISO ? ' is-today' : ''}${launch ? ' is-launch' : ''}${iso === state.guideCalDay ? ' is-picked' : ''}`;
+    const tip  = escHtml(list.map(it => it.label).join(' · ') || '');
+
+    if (!stripes) {
+      /* `data-iso` is what lets the lede light a wait's own days on hover
+         (`gcalWaitHover`, app.js) without re-rendering the month. The date was
+         already in the cell — inside the `onclick` string — and reading it back
+         out of an attribute is the difference between a lookup and parsing a
+         handler. Band mode only: stripe mode has its own per-lane focus. */
+      cells += `
+        <button class="${base}${spanCls}" data-iso="${iso}" onclick="guideCalOpen('${iso}')" title="${tip}">
+          <span class="gcal-num">${d.getDate()}</span>
+          <span class="gcal-dots">${dots}</span>
+        </button>`;
+      continue;
+    }
+
+    /* A run's ends are its OWN dates here, not the band's set — each lane is
+       one submission, so `is-start` is the day it was sent and `is-end` the day
+       an answer is due. A row edge still counts as both, for the band's reason:
+       nothing can flow from Saturday to Sunday. */
+    const strips = lanes.map(w => {
+      if (d < w.from || d > w.to) return `<span class="gcal-strip is-off"></span>`;
+      const cls = (i % 7 === 0 || _calDay(d, -1) < w.from ? ' is-start' : '')
+                + (i % 7 === 6 || _calDay(d,  1) > w.to   ? ' is-end'   : '')
+                + (state.guideCalWait ? (state.guideCalWait === w.pid ? ' is-focus' : ' is-dim') : '');
+      return `<button class="gcal-strip${cls}" style="--s:${CAL_STATUS.waiting}"
+                      onclick="guideCalWaitOpen('${w.pid}','${iso}')"
+                      title="${escHtml(w.label)} — in review"></button>`;
+    }).join('');
+
+    /* THE CELL STOPS BEING A BUTTON, because buttons cannot nest — the same
+       thing the day panel's three-control rows already do. The number and its
+       dots keep the whole press through `.gcal-day-main`, so the day is opened
+       by exactly the same gesture and the strips are extra targets under it
+       rather than a slice taken out of the old one. */
+    cells += `
+      <div class="${base} is-stripe">
+        <button class="gcal-day-main" onclick="guideCalOpen('${iso}')" title="${tip}">
+          <span class="gcal-num">${d.getDate()}</span>
+          <span class="gcal-dots">${dots}</span>
+        </button>
+        <span class="gcal-strips">${strips}</span>
+      </div>`;
+  }
+
+  const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return `
+    <div class="gcal">
+      ${_guideCalLede()}
+      <div class="gcal-head">
+        <span class="gcal-month">${escHtml(monthName)}</span>
+        <span class="gcal-nav">
+          <button class="gcal-arrow" onclick="calShiftMonth(-1)" aria-label="Previous month">‹</button>
+          <button class="gcal-today" onclick="calToday()">Today</button>
+          <button class="gcal-arrow" onclick="calShiftMonth(1)" aria-label="Next month">›</button>
+        </span>
+      </div>
+      <div class="gcal-grid${stripes ? ' has-lanes' : ''}" style="--lane:${laneH}px">${head}${cells}</div>
+      ${_guideCalDayPanel(byDay)}
+    </div>`;
+}
+
+/* ── WHY THE MONTH IS OPEN, AND WHEN EACH STORE ANSWERS ──────────────────────
+   Pressing Submit throws the guide onto this face (see `_doFinalSubmit`), and a
+   surface that changes under you without saying why is a glitch. This block is
+   the why, and since v6.52 it is also the ONE PLACE THAT MAPS A STORE TO ITS
+   DATE.
+
+   **IT LISTS, IT NO LONGER SUMMARISES, and that is the correction.** It used to
+   print one sentence — "2 stores have your build. First answer expected Thu,
+   Sep 17." — which tells you how many and when the EARLIEST lands, and never
+   which is which or when the second one does. With one submission that sentence
+   was complete; with two it was a summary standing in for the thing you wanted.
+   One row per wait now, soonest first, the store on the left and its date on
+   the right.
+
+   **THE PER-PLATFORM TIMELINE WAS NEVER A GRID PROBLEM, and it cost two
+   attempts to learn that.** The stripe gave each submission its own lane and was
+   rejected for the card height it ate (+42px a lane); the progress fill gave the
+   band a filled half and came out because a calendar already says where today
+   is. Both were trying to make a GLANCE surface answer a READING question. The
+   grid's job is *am I waiting on anything today*, and it answers that by fusing
+   every wait into one stroke — deliberately. *On what, and when* is prose, and
+   this is the prose that was already here, already persistent, already printing
+   a store and a date. It only had to stop counting.
+
+   So the split is clean and neither surface pays for the other: the band costs
+   no text, the list costs no cell. And the list costs nothing new in colour
+   either — the date keeps the wait's own yellow, which is what makes this block
+   and the band below it read as one fact rather than two things about the same
+   week.
+
+   It exists ONLY while something is actually in review — the phases past the
+   wait have had their answer, and a line that outlives its fact is the reason
+   nobody reads the next one. Not dismissible, for the same reason: it is not a
+   notification, it is the state of the month you are looking at, and it leaves
+   on its own the moment that state ends.
+
+   **No cap yet, and that is deliberate rather than overlooked.** Each row is
+   ~16px of card, so five platforms would be five rows; the honest moment to pick
+   a cap is when a real submission set has that many, not now against an invented
+   one. If it needs one, the shape to copy is the stripe's `GCAL_MAX_LANES` — a
+   number and a "+N more", not a scrollbox.
+
+   The link stays violet with an arrow, the card's rule for a link that leaves,
+   and it stays LAST: it is the answer to "there is nothing to do here", which
+   only lands once the reader knows what they are waiting on. */
+function _guideCalLede() {
+  /* `_calWaits` is the same source the band and the day panel read, so this
+     cannot disagree with them about who is waiting or until when. Sorted by the
+     decision date because the soonest answer is the one a glance wants. */
+  const waits = _calWaits().slice().sort((a, b) => a.to - b.to);
+
+  const fmt = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  /* ── THE HEADING IS GONE, AND WITH IT THE LAST REASON THE ROWS WERE UNEQUAL
+     (v6.62) ──────────────────────────────────────────────────────────────────
+     It said "Answers expected", then "In review" (v6.59), and both were right
+     about the rows under them and wrong about the block. Jaco: *"quizás puedes
+     quitar el IN REVIEW, y que las plataformas y el launch day estén igual de
+     espaciados, porque queda raro."*
+
+     **A heading over PART of a list forces the rest of it to be set apart.**
+     That is the whole chain this removes. IN REVIEW was true of the stores and
+     false of Launch day, so Launch day had to be pushed below it — first with a
+     rule, then (v6.62) with double the gap — and every version of that gap was
+     paying for a label that only covered two thirds of what it sat over.
+     Take the label out and the block is one list of dated things in this month,
+     evenly spaced, which is what it always was.
+
+     **Nothing is lost, because the rows never needed telling apart in words.**
+     Each already says which kind it is twice: a store wears its platform mark
+     and a yellow date, Launch day a green dot and a green date — and those two
+     hues are `CAL_STATUS.waiting` and `CAL_STATUS.launch`, the same colours
+     their days wear in the grid three inches below. Colour does the sorting the
+     heading was doing, and does it per row rather than per group.
+
+     It also buys back 19px of a 254px column — the label plus its clearance —
+     on a face whose whole argument is that it is read at a glance.
+
+     If a heading ever comes back, note what it has to clear first: it must be
+     true of EVERY row, or the block goes back to being two groups with a step
+     between them. "In review" was not, which is the fact that took three
+     versions to surface. */
+
+  /* THE MARK LEADS THE NAME, as it does on every other list in this app — the
+     card's step rows, the guide's checklist, the pinned nav's pills. A row that
+     puts it after the label makes this the one place where that is not true.
+
+     It is NOT sized by the argument (`smMarkFor(pid)` → width="100%"): the slot
+     is a span sized in CSS, which is the lesson `.active-card-icon svg` and
+     `.ios-step-num svg` are both written under. Xbox and Nintendo have no
+     measured mark yet and fall through to `platformIcon`, whose own svg is
+     sized by the same rule — so the fallback cannot come out a different size.
+
+     And it wears the store name's OWN COLOUR, not the date's yellow. The mark
+     and the label are one half of this row — which store — and the date is the
+     other. Tinting the mark yellow would split the name from its own icon and
+     make two of the three things on the line claim to be the value. */
+  /* A ROW POINTS AT ITS OWN DAYS (v6.57). The band below fuses every wait into
+     one stroke by design — that is how it answers "am I waiting on anything
+     today" — so it cannot say WHICH days are the App Store's. This list names
+     the store and the date; hovering a row is what joins the two, lighting that
+     submission's run in the grid for as long as the pointer is on it.
+
+     It is a HOVER, not a state, and that is what makes it affordable: the
+     stripe presentation answered the same question permanently and cost +42px
+     of card per lane. A transient mark costs nothing and is gone the moment you
+     stop asking. `mouseenter`/`mouseleave` rather than `mouseover`/`mouseout`,
+     which fire again for every child the pointer crosses. */
+  /* **THE ROW IS A BUTTON NOW, AND THAT IS WHAT BUYS THE POINTER (v6.58).** The
+     hover was doing real work and saying so with nothing — a highlight that
+     appears only if you happen to pass over the right 250×18 strip is a feature
+     you find by accident. A `cursor: pointer` announces it, and this app does
+     not put a pointer on something that cannot be pressed, so the press had to
+     become real rather than the cursor become a lie.
+
+     What it does is the hover MADE PERMANENT, not a second idea:
+     `guideCalWaitOpen` already opens a day and focuses a submission, and the
+     day it opens is that wait's own decision date — the one this row prints.
+     Hover previews, press pins and names it in the panel. Pressing the same row
+     again lets go, because that function already toggles.
+
+     `type="button"`, since a bare `<button>` inside anything that ever becomes
+     a form submits it. */
+  const rows = waits.map(w => `
+    <button type="button" class="gcal-lede-row"
+            onclick="guideCalWaitOpen('${w.pid}','${_calISO(w.to)}')"
+            onmouseenter="gcalWaitHover('${w.pid}')" onmouseleave="gcalWaitHover(null)">
+      <span class="gcal-lede-mark">${smMarkFor(w.pid) || platformIcon(w.pid, 15, 'white')}</span>
+      <span class="gcal-lede-store">${escHtml(w.label)}</span>
+      <span class="gcal-lede-when">${escHtml(fmt(w.to))}</span>
+    </button>`).join('');
+
+  /* ── AND THE LAUNCH DAY, WHICH IS NOT AN ANSWER ANYONE OWES YOU ─────────────
+     Jaco's, and the separation is the whole of the design. Everything above is
+     a date a STORE will hand you; this is the one date you choose. Dropped into
+     that list it would sit under a heading reading IN REVIEW and claim to be a
+     fourth store in a state it is not in — so it is a row of its own, below,
+     set apart by SPACE and no heading, because a single labelled fact does not
+     need a column name. (It had a 1px rule until v6.62; the block already ends
+     in a `.10` boundary and a second horizontal line inside it was position's
+     job drawn twice. The distance it was holding is unchanged — see
+     `.gcal-lede-launch` in style.css.)
+
+     **IT IS ALWAYS HERE, and that is why this function no longer returns early
+     on an empty `waits`.** The waits come and go with the review; the launch
+     date is true about the month whether or not anything is out, and a control
+     that vanishes when you cancel your last submission is a control nobody can
+     rely on. With nothing in review the block IS this row.
+
+     **The green is not decoration — it is the same green the cell wears**, and
+     that is the point of putting it here: the row and the box on the 29th are
+     one fact stated twice, exactly as the waits' yellow dates and their band
+     are. `CAL_STATUS.launch` rather than a literal, so a change to the table
+     moves both.
+
+     **A NATIVE `type="date"`, not a popover of our own.** The app already edits
+     this field with one in Release Timing (`#ob-date`), and a second date UI for
+     one value is how two pickers start disagreeing about what a valid date is.
+     It writes through `setLaunchDate`, which is the same function that row
+     calls — so the guide, the checklist, the dashboard timeline and the month
+     cannot drift.
+
+     Empty is a real state: with no date the row says *Not set* and the month
+     draws no green box, which is honest — `formData.releaseDate` ships
+     pre-filled, but nothing guarantees it stays that way. */
+  const launchISO = (state.formData || {}).releaseDate || '';
+  const launchTxt = launchISO ? fmt(new Date(launchISO + 'T00:00:00')) : 'Not set';
+  const launchRow = `
+    <label class="gcal-lede-launch${launchISO ? '' : ' is-unset'}">
+      <span class="gcal-lede-launch-dot" style="--d:${CAL_STATUS.launch}"></span>
+      <span class="gcal-lede-launch-label">Launch day</span>
+      <span class="gcal-lede-launch-when">${escHtml(launchTxt)}</span>
+      <input type="date" class="gcal-lede-launch-input" value="${escHtml(launchISO)}"
+             onchange="setLaunchDate(this.value)">
+    </label>`;
+
+  return `
+    <div class="gcal-lede">
+      ${rows}
+      ${launchRow}
+      <button class="gcal-lede-go" onclick="setView('broadcast')">Line up your launch →</button>
+    </div>`;
+}
+
+/* ── THE DAY OPENS DOWNWARDS ─────────────────────────────────────────────────
+   A day in the grid used to jump to the Calendar tab, which is a big move for
+   a small question ("what is on the 18th?") and threw away the month you were
+   looking at. It expands the panel instead: the grid stays, the day's items
+   come out underneath it, and the way to the full calendar is a link rather
+   than a side effect of pointing at a date.
+
+   Its rows are `.mcal-task`, the same class the Calendar tab's checklist uses,
+   and the tick calls the same `calToggleDone(key)` — so a thing ticked here is
+   ticked there, with no second model of doneness. Adding writes the same
+   `state.calendar.custom` record `calDraftSave` writes; the difference is only
+   how much it asks for. A title, here. The kind, the note and the repeat are
+   what the popover in the big calendar is for. */
+/* EVERY WAIT CURRENTLY RUNNING, AS DATED FACTS — one function, because two
+   surfaces need the same answer and they must not be able to disagree about it.
+   The month's band is drawn from this and so is the day panel's wait line; the
+   band used to build its own Set inline, which was fine while it was the only
+   consumer and is exactly how the second consumer starts to drift.
+
+   Only `in_review` produces a wait: once a store has answered there is nothing
+   left to be waiting through. The end date is `Math.ceil`ed because a calendar
+   cell is a whole day and the submitted card ceilings the same number — the two
+   surfaces print the same date or they are a bug (that one really happened: the
+   card said Sep 15 and the calendar Sep 16 from one raw 2.2).
+
+   `macos` has no row in `OB_PLATFORM_TIMING` and falls through to iOS's, which
+   is not a fudge: a Mac App Store build goes through App Store review. */
+function _calWaits() {
+  return Object.entries(state.platformFlipped || {})
+    .filter(([, f]) => ((f && f.phase) || 'in_review') === 'in_review')
+    .map(([pid, f]) => {
+      const t    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+      const from = f && f.time ? new Date(f.time) : _calToday();
+      const a    = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+      return { pid, label: t.label, from: a, to: _calDay(a, Math.ceil(t.days)) };
+    });
+}
+
+/* THE LANES, ORDERED AND CAPPED. One row per submission, in a fixed order, so
+   a run stays on its own line across the whole month.
+
+   **THREE IS THE CAP, AND IT IS A HEIGHT DECISION.** Every lane costs 5px on
+   all 42 cells — 3 of strip and 2 of gap — which is 30px of card at two lanes
+   and 210 at seven. The guide's card is a column beside the app, not a
+   calendar, and at some point the month stops fitting. Three is the most it
+   can carry and still be a glance; beyond that the strips are 3px apart and
+   indistinguishable anyway. Anything over the cap is simply not drawn, which
+   is honest as long as the day panel still names every wait — it does, from
+   `_calWaits`, which this only ever sorts a copy of. */
+const GCAL_MAX_LANES = 3;
+function _calWaitLanes() {
+  return _calWaits()
+    .sort((a, b) => (a.from - b.from) || (a.pid < b.pid ? -1 : a.pid > b.pid ? 1 : 0))
+    .slice(0, GCAL_MAX_LANES);
+}
+
+function _guideCalDayPanel(byDay) {
+  const iso = state.guideCalDay;
+  if (!iso) return '';
+  const d    = new Date(iso + 'T00:00:00');
+  const list = byDay[iso] || [];
+  const head = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  /* The waits covering THIS day, from the same `_calWaits` the month's band is
+     drawn from — so the line under the grid and the stroke across it cannot
+     disagree about which days are inside a wait. `"Nothing on this day"` is
+     then gated on both: with a wait running, that sentence is simply false. */
+  const waits = _calWaits().filter(w => d >= w.from && d <= w.to);
+  /* THE LINE COUNTS THE DAY, it does not restate the wait — and the first
+     version did, which is what reading it on screen showed.
+
+     It said "App Store has had this since Sep 15 · answer expected Sep 18",
+     which is almost word for word `_guideCalLede`'s sentence printed above the
+     month ("App Store has your build. Answer expected Fri, Sep 18") — on screen
+     at the same time, on every day of the span. A panel that repeats the header
+     is spending the one surface that could say something about THIS day. It
+     also ran to 34 characters in a 254px mono column and wrapped, which is how
+     the duplication got noticed.
+
+     "Day 3 of 3 with the App Store" is the submitted card's own `Day N of M`,
+     borrowed rather than invented — same fact, same phrasing, third surface.
+
+     **BOTH ENDS ARE EXCLUDED, and not for length.** The decision day already
+     carries a real dated item ("App Store decision expected") and the send day
+     carries "Sent to App Store"; a line above either of them saying the same
+     thing in other words is the duplication this note is about, one day further
+     along at each end. Jaco, on the send day: *"al menos en el día 1 y el final,
+     con poner el Sent debería valer, el 1/3 y 1/8 me sobran bastante."*
+
+     **The rule this settles into is worth stating once: the wait speaks only on
+     the days nothing else does.** The two ends of a span are EVENTS and the
+     calendar already draws them as items — that is what `sent-<pid>` and
+     `decide-<pid>` are. The days in between are the only ones with no item of
+     their own, and a day counter is exactly the right thing to print on a day
+     where nothing happened. So the test is the open interval, `from < d < to`,
+     not a pair of special cases: anything that ever adds a third dated item to a
+     span should exclude its day too.
+
+     It also keeps `N of M` honest at the far end. The span is `from` through
+     `from + ceil(days)`, which is M+1 cells, so the last day would have read
+     "Day 4 of 3". */
+  /* THE PRESSED STRIP HAS TO LAND SOMEWHERE WORTH ARRIVING AT, which is the
+     whole argument for making it clickable at all. A strip that only opened the
+     day would be a second, thinner copy of the cell above it.
+
+     So a focused wait prints its own block: the store, both of its dates, and
+     where it is in between. Those are facts the month cannot show — the band
+     and the strip both say "a wait covers this day" and neither can say WHOSE
+     or HOW FAR — and they are the ones you press a strip to ask for.
+
+     Focus is not per day. Pressing any day of a run focuses the SUBMISSION, so
+     walking along it keeps the block and only the "Day N" changes. It is
+     rendered only while the day being shown is inside that wait, or the panel
+     would go on describing a submission you have navigated away from. */
+  const focus = state.guideCalWait
+    ? waits.find(w => w.pid === state.guideCalWait)
+    : null;
+  /* ── `n` COUNTS ELAPSED DAYS, AND IT USED TO COUNT CELLS (fixed v6.62) ───────
+     It was `+ 1`, so the send day read "Day 1 of 3" — and that was consistent
+     only because the ends were printed: with the send day showing 1 and the
+     decision day excluded, the span's four cells ran 1, 2, 3, [item], and the
+     day BEFORE the answer claimed to be the last one. On a 14 → 17 wait Sep 16
+     read "Day 3 of 3" with a whole day still to come.
+
+     With both ends now silent (see the panel's note) the interval is exactly the
+     days that have passed and none that have not, so the number is a subtraction
+     with nothing added: Sep 15 is "Day 1 of 3", Sep 16 "Day 2 of 3", and Sep 17
+     is the answer rather than a day of waiting. `m` is unchanged — `to − from`
+     is already `ceil(days)`, the same rounding the calendar's decision item uses.
+
+     Worth noticing how it hid: the off-by-one was true for the whole life of the
+     line and invisible because the row it contradicted ("Sent to…") sat right
+     above it saying Day 1 on the day nothing had elapsed yet. Removing the
+     duplication is what exposed the arithmetic under it. */
+  const focusBlock = !focus ? '' : (() => {
+    const n = Math.round((d - focus.from) / 864e5);
+    const m = Math.round((focus.to - focus.from) / 864e5);
+    const f = x => x.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return `
+      <div class="gcal-focus">
+        <div class="gcal-focus-head">
+          <span class="gcal-focus-dot"></span>
+          <span class="gcal-focus-name">${escHtml(focus.label)}</span>
+          <span class="gcal-focus-state">in review</span>
+        </div>
+        <div class="gcal-focus-line">Sent ${escHtml(f(focus.from))}<span class="gcal-wait-sep">·</span>answer expected ${escHtml(f(focus.to))}</div>
+        ${focus.from < d && d < focus.to ? `<div class="gcal-focus-line">Day ${n} of ${m}. Nothing to do until they answer.</div>` : ''}
+      </div>`;
+  })();
+
+  const waitLines = waits.filter(w => w.from < d && d < w.to && w !== focus).map(w => {
+    const n = Math.round((d - w.from) / 864e5);   // elapsed, not cells — see above
+    const m = Math.round((w.to - w.from) / 864e5);
+    return `<div class="gcal-panel-wait">Day ${n} of ${m} with the ${escHtml(w.label)}</div>`;
+  }).join('');
+
+  /* A ROW IS THREE CONTROLS, NOT ONE. It was a single `.mcal-task` button that
+     ticked the item — which is all the Calendar tab's checklist needs, because
+     everything else about an item is a double-click away in that view's
+     popover. Treat this panel as the only surface there is and one button is
+     not enough: the kind was unreachable and nothing could be removed. So the
+     dot sets the kind, the label ticks, and the × removes. A `<div>` and not a
+     `<button>`, because buttons cannot nest. */
+  const rows = list.map(it => {
+    const k = CAL_KIND[it.kind] ? it.kind : 'marketing';
+    /* THE DOT NOW CARRIES TWO FACTS AT ONCE, and it has to, because there is
+       one slot and the colour was taken away from it. Its FILL is the item's
+       state and its SHAPE is its kind — square Submission, round Marketing —
+       so pressing it visibly changes something (the shape) even though the
+       colour it is wearing is not the thing being cycled. A control whose only
+       feedback is a hue it does not own would have been unpressable in the
+       dark. The tooltip still says the kind in words. */
+    /* **A DERIVED ITEM LOSES ALL THREE CONTROLS** — see `_calIsDerived` for why
+       each of them is a lie on one. It keeps the row's shape, the kind's shape
+       and the state's colour, because those are all still TRUE about it; only
+       the three presses go. No `is-static` styling beyond `cursor: default` and
+       the missing ×: a fact that looked different from an item would be a
+       second vocabulary for "this is on the 17th". */
+    if (_calIsDerived(it)) {
+      return `
+    <div class="gcal-row is-static" style="--k:${_calColor(it)}">
+      <span class="gcal-kind is-${CAL_KIND[k].shape}" title="${escHtml(CAL_KIND[k].label)}"></span>
+      <span class="gcal-row-label">${escHtml(it.label)}</span>
+    </div>`;
+    }
+    return `
+    <div class="gcal-row${_calDone(it) ? ' is-done' : ''}" style="--k:${_calColor(it)}">
+      <button class="gcal-kind is-${CAL_KIND[k].shape}" onclick="guideCalCycleKind('${it.key}')"
+              title="${escHtml(CAL_KIND[k].label)} — press to change"></button>
+      <button class="gcal-row-label" onclick="calToggleDone('${it.key}')" title="Tick it off">${escHtml(it.label)}</button>
+      <button class="gcal-row-x" onclick="guideCalRemove('${it.key}')" aria-label="Remove" title="Remove">×</button>
+    </div>`;
+  }).join('');
+
+  const nextKind = CAL_KIND[state.guideCalKind] ? state.guideCalKind : 'marketing';
+
+  return `
+    <div class="gcal-panel">
+      ${/* THE HEAD IS THE CLOSER, and it is a fold, not an ×. The × that was
+            here sat a few pixels above the rows' own ×, which REMOVE an item —
+            two of the same glyph that close together meaning "put this away"
+            and "destroy this" is the one adjacency worth designing out. A
+            chevron pointing up says fold, says it in a different shape from
+            delete, and lets the whole header be the target instead of an 18px
+            box in a corner. */''}
+      <button class="gcal-panel-head" onclick="guideCalOpen('${iso}')" title="Fold this day away">
+        <span class="gcal-panel-date">${escHtml(head)}</span>
+        <svg class="gcal-panel-fold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+      </button>
+      ${/* THE WAIT IS A FACT ABOUT THE DAY, AND THE PANEL USED TO DENY IT.
+            Measured on a banded Thursday: the grid painted the cell as occupied
+            and the panel one inch below printed "Nothing on this day". Both
+            were reading the same state and saying opposite things — the band
+            comes from `platformFlipped`, the list from `_calItems`, and only
+            the second one had ever been asked. The send day and the decision
+            day each carry a real item, so the hole was every day in between:
+            exactly the days the band exists to draw.
+
+            It is a STATEMENT, not a row — no kind dot, no tick, no ×. Those
+            three controls are for things you can change, and you cannot tick
+            off "Apple is still reading it". Same argument as `_guideCalLede`
+            one surface up: not a notification, just the state of the day you
+            are looking at, and it leaves when the wait does.
+
+            **AND IT IS NOT PRINTED ON EITHER END ANY MORE (v6.62).** It used to
+            be, on the argument that an EVENT and a STATE are different facts —
+            "Sent to App Store" is what happened, "they have had it since the
+            15th" is what is true. That is a real distinction and it still did
+            not earn a line: on the send day the panel read "Day 1 of 3 with the
+            Mac App Store" directly above "Sent to Mac App Store", two lines in a
+            254px mono column whose only difference is one of tense. With two
+            platforms out it was four lines. Jaco: *"con poner el Sent debería
+            valer, el 1/3 y 1/8 me sobran bastante."*
+
+            So the rule is the one the paragraph above already implies: the wait
+            speaks on the days nothing else does. Both ends carry a dated item of
+            their own (`sent-<pid>`, `decide-<pid>`) — which is also what
+            guarantees the panel is never left empty by this — and the open
+            interval between them is the hole the band exists to draw.
+
+            The cost, and it is small: on the send day the panel no longer states
+            how LONG the wait is. That fact is on screen twice already — the lede
+            above the month prints the answer date for every wait, and the card
+            prints "Usually 3 days". */''}
+      ${focusBlock}
+      ${waitLines}
+      ${rows || (waitLines || focusBlock ? '' : `<div class="gcal-panel-empty">Nothing on this day</div>`)}
+      ${/* The add row's dot is the same control one step earlier: it shows the
+            SHAPE of what you are about to type, so the kind is chosen in the
+            same gesture as the typing. Its fill is `todo`, because that is what
+            a thing you have not written yet is. */''}
+      <div class="gcal-add" style="--k:${CAL_STATUS.todo}">
+        <button class="gcal-kind is-${CAL_KIND[nextKind].shape}" onclick="guideCalNextKind()"
+                title="${escHtml(CAL_KIND[nextKind].label)} — press to change"></button>
+        <input class="gcal-add-input" id="gcal-add-input" type="text" placeholder="Add to this day…"
+               onkeydown="if(event.key==='Enter'){guideCalAdd('${iso}')}else if(event.key==='Escape'){this.value=''}">
+        <button class="gcal-add-go" onclick="guideCalAdd('${iso}')" aria-label="Add" title="Add">+</button>
+      </div>
+    </div>`;
+}
+
+/* ── SHIPPY, IN ONE LAYER ────────────────────────────────────────────────────
    The guide card is opaque and sits at z-index 1, so it crops whatever is
    behind it at its own top edge — no clip-path needed, unlike the retired
-   glass `.sm-panel`.
+   glass `.sm-panel`. The octopus (z-index 0) is entirely behind it and only
+   what rises above that edge is ever seen.
 
-     BACK  (.guide-mascot, z-index 0)  head and body. Only the 73px above the
-           card's edge is ever seen; the card covers the rest.
-     FRONT (.guide-tentacles, z-index 2, above the card) the two tentacles
-           lying ON the card.
-
-   THE CROP IS THE WHOLE TRICK. The front layer's box starts exactly at the
-   card's top edge and hides its overflow, so a tentacle slid upwards is cut
-   off precisely along that edge. A straight cut on an arbitrary line reads as
-   a clipping bug; a straight cut that lands on the card's own border reads as
-   the tentacle passing behind it. That is why one drawing serves for both
-   halves of the illusion, and why `--shippy-tent-rise` can be tuned without
-   asking for new art.
+   IT USED TO BE TWO, and the second layer is what the live rig removes.
+   `.guide-tentacles` sat at z-index 2, ABOVE the card, holding two static
+   tentacle PNGs whose own flat edge was landed on the card's top border so
+   they read as resting on the panel. That was the right answer for a drawing
+   that could not move; the rig's five arms really are drawn, so there is
+   nothing left to fake and nothing that has to go in front of the card.
 
    Two call sites render this column (the Calendar branch above and the main
    one), which is exactly the split that let the Web platform card drift onto
-   old markup — so both go through here. */
-const SHIPPY_PNG = true;   // prototype: PNG art rather than the procedural SVG
+   old markup — so both go through here.
 
+   NO ID, deliberately, although the recipe this is ported from mounts on
+   `#shippy`: shippy.js's own note explains that this repo wraps three views
+   and anything carrying an id in a rendered column exists more than once.
+   `SHIPPY_LIVE.mount()` is handed the node instead. */
 function shippyLayersHTML() {
-  return `<div class="guide-mascot${SHIPPY_PNG ? ' is-png' : ''}"></div>`
-       + `<div class="guide-tentacles" aria-hidden="true">`
-       +   `<span class="guide-tent guide-tent--l"></span>`
-       +   `<span class="guide-tent guide-tent--r"></span>`
-       + `</div>`;
+  return `<div class="guide-mascot is-live"></div>`;
 }
 
-/* THE BREATH DOES NOT RESTART ON EVERY TAB CHANGE.
+/* SHIPPY_LIVE owns a single SVG node and re-parents it, so re-rendering the
+   guide moves the octopus into the fresh host without rebuilding it — the same
+   thing OCTO does next door, and the reason all of the rig's state (pose,
+   gaze, blink, the click ladder) lives in that module's closures rather than
+   in the DOM. Collapsed the card is 52px wide, so the mascot is left out of
+   that branch; the rig's rAF checks `isConnected` and stops solving arms for
+   an octopus that is not in the document.
 
-   renderGuide() rebuilds this column with innerHTML, which throws away the
-   mascot's DOM node and builds a new one — and an animation on a brand-new
-   element starts at its beginning, so Shippy jerked back to the bottom of his
-   breath every time you switched tabs.
-
-   The answer is the DOCUMENT TIMELINE. An animation created through
-   element.animate() can have its startTime set, and document.timeline is one
-   shared monotonic clock for the whole page. Anchoring every new node's
-   animation to startTime 0 puts them all at the same phase by definition:
-   whatever the old node was doing, the new one is doing the same thing at the
-   same instant. There is no seam to hide.
-
-   I tried the negative-animation-delay trick first — delay -1.4s starts a
-   2.8s cycle halfway in — computing the phase from a clock captured at load.
-   Measured, it still jumped about 2px per tab change; the arithmetic and the
-   element's real phase disagreed. The timeline needs no arithmetic, which is
-   why it is right: nothing to get wrong.
-
-   Keeping the node alive would be the other answer, and it is the one OCTO
-   uses, but it does not survive innerHTML — a node removed from the document
-   and re-inserted has its animations reset too. */
-function shippyBreathe(node) {
-  if (!node || typeof node.animate !== 'function') return;
-  // Someone who has asked their system for less movement gets none.
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  const cs   = getComputedStyle(node);
-  const rise = parseFloat(cs.getPropertyValue('--shippy-bob')) || 0;
-  const secs = parseFloat(cs.getPropertyValue('--shippy-bob-t')) || 0;
-  if (!rise || !secs) return;
-
-  node.getAnimations().forEach(a => a.cancel());
-  const anim = node.animate(
-    [{ transform: 'translateY(0)' },
-     { transform: `translateY(${-rise}px)` },
-     { transform: 'translateY(0)' }],
-    { duration: secs * 1000, iterations: Infinity, easing: 'ease-in-out' },
-  );
-  /* The whole point: phase comes from the shared clock, not from when this
-     node happened to be born. */
-  try { anim.startTime = 0; } catch (e) { /* not yet on a timeline; harmless */ }
-}
-window.shippyBreathe = shippyBreathe;   // the editor re-applies after a change
-
-/* OCTO owns a single SVG node and re-parents it, so re-rendering the guide
-   moves the octopus into the fresh host without restarting its animation.
-   Collapsed the card is 48px wide, so the mascot is left out of that branch.
-   In PNG mode the SVG is not mounted at all — mounting it and hiding it in CSS
-   would leave its requestAnimationFrame loop redrawing an invisible octopus. */
+   `shippyBreathe()` went with the PNG. Its argument did not: the breath is
+   still built with element.animate() at `startTime = 0`, inside shippy-live.js
+   where the node now lives, because re-parenting restarts a CSS animation at
+   0% exactly as innerHTML did. */
 function mountShippy(el) {
-  if (SHIPPY_PNG) { shippyBreathe(el.querySelector('.guide-mascot')); return; }
-  if (typeof OCTO !== 'undefined') OCTO.mount(el.querySelector('.guide-mascot'));
+  if (typeof SHIPPY_LIVE !== 'undefined') SHIPPY_LIVE.mount(el.querySelector('.guide-mascot'));
 }
 
 /* ── EXPERIMENT: Netflix-style top-nav sub-tab drawer ──
@@ -3608,6 +5025,101 @@ function renderSubnav() {
    is only made invisible (.is-off -> visibility:hidden), because dropping the
    element would collapse its box and shove the rest of the row sideways every
    time the selection moved. */
+/* ── ADD PLATFORM IS A SELECTED SUB-NAV PILL, IN THE SUB-NAV ROW ─────────────
+   Jaco: "que reconviertas el add platform button en un botón que sea
+   exactamente igual que una pill seleccionada tipo ASSETS o Distribution, y
+   que lo pongas en el panel central de contenido, alineado a la derecha y
+   centrado verticalmente con la palabra submission."
+
+   THE WORD "SUBMISSION" IS THIS ROW, so the pill has to live here and nowhere
+   else. `.app-subnav-title` is emitted by this function into `#app-subnav`, a
+   flex row with `align-items: center` — which is what makes "vertically
+   centred with the word" a fact of the layout rather than a number anybody has
+   to keep true. Anywhere else (inside `#dashboard`, say) it would be in a
+   different box on a different line and would need an offset to fake it.
+
+   IT IS LITERALLY `.app-subtab.is-on`, not a copy of it. "Exactamente igual"
+   is a requirement the class satisfies by construction: the fill
+   (`--chip-fill`), the white label, the 10/18 padding, `--pill-radius` and —
+   the part that matters most — the masked gradient stroke, which comes from
+   the shared `::after` selector list at the end of style.css rather than being
+   redrawn here. That list's own note is explicit that joining it is the only
+   way "the same stroke" stays true after the next change. So this control
+   cannot drift from Distribution and Assets: it IS them.
+
+   The one thing `.subnav-add-wrap` adds is WHERE — `margin-left: auto` plus a
+   right margin of exactly the guide column, so the pill's border box lands on
+   the content panel's right edge, the mirror of what the first sub-tab's
+   border box does on its left edge. See its rule in style.css.
+
+   It replaces two controls rather than joining them: the `+` square at the end
+   of the platform strip and the picker that REPLACED the pane when it opened.
+   A dropdown is the honest shape for "choose one of these" — it does not cost
+   you the page you were reading to ask. */
+function buildSubnavAddPlatform() {
+  /* The same `inactive` derivation renderDashboard used: everything with a
+     PLATFORMS entry that is not already on and not hidden. HIDDEN_PLATFORMS is
+     filtered here (never offer one) where activePlatforms is not (a hidden one
+     already on keeps its tab) — same asymmetry as before. */
+  const inactive = PLATFORM_ORDER.filter(pid =>
+    PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
+  const open = !!(state.submission && state.submission.addOpen);
+  /* COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo) get the same dimmed, inert,
+     locked row Basic Info's Select Platforms grid gives their tiles. */
+  const lockSVG = `<svg class="add-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
+  const rows = inactive.map(pid => {
+    const label = (PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
+    /* THE MEASURED MARKS, like everywhere else — smMarkFor handles the id
+       aliases (egs→epic, macos→ios) and returns null for the two platforms
+       with no measured art yet (Xbox, Nintendo), which fall through to
+       platformIcon()'s own monochrome path. */
+    const icon = smMarkFor(pid, 18)
+      || ((typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '');
+    if (COMING_SOON_PLATFORMS.has(pid)) {
+      return `<button type="button" class="add-plat-item is-coming-soon" disabled title="Coming soon">
+        ${icon}<span class="add-plat-name">${label}</span>${lockSVG}
+      </button>`;
+    }
+    return `<button type="button" class="add-plat-item" onclick="activatePlatform('${pid}')">
+      ${icon}<span class="add-plat-name">${label}</span>
+    </button>`;
+  }).join('');
+  const body = inactive.length
+    ? `<div class="add-plat-list">${rows}</div>`
+    : `<div class="subnav-add-empty">${t('sub.addPlatform.none') || 'Every available platform is already activated.'}</div>`;
+  const label = t('sub.addPlatform') || 'Add platform';
+  /* LIT ONLY WHILE IT IS THE ONLY THING TO DO. Jaco: "solo estar tan luminoso
+     si no hay nada seleccionado, si no, podría estar un poco más sutil".
+
+     The answer costs no new values, because the object already has two states
+     and this is what they mean. `.app-subtab.is-on` is the app's SELECTED pill;
+     `.app-subtab` bare is the same pill unselected — transparent, white 50%
+     ink, hovering to the same fill. So "subtle" is not a third treatment, it is
+     this control in its other state, and "exactamente igual que una pill" holds
+     in both.
+
+     WHICH ONE IS A FACT ABOUT THE PAGE, not about this button: with no platform
+     activated the Submission tab has nothing on it and adding one is the only
+     act available, which is the file's own standing rule — THE MARK IS FOR WHAT
+     IS OUTSTANDING. Once there are cards to read, the invitation is no longer
+     the point and a full selected pill would make it the loudest thing in a
+     band whose subject is the word "Submission".
+
+     Being OPEN deliberately does not light it. The scrim already makes it the
+     only thing at full strength on the page, and a fill that arrives with the
+     menu would be a second mark saying what the dimming says — and would have
+     to be a new CSS state, since opening does not render. */
+  const lit = state.activePlatforms.size === 0;
+  return `
+    <div class="subnav-add-wrap${open ? ' is-open' : ''}" id="subnav-add-wrap">
+      <button class="app-subtab${lit ? ' is-on' : ''} subnav-add" type="button" id="subnav-add-btn"
+              onclick="toggleAddPlatform(event)"
+              aria-haspopup="true" aria-expanded="${open}"
+              title="${label}" aria-label="${label}"><span class="subnav-add-plus" aria-hidden="true">+</span>${label}</button>
+      <div class="subnav-add-menu" role="menu">${body}</div>
+    </div>`;
+}
+
 function renderAppSubnav() {
   const el = document.getElementById('app-subnav');
   if (!el) return;
@@ -3629,7 +5141,21 @@ function renderAppSubnav() {
       || CAL_VIEW_NAME[state.activeView] || '';
     const curSub = list.find(s => s.id === data.cur);
     const text = (curSub ? (t('subtab.' + curSub.id) || curSub.label) : '') || tabLabel;
-    el.innerHTML = text ? `<span class="app-subnav-title">${text}</span>` : '';
+    /* Submission is the one tab with something to put at the other end of this
+       row — see buildSubnavAddPlatform. Emitted here rather than beside the
+       list branch below because Submission has no sub-sections and so always
+       lands in title mode; the Ctrl+D debug toggle drops every tab in here
+       too, which is why the test is the VIEW and not the mode. */
+    const addPill = state.activeView === 'dashboard' ? buildSubnavAddPlatform() : '';
+    el.innerHTML = (text ? `<span class="app-subnav-title">${text}</span>` : '') + addPill;
+    /* The pill's right margin is measured against the content panel — see
+       _subnavAddSolve. Deferred a frame because #dashboard is laid out by
+       renderDashboard, which on a view change has not necessarily run yet, and
+       a rect read before layout is the "flush first" trap this file already
+       pays for on scroll restores. Guarded: render.js loads before app.js. */
+    if (addPill && typeof _subnavAddSolve === 'function') {
+      requestAnimationFrame(() => { _subnavAddArm(); _subnavAddSolve(); });
+    }
     return;
   }
   el.innerHTML = list.map((s, i) => {
@@ -3772,6 +5298,10 @@ function buildDashboardAnnounceCta() {
 }
 
 function renderDashboard() {
+  // The guide column is rendered beside these cards and reads the same
+  // completion predicates they do — keep the two in step. No-op unless
+  // something actually moved (refreshGuideCompletion).
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
   const el = document.getElementById('dashboard');
   if (!el) return;
 
@@ -3783,66 +5313,501 @@ function renderDashboard() {
   // just below); if one were somehow already active on a project (state
   // predating the hide), its card stays right where it already is.
   const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
-  const inactive = PLATFORM_ORDER.filter(pid => PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
-  const addOpen  = !!(state.submission && state.submission.addOpen);
 
-  // Every activated platform, stacked in a single column.
-  const cards = active.map(pid => buildActiveCard(pid)).join('');
+  /* ONE platform's pane, not every platform's card. buildActiveCard and the
+     four builders under it are still here and still correct — they are what
+     the step modal path and _cacheStepsFaceHeight still measure against — but
+     the Submission tab no longer draws a grid of them. See buildSubmissionTabs. */
+  const tab = submissionTab();
 
-  // Always-present "+ Add platform" banner; clicking it reveals the picker.
-  // COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo — declared further below,
-  // already the source of truth two other call sites filter against) get the
-  // same treatment as Epic/PlayStation's locked tiles in Basic Info's Select
-  // Platforms grid (buildObPlatTilesHTML): greyed out, "+ Add" swapped for a
-  // lock icon, disabled (no onclick), "Coming soon" on hover via title.
-  const addPlatLockSVG = `<svg class="add-plat-lock" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="8" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><path d="M4 6V4a2 2 0 1 1 4 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/></svg>`;
-  const picker = addOpen ? `
-    <div class="dash-add-picker">
-      ${inactive.length
-        ? `<div class="add-plat-list">${inactive.map(pid => {
-            const label = (PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
-            /* THE MEASURED MARKS, like everywhere else. This picker was still
-               on platformIcon(), which returns the brand PNGs from
-               Assets/Platform_Icons — a .webp for Google Play, a .png for
-               Steam — whitened by a CSS filter. Those are the files the tiles
-               and the card headers stopped using when the marks were reframed
-               onto one 39×37 canvas, so this list was the last place showing
-               the old artwork: different sizes, different optical weights, and
-               Epic's export dragging its invisible artboard rect along.
-               smMarkFor handles the id aliases (egs→epic, macos→ios) and
-               returns null for the two platforms with no measured art yet
-               (Xbox, Nintendo), which fall through to platformIcon() — now
-               their own monochrome PLATFORM_ICONS SVG path too (see
-               PLATFORM_ASSET's own note, top of file), not a raster PNG. */
-            const icon  = smMarkFor(pid, 18)
-              || ((typeof platformIcon === 'function') ? platformIcon(pid, 18, 'white') : '');
-            if (COMING_SOON_PLATFORMS.has(pid)) {
-              return `<button type="button" class="add-plat-item is-coming-soon" disabled title="Coming soon">
-                ${icon}
-                <span class="add-plat-name">${label}</span>
-                ${addPlatLockSVG}
-              </button>`;
-            }
-            return `<button class="add-plat-item" onclick="activatePlatform('${pid}')">
-              ${icon}
-              <span class="add-plat-name">${label}</span>
-              <span class="add-plat-cta">+ Add</span>
-            </button>`;
-          }).join('')}</div>`
-        : `<div class="dash-empty-desc">Every available platform is already activated.</div>`}
-    </div>` : '';
+  /* THE ADD CONTROL IS NOT DRAWN HERE ANY MORE — see buildSubnavAddPlatform.
+     It moved up into the sub-nav row, beside the word "Submission", as a
+     selected sub-nav pill with a dropdown hanging off it. What left this
+     function is the `+` square at the end of the strip, the dashed banner the
+     modal arm carried, and the picker BOTH arms drew inline — a list that took
+     the pane's place while it was open, which is what the dropdown replaces.
 
-  el.innerHTML = `
+     One control for both arms rather than one each: the sub-nav row is drawn
+     above the split in every presentation, so the flag below no longer has to
+     carry an add affordance of its own. */
+
+  /* THE FLAG NOW COVERS THE PRESENTATION, NOT JUST THE ROW'S CLICK.
+
+     `submission.layout === 'modal'` started life switching one thing: whether a
+     step row opened `openStepModal` or expanded in place (see the note at
+     `const modalMode` in the step row builder). That is half of what changed —
+     the other half is THIS, the grid of platform cards the tab strip replaced —
+     and splitting them left the flag unable to do the job it was put there for.
+     Asking for the old presentation and getting the old interaction inside the
+     new layout answers a question nobody asked.
+
+     So 'modal' means "the presentation before the tab strip", whole. Nothing
+     here is a reconstruction: `buildActiveCard` and the four builders under it
+     are, in the words of the comment thirty lines up, "still here and still
+     correct" — and `.active-card`'s 73 rules and `.dash-column`'s 4 never left
+     style.css. The only thing that had been deleted was the wrapper that called
+     them, which is why `dash-column` appears 0 times in this file and 4 times in
+     the stylesheet. This puts that one line back.
+
+     **THE DEFAULT IS STILL 'inline' AND STILL MARK'S.** With no `?layout=` and
+     nothing in localStorage this branch is never taken, so the live site is
+     untouched by construction — see the hook in state.js. This is a way to LOOK
+     at the other one, which is the whole point of having a flag.
+
+     THE ADD CONTROL IS NO LONGER EITHER ARM'S PROBLEM. This paragraph used to
+     read "the picker rides along in both arms… removing it from one would make
+     that arm a worse version of the app rather than an older one", and it was
+     solving a problem that has since gone away: the pill lives in the sub-nav
+     row, which is drawn above the split in every presentation, so neither arm
+     has to carry one. `.dash-add-banner` — the door this arm was given when it
+     had none — goes with it. */
+  const modalMode = state.submission?.layout === 'modal';
+
+  el.innerHTML = modalMode ? `
     <div class="sec-solo">
       <div class="dash-column">
-        ${cards}
-        <button class="dash-add-banner${addOpen ? ' is-open' : ''}" onclick="toggleAddPlatform()">
-          <span class="dash-add-banner-plus">+</span><span>Add platform</span>
-        </button>
-        ${picker}
+        ${active.map(pid => buildActiveCard(pid)).join('')}
+      </div>
+    </div>` : `
+    <div class="sec-solo">
+      ${buildSubmissionTabs(active)}
+      <div class="sub-pane-wrap">
+        ${buildSubmissionPane(tab)}
       </div>
     </div>`;
+
+  /* innerHTML has just thrown away the open body's scroll listener, so the cue
+     is re-armed here — the same arrangement renderStepModal uses for
+     _smModalFades, and for the same reason. Guarded because render.js is
+     loaded before app.js. */
+  if (typeof _subScrollCue === 'function') requestAnimationFrame(_subScrollCue);
 }
+
+/* ── THE PLATFORM TAB STRIP ──────────────────────────────────────────────────
+   One platform at a time, where there used to be a grid of cards.
+
+   The card grid was `repeat(auto-fill, minmax(360px, 1fr))`, so at any real
+   width it wrapped into two or three columns of platforms side by side. That
+   is the right shape for a STATUS board and the wrong one for a form: the step
+   content that now opens inside a pane was capped at the step modal's 680px
+   and had nowhere to go, and four platforms' worth of steps competing for the
+   eye is four times the chrome around whichever one you are actually filling
+   in. A tab per platform spends the width on the work instead.
+
+   The tab is a DIV, not a BUTTON, and that is forced rather than stylistic:
+   it holds the gear, which is itself a button, and buttons cannot nest. Same
+   trap the guide's day-panel rows hit — see "Treat the panel as the only
+   surface there is" in CLAUDE.md. role/tabindex/aria put the semantics back. */
+function buildSubmissionTabs(active) {
+  /* THE SELECTED TAB STAYS LIT WHILE THE ADD LIST IS UP, and it did not used
+     to. This read `addOpen ? null : submissionTab()` on the argument that "with
+     the picker open there IS no pane, and a lit tab over an empty surface
+     claims a platform is showing when the add list is" — true of a picker that
+     REPLACED the pane, and false of the dropdown that replaced it. The pane is
+     still there, still that platform's, still being read behind the menu; going
+     dark would be the strip disagreeing with the surface underneath it. */
+  const sel = submissionTab();
+  const tabs = active.map(pid => {
+    const isOn = pid === sel;
+    /* THE GEAR AND THE POWER RIDE THE SELECTED TAB ONLY. They act on one
+       platform, and a strip of four tabs each carrying two live controls is
+       eight targets around a pane that concerns one of them. The selected tab
+       is the only one whose platform is on screen, so it is the only one where
+       "settings" and "switch this off" have an unambiguous subject.
+       A submitted platform gets neither: its own card carries the cancel-hold
+       and its gear (buildSubmittedCard → _platformHeadActions(pid,'submitted')),
+       and deactivating a platform whose build a store is currently holding is
+       the question _cancelSubBtn's note says nobody is asking. */
+    /* THE CONTROLS ARE ALWAYS IN THE MARKUP, and only their VISIBILITY changes.
+       They used to be rendered on the selected tab alone, which meant the name
+       beside them had a different amount of room depending on selection — so
+       picking a tab shifted its own label, and the strip twitched as you moved
+       along it. A tab must be the same shape whether or not it is the one you
+       are on; emphasis is fill and ink, never position. `visibility` keeps the
+       box (and therefore the layout) while taking the buttons off screen and
+       out of the tab order. */
+    const submitted = !!state.platformFlipped?.[pid];
+    const actsLive  = isOn && !submitted;
+    const acts = `<span class="sub-tab-acts${actsLive ? '' : ' is-off'}"${actsLive ? '' : ' aria-hidden="true"'}>
+           ${_gearBtn(`platformGearFromTab('${pid}')`,
+              isPlatformConnected(pid) ? 'Account settings' : 'Connect account to publish',
+              false, !isPlatformConnected(pid))}
+           ${_powerBtn(pid)}
+         </span>`;
+    return `
+      <div class="sub-tab${isOn ? ' is-on' : ''}" id="sub-tab-${pid}"
+           role="tab" tabindex="0" aria-selected="${isOn}"
+           onclick="selectPlatformTab('${pid}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectPlatformTab('${pid}')}">
+        <div class="sub-tab-head">
+          <div class="sub-tab-mark">${smMarkFor(pid, 20) || platformIcon(pid, 20, 'white')}</div>
+          <div class="sub-tab-name">${platLabel(pid)}</div>
+          ${acts}
+        </div>
+        ${_subTabDashes(pid)}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="sub-tabs" role="tablist">
+      ${tabs}
+    </div>`;
+}
+
+/* ONE DASH PER STEP, GREEN ONES FIRST — so the strip under a tab's name is a
+   progress bar whose segments happen to be countable.
+
+   It is NOT a per-step status readout: dash 3 does not stand for step 3. The
+   finished ones are collected on the left and the outstanding ones on the
+   right, which is the one arrangement that can be read at a glance from across
+   a strip of four tabs. Reading which PARTICULAR step is outstanding is the
+   pane's job, and the pane is one click away.
+
+   The count includes Submit, because the platform is not done until the build
+   has gone — every card builder already appends that row separately through
+   buildSubmitStepCard, so it is added here the same way rather than trusted to
+   be in the steps array (only egs/psn/xbox/nintendo/web carry an isSubmit
+   entry, which _paneSteps strips precisely so this stays one rule). */
+function _subTabDashes(pid) {
+  const steps      = _paneSteps(pid);
+  const done       = steps.filter(s => _paneComplete(pid, s.id)).length;
+  const submitDone = !!state.platformFlipped?.[pid]
+                  || state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+  const total = steps.length + 1;
+  const green = done + (submitDone ? 1 : 0);
+  const dashes = Array.from({ length: total }, (_, i) =>
+    `<span class="sub-dash${i < green ? ' is-done' : ''}"></span>`).join('');
+  return `<div class="sub-tab-dashes" aria-label="${green} of ${total} steps complete">${dashes}</div>`;
+}
+
+/* ── THE PANE ────────────────────────────────────────────────────────────────
+   Whatever the selected platform's card used to be, minus the header (the tab
+   carries the platform's identity now) — so a submitted platform's pane is
+   buildSubmittedCard, untouched. Everything measured about that face in v6.26
+   (the four phases, the cancel-hold sweep, the read-only step list, Release
+   This Version as the last thing in the card) applies to a card, and it is
+   still a card; it has simply stopped being one of four in a grid.
+
+   It keeps the id `active-card-<pid>`, and that is load-bearing rather than
+   inherited by accident: submitStepClick's spotlight, _smSpotlight,
+   _doFinalSubmit's height animation and cancelSubmission all find the card by
+   that id. Renaming it here would have meant rewriting five handlers to gain
+   nothing. */
+function buildSubmissionPane(pid) {
+  /* THE ADD LIST NO LONGER COSTS YOU THIS PANE. There was an early return
+     here, on the argument that "leaving the platform you were filling in
+     expanded underneath made the picker read as a popover over work you were
+     still doing". It was right about the object and the object changed: that
+     picker was a full-width list taking the pane's place in the column, so it
+     had to be one or the other. The add control is now a pill in the sub-nav
+     row with a real dropdown under it — small, above everything, and gone the
+     moment you look away — so "a popover over work you were still doing" is
+     exactly what it is meant to be, and blanking the page to ask a one-press
+     question is the cost that no longer has to be paid. */
+  if (!pid) {
+    return `<div class="sub-pane-empty">No platforms yet — add one to start a submission.</div>`;
+  }
+
+  /* SETTINGS OPEN IN THE PANE, with a way back — not in a modal.
+     The account face was a modal for one version and it was the wrong box: a
+     modal is for something you do INSTEAD of the page, and connecting a store
+     is part of the submission, read against the steps it unblocks. The pane is
+     where that belongs, and the back arrow says the steps are still there.
+     The exception is the portal SIGN-IN (openAscLogin → buildAscLoginModal),
+     which stays a modal on purpose — it is a drawing of a DIFFERENT WEBSITE
+     opening, and a browser window inside the pane would claim Shipmate was
+     hosting appstoreconnect.apple.com. */
+  if (state.submission?.settings === pid) return buildPlatformSettingsPane(pid);
+
+  if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
+
+  const steps      = _paneSteps(pid);
+  const counts     = platformStepCount(pid);
+  const locked     = !counts.allRequired;
+  const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+  const openId     = state.submission?.openStep?.[pid] || null;
+
+  const rows = steps.map((step, i) => _subStepRow(pid, step, i, openId)).join('');
+  const submitRow = buildSubmitStepCard(pid, steps.length, locked, submitDone);
+
+  /* ONE `.ios-step-cards` PARENT for the steps AND the submit row, exactly as
+     every card builder does it: the divider between rows is an adjacent-sibling
+     rule, so splitting them leaves no line where the list meets Submit. */
+  return `
+    <div class="active-card sub-pane${!locked ? ' submit-ready' : ''}" id="active-card-${pid}">
+      <div class="ios-step-cards sub-step-list">${rows}${submitRow}</div>
+    </div>`;
+}
+
+/* The account face, in the pane, behind a back arrow. Both bodies are the
+   card's own (_accountSettingsHTML / _connectFaceHTML) — this only supplies the
+   box and the way out.
+
+   The arrow carries WORDS as well as a glyph. A bare chevron at the top of a
+   full-width pane has nothing beside it to say what it goes back to, where on a
+   modal the × is unambiguous because there is only one thing to dismiss. */
+function buildPlatformSettingsPane(pid) {
+  const cfg  = platformLoginConfig(pid);
+  const auth = state.platformAuth?.[pid];
+  const body = auth?.loggedIn
+    ? _accountSettingsHTML(pid, cfg, auth.username || '')
+    : _connectFaceHTML(pid, cfg);
+  return `
+    <div class="active-card sub-pane sub-pane--settings" id="active-card-${pid}">
+      <button class="sub-back" type="button" onclick="closePlatformSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        <span>Back to steps</span>
+      </button>
+      <div class="platform-account-body">${body}</div>
+    </div>`;
+}
+
+/* HOW MANY QUESTIONS THIS STEP IS STILL ASKING, or null when the step is not
+   the kind of thing that counts.
+
+   It is the same reduce `buildContentRatingSection` runs for its own pinned
+   line (crUnanswered), against the same IOS_CR_CATEGORIES and the same
+   _getLiveAnswer — deliberately not a second definition of "answered", because
+   the row and the bar inside it would then be able to disagree in front of you.
+
+   Steam and Google Play draw their Content Rating from their own question sets
+   (buildSteamContentRatingSection / buildAndroidContentRatingSection) with no
+   shared constant to count, so they return null and the row simply prints
+   nothing rather than a number that might be wrong. */
+function _stepUnansweredCount(pid, stepId) {
+  if (stepId !== 'contentRating') return null;
+  if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return null;
+  if (typeof IOS_CR_CATEGORIES === 'undefined' || typeof _getLiveAnswer !== 'function') return null;
+  return IOS_CR_CATEGORIES.reduce((sum, cat) =>
+    sum + cat.questions.filter(q => {
+      const v = _getLiveAnswer(pid, q.id);
+      return v === undefined || v === null || v === '';
+    }).length, 0);
+}
+
+/* A STEP ROW AND, WHEN IT IS THE OPEN ONE, ITS BODY UNDER IT.
+
+   The row itself is the card's `.ios-step-card` unchanged — same disc, same
+   tick, same two columns at 21 and 55, same risk dot, same numbering off the
+   row's position among the visible steps. Only the chevron and the click
+   differ: it rotates instead of pointing, and it expands instead of opening a
+   modal. Keeping the class means _paintStepRow, updateIOSCard and
+   submitStepClick's "shake what is outstanding" all still find these rows, and
+   the completed-step promotion rule (name goes white, never dimmed) comes free.
+
+   `dot-<pid>-<stepId>` is on the disc for every platform now. It was on the
+   generic builder's rows only, so _paintStepRow — the function CLAUDE.md says
+   to go through rather than setting is-done/is-complete by hand — silently did
+   nothing on App Store, Google Play and Steam rows. */
+function _subStepRow(pid, step, i, openId) {
+  const isOpen   = openId === step.id;
+  const done     = _paneComplete(pid, step.id);
+  const numClass = 'ios-step-num' + (done ? ' is-done' : '');
+  /* NO STATUS DOT ON A PANE ROW. The card's rows carry one — an amber or red
+     pip from the App Store questionnaire's risk scoring — and next to the
+     "N unanswered" count it was a second, coarser reading of the same fact,
+     three pixels away from a number that says it exactly. The count is the
+     better instrument, so the dot goes rather than the two competing.
+     _paneRisk stays; it is the card's, and the card still draws it. */
+  const riskDot  = '';
+  const binProc  = !!(state.platformBuildProcessing?.[pid]);
+  const trailing = (step.id === 'improveSubmission' && binProc)
+    ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
+    : `<span class="sub-row-chev${isOpen ? ' is-open' : ''}">${SM_STEP_CHEVRON}</span>`;
+
+  /* THE COUNT IS PRINTED ON THE OPEN ROW ONLY, and that is a deliberate
+     restraint rather than an oversight. On every row at once it becomes a
+     column of numbers competing with the discs that already say what is done;
+     on the row you have opened it is the heading of the thing underneath it —
+     "this is what is left in HERE" — read against the questions it is sitting
+     on top of. Amber, because it is the app's one word for *this needs you*. */
+  const unanswered = isOpen ? _stepUnansweredCount(pid, step.id) : null;
+  const countEl = (unanswered > 0)
+    ? `<span class="sub-row-count">${unanswered} unanswered</span>` : '';
+
+  /* THE WAY BACK TO MODALS IS ONE FLAG, and it lives on the row's click.
+     In 'modal' the row opens openStepModal exactly as the platform cards always
+     did and no body is rendered under it; everything else about the pane — the
+     tab strip, the dashes, the release block in Upload Build — stays. That is
+     the point of putting the switch here rather than at renderDashboard: the
+     layout work and the interaction are separable, so abandoning the inline
+     interaction does not cost the rest of it. */
+  const modalMode = state.submission?.layout === 'modal';
+  const openFn = modalMode ? 'openStepModal' : 'toggleStepSection';
+
+  const row = `
+    <div class="ios-step-card sub-row${done ? ' is-complete' : ''}${isOpen ? ' is-open' : ''}"
+         id="${pid}-step-card-${step.id}"
+         role="button" tabindex="0" aria-expanded="${isOpen}"
+         onclick="${openFn}('${pid}','${step.id}')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${openFn}('${pid}','${step.id}')}">
+      <div class="${numClass}" id="dot-${pid}-${step.id}">${done ? smCheckSVG(20) : i + 1}</div>
+      <div class="ios-step-info">
+        <div class="ios-step-name">${stepLabel(pid, step)}</div>
+      </div>
+      ${countEl}
+      ${riskDot}
+      ${trailing}
+    </div>`;
+
+  if (!isOpen || modalMode) return row;
+
+  /* UPLOAD BUILD'S BODY DOES NOT CLIP, and it is the only one that must not.
+
+     The cap plus `overflow-y: auto` is what keeps a long step from pushing the
+     rows below it off screen — right for twenty-two questions, wrong for a box
+     containing a POPOVER. The track picker's panel is `position: absolute`
+     (.loc-dropdown), so inside a scroller it does not overlay anything: it
+     extends the scrollable area instead, and the options end up below the fold
+     of a 280px box, reachable only by scrolling to them. That is the opposite
+     of what a dropdown is for.
+
+     This body is a pill, a line of text and the release block — comfortably
+     under the cap on its own — so lifting the cap costs nothing and lets the
+     panel do what it was drawn to do. Scoped to this one step rather than
+     relaxed for all of them: Content Rating genuinely needs the scroller. */
+  const bodyMod = (step.id === 'uploadBuild') ? ' sub-step-body--free' : '';
+  return row + `
+    <div class="sub-step-body${bodyMod}" id="sub-step-body">${_subStepBodyInner(pid, step.id)}</div>`;
+}
+
+/* THE BODY, ON ITS OWN, so a repaint can replace it without rebuilding the tab
+   strip and the four rows around it.
+
+   That split is the fix for two bugs that looked unrelated and were the same
+   one. Every answer handler in the app calls reRenderStepModal, which in the
+   pane was calling renderDashboard — a full innerHTML of the whole Submission
+   tab for one pill press. The tabs, the dashes and every step row were thrown
+   away and rebuilt, which is the FLASH; and the new `.sub-step-body` came back
+   with scrollTop 0, which is the JUMP TO THE TOP thirty questions down. Neither
+   was a CSS problem and no amount of transition would have hidden either.
+
+   Now the only node that changes is the one whose contents actually did. */
+/* The cue is the LAST in-flow child of the scroller, which is what lets it be
+   `position: sticky` — an absolutely positioned child of a scroll container is
+   laid out against the padding box and scrolls away with the content (the
+   lesson the Mac preview's fades are written up under). It lives inside
+   _subStepBodyInner rather than beside it so a surgical repaint keeps it.
+
+   `aria-hidden` and `tabindex="-1"`: this duplicates something the box can
+   already do. A keyboard reaches every question by tabbing and a screen reader
+   is never told a row is "below the fold" in the first place, so announcing a
+   second way to scroll adds a control without adding a capability. */
+const SM_SCROLL_CUE = `
+  <div class="sub-scroll-cue" aria-hidden="true">
+    <button type="button" class="sub-scroll-cue-btn" tabindex="-1"
+            onclick="_subScrollCueClick(event)" title="More below">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+  </div>`;
+
+function _subStepBodyInner(pid, stepId) {
+  const inf = state.submission?.infer?.[pid] || {};
+  const banner = (inf.status === 'error') ? `
+    <div class="ai-banner ai-banner-error">
+      <span class="ai-banner-icon">⚠</span>
+      <div class="ai-banner-text"><strong>Analysis failed:</strong> ${inf.error || 'Unknown error'}</div>
+      <button class="ai-autofill-btn" onclick="_retryInferenceInline('${pid}','${stepId}')">Retry</button>
+    </div>` : '';
+
+  /* UPLOAD BUILD IS THE ONE STEP WHOSE BODY IS NOT _stepBodyFor's.
+     It never had a modal — it drew its build dropdown inline on the row — and
+     the release block (VERSION / BUILD / TRACK and the destination chip) has
+     come down here to join it. The two facts belong together: the block
+     describes the build this step uploads, and the chip routes it. */
+  if (stepId === 'uploadBuild') {
+    /* THE STEP SAYS WHAT IT TAKES, BEFORE YOU PICK A FILE. The pill opened a
+       file dialog filtered to the store's formats and said nothing about them,
+       so trying the wrong thing — a .app or an .xcarchive on Mac, an .ipa
+       because it is the Apple one you know — came back as the picker simply
+       refusing to select it, with no error to read. A control that silently
+       declines is worse than one that explains first. */
+    /* BESIDE THE BUTTON, ON ONE LINE. It was a stacked pair under the pill —
+       the formats, then a sentence about Xcode — which gave a single control
+       two lines of apparatus and made the note read as a warning about
+       something having gone wrong. The formats are what you need BEFORE you
+       press, so they sit where your eye already is: on the button's own row.
+       The Xcode sentence survives as the row's title, where it is available to
+       anyone who stalls on it without being printed at everyone. */
+    const fmt = smBuildAccept(pid);
+    const uploadRow = `
+      <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
+        ${buildBuildDropdown(pid)}
+        <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
+      </div>`;
+    return banner
+      + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
+      + _localSaveNote(pid)
+      + SM_SCROLL_CUE;
+  }
+
+  /* THE FLIP HAPPENS HERE NOW, not in a modal hoisted over the pane.
+
+     Product Page Preview's sub-sections (Screenshots, Business Questions, Data
+     Collection…) are a second level INSIDE the step, and for one version they
+     opened the step modal on top of the pane — an interim answer, taken because
+     the level had nowhere obvious to go. It has somewhere: the body rectangle
+     itself. The same `is-flip-exit` / `is-flip-enter` pair the card has always
+     used turns this box over, so the sub-section arrives in the same rectangle
+     at the same size, one level down rather than one surface up.
+
+     The back arrow is unconditional while flipped. On the modal the × was
+     ambiguous enough to need replacing with an arrow (see renderStepModal's
+     note); here there is no × at all, so the arrow is the ONLY way back and
+     must never be conditional on which target you are in. */
+  const flipTarget = _subFlipTarget(pid, stepId);
+  const backBar = flipTarget ? `
+    <div class="sub-flip-head">
+      <button class="sub-back sub-back--flip" type="button"
+              onclick="closeStorePreviewSection('${pid}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        <span>${SM_FLIP_LABELS[flipTarget] || 'Back'}</span>
+      </button>
+    </div>` : '';
+
+  return banner + backBar
+    + `<div class="ios-step-body-content">${_stepBodyFor(pid, stepId, flipTarget, inf.status)}</div>`
+    + _localSaveNote(pid)
+    + SM_SCROLL_CUE;
+}
+
+/* Which sub-section this step is currently turned over to, or null.
+   Scoped to the steps that actually HAVE a flip layer — `storePreviewFlipTarget`
+   is keyed by platform rather than by step (only one was ever open at a time in
+   the modal), so without this test a target left over from Product Page Preview
+   would try to draw itself inside Content Rating. */
+function _subFlipTarget(pid, stepId) {
+  const flippable = stepId === 'storePreview' || stepId === 'storePreviewPrototype' || stepId === 'gameCenter';
+  return flippable ? (state.storePreviewFlipTarget?.[pid] || null) : null;
+}
+
+/* ── THE DARKER BOX ───────────────────────────────────────────────────────
+   Every expanded step gets the same one (see .sub-step-body in style.css), and
+   it does two jobs at once.
+
+   It SEPARATES: a step body dropped straight into the list is twenty-two
+   question rows wearing the same ground as the four step rows around them, so
+   the list stops looking like a list the moment anything opens. A recessed
+   panel with its own edge says "this is inside that row" without a heading
+   having to say it.
+
+   And it SCROLLS. `--sub-body-max` caps how far a section can push the steps
+   below it down the page — the whole argument for expanding in place rather
+   than opening a modal is that the other steps stay visible, and a body that
+   runs to three screens throws that away. Past the cap the box scrolls itself
+   and the list underneath never moves.
+
+   Content Rating needs nothing added for its filter to work here: `.cr-pinned`
+   is already the FIRST thing buildContentRatingSection returns and it is
+   `position: sticky`, so making this box the scroller is what pins the
+   Unanswered / All toggle to the top of it. That bar is untouched. */
 
 /* THE RELEASE BLOCK — two lines under the platform card's header.
 
@@ -3903,6 +5868,14 @@ function buildReleaseBlock(pid) {
      voice.
      `si existen` is load-bearing: Steam has no version so its row starts at
      BUILD, and Web has neither so the date is the whole value. */
+  /* ONCE IT IS SENT, THE DESTINATION IS A FACT. The picker disappears below
+     (`submitDone`), and a submitted card that showed VERSION and BUILD but not
+     where the thing went was hiding the one decision the developer actually
+     made. So it joins the line as a third named pair, in the same `.rel-pair`
+     shape as BUILD — one line, three facts, no control. */
+  const _sentTrack = (state.platformStepStatus?.[pid]?.submit === 'complete')
+    ? platformTrackLabel(pid, (state.selectedTracks || {})[pid]) : '';
+
   const parts = [];
   if (shape.versionLabel && version) {
     parts.push(`<b class="rel-version" title="${escHtml(shape.versionLabel)}">v${escHtml(version)}</b>`);
@@ -3919,6 +5892,9 @@ function buildReleaseBlock(pid) {
     parts.push(parts.length
       ? `<span class="rel-pair"><span class="rel-label">Build</span>${inner}</span>`
       : inner);
+  }
+  if (_sentTrack) {
+    parts.push(`<span class="rel-pair"><span class="rel-label">Track</span><span class="rel-build">${escHtml(_sentTrack)}</span></span>`);
   }
 
   /* NO DATE. "2 days ago" rode along on this row through three shapes and it
@@ -3937,41 +5913,26 @@ function buildReleaseBlock(pid) {
   const rowLabel = (shape.versionLabel && version) ? 'Version' : 'Build';
   const rows = [[rowLabel, parts.join('')]];
 
-  /* THE DROPDOWN IS swSelect(), the component the app already had.
-     This first shipped as a pill of its own that opened the hidden native
-     <select> via _openTrackMenu() — so it looked like nothing else in the app
-     and behaved like the OS, which is why it misbehaved. swSelect draws the
-     pill AND its own styled panel (.loc-dropdown), the same one the primary
-     language picker opens, and handles opening, closing and choosing.
-
-     `align: 'right'` because this pill sits under the card's header with the
-     card's right edge close by; a left-anchored panel wide enough for
-     "TestFlight — External" would grow past it. That parameter exists for
-     exactly this case — see swSelect's own doc comment. */
-  const tracks = shape.trackNoun ? (PLATFORM_TRACKS[pid] || []) : [];
-  let picker = '';
-  if (tracks.length) {
-    /* NOTHING IS PRESELECTED. This used to fall back to getLastUsedTrack(),
-       which meant the pill always showed a track the user had never picked —
-       and, worse, `readyToSubmit` in buildSubmitStepCard gates on a chosen
-       track, so a silent default was quietly unlocking Submit on their
-       behalf. Null until they choose, and the placeholder says what to
-       choose. */
-    const sel = (state.selectedTracks || {})[pid] ?? null;
-    picker = `<div class="rel-track">${swSelect(
-      'track-' + pid,
-      sel,
-      tracks.map(tr => ({ value: tr.id, label: tr.label })),
-      /* swSelectChoose calls window[name](value) — a plain global name, one
-         argument. So the platform can't ride along in the string; it is baked
-         into a per-platform callback registered once at load
-         (_registerTrackCallbacks, app.js). */
-      'selectTrack__' + pid,
-      'auto',
-      'left',
-      'Select ' + shape.trackNoun,
-    )}</div>`;
-  }
+  /* THE TRACK PICKER IS BACK, ON THIS ROW — not on a row of its own. Shape 4,
+     and the first one where the destination costs no vertical space at all: the
+     row already ends in empty card, so the picker lands in it and the block
+     stays the two lines it has been since shape 2.
+     It wears `.submit-track-pick`, the SAME class it had in the Submit row, so
+     its 160×30 is one rule in one place — there is no second sizing rule to
+     drift. The Submit row keeps none of it; a value in two places drifts, and
+     that is exactly what shape 1 was punished for. */
+  const trackOpts = (pid === 'web') ? [] : (PLATFORM_TRACKS[pid] || []);
+  const submitDone = state.platformStepStatus?.[pid]?.submit === 'complete';
+  const trackPick = (trackOpts.length && !submitDone) ? `
+      <div class="submit-track-pick" onclick="event.stopPropagation()">${swSelect(
+        'rel-track-' + pid,
+        (state.selectedTracks || {})[pid] || '',
+        trackOpts.map(tr => ({ value: tr.id, label: tr.label })),
+        'selectTrack__' + pid,
+        'auto',
+        'right',
+        t('card.select_track') || 'Select track',
+      )}</div>` : '';
 
   /* LABELLED ROWS, two columns: the store's own noun in mono caps on the left,
      the value on the right. Which rows exist comes off the shape table rather
@@ -3980,19 +5941,28 @@ function buildReleaseBlock(pid) {
      `.rel-line` stays as the wrapper inside every value cell: it carries the
      line's type and the gap between the number and the date. Dropping it when
      this became a grid took its gap with it and the two ran together. */
-  /* The picker's cell takes no .rel-line: that wrapper carries the 14px indent
-     which puts a TEXT value on the same column as the pill's LABEL, and
-     wrapping the pill in it too would just push the pill 14px further right
-     and undo the alignment. `raw` is what says "this value is a control, not a
-     line of text". */
+  /* `raw` says "this value is a control, not a line of text" — it skips the
+     .rel-line wrapper and its 14px indent. Nothing passes it since the track
+     picker left, but the rows are data-driven and the next control-shaped
+     value will want it. */
   const row = (label, value, raw) => `
     <div class="rel-label">${escHtml(label)}</div>
     <div class="rel-value">${raw ? value : `<div class="rel-line">${value}</div>`}</div>`;
 
+  /* THE PICKER RIDES THE FIRST ROW'S VALUE CELL — the facts on the left, the
+     destination hard right, one line. `.rel-value--pick` is what turns that
+     cell into a flex row; the picker is `flex: none` so it keeps its 160 and
+     the text takes whatever is left. */
+  const rowsHTML = rows.map((r, i) => {
+    const withPick = i === 0 && trackPick;
+    return `
+    <div class="rel-label">${escHtml(r[0])}</div>
+    <div class="rel-value${withPick ? ' rel-value--pick' : ''}"><div class="rel-line${_sentTrack ? ' rel-line--triple' : ''}">${r[1]}</div>${withPick ? trackPick : ''}</div>`;
+  }).join('');
+
   return `
     <div class="card-release-block">
-      ${rows.map(r => row(r[0], r[1])).join('')}
-      ${picker ? row(shape.trackNoun, picker, true) : ''}
+      ${rowsHTML}
     </div>`;
 }
 
@@ -4050,7 +6020,7 @@ function _gearBtn(onclick, label, active, alert) {
   return `
     <button class="${cls}" type="button"
             onclick="event.stopPropagation();${onclick}"
-            title="${label}" aria-label="${label}">
+            data-tip="${label}" aria-label="${label}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4063,24 +6033,97 @@ function _gearBtn(onclick, label, active, alert) {
      • signed-in   (account face, logged in)     — gear flips to the linked (steps) face
      • linked      (steps face)                  — gear flips to the signed-in face
    Every state also shows a power button that deactivates the platform. */
+/* A SUBMITTED CARD CANNOT BE SWITCHED OFF, SO IT DOES NOT OFFER TO. The power
+   button deactivates a platform — it is about whether you are shipping there at
+   all, which is not a question you are asking while a store holds your build.
+   The one undo that exists at that point is cancelling the submission, so that
+   is the button, and it looks like a stop sign rather than a power symbol.
+   It ASKS. Deactivating is reversible by pressing the tile again; withdrawing
+   from review is not, so the press opens a question inside the card rather
+   than doing it. */
+/* THE HINT IS THE APP'S OWN BUBBLE, NOT THE OS's (v6.70). Jaco: *"el tooltip
+   tarda muchísimo en salir, debería ser tan inmediato como los tooltip de la
+   tabla de data privacy."* Right, and it was not a slow tooltip — it was a
+   DIFFERENT ONE: a bare `title`, which every browser sits on for about a
+   second and then draws in the system's own style. The card header was the
+   one place in the app still doing that (measured: zero `.tooltip-anchor` on
+   a card, four plain `title`s), so the hint that names a gesture nobody can
+   guess was also the slowest hint in the product.
+   `data-tip` instead — the delegated handler fires on `mouseover`, so it is
+   instant by construction — and `aria-label` stays, because it is the
+   ACCESSIBLE name and `title` was never doing that job. The class is
+   deliberately NOT added: see the note at initGlobalTooltip. */
+function _cancelSubBtn(pid) {
+  return `
+    <button class="active-card-power active-card-cancelsub" type="button"
+            onpointerdown="event.stopPropagation();cancelHoldStart('${pid}', this)"
+            onpointerup="cancelHoldEnd()" onpointerleave="cancelHoldEnd()" onpointercancel="cancelHoldEnd()"
+            onclick="event.stopPropagation()"
+            data-tip="Hold to cancel submission" data-tip-tone="danger"
+            aria-label="Hold to cancel submission">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+        <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>`;
+}
+
 function _platformHeadActions(pid, face) {
   // Web has no developer-portal login, so its header is power-only (no gear).
-  if (pid === 'web') return `<div class="active-card-actions">${_powerBtn(pid)}</div>`;
+  if (pid === 'web') return `<div class="active-card-actions">${face === 'submitted' ? _cancelSubBtn(pid) : _powerBtn(pid)}</div>`;
   const connected = isPlatformConnected(pid);
   let gear;
-  if (face === 'steps') {
-    // Cog turns alert-red until connected; either way it flips to the account/connect face.
-    gear = _gearBtn(`platformGearFromSteps('${pid}')`,
-      connected ? 'Account settings' : 'Connect account to publish', false, !connected);
-  } else if (connected) {
-    // Highlighted to signal you're in a temporary, reversible settings view.
-    gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
+  if (face === 'steps' || face === 'submitted') {
+    /* SUBMITTED IS NOT THE ACCOUNT FACE, and for a long time this branch said it
+       was. There were only two arms — `steps` and everything else — so a
+       submitted card fell through to the second one and its gear came out LIT
+       (`--active`, the highlight that means "you are inside a temporary,
+       reversible view") with the tooltip **"Back to steps"**. The card was
+       announcing itself as a settings detour you could reverse with one press,
+       on the one face where going back is a withdrawal that costs a 1.4s hold.
+       Measured before the fix: `title: "Back to steps"`, `onclick:
+       platformGearFromAccount`, class carrying `--active`.
+       A sent card and a card being filled in want the same thing from this
+       button — a way to the account — so they share the arm. What differs is
+       the alert: an unconnected account is a problem you can still fix while
+       you are working, and a nag about it after the build has gone is pointing
+       at a door that has already closed. */
+    /* ONE DOOR TO THE ACCOUNT, and since v6.29 it is a modal rather than the
+       back of a card. The submitted card is the last surface still drawing this
+       gear (the steps face's own went up to the tab strip), and it wanted the
+       same thing it always did — a way to the account — so it gets the same way
+       everyone else now has. platformGearFromSteps survives for the card path
+       that _cacheStepsFaceHeight and buildActiveCard still exercise; it is no
+       longer what this button calls, because from a pane there is no reverse to
+       turn to. */
+    /* AND IN THE CARD GRID IT IS STILL A FLIP, because there the card really
+       does have a back. `platformGearFromTab` sets `submission.settings` and
+       lets the PANE draw the account face in place of the steps — which is the
+       right door when a pane is what is on screen and the only door the note
+       above was written against. With `submission.layout === 'modal'` there is
+       no pane: nothing reads `submission.settings`, `renderSubmission`'s grid
+       arm just rebuilds the same cards, and `showAccountFace` — which is what
+       `buildActiveCard` actually asks — reads `platformFace`, which that
+       function never writes. So the press changed two fields nobody was
+       reading and the card sat there. Measured as "el gear no hace nada".
+
+       `platformGearFromSteps` is the flip and has been all along; it is what
+       `_cacheStepsFaceHeight` and `buildAccountCard` are still built around.
+       One branch, the same shape `buildSubmittedCard` and `renderSubmission`
+       already use for this flag, and it goes when the flag does. */
+    const cardGrid = state.submission?.layout === 'modal';
+    gear = _gearBtn(cardGrid ? `platformGearFromSteps('${pid}')` : `platformGearFromTab('${pid}')`,
+      connected ? 'Account settings' : 'Connect account to publish',
+      false, !connected && face === 'steps');
   } else {
-    // On the connect face; cog flips back to steps (connecting is optional up front).
+    /* The account/connect face itself: lit, because you ARE in the temporary
+       view, and the same press takes you back out of it. Connected or not makes
+       no difference to the gear here — connecting is optional up front. */
     gear = _gearBtn(`platformGearFromAccount('${pid}')`, 'Back to steps', true);
   }
-  // Settings (gear) on the left, power on the right.
-  return `<div class="active-card-actions">${gear}${_powerBtn(pid)}</div>`;
+  // Settings (gear) on the left; power on the right — or, once submitted, the
+  // one undo that exists at that point: cancelling.
+  return `<div class="active-card-actions">${gear}${face === 'submitted' ? _cancelSubBtn(pid) : _powerBtn(pid)}</div>`;
 }
 
 // Shared header used by all states. Body is inert; only the buttons act.
@@ -4155,8 +6198,16 @@ function _connectFaceHTML(pid, cfg) {
 
 // URL shown in the simulated browser chrome of the sign-in modal.
 function connectPortalUrl(pid) {
-  return ({ ios: 'appstoreconnect.apple.com', steam: 'partner.steamgames.com', android: 'play.google.com/console' })[pid]
-    || 'developer.portal';
+  /* macos and macos_full are App Store Connect too — they were missing, so the
+     simulated browser's URL bar read "developer.portal" on the one screen whose
+     entire job is to look like the real site. */
+  return ({
+    ios: 'appstoreconnect.apple.com',
+    macos: 'appstoreconnect.apple.com',
+    macos_full: 'appstoreconnect.apple.com',
+    steam: 'partner.steamgames.com',
+    android: 'play.google.com/console',
+  })[pid] || 'developer.portal';
 }
 
 /* Larger, browser-framed sign-in modal — simulates signing in on the real portal
@@ -4176,20 +6227,34 @@ function buildAscLoginModal() {
     </div>`;
 }
 
-// Platform-themed sign-in page rendered inside the browser frame.
+/* Platform-themed sign-in page rendered inside the browser frame.
+
+   PID TRAVELS ALL THE WAY TO THE SUBMIT, and it used to be dropped right here.
+   `_appleSigninPage` took only `cfg` and wrote `ascLoginSubmit('ios')` as a
+   literal, which was invisible while the App Store was the only Apple platform
+   that reached it. Mac App Store falls into the same branch: signing in set
+   `connectStage.ios = 'confirm'` and re-rendered the iOS card, so
+   `connectStage.macos` never moved off 'signin' — and because connectInstall
+   had already set `extensionInstalled`, `_connectStage('macos')` kept returning
+   'signin' forever. That is the loop: sign in, land back on "Sign in via
+   extension", repeat, with the confirm stage unreachable.
+
+   Steam's copy had the same literal and was only ever reached with 'steam', so
+   it was latent rather than live; it takes `pid` too now, because the next
+   store that shares a sign-in page should not have to rediscover this. */
 function _signinPageHTML(pid, cfg) {
-  if (pid === 'steam')   return _steamSigninPage(cfg);
+  if (pid === 'steam')   return _steamSigninPage(pid, cfg);
   if (pid === 'android') return _googleSigninPage(cfg);
-  return _appleSigninPage(cfg);
+  return _appleSigninPage(pid, cfg);
 }
 
-function _appleSigninPage(cfg) {
+function _appleSigninPage(pid, cfg) {
   const logo = `<svg width="34" height="34" viewBox="0 0 24 24" fill="#111"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`;
   return `
     <div class="signin-page sp-apple">
       <div class="sp-logo">${logo}</div>
       <div class="sp-title">Sign in to ${escHtml(cfg.portal)}</div>
-      <form class="sp-form" onsubmit="ascLoginSubmit('ios');return false;">
+      <form class="sp-form" onsubmit="ascLoginSubmit('${pid}');return false;">
         <input class="sp-input" id="asc-user" type="text" placeholder="Apple Account" autocomplete="off" spellcheck="false">
         <input class="sp-input" id="asc-pass" type="password" placeholder="Password" autocomplete="off">
         <input class="sp-input" id="asc-2fa" type="text" placeholder="Verification code" autocomplete="off">
@@ -4200,14 +6265,14 @@ function _appleSigninPage(cfg) {
     </div>`;
 }
 
-function _steamSigninPage(cfg) {
+function _steamSigninPage(pid, cfg) {
   const logo = `<svg width="42" height="42" viewBox="0 0 24 24" fill="#fff"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>`;
   return `
     <div class="signin-page sp-steam">
       <div class="sp-logo">${logo}</div>
       <div class="sp-title">Sign in</div>
       <div class="sp-sub">Sign in with account name</div>
-      <form class="sp-form" onsubmit="ascLoginSubmit('steam');return false;">
+      <form class="sp-form" onsubmit="ascLoginSubmit('${pid}');return false;">
         <input class="sp-input" id="asc-user" type="text" placeholder="Account name" autocomplete="off" spellcheck="false">
         <input class="sp-input" id="asc-pass" type="password" placeholder="Password" autocomplete="off">
         <input class="sp-input" id="asc-2fa" type="text" placeholder="Steam Guard code" autocomplete="off">
@@ -4459,7 +6524,12 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      `readyToSubmit` survives, but only to style the row; the decision itself
      moved to the handler, where it can name the obstacle instead of just
      withholding the click. */
-  const pulseClass = readyToSubmit ? ' submit-step-pulse' : '';
+  /* `pulseClass` is GONE (v6.62) — it emitted `submit-step-pulse`, the orange
+     ring that breathed out of this row every two seconds. The argument is in
+     style.css where the keyframes used to be; short version, a ring in a hue
+     this app does not own, marking READY, which is green's job and which
+     `.submit-step-ready` already says twice. `readyToSubmit` still decides
+     ready-vs-locked below; only the ring went. */
   const stepLocked = locked || !connected;
 
   /* NO TRAILING CONTROL. "Connect to submit" lived here, a second button in a
@@ -4468,13 +6538,104 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
      now answers for both: press it unconnected and the gear shakes, which
      points at where connecting actually happens rather than duplicating it. */
 
+  /* THE DESTINATION PICKER IS A CHIP IN THE ROW, the same object Upload Build
+     puts at the end of its own row (.build-pill: 184px, 30px tall, 8px radius).
+     The first version grew three pills inline when Submit was pressed — they
+     overflowed the card at the App Store's label lengths, and they only existed
+     after every other step was done, which made the last decision the least
+     reachable one. A picker is available from the first paint: choosing where
+     this build goes does not depend on the store page being written.
+
+     swSelect draws the app's own panel (the release block used the same control
+     when the pill lived there), and `selectTrack__<pid>` is the per-platform
+     callback registered once at load — swSelectChoose calls window[name](value)
+     with one argument, so the platform cannot ride along in the string. */
+  /* THE CHIP IS NOT HERE ANY MORE — it went up to the release block's first
+     row, where it costs no vertical space and sits beside the build it routes
+     (buildReleaseBlock, shape 4). Submit is back to being one act.
+     Nothing replaces it in this row: a second copy of the destination is the
+     drift shape 1 was punished for. `selTrack` still reads below, because the
+     row's ready/locked state depends on a destination having been chosen. */
+  const trackPicker = '';
+
+  /* THE ROW SAYS THE GESTURE THE MOMENT THE GESTURE IS AVAILABLE (v6.63).
+     Jaco, relaying feedback: *"se siente un poco confuso porque nada te dice
+     que tienes que pulsar para submit"* — and measured, that was exactly true.
+     The only statement of the hold was a `title`, i.e. a tooltip you have to
+     find by hovering the thing you already do not know is pressable, and
+     everything else drew this as a sixth step: 15px/500 in the same white as a
+     finished step's name, the pending grey disc while the five above are solid
+     green, no chevron where all five have one, and a "ready" fill of
+     `rgba(47,220,128,.04)` that composites to **6.2 points of luminance** over
+     the card. One instruction, in the one place nobody looks.
+
+     **IT CHANGES WITH THE STATE, WHICH IS WHY IT IS NOT JUST A RENAME.** Jaco:
+     *"cuando todos los pasos están completados y ya vas a poder submitear, el
+     texto cambia a Hold to Submit."* Locked, the row is a NAME — the last item
+     of a checklist, and printing a gesture you cannot perform yet is an
+     instruction for a door that is shut. Ready, it is the one act on the card,
+     so it stops naming itself and says what to do. The label appears exactly
+     when it becomes true, which is the same shape as the store pill saying
+     "Set price" until Business is answered and `GET` after.
+
+     It costs no geometry: measured at 15px IBM Plex Mono, "Hold to Submit" is
+     126px in the 308.5 the row leaves after the disc, well under the 296.5 of
+     "Improve Your Submission" — so the longest name in the list is still some
+     other row's.
+
+     The `title` and `aria-label` keep the same words rather than being dropped.
+     They are the ACCESSIBLE name; the visible label being identical is the
+     point, not a duplication.
+
+     **AND THE TEST IS `readyToSubmit`, NOT `stepLocked` — v6.64 shipped the
+     wrong one and Jaco caught it in a sentence:** *"el botón submit cambia a
+     Hold to Submit cuando todavía me queda el Tracking que seleccionar. No
+     debería pasar."*
+
+     Exactly right, and it is this entry's own argument used against itself.
+     `stepLocked` is `locked || !connected` — the STEPS and the account, and
+     nothing about the destination. But `submitStepClick` refuses on THREE
+     gates, and gate 3 is the track: press a row reading "Hold to Submit" with
+     no track chosen and the hold does not start, it spotlights the chip up in
+     the release block. So the row was printing a gesture that cannot be
+     performed — *"an instruction for a door that is shut"*, four paragraphs
+     up, on the one state that paragraph did not enumerate.
+
+     **The right test was already computed and already documented as doing
+     this.** `readyToSubmit` is `connected && !locked && !!selTrack && !
+     submitDone` — the hold's own three gates — and its comment two screens up
+     says it *"still decides ready-vs-locked below"*. It did not: nothing read
+     it. A variable whose note claims a job it does not have is the same
+     failure as the fill that called itself the cancel hold run forward.
+
+     **The green fill moves with the label**, because they make one claim. The
+     row is `.submit-step-ready` on the same test now, so a card with four
+     ticks and no destination is a LOCKED Submit row — which is true, and which
+     leaves the card's only lit thing the track chip the gate points at.
+
+     The `submitDone` arm is untouched on purpose: a submitted row is a
+     finished step, and `readyToSubmit` is false there by construction, so it
+     is branched before this test rather than through it. */
+  const canHold = readyToSubmit;
+
+  const submitLabel = submitDone || !canHold
+    ? (isWeb ? (t('step.web.submit')      || 'Deploy')         : (t('step.submit')      || 'Submit'))
+    : (isWeb ? (t('step.web.submit.hold') || 'Hold to Deploy') : (t('step.submit.hold') || 'Hold to Submit'));
+
   return `
-    <div class="ios-step-card ios-step-card--inline submit-step-card${pulseClass} ${submitDone ? 'is-complete' : ''} ${stepLocked ? 'submit-step-locked' : 'submit-step-ready'}"
-         id="${pid}-step-card-submit" onclick="submitStepClick('${pid}')">
+    <div class="ios-step-card ios-step-card--inline submit-step-card ${submitDone ? 'is-complete' : ''} ${submitDone ? (stepLocked ? 'submit-step-locked' : 'submit-step-ready') : (canHold ? 'submit-step-ready' : 'submit-step-locked')}"
+         id="${pid}-step-card-submit"
+         onpointerdown="submitHoldStart('${pid}', this, event)"
+         onpointerup="submitHoldEnd()"
+         onpointerleave="submitHoldEnd()"
+         onpointercancel="submitHoldEnd()"
+         title="${submitDone || !canHold ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}"
+         aria-label="${submitDone || !canHold ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}">
       <div class="${numClass}">${submitDone ? checkSVG : num}</div>
       <div class="ios-step-info">
-        <div class="ios-step-name">${isWeb ? (t('step.web.submit') || 'Deploy') : (t('step.submit') || 'Submit')}</div>
+        <div class="ios-step-name">${submitLabel}</div>
       </div>
+      ${submitDone ? '' : trackPicker}
     </div>`;
 }
 
@@ -4504,6 +6665,38 @@ function _appStoreSectionComplete(pid, sectionId) {
 function _appStoreSectionRisk(pid, sectionId) {
   if (pid === 'macos_full') return computeMacFullSectionRisk(sectionId);
   return pid === 'macos' ? computeMacSectionRisk(sectionId) : computeIOSSectionRisk(sectionId);
+}
+
+/* ── ONE COMPLETION ANSWER AND ONE RISK ANSWER, FOR EVERY PLATFORM ───────────
+   The same two questions were being asked in five places each — the four card
+   builders, renderStepModal's own `complete`, and updateIOSCard — as five
+   separate chains of ternaries over the same platform ids. They agreed, but
+   only because nobody had changed one of them; adding the inline pane would
+   have made it six, which is the point at which "they agree" stops being worth
+   betting on. Both dispatchers below are lifted verbatim from the chain that
+   renderStepModal already carried, so no platform's answer changes.
+
+   Risk is NONE where a platform has no risk scoring of its own: the generic
+   builder's note is explicit that Web and the consoles have no equivalent of
+   the App Store questionnaire's scoring, so a row with nothing to say says
+   nothing. Returning a string rather than null keeps every caller on one shape. */
+/* Now a one-line delegation to platformSectionComplete (state.js) rather than
+   a fourth copy of the same platform switch. That function is where the
+   STEP_REQUIRES_VISIT gate lives, so the card, the pane, the modal and
+   platformStepCount's own Submit-unlocking count all answer this question
+   identically — previously the count called each isXxxSectionComplete
+   directly, which would have let a step read "done" on the card while the
+   visit gate was ignored by the button. Same per-platform answers as before
+   for every step outside that set. */
+function _paneComplete(pid, stepId) {
+  return platformSectionComplete(pid, stepId);
+}
+
+function _paneRisk(pid, stepId) {
+  if (pid === 'android') return computeAndroidSectionRisk(stepId);
+  if (pid === 'steam')   return computeSteamSectionRisk(stepId);
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') return _appStoreSectionRisk(pid, stepId);
+  return 'NONE';
 }
 
 function buildIOSActiveCard(pid, force) {
@@ -4729,6 +6922,25 @@ function buildTaskContent(platformId, stepId, done) {
     <p class="task-stub-note">Full task UI coming in the next iteration. Mark complete to continue.</p>`;
 }
 
+/* ONE LOADER, ONE DEFINITION. The same markup was pasted at three call sites
+   (step-modal inference, Improve's report card, Game Details' inline pane), so
+   any change had to be made three times — and the orange Subwoofer icon had
+   already outlived the palette in all three.
+
+   The rings and the centre logo are gone for now; what is left is the headline
+   and the list of what Shipmate is doing, which is the part that actually says
+   anything. The centre of the loader is an open design question, deliberately
+   left empty rather than filled with the old mark. */
+function _infLoadingScreen(headline, msgs, extraCls) {
+  return `
+      <div class="inf-loading-screen${extraCls ? ' ' + extraCls : ''}">
+        <div class="inf-headline">${headline}</div>
+        <div class="inf-steps">
+          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
+        </div>
+      </div>`;
+}
+
 /* ── Inference loading messages (per platform + step) ─── */
 function _getInferenceMsgs(platformId, stepId) {
   // The Content Rating step shares the unified questionnaire inference, so it
@@ -4777,6 +6989,119 @@ function _countInferenceAnswers(platformId, stepId) {
 
 /* ── Step Modal (iOS per-step) ───────────────────────── */
 
+/* THE SUB-SECTION NAMES, ONE DEFINITION.
+
+   These were a `const` inside renderStepModal, which was fine while the modal
+   was the only thing that could be flipped. The inline pane flips too now — it
+   prints the same name beside its back arrow — and a second copy of a label
+   table is the exact shape this file keeps a section about ("One definition per
+   symbol"): the copies do not break, they drift, and nobody diffs them. */
+const SM_FLIP_LABELS = {
+  content:       'Content Questions',
+  business:      'Business Questions',
+  data:          'Data Collection Questions',
+  screenshots:   'Screenshots',
+  siteInfo:      'Site Details',
+  webFactsheet:  'About',
+  webDescription:'Description',
+  webMedia:      'Media',
+  webKeyArt:     'Key Art',
+  steamAssets:   'Select Steam Assets',
+  tags:          'Tags',
+  technical:     'Technical',
+  languages:     'Languages',
+  info:          'Info',
+  localization:  'Localization Review',
+  iapLocalizations: 'IAP Localizations',
+  achievementLocalizations: 'Achievement Localizations',
+  appInformation: 'App Information',
+};
+
+/* ── THE STEP BODY DISPATCHER ────────────────────────────────────────────────
+   Lifted out of renderStepModal in v6.29, verbatim, when the Submission tab
+   stopped opening steps in a modal and started expanding them in place. Both
+   surfaces now ask this one function what a step's body is.
+
+   It is a function rather than a copy for the reason written all over this
+   file: a body list duplicated across two render paths is a list that drifts,
+   and this one is 50 lines of platform-by-step branching that nobody would
+   diff. The inline pane would otherwise have had to know that Steam's preview
+   step is `storePreviewPrototype` while everyone else's is `storePreview`,
+   that macos_full re-uses three generic builders and has its own for the rest,
+   and that Game Center is reachable but is not in any steps array.
+
+   The two loading screens stay INSIDE it. They are what the body IS while a
+   call is in flight, not chrome around it — the inline pane wants the same
+   "Shipmate is working…" in the same place the modal put it. */
+function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
+  let body = '';
+  if (inferenceStatus === 'loading') {
+    const msgs = _getInferenceMsgs(platformId, stepId);
+    body = _infLoadingScreen('Shipmate is working…', msgs);
+  } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
+    const iaMsgs = [
+      'Comparing store page to best in class…',
+      'Reviewing assets to maximize conversion…',
+      'Analyzing binary to gauge compliance risk…',
+      'Preparing your personalized report…',
+    ];
+    body = _infLoadingScreen('Generating Report Card…', iaMsgs);
+  } else if (platformId === 'android') {
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
+    // Legacy / questionnaire kept for backward-compat
+    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
+    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
+    else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
+    else if (stepId === 'localizations')      body = buildAndroidLocalizationsSection();
+    else if (stepId === 'business')           body = buildAndroidBusinessSection();
+  } else if (platformId === 'steam') {
+    if (stepId === 'storePreviewPrototype')   body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
+    // Legacy / questionnaire kept for backward-compat
+    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
+    else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
+    else if (stepId === 'dataSafety')         body = buildSteamDataSafetySection();
+    else if (stepId === 'localizations')      body = buildSteamLocalizationsSection();
+    else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
+    else if (stepId === 'technical')          body = buildSteamTechnicalSection();
+  } else if (platformId === 'web') {
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
+  } else if (platformId === 'macos_full') {
+    // Mac App Store Full — organized by App Store Connect section (see
+    // PLATFORMS.macos_full.steps, state.js). contentRating/privacy/
+    // improveSubmission reuse the same generic builders every other
+    // platform's App-Store-style step already calls (buildContentRatingSection/
+    // buildPrivacySection/buildImproveSubmissionSection all resolve via pid
+    // already); every other step gets its own dedicated builder below,
+    // since none of them have a real ios/macos equivalent to reuse.
+    if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
+    else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
+    else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
+    else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
+    else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
+    else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
+    else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
+    else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
+  } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
+  else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
+  else if (stepId === 'localizations' && platformId === 'macos') body = buildMacLocalizationsSection();
+  else if (stepId === 'localizations' && platformId === 'ios') body = buildIosLocalizationsSection();
+  else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
+  else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
+  else if (stepId === 'distribution')         body = buildDistributionSection();
+  // iOS legacy / questionnaire kept for backward-compat
+  else if (stepId === 'questionnaire')        body = buildQuestionnaireSection(platformId);
+  else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
+  else if (stepId === 'contentRating')        body = buildContentRatingSection(platformId);
+  else if (stepId === 'privacy')              body = buildPrivacySection(platformId);
+  else if (stepId === 'business')             body = buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
+  return body;
+}
+
 function renderStepModal() {
   const modal = document.getElementById('submit-modal');
   if (!modal) return;
@@ -4822,8 +7147,108 @@ function renderStepModal() {
   // plain step body. Scoped to ios/macos only, per request — macos_full's
   // own 'privacy' step is a separate, differently-reached surface that
   // wasn't asked for here.
-  const isPrivacyWide = stepId === 'storePreview' && (platformId === 'ios' || platformId === 'macos') && state.storePreviewFlipTarget?.[platformId] === 'data';
-  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (state.showHighlights ? ' is-validating' : '');
+  /* TWO DOORS, ONE TABLE, ONE WIDTH (v6.52). This used to test the flip alone —
+     `storePreview` + a `data` flip target — and that was the door the width was
+     designed for. But `privacy` is also a REAL STEP (macos_full lists it), and
+     reached that way the identical table was drawn in a 680px modal with 253px
+     of sideways scroll. The old comment called that "a separate, differently
+     reached surface that wasn't asked for here"; it is the same builder, the
+     same markup and the same 748px table, so it is the same surface reached by
+     a different route and it takes the same width. */
+  const isPrivacyWide =
+    (stepId === 'privacy') ||
+    (stepId === 'storePreview' && (platformId === 'ios' || platformId === 'macos')
+      && state.storePreviewFlipTarget?.[platformId] === 'data');
+  /* Mac App Store's Game Center, at Product Page Preview's width by request.
+     The two are one surface from the developer's seat — Achievements is a
+     card ON the preview (buildMacStorePreviewSection's achievementsHtml) and
+     clicking it opens this, so the modal jumping from 1000px down to the
+     default 680 read as landing somewhere else entirely rather than one level
+     deeper. Its own modifier rather than reusing .submit-modal-mac-spp, for
+     the same reason .submit-modal-privacy-wide is separate: that class also
+     carries sidebar flex/scroll overrides (.mac-spp-sidebar) that have
+     nothing to drive here. Scoped to 'macos' as asked — macos_full's Game
+     Center is a different, more elaborate surface (leaderboards) and wasn't
+     part of the request. */
+  /* AND BUSINESS QUESTIONS TAKES THE SAME WIDTH, for the same reason and now
+     through the same flag (by request: "so that transitioning between the two
+     sections looks smoother"). Business is reached by flipping the preview over
+     — `storePreview` + a `business` flip target, the same door Content and Data
+     Questions use — so the developer is one level deeper inside a surface they
+     were just looking at, and dropping 1000 → 680 on the way in read as landing
+     somewhere else. `.submit-modal` transitions `max-width`, so with the two
+     equal there is no resize to watch at all.
+
+     One flag rather than a second identical one: Game Center and Business
+     Questions make the SAME claim — a sub-surface of the Mac preview, at the
+     preview's width, with none of `.submit-modal-mac-spp`'s sidebar
+     flex/scroll overrides to act on. The class is named for the claim now
+     rather than for the first step that made it.
+
+     Data Questions is deliberately NOT folded in: its width is DERIVED from the
+     table it holds (807, see .submit-modal-privacy-wide) rather than borrowed
+     from the preview, and it was re-derived away from 1000 on purpose. */
+  /* AND CONTENT AND DATA QUESTIONS JOIN THEM, by request — so every door out of
+     the Mac preview lands at the preview's width and the flip stops resizing
+     entirely.
+
+     BOTH DOORS, NOT JUST THE FLIP, on this file's own rule: v6.52 widened the
+     standalone `privacy` STEP to the flip's width because "it is the same
+     builder, the same markup and the same table, so it is the same surface
+     reached by a different route and it takes the same width." Mac reaches its
+     Data Collection Questions from the preview AND from the Data Safety card
+     step (v6.95), and its Content Questions from the preview AND from the
+     Content Rating card step. Widening one door only would draw the same
+     section at two sizes depending on how you arrived.
+
+     SCOPED TO macos, which is what was asked and also all that makes sense: the
+     App Store's own preview is 680, so there is no transition to smooth there,
+     and iOS keeps the derived 807 its data table was measured for.
+
+     WORTH KNOWING, because it reverses a measurement: 807 is not a picked
+     number — it is 748 of table plus its chrome, re-derived DOWN from 1000 in
+     v6.49/v6.52 precisely because 1000 was wider than the table needs. On Mac
+     that derivation now loses to the transition, deliberately; the table sits
+     in a roomier box than it would choose for itself. iOS still holds the
+     derived width, so the measurement is not lost, just no longer the only
+     consideration on the one surface that flips out of a 1000px page.
+
+     AND ADJUST SCREENSHOTS, THE LAST DOOR, by request — and the one where the
+     resize was never only cosmetic. `_shotEdWatchWidth` (app.js) documents what
+     the shrink did here: the stage is armed on the first frame of the flip, at
+     which point the modal is still 1000 and the stage measures 939, so the crop
+     frame was solved at 939 x 587 and pinned in inline pixels; the modal then
+     animated down to 680 around it, leaving 619 x 587 of a 939-wide frame
+     visible — ratio 1.05, which is what *"la primera vez que se abre el modal
+     de los screenshots, la preview es cuadrada"* was. A `ResizeObserver` made
+     the geometry a function of the width rather than a snapshot of it, and that
+     stays (a window resize still moves the width); with the two modals equal it
+     simply has nothing to do on the way in. The bug's transient value, 939 x
+     587, is now the settled one.
+
+     THE STAGE GROWS WITH THE MODAL ON PURPOSE: it is the modal's full width by
+     this editor's own brief (*"que me muestres la preview ocupando todo el
+     ancho del modal"*), so 619 x 387 becomes 939 x 587 rather than a 619 box
+     centred in a wider sheet.
+
+     AND THAT HEIGHT IS THE PRICE, MEASURED AND NAMED RATHER THAN HIDDEN: the
+     stage is 200px taller, and the modal is not (`height: clamp(560px, 88vh,
+     860px)`), so the room comes out of what sits below it. On a 1050-tall
+     viewport the zoom toolbar and the thumbnail strip still clear the fold; at
+     1440 x 900 the strip opens entirely below it, and at 1280 x 800 the toolbar
+     does too. Capping the canvas would fix it — `_shotEdGeometry`'s `full:
+     false` arm already centres a frame narrower than its canvas, which is what
+     a capped landscape stage is — but a height cap is a different change from a
+     width, so it is stated here and not smuggled in. */
+  const macFlip = platformId === 'macos' ? state.storePreviewFlipTarget?.['macos'] : null;
+  const isMacPreviewSub =
+    (platformId === 'macos') &&
+    (stepId === 'gameCenter' ||
+     stepId === 'privacy' || stepId === 'contentRating' ||
+     (stepId === 'storePreview' &&
+      (macFlip === 'business' || macFlip === 'content' ||
+       macFlip === 'data'     || macFlip === 'screenshots')));
+  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (isMacPreviewSub ? ' submit-modal-mac-sub' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];
@@ -4869,26 +7294,7 @@ function renderStepModal() {
   const flipTarget = (stepId === 'storePreview' || stepId === 'storePreviewPrototype' || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full')))
     ? (state.storePreviewFlipTarget?.[platformId] || null)
     : null;
-  const FLIP_LABELS = {
-    content:       'Content Questions',
-    business:      'Business Questions',
-    data:          'Data Collection Questions',
-    screenshots:   'Screenshots',
-    siteInfo:      'Site Details',
-    webFactsheet:  'About',
-    webDescription:'Description',
-    webMedia:      'Media',
-    webKeyArt:     'Key Art',
-    steamAssets:   'Select Steam Assets',
-    tags:          'Tags',
-    technical:     'Technical',
-    languages:     'Languages',
-    info:          'Info',
-    localization:  'Localization Review',
-    iapLocalizations: 'IAP Localizations',
-    achievementLocalizations: 'Achievement Localizations',
-    appInformation: 'App Information',
-  };
+  const FLIP_LABELS = SM_FLIP_LABELS;
   const isFlipped = !!flipTarget;
   // Game Center (macos, ios, and now macos_full too) is not one of
   // PLATFORMS.macos.steps/PLATFORMS.ios.steps/PLATFORMS.macos_full.steps at
@@ -4901,100 +7307,9 @@ function renderStepModal() {
     ? (FLIP_LABELS[flipTarget] || step?.label)
     : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
-  // Step body
-  let body = '';
-  if (inferenceStatus === 'loading') {
-    const msgs = _getInferenceMsgs(platformId, stepId);
-    body = `
-      <div class="inf-loading-screen">
-        <div class="inf-rings-wrap">
-          <div class="inf-ring inf-ring-1"></div>
-          <div class="inf-ring inf-ring-2"></div>
-          <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="inf-headline">Shipmate is working…</div>
-        <div class="inf-steps">
-          ${msgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
-        </div>
-      </div>`;
-  } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
-    const iaMsgs = [
-      'Comparing store page to best in class…',
-      'Reviewing assets to maximize conversion…',
-      'Analyzing binary to gauge compliance risk…',
-      'Preparing your personalized report…',
-    ];
-    body = `
-      <div class="inf-loading-screen">
-        <div class="inf-rings-wrap">
-          <div class="inf-ring inf-ring-1"></div>
-          <div class="inf-ring inf-ring-2"></div>
-          <div class="inf-ring inf-ring-3"></div>
-          <img src="Assets/SubwooferIcon_Orange.png" class="inf-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="inf-headline">Generating Report Card…</div>
-        <div class="inf-steps">
-          ${iaMsgs.map((m, i) => `<div class="inf-step" style="animation-delay:${i * 1.3}s"><div class="inf-dot"></div><span>${m}</span></div>`).join('')}
-        </div>
-      </div>`;
-  } else if (platformId === 'android') {
-    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-    // Legacy / questionnaire kept for backward-compat
-    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
-    else if (stepId === 'dataSafety')         body = buildAndroidDataSafetySection();
-    else if (stepId === 'business')           body = buildAndroidBusinessSection();
-  } else if (platformId === 'steam') {
-    if (stepId === 'storePreviewPrototype')   body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildSteamStorePreviewPrototypeSection();
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-    // Legacy / questionnaire kept for backward-compat
-    else if (stepId === 'questionnaire')      body = buildQuestionnaireSection(platformId);
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'contentRating')      body = buildSteamContentRatingSection();
-    else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
-    else if (stepId === 'technical')          body = buildSteamTechnicalSection();
-  } else if (platformId === 'web') {
-    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
-  } else if (platformId === 'macos_full') {
-    // Mac App Store Full — organized by App Store Connect section (see
-    // PLATFORMS.macos_full.steps, state.js). contentRating/privacy/
-    // improveSubmission reuse the same generic builders every other
-    // platform's App-Store-style step already calls (buildContentRatingSection/
-    // buildPrivacySection/buildImproveSubmissionSection all resolve via pid
-    // already); every other step gets its own dedicated builder below,
-    // since none of them have a real ios/macos equivalent to reuse.
-    if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
-    else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
-    else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
-    else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
-    else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
-    else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
-    else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
-    else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-  } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
-  else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
-  else if (stepId === 'localizations' && platformId === 'macos') body = buildMacLocalizationsSection();
-  else if (stepId === 'localizations' && platformId === 'ios') body = buildIosLocalizationsSection();
-  else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : (platformId === 'macos' ? buildMacStorePreviewSection() : buildStorePreviewSection());
-  else if (stepId === 'improveSubmission')    body = buildImproveSubmissionSection(platformId);
-  else if (stepId === 'distribution')         body = buildDistributionSection();
-  // iOS legacy / questionnaire kept for backward-compat
-  else if (stepId === 'questionnaire')        body = buildQuestionnaireSection(platformId);
-  else if (stepId === 'screenshots')          body = buildScreenshotsSection(platformId);
-  else if (stepId === 'contentRating')        body = buildContentRatingSection(platformId);
-  else if (stepId === 'privacy')              body = buildPrivacySection(platformId);
-  else if (stepId === 'business')             body = buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
-
-  const complete = platformId === 'android'    ? isAndroidSectionComplete(stepId)
-               : platformId === 'steam'        ? isSteamSectionComplete(stepId)
-               : platformId === 'web'          ? (state.platformStepStatus?.web?.[stepId] === 'complete')
-               : platformId === 'macos'        ? isMacSectionComplete(stepId)
-               : platformId === 'macos_full'   ? isMacFullSectionComplete(stepId)
-               : isIOSSectionComplete(stepId);
+  // Step body — one dispatcher, shared with the inline Submission pane.
+  const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
+  const complete = _paneComplete(platformId, stepId);
 
   /* GOING BACK IS NOT CLOSING, and the header used to offer only the second.
      A flipped panel is one level INSIDE the Store Preview — you got here by
@@ -5011,17 +7326,47 @@ function renderStepModal() {
 
      Un-flipped, the × is right and stays: there is no level to go back to,
      and closing IS the way out. */
+  /* GAME CENTER IS A SUB-PANEL TOO, AND IT WAS THE ONE THAT SAID OTHERWISE.
+     Jaco: *"Achievements es el único modal que no sigue el mismo patrón de
+     flecha para volver atrás… tiene un Done que cierra todo, la tienda incluida,
+     y eso no está bien."*
+
+     The paragraph above is written against `isFlipped`, and that test is about
+     the MECHANISM (a flip inside one step) rather than about the fact it was
+     reasoning from — **that you got here from somewhere, and back is not
+     closed.** Game Center arrives at the same place by a different road: it is
+     not in any platform's `steps` at all (see PLATFORMS.macos/ios/macos_full),
+     so the Achievements card on the Product Page Preview is its ONLY door. That
+     makes "where back goes" derivable rather than guessed, and it makes the ×
+     and the Done exactly as wrong here as they were there — one level down, the
+     most obvious control in the corner threw away the store page you were
+     reading, and the footer button did it too while claiming to be finished.
+
+     So the chrome follows the SITUATION, not the mechanism: `isSubPanel` is what
+     the header and footer read now. Nothing about the flip changes — the title
+     still comes from `step?.label`, the body is still Game Center's own builder,
+     and a flipped panel is untouched. */
+  const cameFromPreview = stepId === 'gameCenter'
+    && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full');
+  const isSubPanel = isFlipped || cameFromPreview;
+
   const returnAction = flipTarget === 'iapLocalizations'
     // IAP Locs is reached FROM Business Questions rather than from the Store
     // Preview itself, so back means Business Questions — see the note on the
     // footer button below.
     ? `openStorePreviewSection('${platformId}','business')`
-    : `closeStorePreviewSection('${platformId}')`;
+    : cameFromPreview
+      // Not a flip: Game Center is its own step modal, opened over the preview
+      // by the Achievements card. Back is that card's own step, re-opened the
+      // same way it opened this one — symmetric, so the two presses are one
+      // gesture and its reverse.
+      ? `openStepModal('${platformId}','storePreview')`
+      : `closeStorePreviewSection('${platformId}')`;
 
   modal.innerHTML = `
     <div class="submit-modal-header" style="border-top-color:${p.color};">
       <div class="submit-modal-title-row">
-        ${isFlipped ? `
+        ${isSubPanel ? `
         <button class="submit-modal-back" onclick="${returnAction}"
                 title="Back" aria-label="Back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -5029,31 +7374,54 @@ function renderStepModal() {
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>` : ''}
-        <div class="submit-modal-hicon">${platformIcon(platformId, 30, 'white')}</div>
-        <div>
+        <!-- THE MEASURED MARK FIRST, exactly as the platform card does it
+             (buildIOSActiveCard → smMarkFor). The modal used to call
+             platformIcon() straight, so macOS wore the bare Apple glyph in the
+             header while its card wore the App Store mark — two different
+             identities for one store. Sized in CSS, not by these arguments. -->
+        <div class="submit-modal-hicon">${(typeof smMarkFor === 'function' && smMarkFor(platformId, 30)) || platformIcon(platformId, 30, 'white')}</div>
+        <div class="submit-modal-head-titles">
           <div class="submit-modal-title">${displayStepLabel || ''}</div>
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
-      ${isFlipped ? '' : `
+      ${isSubPanel ? '' : `
       <div class="submit-modal-header-actions">
-        <!-- The Mac App Store Product Page Preview's language switcher only
-             — its own request, see _macSppLangDropdownHTML. iOS and Mac Full
-             keep theirs in the scrollable body, unchanged. -->
-        ${(platformId === 'macos' && stepId === 'storePreview') ? _macSppLangDropdownHTML() : ''}
+        <!-- The two Apple Product Page Previews' language switchers. Both sit
+             here, left of the ×, because the ask is "above the top bar" and the
+             pinned section nav is the first thing inside the body — see
+             _iasSppLangDropdownHTML / _macSppLangDropdownHTML. Mac Full and
+             Steam keep theirs in the scrollable body, unchanged. -->
+        ${(stepId === 'storePreview' && platformId === 'macos') ? _macSppLangDropdownHTML() : ''}
+        ${(stepId === 'storePreview' && platformId === 'ios')   ? _iasSppLangDropdownHTML() : ''}
         <button class="task-modal-close" onclick="closeStepModal()">×</button>
       </div>`}
     </div>
-    <div class="submit-modal-scroll" id="step-modal-body">
-      ${inferenceBanner}
-      <div class="ios-step-body-content">
-        ${body}
+    ${/* READ-ONLY IS A PROPERTY OF THE VISIT, not of the step. A submitted
+          platform's answers are a declaration already made — you can read every
+          one of them and change none. The lock is one class on the scroller
+          plus a banner, rather than a `disabled` on every control: the step
+          bodies are built by a dozen builders across four platforms and
+          touching each of them to learn a second mode is how they drift.
+          The cost, stated: it is a POINTER lock, not a permissions model. A
+          keyboard can still reach a field. That is the right trade for a
+          prototype and the wrong one for a product. */''}
+    ${state.stepModalReadOnly === platformId ? `
+    <div class="step-readonly-note">Submitted — read only. Cancel the submission to change anything.</div>` : ''}
+    <div class="submit-modal-body-wrap at-top at-bottom${state.stepModalReadOnly === platformId ? ' is-readonly' : ''}" id="step-modal-body-wrap">
+      <div class="submit-modal-scroll" id="step-modal-body">
+        ${inferenceBanner}
+        <div class="ios-step-body-content">
+          ${body}
+        </div>
       </div>
+      <div class="submit-modal-fade-top"></div>
+      <div class="submit-modal-fade-bottom"></div>
     </div>
     <div class="submit-modal-footer">
       ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
-      ${isFlipped
+      ${isSubPanel
         // IAP Locs is reached FROM Business Questions (the "IAP Locs" button
         // on the IAP Products row, buildIapSection) rather than from the
         // un-flipped Store Preview itself, so its own "Save & Return" flips
@@ -5062,8 +7430,8 @@ function renderStepModal() {
         // Store Preview, skipping right over the Business Questions they
         // actually came from. Both this and the header's back arrow read the
         // same `returnAction`, so the two ways out can never disagree.
-        ? `<button class="btn btn-primary" onclick="${returnAction}">Save &amp; Return</button>`
-        : `<button class="btn btn-primary" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
+        ? `<button class="imp-cta" onclick="${returnAction}">Save &amp; Return</button>`
+        : `<button class="imp-cta" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
       }
     </div>`;
 
@@ -5089,6 +7457,36 @@ function renderStepModal() {
     requestAnimationFrame(_impPostRender);
   }
 
+  /* The header and footer no longer draw a line — the body dissolves into them
+     instead. That has to be re-armed on EVERY render: this function replaces
+     the modal's innerHTML, so the previous scroller (and its listener) is gone.
+     See _smModalFades in app.js. */
+  if (typeof _smModalFades === 'function') requestAnimationFrame(_smModalFades);
+
+  /* Same reason, one floor up: the pinned nav's green sweep fires on the EDGE
+     from "something outstanding" to "nothing outstanding", and an edge can only
+     be seen by comparing two renders. See _sppCelebrate (app.js). */
+  if (typeof _sppCelebrate === 'function') requestAnimationFrame(_sppCelebrate);
+
+  /* And the same contract again for the row that scrolls sideways inside it: a
+     fresh node starts at `scrollLeft: 0` with no listener, so both the end fades
+     and the lit pill's own position have to be re-solved after the paint. See
+     `_sppPinnedArm` (app.js). */
+  if (typeof _sppPinnedArm === 'function') requestAnimationFrame(_sppPinnedArm);
+
+  /* And the same argument one level finer: the return pop diffs each element
+     against what it last looked like, so it can only run after a paint. Its
+     twin — the commit sweep — is deliberately NOT here: it fires at commit time
+     from an overlay, because the render it would otherwise wait for is deferred
+     and can be deferred indefinitely. See `_masCommitGlimmer` (app.js). */
+  if (typeof _sppJustChanged === 'function') requestAnimationFrame(_sppJustChanged);
+
+  /* The Screenshots editor is armed here for `_smModalFades`'s reason and one
+     of its own: its listeners die with the modal's innerHTML, AND its crop
+     frame is solved against the stage's real width, which no builder can know.
+     A no-op on every other step — it looks for `.shot-ed` and leaves. */
+  if (typeof _shotEdArm === 'function') requestAnimationFrame(_shotEdArm);
+
   // Mac App Store's own Description clamps to exactly 4 rows via native
   // -webkit-line-clamp (buildMacStorePreviewSection, above) — whether that
   // actually truncated anything (and so whether the "more" chip should
@@ -5100,6 +7498,18 @@ function renderStepModal() {
 
   // Doc pane — questionnaire only, desktop only
   _syncDocPane(stepId);
+
+  /* RENDERING A STEP CAN COMPLETE ONE, so the checklist is refreshed on the way
+     out as well as on the way in. Three of the preview's required elements are
+     "you have been here" flags — storePreviewSectionSeen, written by
+     buildStorePreviewFlipSection while it BUILDS the sub-section's HTML, and
+     stepSectionSeen, written by openStepModal — which means the visit becomes
+     true partway through this paint, after reRenderStepModal's own refresh has
+     already run. Data safety is the visible case: flipping to Data Collection
+     Questions on the second Apple platform is the moment _chkDataSafetyDone()
+     turns true, and without this line the row waited for whatever repainted
+     next. No-op unless the done-state actually moved. */
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
 }
 
 /* ── Documentation Pane helpers ─────────────────────────── */
@@ -6671,21 +9081,33 @@ function buildImproveSubmissionSection(platformId) {
      is the only thing still making it. */
   function _carousel(states, sel, onClickFor) {
     if (states.length < 2) return '';
+    /* THE NEXT ONE TO DO BREATHES — but only once the one you are on is
+       answered. Before that the pulse would be pointing past work you have not
+       started. It is the next OPEN circle forward from the selected one,
+       wrapping; with nothing left open there is nothing to point at. */
+    let nextIdx = -1;
+    if (sel >= 0 && states[sel] && states[sel] !== 'open') {
+      for (let k = 1; k < states.length; k++) {
+        const j = (sel + k) % states.length;
+        if (states[j] === 'open') { nextIdx = j; break; }
+      }
+    }
     return `<span class="iv-carousel">${states.map((st, i) => {
       const cls = 'iv-tab'
         + (i === sel ? ' sel' : '')
         + (st === 'reviewed' ? ' reviewed' : '')
-        + (st === 'pend' ? ' pend' : '');
+        + (st === 'pend' ? ' pend' : '')
+        + (i === nextIdx ? ' iv-tab-next' : '');
       return `<button type="button" class="${cls}" onclick="${onClickFor(i)}">`
            + (st === 'reviewed' ? TAB_CHECK_SVG : (i + 1)) + '</button>';
     }).join('')}</span>`;
   }
 
+  /* An all-clear is the same claim as a completion line, so it wears the same
+     format — `.iv-strong-line`, no icon. The green circle-check it replaced was
+     the last `iys-` legacy styling left inside this section. */
   function _allGood(msg) {
-    return `<div class="iys-issue-content iys-all-good-inline">
-      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="7" stroke="var(--green)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>${msg || 'Looking good'}</span>
-    </div>`;
+    return `<div class="iv-strong-line">${msg || 'Looking good'}</div>`;
   }
 
   /* The batch shell: tab behind, card in front. `headRight` is the carousel (or
@@ -6916,7 +9338,21 @@ function buildImproveSubmissionSection(platformId) {
        text it wrote is the real store copy. Folding that away the instant you
        choose hides the thing you are most likely to want to reread.
        The header toggle still works, so it can be parked by hand. */
-    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', false)) {
+    /* STORE PAGE AUTO-COLLAPSES NOW, and this reverses the rule written above.
+
+       That rule was right about the FACT and wrong about the consequence: an
+       accepted fix really does stay editable through its pencil, so answering
+       one is not the end of it. But the three batches are also a REPORT CARD,
+       and a card that stays open for ever while the two beside it fold is a
+       report you can never finish reading — the grades never line up because
+       one panel is always a screen tall.
+
+       Reaching the end of the queue is a real event and deserves to be marked
+       like the other two. What the old note was protecting is still protected:
+       collapsing is not deleting. The header toggle reopens it, the carousel
+       still lists every suggestion, and pressing a circle opens the batch on
+       that item with its pencil intact. */
+    if (typeof _improveCollapsed === 'function' && _improveCollapsed('storePage', spAllAnswered)) {
       spCardCls = 'iv-card-collapsed';
       /* THE LINE IS EARNED, NOT A CONSEQUENCE OF BEING SHUT. Collapsing happens
          for two different reasons — the work finished, or you parked it — and
@@ -6924,7 +9360,12 @@ function buildImproveSubmissionSection(platformId) {
          suggestions still open, it said everything was fine about work nobody
          had done. Parked, it shows its header and nothing else, which is the
          honest shape for "not now". */
-      spBody = spAllAnswered ? `<div class="iv-strong-line">Your store page is looking good</div>` : '';
+      /* "INCORPORATED", not "looking good". The three end-cards are read side by
+         side, so they say the same KIND of thing in the same grammar: what you
+         did with the batch, not how the batch turned out. The grade already
+         reports quality; a line that also praises it says one thing twice and
+         leaves the three panels making three different claims. */
+      spBody = spAllAnswered ? `<div class="iv-strong-line">Store page suggestions incorporated</div>` : '';
       spHeadRight = _carousel(spAll.map(it => it.status === 'open' ? 'open' : 'reviewed'), -1, i => `selectStoreFix(${i})`);
     }
   }
@@ -6964,8 +9405,14 @@ function buildImproveSubmissionSection(platformId) {
          suggestions still open, it said everything was fine about work nobody
          had done. Parked, it shows its header and nothing else, which is the
          honest shape for "not now". */
+    /* One line for both outcomes. It used to split — "<language> added" when
+       accepted, "Localization handled" when declined — which reads as two
+       different kinds of ending in a row of three that must match. Confirming
+       your intended localizations is what happened either way; whether that
+       meant adding one is the grade's business, and the grade still falls when
+       you decline (locAccepted ? 'A' : locGrade, below). */
     locBody = locDone
-      ? `<div class="iv-strong-line">${locAccepted ? escHtml(langName) + ' added' : 'Localization handled'}</div>`
+      ? `<div class="iv-strong-line">Intended localizations confirmed</div>`
       : '';
   } else {
     const undoLoc = locDone
@@ -6979,7 +9426,15 @@ function buildImproveSubmissionSection(platformId) {
            <button type="button" class="imp-cta" data-imp-act="apply" onclick="answerLocalizationRec(true)">Add language</button>
          </div>`}`;
   }
-  const locSection = _batch('imp-loc-batch', locDone ? 'A' : locGrade, 'loc', 'Localization', '', '', locBody, locCardCls,
+  /* ONLY ACCEPTING MOVES THE GRADE. It was `locDone ? 'A' : locGrade`, so "Not
+     now" scored the same as adding the language — the batch went to A for
+     having been answered. The grade rates the SUBMISSION, not whether you have
+     dealt with the card: declining a language leaves the submission exactly as
+     weak as it was, and a grade that rises for dismissing its own advice is
+     worth nothing. Dismissed still collapses the batch (it is no longer asking
+     anything) and still says "Localization handled" — those are about the ask,
+     which is a different fact from the score. */
+  const locSection = _batch('imp-loc-batch', locAccepted ? 'A' : locGrade, 'loc', 'Localization', '', '', locBody, locCardCls,
                             langName ? { key: 'loc', allAnswered: locDone } : null);
 
   // ── BINARY SECTION ────────────────────────────────────
@@ -7009,10 +9464,8 @@ function buildImproveSubmissionSection(platformId) {
      inert. It now opens the same file picker the pill below does — the input
      is its own (a second id would clash with the pill's) and lands in the same
      handleBuildUpload, so there is one upload path however you reach it. */
-  const binAccept = platformId === 'ios' ? '.ipa'
-                  : (platformId === 'macos' || platformId === 'macos_full') ? '.pkg,.zip'
-                  : platformId === 'android' ? '.apk,.aab'
-                  : '.exe,.zip';
+  // SM_BUILD_ACCEPT (state.js) — one list, read by both upload controls.
+  const binAccept = smBuildAccept(platformId).accept;
   const binChipInput = `iv-binfile-input-${platformId}`;
   const UPLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex:none"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>';
 
@@ -7043,7 +9496,10 @@ function buildImproveSubmissionSection(platformId) {
     /* Collapsed: the sentence is a caption for the header's control, not a body
        under it, so it gets no divider — same reasoning as the all-clear states. */
     binCardCls = 'iv-card-binary iv-card-collapsed';
-    binBody = `<div class="imp-problem" style="margin-bottom:0;">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
+    /* The margins live in CSS (.iv-card-binary.iv-card-collapsed .imp-problem),
+       not inline: the caption needs air on BOTH sides and an inline
+       margin-bottom:0 cannot be overridden by a rule. */
+    binBody = `<div class="imp-problem">Upload your build to scan for undeclared SDKs, missing privacy manifests, deprecated APIs, and permission mismatches.</div>`;
   } else if (binProcessing) {
     binBody = `<div class="iys-bin-analyzing"><span class="build-proc-spin"></span><span>Analyzing binary… this takes about 10 seconds.</span></div>`;
   } else {
@@ -7076,11 +9532,25 @@ function buildImproveSubmissionSection(platformId) {
            <button type="button" class="imp-cta" data-imp-act="apply" onclick="acknowledgeBinFinding('${platformId}')">Got it</button>
          </div>`;
 
+    /* THE BUTTONS SIT ABOVE THE PANEL THEY OPEN, and that is the whole point:
+       "View fix" must not move when the fix appears.
+
+       Underneath, the snippet pushed the row down by its own height — so the
+       control you had just pressed was no longer where your pointer was, and
+       closing it again meant hunting for a button that had walked off. On a
+       disclosure the second press is the likeliest next thing you do, which is
+       the same argument the submitted card's "See what you sent" toggle was
+       moved above its list for.
+
+       "Got it" comes along for the ride, and that is right too: both are
+       actions on the FINDING, and the snippet is evidence underneath them.
+       A panel growing below a fixed row is content arriving; a row sliding
+       down ahead of it is the page rearranging itself. */
     binBody = `
       <div class="iv-titlerow"><div class="iv-title">${escHtml(cur.title)}</div></div>
       <div class="imp-problem">${escHtml(cur.body)}</div>
-      ${fixPanel}
-      ${actions}`;
+      ${actions}
+      ${fixPanel}`;
 
     if (typeof _improveCollapsed === 'function' && _improveCollapsed('binary', binAllDone)) {
       binCardCls = 'iv-card-binary iv-card-collapsed';
@@ -7091,7 +9561,9 @@ function buildImproveSubmissionSection(platformId) {
          the batch on that finding, which then offers its own button.
          The reference pairs the line and the button in one row, and that row is
          right for a resolved finding you are looking at; it is not the summary. */
-      binBody = binAllDone ? `<div class="iv-strong-line">Your binary is looking good</div>` : '';
+      // "Considered" rather than "fixed": Got it is an acknowledgement, not a
+      // repair — the finding is still in the binary. Same grammar as the other two.
+      binBody = binAllDone ? `<div class="iv-strong-line">Binary recommendations considered</div>` : '';
       binHeadRight = _carousel(findings.map((_, i) => binDone.has(i) ? 'reviewed' : 'open'), -1, i => `selectBinFinding('${platformId}',${i})`);
     }
   }
@@ -7100,11 +9572,36 @@ function buildImproveSubmissionSection(platformId) {
   const binSection = _batch('imp-binary-batch', binGrade, 'bin', 'Binary', binHeadExtra, binHeadRight, binBody, binCardCls,
                             { key: 'binary', allAnswered: binAllDone });
 
+  /* ── What Shipmate found, in a sentence ────────────────
+     "SHIPMATE GUIDANCE" was a category label: it named the machine's role and
+     told you nothing about your own submission. This counts what is actually
+     asking for a decision — open store-page suggestions, the localization
+     recommendation if it is unanswered, and unresolved binary findings — in the
+     same voice as Content Rating's pinned line, so the two steps sound like one
+     app. Unlike that line it is NOT a pill: a pill there holds a control (the
+     filter), and a box drawn around a sentence with nothing to press is a box
+     for nothing. */
+  const openStoreCount = spAll.filter(it => it.status === 'open').length;
+  const openLocCount   = (langName && !locDone) ? 1 : 0;
+  const openBinCount   = binAnalyzed ? findings.filter((_, i) => !binDone.has(i)).length : 0;
+  const openTotal      = openStoreCount + openLocCount + openBinCount;
+  /* NO NUMBER. The count was drawn from the locale string, which cannot say
+     "1 way" and "3 ways" from one template — and the batches below are the
+     count anyway. "Some ways" is true at every value it can take. */
+  const guidanceLine   = openTotal > 0
+    ? (t('imp.found')
+       || 'Shipmate found some ways to make your submission stronger.')
+    : (t('imp.found_none')
+       || 'Shipmate checked your store page, localization and build.');
+
   // ── Re-analyze footer ─────────────────────────────────
+  /* "Re-analyze all" read like a debug button — the verb is what the machine
+     does to your data, and "all" is scope nobody asked about. "Check again" is
+     what you would say out loud. */
   const hasResults = (spi && !spi.loading) || (ana && !ana.loading);
   const reanalyzeRow = hasResults ? `
     <div class="iys-reanalyze-row">
-      <button class="btn btn-ghost btn-sm" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">Re-analyze all</button>
+      <button class="btn btn-ghost btn-sm" onclick="state.storePageInsights=null;state.improveSubmissionAnalysis=null;_autoRunImproveSubmission('${platformId}')">${t('imp.check_again') || 'Check again'}</button>
     </div>` : '';
 
   // ── Chunk 2: Recommended Partners — 3 columns (QA · Press · Marketing) ──
@@ -7153,7 +9650,7 @@ function buildImproveSubmissionSection(platformId) {
   return `
     <div class="iys-wrap improve-v2">
       <div class="iys-chunk">
-        <div class="iys-chunk-label">Shipmate Guidance</div>
+        <div class="iys-chunk-intro">${guidanceLine}</div>
         <div class="imp-list iv-blueconfirm">
           ${spPageSection}
           ${locSection}
@@ -7186,36 +9683,52 @@ function _iasAllPreviewLangCodes() {
   return [primary, ...supporting];
 }
 
-/* ── Required-element focus system for the App Store/Mac App Store Product
-   Page Preview footer (buildStorePreviewSection/buildMacStorePreviewSection
+/* ── Element focus system for the App Store/Mac App Store Product Page
+   Preview footer (buildStorePreviewSection/buildMacStorePreviewSection
    only — Mac App Store Full and Android/Steam's own preview builders keep
    their original always-pulsing "Next required" footer, out of scope here)
    ──
-   Seven required elements, always in this same top-down/left-to-right
-   order: Title, Subtitle, Content, Business, Adjust Screenshots,
-   Description, Answer Data Collection Questions — matching the order they
-   actually appear in the preview (header → meta strip → screenshots →
-   description → privacy). Exactly one is ever "in focus" at a time; only
-   the focused, not-yet-addressed element keeps the animated pulse
-   (is-spp-focused, reusing ias-meta-pulse/spp-pulse below) — every other
-   not-yet-addressed element instead gets a static, duller glow box
-   (is-spp-static, style.css), and an already-addressed element gets neither
-   (its existing done styling — .ias-meta-cell--seen / .spp-section-btn--done
-   / plain filled-in text — is untouched). Replaces the old always-on "Next
-   required" footer with a prev/next navigator (_sppFooterNav) that walks
-   this same ordered list — filtered down to only the not-yet-done elements
-   by every call site, so a fulfilled required element drops out of the
-   navigator entirely, not just out of the glow — and can move focus off
-   the default.
+   Eight focusable elements total, always in this same top-down/left-to-right
+   order: Title, Subtitle, Business (the GET button), Content, Adjust
+   Screenshots, Description, Achievements, Answer Data Collection Questions
+   — matching the order they actually appear in the preview (header → meta
+   strip → screenshots → description → Game Center → privacy). What's New
+   used to sit between Achievements and Answer Data Collection Questions
+   here too, until its whole section was hidden (by request) — see that
+   section's own removed-comment, further down, for why; it no longer
+   exists anywhere in this list or on the page. Seven of these are REQUIRED
+   (every one except Achievements); the one optional element has no
+   completion concept of its own; it's just as fully navigable but never
+   blocks or drives the default focus below. Exactly one element is ever
+   "in focus" at a time, and the pinned section nav at the top of the page
+   (_sppPinnedNav) always walks the complete, unfiltered eight-element list
+   — nothing ever drops out of it, whether done, required, or optional.
+
+   The focused element's glow is one of three colors, all layered on top of
+   is-spp-focused's shared brighter pulse shape (spp-focus-pulse family,
+   style.css):
+     - is-spp-focused       (yellow/orange) — required, not yet done
+     - is-spp-focused-done  (green)         — required, already done
+     - is-spp-focused-optional (gray)       — Achievements
+   A required, not-yet-done element that ISN'T the one in focus instead gets
+   a static, duller glow box (is-spp-static, style.css). An already-done
+   required element or an optional element that ISN'T focused gets neither
+   — its existing done styling (.ias-meta-cell--seen / .spp-section-btn--done
+   / plain filled-in text) or plain unstyled look is untouched.
 
    state.storePreviewFocus[pid] (state.js) holds an explicit focus choice,
    set only by clicking the footer's prev/next arrows (setStorePreviewFocus,
    app.js) — until then, or if that choice's element no longer exists, focus
-   always falls back to the first not-yet-addressed element, computed fresh
-   on every render. That means fixing the currently-focused field elsewhere
-   in the app (e.g. finally typing a Title) naturally advances the glow to
-   whatever's next incomplete the next time this re-renders, as long as the
-   user hasn't explicitly clicked to some other element in the meantime. */
+   always falls back to the first not-yet-done REQUIRED element (optional
+   elements are marked done:true purely so this fallback scan skips over
+   them — see ALL_ELEMENTS in each builder), computed fresh on every render.
+   That means fixing the currently-focused field elsewhere in the app (e.g.
+   finally typing a Title) naturally advances the default focus to whatever
+   required element is next incomplete the next time this re-renders, as
+   long as the user hasn't explicitly clicked to some other element (done,
+   optional, or otherwise) in the meantime. Once every required element is
+   done, the fallback parks on the last element (Answer Data Collection
+   Questions) rather than wrapping or landing on an optional element. */
 function _sppFocusIndex(pid, elements) {
   const saved = state.storePreviewFocus?.[pid];
   let idx = saved ? elements.findIndex(e => e.id === saved) : -1;
@@ -7235,59 +9748,310 @@ function _sppIsFocused(pid, elements, id) {
   return elements[_sppFocusIndex(pid, elements)]?.id === id;
 }
 
-// Prev/next footer navigator — replaces the old single "Next required"
-// button. Always renders both arrows so the footer's layout never shifts;
-// an arrow with nothing to move to (already at the first/last required
-// element) renders disabled/greyed with no label rather than wrapping
-// around to the other end.
-function _sppFooterNav(pid, elements) {
-  // Callers pass only the not-yet-done elements (REQUIRED_ELEMENTS.filter(e
-  // => !e.done)) — once every required element is fulfilled there's nothing
-  // left to navigate to, so the whole bar disappears rather than rendering
-  // two disabled arrows around an empty label.
+/* ── THE PINNED SECTION NAV ───────────────────────────────────────────────────
+   Both Apple previews' navigator, and it ate `_sppFooterNav` whole — the Mac
+   preview first, and the App Store's own on Jaco's ask that the two behave the
+   same. The footer was a PREV / CURRENT / NEXT stepper: it could
+   only say where you were and offer the two places either side of it, so
+   reaching Data privacy from Title meant pressing next seven times, and the
+   seven names in between were never on screen at once. A pinned row of pills is
+   the whole map — every section addressable in one press, and the page's own
+   order printed along the top of it.
+
+   THE FOOTER IS DELETED RATHER THAN LEFT DORMANT. With the App Store moved over
+   it had no caller at all, and a builder nobody calls is a control waiting to be
+   switched back on — the argument the dev bar was removed under. `.spp-nav-bar`
+   itself SURVIVES: Mac Full, Google Play and Steam still render their own older
+   "Next required" pair inside it. Only the three rules that were the stepper's
+   alone (`.spp-nav-arrow`, its `--next` and `.spp-nav-current`) went with it.
+
+   PRESSING ONE IS `setStorePreviewFocus`, NOT A NEW SCROLLER. That function
+   already moves focus AND scrolls `[data-spp-el="<id>"]` into view (app.js), so
+   the pills need no travel code of their own — which is what keeps this from
+   becoming a second navigation model that can disagree with the first. The
+   footer's arrows called the same function; only the shape of the control
+   changed.
+
+   `short` where a label is a sentence — see the note on ALL_ELEMENTS.
+
+   `sticks` IS A FACT ABOUT WHAT SCROLLS UNDER THE BAR, NOT ABOUT WHICH STORE
+   THIS IS, which is why it is a parameter and not a platform test. Mac hands
+   its scrolling to `.mac-spp-main`, so the bar is a plain row of the modal's
+   flex column with nothing passing beneath it — `position` and an opaque ground
+   would both be claims that are not true (the long version is at `.spp-pinned`
+   in style.css). The App Store preview scrolls on the modal body itself, the
+   ordinary arrangement every other step uses, so the whole page really does
+   travel under this bar and it has to be sticky and opaque to stay the
+   "persistent container" it is drawn as. Only the builder knows which
+   arrangement it is in, so only the builder can say. */
+/* ── THE TOP BAR'S LIST, ONCE ─────────────────────────────────────────────
+   The eight required elements of an Apple Product Page Preview, and the ONLY
+   place they are enumerated. Both previews built this array inline, character
+   for character identical, and the step's own completeness predicate
+   (isIOSSectionComplete / isMacSectionComplete, state.js) re-derived a SUBSET
+   of it by hand — which is how the step came to report complete while the bar
+   above it still showed outstanding pills. Twice: v6.78 found Title, Subtitle
+   and Description missing from the predicate, and the Business pill was still
+   missing after it, because the pill asks `seen.business && complete` and the
+   predicate asked only `complete`.
+
+   So the bar and the tick now read the same eight lines. A future element is
+   added here and both surfaces get it; there is no second list to forget.
+
+   `lang` is the one thing the two callers legitimately disagree about. The BAR
+   describes the language the dropdown is showing, so it passes previewLang; the
+   STEP is about whether this listing can ship, which is the primary language's
+   business — a supporting language's translation belongs to the Localizations
+   step. Same rules, stated once, asked of whichever language the caller means. */
+function sppRequiredElements(pid, lang) {
+  const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
+  const fieldValue = pid === 'macos' ? _masFieldValue       : _iasFieldValue;
+  const seen       = state.storePreviewSectionSeen?.[pid] || {};
+  const val  = f => (fieldValue(f, lang) || '');
+  const over = f => val(f).length > IAS_FIELD_CHAR_LIMITS[f];
+  return [
+    { id: 'title',        label: 'Title',                            required: true,  done: !!val('title'),        bad: over('title') },
+    { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!val('subtitle'),     bad: over('subtitle') },
+    { id: 'business',     label: 'Business',                          required: true,  done: !!(seen.business && complete('business')) },
+    { id: 'content',      label: 'Content',                           required: true,  done: complete('contentRating') },
+    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: complete('screenshots'),  short: 'Screenshots' },
+    { id: 'description',  label: 'Description',                       required: true,  done: !!val('description'),  bad: over('description') },
+    { id: 'achievements', label: 'Achievements',                      required: false, done: true },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: complete('privacy'),      short: 'Data privacy' },
+  ];
+}
+
+/* "Is every required element on this page satisfied" — the same expression
+   `_sppPinnedNav` uses for the bar's own is-complete state, so the step's tick
+   and the bar's cannot disagree. `bad` counts: an over-limit title is not a
+   listing you can submit, and the bar already refuses to call itself complete
+   with one. Defaults to the primary language; see sppRequiredElements. */
+function sppAllRequiredDone(pid, lang) {
+  const primary = (state.formData && state.formData.primaryLanguage) || 'en';
+  return sppRequiredElements(pid, lang || primary)
+    .every(e => (!e.required || e.done) && !e.bad);
+}
+
+function _sppPinnedNav(pid, elements, sticks) {
   if (!elements.length) return '';
-  const idx     = _sppFocusIndex(pid, elements);
-  const current = elements[idx];
-  const prev    = idx > 0 ? elements[idx - 1] : null;
-  const next    = idx < elements.length - 1 ? elements[idx + 1] : null;
-  const arrowLeft  = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const arrowRight = `<svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const cur = elements[_sppFocusIndex(pid, elements)]?.id;
+  /* THE `|` BETWEEN THEM IS `.app-subnav`'s, NOT A NEW IDEA. Eight transparent
+     labels 6px apart read as one run-on line of words — the same problem the
+     Game Details sub-nav (Basic Info | Languages | Distribution | Assets) had
+     and already answered, and the two rows are the same kind of object: a nav
+     whose resting items draw nothing and whose selected one is the only filled
+     pill. So this borrows the answer rather than inventing a second one.
+     Three things come with it and all three are load-bearing:
+     - The bar is HIDDEN, NEVER REMOVED (`visibility`, `.is-off`), beside the
+       lit pill and — from CSS, since hover is not a render — beside a hovered
+       one. Dropping it from the DOM was what used to let a selected pill and
+       its hovered neighbour meet; keeping its box means the row never reflows.
+     - It is a real glyph, so it is the GAP TOO: `.spp-pinned-row` goes to
+       `gap: 0` and the pills' own 12px of padding does the spacing. Left at 6
+       the row would have paid 6 + glyph + 6 seven times and started
+       overflowing, which on a nav whose whole argument is "every section in one
+       press" would have pushed Data privacy off the end.
+     - It takes THIS row's type (11.5px), not the sub-nav's 14 — the same
+       object at the size the thing it separates is drawn at. */
+  const sep = off => `<span class="spp-pin-sep${off ? ' is-off' : ''}" aria-hidden="true">|</span>`;
+  /* EVERY PILL WEARS A DISC — THE PENDING ONE UNTIL THERE IS A CHECK TO PUT IN
+     IT. This is the platform card's scheme wholesale (`.ios-step-num`, plus
+     `.is-done`), and taking the whole scheme rather than half of it is what
+     fixes the shape the first version had.
+
+     That version reserved the slot and hid the mark with `visibility`, which
+     kept the row's geometry constant — the real requirement, since a mark that
+     appears on completion makes its pill wider and in a row of eight the pill
+     you were about to press moves the moment you answer a different one. But an
+     invisible box reads as a HOLE: seven pills with a gap where something
+     obviously belongs. The pending disc occupies that box for real and costs
+     nothing extra, because the geometry was already being paid for.
+
+     It is also the card's own argument, applied one surface over: a soft disc
+     turning green is the SAME OBJECT changing colour, where a blank becoming a
+     disc is a change of kind. The card dropped its empty ring for exactly this.
+
+     SO THE DISC NOW MEANS "NOTHING OUTSTANDING HERE", AND THAT FLIPPED WHAT
+     ACHIEVEMENTS GETS. Under the hidden-slot version the mark meant "you
+     finished this", so Achievements — `required: false, done: true`
+     permanently, because there is nothing in it to finish — was deliberately
+     left blank rather than wear an unearned medal among blanks. With a disc on
+     every pill that reasoning inverts: withholding the green would leave one
+     section permanently pending, an item that can never complete, which reads
+     as a fault rather than as an exemption. Nothing is outstanding there, so it
+     is green. The BAR's own `is-complete` still counts required sections only,
+     so the aggregate claim is unchanged.
+
+     IT SITS BEFORE THE LABEL, and that is not a preference — it is what makes
+     the pill the same object as the rows it borrows the disc from. The platform
+     card's step rows and the guide's checklist both put the disc first and the
+     name after it; trailing the label made this the only place in the app where
+     the same mark came second, so the pills read as labels-with-a-badge rather
+     than as checklist items. Leading it also puts every label in the row on one
+     left edge inside its own pill, done or not.
+
+     ONE CLASS, NOT A SECOND GLYPH. Wearing `.ios-step-num` means the green, the
+     dark `#0F2A1A` check, the pending fill and the 38.3% ink ratio are the
+     card's and cannot drift from it. Only the SIZE is local: `--pico` is
+     overridden to 15px inside the pill, the documented lever for that disc, and
+     it reaches nothing else from in here — the card's own `--pico` and the text
+     column it governs are untouched. The pending disc carries NO NUMBER, unlike
+     the card's: there the digit is the step's position in a sequence you work
+     through, and these eight are a map you enter at any point.
+
+     GREEN IS RIGHT HERE and it is worth saying why, because the submitted
+     card's read-only list argues the opposite. There, every row is finished by
+     definition, so a column of green discs is news to nobody and the ticks go
+     white. Here the list is MIXED — that is the entire point of the mark — so
+     green is doing exactly what the colour rule reserves it for: marking one
+     finished thing against others that are not. */
+  /* THREE STATES, NOT TWO — AND THE THIRD IS WHY RETIRING THE TICK WAS THE
+     WEAKER OF THE TWO OPTIONS ON OFFER. Jaco: *"si estando la tienda
+     perfectamente completada, me da por cambiar el título o algún input que
+     deje en rojo el cajetín, deberías retirar el checkmark de la pill
+     correspondiente, o incluso marcarlo en rojo con un check con una x?"*
+
+     Retiring it puts the pill back in the PENDING socket, and that socket
+     already means something else: *you have not done this yet*. An over-limit
+     title is not that — you did it, and what you wrote is now invalid. Collapse
+     the two and a broken section looks exactly like an untouched one, so the
+     only way to find it is to open all eight. The bar's whole job is to save
+     that walk.
+
+     So it is his second option: the disc goes RED and the tick becomes a CROSS.
+     One object through three values rather than a mark that comes and goes —
+     the same argument the platform card's step disc was rebuilt under, where an
+     empty ring becoming a solid disc was a change of KIND and a soft disc going
+     green is the same thing changing colour. The cross sits in the tick's own
+     slot at the tick's own weight (`smCrossSVG`, state.js), so the geometry
+     this row guards so carefully does not move: the disc is 15px in all three
+     states and no pill changes width.
+
+     RED IS FORCED, not chosen. The colour table gives three meanings and this
+     is the only one that fits: green done, amber *this needs you*, red WRONG.
+     And the hue is `--magenta`, the exact value the field's own well takes when
+     it crosses the limit — the bar and the field are one fact stated in two
+     places, which is the relationship the wait's yellow date has with its band.
+
+     `bad` OUTRANKS `done`, because it has to: an over-limit field is non-empty,
+     so every `done` test on this page says true about it. That ordering is the
+     whole mechanism — see `ALL_ELEMENTS`' own note for where the flag comes
+     from and why only three sections can carry it. */
+  const disc = (on, bad) => `<span class="spp-pin-tick ios-step-num${
+    bad ? ' is-bad' : on ? ' is-done' : ''}" aria-hidden="true">${
+    bad ? smCrossSVG() : on ? smCheckSVG() : ''}</span>`;
+  const pills = elements.map((e, i) => `${i ? sep(e.id === cur || elements[i - 1].id === cur) : ''}
+    <button type="button" class="spp-pin${e.id === cur ? ' is-on' : ''}" data-spp-pin="${e.id}"
+            onclick="setStorePreviewFocus('${pid}','${e.id}')"
+            title="${escHtml(e.label)}${e.bad ? ' — over the character limit' : ''}">${disc(e.done, e.bad)}${escHtml(e.short || e.label)}</button>`).join('');
+  /* `data-spp-pin` is what lets `_sppFocusHere` (app.js) light a pill without a
+     render when you click straight into a field on the page. The id is already
+     in the `onclick` string a character later; putting it in an attribute is
+     the difference between a lookup and parsing a handler — the same move
+     `data-iso` made on the calendar's band cell. */
+  /* THE BAR ITSELF SAYS WHEN THERE IS NOTHING LEFT. `is-complete` is derived,
+     never stored — every required section done — so it is as true as the
+     sections are and it goes away by itself if you empty a field. The
+     CELEBRATION (a one-shot sweep) is NOT decided here: a render cannot tell
+     "you just finished" from "you re-opened a step that was already finished",
+     and a modal that throws confetti every time you look at it is a modal that
+     has stopped meaning anything. That edge is detected after the paint, by
+     `_sppCelebrate` (app.js), exactly the way `_impPostRender` tells a grade
+     that ROSE from a grade that was merely redrawn. */
+  /* AND THE GREEN BAR ANSWERS TO THE SAME FLAG. A submission with an invalid
+     title is not finished, so a bar that still went green over one would be
+     celebrating past the one thing left to fix — and `_sppCelebrate` reads this
+     class, so the sweep would fire on the render that BROKE it. `bad` is tested
+     on every element rather than only the required ones: an optional section
+     holding invalid text is still invalid, where an optional section merely
+     left empty is fine, which is exactly the distinction `required` makes and
+     `bad` does not. */
+  const allRequiredDone = elements.every(e => (!e.required || e.done) && !e.bad);
+  /* TWO BOXES ON MAC, AND `.cr-pinned`'S THIRD ONE BACK AGAIN ON iOS. That bar
+     has an outer sticky opaque strip so the page cannot show through the gap
+     between a floating container's rounded edge and the scrollport. Mac needs
+     none of it — nothing scrolls under the bar there, so `.spp-pinned` is just
+     the row's padding — and the App Store preview needs all of it, which is
+     exactly what `sticks` turns on. See the CSS for the rest. */
   return `
-    <div class="spp-nav-bar">
-      <button type="button" class="spp-nav-arrow${prev ? '' : ' is-disabled'}"
-        ${prev ? `onclick="setStorePreviewFocus('${pid}','${prev.id}')"` : 'disabled'}>
-        ${arrowLeft}<span>${prev ? escHtml(prev.label) : ''}</span>
-      </button>
-      <span class="spp-nav-current">${current ? escHtml(current.label) : ''}</span>
-      <button type="button" class="spp-nav-arrow spp-nav-arrow--next${next ? '' : ' is-disabled'}"
-        ${next ? `onclick="setStorePreviewFocus('${pid}','${next.id}')"` : 'disabled'}>
-        <span>${next ? escHtml(next.label) : ''}</span>${arrowRight}
-      </button>
+    <div class="spp-pinned${sticks ? ' spp-pinned--sticks' : ''}">
+      <div class="spp-pinned-bar${allRequiredDone ? ' is-complete' : ''}">
+        <div class="spp-pinned-row">${pills}</div>
+      </div>
     </div>`;
 }
+
+/* ── WHAT THE PREVIEWS CALL THE DEVELOPER ─────────────────────────────────
+   Every store preview shipped with the literal word "Developer" (and "Your
+   Company" in the Information card) wherever the developer's name belongs —
+   placeholders seeded the way "My Game" and "Pixel Forge" are, with nothing
+   behind them. A Steam scrape does know the real name: _applySteamAboutData
+   joins /game's `developers` list onto state.webSite.developer. So by request
+   every one of those places now reads it, and falls back to its own original
+   placeholder when the project has not been linked to a Steam title (or when
+   the developer has cleared the field), which is what keeps an unscraped
+   preview looking exactly as it did.
+
+   One function rather than a value threaded through each builder: the four
+   places sit in three different files' worth of markup and each had its own
+   placeholder word, so the fallback has to travel with the call. */
+function _sppDeveloperName(placeholder) {
+  const scraped = ((state.webSite && state.webSite.developer) || '').trim();
+  return scraped || placeholder;
+}
+
+/* The preview's Website/Support destinations, also from the scrape:
+   state.webSite.officialWebsite (/game's `website`) and state.steamSupportUrl
+   (/game's `supportUrl`). Returns '' when there is nothing to link to, which
+   is the signal to render the row as the plain, unclickable span it has always
+   been rather than a dead <a>. Bare hosts get a scheme so the browser treats
+   "celestegame.com" as a site and not as a relative path. */
+function _sppExternalUrl(raw) {
+  const v = (raw || '').trim();
+  if (!v) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return /^https?:/i.test(v) ? v : '';
+  return 'https://' + v;
+}
+const MAC_SPP_WEBSITE_ICON = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M10.1 5.9L8.6 8.7 5.9 10.1 7.4 7.3 10.1 5.9Z" fill="currentColor"/></svg>`;
+const MAC_SPP_SUPPORT_ICON = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.4a1.8 1.8 0 113.3 1c-.25.5-.95.8-1.25 1.3-.15.25-.2.5-.2.75" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.55" fill="currentColor"/></svg>`;
+
+/* The label + icon pair beside the description. An <a> when there is somewhere
+   to go, the original <span> when there is not — same class either way, so the
+   two states are identical to look at and only one of them is clickable. */
+function _sppLinkRowHtml(label, url, iconSvg) {
+  const inner = `<span>${label}</span>${iconSvg}`;
+  if (!url) return `<span class="mac-spp-link-row">${inner}</span>`;
+  return `<a class="mac-spp-link-row is-live" href="${escHtml(url)}" target="_blank" rel="noopener"
+             title="${escHtml(url)}" onclick="event.stopPropagation()">${inner}</a>`;
+}
+
+function _sppWebsiteUrl() { return _sppExternalUrl(state.webSite && state.webSite.officialWebsite); }
+function _sppSupportUrl() { return _sppExternalUrl(state.steamSupportUrl); }
 
 function buildStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
   const a     = state.iosSubmitAnswers;
-  const icon  = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon  = smAppIcon();
   const pid   = state.stepModal?.platformId || 'ios';
 
-  // Use the screenshots selected in the Select Screenshots step,
-  // falling back to all uploaded screenshots if none selected yet.
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const allUploaded = ups.screenshots || [];
-  const selectedIds = new Set(ps.selected);
-  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
-  const customShots = ps.custom || [];
-  const shots = selectedUploaded.length > 0 || customShots.length > 0
-    ? [...selectedUploaded, ...customShots]
-    : allUploaded; // fall back to all if none selected yet
+  /* The listing's screenshots — in the order the Screenshots editor put them,
+     minus anything removed there, with any crop already baked in. See
+     `platformStoreShots` for why this is one function and not the five copies
+     of the selected+custom||all expression it replaced. */
+  const shots = platformStoreShots(pid);
 
   const category  = escHtml(fd.genre || 'Games');
-  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
-  const price     = isFree ? 'GET' : `$${fd.price}`;
-  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  // This store's own base price — see buildBusinessSection's note on the split.
+  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const isFree    = !priceRaw || parseFloat(priceRaw) === 0 || priceRaw.trim() === '' || priceRaw.trim() === '0';
+  const price     = isFree ? 'GET' : `$${priceRaw}`;
+  const priceText = isFree ? 'Free' : `$${priceRaw}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
@@ -7516,7 +10280,7 @@ function buildStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
+    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -7524,7 +10288,13 @@ function buildStorePreviewSection() {
         </svg>
       </div>`;
 
-  // Show all selected shots (no cap) — scroll container handles overflow
+  // Show all selected shots (no cap) — scroll container handles overflow.
+  /* THE FRAMES ARE NOT THE BUTTON — THE WELL IS, the same conclusion the Mac
+     preview reached and for the same reason. Each frame carried its own
+     onclick, so the carousel read as three separate targets and picking one
+     screenshot looked like it meant something. It does not: the step you land
+     in adjusts the whole set. One veil over the strip, one press. (Mac Full
+     keeps its per-frame handlers — it has no well and no veil.) */
   const shotHtml = shots.length > 0
     ? shots.map(s =>
         `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
@@ -7540,7 +10310,7 @@ function buildStorePreviewSection() {
     </div>`;
 
   const infoRowsTop = [
-    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Seller',        value: escHtml(_sppDeveloperName('Your Company')) },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'iPhone, iPad'      },
@@ -7577,22 +10347,74 @@ function buildStorePreviewSection() {
   // required question inside it has been answered, so a section pre-filled
   // from onboarding data never silently shows as complete without a review.
   const seenSections    = state.storePreviewSectionSeen?.ios || {};
-  const contentDone     = !!(seenSections.content && isIOSSectionComplete('contentRating'));
+  /* DONE IS DONE, WHEREVER YOU DID IT.
+     This required `seenSections.content` — a flag written in exactly ONE place,
+     buildStorePreviewFlipSection, i.e. only when the sub-section is opened FROM
+     this preview. Answering Content Rating in its own step, which is where the
+     Submission tab now puts it, left the item un-ticked and, because the
+     header's Age cell is gated on the same value, hid the rating the
+     questionnaire had just assigned. macos_full, Android and Steam already
+     read completion directly (see their own contentDone lines); these two were
+     the outliers. */
+  const contentDone     = isIOSSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
-  const dataDone        = !!(seenSections.data && isIOSSectionComplete('privacy'));
-  const screenshotsDone = !!(seenSections.screenshots && isIOSSectionComplete('screenshots'));
-  // Description is a plain text field, same as Title/Subtitle — done once it
-  // has any text other than the pre-populated placeholder copy, regardless
-  // of whether that text arrived from direct editing here or was filled in
-  // from another section (e.g. Game Details).
-  const descDone        = !!descRaw;
+  /* THE BUTTON ASKS BEFORE IT REPORTS — the Mac preview's rule, now this one's
+     too (by request: "the behavior should be the same").
+
+     GET is the store's own word for a free app, and it is TRUE the moment
+     somebody has actually said the app is free — but the preview cannot tell
+     "free" from "nobody has set a price yet", because `isFree` is derived from
+     an empty string exactly as much as from a zero. So a brand-new listing
+     announced GET, in the store's voice, about a decision nobody had made.
+
+     Until Business is answered the pill says what it wants ("Set price"); after
+     it, the store's own GET / $4.99. That is the order every other field on
+     this page follows — what is empty says so, what is answered shows the
+     answer — and it is a LABEL, not a second control: same button, same
+     handler, same target. `.ias-get-btn` is padding plus `white-space: nowrap`,
+     so the longer string costs nothing here. (The `is-priced` class Mac's own
+     button carries is deliberately NOT copied: it exists only to swap that
+     preview's tile-derived width for `auto`, and this page's pill has no
+     authored width to swap.) */
+  const getLabel        = businessDone ? price : 'Set price';
+  /* DATA PRIVACY IS DONE WHEN IT IS ANSWERED. It also required
+     `seenSections.data` — that you had opened it FROM this preview — which was
+     the right gate while the preview's flip was the only door to those
+     questions. It is not any more: v6.95 gave App Store and Mac App Store their
+     own Data Safety step on the platform card, so the questions can be answered
+     in full without this page ever being opened, and the pill up in the top bar
+     went on saying they were outstanding. Same deletion Adjust Screenshots took
+     in v6.78, and the same reasoning: the visit gate is for a questionnaire
+     Shipmate answered on the developer's behalf, not for one they have already
+     filled in somewhere else. The Shippy Checklist's own row dropped this gate
+     in v6.79, so all three surfaces now agree. */
+  const dataDone        = isIOSSectionComplete('privacy');
+  /* ADJUST SCREENSHOTS IS DONE WHEN THERE ARE SCREENSHOTS. It used to also
+     require `seenSections.screenshots` — opening the editor at least once —
+     which is the right gate for a questionnaire Shipmate answered on the
+     developer's behalf and the wrong one here: nothing is inferred, the shots
+     are already visible in the row above, and they arrive pre-populated from
+     Game Details - Assets. The editor is for CURATING them, which is optional
+     by this section's own design (see isIOSSectionComplete's 'screenshots'
+     arm), so requiring a visit asked the developer to confirm a choice they
+     had already made somewhere else. Emptying the listing still reads as not
+     done — that check lives in the isXxxSectionComplete arm and is untouched. */
+  const screenshotsDone = isIOSSectionComplete('screenshots');
+  // (`descDone` lived here. Its only consumer was this preview's ALL_ELEMENTS
+  //  entry, which now comes from sppRequiredElements — where the same test,
+  //  "any text at all, wherever it was typed", is stated once for both
+  //  previews. Removed rather than left assigned and unread.)
 
   // Section button helper — glows (animated if focused, static otherwise)
   // when incomplete, green check when done. glowCls is the is-spp-focused/
   // is-spp-static modifier computed by the caller (empty string when done).
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
-      return `<button class="spp-section-btn spp-section-btn--done" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
+      // glowCls can still be non-empty here now: a required, already-done
+      // element (Content/Screenshots/Data) that's the one currently in
+      // focus gets is-spp-focused-done's green pulse layered on top of its
+      // own done styling, same as every other done-but-focused element.
+      return `<button class="spp-section-btn spp-section-btn--done${glowCls || ''}" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="spp-section-btn-title">${label}</div>
@@ -7611,27 +10433,58 @@ function buildStorePreviewSection() {
     </button>`;
   }
 
-  // Required elements, top-down/left-to-right — drives both the focus glow
-  // (_sppIsFocused, below) and the footer's prev/next navigator (_sppFooterNav).
-  const REQUIRED_ELEMENTS = [
-    { id: 'title',       label: 'Title',                            done: !!titleRaw },
-    { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
-    { id: 'business',    label: 'Business',                          done: businessDone },
-    { id: 'content',     label: 'Content',                           done: contentDone },
-    { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
-    { id: 'description', label: 'Description',                       done: descDone },
-    { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
-  ];
-  // Additive glow class for a not-yet-addressed required element: the
-  // animated pulse if it's the one in focus, a static/duller box otherwise.
-  // Returns '' for an already-addressed element — its own done styling
-  // (ias-meta-cell--seen/spp-section-btn--done/plain filled-in text) is
-  // untouched.
-  const _sppGlowCls = id => {
-    const el = REQUIRED_ELEMENTS.find(e => e.id === id);
-    if (!el || el.done) return '';
-    return _sppIsFocused(pid, REQUIRED_ELEMENTS, id) ? ' is-spp-focused' : ' is-spp-static';
-  };
+  // All eight focusable elements, top-down/left-to-right — drives both the
+  // focus glow (_sppIsFocused, below) and the pinned section nav at the top of
+  // the preview (_sppPinnedNav), which walks this same complete list
+  // unfiltered. What's New used to be a ninth entry here, between
+  // Achievements and Answer Data Collection Questions — removed along with
+  // its section (hidden by request; see the removed ias-wn-section markup's
+  // own former spot, further down). Achievements is marked `required: false`
+  // and a fixed `done: true` — the latter purely so _sppFocusIndex's own
+  // first-not-done fallback scan skips over it and never parks default
+  // focus on the optional element; it plays no other role, since optional
+  // elements have no real completion state of their own.
+  /* `short` AND `bad` ARRIVED WITH THE PINNED BAR, and both are the Mac twin's
+     — see its own ALL_ELEMENTS for the arguments, which are about the CONTROL
+     rather than about the store and so hold identically here.
+     Short version: `short` is only on the two entries whose `label` is a
+     sentence, because "Adjust Screenshots" and "Answer Data Collection
+     Questions" read fine after an arrow and not at all inside a pill, and the
+     other six already have names rather than a copy of their own label. `bad`
+     is only on the three sections that can be answered AND wrong — free text
+     against a character limit — and it is the SAME `*OverLimit` boolean the
+     field itself wears as `is-over-limit` further down, so the magenta box and
+     the red disc cannot disagree about one string. */
+  // The eight required elements, from the one place they are listed — see
+  // sppRequiredElements. previewLang, because the bar describes the language
+  // the dropdown is currently showing.
+  const ALL_ELEMENTS = sppRequiredElements(pid, previewLang);
+  /* THE GLOW BOXES ARE GONE FROM THIS PAGE (by request), the same deletion the
+     Mac preview took in v6.40 and for the same reason — this preview now says
+     what it has to say the way Mac's does, and the two surfaces no longer wear
+     two vocabularies for one idea. The helper is DELETED rather than left
+     returning '', which is the rule Mac's own note set: a helper that can only
+     return the empty string is a call site pretending to have a decision.
+
+     WHAT REPLACES WHAT, because each ring was answering a real question and
+     none of them is simply dropped:
+       - the "required, still empty" ring -> the WELL. An empty field is a dark
+         socket with a .14 stroke; a filled one recedes to
+         --spp-well-fill-done with .08. "Unfinished" is now a property of the
+         box the value goes in rather than a ring pulsing beside it.
+       - the hover accents -> the well's stroke coming up to .24. Approaching
+         any editable thing brightens the thing itself.
+       - the focused ring ("this is the one the nav is pointing at") -> the
+         SPOTLIGHT. _sppSpotlight dims the rest of the page for the length of
+         the travel plus a beat, which answers "where did I just land" without
+         borrowing the colour that means "unfinished".
+       - Achievements' purple focus ring -> nothing. It marked an optional
+         element as the focus target; the spotlight marks it the same way it
+         marks every other.
+
+     _sppIsFocused survives and is still read by the pinned nav below to light
+     its pill: where-you-are is still tracked, it is simply no longer drawn on
+     the page as a ring. */
 
   // Age meta cell — always clickable; glows when not done (animated if
   // focused, static otherwise), green hover when done
@@ -7640,7 +10493,7 @@ function buildStorePreviewSection() {
          <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-label-top ias-meta-bot--action">Content</div>
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
@@ -7648,17 +10501,17 @@ function buildStorePreviewSection() {
        </div>`;
 
   // Price/Business meta cell is gone from the meta strip (by request) — the
-  // Get button itself (ias-header-cta, below) is now the required element
-  // that glows for Business/carries navigation to Business Questions, so
-  // there's no separate cell duplicating that. businessDone/_sppGlowCls
-  // ('business') live on, just applied to the Get button instead.
+  // Get button itself (ias-header-cta, below) is the element that carries
+  // navigation to Business Questions, so there's no separate cell duplicating
+  // that. businessDone lives on and drives the button's own label/state; the
+  // ring it used to wear went with every other one (see the note above).
 
   // Developer meta cell — decorative only (no developer-logo data tracked
   // anywhere in Shipmate yet), a generic placeholder icon matching the
   // native App Store's own default "no verified developer icon" look.
   const devCell = `
     <div class="ias-meta-cell">
-      <div class="ias-meta-label-top">Developer</div>
+      <div class="ias-meta-label-top">${escHtml(_sppDeveloperName('Developer'))}</div>
       <div class="ias-meta-top ias-meta-dev-logo">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
       </div>
@@ -7684,27 +10537,68 @@ function buildStorePreviewSection() {
       <div class="ias-meta-top">—</div>
     </div>`;
 
-  // Screenshots area — always show shots; full-width Select/Edit button below
+  /* Screenshots area — the Mac preview's strip, shape for shape, because this
+     is the one required element on the page whose treatment had not caught up
+     with the rest of it (v6.92 shared the wells and the spotlight; the
+     carousel kept its old per-frame targets and no well at all).
+
+     WHAT IT IS: the ROW is the well and the single press target; the STRIP is
+     the positioning context; the VEIL is paint (pointer-events: none) laid
+     over the shots while they are unreviewed, carrying the one word the store
+     itself never prints here. The real product page has no screenshots
+     heading, so there is no store word to borrow and an invented one would be
+     Shipmate writing on the drawing — the veil says it by covering the thing
+     it is about instead.
+
+     AND THE VEIL BELONGS TO THE UNREVIEWED STATE ONLY. It is not drawn once
+     screenshotsDone, rather than receding to 0 and returning on hover: its
+     whole sentence is "you have not looked at these yet", which stops being
+     true the moment you have, and a wash over finished work would re-ask an
+     answered question. The WELL keeps the press either way — its ring drops to
+     .08 and its hover still comes up to .24, exactly like every other answered
+     field on this page.
+
+     The frame GEOMETRY is deliberately not copied. Mac fits two 16:10
+     landscape captures because that is what a Mac game's screenshots are;
+     these are iPhone portrait shots at a fixed height, which is what this
+     store shows. Matching the treatment is the ask, not matching the
+     proportions of a different device. */
   const screenshotsArea = `
-    <div class="ias-shots-scroll">${shotHtml}</div>
+    <div class="spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
+         onclick="openStorePreviewSection('${pid}','screenshots')"
+         title="Adjust Screenshots">
+      <div class="spp-shots-strip">
+        <div class="ias-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
+        ${screenshotsDone ? '' : `
+        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Adjust Screenshots</span></div>`}
+      </div>
+    </div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><rect x="2" y="4" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="14" y="6" width="4" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
       <span>iPhone, iPad</span>
-    </div>
-    <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone, _sppGlowCls('screenshots'))}
     </div>`;
 
-  // Privacy section
+  // Privacy section. Once done, App Privacy replaces the Answer Data
+  // Collection Questions button with its own real nutrition-label preview —
+  // but that swap used to drop the click entirely, with nothing here to
+  // send the developer back to Data Collection Questions to revise an
+  // answer. Wrapped in one clickable block now (ias-privacy-block), same
+  // "done elements stay editable" convention _sppBtn's own done state
+  // already follows for every other required element. Also picks up the
+  // data-spp-el/glow-class pairing this branch never had — data's own focus
+  // ring silently had nowhere to render before, on the rare occasion it was
+  // both done and in focus.
   const privacySection = dataDone
-    ? `<div class="ias-section-head-row">
-         <span class="ias-section-head">App Privacy</span>
-         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-       </div>
-       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
-       ${privacyHtml}
-       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
+    ? `<div class="ias-privacy-block" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+         <div class="ias-section-head-row">
+           <span class="ias-section-head">App Privacy</span>
+           <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+         </div>
+         <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+         ${privacyHtml}
+         <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>
+       </div>`
+    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, '');
 
   // Achievements widget — App Store (ios) only (this builder is also reused,
   // unmodified, for android/steam/egs/psn/xbox/switch's own Product Page
@@ -7718,7 +10612,7 @@ function buildStorePreviewSection() {
   // would show for a game with none.
   const savedAchievements = pid === 'ios' ? (state.iosGameCenterAchievements || []).filter(a => a.saved) : [];
   const achievementsHtml = `
-        <div class="ias-section ias-achv-section" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
+        <div class="ias-section ias-achv-section" data-spp-el="achievements" onclick="openStepModal('ios','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
           <div class="ias-achv-card">
@@ -7740,32 +10634,54 @@ function buildStorePreviewSection() {
 
         <div class="ias-section-divider"></div>`;
 
-  return `
-    <div class="ias-device-wrap">
-      <!-- "App Store Preview" badge, "Reflects your submission data" note, and
-           the "Localizations" button are all hidden here by request — only
-           the preview-language dropdown remains. justify-content is forced to
-           flex-end inline (rather than editing .ias-label-row's own
-           space-between, which Steam's own preview header — further below,
-           buildStoreFlipSection — still relies on) so the lone remaining
-           control stays right-aligned instead of collapsing to the start. -->
-      <div class="ias-label-row" style="justify-content:flex-end;">
-        <div class="ias-label-right">
-          <div class="ias-locs-lang-group">
-            ${swSelect('ias-preview-lang', previewLang, previewLangOptions, 'setIasPreviewLang', '150px', 'right')}
-          </div>
-        </div>
-      </div>
+  /* THE NAVIGATOR IS AT THE TOP NOW, AND BOTH OF THEM COULD NOT STAND. Jaco:
+     *"quiero que vayas a ios app store, y hagas lo mismo en la store page de
+     app store normal, que sigue teniendo el paradigma antiguo con navegación en
+     el footer."*
 
+     The footer was PREV / CURRENT / NEXT: it could name where you were and
+     offer the two places either side, so reaching Data privacy from Title meant
+     pressing next seven times and the seven names in between were never on
+     screen together. A pinned row of pills is the whole map — every section in
+     one press, in the page's own order, with a disc each saying what is still
+     outstanding, which is the "estado general" half of the ask and the half a
+     stepper cannot do at all.
+
+     It REPLACES the footer rather than joining it, for the reason the Mac
+     preview already recorded: the two drive the same `storePreviewFocus`, so a
+     press in one silently moves the other — one list with two controls
+     reporting different positions.
+
+     It sits ABOVE `.ias-device-wrap`, so it is the first child of the step
+     body and therefore the full width of the modal's content column, the way
+     Mac's is a sibling of its shell. `sticks` is the difference between the two
+     surfaces and is argued at `_sppPinnedNav`. */
+  return `
+    ${_sppPinnedNav(pid, ALL_ELEMENTS, true)}
+
+    <div class="ias-device-wrap spp-spot-host">
+      <!-- "App Store Preview" badge, "Reflects your submission data" note and
+           the "Localizations" button are all hidden here by request, and the
+           language dropdown has now followed Mac's up into the modal's own
+           header, left of its × — see _iasSppLangDropdownHTML and
+           renderStepModal. With the last control gone the whole
+           .ias-label-row goes with it rather than staying as an empty band.
+
+           NOTE: no backticks in this comment — it lives inside a template
+           literal, and one backtick here ends the string (see mac-spp-get-row's
+           own comment for the same trap). spp-spot-host is what _sppSpotlight
+           (app.js) dims: the pinned nav's press lands the eye here, and this
+           wrap is to this preview what .mac-spp-shell is to Mac's — the box
+           that holds the page and nothing else. -->
       <div class="ias-page ios-spp-page">
 
         <!-- ── Header ── -->
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
                  onclick="startIasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
                  onclick="startIasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             <!-- GET now sits beneath the Title/Subtitle stack, matching the
@@ -7785,8 +10701,8 @@ function buildStorePreviewSection() {
                  longer has) back down to the reference layout's own tight
                  spacing — see .is-spp-done, style.css. -->
             <div class="ias-header-cta${businessDone ? ' is-spp-done' : ''}">
-              <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
-                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              <span class="spp-get-glow-wrap">
+                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${getLabel}</button>
               </span>
               ${iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
@@ -7820,12 +10736,12 @@ function buildStorePreviewSection() {
 
         <!-- ── Description ── -->
         <div class="ias-section">
-          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder' + _sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
+          <div class="ias-desc-text ias-editable${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="ias-desc-text" data-spp-el="description"
                onclick="startIasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descShort}</span>${descRaw.length > 240
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
           <div class="ias-dev-row">
-            <span class="ias-dev-name">Developer</span>
+            <span class="ias-dev-name">${escHtml(_sppDeveloperName('Developer'))}</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
@@ -7833,24 +10749,15 @@ function buildStorePreviewSection() {
         <div class="ias-section-divider"></div>
 
         ${achievementsHtml}
-
-        <!-- ── What's New ── -->
-        <div class="ias-section">
-          <div class="ias-section-head-row">
-            <span class="ias-section-head">What's New</span>
-            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="ias-wn-version">Version ${version}</div>
-          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
-               onclick="startIasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
-          ${notesStatusHtml}
-          <div class="ias-wn-edit-hint">
-            <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
-            Click to edit
-          </div>
-        </div>
-
-        <div class="ias-section-divider"></div>
+        <!-- What's New is hidden here, by request — was between Achievements
+             and App Privacy; achievementsHtml's own trailing divider (above)
+             is what now separates Achievements from Privacy directly. Its
+             own markup, the releaseNotes field it edited, and Localization
+             Review's own copy of the same field (LOC_REVIEW_FIELDS, below —
+             already unreachable from here anyway, since its own opener, the
+             preview's "Localizations" button, is hidden by an earlier
+             request too) are all untouched; only this inline section's
+             presence on the page is gone. -->
 
         <!-- ── App Privacy (or Data Collection button) ── -->
         <div class="ias-section">
@@ -7869,8 +10776,6 @@ function buildStorePreviewSection() {
 
       </div><!-- /ias-page -->
     </div><!-- /ias-device-wrap -->
-
-    ${_sppFooterNav(pid, REQUIRED_ELEMENTS.filter(e => !e.done))}
   `;
 }
 
@@ -7883,6 +10788,35 @@ const LOC_REVIEW_FIELDS = [
   { value: 'subtitle',     label: 'Subtitle' },
   { value: 'description',  label: 'Description' },
   { value: 'releaseNotes', label: "What's New" },
+];
+
+/* The unified Localizations STEP's own Store Page field list. By request it
+   drops What's New from both the Fields dropdown and the "Automatically
+   translated fields" menu. LOC_REVIEW_FIELDS itself is untouched: the
+   standalone Localization Review sections, opened from each platform's Store
+   Page Preview, still offer all four — this narrows one screen, it does not
+   remove the field or stop it being translated. */
+const LOC_STEP_REVIEW_FIELDS = LOC_REVIEW_FIELDS.filter(f => f.value !== 'releaseNotes');
+
+/* Store Page rows for the unified step's settings menu, in the requested
+   order: Title, Subtitle, Description. `shared` points Title/Subtitle at
+   iasAutoTranslateFields for the platforms whose Title/Subtitle ARE the App
+   Store's (Mac App Store — see MAS_SHARED_LISTING_FIELDS, app.js); the App
+   Store's own menu needs no override since that is already its config, and
+   Mac App Store Full owns all four fields outright. */
+const LOC_STEP_AUTOCFG_DEFAULT = { title: false, subtitle: true, description: true, releaseNotes: true };
+const LOC_SHARED_AUTO_OVERRIDE = {
+  autoCfgKey:        'iasAutoTranslateFields',
+  autoCfgDefault:    LOC_STEP_AUTOCFG_DEFAULT,
+  toggleFieldOnclick: (k) => `_iasToggleAutoTranslateField('${k}')`,
+};
+const LOC_STEP_SETTINGS_ROWS_OWN = [
+  ['title', 'Title'], ['subtitle', 'Subtitle'], ['description', 'Description'],
+];
+const LOC_STEP_SETTINGS_ROWS_SHARED_TITLE = [
+  ['title', 'Title', LOC_SHARED_AUTO_OVERRIDE],
+  ['subtitle', 'Subtitle', LOC_SHARED_AUTO_OVERRIDE],
+  ['description', 'Description'],
 ];
 
 /* ── App Store Product Page Preview flip section: "Localization Review" ──
@@ -7965,6 +10899,34 @@ const LOC_REVIEW_FIELDS = [
    Split out to its own function so renderStepModal can reach it without
    duplicating buildMacStorePreviewSection's option-list logic, since the
    header is built before (and independently of) the body. */
+/* THE APP STORE'S SWITCHER MOVES UP TOO, and it is the Mac one's twin rather
+   than a second design — same control, same `auto` width, same right-aligned
+   panel, reading iOS's own option list and setter. By request: the dropdown
+   belongs ABOVE the pinned section nav, and the only chrome above that nav is
+   the modal's own header, which is exactly where Mac put its own.
+
+   Two functions rather than one parameterised by pid because the two previews
+   answer with different state — `_iasLangHasOverLimitField` /
+   `setIasPreviewLang` against `state.formData`, `_masLangHasOverLimitField` /
+   `setMasPreviewLang` against `state.macAppStoreListing` — and a pid switch
+   inside one builder would be three conditionals to save four lines. Mac Full
+   and Steam keep theirs in the scrollable body, untouched. */
+function _iasSppLangDropdownHTML() {
+  const fd = state.formData;
+  const previewPrimaryLang = fd.primaryLanguage || 'en';
+  const previewSupportedLangs = (fd.localizations || [])
+    .slice()
+    .sort((la, lb) => (OB_LANG_NAMES[la] || la).localeCompare(OB_LANG_NAMES[lb] || lb));
+  const previewLangOptions = [previewPrimaryLang, ...previewSupportedLangs].map(l => ({
+    value: l,
+    label: OB_LANG_NAMES[l] || l,
+    warning: _iasLangHasOverLimitField(l),
+  }));
+  return `<div class="ias-locs-lang-group">
+            ${swSelect('ias-preview-lang', _iasEffectivePreviewLang(), previewLangOptions, 'setIasPreviewLang', 'auto', 'right')}
+          </div>`;
+}
+
 function _macSppLangDropdownHTML() {
   const fd = state.formData;
   const previewPrimaryLang = fd.primaryLanguage || 'en';
@@ -7978,8 +10940,15 @@ function _macSppLangDropdownHTML() {
     warning: _masLangHasOverLimitField(l),
   }));
   const previewLang = _masEffectivePreviewLang();
+  /* `auto`, NOT A FIXED WIDTH — the last piece of `.rel-track`'s ghost-trigger
+     treatment, which this switcher now wears (see its rules in style.css). The
+     card's track picker shrink-wraps to the track's name; at a fixed 150px this
+     one spent that much of the modal's header on the word "English", with the
+     label stretched across 102 of it. A control in chrome takes the room its
+     value needs and no more. The panel still opens right-aligned, so nothing
+     about where it lands changes. */
   return `<div class="ias-locs-lang-group">
-            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', '150px', 'right')}
+            ${swSelect('mas-preview-lang', previewLang, previewLangOptions, 'setMasPreviewLang', 'auto', 'right')}
           </div>`;
 }
 
@@ -7988,24 +10957,26 @@ function buildMacStorePreviewSection() {
   const ups   = state.uploads;
   const a     = state.macSubmitAnswers;                        // Business (hasIAP, iapProducts) — Mac App Store's own
   const sh    = _appStoreAnswers('macos', 'collectsData');      // Content Rating + Privacy — shared with the App Store (state.iosSubmitAnswers)
-  const icon  = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon  = smAppIcon();
   const pid   = 'macos';
 
-  // Use the screenshots selected in the Select Screenshots step,
-  // falling back to all uploaded screenshots if none selected yet.
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const allUploaded = ups.screenshots || [];
-  const selectedIds = new Set(ps.selected);
-  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
-  const customShots = ps.custom || [];
-  const shots = selectedUploaded.length > 0 || customShots.length > 0
-    ? [...selectedUploaded, ...customShots]
-    : allUploaded; // fall back to all if none selected yet
+  /* The listing's screenshots — in the order the Screenshots editor put them,
+     minus anything removed there, with any crop already baked in. See
+     `platformStoreShots` for why this is one function and not the five copies
+     of the selected+custom||all expression it replaced. */
+  const shots = platformStoreShots(pid);
 
   const category  = escHtml(fd.genre || 'Games');
-  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
-  const price     = isFree ? 'GET' : `$${fd.price}`;
-  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  // This store's own base price — see buildBusinessSection's note on the split.
+  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const isFree    = !priceRaw || parseFloat(priceRaw) === 0 || priceRaw.trim() === '' || priceRaw.trim() === '0';
+  const price     = isFree ? 'GET' : `$${priceRaw}`;
+  const priceText = isFree ? 'Free' : `$${priceRaw}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
   const langCode  = (fd.primaryLanguage || 'EN').toUpperCase().slice(0, 2);
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
@@ -8183,7 +11154,7 @@ function buildMacStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
+    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -8191,7 +11162,18 @@ function buildMacStorePreviewSection() {
         </svg>
       </div>`;
 
-  // Show all selected shots (no cap) — scroll container handles overflow
+  // Show all selected shots (no cap) — scroll container handles overflow.
+  // Each frame (placeholder or real) is its own click target straight to
+  // the Screenshots section — Adjust Screenshots' own button below this
+  // carousel is hidden now (by request), so the shots themselves are the
+  // only way in; see .ias-shots-scroll's own data-spp-el/glow class,
+  // screenshotsArea below, for where the "required, not done" ring that
+  // button used to carry now lives instead.
+  // THE FRAMES ARE NOT THE BUTTON — THE WELL IS. Each frame carried its own
+  // onclick, so the carousel read as six separate targets and selecting one
+  // screenshot looked like it meant something. It does not: the step you land
+  // in adjusts the whole set. One veil over the strip, one press. (iOS and Mac
+  // Full keep their per-frame handlers — they have no well and no veil.)
   const shotHtml = shots.length > 0
     ? shots.map(s =>
         `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
@@ -8223,7 +11205,7 @@ function buildMacStorePreviewSection() {
   // naturally lands alone on its own row whenever there's more than one
   // column, the same way the reference screenshot shows it.
   const infoCellsHtml = [
-    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Seller',        value: escHtml(_sppDeveloperName('Your Company')) },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'Mac',      chevron: true },
@@ -8259,19 +11241,40 @@ function buildMacStorePreviewSection() {
   // answered, so a section pre-filled from onboarding data never silently
   // shows as complete without a review.
   const seenSections    = state.storePreviewSectionSeen?.macos || {};
-  const contentDone     = !!(seenSections.content && isMacSectionComplete('contentRating'));
+  // See buildStorePreviewSection's note — same gate, same reason.
+  const contentDone     = isMacSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isMacSectionComplete('business'));
-  const dataDone        = !!(seenSections.data && isMacSectionComplete('privacy'));
-  const screenshotsDone = !!(seenSections.screenshots && isMacSectionComplete('screenshots'));
-  // Description is a plain text field, same as Title/Subtitle — done once it
-  // has any text other than the pre-populated placeholder copy, regardless
-  // of whether that text arrived from direct editing here or was filled in
-  // from another section (e.g. Game Details).
-  const descDone        = !!descRaw;
+  /* THE BUTTON ASKS BEFORE IT REPORTS. Jaco: "que el GET sea quizás un 'set
+     price'." GET is the store's own word for a free app, and it is TRUE the
+     moment somebody has actually said the app is free — but this preview
+     cannot tell "free" from "nobody has set a price yet", because isFree is
+     derived from an empty string as much as from a zero. Until Business is
+     answered the blue pill is the one required element on this page still
+     wearing the store's voice while it is really asking a question, and it
+     is the only place the price can be set from. So it says what it wants
+     ("Set price") until that step is done, and the store's own GET / $4.99
+     after — the same order every other field on this page follows, where
+     what is empty says so and what is answered shows the answer.
+     It is a LABEL, not a second control: the same button, the same handler,
+     the same target. The pill has no fixed width (.ias-get-btn is padding +
+     white-space: nowrap), so the longer string costs nothing. */
+  const getLabel        = businessDone ? price : 'Set price';
+  // Same rule as the App Store preview's own — see its note.
+  const dataDone        = isMacSectionComplete('privacy');
+  // Same rule as the App Store preview's own — see its note.
+  const screenshotsDone = isMacSectionComplete('screenshots');
+  // (`descDone` lived here. Its only consumer was this preview's ALL_ELEMENTS
+  //  entry, which now comes from sppRequiredElements — where the same test,
+  //  "any text at all, wherever it was typed", is stated once for both
+  //  previews. Removed rather than left assigned and unread.)
 
   function _sppBtn(target, label, sub, isDone, glowCls) {
     if (isDone) {
-      return `<button class="spp-section-btn spp-section-btn--done" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
+      // glowCls can still be non-empty here now: a required, already-done
+      // element (Content/Screenshots/Data) that's the one currently in
+      // focus gets is-spp-focused-done's green pulse layered on top of its
+      // own done styling, same as every other done-but-focused element.
+      return `<button class="spp-section-btn spp-section-btn--done${glowCls || ''}" data-spp-el="${target}" onclick="openStorePreviewSection('${pid}','${target}')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#34c759"/><path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="spp-section-btn-title">${label}</div>
@@ -8290,31 +11293,82 @@ function buildMacStorePreviewSection() {
     </button>`;
   }
 
-  // Required elements, top-down/left-to-right — drives both the focus glow
-  // (_sppIsFocused, above) and the footer's prev/next navigator (_sppFooterNav).
-  const REQUIRED_ELEMENTS = [
-    { id: 'title',       label: 'Title',                            done: !!titleRaw },
-    { id: 'subtitle',    label: 'Subtitle',                          done: !!subtitleRaw },
-    { id: 'business',    label: 'Business',                          done: businessDone },
-    { id: 'content',     label: 'Content',                           done: contentDone },
-    { id: 'screenshots', label: 'Adjust Screenshots',                done: screenshotsDone },
-    { id: 'description', label: 'Description',                       done: descDone },
-    { id: 'data',        label: 'Answer Data Collection Questions',  done: dataDone },
-  ];
-  // Additive glow class for a not-yet-addressed required element — see the
-  // twin definition's own comment in buildStorePreviewSection above.
-  const _sppGlowCls = id => {
-    const el = REQUIRED_ELEMENTS.find(e => e.id === id);
-    if (!el || el.done) return '';
-    return _sppIsFocused(pid, REQUIRED_ELEMENTS, id) ? ' is-spp-focused' : ' is-spp-static';
-  };
+  // All eight focusable elements, top-down/left-to-right — see the twin
+  // definition's own comment in buildStorePreviewSection above (What's New
+  // used to be a ninth entry, hidden along with its section by request).
+  /* `short` is only for the pinned nav's pills, and only the two entries that
+     need it have one. `label` is a sentence because the footer navigator it was
+     written for printed it beside an arrow ("Answer Data Collection Questions"
+     reads fine as "next: …"); a pill is a NAME, and a pill wide enough to hold
+     a sentence stops being one. Everything else already had a name, so it has
+     no `short` rather than a copy of its own label — one string per fact. */
+  /* `bad` IS ONLY ON THE THREE SECTIONS THAT CAN HOLD INVALID CONTENT, and the
+     asymmetry is real rather than an omission. Title, Subtitle and Description
+     are free text against a character limit, so they have a way to be answered
+     AND wrong; the other five are answered by making choices in another step,
+     where every reachable answer is a legal one. There is nothing for a fourth
+     flag to say about Achievements.
+
+     They are the SAME `*OverLimit` booleans the fields themselves wear as
+     `is-over-limit` a few hundred lines down — one test, two consumers, so the
+     magenta well and the red disc cannot disagree about the same string. See
+     the `disc` helper in `_sppPinnedNav` for why this outranks `done`. */
+  // The eight required elements, from the one place they are listed — see
+  // sppRequiredElements. previewLang, because the bar describes the language
+  // the dropdown is currently showing.
+  const ALL_ELEMENTS = sppRequiredElements(pid, previewLang);
+  /* NO AMBER ON THIS PAGE, AND FOCUS IS ONE MARK RATHER THAN THREE.
+     The iOS twin of this function (buildStorePreviewSection above) still
+     returns the full five-class set and is deliberately untouched; this is
+     the Mac preview only.
+
+     What went, and why each was answering the wrong question:
+
+     - `is-spp-static`, the amber ring every unfinished element wore, was
+       `rgba(255,149,0,0.06)` at 2px. Over this page's ground — `--panel`
+       #141414, since `.mac-spp-page` sets `background: transparent` — that
+       composites to about #1f1a14: eleven points of luminance. It was not
+       LOUD, it was unreadable, which is the opposite diagnosis from the one
+       the brief started with. And with every editable field now wearing a
+       well of its own (`.mac-spp-page .ias-editable`, style.css), the
+       question it was asking has a better answer: the field says "you can
+       type here" at rest, and what is still EMPTY says so by being empty.
+     - `is-spp-focused` / `-done` / `-optional` were three colours for one
+       fact. Amber/green/gray encoded DONE-ness in a mark whose whole job is
+       "the nav sent you here" — a locator, not a status, exactly as the
+       pinned bar's own note says of itself.
+
+     THEN THE FOCUS MARK WENT TOO, AND THE COUNT IS THE ARGUMENT. Collapsing
+     three rings into one neutral one was still one ring too many: "you are
+     here" was already being said THREE times on this surface — the pinned
+     pill stays lit, `_sppSpotlight` dims the whole page around where you
+     landed for 1.6s, and then a halo pulsed on the element for as long as it
+     held focus. Jaco: *"no entiendo los halos constantes."*
+
+     And the third of those was the weakest kind: it never stopped. This file
+     killed an identical one two versions ago — "a nudge that repeats forever
+     is not pointing at anything" (the Submit row's orange pulse) — and the
+     same sentence applies verbatim. A locator that is still flashing a minute
+     after you arrived has stopped being about arriving.
+
+     So `_sppGlowCls` is DELETED rather than left returning '': a helper that
+     can only produce the empty string is a switched-off control, which is the
+     argument the dev bar was removed under. Its ten call sites went with it.
+     `_sppIsFocused` stays — the pinned bar still reads it to light its pill,
+     which is where "where you are" now lives, once.
+
+     Two amber keyframes (`ias-meta-pulse`, `spp-pulse`) are still declared
+     in style.css for the iOS surface. On THIS page they were dead code
+     before this change and remain so: every element carrying them also
+     carried a class above whose `animation` was `!important`. Measured, not
+     assumed — nothing on the Mac preview has ever pulsed. */
 
   const ageCell = contentDone
     ? `<div class="ias-meta-cell ias-meta-cell--action ias-meta-cell--seen" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Edit Content Questions">
          <div class="ias-meta-label-top">Age</div>
          <div class="ias-meta-top ias-meta-age">${ageRating}</div>
        </div>`
-    : `<div class="ias-meta-cell ias-meta-cell--action${_sppGlowCls('content')}" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
+    : `<div class="ias-meta-cell ias-meta-cell--action" data-spp-el="content" onclick="openStorePreviewSection('${pid}','content')" title="Answer Content Questions">
          <div class="ias-meta-label-top ias-meta-bot--action">Content</div>
          <div class="ias-meta-top ias-meta-action-icon">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.2"/></svg>
@@ -8330,7 +11384,7 @@ function buildMacStorePreviewSection() {
   // native App Store's own default "no verified developer icon" look.
   const devCell = `
     <div class="ias-meta-cell">
-      <div class="ias-meta-label-top">Developer</div>
+      <div class="ias-meta-label-top">${escHtml(_sppDeveloperName('Developer'))}</div>
       <div class="ias-meta-top ias-meta-dev-logo">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="11" fill="var(--panel-3)"/><circle cx="12" cy="9.6" r="3.4" fill="var(--text-faint)"/><path d="M5.2 19c1.15-3.4 3.9-5.1 6.8-5.1s5.65 1.7 6.8 5.1" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
       </div>
@@ -8356,25 +11410,148 @@ function buildMacStorePreviewSection() {
       <div class="ias-meta-top">—</div>
     </div>`;
 
+  // Adjust Screenshots' own button (below the carousel) is hidden now, by
+  // request — the shots themselves are the click target instead (see
+  // shotHtml, above), so the "required, not done" glow ring that button
+  // used to carry moves onto the carousel container itself.
+  /* BOTH CHEVRONS ARE GONE (Jaco: *"no me convence las flechas del
+     screenshot"*), and they are DELETED rather than hidden — the markup here,
+     `_macShotsArrows` and its render hook, and their rules in style.css.
+
+     **The frame arithmetic did not need them and maintains itself.** The width
+     is `(100% − 16px) / 2` of whatever box the scroller gets, so losing the
+     40px lane simply makes both frames 20px wider and the third still starts
+     exactly on the viewport's edge: there was never a literal to re-solve. The
+     pair still fits, nothing peeks, and the carousel is scrolled the way every
+     other horizontal strip in this app is.
+
+     What it costs, knowingly: paging is a trackpad gesture now, with no control
+     saying the third screenshot is there. That is the trade — a chevron on a
+     surface whose whole well is ONE press was a second control inside a button,
+     which is the "two marks on one object" this page keeps refusing. */
+  // THE SHOTS WEAR A WELL TOO. Jaco: *"creo que los screenshots deberían tener
+  // un pocillo alrededor, para indicar que hay que clicarlos y revisarlos. Si
+  // necesitas hacer su preview un pelín más pequeña para que el pocillo quede
+  // alineado a la izquierda con el resto, hazlo."*
+  //
+  // The earlier pass left these bare on the argument that the frames "already
+  // draw their own 1px frames, so a well would be a second box on something
+  // that has one". That was reading the frames as the OBJECT, and they are not
+  // — they are the VALUE. A well says *this is yours to set*, and the frames
+  // are what is currently set, exactly as the title's text is what the title's
+  // well contains. The pencil-and-well pair on Content settled this same
+  // question once already.
+  //
+  // It goes on the ROW, not the scroller, so the box spans 441 → 1193 like
+  // every other well rather than stopping 32px short where the scroller ends.
+  // The chevron therefore sits INSIDE it, which is right: it drives this
+  // carousel and belongs to it. `data-spp-el` stays on the scroller — the
+  // spotlight's `:not(:has())` keeps a group lit when it CONTAINS the mark, so
+  // moving it would change what lights up.
+  // AND THE WELL SAYS WHAT IT WANTS, ABOVE THE SHOTS. Jaco: *"el pocillo de
+  // screenshots debería marcarse de alguna forma en este caso, como por encima
+  // de los screenshots, y quitar la flecha de scroll lateral hasta que no los
+  // hayan revisado."*
+  //
+  // Both halves are about the UNREVIEWED state and they are one idea: this is
+  // the only well with nothing to read. Achievements and App Privacy are named
+  // by the STORE, so their own headings mark them; the real product page never
+  // titles its screenshots, so there is no store word to borrow and an invented
+  // 20px heading would be Shipmate writing on the drawing. What it gets instead
+  // is the ASK — the same two lines App Privacy uses while it is unanswered,
+  // the editor talking rather than the store — and like that one it leaves when
+  // it has been answered. "Answered recedes" is the same rule a fourth time.
+  //
+  // THE ARROW IS GATED ON THE SAME FLAG, and that is the half worth arguing.
+  // A carousel that offers to page before you have looked at what is on screen
+  // invites you to skim past the thing you were asked to check; once reviewed,
+  // paging is exactly what you want. So the prompt and the chevron are the two
+  // faces of one state and can never both be on.
+  //
+  // AND THE ASK BECAME A VEIL (Jaco: *"el adjust screenshots text está extraño,
+  // y es raro que me dejes acceder seleccionado cada uno de los screenshots,
+  // debería haber como una capilla de opacidad por encima de los screenshots
+  // (pocillo) que actúe como un pulsador único que me lleva a la zona de
+  // cambiar los screenshots."*).
+  //
+  // The two-line ask was App Privacy's object borrowed onto a surface that
+  // could not hold it: there it sits in a block with nothing else in it, here
+  // it floated above two pictures as a caption nobody had asked for — and it
+  // said in words what the veil says by covering the thing it is about.
+  //
+  // ONE PRESS TARGET IS THE WHOLE POINT. The ROW takes the onclick now, and the
+  // veil is PAINT (`pointer-events: none`) laid over the strip, so there is no
+  // arrangement in which a single frame can be aimed at. The chevron is the one
+  // live child inside it and it stops the event, or paging would open the step.
+  //
+  // It is also "answered recedes" a fifth time: unreviewed the veil rests
+  // visible and carries the label, reviewed it rests at 0 and only returns on
+  // hover — the shots are the value once you have looked at them, and a wash
+  // over finished work is the page telling you something it already told you.
   const screenshotsArea = `
-    <div class="ias-shots-scroll mac-spp-shots-scroll">${shotHtml}</div>
+    <div class="spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
+         onclick="openStorePreviewSection('${pid}','screenshots')"
+         title="Adjust Screenshots">
+      <div class="spp-shots-strip">
+        <div class="ias-shots-scroll mac-spp-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
+        ${screenshotsDone ? '' : `
+        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Adjust Screenshots</span></div>`}
+      </div>
+    </div>
     <div class="ias-device-compat">
       <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5v7H3v-7Z" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 15.5h17l-1 1.2a1 1 0 0 1-.78.3H3.28a1 1 0 0 1-.78-.3l-1-1.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
       <span>Mac</span>
-    </div>
-    <div style="padding:0 16px 10px;">
-      ${_sppBtn('screenshots', 'Adjust Screenshots', 'Confirm or adjust screenshots for this listing', screenshotsDone, _sppGlowCls('screenshots'))}
     </div>`;
 
+  // Once done, App Privacy replaces the Answer Data Collection Questions
+  // button with its own real nutrition-label preview — but that swap used to
+  // drop the click entirely, with nothing here to send the developer back to
+  // Data Collection Questions to revise an answer. Wrapped in one clickable
+  // block now (ias-privacy-block), same "done elements stay editable"
+  // convention _sppBtn's own done state already follows for every other
+  // required element. Also picks up the data-spp-el/glow-class pairing this
+  // branch never had — data's own focus ring silently had nowhere to render
+  // before, on the rare occasion it was both done and in focus.
+  // THE SECTION IS CALLED "APP PRIVACY" WHETHER OR NOT IT IS ANSWERED. Jaco:
+  // *"el pocillo de answer data collection podría tener el mismo título 'App
+  // Privacy' que tiene Achievements, así queda aún más fiel a la tienda."*
+  //
+  // The DONE arm already carried that heading; the ASK arm was a bare
+  // `_sppBtn` — so the one section on the page whose name the store always
+  // prints went unnamed for exactly as long as it was unanswered, and it
+  // renamed itself to "App Privacy" the moment you filled it in. A section's
+  // NAME is not a state: the real product page says App Privacy before you
+  // have read a word of it, the same way it says Achievements over a card with
+  // nothing completed in it.
+  //
+  // So both arms are `.ias-privacy-block` now — one object, one heading, two
+  // bodies — and the `--ask` modifier is what carries the difference (the
+  // outstanding `.14` ring against the answered `.08`, per "answered
+  // recedes"). The WRAPPER is the target: `data-spp-el` / the click / the well
+  // live on it exactly as they do on the done arm, and the row inside is a
+  // plain `<div>` rather than `_sppBtn`'s `<button>`, so there is one pressable
+  // box and one `data-spp-el="data"` in the document rather than two.
+  // `_sppBtn` is untouched — screenshots still use it, and so do iOS and Mac
+  // Full for this same element.
+  const privacyHead = `
+         <div class="ias-section-head-row">
+           <span class="ias-section-head">App Privacy</span>
+           <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+         </div>`;
   const privacySection = dataDone
-    ? `<div class="ias-section-head-row">
-         <span class="ias-section-head">App Privacy</span>
-         <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-       </div>
-       <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
-       ${privacyHtml}
-       <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false, _sppGlowCls('data'));
+    ? `<div class="ias-privacy-block" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Edit Data Collection Questions">
+         ${privacyHead}
+         <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
+         ${privacyHtml}
+         <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>
+       </div>`
+    : `<div class="ias-privacy-block ias-privacy-block--ask" data-spp-el="data" onclick="openStorePreviewSection('${pid}','data')" title="Answer Data Collection Questions">
+         ${privacyHead}
+         <div class="ias-privacy-ask">
+           <div class="spp-section-btn-title">Answer Data Collection Questions</div>
+           <div class="spp-section-btn-sub">Complete your App Privacy disclosure</div>
+         </div>
+       </div>`;
 
   // Achievements — a Game Center widget preview, mirroring the real App
   // Store product page's own "GAME CENTER / Achievements" card. Always
@@ -8401,7 +11578,7 @@ function buildMacStorePreviewSection() {
   // "chosen" achievement to name-drop.
   const savedAchievements = (state.macGameCenterAchievements || []).filter(a => a.saved);
   const achievementsHtml = `
-        <div class="ias-section ias-achv-section" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
+        <div class="ias-section ias-achv-section" data-spp-el="achievements" onclick="openStepModal('macos','gameCenter')" title="View Game Center">
           <div class="ias-achv-kicker"><span class="ias-achv-kicker-icon">🎨</span>GAME CENTER</div>
           <div class="ias-achv-title">Achievements</div>
           <div class="ias-achv-card">
@@ -8424,8 +11601,21 @@ function buildMacStorePreviewSection() {
         <div class="ias-section-divider"></div>`;
 
   return `
-    <div class="mac-spp-shell">
-      ${_buildMacSppSidebar()}
+    ${/* ABOVE THE SHELL, NOT INSIDE THE SCROLLER — it spans the whole modal.
+          It began as the first child of `.mac-spp-main` and stuck to its top,
+          which made it the width of the store column and left it floating OVER
+          the page as that page ran underneath. Two things were wrong with that
+          and only one of them was visible: a nav that indexes the whole step
+          was drawn inside one of the step's two panes, and an opaque strip
+          sliding over the product page reads as a sheet laid on top of it
+          rather than as the modal's own chrome.
+          Out here it is a sibling of `.mac-spp-shell` inside the flex column
+          `.submit-modal-mac-spp .ios-step-body-content` already is, so it takes
+          its natural height and the shell takes the rest — and it needs no
+          `sticky` at all, because nothing scrolls past it any more. */''}
+    ${_sppPinnedNav(pid, ALL_ELEMENTS)}
+    <div class="mac-spp-shell spp-spot-host">
+      ${_buildMacSppSidebar(titleRaw)}
       <div class="mac-spp-main">
       <div class="ias-device-wrap">
       <!-- "Mac App Store Preview" badge, "Reflects your submission data" note,
@@ -8440,10 +11630,10 @@ function buildMacStorePreviewSection() {
         <div class="ias-header">
           ${iconHtml}
           <div class="ias-header-meta">
-            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder' + _sppGlowCls('title')}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
-                 onclick="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
-            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder' + _sppGlowCls('subtitle')}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
-                 onclick="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
+            <div class="ias-app-name ias-editable${titleRaw ? '' : ' ias-placeholder'}${titleOverLimit ? ' is-over-limit' : ''}" data-spp-el="title"
+                 onpointerdown="startMasInlineEdit('title', this, event)" title="Click to edit">${title}</div>
+            <div class="ias-app-subtitle ias-editable${subtitleRaw ? '' : ' ias-placeholder'}${subtitleOverLimit ? ' is-over-limit' : ''}" data-spp-el="subtitle"
+                 onpointerdown="startMasInlineEdit('subtitle', this, event)" title="Click to edit">${subtitle}</div>
             ${subtitleStatusHtml}
             <!-- GET sits beneath the title/subtitle stack, not beside it as a
                  separate header-cta column — matches the native macOS App
@@ -8455,17 +11645,23 @@ function buildMacStorePreviewSection() {
                  only, matching the native app's own product page) rather
                  than under the title/subtitle stack — see mac-spp-get-row's
                  own comment, style.css, for the row's layout. Get is also
-                 this preview's own "Business" required element — it glows
-                 (_sppGlowCls('business')) until Business Questions has been
-                 opened and answered, same as every other required element,
-                 replacing the meta strip's old separate Business cell
-                 below. Once Business is done, is-spp-done drops the extra
-                 margin-top (only there to clear the glow this button no
-                 longer has) back down to the reference layout's own tight
+                 this preview's own "Business" required element, replacing the
+                 meta strip's old separate Business cell below. It USED to
+                 glow until Business Questions had been answered; that mark is
+                 gone with every other ring on this page (v6.40 — see
+                 _sppGlowCls's deletion note above), so .spp-get-glow-wrap
+                 now only reserves the box. NOTE: no backticks in this
+                 comment — it lives inside a template literal, and one
+                 backtick here ends the string and turns the next word into
+                 an identifier ("ReferenceError: get is not defined", which
+                 node --check does not catch because it still parses).
+                 Once Business is done, is-spp-done
+                 drops the extra margin-top (only there to clear the glow this
+                 button no longer has) back down to the reference layout's own tight
                  spacing — see mac-spp-get-row's own rule, style.css. -->
             <div class="mac-spp-get-row${businessDone ? ' is-spp-done' : ''}">
-              <span class="spp-get-glow-wrap${_sppGlowCls('business')}">
-                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+              <span class="spp-get-glow-wrap">
+                <button class="ias-get-btn ias-get-btn--interactive${businessDone ? ' is-priced' : ''}" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${getLabel}</button>
               </span>
               ${isFree && iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
@@ -8530,22 +11726,29 @@ function buildMacStorePreviewSection() {
                    actually visible, once the browser confirms the text
                    overflows 4 rows. -->
               <div class="mac-spp-desc-flex" id="mas-desc-flex">
-                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder' + _sppGlowCls('description')}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
-                     onclick="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
+                <div class="ias-desc-text ias-editable mac-spp-desc-clamp${descRaw ? '' : ' ias-placeholder'}${descOverLimit ? ' is-over-limit' : ''}" id="mas-desc-text" data-spp-el="description"
+                     onpointerdown="startMasInlineEdit('description', this, event)" title="Click to edit"><span class="ias-desc-text-inner">${descFull}</span></div>
                 <button type="button" class="ias-more-btn mac-spp-desc-more" id="mas-desc-more-btn" style="visibility:hidden;" onclick="event.stopPropagation(); toggleMasDescMore(this)">more</button>
               </div>
               ${descStatusHtml}
             </div>
             <div class="mac-spp-dev-links">
-              <span class="ias-dev-name">Developer</span>
-              <span class="mac-spp-link-row">
-                <span>Website</span>
-                <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M10.1 5.9L8.6 8.7 5.9 10.1 7.4 7.3 10.1 5.9Z" fill="currentColor"/></svg>
-              </span>
-              <span class="mac-spp-link-row">
-                <span>Support</span>
-                <svg viewBox="0 0 16 16" width="13" height="13" fill="none"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.4a1.8 1.8 0 113.3 1c-.25.5-.95.8-1.25 1.3-.15.25-.2.5-.2.75" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.55" fill="currentColor"/></svg>
-              </span>
+              ${/* Website and Support were "decorative (no real destination)",
+                    per the comment above. They have destinations now whenever
+                    the title has been scraped — /game's own `website` and
+                    `supportUrl` — so by request each becomes a real link to
+                    its own URL and stays the plain unclickable span it was
+                    when there is nothing to point at.
+
+                    target=_blank + rel=noopener: this is the developer's own
+                    store page opening, and the preview they are editing should
+                    still be here when they come back. stopPropagation because
+                    the description column beside this flips into inline edit on
+                    click — without it, following the link would also open an
+                    editor behind the new tab. */''}
+              <span class="ias-dev-name">${escHtml(_sppDeveloperName('Developer'))}</span>
+              ${_sppLinkRowHtml('Website', _sppWebsiteUrl(), MAC_SPP_WEBSITE_ICON)}
+              ${_sppLinkRowHtml('Support', _sppSupportUrl(), MAC_SPP_SUPPORT_ICON)}
             </div>
           </div>
         </div>
@@ -8553,24 +11756,15 @@ function buildMacStorePreviewSection() {
         <div class="ias-section-divider"></div>
 
         ${achievementsHtml}
-
-        <!-- ── What's New ── -->
-        <div class="ias-section">
-          <div class="ias-section-head-row">
-            <span class="ias-section-head">What's New</span>
-            <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="ias-wn-version">Version ${version}</div>
-          <div class="ias-wn-notes ias-editable${releaseNotes ? '' : ' ias-placeholder'}${notesOverLimit ? ' is-over-limit' : ''}"
-               onclick="startMasInlineEdit('releaseNotes', this, event)" title="Click to edit">${notesHtml}</div>
-          ${notesStatusHtml}
-          <div class="ias-wn-edit-hint">
-            <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M11 2.5a1.5 1.5 0 012 2L5.5 12 3 12.5l.5-2.5L11 2.5z" stroke="currentColor" stroke-width="1.3"/></svg>
-            Click to edit
-          </div>
-        </div>
-
-        <div class="ias-section-divider"></div>
+        <!-- What's New is hidden here, by request — was between Achievements
+             and App Privacy; achievementsHtml's own trailing divider (above)
+             is what now separates Achievements from Privacy directly. Its
+             own markup, the releaseNotes field it edited, and Localization
+             Review's own copy of the same field (LOC_REVIEW_FIELDS, iOS
+             builder — already unreachable from here anyway, since its own
+             opener, the preview's "Localizations" button, is hidden by an
+             earlier request too) are all untouched; only this inline
+             section's presence on the page is gone. -->
 
         <!-- ── App Privacy (or Data Collection button) ── -->
         <div class="ias-section">
@@ -8601,8 +11795,12 @@ function buildMacStorePreviewSection() {
     </div><!-- /ias-device-wrap -->
       </div><!-- /mac-spp-main -->
     </div><!-- /mac-spp-shell -->
-
-    ${_sppFooterNav(pid, REQUIRED_ELEMENTS.filter(e => !e.done))}
+    ${/* NO FOOTER HERE ANY MORE — `_sppPinnedNav` at the top of the scroller
+          replaced it. The two cannot both stand: they drive the same
+          `storePreviewFocus`, so a press in one silently moves the other, and
+          the modal would carry two navigators for one list. The footer is still
+          the navigator on the iOS and Mac Full previews, which have not been
+          re-cut. */''}
   `;
 }
 
@@ -8614,43 +11812,147 @@ function buildMacStorePreviewSection() {
    make buildMacStorePreviewSection's Product Page Preview read as "the
    App Store app on a Mac" rather than the in-browser store page. Scoped
    entirely to its own .mac-spp-* classes (style.css). */
-function _buildMacSppSidebar() {
-  const navIcon = d => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none">${d}</svg>`;
-  const ICONS = {
-    discover: '<path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13Z" stroke="currentColor" stroke-width="1.3"/><path d="M10.2 5.8L6.6 7.3 5.1 10.9l3.6-1.5 1.5-3.6Z" fill="currentColor"/>',
-    arcade:   '<rect x="1.5" y="4.5" width="13" height="8" rx="3" stroke="currentColor" stroke-width="1.3"/><circle cx="5.2" cy="8.5" r="0.9" fill="currentColor"/><circle cx="11.2" cy="7.3" r="0.9" fill="currentColor"/><circle cx="11.2" cy="9.7" r="0.9" fill="currentColor"/>',
-    create:   '<path d="M2 12.5l1-3.3 7-7 2.3 2.3-7 7-3.3 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
-    work:     '<rect x="1.5" y="4.5" width="13" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5" stroke="currentColor" stroke-width="1.3"/>',
-    play:     '<path d="M3.5 2.5v11l9-5.5-9-5.5Z" fill="currentColor"/>',
-    develop:  '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
-    categories: '<rect x="1.7" y="1.7" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.1" y="1.7" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.7" y="9.1" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.1" y="9.1" width="5.2" height="5.2" rx="1" stroke="currentColor" stroke-width="1.3"/>',
-    updates:  '<path d="M8 1.8a6.2 6.2 0 105.2 2.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13.3 1.8v3h-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+function _buildMacSppSidebar(gameTitle) {
+  /* THE GLYPHS ARE THE REAL APP'S, and six of the eight are now the EXACT
+     art rather than a redraw of it — Jaco exported Discover (star), Create
+     (paintbrush), Work (paper plane), Develop (hammer), Categories (grid) and
+     Updates (download arrow) straight from the source, so those six stopped
+     being approximations. Play (rocket) and Arcade (joystick) are still my
+     redraws and are the only two left to replace.
+
+     THAT MAKES THIS COLUMN TWO FAMILIES FOR NOW, and the split is temporary,
+     not a design. The exact art is FILLED — outline shapes drawn as filled
+     paths with their own counters, the way SF Symbols are authored — where the
+     two redraws are 1.3px strokes on a 16-unit box. Both read as outlines at
+     14px, which is the only thing that matters here; a filled mark in this
+     column would read as the selected one, and these do not, because the fill
+     only ever paints the outline itself.
+
+     EVERY GLYPH IS ON THE SAME 16-UNIT BOX, exported art included. The source
+     files are 128-unit canvases carrying a `matrix(4.01085, …)` of their own,
+     so the export's matrix is multiplied by 0.125 (scale 4.01085/8 = 0.501356,
+     translations /8) and baked into the `<g>`. One viewBox for all eight is
+     what lets one CSS rule size them; two canvases would have them bobbing
+     against each other the way the platform marks did before SM_TILE_MARKS.
+
+     `fill-rule` is carried over per glyph rather than left to the default:
+     hammer.svg is authored evenodd and the other five nonzero, and the hammer
+     loses its claw's holes at nonzero. */
+  const navIconStroke = d => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none"
+    stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  /* `overflow: visible` because the exported art really does reach the edges —
+     the hammer's ink measures 0 → 16 on the box exactly, so at the default
+     `hidden` its outermost antialiased pixel is the one being clipped. Nothing
+     here is meant to be cropped by its own canvas. */
+  const navIconFill = g => `<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" style="overflow:visible">${g}</svg>`;
+  // The exported six — filled, on the shared 16-unit box (see above).
+  const ICONS_EXACT = {
+    discover: '<g transform="matrix(0.501356,0,0,0.501356,-0.581163,3.34455)"><path d="M8.203,22.865C8.472,23.073 8.776,23.145 9.115,23.079C9.453,23.014 9.822,22.839 10.221,22.552L17.109,17.487L24.01,22.552C24.41,22.839 24.779,23.014 25.117,23.079C25.456,23.145 25.76,23.073 26.029,22.865C26.298,22.665 26.461,22.396 26.517,22.057C26.573,21.719 26.519,21.315 26.354,20.846L23.633,12.747L30.586,7.747C30.994,7.461 31.276,7.166 31.432,6.862C31.589,6.558 31.615,6.246 31.51,5.924C31.406,5.612 31.202,5.378 30.898,5.221C30.595,5.065 30.191,4.991 29.688,5L21.159,5.052L18.568,-3.086C18.411,-3.563 18.214,-3.924 17.975,-4.167C17.737,-4.41 17.448,-4.531 17.109,-4.531C16.78,-4.531 16.495,-4.41 16.257,-4.167C16.018,-3.924 15.82,-3.563 15.664,-3.086L13.073,5.052L4.544,5C4.041,4.991 3.637,5.065 3.333,5.221C3.03,5.378 2.826,5.612 2.721,5.924C2.617,6.246 2.643,6.558 2.799,6.862C2.956,7.166 3.238,7.461 3.646,7.747L10.599,12.747L7.878,20.846C7.713,21.315 7.658,21.719 7.715,22.057C7.771,22.396 7.934,22.665 8.203,22.865ZM10.078,20.286C10.061,20.269 10.061,20.23 10.078,20.169L12.669,12.721C12.73,12.556 12.758,12.4 12.754,12.253C12.75,12.105 12.708,11.968 12.63,11.842C12.552,11.717 12.439,11.602 12.292,11.497L5.807,7.018C5.747,6.984 5.725,6.949 5.742,6.914C5.751,6.888 5.79,6.875 5.859,6.875L13.737,7.018C14.006,7.027 14.227,6.973 14.401,6.855C14.575,6.738 14.701,6.545 14.779,6.276L17.044,-1.263C17.062,-1.332 17.083,-1.367 17.109,-1.367C17.144,-1.367 17.17,-1.332 17.188,-1.263L19.453,6.276C19.531,6.545 19.657,6.738 19.831,6.855C20.004,6.973 20.226,7.027 20.495,7.018L28.372,6.875C28.442,6.875 28.481,6.888 28.49,6.914C28.507,6.949 28.485,6.984 28.424,7.018L21.94,11.497C21.793,11.602 21.68,11.717 21.602,11.842C21.523,11.968 21.482,12.105 21.478,12.253C21.474,12.4 21.502,12.556 21.563,12.721L24.154,20.169C24.162,20.23 24.162,20.269 24.154,20.286C24.136,20.313 24.097,20.304 24.036,20.26L17.773,15.482C17.565,15.317 17.346,15.234 17.116,15.234C16.886,15.234 16.667,15.317 16.458,15.482L10.195,20.26C10.135,20.304 10.095,20.313 10.078,20.286Z"/></g>',
+
+    create: '<g transform="matrix(0.501356,0,0,0.501356,-0.442501,2.867688)"><path d="M4.635,24.063C5.72,25.156 6.866,25.707 8.073,25.716C9.28,25.725 10.417,25.195 11.484,24.128C11.884,23.737 12.281,23.238 12.676,22.63C13.071,22.023 13.459,21.382 13.841,20.71C14.223,20.037 14.59,19.405 14.941,18.815C15.293,18.225 15.625,17.747 15.938,17.383L18.711,20.169C19.214,20.681 19.755,20.94 20.332,20.944C20.909,20.948 21.445,20.703 21.94,20.208L23.62,18.516C24.115,18.012 24.362,17.478 24.362,16.914C24.362,16.35 24.102,15.812 23.581,15.299L13.411,5.117C12.899,4.605 12.359,4.347 11.79,4.342C11.222,4.338 10.686,4.583 10.182,5.078L8.503,6.771C8.008,7.266 7.76,7.799 7.76,8.372C7.76,8.945 8.016,9.488 8.529,10L11.315,12.773C10.951,13.077 10.473,13.405 9.883,13.757C9.293,14.108 8.663,14.477 7.995,14.863C7.326,15.25 6.688,15.64 6.081,16.035C5.473,16.43 4.974,16.823 4.583,17.214C3.516,18.281 2.986,19.418 2.995,20.625C3.003,21.832 3.55,22.977 4.635,24.063ZM10.313,7.93L11.367,6.901C11.541,6.727 11.717,6.638 11.895,6.634C12.072,6.63 12.244,6.714 12.409,6.888L21.823,16.289C22.161,16.636 22.153,16.988 21.797,17.344L20.781,18.372C20.425,18.754 20.069,18.759 19.714,18.385L16.602,15.26C16.359,15.017 16.092,14.907 15.801,14.928C15.51,14.95 15.226,15.095 14.948,15.365C14.696,15.616 14.397,16.037 14.049,16.628C13.702,17.218 13.32,17.886 12.904,18.633C12.487,19.379 12.042,20.117 11.569,20.846C11.096,21.576 10.599,22.196 10.078,22.708C9.453,23.342 8.783,23.657 8.066,23.652C7.35,23.648 6.667,23.325 6.016,22.682C5.373,22.04 5.05,21.359 5.046,20.638C5.041,19.918 5.356,19.245 5.99,18.62C6.502,18.108 7.122,17.613 7.852,17.135C8.581,16.658 9.319,16.211 10.065,15.794C10.812,15.378 11.482,14.998 12.077,14.655C12.671,14.312 13.095,14.015 13.346,13.763C13.607,13.485 13.75,13.199 13.776,12.904C13.802,12.609 13.694,12.344 13.451,12.109L10.313,8.984C9.957,8.628 9.957,8.277 10.313,7.93ZM8.008,22.331C8.451,22.331 8.828,22.172 9.141,21.855C9.453,21.539 9.609,21.159 9.609,20.716C9.609,20.273 9.453,19.896 9.141,19.583C8.828,19.271 8.451,19.115 8.008,19.115C7.565,19.115 7.185,19.271 6.868,19.583C6.552,19.896 6.393,20.273 6.393,20.716C6.393,21.159 6.552,21.539 6.868,21.855C7.185,22.172 7.565,22.331 8.008,22.331ZM23.438,16.589L29.622,10.404C30.343,9.683 30.697,8.913 30.684,8.092C30.671,7.272 30.295,6.489 29.557,5.742L19.336,-4.492C18.989,-4.831 18.6,-5.054 18.171,-5.163C17.741,-5.271 17.316,-5.269 16.895,-5.156C16.474,-5.043 16.102,-4.822 15.781,-4.492C15.46,-4.162 15.239,-3.733 15.117,-3.203C14.874,-2.153 14.668,-1.265 14.499,-0.54C14.329,0.184 14.169,0.805 14.017,1.322C13.865,1.838 13.698,2.307 13.516,2.728C13.333,3.149 13.112,3.572 12.852,3.997C12.591,4.423 12.261,4.913 11.862,5.469L13.359,6.966C13.932,6.22 14.39,5.54 14.733,4.928C15.076,4.316 15.362,3.689 15.592,3.047C15.822,2.405 16.046,1.673 16.263,0.853C16.48,0.033 16.745,-0.959 17.057,-2.122C17.118,-2.348 17.211,-2.515 17.337,-2.624C17.463,-2.732 17.604,-2.78 17.76,-2.767C17.917,-2.754 18.069,-2.674 18.216,-2.526L27.969,7.214C28.273,7.517 28.424,7.839 28.424,8.177C28.424,8.516 28.286,8.824 28.008,9.102L21.979,15.13L23.438,16.589ZM21.38,9.167C21.554,9.34 21.886,9.358 22.376,9.219C22.867,9.08 23.422,8.843 24.043,8.509C24.664,8.175 25.26,7.793 25.833,7.363C26.406,6.934 26.858,6.51 27.188,6.094L24.323,3.242C24.201,4.397 23.869,5.408 23.327,6.276C22.784,7.144 22.148,7.943 21.419,8.672C21.237,8.845 21.224,9.01 21.38,9.167Z"/></g>',
+
+    work: '<g transform="matrix(0.501356,0,0,0.501356,0.163039,2.500087)"><path d="M18.294,24.609C18.763,24.609 19.167,24.423 19.505,24.049C19.844,23.676 20.135,23.177 20.378,22.552L28.906,0.273C29.019,-0.03 29.108,-0.313 29.173,-0.573C29.238,-0.833 29.271,-1.076 29.271,-1.302C29.271,-1.727 29.149,-2.062 28.906,-2.305C28.663,-2.548 28.329,-2.669 27.904,-2.669C27.687,-2.669 27.446,-2.637 27.181,-2.572C26.916,-2.507 26.632,-2.418 26.328,-2.305L3.932,6.276C3.385,6.484 2.925,6.758 2.552,7.096C2.179,7.435 1.992,7.839 1.992,8.307C1.992,8.906 2.196,9.338 2.604,9.603C3.012,9.868 3.529,10.095 4.154,10.286L13.555,13.047L16.289,22.331C16.48,22.982 16.71,23.524 16.979,23.958C17.248,24.392 17.687,24.609 18.294,24.609ZM14.141,11.068L5.156,8.32C5.052,8.294 4.98,8.264 4.941,8.229C4.902,8.194 4.883,8.155 4.883,8.112C4.883,8.069 4.9,8.027 4.935,7.988C4.97,7.949 5.035,7.912 5.13,7.878L22.734,1.211C23.255,1.011 23.765,0.792 24.264,0.553C24.763,0.315 25.256,0.082 25.742,-0.143C25.308,0.204 24.848,0.577 24.362,0.977C23.876,1.376 23.455,1.753 23.099,2.109L14.141,11.068ZM18.503,21.745C18.451,21.745 18.409,21.721 18.379,21.673C18.349,21.625 18.316,21.549 18.281,21.445L15.534,12.461L24.492,3.503C24.848,3.147 25.228,2.721 25.632,2.227C26.035,1.732 26.411,1.263 26.758,0.82C26.532,1.315 26.298,1.814 26.055,2.318C25.812,2.821 25.59,3.338 25.391,3.867L18.724,21.471C18.689,21.567 18.655,21.636 18.62,21.68C18.585,21.723 18.546,21.745 18.503,21.745Z"/></g>',
+
+    develop: '<g transform="matrix(0.501356,0,0,0.501356,-1.501963,2.948113)" fill-rule="evenodd"><path d="M18.815,4.554C18.792,4.488 18.773,4.422 18.757,4.355C18.657,3.943 18.72,3.459 18.945,2.904L19.727,0.964C18.772,0.339 17.795,0.007 16.797,-0.033C15.799,-0.072 14.813,0.022 13.841,0.247C13.407,0.352 13.04,0.343 12.741,0.221C12.441,0.1 12.214,-0.082 12.057,-0.326C11.901,-0.586 11.84,-0.89 11.875,-1.237C11.91,-1.584 12.066,-1.892 12.344,-2.161C13.307,-3.125 14.377,-3.85 15.553,-4.336C16.73,-4.822 17.954,-5.054 19.225,-5.033C20.497,-5.011 21.76,-4.724 23.014,-4.173C24.269,-3.622 25.451,-2.795 26.563,-1.693L29.492,1.224C29.883,1.615 30.139,1.973 30.26,2.298C30.382,2.624 30.399,2.973 30.313,3.346L29.987,4.844L30.846,5.69L31.615,5.625C31.936,5.599 32.233,5.645 32.507,5.762C32.78,5.879 33.073,6.098 33.385,6.419L34.414,7.435C34.735,7.756 34.9,8.101 34.909,8.47C34.918,8.839 34.766,9.18 34.453,9.492L30.573,13.385C30.26,13.698 29.915,13.848 29.538,13.835C29.16,13.822 28.811,13.655 28.49,13.333L27.474,12.344C27.153,12.023 26.938,11.723 26.829,11.445C26.721,11.168 26.68,10.864 26.706,10.534L26.758,9.792L25.872,8.893L24.453,9.154C24.08,9.223 23.741,9.232 23.438,9.18C23.394,9.172 23.35,9.162 23.306,9.149L9.753,24.089C9.136,24.774 8.509,25.139 7.871,25.182C7.233,25.226 6.628,24.957 6.055,24.375L3.789,22.096C3.216,21.515 2.954,20.907 3.001,20.273C3.049,19.64 3.403,19.019 4.063,18.411L18.815,4.554ZM21.887,7.988L19.933,6.018L5.521,19.583C5.252,19.826 5.098,20.067 5.059,20.306C5.02,20.545 5.156,20.82 5.469,21.133L7.031,22.682C7.344,22.995 7.619,23.134 7.858,23.099C8.097,23.064 8.333,22.912 8.568,22.643L21.887,7.988ZM14.336,-1.667C14.249,-1.597 14.221,-1.53 14.251,-1.465C14.282,-1.4 14.349,-1.38 14.453,-1.406C15.807,-1.806 17.135,-1.819 18.438,-1.445C19.74,-1.072 20.911,-0.399 21.953,0.573L20.781,3.359C20.677,3.602 20.636,3.796 20.658,3.939C20.679,4.082 20.777,4.232 20.951,4.388L23.62,7.057C23.785,7.214 23.93,7.307 24.056,7.337C24.182,7.368 24.353,7.361 24.57,7.318L26.602,6.979L28.594,8.958L28.503,10.26C28.494,10.434 28.507,10.564 28.542,10.651C28.576,10.738 28.659,10.846 28.789,10.977L29.557,11.745L32.813,8.49L32.044,7.721C31.914,7.591 31.806,7.511 31.719,7.48C31.632,7.45 31.506,7.439 31.341,7.448L30.026,7.526L28.021,5.547L28.451,3.568C28.503,3.342 28.509,3.155 28.47,3.008C28.431,2.86 28.333,2.708 28.177,2.552L24.935,-0.664C24.197,-1.411 23.383,-1.992 22.493,-2.409C21.604,-2.826 20.686,-3.079 19.74,-3.171C18.793,-3.262 17.858,-3.181 16.934,-2.93C16.009,-2.678 15.143,-2.257 14.336,-1.667Z"/></g>',
+
+    categories: '<g transform="matrix(0.501356,0,0,0.501356,0.326241,2.872187)"><path d="M5.807,9.154L11.745,9.154C12.569,9.154 13.19,8.943 13.607,8.522C14.023,8.101 14.232,7.461 14.232,6.602L14.232,0.781C14.232,-0.078 14.023,-0.716 13.607,-1.133C13.19,-1.549 12.569,-1.758 11.745,-1.758L5.807,-1.758C4.983,-1.758 4.362,-1.549 3.945,-1.133C3.529,-0.716 3.32,-0.078 3.32,0.781L3.32,6.602C3.32,7.461 3.529,8.101 3.945,8.522C4.362,8.943 4.983,9.154 5.807,9.154ZM5.833,7.318C5.608,7.318 5.438,7.257 5.326,7.135C5.213,7.014 5.156,6.836 5.156,6.602L5.156,0.781C5.156,0.547 5.213,0.371 5.326,0.254C5.438,0.137 5.608,0.078 5.833,0.078L11.706,0.078C11.931,0.078 12.103,0.137 12.22,0.254C12.337,0.371 12.396,0.547 12.396,0.781L12.396,6.602C12.396,6.836 12.337,7.014 12.22,7.135C12.103,7.257 11.931,7.318 11.706,7.318L5.833,7.318ZM18.88,9.154L24.805,9.154C25.629,9.154 26.25,8.943 26.667,8.522C27.083,8.101 27.292,7.461 27.292,6.602L27.292,0.781C27.292,-0.078 27.083,-0.716 26.667,-1.133C26.25,-1.549 25.629,-1.758 24.805,-1.758L18.88,-1.758C18.047,-1.758 17.422,-1.549 17.005,-1.133C16.589,-0.716 16.38,-0.078 16.38,0.781L16.38,6.602C16.38,7.461 16.589,8.101 17.005,8.522C17.422,8.943 18.047,9.154 18.88,9.154ZM18.906,7.318C18.672,7.318 18.498,7.257 18.385,7.135C18.273,7.014 18.216,6.836 18.216,6.602L18.216,0.781C18.216,0.547 18.273,0.371 18.385,0.254C18.498,0.137 18.672,0.078 18.906,0.078L24.779,0.078C25.013,0.078 25.184,0.137 25.293,0.254C25.401,0.371 25.456,0.547 25.456,0.781L25.456,6.602C25.456,6.836 25.401,7.014 25.293,7.135C25.184,7.257 25.013,7.318 24.779,7.318L18.906,7.318ZM5.807,22.214L11.745,22.214C12.569,22.214 13.19,22.005 13.607,21.589C14.023,21.172 14.232,20.534 14.232,19.674L14.232,13.841C14.232,12.99 14.023,12.355 13.607,11.934C13.19,11.513 12.569,11.302 11.745,11.302L5.807,11.302C4.983,11.302 4.362,11.513 3.945,11.934C3.529,12.355 3.32,12.99 3.32,13.841L3.32,19.674C3.32,20.534 3.529,21.172 3.945,21.589C4.362,22.005 4.983,22.214 5.807,22.214ZM5.833,20.378C5.608,20.378 5.438,20.319 5.326,20.202C5.213,20.085 5.156,19.909 5.156,19.674L5.156,13.854C5.156,13.611 5.213,13.431 5.326,13.314C5.438,13.197 5.608,13.138 5.833,13.138L11.706,13.138C11.931,13.138 12.103,13.197 12.22,13.314C12.337,13.431 12.396,13.611 12.396,13.854L12.396,19.674C12.396,19.909 12.337,20.085 12.22,20.202C12.103,20.319 11.931,20.378 11.706,20.378L5.833,20.378ZM18.88,22.214L24.805,22.214C25.629,22.214 26.25,22.005 26.667,21.589C27.083,21.172 27.292,20.534 27.292,19.674L27.292,13.841C27.292,12.99 27.083,12.355 26.667,11.934C26.25,11.513 25.629,11.302 24.805,11.302L18.88,11.302C18.047,11.302 17.422,11.513 17.005,11.934C16.589,12.355 16.38,12.99 16.38,13.841L16.38,19.674C16.38,20.534 16.589,21.172 17.005,21.589C17.422,22.005 18.047,22.214 18.88,22.214ZM18.906,20.378C18.672,20.378 18.498,20.319 18.385,20.202C18.273,20.085 18.216,19.909 18.216,19.674L18.216,13.854C18.216,13.611 18.273,13.431 18.385,13.314C18.498,13.197 18.672,13.138 18.906,13.138L24.779,13.138C25.013,13.138 25.184,13.197 25.293,13.314C25.401,13.431 25.456,13.611 25.456,13.854L25.456,19.674C25.456,19.909 25.401,20.085 25.293,20.202C25.184,20.319 25.013,20.378 24.779,20.378L18.906,20.378Z"/></g>',
+
+    updates: '<g transform="matrix(0.501356,0,0,0.501356,0.541667,3.041925)"><path d="M7.409,23.945L22.344,23.945C23.707,23.945 24.729,23.607 25.41,22.93C26.092,22.253 26.432,21.246 26.432,19.909L26.432,6.914C26.432,5.577 26.092,4.57 25.41,3.893C24.729,3.216 23.707,2.878 22.344,2.878L18.424,2.878L18.424,4.974L22.305,4.974C22.947,4.974 23.446,5.148 23.802,5.495C24.158,5.842 24.336,6.354 24.336,7.031L24.336,19.792C24.336,20.469 24.158,20.981 23.802,21.328C23.446,21.675 22.947,21.849 22.305,21.849L7.435,21.849C6.784,21.849 6.285,21.675 5.938,21.328C5.59,20.981 5.417,20.469 5.417,19.792L5.417,7.031C5.417,6.354 5.59,5.842 5.938,5.495C6.285,5.148 6.784,4.974 7.435,4.974L11.328,4.974L11.328,2.878L7.409,2.878C6.046,2.878 5.024,3.214 4.342,3.887C3.661,4.559 3.32,5.569 3.32,6.914L3.32,19.909C3.32,21.254 3.661,22.263 4.342,22.936C5.024,23.609 6.046,23.945 7.409,23.945ZM14.87,15.378C15.009,15.378 15.137,15.354 15.254,15.306C15.371,15.258 15.495,15.169 15.625,15.039L20.026,10.781C20.234,10.582 20.339,10.356 20.339,10.104C20.339,9.835 20.247,9.616 20.065,9.447C19.883,9.277 19.657,9.193 19.388,9.193C19.102,9.193 18.867,9.297 18.685,9.505L16.706,11.602L15.833,12.526L15.911,10.573L15.911,-3.151C15.911,-3.429 15.809,-3.668 15.605,-3.867C15.401,-4.067 15.156,-4.167 14.87,-4.167C14.592,-4.167 14.351,-4.067 14.147,-3.867C13.943,-3.668 13.841,-3.429 13.841,-3.151L13.841,10.573L13.919,12.526L13.034,11.602L11.068,9.505C10.885,9.297 10.647,9.193 10.352,9.193C10.074,9.193 9.848,9.277 9.674,9.447C9.501,9.616 9.414,9.835 9.414,10.104C9.414,10.356 9.514,10.582 9.714,10.781L14.115,15.039C14.253,15.169 14.382,15.258 14.499,15.306C14.616,15.354 14.74,15.378 14.87,15.378Z"/></g>',
   };
-  const item = (key, label, current) => `
-    <div class="mac-spp-nav-item${current ? ' is-current' : ''}">
-      ${navIcon(ICONS[key])}
+  // Still mine, still stroked: Jaco has not exported these two yet.
+  const ICONS_DRAWN = {
+    arcade:   '<circle cx="8" cy="4.3" r="1.9"/><path d="M8 6.2v4.1"/><path d="M4.4 10.6c-1.1.35-1.8.9-1.8 1.5 0 1.05 2.42 1.9 5.4 1.9s5.4-.85 5.4-1.9c0-.6-.7-1.15-1.8-1.5"/>',
+    play:     '<path d="M8 1.7c2.25 1.75 3.5 4.3 3.5 7.05L9.95 11.3H6.05L4.5 8.75C4.5 6 5.75 3.45 8 1.7Z"/><circle cx="8" cy="6.2" r="1.15"/><path d="M6.1 11.6 4.3 14l2.45-.75M9.9 11.6 11.7 14l-2.45-.75"/>',
+  };
+  const navIcon = key => ICONS_EXACT[key] ? navIconFill(ICONS_EXACT[key]) : navIconStroke(ICONS_DRAWN[key]);
+  /* NO ROW IS CURRENT, and the highlight was removed rather than moved. This
+     sidebar is decorative chrome around a PRODUCT PAGE, and a product page is
+     not any of the eight destinations in it — lighting "Discover" claimed you
+     had navigated somewhere you had not, on the one surface in this modal whose
+     whole job is to say "this is your game's page". In the real app those rows
+     are unselected while a product page is open, for the same reason.
+     The `current` parameter and `.mac-spp-nav-item.is-current`'s rules went
+     with it: a state nothing can ever set is a control waiting to be turned
+     back on, which is why the dev bar was deleted rather than defaulted off. */
+  const item = (key, label) => `
+    <div class="mac-spp-nav-item">
+      ${navIcon(key)}
       <span>${label}</span>
     </div>`;
   return `
     <div class="mac-spp-sidebar">
-      <div class="mac-spp-search">
-        <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="6.8" cy="6.8" r="4.8" stroke="currentColor" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        <span>Search</span>
+      ${/* THE TRAFFIC LIGHTS, and I argued against these once. When the sidebar
+            was first nailed against the reference I left them out on the
+            grounds that they are WINDOW chrome rather than sidebar — true of
+            the object, wrong about this drawing. Everything else in this column
+            exists to say "you are looking at the Mac App Store app", and those
+            three dots are the single most recognisable thing on a macOS window;
+            without them the column reads as a web sidebar that happens to list
+            Apple's sections. They are the cheapest fidelity in the whole
+            preview.
+            They are DEAD, and deliberately so: no hover, no `cursor: pointer`,
+            no handlers. A control that looks pressable and does nothing is
+            worse than a picture of one, and this is a picture — `aria-hidden`
+            so it is not announced as anything either. Apple's own colours,
+            which is why they are literals rather than tokens: they belong to
+            macOS, not to this app's palette, and repointing them at
+            `--alert-*` / green would have quietly made them mean something. */''}
+      <div class="mac-spp-lights" aria-hidden="true">
+        <span class="mac-spp-light mac-spp-light--close"></span>
+        <span class="mac-spp-light mac-spp-light--min"></span>
+        <span class="mac-spp-light mac-spp-light--max"></span>
       </div>
-      ${item('discover', 'Discover', true)}
-      ${item('arcade', 'Arcade', false)}
-      ${item('create', 'Create', false)}
-      ${item('work', 'Work', false)}
-      ${item('play', 'Play', false)}
-      ${item('develop', 'Develop', false)}
-      <div class="mac-spp-nav-divider"></div>
-      ${item('categories', 'Categories', false)}
-      ${item('updates', 'Updates', false)}
+      ${/* THE FIELD HOLDS THE GAME'S NAME, not the word "Search". It is the one
+            line of this fake chrome that can tell the truth about YOUR
+            submission, and it costs nothing to: you are looking at your game's
+            product page, so the way you got here was by searching for it. A
+            literal "Search" beside a page that is unmistakably one game's is the
+            only part of the sidebar still describing a generic App Store.
+            It falls back to "Search" when there is no title yet — an empty
+            field is what an untouched one looks like, and inventing a
+            placeholder game name there would put a second fake title on a
+            screen whose real one is right beside it, already saying "Your Game
+            Title". `is-query` is what tells the two apart: a real query is
+            ink, a prompt is placeholder grey. */''}
+      <div class="mac-spp-search${gameTitle ? ' is-query' : ''}">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="6.8" cy="6.8" r="4.8" stroke="currentColor" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>${escHtml(gameTitle || 'Search')}</span>
+      </div>
+      ${item('discover', 'Discover')}
+      ${item('arcade', 'Arcade')}
+      ${item('create', 'Create')}
+      ${item('work', 'Work')}
+      ${item('play', 'Play')}
+      ${/* NO DIVIDER before Categories. There was one, and the real app has
+            nothing there — the eight items are one list at one rhythm. A rule
+            across a column this narrow also reads as a section break the app
+            never makes. */''}
+      ${item('develop', 'Develop')}
+      ${item('categories', 'Categories')}
+      ${item('updates', 'Updates')}
+      ${/* THE ACCOUNT ROW IS A PERSON, not a menu item. The real one is a round
+            photo and the account holder's name, which is why it reads as "you"
+            at the bottom of a list of places — it was a generic person glyph in
+            a rounded square labelled "Account", which is a ninth nav item
+            wearing a different shape.
+
+            THE AVATAR IS EMPTY, and the person glyph inside it is GONE. It was
+            there to stop a bare disc reading as a hole, which was the right
+            worry and the wrong fix: a little figure is a PICTURE OF a person,
+            so the row ended up saying "someone" twice — once in the drawing and
+            once in the name beside it. A plain disc is what an account with no
+            photo actually looks like, here and in the real app. Its fill went
+            up a step to carry that on its own (see the CSS).
+
+            THE NAME IS GENERIC. It read "Jacobo Abril", which is a real person
+            in a mock — the one value on this screen that was true about
+            somebody rather than about the prototype. "Developer" is seeded the
+            way every other fake value here is (My Game, Pixel Forge, Your
+            Company). There is no account model to read it from yet; when one
+            exists, this is the one line to change. */''}
       <div class="mac-spp-account">
-        <div class="mac-spp-account-avatar">
-          <svg viewBox="0 0 16 16" width="12" height="12" fill="none"><circle cx="8" cy="5.6" r="2.6" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 13.2c0-2.5 2.3-4.2 5.2-4.2s5.2 1.7 5.2 4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        </div>
-        <span class="mac-spp-account-label">Account</span>
+        <div class="mac-spp-account-avatar"></div>
+        <span class="mac-spp-account-label">${escHtml(_sppDeveloperName('Developer'))}</span>
       </div>
     </div>`;
 }
@@ -9797,20 +13099,53 @@ function _getLiveAnswer(platformId, qid) {
  * and the current value matches `val` (if provided).
  * Pass val=undefined to skip the value check (e.g. Steam caller already checks externally).
  */
+/* VIOLET IS "THE USER DID NOT ANSWER THIS", AND THAT IS THE TEST — not "an
+   inference wrote this".
+
+   It used to require a meta entry: `if (!meta || meta.humanConfirmed) return ''`.
+   So an answer was only violet if some writer had remembered to stamp
+   provenance alongside it, and anything Shipmate put in WITHOUT stamping came
+   out wearing the selection blue — which in this app means *you confirmed
+   this*. That is the worst direction for the mistake to run: the one colour
+   that says a human approved a legal declaration, on a declaration no human
+   ever looked at. It also made correctness depend on every present and future
+   write path remembering a second line.
+
+   Inverted, the rule is the one Mark stated and it needs no bookkeeping: an
+   answer is YOURS only if `humanConfirmed` says you made it. Everything else
+   with a value — inferred, defaulted to "no"/"none" because the model could
+   not confirm anything (see the prompt's own instruction, claude.js), seeded,
+   or written by some path that forgets to stamp — is Shipmate's, and says so.
+   It now fails safe: the failure mode is "review this", never "you signed it".
+
+   ONE THING IT DELIBERATELY DOES NOT CHANGE: the pinned line's count still
+   counts `confidence` (buildContentRatingSection). That line claims Shipmate
+   INFERRED n answers, which is a narrower and more specific claim than "you
+   did not answer these" — a value defaulted for want of evidence was not
+   inferred from anything. So the paint and the count are no longer the same
+   test, and CLAUDE.md's note saying they are is now out of date. */
 function _platformAIClass(platformId, qid, val) {
   const meta = _getAnswerMeta(platformId, qid);
-  if (!meta || meta.humanConfirmed) return '';
+  if (meta && meta.humanConfirmed) return '';
+
+  const ans = _getLiveAnswer(platformId, qid);
+  // No answer at all is not Shipmate's work — an empty row stays neutral.
+  const hasAnswer = Array.isArray(ans) ? ans.length > 0 : (ans !== null && ans !== undefined && ans !== '');
+  if (!hasAnswer) return '';
+
   if (val !== undefined) {
-    const ans   = _getLiveAnswer(platformId, qid);
     const match = Array.isArray(ans) ? ans.includes(val) : ans === val;
     if (!match) return '';
   }
   return ' ai-confident';
 }
 
-/** Returns AI badge HTML or empty string. */
+/** The ✦ badge is retired — the violet fill says it on its own (see
+    .ai-confident in style.css). Kept as a no-op rather than deleted because it
+    is called from a dozen row builders across four platforms, and a stub that
+    returns nothing is one edit instead of twelve. */
 function _platformAIBadge(platformId, qid, val) {
-  return _platformAIClass(platformId, qid, val) ? '<span class="ai-badge">✦</span>' : '';
+  return '';
 }
 
 /* ── Shared toggle pill for Unanswered / All filter ─────── */
@@ -9820,13 +13155,22 @@ function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
   if (!collapseMode) return '';
   // Same selection language as the Game Details sub-tabs (.app-subtab): the
   // picked option takes the quiet dark pill + white label, the other stays at
-  // 50% and lifts on hover, with a vertical bar between them. The separator is
-  // always shown here (a 2-way toggle always has one selected, so the sub-nav's
-  // "hide the bar next to the selected pill" rule would erase it entirely).
+  // 50% and lifts on hover.
+  //
+  // NO SEPARATOR. The sub-nav uses a vertical bar because it is a row of peers
+  // you move along; this is a two-state switch, and a rule down the middle made
+  // it read as two buttons that happen to be adjacent. With the bar gone and
+  // the box around them acting as the track, the filled half IS the state —
+  // which is what a toggle looks like everywhere else.
+  /* A SLIDING THUMB WAS TRIED AND REVERTED. The fill lived in its own element so
+     it could travel between the halves; with two labels of very different
+     widths ("Unanswered" is 106px against "All"'s 56) the box has to resize as
+     it moves, and width and transform animating together read as the control
+     stretching rather than the selection sliding. The state is a step, so it
+     is painted as one. */
   return `
     <div class="cr-toggle-bar">
       <button class="app-subtab${!showAll ? ' is-on' : ''}" onclick="${offFn}">Unanswered</button>
-      <span class="app-subtab-sep">|</span>
       <button class="app-subtab${showAll ? ' is-on' : ''}" onclick="${onFn}">All</button>
     </div>`;
 }
@@ -9834,6 +13178,17 @@ function buildCRTogglePill(collapseMode, showAll, offFn, onFn) {
 /* ── Snapshot helper — captures answered IDs at filter time ─ */
 // Called when inference completes or when user clicks "Unanswered".
 // Stores a frozen Set so re-answering questions doesn't auto-disappear them.
+/* Age Category counts as answered the same way the rows do, and it has to go
+   into the SNAPSHOT rather than be read live — see the note on addlAnswered in
+   buildContentRatingSection. Its follow-ups are part of the answer: picking
+   "Made for kids" without an age range, or "Override" without a rating, is a
+   half-answer and stays on the list. */
+function _crAgeAnswered(a) {
+  return a.ageCategory !== null && a.ageCategory !== undefined
+    && !(a.ageCategory === 'made_for_kids'   && (a.kidsAgeRange   === null || a.kidsAgeRange   === undefined))
+    && !(a.ageCategory === 'override_higher' && (a.overrideRating === null || a.overrideRating === undefined));
+}
+
 function takeFilterSnapshot(platformId) {
   if (platformId === 'ios') {
     const a = state.iosSubmitAnswers;
@@ -9845,6 +13200,7 @@ function takeFilterSnapshot(platformId) {
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    if (_crAgeAnswered(a)) s.add('ageCategory');
     state.iosAnsweredAtInference = s;
   } else if (platformId === 'macos') {
     // Content Rating fields are shared with the App Store (state.iosSubmitAnswers
@@ -9861,6 +13217,11 @@ function takeFilterSnapshot(platformId) {
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    /* ROUTED BY FIELD. ageCategory (and its two follow-ups) are in
+       IOS_MAC_SHARED_ANSWER_FIELDS, so for Mac App Store they live in the iOS
+       store — _appStoreAnswers('macos') with no field id hands back Mac's own
+       bucket, where they are always null. */
+    if (_crAgeAnswered(_appStoreAnswers('macos', 'ageCategory'))) s.add('ageCategory');
     state.macAnsweredAtInference = s;
   } else if (platformId === 'macos_full') {
     // Fully independent — reads state.macFullSubmitAnswers directly, no
@@ -9874,6 +13235,7 @@ function takeFilterSnapshot(platformId) {
     if (a.usesEncryption !== null && a.usesEncryption !== undefined) s.add('usesEncryption');
     if (a.encryptionExempt !== null && a.encryptionExempt !== undefined) s.add('encryptionExempt');
     if (a.hasERN        !== null && a.hasERN        !== undefined) s.add('hasERN');
+    if (_crAgeAnswered(a)) s.add('ageCategory');
     state.macFullAnsweredAtInference = s;
   } else if (platformId === 'android') {
     const androidQs = CQ_QUESTIONS.filter(q => q.platforms.includes('android'));
@@ -10122,11 +13484,65 @@ function buildPrivacySection(pid = 'ios') {
     ${collectBlock}`;
 }
 
+/* ── THE CELL IS THE CONTROL ──────────────────────────────────────────
+   Jaco: *"quitando los checks cuadrados y convirtiendo todas las celdas en
+   pulsables."*
+
+   THESE WERE THE LAST NATIVE CONTROLS IN THE APP. Every other pressable thing
+   here is drawn by us — the step disc, the pills, the masked selection stroke —
+   and this table ran eight `<input type="checkbox">` per row on `accent-color`,
+   which is both a different shape language and a different blue from anything
+   around it.
+
+   AND THE TARGET WAS 15px WIDE IN A 98px COLUMN. The cell was a box with a tiny
+   control sitting in the middle of it, so ~85% of every cell you aimed at did
+   nothing — the same complaint the Mac preview's screenshot frames answered
+   ("the frames are not the button — the well is"). The button IS the cell now:
+   `.prv-hit` fills the column's whole width and the row's whole height, and the
+   18px mark inside it is paint, not the target.
+
+   THREE STATES, AND THE THIRD IS WHY THIS IS A HELPER AND NOT A STRING.
+     · live   — the row is part of your answer; the socket is visible at rest.
+     · add    — the row is NOT selected yet. Pressing a cell here is a
+                STATEMENT ("I collect this, for this purpose"), so it does the
+                two things at once rather than refusing. It used to be
+                `disabled` with `opacity: 0`, i.e. a name followed by seven
+                voids, which reads as broken rather than as off.
+     · locked — genuinely unavailable, which only Google Play has: Ephemeral
+                and Required mean nothing until Collected is on. A real
+                impossibility, not merely an unanswered row — so it keeps no
+                pointer and no hover.
+
+   The socket only RESTS visible on a live row; an add row reveals its sockets
+   when the pointer crosses it. Same argument as the calendar day panel's ×,
+   which is bare until its row is hovered: a permanent socket in all 280 cells
+   would be 280 invitations, and at any moment ~86% of this grid is cells you
+   have said nothing about.
+
+   The glyph is `smCheckSVG()` with NO size argument, sized by CSS, for the
+   standing reason (`.ios-step-num svg`, `.active-card-icon svg`): a literal at
+   the call site is what goes stale the first time the box moves. It is emitted
+   in every state and hidden by `color: transparent`, so pressing a cell cannot
+   change its layout. */
+function _prvCell(on, js, opts = {}) {
+  const { add = false, locked = false, meta = false } = opts;
+  const cls = `prv-check-cell${meta ? ' prv-meta-col' : ''}`;
+  if (locked) {
+    return `<td class="${cls}"><span class="prv-hit is-locked"><span class="prv-box"></span></span></td>`;
+  }
+  return `<td class="${cls}">
+    <button type="button" class="prv-hit${add ? ' is-add' : ''}" aria-pressed="${on ? 'true' : 'false'}"
+            onclick="event.stopPropagation();${js}">
+      <span class="prv-box${on ? ' is-on' : ''}">${smCheckSVG()}</span>
+    </button>
+  </td>`;
+}
+
 function buildPrivacyMatrix(a, pid = 'ios') {
   const cols = IOS_PURPOSES;
   const META_COLS = [
-    { id: 'linked_identity', label: t('ios.privacy.linked.label') || 'Linked to Identity' },
-    { id: 'used_tracking',   label: t('ios.privacy.tracking.label') || 'Used for Tracking' },
+    { id: 'linked_identity', label: t('ios.privacy.linked.label') || 'Linked to Identity',  head: ['Linked to', 'Identity'] },
+    { id: 'used_tracking',   label: t('ios.privacy.tracking.label') || 'Used for Tracking', head: ['Used for', 'Tracking'] },
   ];
   const META_COL_TIPS = {
     linked_identity: t('ios.privacy.linked.tooltip') || "Data directly linked to the user's identity — such as their account, name, or email address.",
@@ -10137,118 +13553,377 @@ function buildPrivacyMatrix(a, pid = 'ios') {
   const selectedTypeIds = new Set(Object.keys(a.dataPerType));
   const selectedCount   = Object.keys(a.dataPerType).length;
 
-  // Per-group collapse state (Contact Info, Health & Fitness, ...) — a
-  // group with one or more flagged/selected data types is ALWAYS expanded,
-  // every time the table renders (whether it's first shown, or right after
-  // a preset is applied/removed via togglePrivacyPreset, app.js) — that
-  // invariant is non-negotiable, so a flagged group ignores any override
-  // below. A group with nothing flagged defaults to collapsed, but can
-  // still be expanded manually (state.privacyGroupExpanded, keyed
-  // "pid:Group Name") to browse/select types inside it that no preset has
-  // touched — that manual peek is the ONLY thing the override map is for
-  // now, which is why togglePrivacyPreset clears it for this pid on every
-  // preset click rather than letting a stale peek survive a data change.
-  // Keyed by pid (not shared flat) because although ios/macos share the
-  // same dataPerType (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's
-  // is fully independent (_appStoreAnswers) and shouldn't inherit ios/macos's
-  // per-group peeks or vice versa.
-  if (!state.privacyGroupExpanded) state.privacyGroupExpanded = {};
-  const _groupKey     = g => `${pid}:${g.group}`;
-  const _groupFlagged = g => g.types.some(gt => selectedTypeIds.has(gt.id));
-  const _isGroupExpanded = g => _groupFlagged(g) || !!state.privacyGroupExpanded[_groupKey(g)];
+  /* ── THE TABLE IS AN ACCORDION, AND THE 16 GROUPS ARE ALWAYS THE VIEW ─────
+     v6.52, ported from Jaco's own mock (apple-privacy-modal-990.html).
 
-  // Dynamic ordering: flagged (always-expanded) groups float to the top,
-  // in their original relative order, followed by unflagged (collapsed —
-  // unless manually peeked open) groups, also in their original relative
-  // order — so a group that just gained a flagged type (individually, or
-  // via a preset) visibly moves up next to the others that already need
-  // review, instead of staying buried in its fixed catalog position.
-  const sortedGroups = IOS_DATA_TYPES
+     WHAT IT REPLACES: every type of every group drawn at once — 35 rows of 8
+     cells, of which 40 held a control. The inventory called that out as 86%
+     empty and left the structural question open; this is the answer. The 16
+     group names fit on one screen with nothing scrolled, each one carries its
+     own count of what you have declared inside it, and exactly one opens at a
+     time.
+
+     ONE AT A TIME IS THE PART THAT DOES THE WORK. With several open, the
+     open group's lighter ground marks four places and stops meaning "you are
+     here"; with one, it is the only lit block on the table and the other
+     fifteen step back to .38. It also keeps all sixteen reachable without
+     scrolling past a group you have expanded and forgotten. */
+  const _openKey  = `${pid}`;
+  if (!state.privacyGroupOpen) state.privacyGroupOpen = {};
+  const openGroup = state.privacyGroupOpen[_openKey] || null;
+
+  /* THE OLD MODEL IS GONE AND IT IS WORTH SAYING WHAT IT WAS, because its
+     central claim was the thing this replaces. It read: "a group with one or
+     more flagged data types is ALWAYS expanded, every time the table renders —
+     that invariant is non-negotiable", with a per-group override map
+     (`privacyGroupExpanded`) on top for manually peeking into the rest.
+
+     Two costs, and the first is the one its own comment admits: a header whose
+     group is flagged is a button that does nothing, because the invariant
+     immediately re-opens it. The second is that three presets flag four groups,
+     so four blocks opened at once and the table went back to being a wall —
+     which is exactly what the 86%-empty inventory was about.
+
+     The counter on each header is what made the invariant unnecessary. A closed
+     group that says "2" has not hidden anything from you; it has told you what
+     is inside without spending a screen on it.
+
+     Keyed by pid (not shared flat) because although ios/macos share the same
+     dataPerType (IOS_MAC_SHARED_ANSWER_FIELDS, state.js), macos_full's is
+     fully independent (_appStoreAnswers) and must not inherit ios/macos's open
+     group or its frozen order. */
+  const _groupFlagged = g => g.types.some(gt => selectedTypeIds.has(gt.id));
+
+  /* THE ORDER IS FROZEN WHEN THE TABLE OPENS, NOT RECOMPUTED ON EVERY CLICK.
+     Flagged groups float to the top, in Apple's own relative order, and the
+     sort is stable so the rest keep theirs. That much is unchanged — what
+     changed is WHEN it is decided. Recomputed per render, marking the first
+     cell of an untouched group made that group jump to the top of the table
+     **under the pointer that had just pressed it**, which is the one thing a
+     press must never do (the submitted card's disclosure toggle and the
+     hold-to-submit row are both built under that rule).
+
+     `togglePrivacyMatrix` (app.js) stamps the order on the way in; this only
+     reads it, and falls back to computing one if the field is missing so a
+     restored state or a direct render can never draw an empty table. */
+  const _computeOrder = () => IOS_DATA_TYPES
     .map((g, i) => ({ g, i, flagged: _groupFlagged(g) }))
     .sort((x, y) => (x.flagged === y.flagged) ? x.i - y.i : (x.flagged ? -1 : 1))
-    .map(x => x.g);
+    .map(x => x.g.group);
+  const _order = (state.privacyGroupOrder && state.privacyGroupOrder[_openKey]) || _computeOrder();
+  const sortedGroups = _order
+    .map(name => IOS_DATA_TYPES.find(g => g.group === name))
+    .filter(Boolean);
 
-  // Header row with inline tooltips
+  /* ── THE NAME IS THE HANDLE ───────────────────────────────────────────
+     Jaco: *"quizás los tooltip symbols nos hacen daño y habría que ponerlos o
+     debajo de los nombres o simplemente haciendo hover sobre el nombre del uso
+     de los datos."*
+
+     THIS TABLE ALREADY HAD TWO TOOLTIP CONVENTIONS AND ONLY ONE OF THEM DREW A
+     MARK. The 35 data-type names down the first column are bare
+     `.tooltip-anchor`s — hover the name, read the description, no glyph — and
+     the eight column headings carried a `?` disc. One table, two answers to the
+     same question. The row labels are the older and the quieter, so the
+     headings join them rather than the other way round.
+
+     WHAT THE ICON REALLY COSTS IS HEIGHT, NOT WIDTH, and that is worth being
+     exact about because it is not what it looked like. Measured, the column's
+     floor is the longest WORD in its label — "Personalization" at 84.0px —
+     which the icon does not touch; what the icon did was ride along as one more
+     wrapping token, pushing App Functionality to three lines and the whole
+     header row to 61px. Gone, the row is 46.
+
+     `_prvColHead` is one helper for both groups because they are one row: the
+     two meta columns were already a verbatim copy of the purpose header with a
+     different tip source.
+
+     TWO LINES ARE PRINTED EVEN WHEN THE FIRST IS EMPTY (v6.52). `.h1` and
+     `.h2` are two blocks rather than one string with a `<br>`, and an empty
+     first line goes out as `&nbsp;` — so every heading occupies exactly two
+     lines and the eight of them share one baseline by construction rather than
+     by `vertical-align`. Both lines carry `white-space: nowrap`: the whole
+     point of abbreviating "Personaliz." and "Functional." in state.js is that
+     the break is OURS, and a column narrow enough to re-wrap them would undo
+     that silently.
+
+     THE WHOLE `<th>` IS THE ANCHOR, not a span inside it. An inline box's hover
+     area is its GLYPHS, so on a two-line heading the dead centre falls in the
+     leading between the lines where no inline box exists — measured in v6.51,
+     `elementFromPoint` there returned the `<th>`. The tip carries the full
+     label AND the description, which is what makes the abbreviation honest:
+     Apple's own wording is one hover away. */
+  const _prvColHead = (lines, tip, cls) =>
+    `<th class="pvt-col-hd${cls ? ' ' + cls : ''} tooltip-anchor" data-tip="${tip}"` +
+    `><span class="pvt-h1">${lines[0] || '&nbsp;'}</span>` +
+    `<span class="pvt-h2">${lines[1] || lines[0] || ''}</span>` +
+    /* THE HANDLE IS BACK, AND IT COSTS NOTHING BECAUSE IT IS OUT OF FLOW.
+       v6.51 removed the `?` disc because it rode along as one more wrapping
+       token and pushed this row to 61px — that is a fact about an INLINE icon,
+       not about the icon. Absolutely positioned into the 13px of bottom padding
+       the `<th>` already pays, it changes no box at all, which is the same
+       guarantee `text-decoration` bought and the reason that underline was
+       chosen over bringing this back. `pointer-events: none` because the whole
+       cell is the anchor: the disc is a SIGN that there is a tooltip, never the
+       target, exactly as it already was before it was removed. */
+    `<span class="tooltip-icon pvt-tt">?</span></th>`;
+
+  /* THE BREAK IS AN ENGLISH TYPOGRAPHIC DECISION, so a real translation does
+     not inherit it. `t()` returns the KEY when a string is missing and the
+     English file is a verbatim copy of `label`, so "is there a locale override"
+     is not the question to ask — the first attempt asked it and every heading
+     came back single-line, because en.json always answers. The test is whether
+     the resolved string IS the English one: if it is, use the chosen lines; if
+     a translator has replaced it (zh-CN has all six), print theirs and let it
+     wrap on its own, which is right for a language that breaks per character
+     anyway. A locale that wants its own two lines can grow a `head` later. */
   const purposeHeaders = cols.map(c => {
-    const cLabel = t(`ios.purpose.${c.id}.label`) || c.label;
     const cDesc  = t(`ios.purpose.${c.id}.desc`)  || c.desc;
-    return `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${cDesc}">${cLabel} <span class="tooltip-icon">?</span><span class="tooltip-body">${cDesc}</span></span></th>`;
+    const cLabel = t(`ios.purpose.${c.id}.label`) || c.label;
+    const cHead  = (cLabel === c.label) ? (c.head || ['', c.label]) : ['', cLabel];
+    // The tip names the purpose in full before describing it — that is the
+    // half the abbreviated heading gave up.
+    return _prvColHead(cHead, `${cLabel} — ${cDesc}`);
   }).join('');
   const metaHeaders = META_COLS.map(c =>
-    `<th class="prv-col-hd prv-meta-col"><span class="tooltip-anchor" data-tip="${META_COL_TIPS[c.id]}">${c.label} <span class="tooltip-icon">?</span><span class="tooltip-body">${META_COL_TIPS[c.id]}</span></span></th>`).join('');
+    _prvColHead(c.head, `${c.label} — ${META_COL_TIPS[c.id]}`)).join('');
 
-  // Build rows — all types shown when expanded (grouped); none when collapsed
+  /* ── THE CELL IS THE CONTROL, AND THE MARK IS A 14px SQUARE INSIDE IT ─────
+     v6.46's sentence is unchanged and v6.52 only moves the PAINT. The hit area
+     is still the whole cell — "acertar un cuadrito de 14px es una lotería" —
+     and what shrank is the thing drawn in it.
+
+     WHY IT HAD TO SHRINK: at 92 × 30 the mark was the right size for the six
+     columns the old table had room for, and the same fill over eight columns in
+     a 748px table turned the grid into a wall of slabs. The socket went with
+     it. An EMPTY cell now draws nothing at all: a 14px square outlined at
+     white 7% — the divider's own alpha — so the table reads as white space with
+     blue marks where there is data, instead of 280 boxes asking for attention.
+     That is the same arithmetic as v6.46's own ".07 was right for an 18px chip
+     and ten times too much ink over 92 × 30", run in the other direction.
+
+     THE SQUARE WEARS THE APP'S OWN SELECTED-PILL STROKE at a 4px radius: its
+     fill is `--pill-on-bg` and its ring is the masked gradient every other
+     selected thing in this app draws, joined through the shared `::after`
+     selector list rather than redrawn locally.
+
+     AND THE CELL CARRIES NO TOOLTIP (v6.66). Jaco: *"no me has quitado los
+     tooltips on hover de cada checkmark, quítalos por favor."* Every square was
+     a `.tooltip-anchor` naming its type and its column, on the argument that it
+     is *"what keeps a grid of unlabelled squares readable"*. With one group open
+     that argument does not survive its own numbers: a cell has its TYPE printed
+     on the same row, four inches left, and its COLUMN printed at the top of the
+     table, which is sticky and therefore always on screen. The tooltip repeated
+     two labels you can already read, on 128 targets, and a hint that fires on
+     every pass of the pointer across a grid is noise rather than help. The two
+     anchors that stay are the ones naming something NOT on screen — the row's
+     type name (Apple's description of it) and the column heading (its full
+     unabbreviated label). `aria-label` keeps the pair for a screen reader, where
+     "the label is elsewhere on screen" is not an answer. */
+  const _pvtCell = (on, js, tip) =>
+    `<td class="pvt-cl"><button type="button" class="pvt-cel${on ? ' is-on' : ''}"` +
+    ` aria-pressed="${on ? 'true' : 'false'}" aria-label="${tip}"` +
+    ` onclick="event.stopPropagation();${js}"><i class="pvt-sq"></i></button></td>`;
+
+  const COLSPAN = 1 + cols.length + META_COLS.length;
+  const anyOpen = !!openGroup;
+
+  // Resolved once, OUTSIDE the row loops — whose own variable is `t` and so
+  // shadows the locale helper of the same name. (That shadowing is why the old
+  // builder could not translate anything inside a row either.)
+  const colLabel = {};
+  cols.forEach(c => { colLabel[c.id] = t(`ios.purpose.${c.id}.label`) || c.label; });
+  META_COLS.forEach(c => { colLabel[c.id] = c.label; });
+
+  // Build rows — one <tbody> per group, so the open block's lighter ground
+  // covers its header, its rows and its tail as one surface. A background on a
+  // run of <tr>s cannot do that; a <tbody> can.
   let bodyHtml = '';
   if (expanded) {
     sortedGroups.forEach(group => {
-      const groupOn = _isGroupExpanded(group);
+      const groupOn = openGroup === group.group;
+      const selIn   = group.types.filter(gt => selectedTypeIds.has(gt.id));
+      const nSel    = selIn.length;
+
+      /* ── THE HEADER NAMES WHAT IS INSIDE IT, NOT JUST HOW MUCH ───────────
+         Jaco: *"the user might sometimes want to see all the data types
+         they've flagged at a glance. Maybe we can do this by showing flagged
+         data types in each data type section header, where you currently have
+         the number. That way this info is available at a glance without
+         accordioning."*
+
+         IT IS THE ANSWER TO THE COST OF ONE-AT-A-TIME. v6.52's argument for a
+         single open group is unchanged and is what makes the table readable —
+         "with several open the lighter ground marks four places and stops
+         meaning *you are here*" — but it does mean the only way to re-read
+         what you declared is to open four blocks in turn. The count already
+         says a group is not empty; the names say what it holds, and the row
+         they go on is already drawn.
+
+         THE COUNT STAYS. It is the one part that is always true and always
+         fits: the list ellipsises when a group holds more names than the row
+         has room for, and a truncated list with a number beside it still
+         answers "how many". Removing it would make the ellipsis lossy.
+
+         SENTENCE CASE, AGAINST THE GROUP NAME'S UPPERCASE. The `<td>` shouts
+         because a group name is a section heading; these are content sitting
+         on the same line, and the case is what keeps one from reading as a
+         continuation of the other. Same lever the release block's labels use
+         against their values. */
+      const gFlags = selIn.map(gt => {
+        const gtd = a.dataPerType[gt.id] || {};
+        const trk = gtd.tracking === 'yes';
+        const idn = gtd.identity === 'yes';
+        const tip = trk && idn
+          ? `${gt.label} — linked to the user's identity AND used for tracking. Tracking requires AppTrackingTransparency.`
+          : trk ? `${gt.label} — used for tracking. Tracking requires AppTrackingTransparency.`
+          : idn ? `${gt.label} — linked to the user's identity.`
+          : `${gt.label} — declared, not linked to identity and not used for tracking.`;
+        return `<span class="pvt-gf${trk ? ' is-trk' : ''}` +
+               ` tooltip-anchor" data-tip="${tip}">${gt.label}</span>`;
+      // A COMMA, NOT A GAP — and the comma is NOT inside the chip. It belongs to
+      // the list rather than to either name beside it, so it takes neither
+      // name's hue: an amber comma after a tracked type would read as part of
+      // that type's mark. Its own span, in the row's text colour.
+      }).join('<span class="pvt-gfc">,</span>');
+
+      const gCls    = [
+        'pvt-g',
+        nSel ? '' : 'is-empty',
+        groupOn ? 'is-open' : '',
+        anyOpen && !groupOn ? 'is-dim' : '',
+      ].filter(Boolean).join(' ');
+
+      let rows = '';
+      if (groupOn) {
+        group.types.forEach((t, ti) => {
+          const isOn = !!a.dataPerType[t.id];
+          const td   = a.dataPerType[t.id] || { purposes: [], identity: null, tracking: null };
+          const cells = cols.map(c => {
+            const checked = td.purposes.includes(c.id);
+            return _pvtCell(checked,
+              `togglePrivacyPurpose('${t.id}','${c.id}',${!checked})`,
+              `${t.label} · ${colLabel[c.id]}`);
+          }).join('') + META_COLS.map(c => {
+            const isChecked = c.id === 'linked_identity' ? td.identity === 'yes' : td.tracking === 'yes';
+            const field     = c.id === 'linked_identity' ? 'identity' : 'tracking';
+            return _pvtCell(isChecked,
+              `setPrivacyMeta('${t.id}','${field}',${!isChecked})`,
+              `${t.label} · ${colLabel[c.id]}`);
+          }).join('');
+          rows += `
+            <tr class="pvt-r is-in${isOn ? ' has-data' : ''}${td.tracking === 'yes' ? ' is-trk' : ''}${ti % 2 ? ' is-alt' : ''}">
+              <td class="pvt-ty tooltip-anchor" data-tip="${t.label} — ${t.desc}"
+                ><span class="tooltip-icon pvt-tt">?</span>${t.label}</td>
+              ${cells}
+            </tr>`;
+        });
+        // A tail row rather than padding on the last data row: it is what
+        // carries the open block's bottom rule, and it must be the tbody's own
+        // last child for that rule to land under the whole group.
+        rows += `<tr class="pvt-pad"><td colspan="${COLSPAN}"></td></tr>`;
+      }
+
       bodyHtml += `
-        <tr class="prv-group-row${groupOn ? ' is-expanded' : ''}" onclick="togglePrivacyGroup('${pid}','${group.group}',${groupOn})">
-          <td colspan="${1 + cols.length + META_COLS.length}"><span class="prv-group-chev">${groupOn ? _chevUp : _chevDown}</span>${group.group}</td>
-        </tr>`;
-      if (!groupOn) return;
-      group.types.forEach(t => {
-        const isOn = !!a.dataPerType[t.id];
-        const td   = a.dataPerType[t.id] || { purposes: [], identity: null, tracking: null };
-        const purposeCells = cols.map(c => {
-          const checked = td.purposes.includes(c.id);
-          return `<td class="prv-check-cell">
-            <input type="checkbox" class="prv-cb" ${isOn ? '' : 'disabled'}
-                   data-type="${t.id}" data-col="${c.id}"
-                   ${checked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="togglePrivacyPurpose('${t.id}','${c.id}',this.checked)">
-          </td>`;
-        }).join('');
-        const metaCells = META_COLS.map(c => {
-          const isChecked = c.id === 'linked_identity' ? td.identity === 'yes' : td.tracking === 'yes';
-          const field     = c.id === 'linked_identity' ? 'identity' : 'tracking';
-          return `<td class="prv-check-cell prv-meta-col">
-            <input type="checkbox" class="prv-cb" ${isOn ? '' : 'disabled'}
-                   data-type="${t.id}" data-meta="${field}"
-                   ${isChecked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="setPrivacyMeta('${t.id}','${field}',this.checked)">
-          </td>`;
-        }).join('');
-        bodyHtml += `
-          <tr class="prv-data-row ${isOn ? 'is-on' : ''}" onclick="togglePrivacyDataType('${t.id}')">
-            <td class="prv-type-cell">
-              <span class="prv-type-name tooltip-anchor" data-tip="${t.desc}">${t.label}</span>
+        <tbody class="pvt-grp${groupOn ? ' is-open' : ''}">
+          <tr class="${gCls}">
+            <td colspan="${COLSPAN}" data-g="${group.group}"
+                onclick="togglePrivacyGroup('${pid}','${group.group.replace(/'/g, "\\'")}')">
+              <div class="pvt-grow">
+                <span class="pvt-ghead"
+                  ><span class="pvt-gtx">${group.group}</span
+                  >${nSel ? `<span class="pvt-gn">(${nSel})</span>` : ''}</span>
+                ${nSel ? `<span class="pvt-gfs">${gFlags}</span>` : ''}
+                <span class="pvt-gsp"></span>
+                <span class="pvt-gc${groupOn ? ' is-up' : ''}">${_chevDown}</span>
+              </div>
             </td>
-            ${purposeCells}
-            ${metaCells}
-          </tr>`;
-      });
+          </tr>
+          ${rows}
+        </tbody>`;
     });
   }
 
   const tableHtml = expanded ? `
-    <div class="prv-matrix-wrap">
-      <table class="prv-matrix">
+    <div class="pvt-scroll" id="pvt-scroll" data-inner-scroll>
+      <table class="pvt">
         <thead>
           <tr>
-            <th class="prv-type-hd">Data Type</th>
+            <th class="pvt-name-hd"><span class="pvt-h2">Data Type</span></th>
             ${purposeHeaders}
             ${metaHeaders}
           </tr>
         </thead>
-        <tbody>${bodyHtml}</tbody>
+        ${bodyHtml}
       </table>
     </div>
-    ${Object.values(a.dataPerType).some(t => t.tracking === 'yes') ?
-      `<div class="dist-tip-box" style="margin-top:10px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span><strong>Tracking:</strong> You must implement Apple's AppTrackingTransparency framework and request user permission before collecting any data used for tracking.</span>
-      </div>` : ''}` : '';
+  ` : '';
+
+  /* THE TRACKING WARNING IS A PILL BESIDE THE COUNT, NOT A BOX UNDER THE TABLE
+     (v6.70). Jaco: *"salta un mensaje de advertencia de apple, que ahora mismo
+     se entierra en la parte baja de la tabla de una forma fea. Ignóralo, o
+     añádelo como un pill de advertencia de una palabra al lado del 'X data
+     types selected'."*
+
+     IT WAS IN A PLACE THAT CANNOT BE SEEN. The box sat AFTER `.pvt-scroll`, and
+     that scroller is `flex: 1` inside a chain built so the table absorbs every
+     spare pixel — so the note lived below a 400px table in a modal that does not
+     scroll, i.e. off the bottom of the step, arriving only when the table itself
+     is folded away. A warning you have to close the thing it is about in order
+     to read is not a warning.
+
+     The count badge is the one thing on this step that is always on screen and
+     always about the table, which makes it the right neighbour: it says how much
+     you have declared, and this says that one of those declarations carries an
+     obligation. Same row, same 11px, same pill.
+
+     ONE WORD, AND THE SENTENCE IS THE TOOLTIP — which is the test v6.67 wrote
+     when the cells LOST theirs: an anchor earns its place by naming something
+     NOT on screen. A cell's type and column are both printed; Apple's
+     AppTrackingTransparency requirement is printed nowhere else, so it keeps its
+     full text and loses only the 300px of box it was reserving.
+
+     AMBER, WHICH IS FORCED. The colour table gives three: green done, amber
+     *this needs you*, red wrong. This is neither finished nor an error — it is
+     work waiting outside this app (you must implement ATT), which is amber's own
+     sentence. It was drawn in `.dist-tip-box`'s green, and a green warning is a
+     contradiction in this palette. */
+  const trackingOn = Object.values(a.dataPerType).some(t => t.tracking === 'yes');
+  const trackPill  = trackingOn
+    ? `<span class="pvt-trk tooltip-anchor" data-tip="Tracking — you must implement Apple's AppTrackingTransparency framework and request user permission before collecting any data used for tracking.">Tracking</span>`
+    : '';
 
   return `
     <div class="ios-subsection" style="margin-top:10px;">
       <div class="prv-matrix-header">
+        <!-- THE TOGGLE DOES NOT MOVE WHEN IT CHANGES ITS MIND (v6.58). Jaco:
+             *"el SHOW ALL DATA TYPES está bien colocado, que el HIDE DATA TYPES
+             esté igual, que no se mueva."* Measured, the button went 144.4 →
+             118 and dragged the count badge 26.4px left with it — a control
+             that jumps as a consequence of being pressed, which is the rule the
+             submitted card's disclosure toggle and the hold-to-submit row were
+             both rebuilt under.
+
+             BOTH LABELS ARE ALWAYS IN THE BOX, one of them hidden: they are
+             stacked in one grid cell, so the width is the larger of the two by
+             construction, in any language. A measured min-width would have been
+             one number that goes stale the first time either string is
+             translated or the face changes — the same failure the inline
+             editor's reserved error column is on record for. It uses
+             visibility rather than display, so the hidden one keeps its box.
+
+             (No backticks in this comment: it sits inside a template literal,
+             and one backtick here ends the string and turns the next word into
+             an identifier — the trap CLAUDE.md records, hit again writing it.) -->
         <button class="prv-expand-btn" onclick="togglePrivacyMatrix()">
-          ${expanded ? `${_chevUp} Hide data types` : `${_chevDown} Show all data types`}
+          ${expanded ? _chevUp : _chevDown}
+          <span class="prv-exp-label">
+            <span${expanded ? '' : ' class="is-off"'}>Hide data types</span>
+            <span${expanded ? ' class="is-off"' : ''}>Show all data types</span>
+          </span>
         </button>
         ${selectedCount > 0 ? `<span class="prv-count-badge">${selectedCount} data type${selectedCount !== 1 ? 's' : ''} selected</span>` : ''}
+        ${trackPill}
       </div>
       ${tableHtml}
     </div>`;
@@ -10431,33 +14106,108 @@ function buildContentRatingSection(pid = 'ios') {
   // than just reading answered.size. Y is the fixed total across all six
   // categories (Additional Information/ageCategory isn't a content
   // question — see its own section below — so it's excluded from Y).
-  // Only shown in the "Unanswered" view (by request) — once the user has
-  // switched to "All" they're already looking at everything, so the prompt
-  // to go look has nothing left to do.
+  // Shown in both views now — see "THE LINE SURVIVES THE SWITCH" below.
+  /* COUNT THE VIOLET PILLS, NOT THE SNAPSHOT. This read `answered` — the
+     filter's frozen Set — and that Set is deliberately RE-TAKEN every time you
+     press "Unanswered" (toggleContentRatingExpanded, app.js), so questions you
+     had just answered by hand joined it and the line went on to credit Shipmate
+     with them: answer five yourself, press Unanswered, and "12 inferred"
+     became 17.
+
+     The snapshot is the right source for what to HIDE and the wrong one for who
+     answered what. Provenance lives in the answer meta, which is exactly what
+     paints a pill violet — so the number now counts the pills that are violet
+     on screen, and it ticks DOWN as you confirm them. */
   const crTotalQuestions = IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.length, 0);
-  const crInferredCount  = collapseMode
-    ? IOS_CR_CATEGORIES.reduce((sum, cat) => sum + cat.questions.filter(q => answered.has(q.id)).length, 0)
+  /* TWO NUMBERS, BECAUSE THERE ARE TWO FACTS.
+
+     Provenance does not expire: an answer Shipmate inferred was still inferred
+     by Shipmate after you agree with it, so confirming one must not take it off
+     the count. `confidence` is the tell — only inference writes it, and the
+     human-confirm path spreads the existing meta rather than replacing it, so
+     it survives. An answer you typed yourself gets a meta entry too
+     ({ humanConfirmed: true }) but never a confidence, which is what keeps your
+     own work from being credited to Shipmate.
+
+     A COUNTDOWN OF WHAT IS LEFT was tried here and taken out: "11 of 22 — 11 to
+     review" put two numbers a sentence apart that kept drifting from each other
+     as you worked, and the second one read as a score. The line says what
+     Shipmate did and asks you to check it, and it says the same thing until you
+     leave — the violet pills are already the per-row record of what you have
+     been through. */
+  const crMeta = (qid) => (typeof _getAnswerMeta === 'function') ? _getAnswerMeta(pid, qid) : null;
+  const crInferredCount = collapseMode
+    ? IOS_CR_CATEGORIES.reduce((sum, cat) =>
+        sum + cat.questions.filter(q => crMeta(q.id)?.confidence !== undefined).length, 0)
     : 0;
-  // The "All" inside the message is a real pill button — same look as the
-  // real "All" toggle above (.cr-toggle-bar .app-subtab's 12px/5px-12px
-  // sizing, reused here via .cr-toggle-bar-all-inline rather than
-  // duplicated, so the two can't drift apart) — and it actually works,
-  // flipping to the All view exactly like clicking the real tab would.
-  // is-on is included so it always reads as the SELECTED pill look (the
-  // quiet gray/dark fill + white label, same as whichever of
-  // Unanswered/All is currently active above) rather than the dimmed
-  // 50%-opacity unselected look .app-subtab defaults to — this pill isn't
-  // "currently selected" in the toggle-pair sense, it's a call-to-action
-  // styled to match, per request. {allPill} is a substitution point in the
-  // locale string, not literal HTML a translator has to reproduce.
-  const allPillHtml = `<button type="button" class="app-subtab is-on cr-toggle-bar-all-inline" onclick="toggleContentRatingExpanded(true)">All</button>`;
-  const inferredBanner = (crInferredCount > 0 && !showAll) ? `
-    <div class="sw-tip-box sw-tip-box-inference">
-      <div class="sw-tip-box-row">
-        ${SM_INFO_ICON}
-        <span class="sw-tip-text">${t('cr.inferred_banner', { count: crInferredCount, total: crTotalQuestions, allPill: allPillHtml }) || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses. Click ${allPillHtml} to review before submitting.`}</span>
-      </div>
-    </div>` : '';
+
+  /* ONE BOX, NOT TWO STACKED THINGS. The switch and the sentence explaining it
+     were a pill floating above a two-line tip box — 147px of a 714px window,
+     permanently, once the bar was pinned. They are one control and its caption,
+     so they are one box now: the toggle at the left, the count beside it,
+     inside the same `.sw-tip-box` Distribution uses.
+
+     THE INLINE "ALL" WORD IS BACK, on request — it had been dropped as
+     redundant with the real toggle sitting right there, but review feedback
+     was that the plain word "all" in the Unanswered-view sentence read as
+     just prose, not as a pointer to the switch beside it. It first came back
+     as a pill matching .cr-toggle-bar's own "All" tab exactly (padding,
+     radius, the works) — then THAT was taken back out: sitting mid-sentence
+     with no onclick, it read as a button you could press, not as a label
+     pointing at one. cr-inferred-all-word (style.css) keeps only the font/
+     color match (12px, weight 600, the tab's own dimmed white) and drops the
+     box — no padding, no radius, no hover fill — so it reads as emphasis on
+     a word, not as a second control. `cr.inferred_compact`/`cr.inferred_
+     click_all` are the two locale keys for the two-row Unanswered-view
+     sentence below; `cr.inferred_banner` (the older single-line form with
+     the same {allPill}) is left in the locale files unused, for any surface
+     that still wants one line instead of two. */
+  /* THE LINE SURVIVES THE SWITCH. It used to be printed only in the Unanswered
+     view — the reasoning being that once you are looking at everything, a
+     prompt to go look has nothing left to do. True of the prompt, not of the
+     count: "12 of 22 came from Shipmate" is the reason to read this list
+     carefully, and it is MORE relevant in the view that shows the inferred
+     answers than in the one that hides them. It also kept the pinned bar from
+     changing height under the pointer when you pressed All. So both views get
+     a line; only the half that asks you to do something changes. */
+  // The Unanswered view's own sentence is two rows, not one — "what Shipmate
+  // did" on top, "what to do about it" (with the inline All pill) below —
+  // stacked inside .sw-tip-text (a <div> here, not the usual <span>, since it
+  // now holds block children) rather than run together as one sentence. The
+  // All view keeps its own single-line count, unchanged in shape. Neither of
+  // the "nothing inferred" cases below (crUnanswered / all_answered) changes.
+  /* THE BAR IS NEVER SILENT. Inferring nothing is a real outcome — `tryApply`
+     (claude.js) needs a valid value AND confidence ≥ 80, so a vague game can
+     come back with the call succeeding and not one answer filled. The snapshot
+     is still taken, so the toggle appeared with an empty space beside it and
+     the step looked broken rather than untouched. When there is nothing to
+     credit Shipmate with, the line counts what is left for YOU instead.
+     (A call that actually failed never gets here: with no snapshot there is no
+     bar at all, and the red "Analysis failed" banner has the floor.) */
+  const crUnanswered = IOS_CR_CATEGORIES.reduce((sum, cat) =>
+    sum + cat.questions.filter(q => {
+      const v = (typeof _getLiveAnswer === 'function') ? _getLiveAnswer(pid, q.id) : undefined;
+      return v === undefined || v === null || v === '';
+    }).length, 0);
+
+  const crAllPillHtml = `<span class="cr-inferred-all-word">All</span>`;
+  const inferredText = crInferredCount > 0
+    ? (showAll
+        ? (t('cr.showing_all', { total: crTotalQuestions })
+           || `All ${crTotalQuestions} questions from Apple's content questionnaire.`)
+        : `<div class="cr-inferred-row">${
+             t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
+               || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses.`
+           }</div><div class="cr-inferred-row">${
+             t('cr.inferred_click_all', { allPill: crAllPillHtml })
+               || `Click ${crAllPillHtml} to review before submitting.`
+           }</div>`)
+    : crUnanswered > 0
+      ? (t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
+         || `${crUnanswered} of ${crTotalQuestions} still to answer.`)
+      : (t('cr.all_answered', { total: crTotalQuestions })
+         || `All ${crTotalQuestions} answered.`);
+  const inferredBanner = '';
 
   // Build question rows — filter by answered/unanswered when in collapseMode + "Unanswered" view
   // Uses snapshot (answered) not live state so questions don't vanish mid-session
@@ -10499,12 +14249,14 @@ function buildContentRatingSection(pid = 'ios') {
       </div>
     </div>` : '';
 
-  // "Not applicable" (like any set Age Category) is a sufficient answer, so once
-  // it's chosen the whole section is done and should drop out of the Unanswered
-  // view like every other answered question — rather than lingering forever.
-  const addlAnswered = a.ageCategory !== null
-    && !(a.ageCategory === 'made_for_kids'   && a.kidsAgeRange   === null)
-    && !(a.ageCategory === 'override_higher' && a.overrideRating === null);
+  /* THE SNAPSHOT DECIDES, NOT THE LIVE VALUE — the same rule every question row
+     follows. This read `a.ageCategory` directly, so choosing "Not applicable"
+     made the whole section vanish on the very next render, out from under the
+     pointer that had just set it. Every other answer stays put until the filter
+     is re-taken (pressing "Unanswered", or a fresh analysis), which is what
+     lets you change your mind about the thing you just answered. Age Category
+     now goes into that snapshot too — see _crAgeAnswered above. */
+  const addlAnswered = collapseMode && answered.has('ageCategory');
   const additionalSection = (collapseMode && !showAll && addlAnswered) ? '' : `
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Additional Information</div>
@@ -10534,7 +14286,20 @@ function buildContentRatingSection(pid = 'ios') {
              onblur="reRenderStepModal()">
     </div>`}`;
 
-  return togglePill + inferredBanner + questionsHtml + additionalSection;
+  /* THE FILTER AND ITS SENTENCE STAY ON SCREEN. Both are controls for the list
+     below them — "you are seeing 7 of 22" and the switch that changes which —
+     and thirty rows down the page they had scrolled away, leaving no way to
+     tell which view you were in without going back up. Wrapped in .cr-pinned,
+     which is `position: sticky` (style.css). */
+  const pinned = togglePill
+    ? `<div class="cr-pinned">
+         <div class="sw-tip-box cr-pinned-bar">
+           ${togglePill}
+           ${inferredText ? `<div class="sw-tip-text">${inferredText}</div>` : ''}
+         </div>
+       </div>`
+    : '';
+  return pinned + questionsHtml + additionalSection;
 }
 
 function computeIOSAgeRating() {
@@ -10567,11 +14332,25 @@ function computeIOSAgeRating() {
 function buildExportComplianceSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
-  // Respect the Unanswered/All filter — hide this section when usesEncryption is answered
-  const answered     = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
-  const collapseMode = answered !== null;
-  const showAll      = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
-  if (collapseMode && !showAll && answered.has('usesEncryption')) return '';
+  /* THE UNANSWERED FILTER DOES NOT REACH THIS SECTION ANY MORE, and the App
+     Store is why. This used to early-return '' whenever the platform's filter
+     snapshot contained `usesEncryption` — and takeFilterSnapshot (app.js) adds
+     that id the moment the field has any value at all, including the value the
+     shared questionnaire inference writes without the developer ever seeing the
+     question. The App Store takes that snapshot (its inference runs from the
+     Product Page Preview's Content section); Mac App Store, in practice, does
+     not. So the very same Business Questions section showed the cryptography
+     question on Mac App Store and had NOTHING where it should be on the App
+     Store — reported as "App Store - Business Questions is missing the
+     cryptography question", which is exactly what it looked like.
+
+     The filter is Content Rating's tool: thirty-odd inferred questions where
+     hiding the settled ones is the whole point of the view. Business Questions
+     is three fields, one of which IS this one — there is nothing to declutter,
+     and a required question that vanishes because something answered it for you
+     is the opposite of what a review surface is for. Tax Category keeps its own
+     hide (buildBusinessSection) because that one is gated on
+     `humanConfirmed` — the developer actually picked it. */
 
   let followUp = '';
   if (a.usesEncryption === 'yes') {
@@ -10707,11 +14486,14 @@ function buildIapProductRow(p) {
 }
 
 // pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
-// Business answers (tax category — see buildContentRatingSection above).
-// Price (USD) is deliberately NOT independent: it's the one game-wide price
-// (state.formData.price) shared by every store that bills in a single base
-// price, same as the App Store Product Page Preview itself reads — Mac App
-// Store and App Store share Apple's one price, they don't get their own.
+/* Business answers (tax category — see buildContentRatingSection above).
+   PRICE (USD) IS PER STORE (by request). It used to be the one game-wide
+   `state.formData.price`, on the reasoning that "Mac App Store and App Store
+   share Apple's one price" — which is how Apple BILLS and is not how a
+   developer PRICES: a Mac build and a phone build routinely carry different
+   numbers, and these are two forms asking two stores. Through
+   _appStorePrice/_setAppStorePrice (app.js), which keep macos_full on the
+   game-wide value it is separately documented as sharing. */
 function buildBusinessSection(pid = 'ios') {
   const a = _appStoreAnswers(pid);
 
@@ -10733,7 +14515,7 @@ function buildBusinessSection(pid = 'ios') {
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
 
   const fd = state.formData;
-  const priceVal = fd.price || '';
+  const priceVal = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
 
   // Mac App Store Full only ever submits games, so its Tax Category is
   // hard-set to Games and shown as a locked field — no dropdown, and
@@ -10768,7 +14550,7 @@ function buildBusinessSection(pid = 'ios') {
       </label>
       <input class="form-input" id="${pid}-price" type="text" placeholder="e.g., 4.99 (or 0 for free)"
              value="${priceVal}"
-             oninput="syncField('price', this.value)"
+             oninput="setAppStorePrice('${pid}', this.value)"
              onblur="roundPrice(this)">
     </div>
     ${taxCategoryHTML}`;
@@ -10799,10 +14581,15 @@ function buildIapSection(pid = 'ios') {
   // (and their localizations) disappear entirely the moment hasIAP was
   // answered and the view was collapsed to "Unanswered" — the exact
   // opposite of what this filter is for.
-  const bsAnswered = pid === 'macos_full' ? state.macFullAnsweredAtInference : pid === 'macos' ? state.macAnsweredAtInference : state.iosAnsweredAtInference;
-  const bsCollapse = bsAnswered !== null;
-  const bsShowAll  = pid === 'macos_full' ? state.macFullContentRatingExpanded : pid === 'macos' ? state.macContentRatingExpanded : state.iosContentRatingExpanded;
-  const hideIAPQuestion = bsCollapse && !bsShowAll && bsAnswered?.has('hasIAP');
+  /* NOT FILTERED EITHER — same reason, same report. See
+     buildExportComplianceSection's note directly above: the snapshot contains
+     'hasIAP' as soon as anything writes a value, so on the App Store this hid
+     the question and left the In-App Purchases block with only its heading,
+     while Mac App Store showed it in full. Kept as a named constant rather
+     than deleting the branch outright because the comment below it — about
+     NOT letting this flag reach the saved products list — is the bug this
+     section has already been fixed for once, and it should stay readable. */
+  const hideIAPQuestion = false;
 
   const iapProducts = a.iapProducts || [];
 
@@ -12279,19 +16066,19 @@ function buildMacFullStorePreviewSection() {
   const fd    = state.formData;
   const ups   = state.uploads;
   const a     = state.macFullSubmitAnswers;                    // unified answers — Content Rating, Privacy, Business, and IAP all live here (no shared/own split, unlike Mac App Store's own)
-  const icon  = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon  = smAppIcon();
   const pid   = 'macos_full';
 
-  // Use the screenshots selected in the Select Screenshots step,
-  // falling back to all uploaded screenshots if none selected yet.
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const allUploaded = ups.screenshots || [];
-  const selectedIds = new Set(ps.selected);
-  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
-  const customShots = ps.custom || [];
-  const shots = selectedUploaded.length > 0 || customShots.length > 0
-    ? [...selectedUploaded, ...customShots]
-    : allUploaded; // fall back to all if none selected yet
+  /* The listing's screenshots — in the order the Screenshots editor put them,
+     minus anything removed there, with any crop already baked in. See
+     `platformStoreShots` for why this is one function and not the five copies
+     of the selected+custom||all expression it replaced. */
+  const shots = platformStoreShots(pid);
 
   const category  = escHtml(a.category.primary || 'Games');
   const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
@@ -12479,7 +16266,7 @@ function buildMacFullStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" class="ias-icon" alt="App icon">`
+    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -12510,7 +16297,7 @@ function buildMacFullStorePreviewSection() {
   // lists every language a listing is localized into.
   const languagesValue = previewLangCodes.map(code => OB_LANG_NAMES[code] || code).join(', ');
   const infoRowsTop = [
-    { label: 'Seller',        value: 'Your Company'      },
+    { label: 'Seller',        value: escHtml(_sppDeveloperName('Your Company')) },
     { label: 'Size',          value: '—'                 },
     { label: 'Category',      value: category            },
     { label: 'Compatibility', value: 'Mac'                },
@@ -12733,7 +16520,7 @@ function buildMacFullStorePreviewSection() {
             ? ` <button type="button" class="ias-more-btn" data-full="${descFull}" data-short="${descShort}" onclick="event.stopPropagation(); toggleIasDescMore(this)">more</button>` : ''}</div>
           ${descStatusHtml}
           <div class="ias-dev-row">
-            <span class="ias-dev-name">Developer</span>
+            <span class="ias-dev-name">${escHtml(_sppDeveloperName('Developer'))}</span>
             <svg viewBox="0 0 8 14" fill="none" width="5" height="9"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
@@ -13187,6 +16974,22 @@ function _locsCardsHtml(cfg) {
     const langName = escHtml(OB_LANG_NAMES[lang] || lang);
     const raw = cfg.fieldValue(lang);
 
+    /* BY REQUEST (v6.53): the source badge survives the flip. It used to be
+       computed inside the un-flipped branch only, so pressing Review — the one
+       moment a developer is deliberately auditing whether a localization can
+       be trusted — took away the very mark that says where it came from. The
+       flipped card's TOP half holds the same value the un-flipped card shows,
+       so the same badge belongs in its head; a live translation's spinner
+       still wins that slot while it is spinning. */
+    const srcBadge = cfg.sourceBadge(lang);
+    const badgeHtml = (!isPrimary && cfg.translatePending(lang))
+      ? locReviewLoadingSpinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
     if (reviewMode && !isPrimary) {
       const back = cfg.backValue(lang);
       const topStatusHtml = cfg.translatePending(lang)
@@ -13198,7 +17001,7 @@ function _locsCardsHtml(cfg) {
       <div class="${cardCls}">
         <div class="${sideClass}">
           <div class="${halfClass} ${halfClass}--top">
-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml || badgeHtml}</div>
             ${fieldBlock(raw, cfg.inlineOnclick(lang), undoRedoGroup('real', lang))}
           </div>
           <div class="${halfClass} ${halfClass}--bottom">
@@ -13208,16 +17011,6 @@ function _locsCardsHtml(cfg) {
         </div>
       </div>`;
     }
-
-    const isPending = !isPrimary && cfg.translatePending(lang);
-    const srcBadge = cfg.sourceBadge(lang);
-    const badgeHtml = isPending
-      ? locReviewLoadingSpinnerHtml
-      : srcBadge === 'steam'
-        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
-        : srcBadge === 'ai'
-          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
-          : '';
 
     return `
       <div class="${cardCls}${isPrimary ? ` ${cardCls}--primary` : ''}">
@@ -13237,17 +17030,31 @@ function _locsSettingsMenu(cfg) {
         <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>`;
-  const settingsRow = (key, label) => `
+  /* A row may carry its own backing config as an optional third element —
+     see LOC_SHARED_TITLE_ROWS below. Mac App Store's Title/Subtitle are the
+     App Store's own values (MAS_SHARED_LISTING_FIELDS, app.js), so their
+     checkboxes have to read and write iasAutoTranslateFields; pointed at
+     masAutoTranslateFields like the rest of that menu they would tick and
+     untick while changing nothing at all. */
+  const settingsRow = (key, label, over) => {
+    const backing  = over && over.autoCfgKey
+      ? (state[over.autoCfgKey] || over.autoCfgDefault || {})
+      : cfg.autoCfg;
+    const onchange = over && over.toggleFieldOnclick
+      ? over.toggleFieldOnclick(key)
+      : cfg.toggleFieldOnclick(key);
+    return `
         <label class="cq-check-row loc-review-settings-row">
-          <input type="checkbox" ${cfg.autoCfg[key] ? 'checked' : ''} onchange="${cfg.toggleFieldOnclick(key)}">
+          <input type="checkbox" ${backing[key] ? 'checked' : ''} onchange="${onchange}">
           <span>${label}</span>
         </label>`;
+  };
   return `
       <div class="loc-review-settings-wrap sw-select-wrap${cfg.isOpen ? ' is-open' : ''}" id="${cfg.wrapId}">
         <button class="loc-review-settings-btn" type="button" onclick="${cfg.toggleMenuOnclick}" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
         <div class="loc-dropdown loc-review-settings-dropdown">
           <div class="loc-review-settings-heading">Automatically translated fields</div>
-          ${cfg.rows.map(([k, l]) => settingsRow(k, l)).join('')}
+          ${cfg.rows.map(([k, l, over]) => settingsRow(k, l, over)).join('')}
         </div>
       </div>`;
 }
@@ -13314,9 +17121,16 @@ function _buildUnifiedLocalizationsSection(p) {
 
   if (view === 'storePage') {
     field = state[p.storePage.fieldKey] || 'title';
+    // What's New is no longer one of this step's fields (LOC_STEP_REVIEW_FIELDS
+    // above). A selection left over from the standalone Localization Review,
+    // which shares this same state key, falls back to Title rather than showing
+    // a field with no tab left to reselect it from — same treatment the view
+    // fallback above gives a tab that has disappeared, and deliberately not
+    // written back to state for the same reason.
+    if (!LOC_STEP_REVIEW_FIELDS.some(f => f.value === field)) field = 'title';
     const limit = IAS_FIELD_CHAR_LIMITS[field];
     reviewMode = state[p.storePage.modeKey] === 'review';
-    fieldOptions = LOC_REVIEW_FIELDS.map(f => ({
+    fieldOptions = LOC_STEP_REVIEW_FIELDS.map(f => ({
       value: f.value,
       label: f.label,
       warning: p.storePage.fieldHasOverLimitLang(f.value, langCodes),
@@ -13325,6 +17139,9 @@ function _buildUnifiedLocalizationsSection(p) {
     itemId = '';
     itemSetterName = null;
     cardClass = 'loc-review';
+    // Also read by the cards' own pending test below — a field the developer
+    // has switched auto-translation off for is not waiting on one.
+    const storeAutoCfg = state[p.storePage.autoCfgKey] || p.storePage.autoCfgDefault || {};
     settingsHtml = _locsSettingsMenu({
       wrapId: `${p.idPrefix}-locs-storepage-settings-wrap`,
       isOpen: !!state[p.storePage.settingsOpenKey],
@@ -13345,7 +17162,15 @@ function _buildUnifiedLocalizationsSection(p) {
       langCodes, primary, primaryName, limit, reviewMode, cardClass,
       fieldValue: (lang) => p.storePage.fieldValue(field, lang),
       backValue: (lang) => p.storePage.backTranslationValue(field, lang),
-      translatePending: (lang) => p.storePage.fieldTranslatePending(field, lang),
+      /* ...or Steam's own scrape for this language hasn't settled yet, so the
+         translation that would fill this card is still being held back for it
+         (_locAwaitingSteamOrQueue, app.js — its comment has the whole rule).
+         Feeding it through the SAME translatePending the cards already use
+         means both faces get it for free: the spinner on an un-flipped card
+         and the status slot on a flipped one. */
+      translatePending: (lang) => p.storePage.fieldTranslatePending(field, lang)
+        || (typeof _locAwaitingSteamOrQueue === 'function' && _locAwaitingSteamOrQueue(
+             'listing', lang, field, !!storeAutoCfg[field], p.storePage.fieldValue(field, primary))),
       sourceBadge: (lang) => p.storePage.sourceBadge(field, lang),
       undoState: (kind, lang) => p.storePage.undoState(kind, field, lang),
       undoOnclick: (kind, lang) => `${p.storePage.undoFn}('${kind}','${field}','${lang}')`,
@@ -13411,6 +17236,9 @@ function _buildUnifiedLocalizationsSection(p) {
     const item = savedAchievements.find(x => x.id === itemId);
     if (!emptyState && !item) emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
     field = state[p.achievements.fieldKey] || 'displayName';
+    // Shared with the cards' pending test below, same as the Store Page branch.
+    const achAutoCfg = state[p.achievements.autoCfgKey]
+      || { displayName: true, earnedDescription: true, preEarnedDescription: true };
     const limit = ACHIEVEMENT_FIELD_LIMITS[field];
     reviewMode = state[p.achievements.modeKey] === 'review';
     fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
@@ -13427,7 +17255,7 @@ function _buildUnifiedLocalizationsSection(p) {
       // See the Store Page branch's own note above — same fix, same reason.
       toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.achievements.settingsOpenKey}', '${p.idPrefix}-locs-achievements-settings-wrap')`,
       toggleFieldOnclick: (key) => `${p.achievements.toggleAutoTranslateFieldFn}('${key}')`,
-      autoCfg: state[p.achievements.autoCfgKey] || { displayName: true, earnedDescription: true, preEarnedDescription: true },
+      autoCfg: achAutoCfg,
       rows: [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
     });
     toggleReviewFnName = p.achievements.toggleReviewModeFn;
@@ -13436,7 +17264,11 @@ function _buildUnifiedLocalizationsSection(p) {
         langCodes, primary, primaryName, limit, reviewMode, cardClass,
         fieldValue: (lang) => p.achievements.fieldValue(itemId, field, lang),
         backValue: (lang) => p.achievements.backTranslationValue(itemId, field, lang),
-        translatePending: (lang) => p.achievements.fieldTranslatePending(itemId, field, lang),
+        // Steam localizes achievements too — see the Store Page branch's own
+        // note above for what this second arm is for.
+        translatePending: (lang) => p.achievements.fieldTranslatePending(itemId, field, lang)
+          || (typeof _locAwaitingSteamOrQueue === 'function' && _locAwaitingSteamOrQueue(
+               'achievements', lang, field, !!achAutoCfg[field], p.achievements.fieldValue(itemId, field, primary))),
         sourceBadge: (lang) => p.achievements.sourceBadge(itemId, field, lang),
         undoState: (kind, lang) => p.achievements.undoState(kind, itemId, field, lang),
         undoOnclick: (kind, lang) => `${p.achievements.undoFn}('${kind}','${itemId}','${field}','${lang}')`,
@@ -13511,8 +17343,8 @@ function buildIosLocalizationsSection() {
     storePage: {
       fieldKey: 'locReviewField', modeKey: 'locReviewMode', settingsOpenKey: 'iasReviewSettingsOpen',
       autoCfgKey: 'iasAutoTranslateFields',
-      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
-      settingsRows: [['title', 'Title'], ['subtitle', 'Subtitle'], ['description', 'Description'], ['releaseNotes', "What's New"]],
+      autoCfgDefault: LOC_STEP_AUTOCFG_DEFAULT,
+      settingsRows: LOC_STEP_SETTINGS_ROWS_OWN,
       fieldHasOverLimitLang: _iasFieldHasOverLimitLang,
       fieldValue: _iasFieldValue,
       backTranslationValue: _locReviewBackTranslationValue,
@@ -13565,8 +17397,8 @@ function buildMacLocalizationsSection() {
     storePage: {
       fieldKey: 'masLocReviewField', modeKey: 'masLocReviewMode', settingsOpenKey: 'masReviewSettingsOpen',
       autoCfgKey: 'masAutoTranslateFields',
-      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
-      settingsRows: [['description', 'Description'], ['releaseNotes', "What's New"]],
+      autoCfgDefault: LOC_STEP_AUTOCFG_DEFAULT,
+      settingsRows: LOC_STEP_SETTINGS_ROWS_SHARED_TITLE,
       fieldHasOverLimitLang: _masFieldHasOverLimitLang,
       fieldValue: _masFieldValue,
       backTranslationValue: _masLocReviewBackTranslationValue,
@@ -13619,8 +17451,8 @@ function buildMacFullLocalizationsSection() {
     storePage: {
       fieldKey: 'macFullLocReviewField', modeKey: 'macFullLocReviewMode', settingsOpenKey: 'macFullReviewSettingsOpen',
       autoCfgKey: 'macFullAutoTranslateFields',
-      autoCfgDefault: { title: false, subtitle: true, description: true, releaseNotes: true },
-      settingsRows: [['description', 'Description'], ['releaseNotes', "What's New"]],
+      autoCfgDefault: LOC_STEP_AUTOCFG_DEFAULT,
+      settingsRows: LOC_STEP_SETTINGS_ROWS_OWN,
       fieldHasOverLimitLang: _macFullFieldHasOverLimitLang,
       fieldValue: _macFullFieldValue,
       backTranslationValue: _macFullLocReviewBackTranslationValue,
@@ -13844,6 +17676,11 @@ function buildCQQuestion(q) {
 }
 
 function renderCQModal() {
+  // Content Rating answers reach the Submission checklist's "Set content
+  // ratings" row, and this pane repaints through its own renderer rather than
+  // reRenderStepModal — so the same no-op-unless-it-moved refresh goes here
+  // too. See refreshGuideCompletion's own note.
+  if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
   const modal = document.getElementById('cq-modal');
   if (!modal) return;
   modal.classList.toggle('is-validating', !!state.showHighlights);
@@ -14120,8 +17957,22 @@ function buildAndroidContentRatingSection() {
   return `<div class="giarc-root">${GOOGLE_IARC_TOP_LEVEL_KEYS.map((key, i) => renderGIARCQuestion(key, 1, i + 1)).join('')}</div>`;
 }
 
-/* Stub section for steps not yet implemented */
-function buildAndroidStubSection(title, note) {
+/* STUB SECTION FOR STEPS NOT YET IMPLEMENTED — ONE SHAPE, ANY PLATFORM.
+
+   Renamed from buildAndroidStubSection, which had no callers at all and was
+   Android-named only because Android is where it was written. Steam and
+   Google Play's new Data Safety / Localizations rows are its first real
+   consumers and neither is more Android's than the other's, so the name says
+   what it is instead of where it came from. (One comment further up this file
+   still referenced the old name as a styling precedent; it moved with it.)
+
+   A stub is deliberately not a blank body: it names the step and states, in
+   the app's own Shipmate Tip, that there is nothing to answer yet. A step
+   that opens onto nothing reads as broken, where one that says so reads as
+   unfinished — the same distinction the screenshots editor's empty stage and
+   the "not yet" checklist states are built on. `note` is the honest half and
+   should say what WILL be asked here, not merely that something will. */
+function buildStepStubSection(title, note) {
   return `
     <div class="ios-section-head">${title}</div>
     <div class="sw-tip-box" style="margin-bottom:16px;">
@@ -14130,6 +17981,42 @@ function buildAndroidStubSection(title, note) {
         <span class="sw-tip-text">${note}</span>
       </div>
     </div>`;
+}
+
+/* GOOGLE PLAY AND STEAM'S PLACEHOLDER STEPS.
+
+   Three of them, and what they have in common is the reason they exist:
+   every store in this prototype now walks ratings -> data -> localizations
+   -> store page, so a platform missing one of those rows was a platform
+   whose checklist quietly skipped a question a real submission has to
+   answer. See PLATFORMS.steam.steps / PLATFORMS.android.steps (state.js).
+
+   Google Play's DATA Safety is NOT here — it is fully built
+   (buildAndroidDataSafetySection, below) and only ever lacked its step row.
+
+   Each names what it will ask rather than saying "coming soon", so the row
+   is worth opening once even while it is a stub. All three mark complete on
+   first visit; the arms that do that are in isAndroidSectionComplete /
+   isSteamSectionComplete and are what change when any of these grows teeth. */
+function buildSteamDataSafetySection() {
+  return buildStepStubSection(
+    'Data Safety',
+    'Steam asks for a privacy policy URL, and for a disclosure of what your game collects, whenever it gathers player data — through accounts, analytics, telemetry or a third-party SDK. Those questions will be asked here. Nothing is required of you yet.'
+  );
+}
+
+function buildSteamLocalizationsSection() {
+  return buildStepStubSection(
+    'Localizations',
+    'Your Steam store page can carry a translated name, description and feature list per language, separately from the interface, audio and subtitle support you set on the Store Page Preview. Reviewing those translations will happen here. Nothing is required of you yet.'
+  );
+}
+
+function buildAndroidLocalizationsSection() {
+  return buildStepStubSection(
+    'Localizations',
+    'Google Play lets you localize your listing per language — title, short description, full description and graphics — with the store falling back to your default language wherever a translation is missing. Reviewing those translations will happen here. Nothing is required of you yet.'
+  );
 }
 
 /* Android Store Listing — review metadata */
@@ -14162,14 +18049,19 @@ function buildAndroidStorePreviewSection() {
   const pid  = 'android';
   const fd   = state.formData;
   const ups  = state.uploads;
-  const icon = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon = smAppIcon();
   const shots = ups.screenshots || [];
   const title = escHtml(fd.title || 'Your Game Title');
   const descRaw = fd.description || '';
   const descShort = escHtml(descRaw.slice(0, 120) + (descRaw.length > 120 ? '…' : ''));
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
+    ? `<img src="${smAppIconSrc()}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;">`
     : `<div style="width:60px;height:60px;border-radius:14px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px;">Icon</div>`;
 
   // Mark as seen
@@ -14395,11 +18287,16 @@ function buildAndroidDataMatrix(a) {
   const selectedTypeIds = new Set(Object.keys(a.dataPerType));
   const selectedCount   = selectedTypeIds.size;
 
+  // The name is the handle here too — see _prvColHead's note in
+  // buildPrivacyMatrix. Google Play's labels are mostly single words, so they
+  // carry no `head` and simply wrap on their own; what they gain from this is
+  // the same thing the App Store's did, the `?` no longer riding along as an
+  // extra wrapping token in an already tight column.
   const usageHeaders   = USAGE_COLS.map(c =>
-    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.tip}">${c.label} <span class="tooltip-icon">?</span><span class="tooltip-body">${c.tip}</span></span></th>`
+    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.tip}">${c.label}<span class="tooltip-body">${c.tip}</span></span></th>`
   ).join('');
   const purposeHeaders = ANDROID_PURPOSES.map(c =>
-    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.desc}">${c.label} <span class="tooltip-icon">?</span><span class="tooltip-body">${c.desc}</span></span></th>`
+    `<th class="prv-col-hd"><span class="tooltip-anchor" data-tip="${c.desc}">${c.label}<span class="tooltip-body">${c.desc}</span></span></th>`
   ).join('');
 
   let bodyHtml = '';
@@ -14411,36 +18308,36 @@ function buildAndroidDataMatrix(a) {
         const td   = a.dataPerType[t.id] || {};
 
         const usageCells = USAGE_COLS.map(col => {
-          const epOrReq   = col.id === 'ephemeral' || col.id === 'required';
-          const isDisabled = !isOn || (epOrReq && !td.collected);
+          const epOrReq = col.id === 'ephemeral' || col.id === 'required';
+          // LOCKED IS NOT THE SAME AS UNANSWERED, and Google Play is the only
+          // table here that has both. Ephemeral and Required are statements
+          // ABOUT collected data, so they mean nothing until Collected is on —
+          // that is a real impossibility and keeps no pointer. Collected and
+          // Shared on an unselected row are merely unanswered, so they stay
+          // pressable and turn the type on (see _prvCell's 'add').
+          const locked  = epOrReq && !td.collected;
           const checked = isOn && (
             col.id === 'collected' ? !!td.collected :
             col.id === 'shared'    ? !!td.shared    :
             col.id === 'ephemeral' ? !!td.ephemeral :
             !!td.required
           );
-          return `<td class="prv-check-cell${isDisabled ? ' prv-disabled' : ''}">
-            <input type="checkbox" class="prv-cb" ${isDisabled ? 'disabled' : ''}
-                   ${checked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="setAndroidTypeFlag('${t.id}','${col.id}',this.checked)">
-          </td>`;
+          return _prvCell(checked,
+            `setAndroidTypeFlag('${t.id}','${col.id}',${!checked})`,
+            { add: !isOn, locked });
         }).join('');
 
         const purposeCells = ANDROID_PURPOSES.map(p => {
           const checked = isOn && (td.purposes || []).includes(p.id);
-          return `<td class="prv-check-cell">
-            <input type="checkbox" class="prv-cb" ${isOn ? '' : 'disabled'}
-                   ${checked ? 'checked' : ''}
-                   onclick="event.stopPropagation()"
-                   onchange="toggleAndroidPurpose('${t.id}','${p.id}',this.checked)">
-          </td>`;
+          return _prvCell(checked,
+            `toggleAndroidPurpose('${t.id}','${p.id}',${!checked})`,
+            { add: !isOn });
         }).join('');
 
         bodyHtml += `
-          <tr class="prv-data-row ${isOn ? 'is-on' : ''}" onclick="toggleAndroidDataType('${t.id}')">
+          <tr class="prv-data-row ${isOn ? 'is-on' : ''}">
             <td class="prv-type-cell">
-              <span class="prv-type-name tooltip-anchor" data-tip="${t.desc}">${t.label}</span>
+              <span class="prv-type-name tooltip-anchor" onclick="toggleAndroidDataType('${t.id}')" data-tip="${t.desc}">${t.label}</span>
             </td>
             ${usageCells}
             ${purposeCells}
@@ -14567,7 +18464,7 @@ function buildSteamContentRatingSection() {
 
   // Content categories — each item is a ynRow
   // Filter uses snapshot so questions don't vanish while actively answering
-  let catHtml = steamTogglePill;
+  let catHtml = steamTogglePill ? `<div class="cr-pinned">${steamTogglePill}</div>` : '';   // pinned — see buildContentRatingSection
   STEAM_CONTENT_CATEGORIES.forEach(grp => {
     const items = (steamCollapse && !steamShowAll)
       ? grp.items.filter(item => !steamAnsweredSet?.has(item.id))
@@ -14935,12 +18832,13 @@ function buildSteamTechnicalSection() {
    Reached by clicking the Languages side-block on the prototype page (see
    languagesHtml, buildSteamStorePreviewPrototypeSection). Mirrors the App
    Store Data Collection Questions' full matrix table (buildPrivacyMatrix,
-   above) — same .prv-matrix-wrap/.prv-matrix/.prv-type-cell/.prv-check-cell/
-   .prv-cb classes — but simpler: every listed language is already "in" by
-   definition (no row-level on/off gate the way a data type needs one before
-   its purpose columns unlock), so each Interface/Full Audio/Subtitles
-   checkbox is independently togglable straight away, plus a per-row remove
-   button to drop a language entirely.
+   above) — same .prv-matrix-wrap/.prv-matrix/.prv-type-cell/.prv-check-cell
+   classes and the same _prvCell pressable cell — but simpler: every listed
+   language is already "in" by definition (no row-level on/off gate the way a
+   data type needs one before its purpose columns unlock), so every row is
+   `is-on`, no cell is ever 'add' or 'locked', and each Interface/Full Audio/
+   Subtitles cell is independently togglable straight away, plus a per-row
+   remove button to drop a language entirely.
    Backed by state.steamSubmitAnswers.languages, seeded once — the first
    time this section is opened — from Game Details' Primary + Supported
    languages (see _steamSeedLanguagesIfNeeded, app.js), then never
@@ -14954,18 +18852,9 @@ function buildSteamLanguagesEditSection() {
   const rows = langs.map(l => `
     <tr class="prv-data-row is-on">
       <td class="prv-type-cell"><span class="prv-type-name">${escHtml(OB_LANG_NAMES[l.code] || l.code)}</span></td>
-      <td class="prv-check-cell">
-        <input type="checkbox" class="prv-cb" ${l.interface ? 'checked' : ''}
-               onchange="toggleSteamLanguageFlag('${l.code}','interface',this.checked)">
-      </td>
-      <td class="prv-check-cell">
-        <input type="checkbox" class="prv-cb" ${l.fullAudio ? 'checked' : ''}
-               onchange="toggleSteamLanguageFlag('${l.code}','fullAudio',this.checked)">
-      </td>
-      <td class="prv-check-cell">
-        <input type="checkbox" class="prv-cb" ${l.subtitles ? 'checked' : ''}
-               onchange="toggleSteamLanguageFlag('${l.code}','subtitles',this.checked)">
-      </td>
+      ${_prvCell(!!l.interface, `toggleSteamLanguageFlag('${l.code}','interface',${!l.interface})`)}
+      ${_prvCell(!!l.fullAudio, `toggleSteamLanguageFlag('${l.code}','fullAudio',${!l.fullAudio})`)}
+      ${_prvCell(!!l.subtitles, `toggleSteamLanguageFlag('${l.code}','subtitles',${!l.subtitles})`)}
       <td class="steam-lang-remove-cell">
         <button type="button" class="steam-lang-remove-btn" title="Remove language" onclick="removeSteamLanguage('${l.code}')">✕</button>
       </td>
@@ -15106,7 +18995,12 @@ function buildSteamStorePreviewSection() {
   const pid  = 'steam';
   const fd   = state.formData;
   const ups  = state.uploads;
-  const icon = ups.appIcon;
+  /* TWO DOORS, ONE ICON — `smAppIcon` / `smAppIconSrc` (assets.js), not
+     `ups.appIcon`. The dedicated uploader's slot is only one of the ways an icon
+     gets into Shipmate; dropping it in the asset library is the other, and this
+     preview used to draw the grey placeholder over a file the developer had
+     already handed us. The slot still wins when it is set. */
+  const icon = smAppIcon();
   const shots = ups.screenshots || [];
   const title = escHtml(fd.title || 'Your Game Title');
   const descRaw = fd.description || '';
@@ -15114,7 +19008,7 @@ function buildSteamStorePreviewSection() {
   const topGenres = state.steamSubmitAnswers.topGenres.slice(0, 2).join(', ') || 'Game';
 
   const iconHtml = icon
-    ? `<img src="${_screenshotSrc(icon)}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
+    ? `<img src="${smAppIconSrc()}" style="width:108px;height:50px;border-radius:4px;object-fit:cover;">`
     : `<div style="width:108px;height:50px;border-radius:4px;background:var(--bg-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:9px;">Capsule</div>`;
 
   state.steamSubmitAnswers.storePreviewSeen = true;
@@ -16144,11 +20038,8 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
 function buildBuildDropdown(pid, inModal) {
   const build      = state.platformBuilds?.[pid] || null;
   const processing = !!(state.platformBuildProcessing?.[pid]);
-  const accept     = pid === 'ios'        ? '.ipa'
-                   : pid === 'macos'      ? '.pkg,.zip'
-                   : pid === 'macos_full' ? '.pkg,.zip'
-                   : pid === 'android'    ? '.apk,.aab'
-                   :                        '.exe,.zip';
+  const fmt        = smBuildAccept(pid);          // SM_BUILD_ACCEPT, state.js
+  const accept     = fmt.accept;
   // Unique file input id — avoid clash between card header and modal instances
   const inputId    = inModal ? `build-file-modal-${pid}` : `build-file-${pid}`;
   const uploadSVG  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -16165,9 +20056,23 @@ function buildBuildDropdown(pid, inModal) {
       </div>`;
   }
   const noBuild = !build;
+  /* THE TOOLTIP IS THE HINT, WHICH IS AN INSTRUCTION RATHER THAN A FORMAT LIST.
+     It read "Upload build — accepts .pkg or .zip", i.e. what the control will
+     swallow — and `hint`'s own note in state.js is explicit that this is the
+     wrong half: "Export a signed .pkg from Xcode" tells you what to go and DO,
+     which is the actual question someone staring at an empty Upload Build has.
+     Mark's inline pane already prints that string beside this same pill, so the
+     card was the one surface saying something different about one control.
+     Jaco: *"el tooltip … fuera 'Export a signed .pkg from Xcode', igual que en
+     el modo inline de Mark."*
+
+     One string in both states: it stays true once a build is in, because
+     replacing it means exporting another. `accept` is unchanged and still
+     filters the dialog — what we recommend and what we permit are two different
+     things, which is that note's other half. */
   return `
     <div class="build-pill ${noBuild ? 'no-build' : 'has-build'}"
-         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${noBuild ? 'Upload build' : 'Change build'}">
+         onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${escHtml(fmt.hint)}">
       <input type="file" id="${inputId}" accept="${accept}" hidden
              onchange="handleBuildUpload('${pid}', this.files)">
       ${noBuild ? uploadSVG : checkSVG}
@@ -16176,213 +20081,553 @@ function buildBuildDropdown(pid, inModal) {
 }
 
 /* ══════════════════════════════════════════════════════
-   SCREENSHOTS STEP  (per-platform, inside step modal)
-   ══════════════════════════════════════════════════════ */
-function buildScreenshotsSection(pid) {
-  const onboardingShots = state.uploads?.screenshots || [];
-  const ps = state.platformScreenshots?.[pid] || { selected: [], custom: [] };
-  const selectedSet = new Set(ps.selected);
+   THE LISTING'S SCREENSHOTS — one resolver, five readers
+   ══════════════════════════════════════════════════════
+   Every store preview used to compute this itself, and the expression was
+   copied verbatim in FIVE places (the iOS preview, Mac's, Mac Full's, the
+   screenshots step and Steam's): selected-from-uploads plus per-platform
+   uploads, falling back to every upload while neither has been touched. One
+   definition per symbol — the same argument `smCheckSVG` and `smAppIcon` were
+   lifted out under — and now the three things the editor writes (order,
+   removals, crops) reach all five without teaching any of them a new model.
 
-  const checkMark = `<div class="shot-check">✓</div>`;
+   WITH NOTHING SET IT RETURNS EXACTLY WHAT THE COPIES DID, which is what made
+   the swap safe: an empty `order` orders nothing, an empty `removed` removes
+   nothing, and an empty `crops` leaves every entry the shape its caller has
+   always been handed.
 
-  // Onboarding screenshots row — thumbnails are draggable into the crop zone
-  let onboardingHtml;
-  if (onboardingShots.length > 0) {
-    onboardingHtml = onboardingShots.map(s => {
-      const src = _screenshotSrc(s);
-      const sel = selectedSet.has(s.id);
-      return `
-        <div class="shot-thumb${sel ? ' is-selected' : ''}"
-             draggable="true"
-             ondragstart="shotDragStart(event,'${pid}','${s.id}')"
-             onclick="togglePlatformScreenshot('${pid}','${s.id}')"
-             title="${escHtml(s.name)}">
-          <img src="${src}" alt="${escHtml(s.name)}">
-          ${sel ? checkMark : ''}
-          <div class="shot-drag-hint">drag to preview</div>
-        </div>`;
-    }).join('');
-  } else {
-    onboardingHtml = `<p class="shot-empty-msg">No screenshots in your uploads yet — add them under Assets during onboarding.</p>`;
+   A CROPPED SHOT IS A COPY, NOT A MUTATION. The baked preview is spread over
+   the entry as a plain `dataUrl` with `ref`/`url` cleared, because
+   `_screenshotSrc` resolves a library reference BEFORE it looks at the bytes —
+   left in place, the ref would win and the crop would never be drawn. The
+   asset in the library is untouched, so clearing the crop really does revert. */
+function platformStoreShots(pid) {
+  const ps          = state.platformScreenshots?.[pid] || {};
+  const allUploaded = state.uploads?.screenshots || [];
+  const custom      = ps.custom || [];
+  const selectedIds = new Set(ps.selected || []);
+  const selectedUploaded = allUploaded.filter(s => selectedIds.has(s.id));
+
+  /* THE POOL — and the ONE place this diverges from the five copies, because
+     they had a bug the editor made reachable.
+
+     They read `selected.length || custom.length ? [...selected, ...custom] :
+     all`, i.e. a platform-specific upload switched the fallback off. Measured:
+     with five library screenshots showing and nothing picked, adding ONE shot
+     here took the listing from 5 to 1 — the other four silently gone, because
+     `custom` being non-empty sent it down the explicit arm with an empty
+     `selected`. Tolerable while the only door was a picker where you also
+     ticked; not tolerable now that adding is a slot in a strip.
+
+     A PLATFORM UPLOAD IS AN ADDITION, NOT A REPLACEMENT. An explicit PICK
+     still means what it always did — you named the ones you want — but adding
+     a shot says nothing about the library ones, so they stay and the new one
+     joins them. `removed` is the field that means "chosen against", and it is
+     the only thing that takes a screenshot out. Untouched, this is identical
+     to what the copies returned. */
+  let list = selectedUploaded.length > 0
+    ? [...selectedUploaded, ...custom]
+    : [...allUploaded, ...custom];
+
+  const removed = new Set(ps.removed || []);
+  if (removed.size) list = list.filter(s => !removed.has(s.id));
+
+  /* `order` is a PREFERENCE, not a whitelist — ids it does not mention are
+     appended in pool order, so a screenshot dropped into Assets after the
+     listing was arranged still appears instead of silently vanishing. */
+  const order = ps.order || [];
+  if (order.length) {
+    const byId  = new Map(list.map(s => [s.id, s]));
+    const named = new Set(order);
+    list = [
+      ...order.map(id => byId.get(id)).filter(Boolean),
+      ...list.filter(s => !named.has(s.id)),
+    ];
   }
 
-  // Platform-specific custom uploads
-  let customHtml = '';
-  if (ps.custom && ps.custom.length > 0) {
-    customHtml = `
-      <div class="shot-group-label">Platform-specific uploads</div>
-      <div class="shot-grid">
-        ${ps.custom.map(s => `
-          <div class="shot-thumb is-selected is-custom" title="${escHtml(s.name)}">
-            <img src="${_screenshotSrc(s)}" alt="${escHtml(s.name)}">
-            ${checkMark}
-            <button class="shot-remove" onclick="removePlatformScreenshot('${pid}','${s.id}')" title="Remove">×</button>
-          </div>`).join('')}
-      </div>`;
-  }
-
-  const total = ps.selected.length + (ps.custom?.length || 0);
-
-  // Inline crop edit zone (persists crop state across renders via _shotCropState)
-  const editZoneHtml = _buildShotEditZoneHtml(pid);
-
-  return `
-    <div class="screenshots-step">
-      <p class="shot-intro">
-        Select screenshots to include with your ${platLabel(pid)} submission.
-        ${total > 0 ? `<strong>${total} selected.</strong>` : ''}
-        <span class="shot-intro-hint">Click a screenshot to select it, or drag it down to preview the crop.</span>
-      </p>
-
-      <div class="shot-group-label">From your uploads</div>
-      <div class="shot-grid" id="shot-grid-${pid}">${onboardingHtml}</div>
-
-      ${customHtml}
-
-      <!-- Inline crop preview zone -->
-      <div class="shot-edit-zone" id="shot-edit-zone-${pid}"
-           ondragover="shotDragOver(event,'${pid}')"
-           ondragleave="shotDragLeave(event,'${pid}')"
-           ondrop="shotDrop(event,'${pid}')">
-        ${editZoneHtml}
-      </div>
-
-      <div class="shot-actions">
-        <label class="btn btn-ghost btn-sm shot-upload-btn" style="cursor:pointer;">
-          <input type="file" accept="image/*" multiple hidden
-                 onchange="handlePlatformScreenshotFiles('${pid}', this.files)">
-          + Upload New
-        </label>
-      </div>
-    </div>`;
+  const crops = ps.crops || {};
+  return list.map(s => {
+    const c = crops[s.id];
+    if (!c || !c.url) return s;
+    return { ...s, ref: null, url: null, dataUrl: c.url, _cropped: true };
+  });
 }
 
-/* Build the HTML content of the crop preview zone (called on render and on drag events) */
-function _buildShotEditZoneHtml(pid) {
-  const cs = (typeof _shotCropState !== 'undefined') ? _shotCropState[pid] : null;
-  if (!cs || !cs.shotId) {
-    return `
-      <div class="shot-edit-placeholder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="30" height="30" style="opacity:.4">
-          <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 4-5 7 7"/>
-        </svg>
-        <span>Drag a screenshot here to preview &amp; crop</span>
+/* The ratio a crop frame has to hit, read off the store's own table rather
+   than typed here — `SM_REQS[<store>]`'s first `shot: true` entry (assets.js).
+   Mac is 16:10 and says so in one place; iOS is 1320×2868 portrait.
+
+   ROTATION IS DERIVED, NOT A TOGGLE. Three of the four stores mark their
+   screenshot rows `rot: true`, meaning the same requirement accepted the other
+   way round — so a set of landscape captures gets a landscape frame instead of
+   asking the developer to answer a question the pictures already answer. Mac
+   carries no `rot`: 16:10 only, always this way up. */
+function _shotEdRatio(pid, sampleLandscape) {
+  const key  = pid === 'macos_full' ? 'macos' : pid;
+  const reqs = (typeof SM_REQS !== 'undefined' && SM_REQS[key]) || [];
+  const row  = reqs.find(r => r.shot);
+  if (!row || !row.w || !row.h) return 16 / 10;
+  let r = row.w / row.h;
+  if (row.rot && sampleLandscape != null && (r > 1) !== !!sampleLandscape) r = 1 / r;
+  return r;
+}
+
+/* THE CANVAS'S OWN RATIO, WHICH IS NOT ALWAYS THE FRAME'S — and it is a
+   separate function because THREE things now need it and they cannot be
+   allowed to disagree: `_shotEdGeometry` solving the live stage, the EMPTY
+   stage's box, and anything later that wants to reserve the right hole before
+   a picture exists.
+
+   The rule is the one `_shotEdGeometry` already stated in prose: a LANDSCAPE
+   store's frame IS the canvas, so the canvas takes the store's ratio; a
+   PORTRAIT store cannot do that, so the canvas stays a landscape band at
+   1.96 — the reference's own 632 × 322 — with the tall frame centred in it.
+
+   It takes no image and needs none. That is the whole reason the empty state
+   can be drawn correctly: the ratio is a fact about the STORE, which this file
+   has had to say twice already (once when the stage measured 0 until an image
+   decoded, once when a `ResizeObserver` replaced a snapshot of the width). */
+function _shotEdCanvasRatio(pid, sampleLandscape) {
+  const r = _shotEdRatio(pid, sampleLandscape);
+  return r >= 1 ? r : 1.96;
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREENSHOTS STEP  (per-platform, inside step modal)
+   ══════════════════════════════════════════════════════
+   IT IS AN EDITOR, NOT A PICKER. Jaco: *"ahora mismo se abre un modal extraño,
+   y quiero que sea un poco diferente… 1. que se muestren los screenshots de la
+   submission y que me permitas drag to order them as they'll look on the
+   store. 2. que me dejes borrarlos/ocultarlos. 3. que si selecciono uno, me
+   muestres la preview ocupando todo el ancho del modal y que yo pueda recortar
+   y dragear dentro de la propia foto con slider/mouse wheel, y que se actualice
+   para la store."*
+
+   What it replaced answered a different question. It was a GRID of every
+   upload, each one a checkbox, with a drop zone underneath that previewed a
+   crop it could not apply — so the step asked "which of these do you own",
+   which the Assets tab has already answered, and the one thing a store listing
+   really is (an ordered row of pictures, cropped to the store's frame) could
+   not be expressed at all. Selection was the model; sequence, removal and crop
+   were not in it.
+
+   THE SHAPE IS THE REFERENCE PROTOTYPE'S, and the three parts map onto his
+   three numbered asks: a STRIP of thumbnails that reorders by drag and removes
+   by its own ×, and above it a STAGE showing the selected one at the modal's
+   full width, panned by dragging inside the picture and zoomed by slider or
+   wheel.
+
+   IT WEARS NO CHROME OF ITS OWN. The reference is a sub-panel inside a store
+   modal and needs a back arrow, a Done and a "Saved" status; this is a STEP,
+   and the step modal already carries a header, an × and Save & Close. A second
+   set inside the first is the thing the Game Center pass had just finished
+   removing. Everything commits as it happens, so there is nothing for a Done
+   to mean. */
+function buildScreenshotsSection(pid) {
+  const shots = platformStoreShots(pid);
+  const pool  = state.uploads?.screenshots || [];
+  const ps    = state.platformScreenshots?.[pid] || {};
+  const removedCount = (ps.removed || []).length;
+
+  /* WHICH ONE IS OPEN IS EPHEMERAL, and it lives beside the transform in
+     `_shotEd` (app.js) rather than in state, for `_shotCropState`'s own reason
+     — it is where the pointer is, not something the submission carries. The
+     builder only has to know the id, and falls back to the first shot so the
+     stage is never empty while there is something to show. */
+  const sel = (typeof _shotEd !== 'undefined' && _shotEd.pid === pid && shots.some(s => s.id === _shotEd.shotId))
+    ? _shotEd.shotId
+    : (shots[0]?.id || null);
+
+  const reqRow = (typeof SM_REQS !== 'undefined' && (SM_REQS[pid === 'macos_full' ? 'macos' : pid] || []).find(r => r.shot)) || null;
+  const reqLine = reqRow
+    ? `${reqRow.w} × ${reqRow.h}${reqRow.note ? ' — ' + escHtml(reqRow.note) : ''}`
+    : '';
+
+  /* The app's one cross (`smCrossSVG`, state.js) rather than a local pair of
+     lines — `smCheckSVG`'s own lesson, which found six stale copies of a glyph
+     that had been inlined seven times. Sized in CSS, never by the argument. */
+  const delSVG = smCrossSVG();
+  /* The pan glyph flags a shot whose own shape differs from the store's frame,
+     i.e. one that is being cover-cropped and therefore has a decision in it.
+     A shot that already fits has nothing to reposition and wears nothing. */
+  const panSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>`;
+
+  const thumbs = shots.map((s, i) => `
+    <div class="shot-thumb${s.id === sel ? ' is-selected' : ''}" data-shot-thumb="${s.id}"
+         draggable="true" title="${escHtml(s.name || 'Screenshot')}">
+      <img src="${_screenshotSrc(s)}" alt="" draggable="false">
+      ${s._cropped ? `<span class="shot-thumb-pan" title="Cropped — open to reposition">${panSVG}</span>` : ''}
+      <span class="shot-thumb-ord">${i + 1}</span>
+      <button class="shot-thumb-del" data-shot-del="${s.id}" title="Remove from this listing">${delSVG}</button>
+    </div>`).join('');
+
+  /* The + is a SLOT in the strip, not a button parked elsewhere: adding a
+     screenshot is the same kind of act as reordering one, and it lands at the
+     end, which is where a new one goes. */
+  const addSlot = `
+    <button class="shot-thumb-add" data-shot-add title="Add a screenshot">
+      <span class="shot-thumb-add-plus">+</span>
+      <input type="file" accept="image/*" multiple hidden
+             onchange="handlePlatformScreenshotFiles('${pid}', this.files)">
+    </button>`;
+
+  /* THE STAGE IS MEASURED, NOT SIZED HERE. Its width is the modal's — the
+     literal ask — so the frame can only be solved once the box exists;
+     `_shotEdArm` (app.js) does it after the paint, the way every other thing
+     on this surface that depends on layout does. The markup only has to name
+     the boxes. */
+  const stage = sel
+    ? `
+      <div class="shot-ed-stage" id="shot-ed-stage">
+        <div class="shot-ed-canvas" id="shot-ed-canvas">
+          <img class="shot-ed-img" id="shot-ed-img" alt="" draggable="false">
+          <div class="shot-ed-frame" id="shot-ed-frame"><div class="shot-ed-grid"></div></div>
+          <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
+        </div>
+      </div>`
+    /* IT IS THE ASSETS DROP WELL, IN ITS OWN WORDS (v6.47). Jaco: *"Upload
+       screenshots en vez de 'Add a screenshot', puedes copiar el mismo estilo
+       de texto del dropwell que tenemos en assets."*
+
+       The three text classes are BORROWED, not copied — `.asset-dropzone-icon`
+       / `-label` / `-hint`, the same rules Game Details' own well uses, so the
+       20px arrow, the 13/600 label and the 11px hint cannot drift from it. What
+       is deliberately NOT taken is `.asset-dropzone` itself: that carries a
+       dashed border and a `--inp-bg` fill, and this box already IS a well (the
+       stage's `--bg` and inset ring), so wearing both would be the second box
+       this whole surface keeps refusing.
+
+       The hint names the FILE, never the size — the head above already prints
+       the store's own "2880 × 1800 — 16:10 only", and the frame you are looking
+       at states the shape. */
+    : `
+      <div class="shot-ed-stage is-empty" id="shot-ed-stage"
+           style="--shot-canvas-ratio:${_shotEdCanvasRatio(pid)}">
+        <button class="shot-ed-empty" data-shot-add>
+          <div class="asset-dropzone-icon">↑</div>
+          <div class="asset-dropzone-label">${removedCount
+            ? 'Every screenshot has been removed from this listing'
+            : 'Upload screenshots'}</div>
+          <div class="asset-dropzone-hint">${removedCount
+            ? 'Restore them below, or upload new ones'
+            : 'PNG or JPG · Multiple files accepted'}</div>
+        </button>
       </div>`;
-  }
-
-  const aspect = (cs.aspect && cs.aspect !== 'auto') ? cs.aspect : '6.7" iPhone';
-  // iOS App Store supported device aspect ratios (portrait dimensions, auto-flipped for landscape images)
-  const IOS_AR_OPTIONS = [
-    { key: 'original',    label: 'Original' },
-    { key: '6.7" iPhone', label: '6.7" iPhone' },
-    { key: '5.5" iPhone', label: '5.5" iPhone' },
-    { key: 'iPad 13"',    label: 'iPad 13"' },
-  ];
-  const arBtns = IOS_AR_OPTIONS.map(a =>
-    `<button class="shot-ar-btn${a.key === aspect ? ' active' : ''}" onclick="setShotAspect('${pid}','${a.key}')">${a.label}</button>`
-  ).join('');
-
-  const isSelected = (() => {
-    const ps = state.platformScreenshots?.[pid];
-    return ps?.selected?.includes(cs.shotId);
-  })();
-
-  const panX = cs.panX || 0;
-  const panY = cs.panY || 0;
 
   return `
-    <div class="shot-edit-active">
-      <button class="shot-edit-close" onclick="shotEditClose('${pid}')" title="Close preview">×</button>
-      <div class="shot-edit-preview-wrap" id="shot-edit-wrap-${pid}"
-           style="cursor:grab" onmousedown="shotPanStart(event,'${pid}')">
-        <img src="${cs.src}" class="shot-edit-img" id="shot-edit-img-${pid}"
-             alt="${escHtml(cs.name || '')}"
-             style="transform:translate(${panX}px,${panY}px);pointer-events:none;"
-             onload="_updateShotCropFrame('${pid}')">
-        <div class="shot-crop-frame" id="shot-crop-frame-${pid}" style="display:none;"></div>
+    <div class="shot-ed" data-shot-ed-pid="${pid}">
+      <div class="shot-ed-head">
+        <div class="shot-ed-count">${shots.length} screenshot${shots.length === 1 ? '' : 's'}${
+          removedCount ? ` · ${removedCount} removed` : ''}</div>
+        ${reqLine ? `<div class="shot-ed-req">${reqLine}</div>` : ''}
       </div>
-      <div class="shot-edit-controls">
-        <div class="shot-edit-label">${escHtml(cs.name || 'Screenshot')}</div>
-        <div class="shot-ar-btns">${arBtns}</div>
-        <button class="btn ${isSelected ? 'btn-ghost' : 'btn-primary'} btn-sm"
-                onclick="togglePlatformScreenshot('${pid}','${cs.shotId}');_renderShotEditZone('${pid}')">
-          ${isSelected ? '✓ Selected' : '+ Select screenshot'}
-        </button>
-        <button class="btn btn-ghost btn-sm" onclick="shotEditClose('${pid}')">Close</button>
+
+      ${stage}
+
+      <!-- THE CONTROLS DOCK TO THE BOTTOM OF THE SCROLLER (v7.05), and the
+           wrapper exists only so the two of them stick as one. v7.04 widened
+           this modal to the preview's 1000 and the stage is the modal's width
+           by this editor's brief, so the picture went 619x387 -> 939x587 while
+           the modal did not grow (its height is a clamp on the viewport): on a
+           1440x900 screen the strip opened entirely below the fold and at
+           1280x800 the zoom row did too. You could not see which screenshot
+           you were editing, or reach the + to add one, without scrolling away
+           from the thing you were editing it in.
+
+           NOT BY CAPPING THE STAGE, which was the obvious answer and is the
+           wrong one: the cap has to come off the room the scroller has, and on
+           a 720-tall window that room is 317px -- so the picture would come out
+           507x317, SMALLER than the 619x387 it had before this modal was ever
+           widened. A fix for the widening that undoes the widening is not a
+           fix. _shotEdGeometry stays exactly as it was.
+
+           The two controls that must never be out of reach are the zoom row and
+           the strip; the note and the Restore row are occasional and stay in
+           flow below. -->
+      <div class="shot-ed-dock">
+        <div class="shot-ed-toolbar${sel ? '' : ' is-off'}">
+          <div class="shot-ed-zoom">
+            <span class="shot-ed-zoom-label">Zoom</span>
+            <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
+                   min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
+          </div>
+          <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
+        </div>
+
+        <div class="shot-ed-strip" id="shot-ed-strip">${thumbs}${addSlot}</div>
       </div>
+
+      ${pool.length === 0 && shots.length === 0 ? `
+      <p class="shot-ed-note">No screenshots uploaded yet — add them here, or under Assets in Game Details.</p>` : ''}
+      ${removedCount ? `
+      <button class="shot-ed-restore" data-shot-restore>Restore ${removedCount} removed screenshot${removedCount === 1 ? '' : 's'}</button>` : ''}
     </div>`;
 }
 
 /* ══════════════════════════════════════════════════════
    SUBMITTED CARD  (shown after successful submission — "back" of the platform card)
    ══════════════════════════════════════════════════════ */
+/* THE SUBMITTED STEPS, READ ONLY. The same `.ios-step-card` rows the steps face
+   draws — same disc, same tick, same two columns — with three things taken
+   away: the chevron, because there is nothing to open past what the modal
+   shows; the risk dot, because a risk you can no longer act on is just a
+   worry; and the Submit row, which has already happened.
+   They still open their step modal, and that modal comes up in a read-only
+   mode (`state.stepModalReadOnly`) — you can read every answer you declared
+   and change none of them. Reading back what you swore to a store is exactly
+   the thing you want most while you wait for it to answer. */
+function _submittedSteps(pid) {
+  const steps = (typeof _visiblePlatformSteps === 'function' ? _visiblePlatformSteps(pid) : (PLATFORMS[pid]?.steps || []))
+    .filter(s => !s.isSubmit);
+  return steps.map((step, i) => `
+    <div class="ios-step-card sub-step is-complete"
+         onclick="openSubmittedStep('${pid}', '${step.id}')" title="${escHtml(step.label || step.id)} — read only">
+      <div class="ios-step-num is-done">${smCheckSVG(20)}</div>
+      <div class="ios-step-info"><div class="ios-step-name">${escHtml(step.label || step.id)}</div></div>
+    </div>`).join('');
+}
+
+/* ══════════════════════════════════════════════════════
+   SUBMITTED CARD — the SAME card, with the work hidden
+   ══════════════════════════════════════════════════════
+   It used to be a card of its own: coloured header bar, 44px platform icon in
+   a well, its own name row, its own cancel control. Five elements re-drawing
+   things the steps card already draws, in a different shape — so pressing
+   Submit swapped one object for a lookalike rather than changing the one you
+   had. Now it IS the platform card: `platformCardHead` verbatim, the release
+   block verbatim, the same width. The steps are simply gone, because they are
+   done, and the card is shorter by exactly what they occupied.
+
+   Two variants are live while the shape is being chosen — `state.subVariant`,
+   flipped with `smReviewVariant(1|2)`:
+     1  four segments across the whole journey (prepare → review → release →
+        live), with the store's own wait claim beside the status line
+     2  no segments; the two dates instead — submitted, and estimated
+   Both print the state in the store's own words (`STORE_REVIEW`). */
 function buildSubmittedCard(pid, flipData) {
-  const trackId    = (flipData && typeof flipData === 'object') ? flipData.track : (flipData || '');
-  const tracks     = PLATFORM_TRACKS[pid] || [];
-  const track      = tracks.find(t => t.id === trackId);
-  const trackLabel = track ? track.label : trackId;
-  const isWeb      = pid === 'web';
-  const ts         = (flipData && flipData.time)
-    ? new Date(flipData.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const isWeb  = pid === 'web';
+  const phase  = isWeb ? 'live' : ((flipData && flipData.phase) || 'in_review');
+  const vocab  = storeReviewPhase(pid, phase);
+  const isLive = phase === 'live';
+  const isYours = phase === 'accepted';
+  const isBad   = phase === 'rejected';
+
+  const _timing    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
+  const reviewDays = isWeb ? 0 : _timing.days;
+  const reviewWhole = Math.max(1, Math.ceil(reviewDays));
+
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const sent = (flipData && flipData.time) ? new Date(flipData.time) : new Date();
+  const est  = _addDays(sent, reviewWhole);
+
+  /* FOUR SEGMENTS, ONE PER STAGE OF THE JOURNEY — prepare, review, release,
+     live — so the bar means the same thing on every platform and in every
+     phase. Rejected does not advance it: it paints the stage the review
+     stopped on, because a rejection is not progress. */
+  /* THE INDEX IS THE STAGE YOU ARE IN, not the count of stages behind you.
+     `in_review` is the SECOND of the four (prepare → review → release → live),
+     so it is index 1 with only `prepare` filled behind it. It was 2, which lit
+     the third segment and quietly claimed the release stage had been reached
+     while the store was still reading the build. */
+  const stage = isLive ? 4 : isYours ? 2 : 1;      // prepare is always behind you
+  const segs = [0,1,2,3].map(i => {
+    if (isBad) return `<span class="sub-seg ${i === 0 ? 'is-done' : i === 1 ? 'is-bad' : ''}"></span>`;
+    return `<span class="sub-seg ${i < stage ? 'is-done' : i === stage ? 'is-current' : ''}"></span>`;
+  }).join('');
+
+  const phaseCls = isLive ? 'is-live' : isYours ? 'is-yours' : isBad ? 'is-bad' : 'is-waiting';
+  const variant  = state.subVariant === 2 ? 2 : 1;
+
+  /* The store's own wait claim. Apple publishes a percentage rather than a
+     duration, so under two days it says that instead of counting to one. */
+  const waitNote = isWeb ? 'Live now'
+    : reviewWhole <= 1 ? 'Usually under 24h'
+    : `Usually ${reviewWhole} days`;
+
+  const reviewing = !!state.subReview?.[pid];
+
+  /* Read once, used twice below: the card grid has no tab strip naming the
+     store, so this face keeps its own header there. See the long note at the
+     header itself. */
+  const modalGrid = state.submission?.layout === 'modal';
+
+  /* THE ACTION IS THE STORE'S OWN VERB when the next move is the developer's
+     (Release This Version / Publish changes / Release App) — see STORE_REVIEW. */
+  const action = vocab.action
+    ? `<button class="sub-phase-act${isBad ? ' is-bad' : ''}" onclick="smAdvancePhase('${pid}')">${escHtml(vocab.action)}</button>`
     : '';
-  // Lock to the exact pre-flip active card height — prevents CSS Grid from stretching
-  // sibling platform cards after submission (min-height alone would allow growth)
-  const savedH = state.platformFlippedCardHeight?.[pid];
-  const heightStyle = savedH ? ` style="height:${savedH}px;max-height:${savedH}px;overflow:hidden"` : '';
-
-  // Review-time model: how long this store typically takes, used to derive the
-  // "Day X of Y" counter and the Est. live date. Web deploys are live at once.
-  const REVIEW_DAYS = { ios: 2, macos: 2, android: 3, steam: 5 };
-  const reviewDays  = REVIEW_DAYS[pid] || 2;
-
-  const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const submittedDate = (flipData && flipData.time) ? new Date(flipData.time) : new Date();
-  const estLiveDate   = new Date(submittedDate); estLiveDate.setDate(estLiveDate.getDate() + reviewDays);
-  const submittedStr  = fmtDate(submittedDate);
-  const estLiveStr    = fmtDate(estLiveDate);
-  const daysElapsed   = Math.max(1, Math.min(reviewDays,
-    Math.floor((Date.now() - submittedDate.getTime()) / 86400000) + 1));
-
-  // 4-segment review progress bar. Stores sit at "In Review" (1 done, 1 current);
-  // web is fully live (all segments filled green).
-  const SEG_COUNT = 4;
-  const stageIdx  = isWeb ? SEG_COUNT : 1;
-  const segbar = Array.from({ length: SEG_COUNT }, (_, i) =>
-    `<span class="sub-seg ${i < stageIdx ? 'is-done' : i === stageIdx ? 'is-current' : ''}"></span>`).join('');
-
-  const waitText = isWeb
-    ? 'Your game is live. Announce it everywhere and turn launch day into momentum.'
-    : 'Reviews are quiet time. Line up your announcement so launch day runs itself.';
 
   return `
-    <div class="active-card submitted-card${isWeb ? ' is-live' : ''}" id="active-card-${pid}"${heightStyle}>
-      <div class="sub-review-bar${isWeb ? ' is-live' : ''}">
-        <span class="sub-review-status">${isWeb ? 'LIVE' : 'IN REVIEW'}</span>
-        ${isWeb ? '' : `<span class="sub-review-day">Day <b>${daysElapsed}</b> of <b>${reviewDays}</b></span>`}
+    <div class="active-card submitted-card ${phaseCls}" id="active-card-${pid}">
+      ${/* WHERE THE STATE GOES DEPENDS ON WHETHER ANYTHING ELSE NAMES THE STORE,
+            and that is a property of the LAYOUT, not of this card.
+
+            Mark's pane (`submission.layout === 'inline'`) puts a lit folder tab
+            above the card carrying the same mark and the same name, so the
+            card's own header was the second time that was said in two inches.
+            He gave that slot to the one fact this face exists to report — the
+            state — and kept the two buttons. Right, there.
+
+            **In the CARD GRID it is wrong, and measured wrong.** There is no tab
+            strip: the grid's own note argued the header was "the only thing
+            saying which store you were looking at", and that is still true.
+            Measured in both arms with one Steam submission: grid steps face
+            "Steam" with a header, grid submitted face NO header reading only
+            "IN REVIEW..."; pane, neither face has one. So in the grid a card had
+            a name until you pressed Submit and lost it exactly then, and two
+            submitted cards side by side were separable only by their track.
+
+            That also unmade the premise the original change rested on — "it puts
+            the two faces back in agreement, the steps face has no header either".
+            True in the pane. In the grid all four steps builders still call
+            `platformCardHead(pid, 'steps')`, so the faces DISAGREED.
+
+            One branch, the same shape `renderDashboard` already uses for this
+            flag, and it goes when the flag does. Nothing of Mark's is touched:
+            `inline` renders byte-for-byte what it rendered before. */''}
+      ${modalGrid ? platformCardHead(pid, 'submitted') : `
+      <div class="sub-head">
+        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>
+        ${_platformHeadActions(pid, 'submitted')}
+      </div>`}
+      ${buildReleaseBlock(pid)}
+      ${variant === 1 ? `<div class="sub-segbar">${segs}</div>` : ''}
+      ${/* The state line comes back HERE in the grid — its original row, where
+            `.sub-state`'s `space-between` pairs it with the wait note on one
+            baseline. `.sub-state:empty` already hides this row in the pane, so
+            the arm that does not use it costs nothing. */''}
+      <div class="sub-state">
+        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>` : ''}
+        ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
+              `!isYours && !isBad`, which let it survive into `live` — so a
+              build that was finished, distributed and on sale still said
+              "Usually 3 days" beside READY FOR DISTRIBUTION. It answers "how
+              long will this take", and past the decision that question has no
+              referent: there is nothing left to be usually-anything. */''}
+        ${variant === 1 && phase === 'in_review' ? `<span class="sub-state-note">${escHtml(waitNote)}</span>` : ''}
       </div>
-      <div class="submitted-body">
-        <div class="sub-plat-row">
-          <div class="sub-plat-icon">${platformIcon(pid, 24, 'white')}</div>
-          <div class="sub-plat-text">
-            <div class="sub-plat-name">${platLabel(pid)}</div>
-            ${trackLabel ? `<div class="sub-plat-sub">${escHtml(trackLabel)}</div>` : ''}
-          </div>
-          <button class="sub-cancel-icon" onclick="cancelSubmission('${pid}')" title="${isWeb ? 'Take down' : 'Cancel submission'}" aria-label="${isWeb ? 'Take down' : 'Cancel submission'}">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"/></svg>
-          </button>
-        </div>
-        <div class="sub-segbar">${segbar}</div>
-        <div class="sub-dates">
-          <span>${isWeb ? 'Deployed' : 'Submitted'} ${submittedStr}</span>
-          ${isWeb
-            ? `<span class="sub-est"><b>Live now</b></span>`
-            : `<span class="sub-est"><b>Est. live</b> ${estLiveStr}</span>`}
-        </div>
-        <div class="sub-wait-card">
-          <div class="sub-wait-head">${isWeb ? 'Now live' : 'While you wait'}</div>
-          <div class="sub-wait-body">${waitText}</div>
-          <button class="sub-wait-link" onclick="setView('broadcast')">Open Marketing →</button>
-        </div>
-      </div>
+      ${variant === 2 && !isWeb ? `
+      <div class="sub-facts">
+        <span class="rel-pair"><span class="rel-label">Submitted</span><span class="rel-build">${fmt(sent)}</span></span>
+        ${phase === 'in_review' ? `<span class="rel-pair"><span class="rel-label">Estimated</span><span class="rel-build">${fmt(est)}</span></span>` : ''}
+      </div>` : ''}
+      ${vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : ''}
+      ${/* THE NUDGE LEFT THIS CARD IN v6.56, AND IT IS THE GUIDE'S NOW.
+            "Quiet time. Go plan your launch →" lived here from the day the wait
+            got a face, on the argument that the one phase with nothing to do in
+            it is the one that should point somewhere. That is still true; what
+            changed is that a better surface started saying it.
+
+            It is a sentence about YOUR TIME, not about this submission.
+            Everything else on this card is a fact about this build — the store,
+            the version, the day an answer is due — and where to spend the days
+            the wait has just freed up is the CALENDAR's subject. `_guideCalLede`
+            prints it once, in the same violet, under the list of what you are
+            waiting on, and it exists for exactly the span this button did.
+
+            And it multiplied. One card said it once; three platforms in review
+            said it three times on one screen, identically, while the month said
+            it once — noise proportional to the number of platforms, which is the
+            shape of a line that is in the wrong place rather than merely
+            repeated.
+
+            The cost, knowingly: with the guide collapsed, or on the checklist
+            face, the invitation is nowhere. `_doFinalSubmit` flips the guide to
+            the month at the moment of sending, so it is on screen when it
+            matters — but someone who works with that column folded will not see
+            it at all. If that turns out to bite, the fix is the collapsed rail,
+            not this button coming back. */''}
+      ${/* THE STEPS ARE STILL THERE, they just have nothing left to ask. A
+            submitted card that hid them entirely made the work unreachable the
+            moment it was done — you could not check what you had declared
+            without withdrawing. Folded by default because the card's job now is
+            the wait, not the form. */''}
+      ${/* NOT "REVIEW". The word is already taken on this very card — the STORE
+            is the one reviewing — and it was wrong twice over: reviewing is
+            what you did before you pressed Submit, and this is just looking at
+            what went. "See what you sent" says the act and the tense.
+            And no arrow: an arrow means somewhere else, and this opens in
+            place.
+
+            THE TOGGLE COMES BEFORE THE THING IT TOGGLES. It sat after the list,
+            so opening pushed it down by the whole height of the list — you
+            pressed "See what you sent" and the button fled from under the
+            pointer, landing four rows lower as "Hide what you sent". A control
+            that moves as a result of being pressed makes its own second press a
+            hunt, and for a disclosure the second press is the likeliest next
+            thing you do. Above it, the list unrolls downwards into space the
+            button never occupied and the hit area does not move at all. */''}
+      <button class="sub-steps-toggle" onclick="toggleSubReview('${pid}')">
+        ${reviewing ? 'Hide what you sent' : 'See what you sent'}
+      </button>
+      ${reviewing ? `<div class="sub-steps">${_submittedSteps(pid)}</div>` : ''}
+      ${/* THE ACT IS THE LAST THING IN THE CARD, because on the other face it
+            already is: the steps list ends in the Submit row, and Release is
+            that same object seen from this side. Putting it there makes one
+            shape for both faces — the facts at the top, everything you read in
+            the middle, the single act at the bottom — where it used to sit
+            above "See what you sent", which reads as though the quiet link were
+            the card's conclusion.
+            The read-only steps are reference, so they belong in the middle with
+            the other things you read, not after the act. The cost, paid
+            knowingly: opening the list pushes this button down by the list's
+            height. That is not the bug the toggle had — there, the control you
+            pressed fled from under your own pointer, which makes its second
+            press a hunt. Here a different control moves as an ordinary
+            consequence of the list growing, exactly as the Submit row would sit
+            below a list that gained a step. */''}
+      ${/* THE MARKETING NUDGE IS BACK ON THE CARD (v6.99), BY REQUEST, AND
+            v6.56'S ARGUMENT AGAINST IT IS STILL ON THE RECORD.
+
+            Mark: "We used to have a link to the marketing section from within
+            the post-submission card. I liked that. Where'd it go?"
+
+            It went to the guide's month in v6.56, and the two reasons it went
+            were good ones: it is a sentence about your TIME rather than about
+            this build, which makes it the calendar's subject; and it
+            MULTIPLIES — one card says it once, three platforms in review say
+            it three times identically on one screen while the month says it
+            once. That multiplication is not fixed here and is the thing to
+            watch. It is the cost of having the link where you actually are.
+
+            What v6.56 got wrong was not the reasoning, it was the assumption
+            that the guide is always the surface you are on. Its own note
+            admitted the gap — "with the guide collapsed, or on the checklist
+            face, the invitation is nowhere" — and prescribed the collapsed
+            rail as the fix. That fix is still unbuilt, and until it is, the
+            card is the only place this is reliably reachable.
+
+            BOTH COPIES EXIST NOW, deliberately. `_guideCalLede`'s violet link
+            is untouched: the calendar is still where this belongs when you are
+            looking at the calendar. If the duplication ever reads as noise,
+            the thing to remove is whichever one you are NOT looking at when
+            the wait starts — which is an argument about the collapsed rail
+            again, not about this button.
+
+            `in_review` ONLY, which is the whole of its original gate: it is
+            the one phase with nothing to do in it, so it is the one phase
+            that should point somewhere else. On `accepted` there is a Release
+            button to press and an invitation to leave would compete with the
+            single act the card exists to offer — which is also why this sits
+            ABOVE `action` rather than after it. On a waiting card `action` is
+            empty, so this ends the card; on any other phase the store's own
+            verb still concludes it, and "the act is the last thing in the
+            card" holds unchanged.
+
+            Violet and an arrow, because it LEAVES — the same vocabulary
+            `.gcal-lede-go` uses for the identical sentence, and the colour
+            this card already reserves for it (see the disclosure toggle's own
+            note, which says in as many words that violet on this card belongs
+            to the one link that sends you somewhere else).
+
+            THE WORDS ARE THE PLATFORM'S OWN (SUB_NUDGE_PLATFORM, state.js), and
+            that is what makes three cards in review read as three invitations
+            rather than one sentence printed three times — the multiplication
+            v6.56 removed this button for. The table is where the reasoning
+            and the length limit live; this line only prints it. */''}
+      ${phase === 'in_review'
+        ? `<button class="sub-nudge" onclick="setView('broadcast')">${escHtml(subNudgeCopy(pid))} &rarr;</button>`
+        : ''}
+      ${action}
     </div>`;
 }
