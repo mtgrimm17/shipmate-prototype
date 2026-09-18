@@ -10199,7 +10199,18 @@ function buildStorePreviewSection() {
      the outliers. */
   const contentDone     = isIOSSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
-  const dataDone        = !!(seenSections.data && isIOSSectionComplete('privacy'));
+  /* DATA PRIVACY IS DONE WHEN IT IS ANSWERED. It also required
+     `seenSections.data` — that you had opened it FROM this preview — which was
+     the right gate while the preview's flip was the only door to those
+     questions. It is not any more: v6.95 gave App Store and Mac App Store their
+     own Data Safety step on the platform card, so the questions can be answered
+     in full without this page ever being opened, and the pill up in the top bar
+     went on saying they were outstanding. Same deletion Adjust Screenshots took
+     in v6.78, and the same reasoning: the visit gate is for a questionnaire
+     Shipmate answered on the developer's behalf, not for one they have already
+     filled in somewhere else. The Shippy Checklist's own row dropped this gate
+     in v6.79, so all three surfaces now agree. */
+  const dataDone        = isIOSSectionComplete('privacy');
   /* ADJUST SCREENSHOTS IS DONE WHEN THERE ARE SCREENSHOTS. It used to also
      require `seenSections.screenshots` — opening the editor at least once —
      which is the right gate for a questionnaire Shipmate answered on the
@@ -11075,7 +11086,8 @@ function buildMacStorePreviewSection() {
      the same target. The pill has no fixed width (.ias-get-btn is padding +
      white-space: nowrap), so the longer string costs nothing. */
   const getLabel        = businessDone ? price : 'Set price';
-  const dataDone        = !!(seenSections.data && isMacSectionComplete('privacy'));
+  // Same rule as the App Store preview's own — see its note.
+  const dataDone        = isMacSectionComplete('privacy');
   // Same rule as the App Store preview's own — see its note.
   const screenshotsDone = isMacSectionComplete('screenshots');
   // Description is a plain text field, same as Title/Subtitle — done once it

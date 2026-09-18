@@ -328,7 +328,7 @@
      disagree by a factor of nearly three. That is the finding, not the pixel
      count: nobody chose 13 lines for a store blurb, a round number got typed.
 
-     SO IT TAKES THE MARKUP'S OWN NUMBER, stated in lines the way `--spp-desc-3`
+     SO IT TAKES THE MARKUP'S OWN NUMBER, stated in lines the way `--spp-desc-rows`
      is on the Mac preview: `5 × 19.5 + 26`. Five is not a fresh guess — it is
      what the `<textarea>` has been asking for all along, so the contradiction
      closes rather than being replaced by a second arbitrary figure.
@@ -8397,11 +8397,19 @@ body.viewing-splash .app-subnav { display: none; }
    now measure the same, which is the property worth having — the field does not
    change size when you write in it.
 
-   `--spp-desc-3` is the one place the type appears, and it MUST track
-   `.ias-desc-text` (13px / 1.6) — a token rather than `3lh`, because `lh`
+   `--spp-desc-rows` is the one place the type appears, and it MUST track
+   `.ias-desc-text` (13px / 1.6) — a token rather than `4lh`, because `lh`
    resolves against each element's OWN line-height and the ROW is a flex box
    that does not inherit the paragraph's. Two consumers, so the pair cannot
-   drift:
+   drift.
+
+   IT WAS `--spp-desc-3`, AND THE COUNT CAME OUT OF THE NAME when the count
+   changed. Four rows now, by request — a description that has room to be read
+   rather than glanced at, and the height that lets the Support link beside it
+   land on the last line (see .mac-spp-dev-links' own bottom inset). A name
+   carrying the value it holds is a name that has to be edited to change the
+   value, and renaming a token across three rules is exactly the kind of edit
+   that gets half-done. The count lives in the calc, once:
 
    - the ROW takes `+6`, and the CLAMP `+10`. The 4 between them is the same
      overhang as before (`.ias-editable` pays its box in negative margins), and
@@ -8411,9 +8419,9 @@ body.viewing-splash .app-subnav { display: none; }
    - the 10 is the clamp's own `4 + 4` of padding plus its two 1px borders —
      `box-sizing: border-box`, verified: `min-height: 104` measured a 104 border
      box with a 102 client box. */
-.mac-spp-page { --spp-desc-3: calc(3 * 1.6 * 13px); }
-.mac-spp-page .mac-spp-desc-row { min-height: calc(var(--spp-desc-3) + 6px); }
-.mac-spp-page .mac-spp-desc-clamp { min-height: calc(var(--spp-desc-3) + 10px); }
+.mac-spp-page { --spp-desc-rows: calc(4 * 1.6 * 13px); }
+.mac-spp-page .mac-spp-desc-row { min-height: calc(var(--spp-desc-rows) + 6px); }
+.mac-spp-page .mac-spp-desc-clamp { min-height: calc(var(--spp-desc-rows) + 10px); }
 /* The 48 is the STORE's number and only applies below; the top is the page's
    ordinary well clearance like every other section's. Declared as two
    longhands on one rule rather than letting a blanket `padding-block`
@@ -8437,6 +8445,30 @@ body.viewing-splash .app-subnav { display: none; }
 
    So `flex-start` + a real **20px** gap, and the pack hangs from the top.
 
+   ── AND THE SPREAD IS BACK, BECAUSE ITS PREMISE IS TRUE AGAIN ─────────
+   Adam: *"the bottom of the text in the lowest displayed row in the Description
+   field should vertically align with the bottom of the Support text."*
+
+   READ THE PARAGRAPH ABOVE BEFORE CHANGING THIS AGAIN. `space-between` was not
+   wrong, it was OUT OF PREMISE: it works exactly when the column's height is
+   the description's own clamped rows, and it stopped working when a floor made
+   the column taller than its text. The description is four real rows now and is
+   the tallest thing in this row, so the column is once more the text's own
+   height and the spread once more puts Developer on the first line and Support
+   on the last — by construction, at any width, which a fixed rhythm cannot do.
+
+   WHAT THIS COSTS, STATED PLAINLY: the 20px is no longer a number, it is a
+   result. At 83px of text and 52px of links the spread lands the rows about
+   15.5 apart, and it will move if either the row count or the link heights do.
+   Jaco asked for 20 and Adam asked for the alignment, and on this column the
+   two cannot both be had — a rhythm measured from the top and an end measured
+   from the bottom only agree by coincidence. The 10px in the base rule is the
+   floor, not the rhythm.
+
+   The −4 stays either way: the pack still hangs from the description box's own
+   painted top edge, which is the half of Jaco's request the spread does not
+   touch.
+
    **The −4 is the well's overhang, again.** `.ias-editable` pays its box in
    negative margins, so the description's painted top edge sits 4px above the
    row both columns start on; without this the rail would align to the ROW and
@@ -8448,8 +8480,6 @@ body.viewing-splash .app-subnav { display: none; }
    rows are 19.5 tall), pack top on the well's top edge to 0.0, and the column
    still stretches to the row so nothing else moved. */
 .mac-spp-page .mac-spp-dev-links {
-  justify-content: flex-start;
-  gap: 20px;
   margin-top: -4px;
 }
 
@@ -11341,7 +11371,13 @@ textarea.loc-review-field.ias-inline-input {
    description beside it — see .mac-spp-dev-links' own comment below for
    why that's what makes Support's bottom land on the description's own
    bottom edge, per request. */
-.mac-spp-desc-row { display: flex; gap: 24px; align-items: stretch; }
+/* THE DESCRIPTION TAKES THE ROOM, because it is the only thing in this row
+   with anything to say. The gap was 24 and the link column 132 for a stack
+   whose widest child measures 65 ("Website" plus its glyph) — so a third of
+   the gap and a third of that column were air on the one row where the store
+   prints a paragraph. 20 + 96 hands 40px back to the text and still leaves the
+   longest label 31px of slack for a developer name longer than "Raw Fury". */
+.mac-spp-desc-row { display: flex; gap: 20px; align-items: stretch; }
 .mac-spp-desc-col { flex: 1; min-width: 0; }
 /* justify-content: space-between (not a fixed gap alone) spreads
    Developer/Website/Support across this column's full stretched height
@@ -11353,8 +11389,29 @@ textarea.loc-review-field.ias-inline-input {
    Store product page this column is modeled on. The 10px gap is a floor
    only (flexbox honors it as a minimum alongside justify-content), for
    a description short enough to leave less than 2 gaps' worth of slack. */
+/* ── SUPPORT LANDS ON THE LAST LINE, AND THE 5 IS MEASURED ────────────
+   `justify-content: space-between` pins Support to the BOTTOM OF THIS COLUMN,
+   and this column is stretched to the ROW — which is 6px taller than the text
+   block by construction (`min-height: calc(var(--spp-desc-rows) + 6px)`, the
+   well's own overhang clearance). The text, meanwhile, hangs 3px BELOW the grid
+   that holds it, on the well's negative margin. Net: Support's box ended 5px
+   under the description's last line — close enough to read as a mistake rather
+   than as a decision, which is the only kind of misalignment worth a rule.
+
+   The 5 is a constant, not a width-dependent fudge: both terms it cancels are
+   authored lengths, so it holds wherever the row lands. Verified at 720, 672
+   and 572px of row — bottom delta 0 at each.
+
+   `padding-bottom` rather than a margin, because space-between distributes
+   inside the CONTENT box: 5px of padding moves Support up by exactly 5 and
+   leaves Developer where the -4px top margin already put it, on the first
+   line's own top. Both ends of the column now sit on the text's own ends, which
+   is what the reference product page shows.
+
+   If the row's `+6` or the well's overhang ever move, this moves with them —
+   re-measure rather than re-derive, the same way they were. */
 .mac-spp-dev-links {
-  flex-shrink: 0; width: 132px;
+  flex-shrink: 0; width: 96px; padding-bottom: 5px;
   display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
   /* Right-aligned per request — Developer/Website/Support read closer to
      the modal's own right edge instead of flush against the description
@@ -11463,7 +11520,10 @@ a.mac-spp-link-row.is-live:focus-visible {
 }
 .mac-spp-desc-clamp > .ias-desc-text-inner {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  /* FOUR, and it tracks --spp-desc-rows above — the token sizes the BOX and
+     this sizes the TEXT, so a change to one without the other leaves either a
+     clamp inside an oversized well or a fifth line sliced by overflow. */
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
