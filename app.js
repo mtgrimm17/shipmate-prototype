@@ -6138,7 +6138,11 @@ function _sppSpotlight(target) {
    it rather than describing it. */
 function submitStepClick(pid) {
   const isWeb     = pid === 'web';
-  const connected = isWeb ? true : isPlatformConnected(pid);
+  /* Through platformAccountReady (state.js) rather than repeating the web
+     exemption here: that helper is now also what the card's green border and
+     the Submit row's lock read, so this gate and those two cannot disagree
+     about whether an account is still owed. */
+  const connected = platformAccountReady(pid);
   const card      = document.getElementById('active-card-' + pid);
 
   /* 1 — no account linked. The gear is where linking happens, so the gear

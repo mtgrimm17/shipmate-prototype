@@ -1330,6 +1330,40 @@ function _platformAnswersComplete(pid, stepId) {
   return state.platformStepStatus?.[pid]?.[stepId] === 'complete';
 }
 
+/* ── THE UNNUMBERED STEP ──────────────────────────────────────────────────
+   "Connect account to publish" is a real requirement and the only one on the
+   card with no numbered row: it lives on the gear (_platformHeadActions,
+   render.js), which is why it was missed. The card went green —
+   `.submit-ready`, whose whole sentence is "this can go" — with nothing on the
+   other end to send it to, while submitStepClick's own first gate refused the
+   press and shook the gear. Two surfaces, two answers, and the card was the one
+   making the promise.
+
+   So it joins `allRequired` rather than being tested again at the outline.
+   Every reader of that flag is asking the same question — the card's border,
+   the Submit row's lock, and the submit button's title — and none of them ever
+   meant "the numbered ones are done".
+
+   IT IS DELIBERATELY NOT ADDED TO `total`/`complete`. Those two count the
+   numbered rows the card draws; they feed the "N / M steps" label and the
+   progress bar, so an unnumbered requirement in that fraction would print a
+   total the card does not show. Readiness is a conjunction, not a bigger count.
+
+   Web is exempt, the same exemption submitStepClick already makes: it has no
+   developer-portal credentials to connect (see showAccountFace, render.js), so
+   requiring one there would be a gate with no door.
+
+   The raw read stays in ONE place. `isPlatformConnected` (render.js) is the
+   question "is this connected"; this is the question "does this platform still
+   need connecting", which is that one plus the web exemption. render.js loads
+   after this file but every call happens at runtime, so the delegation is
+   always live; the fallback is only for a call during load. */
+function platformAccountReady(pid) {
+  if (pid === 'web') return true;
+  if (typeof isPlatformConnected === 'function') return isPlatformConnected(pid);
+  return !!state.platformAuth?.[pid]?.loggedIn;
+}
+
 function platformStepCount(platformId) {
   const p = PLATFORMS[platformId];
   // Binary build upload is required for submit unlock on iOS/Android/Steam
@@ -1339,7 +1373,8 @@ function platformStepCount(platformId) {
     const steps = _visiblePlatformSteps(platformId);
     const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     // uploadBuild step completion already requires hasBuild, so no separate hasBuild check needed
-    return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
+    return { total: steps.length, complete, submitDone: false,
+             allRequired: complete === steps.length && platformAccountReady(platformId) };
   }
   // Mac App Store: completion is computed from its own macSubmitAnswers,
   // exactly like iOS above — without this branch it would silently fall
@@ -1349,7 +1384,8 @@ function platformStepCount(platformId) {
   if (platformId === 'macos') {
     const steps = _visiblePlatformSteps(platformId);
     const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
-    return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
+    return { total: steps.length, complete, submitDone: false,
+             allRequired: complete === steps.length && platformAccountReady(platformId) };
   }
   // Mac App Store Full: completion is computed from its own
   // macFullSubmitAnswers, same reasoning as the 'macos' branch above —
@@ -1359,17 +1395,20 @@ function platformStepCount(platformId) {
   if (platformId === 'macos_full') {
     const steps = _visiblePlatformSteps(platformId);
     const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
-    return { total: steps.length, complete, submitDone: false, allRequired: complete === steps.length };
+    return { total: steps.length, complete, submitDone: false,
+             allRequired: complete === steps.length && platformAccountReady(platformId) };
   }
   // Android: completion is computed from androidSubmitAnswers
   if (platformId === 'android') {
     const complete = p.steps.filter(s => platformSectionComplete(platformId, s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    return { total: p.steps.length, complete, submitDone: false,
+             allRequired: complete === p.steps.length && platformAccountReady(platformId) };
   }
   // Steam: completion is computed from steamSubmitAnswers
   if (platformId === 'steam') {
     const complete = p.steps.filter(s => platformSectionComplete(platformId, s.id)).length;
-    return { total: p.steps.length, complete, submitDone: false, allRequired: complete === p.steps.length };
+    return { total: p.steps.length, complete, submitDone: false,
+             allRequired: complete === p.steps.length && platformAccountReady(platformId) };
   }
   const required = p.steps.filter(s => !s.isSubmit);
   const statuses = state.platformStepStatus[platformId] || {};
@@ -1378,7 +1417,7 @@ function platformStepCount(platformId) {
     total:      required.length,
     complete,
     submitDone: statuses['submit'] === 'complete',
-    allRequired: complete === required.length,
+    allRequired: complete === required.length && platformAccountReady(platformId),
   };
 }
 
