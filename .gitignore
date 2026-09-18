@@ -23,3 +23,6 @@ test-assets/
 # belongs in the commit message, not in the tree.
 .ship-message
 .ship-message.sent
+
+# Claude's scratch folder — backups and working copies, not part of the repo.
+Claude outputs/
