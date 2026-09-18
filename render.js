@@ -277,7 +277,7 @@ function buildDistributionTab() {
     // see _obCountriesForPreset's 'selected_languages' case (app.js) for how
     // "spoken" is resolved to a country list.
     { id:'selected_languages',  label: t('ob.dist.preset.selected_languages') || 'Selected languages' },
-    { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'Minimize regulation' },
+    { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'No additional steps' },
     { id:'custom',              label: t('ob.dist.preset.custom') || 'Custom' },
   ];
 
@@ -1179,7 +1179,7 @@ function buildObExcludedChips() {
 
   return `
     <div class="ob-dist-excluded" id="ob-dist-excluded-block">
-      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Regulation:'}</div>
+      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Countries that require additional steps:'}</div>
       <div class="ob-dist-excluded-list">${chips}</div>
     </div>`;
 }

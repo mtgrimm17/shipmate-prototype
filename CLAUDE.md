@@ -8881,9 +8881,32 @@ never re-publish the last build's description under a new one.
   and the changed-file list as the body.
 - A failed push leaves the note in place for the retry.
 
-Claude writes this file; it does not run git. Ending a batch of edits means
-writing `.ship-message` and saying "run `./ship.sh`" — not handing over a
-one-line subject to paste, which is what this replaced.
+Claude writes this file; it does not run git.
+
+**AND CLAUDE ALSO HANDS MARK A COPIABLE ONE-LINER — BOTH, EVERY TIME.** Mark's
+standing request: *"I always ask for a ship.sh copiable command that has a
+description written in."* So ending a batch of edits means three things, and
+none of them is optional:
+
+1. **Bump the version** — see Versioning. Read the number off `index.html`'s
+   own `?v=` params, never off this file's header prose, which goes stale.
+2. **Write `.ship-message`** with the full build description.
+3. **Print the command, with the version inside the description:**
+
+```bash
+./ship.sh "v6.xx — what changed"
+```
+
+An argument WINS over `.ship-message` (above), so pasting that command
+publishes the one-line subject and sets the note aside unused. That is the
+trade and it is Mark's to make: run the command for a quick subject, or run
+`./ship.sh` bare to get the long body in the log. Claude supplies both and
+does not choose.
+
+This softens, rather than reverses, v6.58's original line — *"not handing over
+a one-line subject to paste, which is what this replaced."* That was written
+against handing over a subject **instead of** a note. Handing over both is
+what Mark asked for.
 
 ### `ship.sh` REBASES, so `--ours` is the OTHER person's side
 

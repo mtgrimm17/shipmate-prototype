@@ -15,19 +15,21 @@ log is the changelog.
 
 _What is actively being worked on. One entry, usually._
 
-- **⚠️ DO NOT RUN `./ship.sh` UNTIL THE PULL IS DONE** (2026-09-18). The working
-  tree holds a `CLAUDE.md` split made from **v6.37**, and origin is 44 commits
-  ahead at **v6.91** with 14 new `###` sections. ship.sh does `git add -A`, so
-  shipping now would commit the stale file and delete the team's additions.
-  Sequence: save the slim copy aside → `git checkout -- CLAUDE.md` → commit
-  `NOTES.md` + `docs/` (uncontested, absent upstream) → pull → re-run the split
-  against their current file.
+- **The re-split, not yet started** (2026-09-18). `CLAUDE.md` is **586 KB,
+  ~146,000 tokens** — larger than a context window, so it now costs a
+  conversation most of its room before anything is asked. The v6.37 split
+  (162 KB → 22 KB) was discarded as stale; `docs/decisions/` and this file are
+  in, built from that older version. Redo the split against the current file:
+  archive the long narrative sections verbatim, keep architecture, invariants,
+  versioning, security and Git Workflow resident, index the archive by one line
+  each. Verify every `###` heading is either kept or archived before committing.
+  No app file changes, so no version bump.
 
-- **Context hygiene pass** (2026-09-15) — `CLAUDE.md` split: 162 KB → 22 KB, with
-  fifteen narrative sections moved verbatim to `docs/decisions/`. `NOTES.md`
-  created. Nothing shipped yet; no version bump, as no app file changed.
-  **Upstream `CLAUDE.md` is now 586 KB (~146k tokens)** — the problem got roughly
-  four times worse in three days, so the re-split matters more, not less.
+- **Existing `docs/decisions/01`–`16` are cut from the v6.37 file**, so several
+  are stale — `Shippy is two layers` was replaced upstream by
+  `Shippy is the live rig (v6.80)`, and the Versioning and ship.sh files predate
+  the `.ship-message` workflow. Re-cut them from the current `CLAUDE.md` rather
+  than keeping them.
 
 ## Next
 
@@ -68,24 +70,28 @@ _Blocked on a decision, Mark's input, or someone else's work._
 
 _Most recent published version and what was in it._
 
-- **v6.37** — Submission: submitted card leads with its state, tab selection
-  carries weight, three Improve end-cards.
+- **v6.82** per `CLAUDE.md`'s own header; `origin/main`'s tip reads
+  **v6.96 — the description gets its room, and Data privacy stops waiting**.
+  Read the live number the way Git Workflow prescribes before minting one.
 
 ---
 
 ## Must survive the re-split
 
-_Facts added to `CLAUDE.md` after the v6.37 split. When redoing the split against
-upstream's current file, carry these across — they are not in the team's copy._
+_Things the v6.37 split added that the current `CLAUDE.md` does not have. Carry
+them across when redoing it. The ship workflow is NOT on this list — the team's
+file documents it properly already (Claude writes `.ship-message`, Mark runs
+`./ship.sh` bare, Claude runs no git at all)._
 
-- **`./ship.sh` is how this repo publishes.** Never hand Mark a raw `git push`.
-  Pass the commit message as its argument: `./ship.sh "v6.38 — what changed"`.
-  It adds, commits, rebases and pushes, and clears the stale `.git` locks the
-  sandbox leaves. Now written into `CLAUDE.md` → Git Workflow.
-- **ship.sh runs `git add -A`** — it commits the whole working tree. Check
-  `git status` before telling Mark to ship.
-- The **Working Agreement** section, the **file-size warning**, and the
-  **Decision Archive index**.
+- **A Working Agreement at the top**: read `NOTES.md` first every conversation,
+  update it without being asked, and **never read a source file whole**.
+- **The file-size warning, which is the expensive one.** `render.js` 1.09 MB,
+  `app.js` 901 KB, `style.css` 848 KB, `splash.html` 402 KB, `state.js` 314 KB,
+  `index.html` 275 KB. Grep for the function or rule by name, then read that
+  range with offset+limit; delegate broad exploration to a subagent so the file
+  dumps stay out of the main thread.
+- **A one-line index of `docs/decisions/`** at the foot of `CLAUDE.md`, with the
+  instruction to open a file only when the task touches its subject.
 
 ---
 
