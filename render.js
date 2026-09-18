@@ -1020,20 +1020,21 @@ function buildObCountryChips(forceExpanded) {
   const maxGamers  = IOS_COUNTRIES[0]?.gamers || 1;
   const totalCount = IOS_COUNTRIES.length;
 
-  // Selected countries float to the top; each half is then sorted by
-  // whichever column was last clicked, in whichever direction it's
-  // currently set to (state.obDistCountrySort = {by, dir}; toggled by
-  // setObDistSort/app.js — clicking the active column flips dir, clicking
-  // the other one switches by and resets dir to that column's own
-  // default). A fresh sorted copy, not an in-place IOS_COUNTRIES.sort() —
-  // that array's own order is still the source the market map/other
-  // readers key off of gamer count for.
+  // The WHOLE list sorts by whichever column was last clicked, in whichever
+  // direction it's currently set to (state.obDistCountrySort = {by, dir};
+  // toggled by setObDistSort/app.js — clicking the active column flips dir,
+  // clicking the other one switches by and resets dir to that column's own
+  // default). Selected countries used to float to the top and each half was
+  // then sorted within itself; removed by request — a sort is expected to
+  // order the entire list, and bubbling the picked ones up made e.g. "sort
+  // by gamers" read as broken. Selection is still visible per row (.is-on /
+  // the chip), just no longer a grouping. A fresh sorted copy, not an
+  // in-place IOS_COUNTRIES.sort() — that array's own order is still the
+  // source the market map/other readers key off of gamer count for.
   const sortState = state.obDistCountrySort || { by: 'name', dir: 'asc' };
   const sortBy  = sortState.by === 'gamers' ? 'gamers' : 'name';
   const sortDir = sortState.dir === 'desc' ? 'desc' : 'asc';
   const sortedCountries = [...IOS_COUNTRIES].sort((a, b) => {
-    const aOn = selected.has(a.code), bOn = selected.has(b.code);
-    if (aOn !== bOn) return aOn ? -1 : 1;
     if (sortBy === 'gamers') return sortDir === 'desc' ? (b.gamers - a.gamers) : (a.gamers - b.gamers);
     return sortDir === 'desc' ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
   });
@@ -1076,9 +1077,8 @@ function buildObCountryChips(forceExpanded) {
   // rather than needing to know how to re-insert it.
   const selectedBadge = `<span class="ob-dist-selected-badge${selectedCount > 0 ? '' : ' hidden'}" id="ob-dist-selected-badge">${selectedCount} selected</span>`;
 
-  // Both header cells are click-to-sort now (setObDistSort, app.js) — same
-  // selected-float-to-top grouping either way, just a different order
-  // WITHIN each of those two groups. .is-active marks whichever one drove
+  // Both header cells are click-to-sort now (setObDistSort, app.js) — each
+  // reorders the entire country list. .is-active marks whichever one drove
   // the current sort, matching this pattern's own use elsewhere (e.g. the
   // active preset pill) rather than inventing a new "which column" cue.
   // Each header's icon reflects its own state: the active column shows a

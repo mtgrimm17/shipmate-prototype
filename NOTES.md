@@ -70,9 +70,9 @@ _Blocked on a decision, Mark's input, or someone else's work._
 
 _Most recent published version and what was in it._
 
-- **v6.82** per `CLAUDE.md`'s own header; `origin/main`'s tip reads
-  **v6.96 — the description gets its room, and Data privacy stops waiting**.
-  Read the live number the way Git Workflow prescribes before minting one.
+- **v6.97** — Distribution: "No additional steps" replaces "Minimize regulation",
+  and the conditional list is now "Countries that require additional steps:".
+  Both locales; the preset id `minimize_regulation` is unchanged.
 
 ---
 

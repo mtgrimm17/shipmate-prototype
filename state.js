@@ -3722,7 +3722,8 @@ const state = {
 
   // Game Details → Distribution's countries list (buildObCountryChips,
   // render.js): which of the two header columns it's currently sorted by,
-  // and in which direction, within each of the selected/unselected groups.
+  // and in which direction. Sorting applies to the whole list — selected
+  // countries are no longer floated to the top.
   // by: 'name' (the default) = alphabetical, or 'gamers' = by approximate
   // gamer count. dir: 'asc' (the default) or 'desc' — for 'name' that's
   // A→Z vs Z→A, for 'gamers' that's smallest→biggest vs biggest→smallest.

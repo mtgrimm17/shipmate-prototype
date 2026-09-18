@@ -7490,10 +7490,10 @@ function _refreshCountryListInPlace() {
 }
 
 // Clicking "Market" or "Gamers (approx.)" in the countries list header
-// (buildObCountryChips, render.js). Both sort within the same
-// selected-float-to-top grouping that list already has — this only
-// changes the order WITHIN each of those two groups, never which group a
-// country falls into.
+// (buildObCountryChips, render.js). Either one sorts the ENTIRE country
+// list. Selected countries used to float to the top and sorting only
+// reordered within that grouping; removed by request — selection still
+// shows per row, but it no longer overrides the sort.
 //
 // Re-clicking the column that's already active flips its direction —
 // Market toggles A→Z / Z→A, Gamers (approx.) toggles biggest-first /

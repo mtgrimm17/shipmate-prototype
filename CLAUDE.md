@@ -8897,6 +8897,14 @@ none of them is optional:
 ./ship.sh "v6.xx — what changed"
 ```
 
+**THE SUBJECT MUST BE UNDER 72 CHARACTERS, THE VERSION PREFIX INCLUDED.**
+`ship.sh` warns past that and GitHub truncates the commit title there, so the
+end of a longer one is simply hidden. The `.ship-message` format above already
+states the limit; it applies to the pasted one-liner too, and v6.97 shipped at
+74 because only the file was being counted. **Count the string you print, not
+the one you wrote.** `v6.xx — ` is 8 of the 72, leaving ~64 for the sentence —
+so name the surface and the change, and leave the before-and-after to the body.
+
 An argument WINS over `.ship-message` (above), so pasting that command
 publishes the one-line subject and sets the note aside unused. That is the
 trade and it is Mark's to make: run the command for a quick subject, or run
