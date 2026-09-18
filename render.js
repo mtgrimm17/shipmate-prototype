@@ -277,7 +277,13 @@ function buildDistributionTab() {
     // see _obCountriesForPreset's 'selected_languages' case (app.js) for how
     // "spoken" is resolved to a country list.
     { id:'selected_languages',  label: t('ob.dist.preset.selected_languages') || 'Selected languages' },
-    { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'No additional steps' },
+    /* "No extra steps", not "Minimize regulation" (by request). The ID stays
+       `minimize_regulation`: it is written into every saved project's
+       `formData.distributionPreset` and read by _obCountriesForPreset (app.js)
+       and by buildObExcludedChips below, so renaming it would either break
+       those projects or need a migration for a label change. The id is the
+       filing name, the label is what the developer reads. */
+    { id:'minimize_regulation', label: t('ob.dist.preset.minimize_reg') || 'No extra steps' },
     { id:'custom',              label: t('ob.dist.preset.custom') || 'Custom' },
   ];
 
@@ -1158,11 +1164,26 @@ function buildObExcludedChips() {
   const ALWAYS_FULL_LIST = new Set(['everywhere', 'minimize_regulation', 'custom']);
   const LANGUAGE_DRIVEN  = new Set(['english_only', 'primary_lang_only', 'selected_languages']);
 
-  let excluded;
+  /* THE HEADING SAYS WHICH SET THIS IS, and the two sets were already here —
+     the label just never distinguished them. A full-list preset shows every
+     country that carries an extra step, whether or not it is in the listing; a
+     language-driven one shows only the ones the chosen languages actually put
+     in the listing. "Regulation:" described neither, and on the language-driven
+     presets it read as the full regulatory picture when it is a subset of it.
+
+     Keyed off the same two Sets the country filter is, so the words and the
+     list can never disagree about what is being shown. primary_lang_only is in
+     the language-driven arm with the other two — it is the same kind of preset
+     (the request named English only and Selected languages, which are the two
+     that always exist; this one only appears when the primary language is not
+     English, and it is selected exactly the same way). */
+  let excluded, label;
   if (ALWAYS_FULL_LIST.has(preset)) {
     excluded = IOS_COUNTRIES.filter(c => regTip(c.code));
+    label = t('ob.dist.excluded') || 'Countries with extra steps:';
   } else if (LANGUAGE_DRIVEN.has(preset)) {
     excluded = IOS_COUNTRIES.filter(c => regTip(c.code) && selected.has(c.code));
+    label = t('ob.dist.excluded_selected') || 'Selected countries with extra steps:';
   } else {
     return '';
   }
@@ -1179,7 +1200,7 @@ function buildObExcludedChips() {
 
   return `
     <div class="ob-dist-excluded" id="ob-dist-excluded-block">
-      <div class="ob-dist-excluded-label">${t('ob.dist.excluded') || 'Countries that require additional steps:'}</div>
+      <div class="ob-dist-excluded-label">${label}</div>
       <div class="ob-dist-excluded-list">${chips}</div>
     </div>`;
 }
@@ -10210,6 +10231,25 @@ function buildStorePreviewSection() {
      the outliers. */
   const contentDone     = isIOSSectionComplete('contentRating');
   const businessDone    = !!(seenSections.business && isIOSSectionComplete('business'));
+  /* THE BUTTON ASKS BEFORE IT REPORTS — the Mac preview's rule, now this one's
+     too (by request: "the behavior should be the same").
+
+     GET is the store's own word for a free app, and it is TRUE the moment
+     somebody has actually said the app is free — but the preview cannot tell
+     "free" from "nobody has set a price yet", because `isFree` is derived from
+     an empty string exactly as much as from a zero. So a brand-new listing
+     announced GET, in the store's voice, about a decision nobody had made.
+
+     Until Business is answered the pill says what it wants ("Set price"); after
+     it, the store's own GET / $4.99. That is the order every other field on
+     this page follows — what is empty says so, what is answered shows the
+     answer — and it is a LABEL, not a second control: same button, same
+     handler, same target. `.ias-get-btn` is padding plus `white-space: nowrap`,
+     so the longer string costs nothing here. (The `is-priced` class Mac's own
+     button carries is deliberately NOT copied: it exists only to swap that
+     preview's tile-derived width for `auto`, and this page's pill has no
+     authored width to swap.) */
+  const getLabel        = businessDone ? price : 'Set price';
   /* DATA PRIVACY IS DONE WHEN IT IS ANSWERED. It also required
      `seenSections.data` — that you had opened it FROM this preview — which was
      the right gate while the preview's flip was the only door to those
@@ -10542,7 +10582,7 @@ function buildStorePreviewSection() {
                  spacing — see .is-spp-done, style.css. -->
             <div class="ias-header-cta${businessDone ? ' is-spp-done' : ''}">
               <span class="spp-get-glow-wrap">
-                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${price}</button>
+                <button class="ias-get-btn ias-get-btn--interactive" data-spp-el="business" onclick="openStorePreviewSection('${pid}','business')" title="Answer Business Questions">${getLabel}</button>
               </span>
               ${iapNote ? `<span class="ias-iap-note">${iapNote}</span>` : ''}
             </div>
