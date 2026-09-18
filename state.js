@@ -4404,6 +4404,26 @@ const state = {
   // versa. primaryLanguage/localizations (which languages exist at all) are
   // NOT duplicated here — that's a studio-wide decision shared with every
   // platform, not per-listing marketing copy.
+  /* THE APP STORE'S OWN LISTING TEXT — today, exactly one field.
+
+     Game Details' Description used to BE the App Store preview's Description:
+     `_iasFieldValue('description', primary)` read `formData.description` and
+     `_iasSetFieldValue` wrote it, so editing the preview edited Game Details
+     and, through Mac's own empty-field fallback, the Mac preview too. By
+     request the three are now one-way — Game Details fills the two previews and
+     overwrites them on every change; neither preview writes back, and neither
+     writes to the other.
+
+     Only `description` lives here because it is the only field that needed
+     moving: Title and Subtitle are deliberately SHARED between the two Apple
+     stores (MAS_SHARED_LISTING_FIELDS, app.js) and a supporting language's text
+     already has its own per-store storage. An object rather than a bare string
+     for symmetry with macAppStoreListing, and so the next field that needs
+     splitting has somewhere obvious to go.
+
+     `null` means "never written", which is what lets a project saved before the
+     split fall back to formData.description until the first propagation. */
+  appStoreListing: { description: null },
   macAppStoreListing: null,
 
   // Steam's appdetails 'support_info.url' field, captured at Steam-link

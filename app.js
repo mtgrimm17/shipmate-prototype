@@ -7342,7 +7342,7 @@ function syncField(field, value) {
     state.androidSubmitAnswers.privacyPolicyUrl = value;
   }
   if (field === 'title') _syncProjectBarTitle(value);
-  if (field === 'description') { _wsPropagateAboutGame(value); _macFullPropagateDescription(value); }
+  if (field === 'description') { _wsPropagateAboutGame(value); _macFullPropagateDescription(value); _applePropagateDescription(value); }
   // Force-sync into the Web platform's own independent trailer slot — same
   // whole-value overwrite treatment as the trailer FILE gets in
   // handleTrailerFiles/removeTrailer (see the state.js comment above
@@ -8149,6 +8149,7 @@ function confirmGameImport() {
   state.formData.description = ls.description;
   _wsPropagateAboutGame(ls.description);
   _macFullPropagateDescription(ls.description);
+  _applePropagateDescription(ls.description);
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = ls.description;
@@ -8709,6 +8710,7 @@ function _fillDescriptionField(text, source) {
   state.formData.description = text || '';
   _wsPropagateAboutGame(text || '');
   _macFullPropagateDescription(text || '');
+  _applePropagateDescription(text || '');
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = text || '';
@@ -10664,6 +10666,7 @@ function _applyFieldValue(field, value) {
     state.formData.description = value;
     _wsPropagateAboutGame(value);
     _macFullPropagateDescription(value);
+    _applePropagateDescription(value);
     const el = document.getElementById('ob-desc');
     if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
     _iasTriggerAutoTranslate('description', value);
@@ -10717,9 +10720,22 @@ function _iasBlankLocalizedText() {
   return { title: '', subtitle: '', description: '', releaseNotes: '' };
 }
 
+/* THE PRIMARY LANGUAGE'S DESCRIPTION IS THE APP STORE'S OWN, and it is the one
+   field here that does not come from Game Details any more. Everything else in
+   the primary language still reads formData: Title and Subtitle are shared
+   between the two Apple stores on purpose, and nothing asked for those to move.
+
+   `?? ` and not `||`, because '' is a real answer — a developer who clears this
+   preview's Description means it cleared, and falling back to Game Details
+   there is exactly the resurrection this split was asked to stop. `null` is the
+   only "never written" value, which is what carries a project saved before the
+   split. */
 function _iasFieldValue(field, lang) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
+  if (lang === primary && field === 'description') {
+    return (state.appStoreListing?.description) ?? (fd.description || '');
+  }
   if (lang === primary) return fd[field] || '';
   const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
   return (entry && entry[field]) || '';
@@ -10787,6 +10803,15 @@ function _locReviewSourceBadge(field, lang) {
 function _iasSetFieldValue(field, lang, value) {
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
+  /* Writes to its OWN store, never back to Game Details — see _iasFieldValue's
+     note. Auto-translation still fires: the supporting languages are this
+     store's own copies either way. */
+  if (lang === primary && field === 'description') {
+    if (!state.appStoreListing) state.appStoreListing = { description: null };
+    state.appStoreListing.description = value;
+    if (_iasFieldAutoTranslateEnabled(field)) _iasTriggerAutoTranslate(field, value);
+    return;
+  }
   if (lang === primary) {
     fd[field] = value;
     if (field === 'title') _iasPropagateTitle(value);
@@ -11208,14 +11233,23 @@ const MAS_SHARED_LISTING_FIELDS = new Set(['title', 'subtitle']);
    That is the same shape as `smAppIcon`'s two doors: the dedicated slot wins
    when it is set, and until then the shared source answers.
 
-   Known edge, and it is the cheaper one: deliberately CLEARING Mac's own
-   description resurrects Game Details' rather than showing an empty field. A
-   preview permanently blank because of when you happened to press a toggle is
-   worse than a cleared field re-inheriting, and the first is what people
-   actually hit.
+   THAT KNOWN EDGE IS NOW A BUG, AND THE FALL-BACK NO LONGER COVERS
+   `description`. The paragraph above accepted one cost — "deliberately CLEARING
+   Mac's own description resurrects Game Details' rather than showing an empty
+   field" — on the grounds that the alternative was a preview stuck blank
+   because of when you pressed a toggle. That alternative is gone:
+   `_applePropagateDescription` now pushes Game Details' Description into this
+   store on every edit, so the field is filled by the thing that fills it rather
+   than by a read-time fall-back, and "seeded the wrong moment" cannot happen.
+
+   With the seeding fixed, the fall-back only fires in the one case it was
+   admitted to be wrong for — a cleared field — and a clear has to stay cleared
+   now that Game Details no longer follows this preview back. `releaseNotes`
+   keeps it: nothing propagates that field, so the original argument still
+   holds there unchanged.
 
    Title and Subtitle never had this — `MAS_SHARED_LISTING_FIELDS` routes them
-   straight to `_iasFieldValue` — so this only ever reaches `description` and
+   straight to `_iasFieldValue` — so this only ever reached `description` and
    `releaseNotes`. */
 function _masFieldValue(field, lang) {
   if (MAS_SHARED_LISTING_FIELDS.has(field)) return _iasFieldValue(field, lang);
@@ -11223,7 +11257,11 @@ function _masFieldValue(field, lang) {
   const ml = state.macAppStoreListing;
   if (!ml) return ''; // not yet seeded (Mac App Store not activated) — nothing to show
   const primary = fd.primaryLanguage || 'en';
-  if (lang === primary) return ml[field] || fd[field] || '';
+  if (lang === primary) {
+    // description: this store's own value, cleared included. See the note above.
+    if (field === 'description') return ml.description ?? (fd.description || '');
+    return ml[field] || fd[field] || '';
+  }
   const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
   const fdEntry = fd.localizedStoreText && fd.localizedStoreText[lang];
   return (entry && entry[field]) || (fdEntry && fdEntry[field]) || '';
@@ -21873,6 +21911,28 @@ function _wsPropagateAboutGame(value) {
 function _macFullPropagateDescription(value) {
   if (!state.macFullAppStoreListing) return;
   state.macFullAppStoreListing.description = value || '';
+}
+
+/* ONE WAY, AND IT OVERWRITES (by request). Game Details' Description fills both
+   Apple previews and replaces whatever is in them; neither preview writes back
+   to Game Details, and neither writes to the other.
+
+   Overwriting is the part worth being explicit about, because it discards work:
+   a developer who has rewritten the Mac preview's copy and then edits Game
+   Details loses the rewrite. That is what was asked for, and it is the only
+   rule that keeps "pre-populated by Game Details" true for more than the first
+   edit — a merge-if-untouched version would leave the two silently diverging
+   with nothing on screen saying which one won.
+
+   Sits beside _macFullPropagateDescription rather than inside it: that one
+   feeds a third, separate listing (macos_full) and is called from the same
+   line in syncField. Mac App Store's own store is seeded at activation by
+   seedMacAppStoreListing and simply overwritten from here afterwards. */
+function _applePropagateDescription(value) {
+  const v = value || '';
+  if (!state.appStoreListing) state.appStoreListing = { description: null };
+  state.appStoreListing.description = v;
+  if (state.macAppStoreListing) state.macAppStoreListing.description = v;
 }
 function setWebAccent(color) {
   if (!state.webSite) state.webSite = {};

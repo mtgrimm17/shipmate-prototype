@@ -13825,9 +13825,17 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    surface a level apart and must not change size between them. Deliberately
    its own selector rather than being added to the mac-spp rule, since that
    class carries sidebar flex/scroll overrides further down this file which
-   would have nothing to act on in Game Center's plain step body. If the
-   preview's width ever moves, move this with it. */
-.submit-modal.submit-modal-mac-gc {
+   would have nothing to act on in a plain step body. If the preview's width
+   ever moves, move this with it.
+
+   RENAMED FROM `.submit-modal-mac-gc` when Business Questions asked for the
+   same width for the same reason. Two identical rules would have been two
+   places to forget, so the class is named for the CLAIM — a sub-surface of the
+   Mac preview, at the preview's width — rather than for the first step that
+   made it. renderStepModal's `isMacPreviewSub` is the one flag that sets it.
+   `.submit-modal` transitions max-width, so equal numbers mean no resize on
+   the way in or out. */
+.submit-modal.submit-modal-mac-sub {
   max-width: 1000px;
 }
 /* ios/macos Data Collection Questions (buildPrivacyMatrix). See

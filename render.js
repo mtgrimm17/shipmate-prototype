@@ -7170,8 +7170,29 @@ function renderStepModal() {
      nothing to drive here. Scoped to 'macos' as asked — macos_full's Game
      Center is a different, more elaborate surface (leaderboards) and wasn't
      part of the request. */
-  const isMacGameCenter = stepId === 'gameCenter' && platformId === 'macos';
-  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (isMacGameCenter ? ' submit-modal-mac-gc' : '') + (state.showHighlights ? ' is-validating' : '');
+  /* AND BUSINESS QUESTIONS TAKES THE SAME WIDTH, for the same reason and now
+     through the same flag (by request: "so that transitioning between the two
+     sections looks smoother"). Business is reached by flipping the preview over
+     — `storePreview` + a `business` flip target, the same door Content and Data
+     Questions use — so the developer is one level deeper inside a surface they
+     were just looking at, and dropping 1000 → 680 on the way in read as landing
+     somewhere else. `.submit-modal` transitions `max-width`, so with the two
+     equal there is no resize to watch at all.
+
+     One flag rather than a second identical one: Game Center and Business
+     Questions make the SAME claim — a sub-surface of the Mac preview, at the
+     preview's width, with none of `.submit-modal-mac-spp`'s sidebar
+     flex/scroll overrides to act on. The class is named for the claim now
+     rather than for the first step that made it.
+
+     Data Questions is deliberately NOT folded in: its width is DERIVED from the
+     table it holds (807, see .submit-modal-privacy-wide) rather than borrowed
+     from the preview, and it was re-derived away from 1000 on purpose. */
+  const isMacPreviewSub =
+    (platformId === 'macos') &&
+    (stepId === 'gameCenter' ||
+     (stepId === 'storePreview' && state.storePreviewFlipTarget?.[platformId] === 'business'));
+  modal.className = 'submit-modal' + (isWide ? ' submit-modal-wide' : '') + (isSteamSpp ? ' submit-modal-steam-spp' : '') + (isMacSpp ? ' submit-modal-mac-spp' : '') + (isPrivacyWide ? ' submit-modal-privacy-wide' : '') + (isMacPreviewSub ? ' submit-modal-mac-sub' : '') + (state.showHighlights ? ' is-validating' : '');
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];
