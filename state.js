@@ -1743,6 +1743,16 @@ const IOS_CONTENT_YN_QUESTIONS = [
     tooltip: 'Users can navigate to any webpage or freely browse the web. Includes embedded browser functionality or browser app.' },
   { id: 'userGenContent',      label: 'User-Generated Content',
     tooltip: 'User-created content broadly distributed as part of the app experience. Includes videos, photos, text, or audio shared by users.' },
+  /* APPLE ADDED THESE TWO, AND THEY ARE REQUIRED. Answers are required on
+     submissions from September 2026. Placed between User-Generated Content and
+     Messaging and Chat because that is where Apple's own Capabilities list puts
+     them, and because the first is a property OF user-generated content: the
+     question is not whether users make things, it is whether the app then
+     spreads them. */
+  { id: 'socialMedia',         label: 'Social Media',
+    tooltip: 'Redistributing, amplifying, or interacting with user-generated content through a social feed or similar discovery method. Includes feeds, reshares, follows, or public comment threads.' },
+  { id: 'socialMediaU13Off',   label: 'Social Media Disabled for Users Under 13',
+    tooltip: 'Users under 13 do not have access to the app\'s social media capabilities. Answer Yes only if those features are actually withheld from under-13 accounts.' },
   { id: 'messagingChat',       label: 'Messaging and Chat',
     tooltip: 'Direct user-to-user communication within the app. Includes text, voice, or video chat, group messaging, or public posting.' },
   { id: 'advertising',         label: 'Advertising',
@@ -1774,6 +1784,131 @@ const IOS_MAC_SHARED_ANSWER_FIELDS = new Set([
   'ageCategory', 'kidsAgeRange', 'overrideRating', 'ageSuitabilityUrl',
   'privacyPolicyUrl', 'collectsData', 'privacyDescription', 'dataPerType',
 ]);
+
+/* ══════════════════════════════════════════════════════
+   APPLE'S AGE RATING, AS APPLE ACTUALLY COMPUTES IT
+   ══════════════════════════════════════════════════════
+   Read off App Store Connect Help -> "Age ratings values and definitions" in a
+   browser on 2026-09-20, the OS-26-and-later table, and transcribed here
+   verbatim. Two summarised fetches of the same page disagreed with each other
+   and with the page, which is why this says where it came from: if a floor
+   below is ever doubted, RE-READ THE PAGE. Do not re-derive it from a summary.
+
+   THE RULE IS A MAXIMUM, NOT A LADDER. Every answer carries a minimum tier;
+   the app takes the highest one any of its answers demands. What this replaced
+   was a five-line ladder that read THREE of the twenty-four answers and could
+   only ever say 4+, 12+ or 17+ — so a game with frequent cartoon violence,
+   constant profanity and guns throughout came out 4+, the same as a shape
+   sorter. Every one of its errors ran the same way: too low.
+
+   UNRATED IS NOT A RATING, IT IS A REJECTION. Apple: an unrated app cannot be
+   published on the App Store. Graphic Sexual Content and Nudity and Prolonged
+   Graphic or Sadistic Realistic Violence put an app there at ANY frequency,
+   infrequent included — there is no "a little of it is 18+" tier. The old
+   ladder reported 17+ for exactly those two, which told a developer they were
+   clear to ship something Apple will refuse outright.
+
+   THE TIERS ARE THE CURRENT ONES. iOS 26 / macOS Tahoe 26 and later show
+   4+, 9+, 13+, 16+, 18+. The 12+ and 17+ that older OS versions display come
+   from Apple's own separate legacy table off the same answers; Shipmate
+   previews what today's store shows, so it is this table that is modelled.
+   (The legacy table is in the team's Apple age rating spec if it is ever
+   needed — it is a different questionnaire, not a relabelling: it has no
+   descriptor at all for guns, loot boxes or health and wellness.) */
+const AGE_TIER_ORDER = ['4+', '9+', '13+', '16+', '18+', 'Unrated'];
+const AGE_UNRATED    = 'Unrated';
+
+/* Frequency questions. `none` never raises anything, which is why it is absent
+   rather than mapped to '4+' — an answered `none` and an unanswered question
+   make the same demand of the rating, and only completeness cares about the
+   difference. */
+const APPLE_AGE_FLOORS_INTENSITY = {
+  profanity:         { infrequent: '9+',        frequent: '13+'       },
+  horrorFear:        { infrequent: '9+',        frequent: '13+'       },
+  substancesAlcohol: { infrequent: '13+',       frequent: '18+'       },
+  medicalTreatment:  { infrequent: '13+',       frequent: '16+'       },
+  matureSuggestive:  { infrequent: '9+',        frequent: '16+'       },
+  sexualContent:     { infrequent: '13+',       frequent: '18+'       },
+  graphicSexual:     { infrequent: AGE_UNRATED, frequent: AGE_UNRATED },
+  cartoonViolence:   { infrequent: '9+',        frequent: '13+'       },
+  realisticViolence: { infrequent: '13+',       frequent: '18+'       },
+  extendedViolence:  { infrequent: AGE_UNRATED, frequent: AGE_UNRATED },
+  gunsWeapons:       { infrequent: '9+',        frequent: '13+'       },
+  simulatedGambling: { infrequent: '13+',       frequent: '18+'       },
+  contests:          { infrequent: '4+',        frequent: '13+'       },
+};
+
+/* Yes/no questions — the floor a `yes` demands. The five at 4+ are listed
+   rather than omitted because Apple lists them: they are what 4+ MAY contain,
+   and a table that only held the uplifts would read as if they were unrated
+   content nobody had gotten around to scoring.
+
+   `socialMediaU13Off` sits at 13+ because Apple's own 13+ row lists it beside
+   Social Media. It reads oddly — it is a mitigation, not content — but it is
+   only ever answered Yes by an app that already answered Social Media Yes, so
+   in practice it never moves the result on its own. Transcribed, not
+   second-guessed. */
+const APPLE_AGE_FLOORS_YN = {
+  parentalControls:     '4+',
+  ageAssurance:         '4+',
+  userGenContent:       '4+',
+  messagingChat:        '4+',
+  advertising:          '4+',
+  healthWellness:       '9+',
+  lootBoxes:            '9+',
+  socialMedia:          '13+',
+  socialMediaU13Off:    '13+',
+  unrestrictedInternet: '16+',
+  realMoneyGambling:    '18+',   // Apple calls this one simply "Gambling"
+};
+
+/* Does THIS answer, on its own, make the app unpublishable? The red pill in
+   the questionnaire and the block on the footer button both ask this, and they
+   ask the table rather than naming the two fields, so a floor that ever
+   changes cannot leave a highlight behind pointing at the wrong pill. */
+function appleAgeAnswerIsUnrated(fieldId, value) {
+  return APPLE_AGE_FLOORS_INTENSITY[fieldId]?.[value] === AGE_UNRATED;
+}
+
+function appleAgeUnratedFields(a) {
+  if (!a) return [];
+  return Object.keys(APPLE_AGE_FLOORS_INTENSITY)
+    .filter(f => appleAgeAnswerIsUnrated(f, a[f]));
+}
+
+/* THE RATING. Returns a tier string, or 'Unrated'.
+
+   `made_for_kids` NO LONGER FORCES 4+, and that is the one behaviour change
+   here that is not simply an arithmetic fix. It used to return '4+' before
+   looking at anything else, so frequent gore plus Made for Kids came out 4+.
+   Apple's Kids Category is a declaration about who the app is FOR; it does not
+   erase the content descriptors, and an app whose answers exceed the Kids
+   Category's ceiling is in conflict with that declaration rather than quietly
+   rated down. So the content answers always win. (Surfacing that conflict as
+   its own warning is a separate job and is not done here.)
+
+   `override_higher` may only RAISE. That field's own tooltip calls it an
+   override of the calculated rating, and until now it was stored and never
+   read at all — set it to 18+ on a clean questionnaire and the page still said
+   4+. An override cannot pull an app OUT of Unrated either: nothing the
+   developer declares makes prohibited content publishable. */
+function appleAgeRating(a) {
+  if (!a) return '4+';
+  let tier = '4+';
+  const raise = t => {
+    if (t && AGE_TIER_ORDER.indexOf(t) > AGE_TIER_ORDER.indexOf(tier)) tier = t;
+  };
+
+  Object.entries(APPLE_AGE_FLOORS_INTENSITY).forEach(([f, floors]) => raise(floors[a[f]]));
+  Object.entries(APPLE_AGE_FLOORS_YN).forEach(([f, floor]) => { if (a[f] === 'yes') raise(floor); });
+
+  if (tier === AGE_UNRATED) return AGE_UNRATED;
+
+  if (a.ageCategory === 'override_higher') {
+    raise({ '9': '9+', '13': '13+', '16': '16+', '18': '18+' }[a.overrideRating]);
+  }
+  return tier;
+}
 
 // Apple-distributable countries, sorted by approximate iOS user count (millions)
 // gamers = estimated total gamers (all platforms: mobile, PC, console) in
@@ -1856,6 +1991,8 @@ function makeBlankIOSAnswers() {
     ageAssurance:           null,
     unrestrictedInternet:   null,
     userGenContent:         null,
+    socialMedia:            null,
+    socialMediaU13Off:      null,
     messagingChat:          null,
     advertising:            null,
     // Content Rating — Step 2: Mature Themes (intensity: null / 'none' / 'infrequent' / 'frequent')

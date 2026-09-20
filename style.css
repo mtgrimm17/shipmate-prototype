@@ -14729,6 +14729,25 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   margin-top: 2px;
 }
 
+/* THE FOOTER BUTTON WITH NOTHING TO SAVE (v7.07). Set while the Content
+   Questions on screen produce Apple's Unrated value — see _stepCtaHtml
+   (render.js) for why the button is `aria-disabled` rather than `disabled`:
+   a disabled button fires no pointer events in Chrome, so the tooltip that
+   explains the block would never appear.
+
+   `pointer-events` therefore stays ON, which is the whole point, and
+   `not-allowed` is what tells the hand before the bubble does. There is no
+   :hover and no :active rule — a control that does nothing must not answer
+   the pointer as though it might. */
+.submit-modal-footer .imp-cta.is-blocked {
+  background: var(--panel-3, #2c2c2e);
+  border-color: var(--border);
+  color: var(--text-faint);
+  cursor: not-allowed;
+  opacity: .65;
+  box-shadow: none;
+}
+
 /* Never let the primary footer button wrap to two lines */
 .submit-modal-footer .btn-primary {
   white-space: nowrap;
@@ -15346,6 +15365,31 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   background: var(--pill-on-bg);
   border-color: transparent;
   color: var(--pill-on-color);
+}
+
+/* THE FOURTH SELECTED STATE, AND THE ONLY ONE THAT IS NOT BLUE (v7.07).
+   Graphic Sexual Content and Nudity, and Prolonged Graphic or Sadistic
+   Realistic Violence, put an app in Apple's Unrated value at ANY frequency —
+   not a high rating, a refusal to publish. So the pill that did it stops
+   reading as an ordinary choice.
+
+   It REPLACES `.is-sel-frequent` in the markup rather than stacking on it
+   (see iosIntensityRowDocPane): both are (0,2,0), and this file has twice paid
+   for letting source order decide a colour.
+
+   The red is the one the app already uses for a danger hint — `.g-tip--danger`
+   and the risk notes — rather than a new one, and it is built the same way the
+   blue pill is: a translucent fill of the hue over the panel, with the text a
+   lighter step of it, so the two read as the same control in two states rather
+   than as two controls. */
+.intensity-btn.is-sel-unrated {
+  background: rgba(255, 59, 120, .30);
+  border-color: transparent;
+  color: #FF7FA6;
+}
+.intensity-btn.is-sel-unrated:hover {
+  background: rgba(255, 59, 120, .38);
+  color: #FF95B5;
 }
 
 /* intensity-btn — amber outline in unanswered row; blue border when selected (matches standard selection) */

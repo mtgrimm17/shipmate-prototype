@@ -7102,6 +7102,61 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
   return body;
 }
 
+/* ── The footer's one button ──────────────────────────────────────────────
+   Split out of renderStepModal only because it now has a REASON not to work,
+   and a conditional inside a conditional inside a template literal is where
+   this file's backtick trap lives.
+
+   IAP Locs is reached FROM Business Questions (the "IAP Locs" button on the
+   IAP Products row, buildIapSection) rather than from the un-flipped Store
+   Preview itself, so its own "Save & Return" flips back to 'business'
+   specifically — closeStorePreviewSection's default (flip to null) would
+   instead dump the user out to the Store Preview, skipping right over the
+   Business Questions they actually came from. Both this and the header's back
+   arrow read the same `returnAction`, so the two ways out can never disagree.
+
+   AND IT REFUSES TO SAVE AN UNPUBLISHABLE ANSWER (v7.07). Graphic Sexual
+   Content and Nudity, or Prolonged Graphic or Sadistic Realistic Violence, at
+   any frequency, puts the app in Apple's **Unrated** value — which is not a
+   high rating, it is a refusal: Apple does not publish unrated apps. Letting
+   "Save & Return" complete the step would be Shipmate telling a developer the
+   submission is in order when the store will not take it.
+
+   BOTH DOORS, on this file's standing rule: Content Questions is reached by
+   flipping the Product Page Preview over AND from the Content Rating card
+   step, and the same answers are wrong by the same amount either way. The
+   label differs between them ("Save & Return" vs "Save & Close"/"Done") and
+   is left alone — what changes is whether the button does anything.
+
+   NOT `disabled`. A disabled button fires no pointer events in Chrome, so the
+   hover tooltip — the only thing that explains the block — would never appear.
+   `aria-disabled` plus no `onclick` is un-pressable in every way that matters
+   and still receives a mouseover, which is what the app's own bubble listens
+   for (`[data-tip]`, app.js). `data-tip-tone="danger"` is the red variant that
+   already exists for exactly this kind of hint.
+
+   THE × AND THE BACK ARROW STILL WORK, deliberately. You must always be able
+   to leave a modal; what you cannot do is leave it by pressing the control
+   that means "this is finished". */
+function _stepCtaHtml(platformId, stepId, isSubPanel, returnAction, complete) {
+  const label  = isSubPanel ? 'Save &amp; Return' : (complete ? 'Done' : 'Save &amp; Close');
+  const action = isSubPanel ? returnAction : 'closeStepModal()';
+
+  const flip = (stepId === 'storePreview') ? state.storePreviewFlipTarget?.[platformId] : null;
+  const showsAppleContentQs =
+    (platformId === 'ios' || platformId === 'macos') &&
+    (stepId === 'contentRating' || flip === 'content');
+  const blocked = showsAppleContentQs &&
+    typeof appleAgeRating === 'function' &&
+    appleAgeRating(_appStoreAnswers(platformId, 'ageCategory')) === AGE_UNRATED;
+
+  return blocked
+    ? `<button class="imp-cta is-blocked" aria-disabled="true"
+               data-tip="Unrated apps cannot be published on the App Store." data-tip-tone="danger"
+       >${label}</button>`
+    : `<button class="imp-cta" onclick="${action}">${label}</button>`;
+}
+
 function renderStepModal() {
   const modal = document.getElementById('submit-modal');
   if (!modal) return;
@@ -7373,18 +7428,7 @@ function renderStepModal() {
     <div class="submit-modal-footer">
       ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
-      ${isSubPanel
-        // IAP Locs is reached FROM Business Questions (the "IAP Locs" button
-        // on the IAP Products row, buildIapSection) rather than from the
-        // un-flipped Store Preview itself, so its own "Save & Return" flips
-        // back to 'business' specifically — closeStorePreviewSection's
-        // default (flip to null) would instead dump the user out to the
-        // Store Preview, skipping right over the Business Questions they
-        // actually came from. Both this and the header's back arrow read the
-        // same `returnAction`, so the two ways out can never disagree.
-        ? `<button class="imp-cta" onclick="${returnAction}">Save &amp; Return</button>`
-        : `<button class="imp-cta" onclick="closeStepModal()">${complete ? 'Done' : 'Save &amp; Close'}</button>`
-      }
+      ${_stepCtaHtml(platformId, stepId, isSubPanel, returnAction, complete)}
     </div>`;
 
   // Init distribution map after render if this is the distribution step
@@ -10102,15 +10146,11 @@ function buildStorePreviewSection() {
   const descStatusHtml     = _iasStatusLine('description', 'description');
   const notesStatusHtml    = _iasStatusLine('releaseNotes', "what's new");
 
-  // Age rating from questionnaire
-  const ageRating = (function() {
-    const cat = a.ageCategory;
-    if (cat === 'made_for_kids') return '4+';
-    const intense = state.iosSubmitAnswers;
-    const hasAdult = intense.graphicSexual === 'frequent' || intense.extendedViolence === 'frequent';
-    const hasTeen  = intense.realisticViolence && intense.realisticViolence !== 'none';
-    return hasAdult ? '17+' : hasTeen ? '12+' : '4+';
-  })();
+  /* Apple's own rule, from Apple's own table — see appleAgeRating (state.js)
+     for the floors and where they were read from. What stood here was five
+     lines that read three of the twenty-four answers and could only say 4+,
+     12+ or 17+. */
+  const ageRating = appleAgeRating(state.iosSubmitAnswers);
 
   // Privacy section content — mirrors Apple's actual Nutrition Label format
   const privacyHtml = (function() {
@@ -10987,13 +11027,9 @@ function buildMacStorePreviewSection() {
   const descStatusHtml     = _masStatusLine('description', 'description');
   const notesStatusHtml    = _masStatusLine('releaseNotes', "what's new");
 
-  // Age rating from Content Rating's shared answers (sh === state.iosSubmitAnswers)
-  const ageRating = (function() {
-    if (sh.ageCategory === 'made_for_kids') return '4+';
-    const hasAdult = sh.graphicSexual === 'frequent' || sh.extendedViolence === 'frequent';
-    const hasTeen  = sh.realisticViolence && sh.realisticViolence !== 'none';
-    return hasAdult ? '17+' : hasTeen ? '12+' : '4+';
-  })();
+  // Age rating from Content Rating's shared answers (sh === state.iosSubmitAnswers),
+  // by Apple's own rule — see appleAgeRating (state.js).
+  const ageRating = appleAgeRating(sh);
 
   // Privacy section content — identical Nutrition Label format, reading the
   // shared Data Privacy answers (sh === state.iosSubmitAnswers).
@@ -13337,6 +13373,14 @@ function iosIntensityRow(label, fieldId, tooltip, pid = 'ios') {
       content: 'None'       + _platformAIBadge(pid, fieldId, 'none'),
       onSelect: `answerIOSField('${fieldId}','none')` },
   ];
+  /* The same Unrated red as the doc-pane row above, applied through this
+     row's own `selectedClass` hook. This variant is only reached by the legacy
+     combined questionnaire (buildQuestionnaireSection) — every Content Rating
+     question has a doc section and so takes iosIntensityRowDocPane — but the
+     two must not disagree about what an unpublishable answer looks like. */
+  if (typeof appleAgeAnswerIsUnrated === 'function') {
+    opts.forEach(o => { if (appleAgeAnswerIsUnrated(fieldId, o.value)) o.selectedClass = 'is-sel-unrated'; });
+  }
   return singleSelectRow(label, val, opts, tooltip);
 }
 
@@ -13889,6 +13933,8 @@ const QUESTIONNAIRE_DOC_SECTIONS = {
   ageAssurance:        'ageAssurance',
   unrestrictedInternet:'contentRating',
   userGenContent:      'contentRating',
+  socialMedia:         'contentRating',
+  socialMediaU13Off:   'contentRating',
   messagingChat:       'contentRating',
   advertising:         'contentRating',
   profanity:           'contentRating',
@@ -13943,11 +13989,32 @@ function iosIntensityRowDocPane(label, fieldId, tooltip, docSection, pid = 'ios'
     { value: 'infrequent', cls: 'is-sel-infrequent', label: 'Infrequent' },
     { value: 'none',       cls: 'is-sel-none',        label: 'None'       },
   ];
+  /* AN ANSWER THAT CANNOT SHIP IS RED WHILE IT IS SELECTED (v7.07). Graphic
+     Sexual Content and Nudity and Prolonged Graphic or Sadistic Realistic
+     Violence put an app in Apple's Unrated value at ANY frequency, and an
+     unrated app cannot be published at all — so the pill that did it says so,
+     and the footer's Save & Return is blocked while it is lit (see
+     renderStepModal).
+
+     IT ASKS THE FLOOR TABLE, not a list of two field names: `appleAgeUnrated-
+     AnswerIsUnrated` reads the same APPLE_AGE_FLOORS_INTENSITY the rating is
+     computed from (state.js), so a highlight can never be left pointing at a
+     pill whose floor has since moved.
+
+     The red class REPLACES `is-sel-frequent`/`is-sel-infrequent` rather than
+     joining it. Both are (0,2,0), so with both present source order would
+     decide the colour — this file has lost that argument twice already (see
+     the tooltip-badge note). One selected-state class, no tie to break. */
   const btns = opts.map(o => {
     const sel      = val === o.value;
+    const unrated  = (typeof appleAgeAnswerIsUnrated === 'function') && appleAgeAnswerIsUnrated(fieldId, o.value);
+    const selClass = sel ? (unrated ? 'is-sel-unrated' : o.cls) : '';
     const aiClass  = _platformAIClass(pid, fieldId, o.value).trim();
-    const cls      = `intensity-btn${sel && o.cls ? ' ' + o.cls : ''}${sel && aiClass ? ' ' + aiClass : ''}`;
-    return `<button class="${cls}" onclick="answerIOSField('${fieldId}','${o.value}')">${o.label}${_platformAIBadge(pid, fieldId, o.value)}</button>`;
+    const cls      = `intensity-btn${selClass ? ' ' + selClass : ''}${sel && aiClass ? ' ' + aiClass : ''}`;
+    const tip      = (sel && unrated)
+      ? ' data-tip="Apple does not rate this content. An app with it cannot be published on the App Store." data-tip-tone="danger"'
+      : '';
+    return `<button class="${cls}"${tip} onclick="answerIOSField('${fieldId}','${o.value}')">${o.label}${_platformAIBadge(pid, fieldId, o.value)}</button>`;
   }).join('');
   return `
     <div class="ios-q-row ios-q-row-intensity" data-answered="${answered ? '1' : '0'}" data-doc-section="${docSection}">
@@ -13965,6 +14032,8 @@ const IOS_CR_CATEGORIES = [
     { type: 'yn',        id: 'ageAssurance' },
     { type: 'yn',        id: 'unrestrictedInternet' },
     { type: 'yn',        id: 'userGenContent' },
+    { type: 'yn',        id: 'socialMedia' },
+    { type: 'yn',        id: 'socialMediaU13Off' },
     { type: 'yn',        id: 'messagingChat' },
     { type: 'yn',        id: 'advertising' },
   ]},
@@ -14254,29 +14323,11 @@ function buildContentRatingSection(pid = 'ios') {
   return pinned + questionsHtml + additionalSection;
 }
 
-function computeIOSAgeRating() {
-  const a = state.iosSubmitAnswers;
-
-  // Step 7 override takes precedence
-  if (a.ageCategory === 'made_for_kids') {
-    const map = { under5: '4+', '6to8': '4+', '9to11': '9+' };
-    return a.kidsAgeRange ? map[a.kidsAgeRange] : null;
-  }
-  if (a.ageCategory === 'override_higher') {
-    const map = { '9': '9+', '13': '13+', '16': '16+', '18': '18+' };
-    return a.overrideRating ? map[a.overrideRating] : null;
-  }
-
-  // Compute from content answers
-  if (a.graphicSexual === 'frequent' || a.sexualContent === 'frequent' ||
-      a.realisticViolence === 'frequent' || a.extendedViolence === 'frequent' ||
-      a.realMoneyGambling === 'yes') return '17+';
-  const hasInfrequent = IOS_INTENSITY_QUESTIONS.some(q => a[q.id] === 'infrequent' || a[q.id] === 'frequent');
-  if (hasInfrequent || a.userGenContent === 'yes' || a.unrestrictedInternet === 'yes' ||
-      a.messagingChat === 'yes') return '12+';
-  if (IOS_INTENSITY_QUESTIONS.every(q => a[q.id] !== null)) return '4+';
-  return null;
-}
+/* `computeIOSAgeRating` LIVED HERE AND WAS NEVER CALLED. A fourth copy of the
+   rating rule — with a fourth set of thresholds, disagreeing with the other
+   three — reachable from nothing. It is gone rather than corrected: the rule
+   has one home now, `appleAgeRating` in state.js, and a dead duplicate is the
+   thing most likely to be revived by someone who does not know that. */
 
 /* ── Export Compliance ───────────────────────────────── */
 // pid defaults to 'ios'; pass 'macos' for Mac App Store's own independent
