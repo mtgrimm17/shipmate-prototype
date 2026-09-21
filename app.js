@@ -2099,10 +2099,47 @@ function taskOverlayClick(e) {
    The disc's content has to change too. It holds the step number when
    pending, so completing it swaps the digit for the tick — which the old code
    never did, because the old `.task-dot` was empty and drew its check in CSS. */
+/* A DONE ROW CANNOT CARRY A RISK DOT, AND ONLY THE BUILDERS KNEW IT (v7.08).
+   Jaco: *"sigo viendo en la platform card view, a veces cuando entro y salgo de
+   un modal como content rating o data safety, una pelotita roja al lado del
+   chevron. Como si faltase algo por completar. Pero creo que está todo."*
+
+   All three step-row builders emit the dot as
+   `(done || !attempted || risk === 'LOW' || risk === 'NONE') ? '' : <span>` —
+   so **`done` suppressing the dot is an invariant of the markup**, and while a
+   row is only ever drawn by a render the two cannot disagree.
+
+   Four functions draw one surgically instead: `_paintStepRow` here, and
+   `updateIOSCard` / `updateAndroidCard` / `updateSteamCard`. Every one of them
+   repaints the disc's `is-done`, the disc's glyph and the row's `is-complete` —
+   and **none of them has ever touched the `.ios-step-risk` span**, which is a
+   sibling of the chevron rather than anything inside the disc. So a row drawn
+   incomplete-and-risky (which needs `stepSaveAttempted`, i.e. you opened the
+   step and came back out — exactly the gesture reported) and then completed
+   without a full render keeps a red dot beside a green tick: the card claiming
+   a problem in a step that is finished.
+
+   That is this file's own recurring shape — a surgical repaint is an inventory
+   of consequences, and the inventory was one item short. It is a helper rather
+   than the same line four times, because four copies is how the next item goes
+   missing in three of them.
+
+   IT ONLY REMOVES, which is deliberate and is the half worth knowing about.
+   Putting a dot BACK needs `risk` too, and that comes from a different function
+   per platform (`_appStoreSectionRisk`, `computeAndroidSectionRisk`,
+   `computeSteamSectionRisk`), so a row going done → not-done still waits for a
+   full render to warn. A stale FALSE ALARM is what was reported and is the
+   worse failure of the two; the missing warning is real, pre-existing, and
+   wants deciding rather than sweeping. */
+function _clearStepRiskDot(row, done) {
+  if (row && done) row.querySelector('.ios-step-risk')?.remove();
+}
+
 function _paintStepRow(platformId, stepId, done) {
   const disc = document.getElementById(`dot-${platformId}-${stepId}`);
   if (!disc) return;
   const row = disc.closest('.ios-step-card');
+  _clearStepRiskDot(row, done);
   disc.classList.toggle('is-done', done);
   // The row's number is its position among the non-submit steps, 1-based —
   // the same expression buildActiveCard numbers them with. Uses
@@ -2337,8 +2374,16 @@ function seedMacAppStoreListing() {
 // the same way.
 function addMacGameCenterAchievement() {
   _collapseOtherMacGcAchievements(null);
+  /* The id is lifted out of the literal so the reveal below can name the card
+     it just created — see `_macGcRevealAchievement`. NEW ACHIEVEMENT sits under
+     the whole list, so a developer with a dozen of them presses a button at the
+     bottom of the scroll and the editor it opens is the one thing they cannot
+     see; and `_collapseOtherMacGcAchievements` folding an open card above it in
+     the same paint moves the new one further still. Same travel as expanding an
+     existing row, which is the point: one gesture, one behaviour. */
+  const id = generateId('ach');
   state.macGameCenterAchievements.push({
-    id: generateId('ach'),
+    id,
     refName: '',
     pointValue: '',
     hidden: false,
@@ -2351,6 +2396,7 @@ function addMacGameCenterAchievement() {
     image: null,
   });
   reRenderStepModal();
+  _macGcRevealAchievement(id);
 }
 function removeMacGameCenterAchievement(id) {
   state.macGameCenterAchievements = state.macGameCenterAchievements.filter(a => a.id !== id);
@@ -2389,11 +2435,60 @@ function _collapseOtherMacGcAchievements(keepId) {
 // expand-on-click convention as expandIapProduct. Collapses whatever else
 // is currently open first (_collapseOtherMacGcAchievements above) so only
 // one achievement is ever expanded at a time.
+/* OPENING AN ACHIEVEMENT BRINGS IT TO YOU (v7.09).
+   Jaco: *"cuando entro al modal de achievements, si toco en uno de los
+   achievements para editar (se expande), debería el scroll moverse
+   automáticamente para centrarme la view al achievement específico."*
+
+   The list is a column of collapsed rows, so the one you press is wherever it
+   happened to be — and expanding it grows that row from ~44px to a full editor,
+   which pushes its own fields below the fold and, if something above it
+   collapsed in the same paint (`_collapseOtherMacGcAchievements`), moves the
+   card you pressed as well. You press a row and end up looking at a different
+   part of the list.
+
+   IT TRAVELS WITH `_smScrollTo`, THE ONE ANIMATOR, and not with
+   `scrollIntoView`: which box an engine picks and whether it honours `smooth`
+   on a nested scroller is per-engine, and this modal stacks two — the whole
+   reason "The travel is ours, not the browser's" exists. It runs AFTER
+   `reRenderStepModal`, which rebuilds the markup and restores the scroll it
+   captured, so the ease starts from where your eye actually is rather than from
+   a position the render invented.
+
+   AND IT CENTRES ONLY WHILE THE CARD FITS. `_smScrollCentre` is the obvious
+   call and is wrong here: its delta is `(elTop − scTop) − (clientHeight −
+   elHeight) / 2`, so once the element is TALLER than the scrollport that second
+   term goes negative and the travel lands PAST the card's top edge — you would
+   open an achievement and arrive in the middle of it, with Reference Name
+   scrolled off above. An expanded editor is routinely taller than the modal's
+   body. So a card that cannot fit is aligned to its top with the same air
+   instead, which is what "centre it" means for something bigger than the frame.
+
+   Written here rather than inside `_smScrollCentre` deliberately: that function
+   is the Mac preview's pinned nav, measured across sixteen trips, and a target
+   taller than its scrollport is a question for that surface on its own terms
+   rather than one to answer from in here. */
+function _macGcRevealAchievement(id) {
+  const el = document.querySelector(`[data-ach-id="${CSS.escape(String(id))}"]`);
+  if (!el) return;
+  const sc = _smNearestScroller(el);
+  if (!sc) return;
+  const PAD  = 16;
+  const elR  = el.getBoundingClientRect();
+  const scR  = sc.getBoundingClientRect();
+  const max  = Math.max(0, sc.scrollHeight - sc.clientHeight);
+  const delta = (elR.height + PAD * 2 > sc.clientHeight)
+    ? (elR.top - scR.top) - PAD
+    : (elR.top - scR.top) - (sc.clientHeight - elR.height) / 2;
+  _smScrollTo(sc, Math.max(0, Math.min(max, Math.round(sc.scrollTop + delta))));
+}
+
 function expandMacGcAchievement(id) {
   _collapseOtherMacGcAchievements(id);
   const a = state.macGameCenterAchievements.find(a => a.id === id);
   if (a) a.collapsed = false;
   reRenderStepModal();
+  _macGcRevealAchievement(id);
 }
 // Collapses an achievement into its summary row — same convention as
 // saveIapProduct. Reference Name is the one required field (mirroring ASC
@@ -3306,6 +3401,7 @@ function updateIOSCard(pid) {
     if (!card) return;
     const done = _appStoreSectionComplete(pid, step.id);
     card.classList.toggle('is-complete', done);
+    _clearStepRiskDot(card, done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
       numEl.classList.toggle('is-done', done);
@@ -20939,6 +21035,7 @@ function updateAndroidCard() {
     if (!card) return;
     const done = isAndroidSectionComplete(step.id);
     card.classList.toggle('is-complete', done);
+    _clearStepRiskDot(card, done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
       numEl.classList.toggle('is-done', done);
@@ -21176,6 +21273,7 @@ function updateSteamCard() {
     if (!card) return;
     const done = isSteamSectionComplete(step.id);
     card.classList.toggle('is-complete', done);
+    _clearStepRiskDot(card, done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
       numEl.classList.toggle('is-done', done);
