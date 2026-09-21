@@ -12584,6 +12584,11 @@ a.mac-spp-link-row.is-live:focus-visible {
   min-height: var(--gi-drop-h);
   display: flex;
   flex-direction: column;
+  /* Restated from `.asset-dropzone`'s own shorthand so the prompt can cancel
+     it by name rather than by a number copied out of another rule — see
+     `.asset-dropzone-prompt` below. Same value, one source. */
+  --sm-drop-pad-top: 24px;
+  padding-top: var(--sm-drop-pad-top);
   /* AND THE BOTTOM PADDING IS THE SIDE PADDING (v6.81). Jaco: *"baja los
      thumbnails para igualar su padding izquierda y abajo con respecto al
      cajetín."* `.asset-dropzone` is authored `24px 20px`, which was right for
@@ -12605,9 +12610,28 @@ a.mac-spp-link-row.is-live:focus-visible {
 }
 /* The invitation takes the free space and centres in it; the library keeps its
    natural height at the bottom. `justify-content: center` on the WELL would
-   have centred the pair as one lump and left the files floating mid-box. */
+   have centred the pair as one lump and left the files floating mid-box.
+
+   AND IT CENTRES IN THE BORDER BAND, NOT THE CONTENT BAND (v7.10). Jaco: *"un
+   nitpicky, puedes hacer que el bloque de drop screenshots etc, incluyendo sub
+   línea e icono de upload, siempre esté en el centro del área que queda entre
+   el top del dropwell y la línea divisoria de los thumbnails?"*
+
+   It was already centring, which is why the note above says so — but in its own
+   flex box, and a flex item's box starts at the PADDING box. The well pays 24px
+   of padding above it, so the band being halved ran from 24px below the dashed
+   edge to the divider, and the block landed exactly half of that padding — 12px
+   — below the centre of the band the eye actually reads, which runs from the
+   EDGE to the divider.
+
+   Pulling the item's top up by that padding is what makes the two bands the
+   same one. Written as the token it cancels rather than as −24, so the day the
+   well's padding is retuned this follows it instead of quietly going wrong
+   again; and it costs nothing, because the prompt paints no background and the
+   three lines it holds are ~60px inside a band of ~200. */
 .ob-form #ob-screenshot-dropzone .asset-dropzone-prompt {
   flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
+  margin-top: calc(-1 * var(--sm-drop-pad-top));
 }
 /* The library is a LIST inside a centred box, so it takes its own alignment
    back — the well centres its text, and a column of group labels centred over
@@ -24520,3 +24544,65 @@ body.sm-picker-open { overflow: hidden; }
 }
 .sub-back svg { width: 16px; height: 16px; flex: none; }
 .sub-back:hover { background: var(--surface-hover, rgba(255, 255, 255, .06)); color: var(--text); }
+
+/* ── CHOOSING THE ICON, FROM THE ZOOM (v7.09) ────────────────────────────
+   One more fact in the caption that already names the file, its size and its
+   kind — see `_smIconPickHtml` (app.js) for why the lightbox is where this
+   lives rather than the well. Both states are quiet by construction: a caption
+   is already the smallest register on this surface. */
+.sm-zoom-iscur { color: #31DC80; }      /* it IS the icon — done, so green */
+/* ── CHOOSING THE ICON, FROM THE ZOOM (v7.09) ────────────────────────────
+   One more fact in the caption that already names the file, its size and its
+   kind — see `_smIconPickHtml` (app.js) for why the lightbox is where this
+   lives rather than the well. Both states are quiet by construction: a caption
+   is already the smallest register on this surface. */
+.sm-zoom-iscur { color: #31DC80; }      /* it IS the icon — done, so green */
+/* ── PICKING THE APP ICON, UNDER ITS TILE (v7.10) ────────────────────────
+   See `_smPickWrap` (app.js) for why it hangs below the thumbnail instead of
+   lying across it, and why the tile that is already the icon carries the same
+   label with `visibility: hidden` rather than nothing at all.
+
+   The column is `align-items: center` so the label centres on the tile
+   whatever the tile's width — an icon is square here, but nothing in this rule
+   depends on that. `flex: 0 0 auto` because the row it sits in lays its
+   children out and must go on deciding their size. */
+.sm-pick {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  flex: 0 0 auto;
+}
+.sm-pick-use {
+  background: none; border: none; margin: 0; padding: 0;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .3px; line-height: 1;
+  color: var(--pill-on-color, #52BAFF);
+  cursor: pointer; white-space: nowrap;
+  transition: color .15s;
+}
+.sm-pick-use:hover { color: #fff; }
+/* Reserved, never removed — the row aligns on its bottom edge, so a missing
+   label would lift that tile above its neighbours. */
+.sm-pick-use.is-off { visibility: hidden; pointer-events: none; }
+
+/* ── THE ICON YOU HAVE NOT GOT (v7.10) ───────────────────────────────────
+   See `_smIconMissingHtml` (app.js) for why it exists, why it is red, and why
+   it can only appear once something else has landed in the library.
+
+   It is `.sm-thumb` first, so the box, the radius and the 42px this well sets
+   are the library's rather than a second set of numbers — only the fill, the
+   edge and the word are its own. The checkerboard is switched off: that
+   pattern means "this file is transparent", and there is no file. */
+.ob-form #ob-screenshot-dropzone .sm-thumb-missing {
+  aspect-ratio: 1 / 1;                       /* an icon is square, so its gap is too */
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; margin: 0; cursor: pointer;
+  background-image: none;
+  background-color: var(--alert-bg);
+  border: 1px dashed var(--alert-border);
+  box-shadow: none;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .3px;
+  color: var(--alert-color);
+  transition: background-color .15s, border-color .15s;
+}
+.ob-form #ob-screenshot-dropzone .sm-thumb-missing:hover {
+  background-color: rgba(255, 59, 118, .16);
+  border-color: var(--alert-color);
+}

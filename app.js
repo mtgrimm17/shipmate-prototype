@@ -23409,6 +23409,61 @@ const SM_STEAM_TRAILER_ID = '__steam-trailer';
    order, so a new kind appears where the model puts it. */
 const SM_WELL_LAST = ['screenshot', 'other'];
 
+/* "USE THIS" GOES UNDER THE TILE, NOT OVER IT (v7.10). Jaco, on the first
+   version: *"muchas cosas en tan pequeño, quizás me lo imaginaba DEBAJO de
+   cada icono, NO DENTRO."*
+
+   It was drawn inside the thumbnail on the argument that an absolutely
+   positioned strip costs no height, which is the rule the × and the play badge
+   are written under — and it is the wrong rule for this one. Those two are
+   MARKS: a glyph in a corner of a picture. This is a sentence, and a sentence
+   laid over 50px of someone's artwork is two things fighting for the same
+   square, which is exactly what the screenshot shows.
+
+   THE ROW ALIGNS ON ITS BOTTOM EDGE (`.sm-well-row` is `align-items:
+   flex-end`), so hanging a label under ONE tile lifts that tile above its
+   neighbours. Both get the label and the one that is already the icon gets it
+   INVISIBLE — the same trick the privacy table's Show/Hide toggle uses, where
+   both strings sit in the box so the width cannot change with the state. Here
+   it is the height, and reserving it needs no measurement and no second
+   number to keep in sync with the font.
+
+   AND IT ONLY WRAPS WHEN THERE IS A CHOICE TO MAKE. One icon in the group is
+   the icon by default; offering to use the thing you are already using is a
+   control that can do nothing. With a single icon the tile renders exactly as
+   it did before this existed. */
+/* The empty Icon tile. RED because that is what was asked for, and it is worth
+   saying that it argues with this app's own colour table: green is done, amber
+   is *this needs you*, red is WRONG — and a missing icon is the middle one.
+   The case for red anyway is that this is the only required asset the library
+   can be silent about, and it is silent by construction (see `needsIcon`). If
+   it ever reads as an error rather than as a gap, `--alert-*` → the ambers is
+   the one-line change.
+
+   It opens the well's own file input rather than a second uploader: the well
+   already accepts images and classifies them, so a square PNG dropped here
+   becomes an icon by the same route as any other file. `stopPropagation` is
+   NOT needed — `#sm-library` already stops the well's own click, which is why
+   this has to reach the input by name. */
+function _smIconMissingHtml() {
+  return `<button type="button" class="sm-thumb sm-thumb-missing"
+                  onclick="document.getElementById('ob-screenshot-input')?.click()"
+                  data-tip="Upload an app icon">Icon</button>`;
+}
+
+function _smPickWrap(a, list, thumbHtml) {
+  if (a.kind !== 'icon') return thumbHtml;
+  const icons = list.filter(x => x.kind === 'icon').length;
+  if (icons < 2) return thumbHtml;
+  const mine = _smIsAppIcon(a);
+  return `<div class="sm-pick">${thumbHtml}
+    ${mine
+      ? `<span class="sm-pick-use is-off" aria-hidden="true">Use this</span>`
+      : `<button type="button" class="sm-pick-use"
+                 onclick="smUseAsAppIcon('${a.id}')">Use this</button>`}
+  </div>`;
+}
+
 function _smLibraryHTML() {
   const pool = state.assets || [];
   const steamTrailer = (state.uploads && state.uploads.steamTrailer) || null;
@@ -23438,7 +23493,28 @@ function _smLibraryHTML() {
     }]);
   }
   const order = SM_KINDS.filter(k => !SM_WELL_LAST.includes(k)).concat(SM_WELL_LAST);
-  const groups = order.map(k => [k, byKind[k] || []]).filter(([, l]) => l.length);
+  /* AN ICON NOBODY HAS IS STILL A ROW (v7.10). Jaco: *"si no hay nada
+     iconizable después del scrapeo, podrías poner un thumbnail vacío de ICON,
+     en rojo, y tocando ahí también te lleva al uploader?"*
+
+     A store page with no icon is the one gap in this library that the library
+     itself cannot show, because a group with nothing in it does not exist —
+     so the absence was invisible in exactly the place the developer goes to
+     check what they have. It draws an empty tile in Icon's own position now,
+     which is where the eye would look for one.
+
+     IT CANNOT APPEAR ON AN EMPTY PROJECT, and that falls out rather than being
+     tested for: this whole function returns '' while the pool is empty, so the
+     placeholder is only ever reachable once something else has landed. Which
+     is precisely "después del scrapeo" — a brand-new form is still an
+     invitation, not a complaint.
+
+     `smAppIcon()` rather than a scan of the pool, so an icon held only in the
+     uploader's slot counts: the question is "does this game have an icon",
+     and that function is the one answer to it. */
+  const needsIcon = !(typeof smAppIcon === 'function' ? smAppIcon() : pool.some(a => a.kind === 'icon'));
+  const groups = order.map(k => [k, byKind[k] || []])
+                      .filter(([k, l]) => l.length || (k === 'icon' && needsIcon));
   return `<div class="sm-wells">${groups.map(([k, list]) => `
     <div class="sm-well">
       ${/* THE COUNT IS IN PARENTHESES, NOT AFTER A MIDDOT (v6.74). Jaco: *"en
@@ -23460,7 +23536,8 @@ function _smLibraryHTML() {
       <div class="sm-well-h">${escHtml(SM_KIND_SHORT[k] || k)}${
         list.length > 1 ? ` <span>(${list.length})</span>` : ''}</div>
       <div class="sm-well-row">
-        ${list.map(a => `
+        ${!list.length ? _smIconMissingHtml() : ''}
+        ${list.map(a => _smPickWrap(a, list, `
           ${/* A THUMBNAIL AT 90px CANNOT BE JUDGED, which is the whole reason
                it opens. The grid answers "did my files land and does the tool
                know what they are"; whether the logotype has the halo baked in
@@ -23525,7 +23602,7 @@ function _smLibraryHTML() {
                     onpointerup="smHoldCancel()" onpointerleave="smHoldCancel()"
                     onpointercancel="smHoldCancel()" onblur="smHoldCancel()">×</button>
             <span class="sm-thumb-burn" aria-hidden="true"></span>
-          </div>`).join('')}
+          </div>`)).join('')}
       </div>
     </div>`).join('')}</div>`;
 }
@@ -23615,6 +23692,62 @@ function smHoldCancel() {
    asset library is rebuilt wholesale by renderAssetLibrary and a node parked
    inside it would go with it. On <body>, so no ancestor's overflow or stacking
    context can clip it — the library lives several nested panels deep. */
+/* CHOOSING THE ICON, WHERE YOU ARE ALREADY JUDGING IT (v7.09).
+   Jaco: *"sigo quedándome con ganas de poder elegir el icono, de alguna manera
+   no intrusiva."*
+
+   Two candidates now land in the library and one is assigned on arrival, which
+   answers "is there an icon" and leaves "is it the right one" with nowhere to
+   go. Every place that question could be asked in the WELL costs something at
+   rest — a second mark on every icon thumbnail, or a row of controls under a
+   group, on a surface whose whole argument is that it is files rather than a
+   form. That is the shape this feature has already been corrected out of
+   twice.
+
+   THE ZOOM COSTS NOTHING AT REST, and it is the right moment rather than
+   merely a free one. This lightbox exists because *"a thumbnail at 50px cannot
+   be judged"* — its own words — and which of two icons is yours is precisely a
+   judgement you cannot make at 50px. So the caption that already names the
+   file, its size and its kind gains one more fact: whether it is the icon, or
+   a button to make it so.
+
+   ANY 'icon' IN THE POOL, not just the two built ones, which closes a gap that
+   predates them: `smAppIcon()`'s second door takes the FIRST icon-kind asset
+   in the pool, so a developer who dropped three square files had the array's
+   order choose for them with no way to say otherwise. Now there is one.
+
+   It writes the SLOT — `uploads.appIcon`, the door that means "chosen for this
+   job" — so the answer survives anything later landing in the pool beside it. */
+function _smIsAppIcon(a) {
+  if (!a || a.kind !== 'icon') return false;
+  const cur = (typeof smAppIconSrc === 'function') ? smAppIconSrc() : '';
+  return !!cur && cur === a.src;
+}
+/* The zoom keeps the STATE and gives up the CONTROL. Jaco: *"no es la mejor
+   forma tener que apretar en el icono para luego elegir con un texto pequeño,
+   funciona, pero quizás estaría bien algo que desde el thumbnail fuera
+   accesible."* He is right: an action you can only reach by opening something
+   is an action nobody finds. It moved under the tile (`_smPickWrap`), and
+   what is left here is a fact rather than a second door — "two controls in one
+   role" is what this file refuses, where a caption naming what you are looking
+   at is just the caption doing its job. */
+function _smIconPickHtml(a) {
+  return _smIsAppIcon(a) ? ` · <span class="sm-zoom-iscur">Current app icon</span>` : '';
+}
+
+/* `renderDetails` rather than a surgical repaint: the icon reaches the project
+   chip, five store previews, the guide's checklist and the Assets coverage
+   line, and an inventory of those is what this file keeps being bitten by. */
+function smUseAsAppIcon(id) {
+  const a = (typeof smGet === 'function') && smGet(id);
+  if (!a) return;
+  state.uploads = state.uploads || {};
+  state.uploads.appIcon = smRef(id);
+  smZoomClose();
+  if (typeof renderDetails === 'function') renderDetails();
+  else if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+}
+
 function smZoom(id) {
   const a = (typeof smGet === 'function') && smGet(id);
   if (!a) return;
@@ -23627,7 +23760,8 @@ function smZoom(id) {
          ? `<video src="${escHtml(a.src)}" controls autoplay muted playsinline></video>`
          : `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">`}
        <figcaption>${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${
-         a.alpha ? ' · transparent' : ''} · ${escHtml(SM_KIND_SHORT[a.kind] || a.kind)}</figcaption>
+         a.alpha ? ' · transparent' : ''} · ${escHtml(SM_KIND_SHORT[a.kind] || a.kind)}${
+         _smIconPickHtml(a)}</figcaption>
      </figure>`;
   /* Anywhere but the picture itself closes it. Testing for the IMG rather than
      for the backdrop means the caption and the margin around the image close
