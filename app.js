@@ -5831,12 +5831,59 @@ function _sppPinnedArm() {
    lacked. The cost, knowingly: the metrics are copied, so a field whose padding
    or font changes needs this checked. That is why it copies rather than
    guesses — every value comes off `getComputedStyle` of the real input. */
+/* ── THE OVERLAY HAS TO BE THE ONLY TEXT ON SCREEN (v7.08) ───────────────
+   Jaco: *"cuando busco distintos juegos sin avanzar a la siguiente pantalla,
+   algunos caracteres de la descripción se superponen."*
+
+   THE FIELD'S BACKGROUND IS TRANSLUCENT AND THE OVERLAY COPIES IT. `--inp-bg`
+   is `rgba(102, 97, 122, .16)`, so `background: s.backgroundColor` below paints
+   a 16% wash and the real textarea goes on showing straight through it. For the
+   whole life of this function that was invisible and therefore harmless: both
+   layers carried the SAME string, pixel-matched, so the double paint read as
+   one. It stops being the same string the moment a SECOND fetch lands — pick
+   another game from the picklist and `_fillDescriptionField` writes B into the
+   field while an overlay still holding A is pinned on top of it. Two different
+   paragraphs, one box: the letters interleave. That is the report, and it is
+   why it only shows up when you search again without advancing.
+
+   The fix is at both ends of that one fact.
+
+   1. ONE SWEEP AT A TIME, AND THE GUARD CANNOT LIVE ON THE NODE.
+      `input._masGlimmering` was the only re-entry test and it is a property of
+      the ELEMENT, so any render that swaps the textarea for a fresh one — and a
+      picklist selection reaches several — hands the next call a node with a
+      clean flag while the previous overlay is still in `document.body` on its
+      own timer. The registry below is global for exactly that reason: starting
+      a sweep tears down every live one first, so an overlay can never outlive
+      the value it was drawn for, whether or not its input survived the render.
+      The same-node case keeps its cheap early return (blur and click both fire)
+      but now compares the VALUE, because a refill into a surviving node is a
+      new fact to confirm, not a duplicate call to ignore.
+
+   2. WHILE THE OVERLAY IS UP, THE FIELD UNDER IT IS COLOURLESS. Compositing an
+      opaque backdrop instead would mean resolving whatever sits behind a
+      translucent field, which is a guess that breaks the next time a pane
+      changes colour. Hiding the text that should not be visible says the same
+      thing directly, and it restores through the single cleanup path, so a
+      cancelled sweep and a completed sweep both put it back.
+
+   AND IT DIES ON SCROLL OR RESIZE. The box is `position: fixed`, pinned to a
+   rect measured once; a field that moves under it is the same superposition
+   arriving by a different road. */
+const _masGlimmerLive = new Set();
+function _masGlimmerCancelAll() {
+  for (const end of Array.from(_masGlimmerLive)) end();
+}
+
 function _masCommitGlimmer(input) {
   if (!input) return;
   const val = input.value;
   if (!val || !val.trim()) return;                  // nothing committed to confirm
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-  if (input._masGlimmering) return;                 // blur and click can both fire
+  // Blur and click can both fire for the same commit — but only while the text
+  // is still the text that sweep was drawn for.
+  if (input._masGlimmering && input._masGlimmerVal === val) return;
+  _masGlimmerCancelAll();
 
   const FADE = 320;
   const px = v => parseFloat(v) || 0;
@@ -5851,6 +5898,7 @@ function _masCommitGlimmer(input) {
      you arrive; there is simply nothing to sweep. */
   if (r.width < 1 || r.height < 1) return;
   input._masGlimmering = true;
+  input._masGlimmerVal = val;
   const s = getComputedStyle(input);
   const isArea = input.tagName === 'TEXTAREA';
   /* The overlay renders from the top, so a textarea scrolled down would sweep
@@ -5926,6 +5974,10 @@ function _masCommitGlimmer(input) {
     spans.push(sp);
   });
   document.body.appendChild(fx);
+  /* The overlay is now the text. Inline so it wins over the stylesheet, and
+     remembered rather than assumed, so the restore is a restore. */
+  const prevColor = input.style.color;
+  input.style.color = 'transparent';
 
   const padT = px(s.paddingTop), bT = px(s.borderTopWidth);
   const contentH = r.height - bT - px(s.borderBottomWidth) - padT - px(s.paddingBottom);
@@ -5941,7 +5993,31 @@ function _masCommitGlimmer(input) {
     sp.style.animationDelay = Math.round(i * rate) + 'ms';
     sp.classList.add('flash-char');
   });
-  setTimeout(() => { fx.remove(); input._masGlimmering = false; }, SWEEP + FADE + 80);
+  /* ONE EXIT, WHOEVER CALLS IT. The timer, a newer sweep, a scroll, a resize
+     and the user typing all end the same way — remove the box, give the field
+     its colour back, drop out of the registry — because every one of them
+     leaves the overlay lying about the value underneath it. `ended` makes it
+     idempotent: the timer fires after a cancel and must find nothing to do. */
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    clearTimeout(timer);
+    _masGlimmerLive.delete(end);
+    window.removeEventListener('scroll', end, true);
+    window.removeEventListener('resize', end);
+    input.removeEventListener('input', end);
+    fx.remove();
+    input.style.color = prevColor;
+    input._masGlimmering = false;
+    input._masGlimmerVal = null;
+  };
+  const timer = setTimeout(end, SWEEP + FADE + 80);
+  _masGlimmerLive.add(end);
+  // Capture phase: the field scrolls inside a pane, not the window.
+  window.addEventListener('scroll', end, true);
+  window.addEventListener('resize', end);
+  input.addEventListener('input', end);
 }
 
 /* ── 2. THE RETURN POP ───────────────────────────────────────────────────
@@ -8575,6 +8651,33 @@ function selectPicklistItem(igdbId) {
        to keep. Only the Steam path gets it, because only the Steam path waits:
        the no-app-id branch fills Description from IGDB's summary synchronously
        above, and a spinner for something already on screen is noise. */
+    /* AND THE FIELD IS EMPTIED FIRST, OR THE WAIT CANNOT BE SEEN AT ALL (v7.08).
+       Jaco: *"si busco otro juego, debería quitar el texto antiguo y volver a
+       poner en el description field el 'Collecting the description'."*
+
+       Two things were wrong and the CSS ties them into one. The deferral above
+       is right — filling from IGDB first would flash a shorter text — but it
+       leaves the textarea holding the PREVIOUS game's description for the whole
+       of the fetch, so the form states a paragraph about a game you are no
+       longer looking at. And the wait overlay is gated on `:placeholder-shown`
+       (see `.gi-desc-group.is-waiting` in style.css), so a non-empty field
+       hides the spinner: the one moment the step most needs to say something
+       was the one moment it said nothing, precisely because the stale text was
+       still there. **Emptying the field and showing the wait are one act.**
+
+       It goes through `_fillDescriptionField`, the same one door the fills use,
+       rather than writing `descEl.value` by hand — that function is what also
+       clears `formData.description`, the character count, `descSource` (so the
+       import note goes silent, which is true: nothing has been imported yet)
+       and the three preview propagations. A hand-written clear would be the
+       inventory this file keeps paying for, and would leave the Website, Mac
+       Full and Apple previews quoting the old game. The glimmer's own empty-text
+       guard means no sweep fires for a clear.
+
+       If the fetch fails, `_applySteamAboutData`'s own IGDB fallback fills it a
+       moment later; if that has nothing either, the field stays empty, which is
+       the honest answer for a game we have no description for. */
+    _fillDescriptionField('', null);
     _setDescLoading(true);
     Promise.resolve(_applySteamAboutData(item.steamAppId, item.name, item))
       .finally(() => _setDescLoading(false));
