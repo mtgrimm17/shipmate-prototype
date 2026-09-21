@@ -7981,6 +7981,46 @@ body.viewing-splash .app-subnav { display: none; }
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint);
 }
+
+/* THE ICON WEARS THE PROJECT CHIP'S OWN EDGE (v7.09). Jaco: *"el stroke interno
+   que ponemos en el top right corner de shipmate, donde se describe el cajetín
+   del juego — quiero que copies ese mismo treatment para el icono en la mac app
+   store y app store preview."*
+
+   It is the same object in two places — the game's icon, masked to a rounded
+   square — and it was drawn two ways: the chip with the internal fading stroke
+   every surface in this app shares, the preview with a flat 60%-of-`--border`
+   outline. So this is not a new treatment, it is `.bar-nav-btn .ic.cover`'s,
+   and it arrives by JOINING the shared `::after` selector list at the end of
+   this file rather than by redrawing the gradient — that list's own standing
+   argument, and the only way "the same stroke" stays true after the next
+   change to it.
+
+   `--pill-bw: 0px` because the border is gone: with the ring inside the box,
+   an outline as well would be two edges on one square, which is what the chip
+   removed from itself. Its padding box IS its border box now, so the ring's
+   `inset` is 0 — see the list's own note for why that matters elsewhere.
+
+   AND IT IS A `<span>` WRAPPING AN `<img>`, WHICH IS THE WHOLE REASON THE
+   MARKUP MOVED. A replaced element does not generate `::before` / `::after`,
+   so the ring simply cannot be drawn on the `<img>` this used to be. The
+   wrapper carries the class, the box and the ring; the image fills it. Nothing
+   else had to change — the only other rules that name `.ias-icon` are the two
+   that size it on the Mac preview, and they are untouched.
+
+   ALL THREE PREVIEWS, not the two that were named: iOS, Mac App Store and Mac
+   App Store Full share this class because they are one drawing at three sizes,
+   and scoping the ring to two of them would leave the third with an outline
+   nobody chose, for no reason a reader could reconstruct. */
+.ias-icon-art {
+  position: relative; overflow: hidden; border: 0;
+  --pill-bw: 0px;
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
+}
+.ias-icon-art img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  border-radius: inherit;
+}
 .ias-header-meta { flex: 1; min-width: 0; padding-top: 2px; }
 .ias-app-name {
   font-size: 16px; font-weight: 700; color: var(--text);
@@ -22659,6 +22699,7 @@ body.viewing-splash #app-guide { display: none; }
 .intensity-btn.is-sel-frequent::after,
 .project-selector-wrap #projectSelector::after,
 .bar-nav-btn .ic.cover::after,
+.ias-icon-art::after,
 .profile-avatar::after,
 .spp-pin.is-on::after,
 .prv-preset-chip.is-active::after,
@@ -24479,5 +24520,3 @@ body.sm-picker-open { overflow: hidden; }
 }
 .sub-back svg { width: 16px; height: 16px; flex: none; }
 .sub-back:hover { background: var(--surface-hover, rgba(255, 255, 255, .06)); color: var(--text); }
-
-

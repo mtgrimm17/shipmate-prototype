@@ -5981,7 +5981,14 @@ function _masCommitGlimmer(input) {
   if (input._masGlimmering && input._masGlimmerVal === val) return;
   _masGlimmerCancelAll();
 
-  const FADE = 320;
+  /* A PELÍN FASTER (v7.09). Jaco: *"que el barrido sea un pelín más rápido para
+     que no sea agobiante la espera."* The pair below used to be 280 + 80 a line
+     capped at 900, which on the description's eight visible lines came to 840,
+     and 840 + 320 of fade is a beat over a second spent watching a field you
+     have already read. The shape is untouched — still one line's crossing plus
+     a slower wave for each further VISIBLE line — only the numbers: 660 at
+     eight lines against 840, and a single-line field 240 against 280. */
+  const FADE = 260;
   const px = v => parseFloat(v) || 0;
   const r = input.getBoundingClientRect();
   /* A FIELD WITH NO BOX CANNOT BE CONFIRMED. The overlay is pinned to the
@@ -6002,11 +6009,30 @@ function _masCommitGlimmer(input) {
      first means the two agree. */
   input.scrollTop = 0;
 
+  /* THE SCROLLBAR IS PART OF THE BOX AND NOT PART OF THE TEXT COLUMN (v7.09).
+     Jaco: *"hay un redibujado con la animación de verde, que hace que se mueva
+     un salto de línea, puedes revisarlo para que no cambie nada de sitio."*
+
+     The overlay was sized from `getBoundingClientRect().width` — the BORDER
+     box — while a description long enough to be worth sweeping is long enough
+     to overflow, so the textarea under it is showing a vertical scrollbar and
+     its text column is that much narrower. Measured on this field's own
+     metrics: 633 against 627, a six-pixel gutter. Six pixels is a whole word
+     at the end of some line, so the overlay wrapped one word earlier or later
+     than the field and the paragraph visibly re-flowed at the moment it was
+     supposed to be reassuring.
+
+     `clientWidth` is the width INSIDE the border and INSIDE the scrollbar, so
+     adding the two borders back gives a border box whose content column is the
+     field's exactly. It is derived rather than a constant on purpose: where the
+     scrollbar is an overlay one and takes no space — Safari's default, which is
+     where this is actually used — the gutter is 0 and this changes nothing. */
   const fx = document.createElement('div');
   fx.setAttribute('aria-hidden', 'true');
   Object.assign(fx.style, {
     position: 'fixed', left: r.left + 'px', top: r.top + 'px',
-    width: r.width + 'px', height: r.height + 'px', margin: '0',
+    width: (input.clientWidth + px(s.borderLeftWidth) + px(s.borderRightWidth)) + 'px',
+    height: r.height + 'px', margin: '0',
     boxSizing: 'border-box',
     paddingTop: s.paddingTop, paddingRight: s.paddingRight,
     paddingBottom: s.paddingBottom, paddingLeft: s.paddingLeft,
@@ -6083,7 +6109,7 @@ function _masCommitGlimmer(input) {
     if (spans[i].offsetTop - bT - padT >= contentH) { vis = i; break; }
   }
   const lines = Math.max(1, Math.round(contentH / lineH));
-  const SWEEP = Math.min(900, 280 + 80 * (lines - 1));
+  const SWEEP = Math.min(720, 240 + 60 * (lines - 1));
   const rate = SWEEP / Math.max(1, vis - 1);
   spans.forEach((sp, i) => {
     sp.style.animationDelay = Math.round(i * rate) + 'ms';
@@ -8779,6 +8805,12 @@ function selectPicklistItem(igdbId) {
       .finally(() => _setDescLoading(false));
     _applySteamHeroBanner(item.steamAppId, item.name);
     _applySteamAchievements(item.steamAppId, item.name);
+    // Steam's logotype into the pool when it is genuinely transparent, and
+    // then the two built icons. Two calls rather than one: the logotype is a
+    // file worth having whatever happens to the icon, and the icons get built
+    // whether or not that file turned out usable.
+    _applySteamLogo(item.steamAppId, item.name);
+    _addSteamIconCandidates(item.steamAppId, item.name);
   }
 
   // Auto-activate platforms — use strict activationPlatforms (no unconfirmed console ports)
@@ -8853,6 +8885,428 @@ function _applySteamHeroBanner(appId, expectedTitle) {
     console.warn('[Steam Hero Banner] no library_hero.jpg found for app', appId);
   };
   img.src = url;
+}
+
+/* ── STEAM'S LOGOTYPE JOINS THE LIBRARY (v7.09) ──────────────────────────
+   Jaco: *"me gustaría que añadieras a los assets el 'logo', porque nos puede
+   ser útil en el futuro, por ejemplo para la website. Así que si existe un
+   logo transparente, añádelo al dropwell por defecto."*
+
+   It goes into the POOL rather than into a slot of its own, which is the whole
+   difference between this and `_applySteamHeroBanner`: the hero is fetched to
+   fill a named Key Art field, where this is a file that will be useful and has
+   no single destination yet. The library is exactly the box for that — it
+   groups it under Logotype, the Website builder already reads the same pool,
+   and "Shipmate found N assets" counts it without being told to.
+
+   TRANSPARENT OR NOT AT ALL, which is his condition and also the only test
+   worth making: a logotype baked onto a background is not a logotype, it is a
+   picture of one, and it would be useless over key art on the marketing page.
+
+   AND `smHasAlpha` IS THE WRONG TEST HERE, which was measured rather than
+   assumed — the first version of this reused it and would have adopted almost
+   nothing. That function asks whether all FOUR CORNERS of an 8×8 downscale are
+   clear, and its own comment says it is conservative on purpose because a
+   false 'logo' sends key art to the corner slot. At 8×8 each corner averages a
+   vast block of the original, so a wide wordmark whose flourishes reach the
+   edges reads as opaque: measured, it rejected Mina the Hollower, Spilled! AND
+   Vampire Survivors, all three of which are genuinely cut out.
+
+   The question there is "is this file a logotype"; the question HERE is "is
+   this file cut out", and we already know it is a logotype because we asked
+   for logo.png by name. So the test is the FRACTION that is see-through, on a
+   48×48 sample. Measured: real cut-outs land between 26% and 78% (Spilled!
+   26.6, Mina 35.3, Vampire 38.4, Hollow Knight 68.8, Hades 78.4) and a flat
+   image lands at 0.0 — an opaque JPEG control and Spilled!'s own logo_2x.png
+   both measure exactly zero. The floor is 5%, which is nowhere near anything.
+
+   `_2x` WINS ONLY IF IT IS ALSO CUT OUT, and Spilled! is why that sentence
+   exists: its logo_2x.png is 560×720 and flat while its logo.png is 640×320
+   and transparent. The bigger file is not automatically the better asset, so
+   both are tested and the largest one that passes is adopted.
+
+   AND THE KIND IS FORCED, WHICH IS THE PART TO READ BEFORE SIMPLIFYING IT.
+   `smAssetKind` sends a transparent image to 'logo' when it is oblong and to
+   'icon' when it is SQUARE — and `smAppIcon()`'s second door is exactly
+   `smPool().find(a => a.kind === 'icon')`. So a studio whose Steam logotype
+   happens to be square would have it silently become the game's app icon, and
+   would never be shown the icon proposal, because the proposal is gated on
+   that same call. Nothing measured is square today, which is precisely why
+   this would be discovered by a developer rather than by us. The fetcher knows
+   what this file is — it asked for logo.png by name — so it says so.
+
+   The cost, stated: `smSetKind` stamps `kindBy: 'user'`, whose name claims a
+   person decided. It is the only flag that survives `smAdopt`'s async
+   re-classification, so it is the mechanism available rather than the one that
+   reads best. The broader question it points at — whether `smAppIcon()`'s pool
+   fallback should ignore anything whose `origin` is not 'upload', since
+   "recognised" ought to mean recognised from a file the developer handed us —
+   is a change to a function seven surfaces read, and belongs in its own pass
+   rather than riding in here. */
+/* How much of the image is see-through. `clearRect` first, because a canvas
+   starts transparent and drawing an OPAQUE image over it must leave zero —
+   that is what makes the control read 0.0 rather than inheriting anything.
+   Returns 0 on a tainted canvas, so an image we cannot read is never adopted. */
+function _logoClearFraction(img) {
+  try {
+    const N = 48, c = document.createElement('canvas');
+    c.width = c.height = N;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.clearRect(0, 0, N, N);
+    x.drawImage(img, 0, 0, N, N);
+    const d = x.getImageData(0, 0, N, N).data;
+    let n = 0;
+    for (let p = 3; p < d.length; p += 4) if (d[p] < 16) n++;
+    return n / (N * N);
+  } catch (_) { return 0; }
+}
+const SM_LOGO_MIN_CLEAR = 0.05;   // real cut-outs measure .27–.78; flat art measures .00
+
+function _applySteamLogo(appId, expectedTitle) {
+  Promise.all([
+    _iconLoadCors(steamLogoUrl(appId, true)),
+    _iconLoadCors(steamLogoUrl(appId, false)),
+  ]).then(([big, small]) => {
+    if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+    const ok = [big, small].filter(i => i && _logoClearFraction(i) >= SM_LOGO_MIN_CLEAR);
+    if (!ok.length) return;                       // no transparent logotype — add nothing
+    const pick = ok.sort((a, b) => b.naturalWidth - a.naturalWidth)[0];
+    const id = smAdopt({ name: 'logo.png', url: pick.src, w: pick.naturalWidth, h: pick.naturalHeight }, 'steam');
+    if (!id) return;
+    smSetKind(id, 'logo');
+    if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TWO BUILT ICONS, AND ONE OF THEM IS ALREADY THE ICON (v7.09)
+   ══════════════════════════════════════════════════════════════════════
+   Jaco: *"no quiero que los iconos aparezcan en otro sitio, quiero que estén
+   las 2 propuestas en el mismo sitio que el resto de thumbnails, y que no me
+   preguntes, quizás coge automáticamente uno, pero no me quites el otro, para
+   que los tenga como opción si quisiera editar."*
+
+   STEAM PUBLISHES NO SQUARE ART, so there is nothing to fetch — the icon has
+   to be BUILT. What makes that possible rather than theoretical is that
+   Steam's CDN sends CORS headers (see steamLogoUrl, claude.js): these images
+   draw into a canvas that `toDataURL` can still read, so a real PNG comes out
+   the other end, adopted through `smAdopt` exactly like a cropped screenshot.
+
+   THIS WENT THROUGH TWO WRONG SHAPES FIRST AND THE THIRD IS SMALLER THAN
+   EITHER. It began as a violet panel asking which icon you wanted, with a
+   Not-now button; then as two ringed tiles in their own row, still waiting to
+   be picked. Both were a QUESTION drawn in a well whose entire language is
+   files you can see and press — and both needed their own element, their own
+   repaint, their own CSS and their own strings to ask it.
+
+   The answer is that a generated icon is just an ASSET. Both candidates go
+   into the pool like everything else Steam hands us, land in the Icon group
+   beside the rest of the thumbnails, and one of them is assigned to the slot
+   on the spot. Nothing is asked because nothing needs asking: the other
+   candidate is still sitting there, so changing your mind is picking up a file
+   that is already in front of you rather than answering a prompt. The whole
+   proposal mechanism — `state.iconProposal`, `_iconProposalHtml`,
+   `_renderIconProposal`, `adoptProposedIcon`, five locale keys and two CSS
+   rules — is deleted rather than switched off.
+
+   TWO CANDIDATES, BECAUSE THEY FAIL IN DIFFERENT DIRECTIONS:
+
+     · `logo` — the wordmark on a colour sampled out of the key art. It depends
+                only on the assets existing, not on what the art happens to
+                show, which is why it is the one taken by default.
+     · `art`  — a square crop of the key art. Better when there is a character
+                worth showing, useless when the hero is a texture — so it is
+                the one worth having AVAILABLE rather than the one to assume.
+
+   THE CROP IS GUIDED, NOT CENTRED, and that is what makes the second candidate
+   usable at all. A Steam hero is composed with the wordmark overlaid, so the
+   subject is routinely off-centre: measured, Mina the Hollower's sits at 68%
+   of the width and Vampire Survivors' at 38%, and a dead-centre crop takes
+   half a face on both. `_iconSalientX` finds the square window with the most
+   local contrast instead. It cannot make anything worse, which is the property
+   worth having: on art that IS centred it returns the centre (Spilled! 50%,
+   Hollow Knight 53%, both pixel-identical to the naive crop).
+
+   AND IT NEVER TAKES AN ICON YOU ALREADY HAD. Jaco, earlier: *"si han subido
+   su propio icono, que no salga la propuesta."* The slot is only written when
+   `smAppIcon()` came back empty BEFORE any of this ran — which is also why
+   that answer is captured first. The second half of that guard is subtler and
+   is the reason the pin exists: `smAppIcon()`'s other door is
+   `smPool().find(a => a.kind === 'icon')`, i.e. the FIRST icon in the pool, so
+   a developer whose icon was merely recognised there rather than chosen would
+   have it silently displaced by two new icons landing beside it. Pinning what
+   they already had into the slot before adopting anything is not a change to
+   their submission — it is what keeps it from being changed. */
+
+/* Where the picture actually has its content: column-wise local contrast,
+   then the square window that maximises it, returned as a 0–1 centre.
+   Deliberately crude — this is choosing between crops of the same picture,
+   not detecting objects, and anything heavier would be a library. */
+function _iconSalientX(img) {
+  const W = 240, H = Math.max(1, Math.round(img.height * W / img.width));
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data;
+  const col = new Float64Array(W);
+  for (let px = 0; px < W; px++) {
+    for (let py = 1; py < H; py++) {
+      const a = (py * W + px) * 4, b = ((py - 1) * W + px) * 4;
+      col[px] += Math.abs(d[a] - d[b]) + Math.abs(d[a + 1] - d[b + 1]) + Math.abs(d[a + 2] - d[b + 2]);
+    }
+    if (px > 0) for (let py = 0; py < H; py++) {
+      const a = (py * W + px) * 4, b = (py * W + px - 1) * 4;
+      col[px] += Math.abs(d[a] - d[b]) + Math.abs(d[a + 1] - d[b + 1]) + Math.abs(d[a + 2] - d[b + 2]);
+    }
+  }
+  const w = Math.min(W, Math.max(1, Math.round(H)));   // the square, in this small space
+  let run = 0;
+  for (let i = 0; i < w; i++) run += col[i];
+  let best = run, bi = 0;
+  for (let i = w; i < W; i++) { run += col[i] - col[i - w]; if (run > best) { best = run; bi = i - w + 1; } }
+  return (bi + w / 2) / W;
+}
+
+/* The colour the logotype sits on. Sampled at 64×64 with the extremes thrown
+   away — a near-black or near-white bucket is usually the art's vignette or
+   its sky, and neither is the game's colour — and scored by population TIMES
+   saturation, because the most COMMON colour in a piece of key art is very
+   often a flat background nobody would name. Falls back to the panel grey
+   rather than to black, so a failure reads as neutral rather than as a hole. */
+function _iconArtColour(img) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0, 64, 64);
+    const d = x.getImageData(0, 0, 64, 64).data;
+    const buckets = {};
+    for (let p = 0; p < d.length; p += 4) {
+      const r = d[p], g = d[p + 1], b = d[p + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx < 28 || mn > 232) continue;
+      const k = `${r >> 5},${g >> 5},${b >> 5}`;
+      (buckets[k] = buckets[k] || { n: 0, r: 0, g: 0, b: 0 });
+      buckets[k].n++; buckets[k].r += r; buckets[k].g += g; buckets[k].b += b;
+    }
+    let best = null;
+    for (const k in buckets) {
+      const v = buckets[k];
+      const sat = Math.max(v.r, v.g, v.b) - Math.min(v.r, v.g, v.b);
+      const score = v.n * (1 + sat / v.n / 128);
+      if (!best || score > best.s) best = { s: score, v };
+    }
+    if (!best) return '#242424';
+    const v = best.v;
+    return `rgb(${Math.round(v.r / v.n)},${Math.round(v.g / v.n)},${Math.round(v.b / v.n)})`;
+  } catch (_) { return '#242424'; }
+}
+
+/* CORS first and NO retry without it, which inverts smMeasure's dance on
+   purpose. That function retries bare because DIMENSIONS are worth having
+   even off a tainted image; here a tainted image is worth nothing at all —
+   the whole output is `toDataURL`. So a host that will not send the header
+   simply produces no icons, which is the honest failure. */
+function _iconLoadCors(url) {
+  return new Promise(res => {
+    const i = new Image();
+    i.crossOrigin = 'anonymous';
+    i.onload = () => res(i);
+    i.onerror = () => res(null);
+    i.src = url;
+  });
+}
+
+/* THE LOGOTYPE'S OWN INK — where it is, and how solid it is (v7.09).
+   One measurement, two answers, because both questions are about the same
+   bounding box and reading the pixels twice to ask them separately would be
+   two chances to disagree.
+
+   WHERE, because a delivered logotype almost never fills its own file. Jaco:
+   *"sería posible que uno de los iconos propuestos fuera el wordmark con un
+   fondo sólido?"* — it already was, and the reason it did not look like it is
+   that the whole FILE was being scaled into the icon, empty alpha margins
+   included, so the wordmark landed small inside its own padding. Drawing the
+   ink box instead lets it fill the 76% the icon reserves for it. This file
+   already knows the lesson in another place: the marketing page's LOGOTYPE INK
+   TRIM (web-page.js) measures the ink for exactly this reason, and notes that
+   Spilled!'s logotype is 35% empty alpha by height. Same fact, same fix, and
+   like that one this only changes what is DRAWN — nothing is re-encoded, so a
+   baked-in shadow outside the box is scaled with everything else rather than
+   being sliced off against a new rectangle.
+
+   HOW SOLID, because Steam's `logo.png` is only USUALLY a cut-out wordmark.
+   Jaco, on Spilled!: *"hay alguna manera de filtrar? esto es una cosa fea
+   dentro de otro cuadrado azul."* Some studios ship a whole illustration in
+   that file, and compositing one onto a colour puts a picture inside a square
+   inside a square.
+
+   TRANSPARENCY ALONE CANNOT TELL THOSE APART — Spilled!'s logo is 63% clear,
+   more than Slay the Spire's 53% and the same ballpark as Celeste's 68%, both
+   real wordmarks. What separates them is how solid the ink is INSIDE THIS BOX:
+   letters leave gaps between and around themselves, a picture fills its
+   rectangle. Measured across fifteen store pages:
+
+     33.9 Cult of the Lamb · 35.5 Hades · 41.7 Cuphead · 52.6 Stardew ·
+     52.8 Celeste · 54.2 Hollow Knight · 58.3 Slay the Spire · 65.3 Blasphemous ·
+     67.1 Hi-Fi Rush · 70.9 Vampire Survivors · 71.3 Mina · 73.0 Terraria ·
+     76.1 Balatro      ← every one of these is a real wordmark
+     ─────────────────────────────────────────────────────────────────
+     87.7 Spilled! · 89.7 Dave the Diver   ← both are solid illustrations
+
+   Eleven and a half points of empty space between the two groups, so the floor
+   at 80 is nowhere near anything rather than fitted to the sample. It changes
+   which candidate is the DEFAULT, never which ones exist: a studio whose
+   logotype is a picture may well still want it, and taking the choice away to
+   fix a default would be the interface deciding more than it knows.
+
+   Returns null when nothing is opaque, which the caller reads as unusable. */
+function _iconInkBox(img) {
+  try {
+    const LONG = 200;
+    const k = Math.min(LONG / img.naturalWidth, LONG / img.naturalHeight);
+    const cw = Math.max(1, Math.round(img.naturalWidth * k));
+    const ch = Math.max(1, Math.round(img.naturalHeight * k));
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.clearRect(0, 0, cw, ch);
+    x.drawImage(img, 0, 0, cw, ch);
+    const d = x.getImageData(0, 0, cw, ch).data;
+    let minx = cw, maxx = -1, miny = ch, maxy = -1, ink = 0;
+    for (let y = 0; y < ch; y++) for (let px = 0; px < cw; px++) {
+      if (d[(y * cw + px) * 4 + 3] < 16) continue;
+      ink++;
+      if (px < minx) minx = px; if (px > maxx) maxx = px;
+      if (y < miny) miny = y;  if (y > maxy) maxy = y;
+    }
+    if (maxx < 0) return null;
+    const bw = maxx - minx + 1, bh = maxy - miny + 1;
+    const back = img.naturalWidth / cw;          // sample space → source pixels
+    return {
+      x: minx * back, y: miny * back, w: bw * back, h: bh * back,
+      density: ink / (bw * bh),
+    };
+  } catch (_) { return null; }
+}
+const SM_LOGO_SOLID = 0.80;   // above this the "logotype" is a picture, not a wordmark
+
+const SM_ICON_PX = 1024;   // Apple's App Store icon, and the largest any store asks for
+
+async function _steamIconCandidates(appId) {
+  const [hero2, hero1, logo2, logo1] = await Promise.all([
+    _iconLoadCors(steamLibraryHeroUrl2x(appId)),
+    _iconLoadCors(steamLibraryHeroUrl(appId)),
+    _iconLoadCors(steamLogoUrl(appId, true)),
+    _iconLoadCors(steamLogoUrl(appId, false)),
+  ]);
+  const hero = hero2 || hero1;
+  /* CUT OUT FIRST, THEN BIGGER — and the expression this replaces was simply
+     wrong. `(a && b && a.w >= b.w) ? a : (a || b)` returns `a` in BOTH arms
+     whenever `a` exists, so it never once picked the smaller file. On Spilled!
+     that meant logo_2x.png at 560×720 and 0.0% transparent — the flat
+     illustration — instead of logo.png at 640×320, which is the cut-out one.
+     Jaco: *"spilled sigue teniendo la ilustración ponzoñosa."* It was not the
+     filter failing; it was being handed the wrong file to judge.
+
+     `_applySteamLogo` had this right already (transparency, then width), so
+     this is the same two-line sort rather than a second rule. */
+  const logo = [logo2, logo1]
+    .filter(i => i && _logoClearFraction(i) >= SM_LOGO_MIN_CLEAR)
+    .sort((a, b) => b.naturalWidth - a.naturalWidth)[0] || null;
+  const out = [];
+  try {
+    if (hero && logo) {
+      const c = document.createElement('canvas');
+      c.width = c.height = SM_ICON_PX;
+      const x = c.getContext('2d');
+      /* OPAQUE BY CONSTRUCTION, because SM_REQS marks the App Store and Mac
+         App Store icons `noA: true` — Apple rejects an icon with alpha. The
+         fill is not decoration, it is what makes this file legal. */
+      x.fillStyle = _iconArtColour(hero);
+      x.fillRect(0, 0, SM_ICON_PX, SM_ICON_PX);
+      const box = SM_ICON_PX * 0.76;   // the wordmark, with a margin that survives a rounded mask
+      /* The INK, not the file — see `_iconInkBox`. Falls back to the whole
+         frame if nothing is opaque, which cannot happen for an image that got
+         this far but costs one `||` to not have to reason about. */
+      const k = _iconInkBox(logo)
+             || { x: 0, y: 0, w: logo.naturalWidth, h: logo.naturalHeight, density: 1 };
+      const s = Math.min(box / k.w, box / k.h);
+      const w = k.w * s, h = k.h * s;
+      x.drawImage(logo, k.x, k.y, k.w, k.h, (SM_ICON_PX - w) / 2, (SM_ICON_PX - h) / 2, w, h);
+      /* A SOLID "LOGOTYPE" IS NOT OFFERED AT ALL, which reverses the first
+         answer to this. It was demoted — built, kept in the library, just not
+         the default — on the argument that a studio shipping a picture there
+         might still want it. Jaco, looking at the result: *"spilled sigue
+         teniendo la ilustración ponzoñosa."* He is right, and the earlier
+         argument was about a CHOICE where this is about a CANDIDATE: offering
+         a picture-inside-a-square as one of two app icons is offering junk and
+         calling it an option. The logotype FILE is still in the library on its
+         own terms (`_applySteamLogo`), so nothing is lost — only this derived
+         icon is not made. */
+      if (k.density < SM_LOGO_SOLID) out.push({ key: 'logo', src: c.toDataURL('image/png') });
+    }
+    if (hero) {
+      const c = document.createElement('canvas');
+      c.width = c.height = SM_ICON_PX;
+      const x = c.getContext('2d');
+      const s = Math.min(hero.naturalWidth, hero.naturalHeight);
+      let sx = Math.round(_iconSalientX(hero) * hero.naturalWidth - s / 2);
+      sx = Math.max(0, Math.min(hero.naturalWidth - s, sx));
+      x.drawImage(hero, sx, Math.round((hero.naturalHeight - s) / 2), s, s, 0, 0, SM_ICON_PX, SM_ICON_PX);
+      out.push({ key: 'art', src: c.toDataURL('image/jpeg', 0.92) });
+    }
+  } catch (_) {
+    /* A tainted canvas, or no canvas at all. No icons rather than broken ones;
+       the developer's own uploader is untouched either way. */
+    return [];
+  }
+  /* THE FIRST ONE IS THE DEFAULT. `logo` is pushed before `art` and is only
+     pushed at all when it is a real wordmark, so the order needs no sort: a
+     game whose logotype is a picture simply gets one icon, the key-art crop. */
+  return out;
+}
+
+/* Same fire-and-forget shape as _applySteamHeroBanner, including its
+   stale-title guard: by the time the images decode the developer may have
+   searched for something else, and an icon built for the previous game is
+   worse than none. */
+function _addSteamIconCandidates(appId, expectedTitle) {
+  const hadIcon = typeof smAppIcon === 'function' ? smAppIcon() : null;
+  _steamIconCandidates(appId).then(cands => {
+    if (!cands.length) return;
+    if ((state.formData.title || '').trim() !== (expectedTitle || '').trim()) return;
+    state.uploads = state.uploads || {};
+
+    /* Their icon was only ever RECOGNISED in the pool, never chosen — so pin
+       it before two more icons land in front of it. See the block above. */
+    if (hadIcon && !state.uploads.appIcon && hadIcon.id) {
+      state.uploads.appIcon = smRef(hadIcon.id);
+    }
+
+    const ids = {};
+    cands.forEach(c => {
+      const id = smAdopt({ name: `app-icon-${c.key}.png`, dataUrl: c.src }, 'steam');
+      if (!id) return;
+      /* Say what it is rather than waiting for the classifier to agree. These
+         are 1024×1024 and opaque, so `smAssetKind` would reach 'icon' on its
+         own — but only after smMeasure's async read, and the slot is written
+         on the line below. */
+      smSetKind(id, 'icon');
+      ids[c.key] = id;
+    });
+
+    /* `_steamIconCandidates` has already put the default first, so this does
+       not repeat the reasoning — it just takes the head. The other one stays
+       in the library either way. */
+    if (!hadIcon) {
+      const pick = ids[cands[0].key] || ids.logo || ids.art;
+      if (pick) state.uploads.appIcon = smRef(pick);
+    }
+    if (typeof renderDetails === 'function') renderDetails();
+    else if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+  });
 }
 
 /* Runs after selectPicklistItem whenever the picked title has IGDB cover
@@ -22965,6 +23419,17 @@ function _smLibraryHTML() {
   if (!pool.length && !hasSteamTrailer) return '';
   const byKind = {};
   SM_KINDS.forEach(k => { byKind[k] = pool.filter(a => a.kind === k); });
+  /* PORTRAIT ART IS KEY ART (v7.09). Jaco: *"si portrait art ocupa mucho (el
+     texto), quizás puedes unirlo como parte de key art."* Its own group cost a
+     whole label row — "Portrait art" is the longest short name in the table —
+     to separate two things a developer thinks of as one: the art for this
+     game, in the shapes the stores ask for. The ORIENTATION is still on each
+     file (a.kind is untouched, so `_shotEdRatio`, the coverage line and every
+     slot picker read exactly what they read before) and it is still visible at
+     a glance, because a portrait thumbnail is visibly portrait. This merges
+     the DISPLAY only, which is why it happens here and not in SM_KINDS. */
+  byKind['art-land'] = byKind['art-land'].concat(byKind['art-port']);
+  byKind['art-port'] = [];
   if (hasSteamTrailer) {
     byKind.video = byKind.video.concat([{
       id: SM_STEAM_TRAILER_ID, kind: 'video', steamTrailer: true,
@@ -23000,8 +23465,18 @@ function _smLibraryHTML() {
                it opens. The grid answers "did my files land and does the tool
                know what they are"; whether the logotype has the halo baked in
                is a question you can only answer at full size. */''}
+          ${/* AN ICON THUMB IS SQUARE, WHATEVER THE NUMBERS SAY (v7.09). Jaco:
+                *"el thumbnail de icono debe ser cuadrado, que no tenga esos
+                bordes transparentes a los lados."* The box takes the file's own
+                ratio, and `a.w`/`a.h` are 0 until smMeasure's async callback
+                lands (or for good, if that read failed) — so the 16/9 fallback
+                drew a genuinely square icon letterboxed, with the checkerboard
+                showing through either side and reading as transparency the file
+                does not have. An icon IS square by definition, in every
+                SM_REQS row that names one, so for this kind the square is not a
+                fallback, it is the answer. */''}
           <div class="sm-thumb${a.kindBy === 'user' ? ' is-user' : ''}"
-               style="aspect-ratio:${a.w || 16}/${a.h || 9}"
+               style="aspect-ratio:${a.kind === 'icon' ? '1/1' : `${a.w || 16}/${a.h || 9}`}"
                onclick="${a.steamTrailer ? 'smZoomSteamTrailer()' : `smZoom('${a.id}')`}" role="button" tabindex="0"
                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${a.steamTrailer ? 'smZoomSteamTrailer()' : `smZoom('${a.id}')`}}"
                title="${a.steamTrailer ? escHtml(a.name) : `${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${a.alpha ? ' · transparent' : ''}`}">

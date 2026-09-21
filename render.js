@@ -10272,7 +10272,7 @@ function buildStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
+    ? `<span class="ias-icon ias-icon-art" role="img" aria-label="App icon"><img src="${smAppIconSrc()}" alt=""></span>`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -11142,7 +11142,7 @@ function buildMacStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
+    ? `<span class="ias-icon ias-icon-art" role="img" aria-label="App icon"><img src="${smAppIconSrc()}" alt=""></span>`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
@@ -16269,7 +16269,7 @@ function buildMacFullStorePreviewSection() {
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
   const iconHtml = icon
-    ? `<img src="${smAppIconSrc()}" class="ias-icon" alt="App icon">`
+    ? `<span class="ias-icon ias-icon-art" role="img" aria-label="App icon"><img src="${smAppIconSrc()}" alt=""></span>`
     : `<div class="ias-icon ias-icon-empty">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>

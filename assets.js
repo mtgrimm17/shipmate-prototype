@@ -413,10 +413,45 @@ function smAdopt(rec, origin) {
   smMeasure(src, m => {
     const a = smGet(id);
     if (!a || !m.w) return;
+    const was = a.kind;
     a.w = m.w; a.h = m.h; a.alpha = m.alpha;
     if (a.kindBy !== 'user') a.kind = smAssetKind(a);
+    if (a.kind !== was) _smClassified();
   });
   return id;
+}
+
+/* THE CLASSIFIER ANSWERS LATE, AND NOTHING USED TO REPAINT (v7.09).
+   Jaco: *"why using hades is not able to classify screenshots and includes it
+   in the category OTHER?"*
+
+   It classified them perfectly. `smAdopt` creates the record as 'other' and
+   fixes the kind inside `smMeasure`'s callback, which cannot run until the
+   image has loaded — and every caller redraws the library on the line AFTER
+   adopting. `_fillScreenshotGridFromSteam` adopts ten Steam URLs and calls
+   `_refreshScreenshotGrid()` synchronously, so the list is painted while all
+   ten still say 'other'; half a second later the loads land, the records are
+   corrected in state, and the screen keeps what it drew. Measured on Hades'
+   own files: 1920×1080, no alpha, `smAssetKind` returns 'screenshot' — the
+   answer was right and nobody asked for it again.
+
+   That is why it looks intermittent: any later render repaints from the
+   corrected pool, so anything that happens to re-render — switching sub-tab,
+   dropping a file — makes the groups snap into place and the bug disappear.
+
+   ONE COALESCED REPAINT, not one per file, or ten adoptions would be ten
+   renders in the same tick. Same shape as `_smDropwellSolve`'s own pending
+   flag, for the same reason. And it fires only when the kind really CHANGED:
+   re-adopting something already measured must not repaint, or an idle library
+   would redraw itself for nothing. */
+let _smClassifyPending = false;
+function _smClassified() {
+  if (_smClassifyPending) return;
+  _smClassifyPending = true;
+  requestAnimationFrame(() => {
+    _smClassifyPending = false;
+    if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+  });
 }
 
 /* A human disagreeing with the classifier is the end of the argument. */

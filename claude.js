@@ -775,6 +775,40 @@ function steamLibraryHeroUrl(appId) {
   return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`;
 }
 
+/* ── The rest of the hash-free set, and what each one is FOR (v7.09) ─────
+   The note above says library_600x900.jpg and logo.png share this path and
+   were removed with the Key Art fields they fed. They come back for a
+   different job: `_proposeIconFromSteam` (app.js) has to BUILD an app icon,
+   and Steam publishes no square art at all — so the two candidates are made
+   out of these.
+
+   `logo.png` IS THE ONE THAT MATTERS. It is the wordmark cut out with real
+   alpha, which makes it the single most icon-like thing Steam has: measured
+   across Hades, Hollow Knight, Vampire Survivors, Spilled! and Mina the
+   Hollower, all five carry it and all five have transparency.
+
+   `_2x` FIRST, AND THE FALLBACK IS NOT DECORATION. The plain files are half
+   size — library_hero.jpg serves 1920×620 where library_hero_2x.jpg serves
+   3840×1240 — and the icon target is 1024 square, so the 2x hero gives a
+   1240px crop that is DOWNscaled while the 1x gives a 620px one that has to
+   be stretched. Measured, 4 of those 5 games have hero_2x and Hollow Knight
+   does not, so both are asked for and the bigger one wins.
+
+   AND THE CANVAS IS CLEAN, which is the fact this whole feature rests on.
+   `shared.fastly.steamstatic.com` sends CORS headers: loaded with
+   crossOrigin='anonymous' these draw into a canvas that `toDataURL()` can
+   still read. That is worth stating because two places in this codebase
+   assume the opposite (smMeasure's CORS retry in assets.js, and the
+   screenshot editor's "a remote image taints the canvas") — both of those
+   are about IGDB THROUGH THE PROXY, a different host. Steam's own CDN does
+   not taint. Verified live against all five app ids above. */
+function steamLogoUrl(appId, x2) {
+  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/logo${x2 ? '_2x' : ''}.png`;
+}
+function steamLibraryHeroUrl2x(appId) {
+  return `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero_2x.jpg`;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    SHIPMATE'S OWN /game — one first-party call in place of four proxied ones
    ══════════════════════════════════════════════════════════════════════
