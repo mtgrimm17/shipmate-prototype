@@ -24766,15 +24766,60 @@ body.sm-picker-open { overflow: hidden; }
    whatever the tile's width — an icon is square here, but nothing in this rule
    depends on that. `flex: 0 0 auto` because the row it sits in lays its
    children out and must go on deciding their size. */
+/* THE COLUMN IS THE THUMBNAIL'S WIDTH, NOT THE LABEL'S (v7.19).
+
+   `.sm-pick` is a column holding a tile and its "Use this", and it was sized
+   by whichever was wider. On every other well that is the tile, so nothing
+   showed — but an ICON is the narrowest thing in this library (square, so 42px
+   against a screenshot's 75) and the label came out 46. Measured: the Icon
+   well's first tile sat 1px right of the row's edge where Key art, Video and
+   Screenshot all sat flush, and the gap between two icons was 13px where every
+   other well's was 9. Both are the same 4px of slack, split by
+   `align-items: center` — half on each side of every icon.
+
+   `width: min-content` settles it by construction. The tile's min-content IS
+   its width (a flex item with a definite height and ratio); the label's is its
+   longest unbreakable word, which is shorter. So the column takes the tile,
+   every well lines up on the row's own left edge, and the 9px gap between
+   tiles is the row's `gap` and nothing else.
+
+   The label is still CENTRED under the tile — `align-items: center` stays, and
+   it is now centring against the picture rather than against itself. */
 .sm-pick {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   flex: 0 0 auto;
+  width: min-content;
 }
+
+/* AND THE LABEL IS MADE TO FIT INSIDE THAT WIDTH, which is the other half and
+   not a duplicate of it. `min-content` guarantees the column cannot grow;
+   without a label that fits, the label would simply overflow it instead —
+   2px of "Use this" over the neighbouring icon on each side, which is the
+   overlap this is asked to prevent.
+
+   8px with .2px of tracking measures 40 against an icon's 42. It is the same
+   mono, the same colour and the same weight — only smaller, and only because
+   the narrowest tile in the library sets the budget. `ellipsis` is the floor
+   under both: if a tile is ever narrower than this label, the label is cut
+   rather than allowed back out over its neighbour. */
 .sm-pick-use {
   background: none; border: none; margin: 0; padding: 0;
-  font-family: var(--mono); font-size: 9px; letter-spacing: .3px; line-height: 1;
+  font-family: var(--mono); font-size: 8px; letter-spacing: .2px; line-height: 1;
   color: var(--pill-on-color, #52BAFF);
-  cursor: pointer; white-space: nowrap;
+  cursor: pointer;
+  /* `nowrap` IS GONE, and dropping it is what makes the column's `min-content`
+     mean what the comment above claims. With it, a label's min-content is its
+     WHOLE string, so the label could still force the column wider than the
+     tile and the two rules were one rule wearing two hats — measured, a long
+     label took the column to 151px against a 42px icon. Without it the
+     min-content is the longest WORD ("this", 18px), comfortably inside every
+     tile, so the column is the tile's width whatever the label says.
+
+     It costs nothing here and fails better if it ever costs anything: "Use
+     this" measures 40 against 42 and does not wrap, and a label that one day
+     did not fit would wrap under its own tile rather than widen the column or
+     spill over the neighbouring one. */
+  min-width: 0; max-width: 100%; text-align: center;
   transition: color .15s;
 }
 .sm-pick-use:hover { color: #fff; }
