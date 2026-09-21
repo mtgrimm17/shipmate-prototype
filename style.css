@@ -23734,7 +23734,23 @@ body.sm-picker-open { overflow: hidden; }
 
    Measured, two lines of groups: card 647.19 → 637.19 on this alone, and
    617.19 → 607.19 with the ASSETS heading also gone. */
-.sm-wells { display: flex; flex-wrap: wrap; gap: 16px 30px; margin-top: 18px; }
+/* A COLUMN, NOT A WRAPPING ROW (v7.20). Each group starts its own line, by
+   request. The 30px COLUMN gap goes with the wrap it existed for — there is no
+   second group beside anything now — and the 16px row gap stays, because that
+   is the space between one group and the next and it always was.
+
+   The groups' own rows (`.sm-well-row`) still wrap internally, which is the
+   wrapping that matters: ten screenshots run onto a second line inside the
+   Screenshot group rather than pushing Video off the end of the library.
+
+   `_smDropwellFit` is unaffected and was checked rather than assumed: v6.74
+   took the line counting out of it, so what it solves is a height against a
+   width this does not touch. The library IS taller — measured on a full
+   project (key art, logotype, two icons, ten screenshots, two videos, one
+   unclassified) it goes to 590 where the wrapping row needed about half that.
+   The well GROWS to hold it: 684, nothing clipped, and no page overflow. Said
+   as measured rather than as "it scrolls", which is what it does not do. */
+.sm-wells { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
 .sm-well { display: flex; flex-direction: column; gap: 9px; }
 /* Font, size and colour come from the shared label rule; this keeps only what
    is its own. The count inside it stays a touch quieter than the word. */

@@ -23551,34 +23551,28 @@ function _smDropwellSolve(dz) {
    <img>, and playback needs hls.js — see smZoomSteamTrailer). */
 const SM_STEAM_TRAILER_ID = '__steam-trailer';
 
-/* THE GROUP THAT CAN GROW SORTS LAST (v6.75)
-   Jaco: *"intenta evitar 3 líneas en este caso, si hay espacio, mete el video
-   en la fila de key art si se necesita."*
+/* ONE WELL PER ROW, IN THE ORDER A DEVELOPER WOULD LIST THEM (v7.20, by
+   request: "each section should begin on a new row").
 
-   THE WELL WRAPS GREEDILY, SO A WIDE GROUP STRANDS EVERYTHING AFTER IT. At an
-   850px panel the row is ~763 wide, and the case he screenshotted is key art
-   (2) ~214 + portrait ~30 + screenshot (8) ~660 + video ~75. Line 1 takes the
-   first two and has ~489 left — not enough for 660 — so Screenshot goes to
-   line 2 and leaves ~73 there, and Video needs ~75. **It misses by two
-   pixels**, and the answer to that is not two pixels: the same folder with one
-   more screenshot, or a slightly narrower panel, breaks somewhere else.
+   THIS REPLACES `SM_WELL_LAST`, AND THAT RULE IS NOT BEING SWITCHED OFF, IT IS
+   BEING RETIRED. v6.75 sorted the unbounded groups (Screenshot, Other) last so
+   the small ones could pack onto line 1 and the wide one took a line of its
+   own — a careful answer to a real measurement (key art 214 + portrait 30 +
+   screenshot 660 + video 75 in a 763px row, missing by two pixels). Every word
+   of that reasoning was about how a WRAPPING row lands. `.sm-wells` is a
+   column now, so there is no line to pack, nothing to miss by two pixels, and
+   no economy left for that rule to buy. Leaving it in place would be a
+   statement about a layout that no longer exists.
 
-   The asymmetry is in the model. `smAssetKind` can only ever produce MANY of
-   one kind — a developer ships eight screenshots and one icon, one logotype,
-   one trailer; key art runs to two or three. So there is exactly one group
-   whose width is unbounded, and putting it LAST is what lets every small group
-   pack onto line 1 with the wide one taking a line of its own. Two lines, from
-   a statement about the data rather than from a measurement of one folder.
+   THE ORDER IS THE ASKED-FOR ONE and is now simply written down: Key art,
+   Logotype, Icon, Screenshot, Video. `art-port` rides with `art-land` because
+   the display merges the two into one "Key art" well (see byKind below), and
+   is listed so the order still holds if that merge is ever undone.
 
-   `other` rides along because it is the classifier's fall-through and is
-   unbounded for the same reason.
-
-   IT IS A LAYOUT ORDER AND SO IT LIVES HERE, not in `SM_KINDS` (assets.js),
-   which is the model's list of kinds and is read by the classifier's own
-   tests. Reordering that constant would state a fact about a flex row in the
-   file that decides what a file IS. Anything not named here keeps SM_KINDS'
-   order, so a new kind appears where the model puts it. */
-const SM_WELL_LAST = ['screenshot', 'other'];
+   ANYTHING NOT NAMED STILL APPEARS, appended in `SM_KINDS`' own order — the
+   one property worth keeping from what this replaces. A kind added to the
+   model and forgotten here shows up at the end rather than vanishing. */
+const SM_WELL_ORDER = ['art-land', 'art-port', 'logo', 'icon', 'screenshot', 'video', 'other'];
 
 /* "USE THIS" GOES UNDER THE TILE, NOT OVER IT (v7.10). Jaco, on the first
    version: *"muchas cosas en tan pequeño, quizás me lo imaginaba DEBAJO de
@@ -23723,7 +23717,7 @@ function _smLibraryHTML() {
       src: steamTrailer.thumbnail, w: 16, h: 9,
     }]);
   }
-  const order = SM_KINDS.filter(k => !SM_WELL_LAST.includes(k)).concat(SM_WELL_LAST);
+  const order = SM_WELL_ORDER.concat(SM_KINDS.filter(k => !SM_WELL_ORDER.includes(k)));
   /* AN ICON NOBODY HAS IS STILL A ROW (v7.10). Jaco: *"si no hay nada
      iconizable después del scrapeo, podrías poner un thumbnail vacío de ICON,
      en rojo, y tocando ahí también te lleva al uploader?"*
