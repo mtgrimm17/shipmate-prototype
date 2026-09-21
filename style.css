@@ -24802,12 +24802,34 @@ body.sm-picker-open { overflow: hidden; }
    gains from seeing that it is the trailer being used — the button is what
    needs two things to choose between, not the statement of fact. */
 .sm-pick-tile {
-  display: block; border-radius: 12px; padding: 2px;
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: box-shadow .14s ease;
+  position: relative;
+  display: block;
+  /* NO PADDING AND THE THUMBNAIL'S OWN RADIUS (v7.16). This shipped with 2px
+     of padding and a 12px radius against `.sm-thumb`'s 9px, which put the ring
+     4px out from the picture on every side and rounded it more than the box it
+     was marking — measured, a 42px icon in a 46px ring. It read as a box
+     around the tile rather than a border on it. Jaco: *"the ring is much too
+     wide."*
+
+     `inherit` on the pseudo below rather than a second 9px, so the two can
+     only ever agree; if `.sm-thumb`'s radius moves, this follows it. */
+  border-radius: 9px;
 }
-.sm-pick-tile.is-current {
-  box-shadow: inset 0 0 0 2px var(--pill-on-color, #52BAFF);
+
+/* A PSEUDO-ELEMENT, NOT A BOX-SHADOW ON EITHER BOX. `.sm-thumb` is
+   `overflow: hidden` with the image filling it, so an inset shadow on the
+   thumbnail paints under its own content and an inset shadow on this wrapper
+   paints under the thumbnail — both invisible. An absolutely positioned
+   border sits above both and lands exactly on the picture's edge, which is
+   what "border the thumbnail" means. `pointer-events: none` so it never takes
+   the click, the hold-to-delete gesture or the zoom cursor off the tile. */
+.sm-pick-tile.is-current::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--pill-on-color, #52BAFF);
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 /* ── THE ICON YOU HAVE NOT GOT (v7.10) ───────────────────────────────────
