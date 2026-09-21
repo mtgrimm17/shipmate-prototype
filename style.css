@@ -24801,29 +24801,44 @@ body.sm-picker-open { overflow: hidden; }
    It applies to a group of ONE as well. A project with a single trailer still
    gains from seeing that it is the trailer being used — the button is what
    needs two things to choose between, not the statement of fact. */
-.sm-pick-tile {
-  position: relative;
-  display: block;
-  /* NO PADDING AND THE THUMBNAIL'S OWN RADIUS (v7.16). This shipped with 2px
-     of padding and a 12px radius against `.sm-thumb`'s 9px, which put the ring
-     4px out from the picture on every side and rounded it more than the box it
-     was marking — measured, a 42px icon in a 46px ring. It read as a box
-     around the tile rather than a border on it. Jaco: *"the ring is much too
-     wide."*
+/* ── WHICH ONE IS IN USE: THE WRAPPER HAS NO BOX (v7.17) ─────────────────
+   Jaco, twice: *"the ring is much too wide."* v7.16 answered the wrong half of
+   that — it took the padding off and matched the radius, and the ring was
+   still hundreds of pixels wide on his project while measuring flush on mine.
 
-     `inherit` on the pseudo below rather than a second 9px, so the two can
-     only ever agree; if `.sm-thumb`'s radius moves, this follows it. */
-  border-radius: 9px;
-}
+   THE WRAPPER WAS THE WHOLE PROBLEM, and its width was never mine to set.
+   `.sm-thumb` carries `flex: 0 0 auto`, `height: 50px` and `max-width: 260px`
+   — it is designed to be a FLEX ITEM of `.sm-well-row`, and that is what sizes
+   it. Putting a block wrapper around it broke that contract: the thumbnail
+   became an ordinary block filling its parent, and the parent took
+   `fit-content`, which is the content's max-content clamped by the space
+   available. When the aspect-ratio happened to be definite that resolved to
+   the thumbnail's own width and everything looked correct; when it did not,
+   the image's intrinsic width (1024, 1920) blew past the row and the wrapper
+   took the whole row instead. Two projects, same CSS, different answers —
+   which is exactly why measuring my own fixture passed it twice.
 
-/* A PSEUDO-ELEMENT, NOT A BOX-SHADOW ON EITHER BOX. `.sm-thumb` is
-   `overflow: hidden` with the image filling it, so an inset shadow on the
-   thumbnail paints under its own content and an inset shadow on this wrapper
-   paints under the thumbnail — both invisible. An absolutely positioned
-   border sits above both and lands exactly on the picture's edge, which is
-   what "border the thumbnail" means. `pointer-events: none` so it never takes
-   the click, the hold-to-delete gesture or the zoom cursor off the tile. */
-.sm-pick-tile.is-current::after {
+   `display: contents` removes the wrapper's box from layout ALTOGETHER. The
+   thumbnail goes back to being a direct flex child of the row (or of
+   `.sm-pick`'s column), `flex: 0 0 auto` works again, and the geometry is
+   bit-for-bit what it was before any of this was added. A box that does not
+   exist cannot be the wrong width.
+
+   THE RING THEREFORE GOES ON THE THUMBNAIL, which is where it was always
+   meant to be: `.sm-thumb` is already `position: relative`, its `::after` was
+   free, and `inset: 0` is its own edge by definition rather than by
+   arithmetic. `overflow: hidden` does not clip it — the border is inside the
+   padding box. `pointer-events: none` so the click, the hold-to-delete
+   gesture and the zoom cursor all still reach the tile.
+
+   AND THE BUTTON CENTRES ITSELF. "Use this" sat far right for the same single
+   reason: `.sm-pick` is a column with `align-items: center`, and it was
+   centring against a wrapper hundreds of pixels wide rather than against the
+   thumbnail. With no wrapper there is nothing else in the column to be wide,
+   so the button lands under the picture with no rule of its own. */
+.sm-pick-tile { display: contents; }
+
+.sm-pick-tile.is-current > .sm-thumb::after {
   content: '';
   position: absolute;
   inset: 0;
