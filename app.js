@@ -5009,7 +5009,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const text    = (data.content?.[0]?.text || '').trim();
     const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -11235,7 +11235,7 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
         messages: [{ role: 'user', content }],
       }),
     });
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
     const cleaned = _extractJSONPayload(raw);
@@ -11324,7 +11324,7 @@ Aim for 3 wherever the listing supports it — a title, a subtitle and a descrip
         messages: [{ role: 'user', content: prompt }],
       }),
     });
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
     const cleaned = _extractJSONPayload(raw);
@@ -11795,7 +11795,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -12203,7 +12203,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -13254,7 +13254,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -13824,7 +13824,7 @@ Rules:
         messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
       }),
     });
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -14683,7 +14683,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -15231,7 +15231,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -18048,7 +18048,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -18704,7 +18704,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -19322,7 +19322,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -19988,7 +19988,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -20508,7 +20508,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -21898,7 +21898,7 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error('API ' + res.status);
+    if (!res.ok) throw await smClaudeHttpError(res);
     const data    = await res.json();
     const text    = (data.content?.[0]?.text || '').trim();
     const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();

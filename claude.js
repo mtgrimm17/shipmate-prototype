@@ -9,6 +9,39 @@ const CLAUDE_API_KEY  = (typeof CONFIG !== 'undefined' &&
 const CLAUDE_MODEL    = 'claude-haiku-4-5-20251001';
 const CLAUDE_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
+/* ── WHY A FAILED CALL SAID "API 400" AND NOTHING ELSE ────────────────────
+   Twenty call sites POST to CLAUDE_ENDPOINT. Three of them read the error
+   body; the other SEVENTEEN were `throw new Error('API ' + res.status)`,
+   which throws away the one part of the response that says what went wrong.
+   Anthropic puts the reason in `error.message` — "image exceeds 5 MB
+   maximum: 7340032 bytes", "unsupported media type", "credit balance is too
+   low" — so a step could fail for a knowable, fixable reason and report a
+   bare number. That is not a thin error message, it is a DISCARDED one, and
+   it cost a round trip to answer "what's the 400?" with a shrug.
+
+   The three that got it right were byte-identical copies of each other,
+   differing only in their console tag — the shape this file keeps catching
+   (`smCheckSVG`, `SM_STEP_CHEVRON`, `setPrivacyMeta`), and the one where
+   copies drift. So the block is lifted here once and all twenty read it.
+
+   The status map stays: 429, 401 and 500/529 are conditions a person can act
+   on and the API's own wording for them is worse than ours. Everything else
+   defers to `error.message`, because we cannot anticipate it and it is
+   already written for a developer. It is `async` because reading the body
+   is — hence `throw await smClaudeHttpError(res)` at every call site. */
+async function smClaudeHttpError(res, tag) {
+  let rawBody = {};
+  try { rawBody = await res.json(); } catch (_) {}
+  console.error(`${tag || '[Claude]'} HTTP`, res.status, JSON.stringify(rawBody, null, 2));
+  const raw = rawBody.error?.message || '';
+  let msg = `Request failed (${res.status})`;
+  if (res.status === 429) msg = 'Rate limit reached — please retry in a moment.';
+  else if (res.status === 401) msg = 'API key rejected — check the key is valid.';
+  else if (res.status === 500 || res.status === 529) msg = 'Claude is temporarily overloaded — please retry.';
+  else msg = raw || msg;
+  return new Error(msg);
+}
+
 /* ── Screenshot content blocks (shared across all inference calls) ── */
 // Returns up to 3 screenshot image content blocks for the Claude API messages array.
 // Returns [] if no screenshots are uploaded.
@@ -154,18 +187,7 @@ async function analyzeGameWithClaude() {
     }),
   });
 
-  if (!res.ok) {
-    let rawBody = {};
-    try { rawBody = await res.json(); } catch (_) {}
-    console.error('[Claude] HTTP', res.status, JSON.stringify(rawBody, null, 2));
-    const raw = rawBody.error?.message || '';
-    let msg = `Request failed (${res.status})`;
-    if (res.status === 429) msg = 'Rate limit reached — please retry in a moment.';
-    else if (res.status === 401) msg = 'API key rejected — check the key is valid.';
-    else if (res.status === 500 || res.status === 529) msg = 'Claude is temporarily overloaded — please retry.';
-    else msg = raw || msg;
-    throw new Error(msg);
-  }
+  if (!res.ok) throw await smClaudeHttpError(res, '[Claude]');
 
   const apiData = await res.json();
   console.log('[Claude] Success — tokens used:', apiData.usage?.input_tokens, '+', apiData.usage?.output_tokens);
@@ -348,18 +370,7 @@ async function analyzeCQWithClaude() {
     }),
   });
 
-  if (!res.ok) {
-    let rawBody = {};
-    try { rawBody = await res.json(); } catch (_) {}
-    console.error('[Claude CQ] HTTP', res.status, JSON.stringify(rawBody, null, 2));
-    const raw = rawBody.error?.message || '';
-    let msg = `Request failed (${res.status})`;
-    if (res.status === 429) msg = 'Rate limit reached — please retry in a moment.';
-    else if (res.status === 401) msg = 'API key rejected — check the key is valid.';
-    else if (res.status === 500 || res.status === 529) msg = 'Claude is temporarily overloaded — please retry.';
-    else msg = raw || msg;
-    throw new Error(msg);
-  }
+  if (!res.ok) throw await smClaudeHttpError(res, '[Claude CQ]');
 
   const apiData = await res.json();
   console.log('[Claude CQ] Success — tokens:', apiData.usage?.input_tokens, '+', apiData.usage?.output_tokens);
@@ -1449,7 +1460,7 @@ Rules:
       messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
     }),
   });
-  if (!res.ok) throw new Error('API ' + res.status);
+  if (!res.ok) throw await smClaudeHttpError(res);
   const data    = await res.json();
   const text    = (data.content?.[0]?.text || '').trim();
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -1604,7 +1615,7 @@ Rules:
       messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
     }),
   });
-  if (!res.ok) throw new Error('API ' + res.status);
+  if (!res.ok) throw await smClaudeHttpError(res);
   const data    = await res.json();
   const text    = (data.content?.[0]?.text || '').trim();
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -1612,10 +1623,47 @@ Rules:
   applySteamResults(parsed);
 }
 
+/* ── WHICH PLATFORMS THIS CALL ANSWERS FOR — ONE LIST, TWO READERS ────────
+   This expression existed TWICE, and the two copies decide different halves of
+   one call: buildUnifiedInferencePrompt uses it to choose which schemas go in
+   the prompt, and inferAllQuestionnaires uses it to decide whether to call at
+   all and which results to apply. They are only correct while they agree, and
+   nothing made them.
+
+   That is not hypothetical — it is how the first attempt at the Mac fix broke.
+   The alias was added to inferAllQuestionnaires alone, so a Mac-only project
+   passed the gate and then built a prompt containing NO schema at all:
+   measured, 3,863 characters with no "ios", "android" or "steam" block in it.
+   A real request, real tokens, and nothing applicable in the reply — worse than
+   the silent skip it replaced, because it looks identical and costs money.
+
+   MAC APP STORE IS THE APP STORE HERE. The list named ios, android and steam,
+   and `macos` appeared nowhere else in this file, so a Mac-only project came
+   out empty and the whole inference returned in silence. The alias is right
+   rather than a fourth branch because Mac's Content Rating answers ARE the
+   App Store's — every intensity and yes/no question, plus ageCategory and the
+   privacy fields, is in IOS_MAC_SHARED_ANSWER_FIELDS (state.js), and
+   applyClaudeResults writes to state.iosSubmitAnswers, which is the bucket
+   _appStoreAnswers routes Mac's shared fields to. So one `ios` in this list
+   makes the call happen AND lands the answers where Mac reads them. Same shape
+   as OB_PLATFORM_TIMING's and SM_TILE_MARK_ALIAS's own macos→ios.
+
+   De-duped, so Mac beside a real App Store submission does not ask twice.
+
+   NOT COVERED, and named rather than left to be discovered: web and the four
+   consoles have questionnaires this prompt does not answer, so they still
+   produce an empty list — which is now honest, because a no-op no longer
+   caches itself as done (see runInference). */
+function _inferencePids() {
+  return [...new Set([...state.activePlatforms]
+    .map(p => (p === 'macos' || p === 'macos_full') ? 'ios' : p)
+    .filter(p => ['ios','android','steam'].includes(p)))];
+}
+
 /* ── Unified inference prompt (all active platforms in one call) ── */
 
 function buildUnifiedInferencePrompt() {
-  const activePids = [...state.activePlatforms].filter(p => ['ios','android','steam'].includes(p));
+  const activePids = _inferencePids();
   const ctx        = buildSharedContext();   // includes natural-language summary at top
 
   // ── iOS schema ───────────────────────────────────────────────────────────────
@@ -1742,8 +1790,12 @@ ${schemaSections}
 
 async function inferAllQuestionnaires() {
   if (!CLAUDE_API_KEY) throw new Error('NO_KEY');
-  const activePids = [...state.activePlatforms].filter(p => ['ios','android','steam'].includes(p));
-  if (!activePids.length) return;
+  /* The SAME list the prompt is built from — see _inferencePids, which is also
+     where the macos→ios alias and the reason for it are written. These two
+     readers have to agree: this one decides whether to call and which results
+     to apply, that one decides which schemas are asked for. */
+  const activePids = _inferencePids();
+  if (!activePids.length) return false;
 
   // Guard: skip inference entirely if there is no meaningful game data to reason about.
   // Without title, description, or screenshots the model defaults to generic heuristics
@@ -1753,7 +1805,7 @@ async function inferAllQuestionnaires() {
                || (state.uploads.screenshots || []).length > 0;
   if (!hasData) {
     console.log('[Unified] Skipping inference — no game data available yet.');
-    return;
+    return false;
   }
 
   // Clear stale AI-inferred meta (preserve human-confirmed answers)
@@ -1792,18 +1844,7 @@ async function inferAllQuestionnaires() {
     }),
   });
 
-  if (!res.ok) {
-    let rawBody = {};
-    try { rawBody = await res.json(); } catch (_) {}
-    console.error('[Unified] HTTP', res.status, JSON.stringify(rawBody, null, 2));
-    const raw = rawBody.error?.message || '';
-    let msg = `Request failed (${res.status})`;
-    if (res.status === 429) msg = 'Rate limit reached — please retry in a moment.';
-    else if (res.status === 401) msg = 'API key rejected — check the key is valid.';
-    else if (res.status === 500 || res.status === 529) msg = 'Claude is temporarily overloaded — please retry.';
-    else msg = raw || msg;
-    throw new Error(msg);
-  }
+  if (!res.ok) throw await smClaudeHttpError(res, '[Unified]');
 
   const apiData = await res.json();
   console.log('[Unified] Success — tokens:', apiData.usage?.input_tokens, '+', apiData.usage?.output_tokens);
@@ -1829,6 +1870,11 @@ async function inferAllQuestionnaires() {
   if (activePids.includes('steam') && parsed.steam) {
     applySteamResults(parsed.steam);
   }
+
+  /* The one path that really called Claude and applied an answer. Every exit
+     above returns false, so `runInference` can tell "done" from "declined to
+     do anything" — see the cache write there. */
+  return true;
 }
 
 /* ── Public dispatcher ───────────────────────────────────────── */
@@ -1900,10 +1946,20 @@ async function runInference(pid, stepId) {
     const uKey = 'unified:questionnaire';
     const sig  = _inferenceSignature();
     if (state.platformInferenceCache[uKey] === sig) return;   // same input, same answers
-    await inferAllQuestionnaires();
-    // Written only on success — a throw leaves the key alone, so a failed call
-    // stays retryable rather than caching itself as done.
-    state.platformInferenceCache[uKey] = sig;
+    const ran = await inferAllQuestionnaires();
+    /* Written only on success — a throw leaves the key alone, so a failed call
+       stays retryable rather than caching itself as done.
+
+       AND A NO-OP IS NOT A SUCCESS, which is the half this was missing and the
+       reason the Mac bug could never recover on its own. inferAllQuestionnaires
+       has three silent exits — no supported platform active, no game data yet,
+       and (until today) any Mac-only project — and every one of them landed here
+       and stamped the cache. So the first open recorded "done" for a call that
+       had never happened, and every later open matched that key and skipped,
+       even once a title, a description and screenshots had arrived. A cache that
+       records intentions rather than outcomes can only ever be wrong in the
+       direction of doing nothing. */
+    if (ran) state.platformInferenceCache[uKey] = sig;
     return;
   }
 
