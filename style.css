@@ -24832,20 +24832,28 @@ body.sm-picker-open { overflow: hidden; }
   width: min-content;
 }
 
-/* AND THE LABEL IS MADE TO FIT INSIDE THAT WIDTH, which is the other half and
-   not a duplicate of it. `min-content` guarantees the column cannot grow;
-   without a label that fits, the label would simply overflow it instead —
-   2px of "Use this" over the neighbouring icon on each side, which is the
-   overlap this is asked to prevent.
+/* AND THE LABEL IS SIZED TO THAT WIDTH, which is the other half and not a
+   duplicate of it. `min-content` guarantees the column cannot grow; without a
+   label that fits, the label would wrap to two lines inside it instead.
 
-   8px with .2px of tracking measures 40 against an icon's 42. It is the same
-   mono, the same colour and the same weight — only smaller, and only because
-   the narrowest tile in the library sets the budget. `ellipsis` is the floor
-   under both: if a tile is ever narrower than this label, the label is cut
-   rather than allowed back out over its neighbour. */
+   THE BUDGET IS THE NARROWEST TILE THAT CARRIES A LABEL, and v7.21 changed
+   which one that is. Only Icon and Video groups get a "Use this"
+   (`_smPickWrap`), and the icon went from 42 to 63 — so the 8px this was cut
+   to in v7.19, which measured 40 against a 42px icon, is now 40 against 63 and
+   two-thirds of the room is going unused.
+
+   12.5px MEASURES 61.8 AGAINST 63, and the ceiling was found rather than
+   guessed. Swept in the browser: 12.75 comes to exactly 63.0 on one line, and
+   13 comes to 64.2 and WRAPS. So 12.75 is the literal answer and sits on the
+   cliff edge — one different font metric in one browser and the label is two
+   lines. 12.5 keeps 1.2px in hand, which is a fifth of the way back to the
+   previous step and reads as flush.
+
+   `ellipsis` is the floor under both: if a tile is ever narrower than this
+   label, the label is cut rather than allowed out over its neighbour. */
 .sm-pick-use {
   background: none; border: none; margin: 0; padding: 0;
-  font-family: var(--mono); font-size: 8px; letter-spacing: .2px; line-height: 1;
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: .2px; line-height: 1;
   color: var(--pill-on-color, #52BAFF);
   cursor: pointer;
   /* `nowrap` IS GONE, and dropping it is what makes the column's `min-content`
