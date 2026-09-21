@@ -15970,7 +15970,14 @@ function _shotEdArm() {
   _shotEdWireStrip(root, pid);
 
   const stage = document.getElementById('shot-ed-stage');
-  if (!stage || stage.classList.contains('is-empty')) { _shotEd.shotId = null; return; }
+  /* `is-trailer` joins `is-empty` as a stage with nothing to crop (v7.15). The
+     selection is NOT cleared for it, unlike the empty case: the strip still
+     shows the trailer tile as the selected one, and `_shotEd.shotId` is what
+     the next render reads back to keep it selected. Only the cropper stands
+     down — no geometry, no listeners, no load. */
+  if (!stage) { _shotEd.shotId = null; return; }
+  if (stage.classList.contains('is-trailer')) { _shotEd.img = null; return; }
+  if (stage.classList.contains('is-empty')) { _shotEd.shotId = null; return; }
 
   // Which one the markup drew as selected — the builder already resolved the
   // fallback, so reading it back beats recomputing it here.
@@ -16374,7 +16381,21 @@ function _shotEdWireStrip(root, pid) {
     return;
   }
 
-  strip.querySelectorAll('[data-shot-thumb]').forEach(t => {
+  /* THE TRAILER TILE IS SELECTABLE AND NOTHING ELSE (v7.15). It carries no
+     `draggable` and no ×, so the reorder and delete wiring below simply never
+     finds it — this only has to give it the click, and to step around the
+     `dragstart`/`dragend` pair the loop would otherwise attach to a tile that
+     cannot be dragged. */
+  const trailerTile = strip.querySelector(`[data-shot-thumb="${SPP_TRAILER_ID}"]`);
+  if (trailerTile) {
+    trailerTile.addEventListener('click', () => {
+      if (_shotEd.shotId === SPP_TRAILER_ID) return;
+      _shotEdCommit();
+      reRenderStepModalScreenshots(pid, SPP_TRAILER_ID);
+    });
+  }
+
+  strip.querySelectorAll('[data-shot-thumb]:not([data-shot-thumb="' + SPP_TRAILER_ID + '"])').forEach(t => {
     t.addEventListener('click', e => {
       if (e.target.closest('[data-shot-del]')) return;
       const id = t.dataset.shotThumb;
@@ -23601,17 +23622,69 @@ function _smIconMissingHtml() {
                   data-tip="Upload an app icon">Icon</button>`;
 }
 
+/* WHICH ONE IS OURS, AND HOW TO CHANGE IT (v7.15 extends this to video).
+
+   ICONS HAD THIS AND VIDEOS DID NOT, which was fine while a project had one
+   trailer and silently wrong the moment it had two: every surface took the
+   first video it found and the developer had no way to say otherwise. Video
+   now answers to the same slot model (`smAppTrailer`, assets.js), so one
+   wrapper serves both rather than a second one growing beside it.
+
+   THE BORDER IS NEW AND IS FOR BOTH. "Use this" only ever appeared on the
+   tiles that were NOT selected — it is the action, and the chosen one has no
+   action to offer — so with two icons the current one was identified by the
+   absence of a button, which is not identification at all. A ring states it.
+   It is on the tile in every case, including the single-asset case where no
+   button is drawn: a project with exactly one trailer still benefits from
+   seeing that it is the one being used.
+
+   THE BUTTON STILL NEEDS TWO, because a choice between one thing is not a
+   choice. `>= 2` on the group, counted as displayed. */
 function _smPickWrap(a, list, thumbHtml) {
-  if (a.kind !== 'icon') return thumbHtml;
-  const icons = list.filter(x => x.kind === 'icon').length;
-  if (icons < 2) return thumbHtml;
-  const mine = _smIsAppIcon(a);
-  return `<div class="sm-pick">${thumbHtml}
+  const isIcon  = a.kind === 'icon';
+  const isVideo = a.kind === 'video';
+  if (!isIcon && !isVideo) return thumbHtml;
+
+  const id   = a.steamTrailer ? SM_STEAM_TRAILER_REF : a.id;
+  const mine = isIcon ? _smIsAppIcon(a)
+                      : (typeof smIsAppTrailer === 'function' && smIsAppTrailer(id));
+  const use  = isIcon ? `smUseAsAppIcon('${a.id}')` : `smUseAsTrailer('${id}')`;
+  const wrapped = `<div class="sm-pick-tile${mine ? ' is-current' : ''}">${thumbHtml}</div>`;
+
+  const group = list.filter(x => x.kind === a.kind).length;
+  if (group < 2) return wrapped;
+
+  return `<div class="sm-pick">${wrapped}
     ${mine
       ? `<span class="sm-pick-use is-off" aria-hidden="true">Use this</span>`
       : `<button type="button" class="sm-pick-use"
-                 onclick="smUseAsAppIcon('${a.id}')">Use this</button>`}
+                 onclick="${use}">Use this</button>`}
   </div>`;
+}
+
+/* The video half of `smUseAsAppIcon`, and the same three lines: write the
+   slot, close whatever is open over it, repaint. The id may be the synthetic
+   Steam one, which is why this takes an id rather than a pool record. */
+function smUseAsTrailer(id) {
+  if (!id) return;
+  state.uploads = state.uploads || {};
+  state.uploads.appTrailer = { ref: id };
+  smZoomClose();
+  if (typeof renderDetails === 'function') renderDetails();
+  else if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+/* PLAYING THE TRAILER FROM ANYWHERE. The store previews' carousel needs the
+   same thing the Assets well does — the lightbox — and the two sources reach
+   it by two different doors: a pool video has a file, so `smZoom` plays it;
+   the Steam one is an HLS manifest and has its own opener. One function, so
+   the preview never has to know which kind it is looking at. */
+function smPlayAppTrailer() {
+  const tr = (typeof smAppTrailer === 'function') ? smAppTrailer() : null;
+  if (!tr) return;
+  if (tr.isSteam) { if (typeof smZoomSteamTrailer === 'function') smZoomSteamTrailer(); return; }
+  if (typeof smZoom === 'function') smZoom(tr.id);
 }
 
 function _smLibraryHTML() {
@@ -23870,6 +23943,21 @@ function smHoldCancel() {
    job" — so the answer survives anything later landing in the pool beside it. */
 function _smIsAppIcon(a) {
   if (!a || a.kind !== 'icon') return false;
+  /* BY ID, NOT BY SRC (v7.15), and v7.14 is what made that necessary rather
+     than merely tidier. This compared `smAppIconSrc()` against `a.src` — and
+     that function now returns the CROPPED BAKE when the App Icon editor has
+     made one, which equals no asset's own src. So the moment a developer
+     cropped their icon, the library stopped being able to say which file it
+     was: no ring, and "Use this" offered on the icon already in use.
+
+     The src comparison also could not tell two identical files apart. `smAdd`
+     dedupes by src so the pool cannot normally hold both, but identity by
+     content was always the weaker claim. `smAppIconId` is the same answer
+     `smAppIconSrc` looks the crop up under, so the two cannot disagree.
+
+     The src fallback stays for the pre-pool upload shape, which has no id. */
+  const id = (typeof smAppIconId === 'function') ? smAppIconId() : null;
+  if (id) return id === a.id;
   const cur = (typeof smAppIconSrc === 'function') ? smAppIconSrc() : '';
   return !!cur && cur === a.src;
 }

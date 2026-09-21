@@ -10126,7 +10126,64 @@ textarea.loc-review-field.ias-inline-input {
    The badge is the app's own Steam-trailer play badge in position, not a new
    glyph: a still frame with nothing on it is indistinguishable from a
    screenshot, which the asset library already learned. */
+/* ── The trailer inside the Media Carousel editor (v7.15) ────────────────
+   The stage draws the video itself rather than a crop canvas, because a
+   trailer has no crop — see buildScreenshotsSection for why the toolbar goes
+   `is-off` beside it rather than showing two disabled controls.
+
+   `aspect-ratio` off the same `--shot-canvas-ratio` token the empty stage
+   uses, so the three stages this surface can draw are sized by one mechanism
+   and cannot disagree. 1.777 is the token's value here: a trailer is 16:9 and
+   says so, where a screenshot stage takes the store's own frame. */
+.shot-ed-stage.is-trailer {
+  position: relative;
+  aspect-ratio: var(--shot-canvas-ratio, 1.777);
+  cursor: pointer;
+}
+.shot-ed-trailer-media {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.shot-ed-trailer-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 54px; height: 54px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38);
+  color: #fff; font-size: 19px; line-height: 1; padding-left: 3px;
+  pointer-events: none;
+  transition: background .14s ease;
+}
+.shot-ed-stage.is-trailer:hover .shot-ed-trailer-play { background: rgba(0, 0, 0, .72); }
+/* The screenshots stage fades its hint out while you drag; this one is not a
+   gesture hint, it is a label on a button, so it stays. */
+.shot-ed-hint.is-static { opacity: 1; }
+
+/* Its tile in the strip. Square-ish like the rest, with the same play badge
+   the carousel uses so the two read as the same object at two sizes. It is
+   not draggable and has no ×, so it also does not take `.shot-thumb`'s grab
+   cursor. */
+.shot-thumb.shot-thumb--trailer { cursor: pointer; }
+.shot-thumb.shot-thumb--trailer video,
+.shot-thumb.shot-thumb--trailer img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.shot-thumb-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3);
+  color: #fff; font-size: 9px; line-height: 1; padding-left: 1px;
+  pointer-events: none;
+}
+
+/* The carousel frame is a button now (v7.15) — it plays rather than opening
+   the section behind the strip, so it says so with the pointer and lifts its
+   badge on hover. */
 .ias-shot-frame.ias-shot-trailer { position: relative; width: 409px; }
+.ias-shot-frame.ias-shot-trailer { cursor: pointer; }
+.ias-shot-frame.ias-shot-trailer:hover .ias-shot-play { background: rgba(0, 0, 0, .72); }
 .ias-shot-frame.ias-shot-trailer video.ias-shot-img,
 .ias-shot-frame.ias-shot-trailer img.ias-shot-img {
   width: 100%; height: 100%; object-fit: cover;
@@ -24724,6 +24781,34 @@ body.sm-picker-open { overflow: hidden; }
 /* Reserved, never removed — the row aligns on its bottom edge, so a missing
    label would lift that tile above its neighbours. */
 .sm-pick-use.is-off { visibility: hidden; pointer-events: none; }
+
+/* ── WHICH ONE IS IN USE (v7.15) ──────────────────────────────────────────
+   "Use this" only ever appeared on the tiles that are NOT the chosen one — it
+   is the action, and the chosen one has no action to offer — so with two icons
+   the current one was identified by the ABSENCE of a button, which is not
+   identification. The ring says it directly.
+
+   The app's own selected blue, the one `--pill-on-color` carries and every
+   selected pill in this interface wears, rather than a colour invented for
+   this row: "this is the one" already has a colour here.
+
+   A WRAPPER, NOT THE THUMBNAIL. `.sm-thumb` is `overflow: hidden` so a ring
+   drawn on it is clipped by its own radius, and it is the element the
+   hold-to-delete bar and the checkerboard are positioned against. The ring
+   sits on a box around it and keeps 2px clear, so it reads as a selection
+   around the file rather than a border painted onto it.
+
+   It applies to a group of ONE as well. A project with a single trailer still
+   gains from seeing that it is the trailer being used — the button is what
+   needs two things to choose between, not the statement of fact. */
+.sm-pick-tile {
+  display: block; border-radius: 12px; padding: 2px;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow .14s ease;
+}
+.sm-pick-tile.is-current {
+  box-shadow: inset 0 0 0 2px var(--pill-on-color, #52BAFF);
+}
 
 /* ── THE ICON YOU HAVE NOT GOT (v7.10) ───────────────────────────────────
    See `_smIconMissingHtml` (app.js) for why it exists, why it is red, and why

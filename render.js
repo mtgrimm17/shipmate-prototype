@@ -7328,8 +7328,19 @@ function renderStepModal() {
   // whenever it's opened this way, and step?.label alone would render a
   // blank modal title. Falls back to its own still-accurate, hardcoded
   // label in that one case.
+  /* "SCREENSHOTS" IS CALLED "MEDIA CAROUSEL" ON THE TWO APPLE PREVIEWS
+     (v7.15, by request). The strip stopped being only screenshots the moment
+     the trailer led it, and the section behind it now selects between both —
+     so the name it wore was describing the old contents.
+
+     A per-platform override rather than editing SM_FLIP_LABELS, because that
+     table is shared: Google Play, Steam and Mac App Store Full reach the same
+     builder through the same target and were not part of the request. One
+     entry, keyed by target, consulted before the shared table. */
+  const APPLE_FLIP_LABELS = { screenshots: 'Media Carousel' };
+  const applePreview = platformId === 'ios' || platformId === 'macos';
   const displayStepLabel = isFlipped
-    ? (FLIP_LABELS[flipTarget] || step?.label)
+    ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
     : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
   // Step body — one dispatcher, shared with the inline Submission pane.
@@ -9831,7 +9842,7 @@ function sppRequiredElements(pid, lang) {
     { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!val('subtitle'),     bad: over('subtitle') },
     { id: 'business',     label: 'Business',                          required: true,  done: !!(seen.business && complete('business')) },
     { id: 'content',      label: 'Content',                           required: true,  done: complete('contentRating') },
-    { id: 'screenshots',  label: 'Adjust Screenshots',                required: true,  done: complete('screenshots'),  short: 'Screenshots' },
+    { id: 'screenshots',  label: 'Media Carousel',                    required: true,  done: complete('screenshots'),  short: 'Media Carousel' },
     { id: 'description',  label: 'Description',                       required: true,  done: !!val('description'),  bad: over('description') },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: complete('privacy'),      short: 'Data privacy' },
@@ -10596,11 +10607,11 @@ function buildStorePreviewSection() {
   const screenshotsArea = `
     <div class="spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
          onclick="openStorePreviewSection('${pid}','screenshots')"
-         title="Adjust Screenshots">
+         title="Media Carousel">
       <div class="spp-shots-strip">
         <div class="ias-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
         ${screenshotsDone ? '' : `
-        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Adjust Screenshots</span></div>`}
+        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Media Carousel</span></div>`}
       </div>
     </div>
     <div class="ias-device-compat">
@@ -11534,11 +11545,11 @@ function buildMacStorePreviewSection() {
   const screenshotsArea = `
     <div class="spp-shots-row${screenshotsDone ? ' is-shots-done' : ''}"
          onclick="openStorePreviewSection('${pid}','screenshots')"
-         title="Adjust Screenshots">
+         title="Media Carousel">
       <div class="spp-shots-strip">
         <div class="ias-shots-scroll mac-spp-shots-scroll" data-spp-el="screenshots">${shotHtml}</div>
         ${screenshotsDone ? '' : `
-        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Adjust Screenshots</span></div>`}
+        <div class="spp-shots-veil"><span class="spp-shots-veil-label">Media Carousel</span></div>`}
       </div>
     </div>
     <div class="ias-device-compat">
@@ -20176,12 +20187,19 @@ function buildBuildDropdown(pid, inModal) {
    to pull, while the Steam trailer is an HLS manifest whose only still is a
    poster image. Resolved here so neither preview has to know it — the same
    reason smAppIconSrc exists. */
+/* The carousel's own id for the trailer tile. Deliberately not an asset id:
+   the tile stands for "whatever the chosen trailer is", and the choice can
+   move under it without the strip's selection meaning something else. */
+const SPP_TRAILER_ID = '__spp-trailer';
+
 function _sppFirstTrailer() {
-  const vid = (state.assets || []).find(a => a.kind === 'video' && a.src);
-  if (vid) return { src: vid.src, poster: null, name: vid.name || 'Trailer' };
-  const st = state.uploads?.steamTrailer;
-  if (st && st.thumbnail) return { src: null, poster: st.thumbnail, name: st.name || 'Trailer' };
-  return null;
+  /* IT IS THE CHOSEN ONE NOW (v7.15), not merely the first. Game Details'
+     Assets well gained a "Use this" for video, so which trailer the listing
+     shows is a decision the developer can make — and `smAppTrailer` is the one
+     place that decision is read, exactly as `smAppIcon` is for the icon. It
+     still falls back to the first available, which is what every project that
+     never opens that well gets. */
+  return (typeof smAppTrailer === 'function') ? smAppTrailer() : null;
 }
 
 /* The frame it draws, shared by the two Apple previews so they cannot drift.
@@ -20193,7 +20211,20 @@ function _sppTrailerFrameHtml() {
   const inner = tr.poster
     ? `<img src="${escHtml(tr.poster)}" class="ias-shot-img" alt="">`
     : `<video src="${escHtml(tr.src)}#t=0.1" class="ias-shot-img" muted playsinline preload="metadata"></video>`;
-  return `<div class="ias-shot-frame ias-shot-trailer" title="${escHtml(tr.name)}">${inner}<span class="ias-shot-play">▶</span></div>`;
+  /* PRESSING IT PLAYS IT (v7.15). The frame is the target rather than the
+     badge alone — the badge is 34px in the middle of a 409px picture, and a
+     play control you have to aim at is a worse control than the picture
+     itself. `stopPropagation` because the strip around it is a well that
+     opens the Media Carousel section: without it, playing the trailer would
+     also navigate away from the page you wanted to watch it on.
+
+     It opens the same lightbox the Assets well does, through the same
+     function, so a pool video and the Steam HLS manifest both behave exactly
+     as they do in Game Details. */
+  return `<div class="ias-shot-frame ias-shot-trailer" role="button" tabindex="0"
+               title="Play ${escHtml(tr.name)}"
+               onclick="event.stopPropagation(); smPlayAppTrailer()"
+          >${inner}<span class="ias-shot-play">▶</span></div>`;
 }
 
 function platformStoreShots(pid) {
@@ -20445,9 +20476,26 @@ function buildScreenshotsSection(pid) {
      — it is where the pointer is, not something the submission carries. The
      builder only has to know the id, and falls back to the first shot so the
      stage is never empty while there is something to show. */
-  const sel = (typeof _shotEd !== 'undefined' && _shotEd.pid === pid && shots.some(s => s.id === _shotEd.shotId))
+  /* THE TRAILER IS IN THE CAROUSEL TOO (v7.15), which is why this section is
+     no longer called Screenshots. The two Apple previews lead their strip with
+     it, so the section that edits that strip has to contain it — otherwise the
+     page shows something the editor behind it cannot see.
+
+     IT IS NOT A SHOT, and the id says so. `SPP_TRAILER_ID` is not in `shots`,
+     never reaches `platformStoreShots`, and carries no crop — so completeness,
+     ordering, removal and the bake are all untouched by its presence. It is a
+     selectable tile and a stage, and nothing else.
+
+     Apple only, as asked: Google Play, Steam and Mac App Store Full reach this
+     same builder and keep the plain screenshots strip. */
+  const applePreview = (pid === 'ios' || pid === 'macos');
+  const trailer = applePreview && typeof smAppTrailer === 'function' ? smAppTrailer() : null;
+
+  const selectable = id => id === SPP_TRAILER_ID ? !!trailer : shots.some(s => s.id === id);
+  const sel = (typeof _shotEd !== 'undefined' && _shotEd.pid === pid && selectable(_shotEd.shotId))
     ? _shotEd.shotId
-    : (shots[0]?.id || null);
+    : (shots[0]?.id || (trailer ? SPP_TRAILER_ID : null));
+  const trailerFocused = sel === SPP_TRAILER_ID;
 
   const reqRow = (typeof SM_REQS !== 'undefined' && (SM_REQS[pid === 'macos_full' ? 'macos' : pid] || []).find(r => r.shot)) || null;
   const reqLine = reqRow
@@ -20462,6 +20510,20 @@ function buildScreenshotsSection(pid) {
      i.e. one that is being cover-cropped and therefore has a decision in it.
      A shot that already fits has nothing to reposition and wears nothing. */
   const panSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>`;
+
+  /* THE TRAILER LEADS THE STRIP, because it leads the carousel this section
+     edits — the two have to agree or the editor is describing a different page
+     from the one behind it. Not draggable and no ×: its place is fixed (the
+     store shows the video first) and removing it means choosing a different
+     trailer in Game Details, not deleting one here. */
+  const trailerThumb = trailer ? `
+    <div class="shot-thumb shot-thumb--trailer${trailerFocused ? ' is-selected' : ''}"
+         data-shot-thumb="${SPP_TRAILER_ID}" title="${escHtml(trailer.name)}">
+      ${trailer.poster
+        ? `<img src="${escHtml(trailer.poster)}" alt="" draggable="false">`
+        : `<video src="${escHtml(trailer.src)}#t=0.1" muted playsinline preload="metadata"></video>`}
+      <span class="shot-thumb-play">▶</span>
+    </div>` : '';
 
   const thumbs = shots.map((s, i) => `
     <div class="shot-thumb${s.id === sel ? ' is-selected' : ''}" data-shot-thumb="${s.id}"
@@ -20487,7 +20549,30 @@ function buildScreenshotsSection(pid) {
      `_shotEdArm` (app.js) does it after the paint, the way every other thing
      on this surface that depends on layout does. The markup only has to name
      the boxes. */
-  const stage = sel
+  /* A TRAILER HAS NO CROP, SO IT GETS NO CROPPER (v7.15). Drag-to-reposition
+     and Zoom are the two controls of a crop, and a video in this carousel is
+     not cropped — it plays. The stage draws the trailer and says how, and the
+     toolbar below goes `is-off`: a disabled slider beside a picture you can
+     plainly see is the interface describing itself.
+
+     `is-trailer` is what `_shotEdArm` bails on, the same way it already bails
+     on `is-empty` — one shape, two reasons, and neither arms a cropper over
+     something with no crop to make. */
+  const trailerStage = trailer ? `
+      <div class="shot-ed-stage is-trailer" id="shot-ed-stage"
+           style="--shot-canvas-ratio:1.777"
+           role="button" tabindex="0" title="Play ${escHtml(trailer.name)}"
+           onclick="smPlayAppTrailer()">
+        ${trailer.poster
+          ? `<img class="shot-ed-trailer-media" src="${escHtml(trailer.poster)}" alt="">`
+          : `<video class="shot-ed-trailer-media" src="${escHtml(trailer.src)}#t=0.1" muted playsinline preload="metadata"></video>`}
+        <span class="shot-ed-trailer-play">▶</span>
+        <div class="shot-ed-hint is-static" aria-hidden="true">Press to play</div>
+      </div>` : '';
+
+  const stage = trailerFocused
+    ? trailerStage
+    : sel
     ? `
       <div class="shot-ed-stage" id="shot-ed-stage">
         <div class="shot-ed-canvas" id="shot-ed-canvas">
@@ -20525,26 +20610,32 @@ function buildScreenshotsSection(pid) {
         </button>
       </div>`;
 
+  /* THE CROP CONTROLS ARE OFF FOR A TRAILER, by request. One condition, used
+     three times, so the label, the slider and Reset cannot end up disagreeing
+     about whether there is anything to control. */
+  const cropOff = !sel || trailerFocused;
+
   return `
     <div class="shot-ed" data-shot-ed-pid="${pid}">
       <div class="shot-ed-head">
         <div class="shot-ed-count">${shots.length} screenshot${shots.length === 1 ? '' : 's'}${
+          trailer ? ' · 1 trailer' : ''}${
           removedCount ? ` · ${removedCount} removed` : ''}</div>
         ${reqLine ? `<div class="shot-ed-req">${reqLine}</div>` : ''}
       </div>
 
       ${stage}
 
-      <div class="shot-ed-toolbar${sel ? '' : ' is-off'}">
+      <div class="shot-ed-toolbar${cropOff ? ' is-off' : ''}">
         <div class="shot-ed-zoom">
           <span class="shot-ed-zoom-label">Zoom</span>
           <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
-                 min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
+                 min="1" max="4" step="0.01" value="1" ${cropOff ? 'disabled' : ''}>
         </div>
-        <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
+        <button class="shot-ed-reset" id="shot-ed-reset" ${cropOff ? 'disabled' : ''}>Reset</button>
       </div>
 
-      <div class="shot-ed-strip" id="shot-ed-strip">${thumbs}${addSlot}</div>
+      <div class="shot-ed-strip" id="shot-ed-strip">${trailerThumb}${thumbs}${addSlot}</div>
 
       ${pool.length === 0 && shots.length === 0 ? `
       <p class="shot-ed-note">No screenshots uploaded yet — add them here, or under Assets in Game Details.</p>` : ''}

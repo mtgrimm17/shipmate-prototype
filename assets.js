@@ -354,6 +354,52 @@ function smIconCandidates() {
   return out;
 }
 
+/* ── THE TRAILER, CHOSEN THE SAME WAY THE ICON IS (v7.15) ─────────────────
+   A project can hold several videos, and until now nothing said which one was
+   THE trailer — every surface simply took the first it found. That is fine
+   while there is one and silently wrong the moment there are two, which is
+   exactly the shape `smAppIcon` already fixed for icons. So this is that
+   model again, deliberately: a slot the developer writes, a candidate list,
+   and a fallback for the overwhelming case where nobody has chosen.
+
+   THE STEAM TRAILER IS A CANDIDATE BUT NOT A RECORD. It is an HLS manifest
+   plus a poster, not a file, so it cannot live in the pool (see
+   SM_STEAM_TRAILER_ID, app.js) — it is synthesised here under that same id so
+   the slot can point at it like anything else.
+
+   ONE SHAPE OUT, unlike the icon's `smAppIcon`. The two sources differ in more
+   than their src field: a pool video has a file to pull a frame from, the
+   Steam one has only a poster and needs hls.js to play. Flattening that here
+   is what lets the store previews draw a trailer without knowing which kind it
+   is — the same argument `smAppIconSrc` makes, one level further up. */
+const SM_STEAM_TRAILER_REF = '__steam-trailer';
+
+function smTrailerCandidates() {
+  const out = smPool().filter(a => a.kind === 'video' && a.src)
+    .map(a => ({ id: a.id, name: a.name || 'Trailer', src: a.src, poster: null, isSteam: false }));
+  const st = state.uploads?.steamTrailer;
+  if (st && st.thumbnail) {
+    out.push({ id: SM_STEAM_TRAILER_REF, name: st.name || 'Trailer',
+               src: null, poster: st.thumbnail, hlsUrl: st.hlsUrl || null, isSteam: true });
+  }
+  return out;
+}
+
+/* The chosen one, or the first available. The fallback is the ORDER THE ASSETS
+   SECTION DRAWS — pool videos, then the Steam trailer appended — so "the first
+   available trailer" means the same thing here and there. */
+function smAppTrailer() {
+  const cands = smTrailerCandidates();
+  if (!cands.length) return null;
+  const ref = state.uploads?.appTrailer?.ref;
+  return cands.find(c => c.id === ref) || cands[0];
+}
+
+function smIsAppTrailer(id) {
+  const cur = smAppTrailer();
+  return !!cur && cur.id === id;
+}
+
 /* THE RECORD. `origin` is the field that matters most, and it is a bug fix as
    much as a feature.
 
