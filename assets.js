@@ -409,13 +409,39 @@ function smIsAppTrailer(id) {
    remote URLs. It is not a fact about the file; it is a coincidence about
    where it came from, and it breaks silently the day an upload is stored as a
    blob URL or a fetched image is inlined. `origin` states the fact. */
+/* WHO SAID WHAT THIS FILE IS. `kindBy` has had two values — 'auto', meaning
+   the geometry classifier worked it out, and 'user', meaning a human
+   overruled it. It gains a third:
+
+     'source' — the place the file came from told us, and it knew.
+
+   THAT IS NOT A NICETY, IT IS THE PORTAL BUG. Shipmate's /game endpoint hands
+   back Steam's images already discriminated by `type`, and
+   `_fillScreenshotGridFromSteam` filters on exactly that word — then adopted
+   each one and threw the word away, leaving `smAssetKind` to re-derive from
+   pixels a fact we had been given in writing. On Portal the seven legacy
+   assets decode at 640x360: widescreen, under the 1024px floor
+   `smLooksLikeShot` imposes, so they came out 'art-land' and seven
+   screenshots landed in Key art. (Their URLs all say `.1920x1080.jpg`, and
+   not one of them is; the filename is a path, not a promise, which is exactly
+   why nothing here reads it.)
+
+   Geometry is an INFERENCE and provenance is a FACT, so the fact wins. The
+   classifier stays exactly as it is for everything that arrives without one —
+   a dropped file still has only its pixels to speak for it.
+
+   'source' RANKS BELOW 'user' and above 'auto': a developer correcting a
+   label is still the end of the argument (see smSetKind), and re-measuring
+   still must not overwrite either of them. */
+const smKindIsDeclared = a => a && (a.kindBy === 'user' || a.kindBy === 'source');
+
 function smAdd(rec) {
   const a = Object.assign({
     id: smNewId(), name: 'image', src: '', origin: 'upload',
     w: 0, h: 0, alpha: false, kind: 'other', kindBy: 'auto',
     mime: '', size: 0, addedAt: Date.now(),
   }, rec);
-  if (a.kindBy !== 'user') a.kind = smAssetKind(a);
+  if (!smKindIsDeclared(a)) a.kind = smAssetKind(a);
   // The same file twice is one asset. Data URLs make this exact and free.
   const dup = smPool().find(x => x.src && x.src === a.src);
   if (dup) return dup.id;
@@ -491,18 +517,31 @@ function smAdopt(rec, origin) {
   if (!src) return null;
   const existing = smPool().find(x => x.src === src);
   if (existing) return existing.id;
+  /* `rec.kind` is the SOURCE'S word, when the source had one — see
+     smKindIsDeclared. Unknown kinds are ignored rather than trusted: a
+     mistyped or future `type` from the endpoint must not put a file in a
+     group that does not exist. */
+  const declared = rec.kind && SM_KINDS.includes(rec.kind) ? rec.kind : null;
   const id = smAdd({
     name: rec.name || 'image', src,
     origin: origin || (rec.dataUrl ? 'upload' : 'steam'),
-    w: rec.w || 0, h: rec.h || 0, kind: 'other',
+    w: rec.w || 0, h: rec.h || 0,
+    kind: declared || 'other',
+    ...(declared ? { kindBy: 'source' } : {}),
   });
   smMeasure(src, m => {
     const a = smGet(id);
     if (!a || !m.w) return;
-    const was = a.kind;
+    const was = a.kind, hadSize = !!a.w;
     a.w = m.w; a.h = m.h; a.alpha = m.alpha;
-    if (a.kindBy !== 'user') a.kind = smAssetKind(a);
-    if (a.kind !== was) _smClassified();
+    if (!smKindIsDeclared(a)) a.kind = smAssetKind(a);
+    /* REPAINT WHEN THE MEASUREMENT LANDS, not only when the KIND moves. That
+       test was written when a declared kind did not exist, so a change of
+       kind was the only thing a measurement could produce. Now a screenshot
+       arrives already in the right group and its kind never moves — but the
+       row still prints `a.w x a.h`, which was '?x?' until this callback. Same
+       v7.09 bug, one field over. */
+    if (a.kind !== was || !hadSize) _smClassified();
   });
   return id;
 }

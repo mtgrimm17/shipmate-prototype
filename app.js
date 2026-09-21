@@ -9594,7 +9594,10 @@ function _fillScreenshotGridFromIgdb(urls) {
     // Adopted on arrival, so a fetched screenshot is classified and pickable
     // straight away rather than at the next project load. The wsrv.nl proxy
     // still happens at render time, inside _screenshotSrc.
-    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url }, 'igdb'),
+    /* THE SOURCE SAID SO (v7.18). These came out of IGDB's `screenshots`
+       field — there is nothing to infer. See smKindIsDeclared (assets.js) for
+       why a declared kind outranks the geometry classifier. */
+    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url, kind: 'screenshot' }, 'igdb'),
   }));
   // Manual uploads survive a change of linked title; fetched ones do not —
   // and "do not" means removed from the shared asset pool itself, not just
@@ -9623,7 +9626,12 @@ function _fillScreenshotGridFromSteam(screenshotUrls) {
     id:   'steam-' + i + '-' + ts,
     // Adopted on arrival: a fetched screenshot is as much a project asset as
     // an uploaded one, and the library is where anything pickable lives.
-    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url }, 'steam'),
+    /* THE SOURCE SAID SO (v7.18), and this is the call the Portal bug ran
+       through: `_applySteamAboutData` has ALREADY filtered images[] on
+       `type === 'screenshot'` to build this list, and adopting them without
+       the word threw that away. Portal's seven legacy assets decode at
+       640x360 and came back out of the classifier as Key art. */
+    ref:  smAdopt({ name: `screenshot-${i + 1}.jpg`, url, kind: 'screenshot' }, 'steam'),
   }));
   // Manual uploads survive a change of linked title; fetched ones do not —
   // and "do not" means removed from the shared asset pool itself, not just
