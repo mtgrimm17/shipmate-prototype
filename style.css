@@ -12862,7 +12862,7 @@ a.mac-spp-link-row.is-live:focus-visible {
    × is absolutely positioned inside it, so 42 is the only number that moves.
    SCOPED: the Website builder renders its own `#sm-library` with the same
    classes, and that one is not inside a well. */
-.ob-form #ob-screenshot-dropzone .sm-thumb { height: 42px; }
+.ob-form #ob-screenshot-dropzone { --sm-thumb-h: 42px; }
 
 /* Grid sits below the dropzone as a sibling — not inside ob-req-group */
 .asset-grid { margin-top: 10px; }
@@ -23751,6 +23751,23 @@ body.sm-picker-open { overflow: hidden; }
    The well GROWS to hold it: 684, nothing clipped, and no page overflow. Said
    as measured rather than as "it scrolls", which is what it does not do. */
 .sm-wells { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
+
+/* ICONS RUN 50% LARGER THAN THE REST (v7.21, by request). An icon is the
+   smallest tile in the library and the one asked to be judged hardest: two
+   auto-generated candidates sit side by side here and the developer has to
+   pick one, which is a decision a 42px square does not give you enough to
+   make. Every other group is a picture you are checking arrived.
+
+   `calc(... * 1.5)` off the inherited token rather than a fresh number, so
+   this stays 50% of whatever the library's base is. In the Assets well that
+   is 42 and this is 63; anywhere the base is the default 50, this is 75.
+
+   IT IS ON THE WELL, NOT THE TILE, so the empty-Icon placeholder grows with
+   it — `.sm-thumb-missing` (v7.10) is a `.sm-thumb` in this same group, and a
+   red 42px tile in a row of 63px icons would be the one ragged thing in the
+   library. `data-kind` comes off the group key the row is built from, so no
+   list of kinds is written twice. */
+.sm-well[data-kind="icon"] .sm-thumb { height: calc(var(--sm-thumb-h, 50px) * 1.5); }
 .sm-well { display: flex; flex-direction: column; gap: 9px; }
 /* Font, size and colour come from the shared label rule; this keeps only what
    is its own. The count inside it stays a touch quieter than the word. */
@@ -23766,7 +23783,15 @@ body.sm-picker-open { overflow: hidden; }
      or are absolutely positioned inside it, so nothing else needed a number
      changed. max-width is what keeps a 3840x1240 key art from running off:
      at 50px tall it comes out ~155px wide, well inside it. */
-  position: relative; height: 50px; border-radius: 9px; overflow: hidden;
+  /* THE HEIGHT IS A TOKEN NOW (v7.21), and 50 is still its default. The
+     Assets well sets it to 42 (see `#ob-screenshot-dropzone` above — that
+     used to be a `height` on this element and is a variable on the container
+     instead, which is the same 42 by inheritance), and the Icon group
+     multiplies whatever it inherits. Declared as a variable rather than
+     fought over with selectors: two rules setting `height` on the same
+     element would be settled by an id in one of them, and the answer would
+     depend on which file the rule happened to live in. */
+  position: relative; height: var(--sm-thumb-h, 50px); border-radius: 9px; overflow: hidden;
   flex: 0 0 auto; max-width: 260px;
   /* The checkerboard earns its place: it is how a transparent logotype is
      visibly transparent, which is the single fact the classifier leaned on

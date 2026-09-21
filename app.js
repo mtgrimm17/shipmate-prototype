@@ -23741,7 +23741,7 @@ function _smLibraryHTML() {
   const groups = order.map(k => [k, byKind[k] || []])
                       .filter(([k, l]) => l.length || (k === 'icon' && needsIcon));
   return `<div class="sm-wells">${groups.map(([k, list]) => `
-    <div class="sm-well">
+    <div class="sm-well" data-kind="${k}">
       ${/* THE COUNT IS IN PARENTHESES, NOT AFTER A MIDDOT (v6.74). Jaco: *"en
             vez de un punto separando la descripción (screenshots · 2) que esté
             justo después entre paréntesis."* The middot is a SEPARATOR — it
