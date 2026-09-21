@@ -15893,6 +15893,13 @@ function _screenshotSrc(s) {
    .crops); this is the working copy while it is being dragged. */
 var _shotEd = {
   pid: null, shotId: null,
+  /* 'shots' | 'icon' — which surface this editor is armed on. Set by
+     `_shotEdArm` from the root's `data-shot-ed-mode`, and read by the four
+     seams that differ between the two: the frame's ratio, where the original
+     comes from, where the crop is filed, and whether the strip reorders.
+     Everything else — the geometry, the pan clamp, the bake, the debounce and
+     its flush — is the same editor. See buildAppIconSection (render.js). */
+  mode: 'shots',
   z: 1, tx: 0, ty: 0,          // zoom, and pan in CANVAS pixels
   img: null, natW: 0, natH: 0, // the decoded original
   FW: 0, FH: 0,                // the crop frame, measured
@@ -15900,6 +15907,16 @@ var _shotEd = {
 };
 
 function _shotEdPs(pid) {
+  /* THE ICON'S CROP IS GAME-WIDE, not per-platform, because the icon is: one
+     `state.uploads.appIcon` answers every store (smAppIcon, assets.js), so a
+     crop filed per platform would let the same file be two different icons
+     depending on which preview you cropped it in. Same `{ crops: {} }` shape,
+     so nothing downstream knows the difference. */
+  if (_shotEd.mode === 'icon') {
+    if (!state.appIconEd) state.appIconEd = {};
+    if (!state.appIconEd.crops) state.appIconEd.crops = {};
+    return state.appIconEd;
+  }
   if (!state.platformScreenshots) state.platformScreenshots = {};
   if (!state.platformScreenshots[pid]) state.platformScreenshots[pid] = { selected: [], custom: [] };
   const ps = state.platformScreenshots[pid];
@@ -15913,6 +15930,16 @@ function _shotEdPs(pid) {
    the cropped copy `platformStoreShots` hands out, or a second crop would
    compound on the first and Reset would revert to the last bake. */
 function _shotEdOriginal(pid, shotId) {
+  /* In icon mode the id is an ASSET id, and the record the pool holds is
+     already the original — the crop never overwrites it, it is filed beside it
+     under the same id (see smAppIconSrc's lookup). The `_slot` fallback is the
+     pre-pool upload shape that has no pool record behind it. */
+  if (_shotEd.mode === 'icon') {
+    const a = (typeof smGet === 'function') ? smGet(shotId) : null;
+    if (a) return a;
+    const slot = state.uploads?.appIcon;
+    return (slot && !slot.ref) ? slot : null;
+  }
   const ps = _shotEdPs(pid);
   return (ps.custom || []).find(s => s.id === shotId)
       || (state.uploads?.screenshots || []).find(s => s.id === shotId)
@@ -15930,8 +15957,15 @@ function _shotEdOriginal(pid, shotId) {
 function _shotEdArm() {
   const root = document.querySelector('.shot-ed[data-shot-ed-pid]');
   if (!root) { _shotEd.shotId = null; _shotEd.img = null; return; }
-  const pid = root.dataset.shotEdPid;
-  if (_shotEd.pid !== pid) { _shotEd.pid = pid; _shotEd.shotId = null; }
+  const pid  = root.dataset.shotEdPid;
+  const mode = root.dataset.shotEdMode || 'shots';
+  /* A MODE CHANGE IS A SUBJECT CHANGE, so it drops the selection for the same
+     reason a pid change does: the id under the pointer means a screenshot on
+     one surface and an asset on the other, and carrying it across would let
+     `_shotEdCommit` file an icon's crop under a listing. */
+  if (_shotEd.pid !== pid || _shotEd.mode !== mode) {
+    _shotEd.pid = pid; _shotEd.mode = mode; _shotEd.shotId = null;
+  }
 
   _shotEdWireStrip(root, pid);
 
@@ -16043,8 +16077,9 @@ function _shotEdGeometry(pid, landscape) {
      inside the portrait arm, which made this the only place that knew the
      rule; the empty stage needs the same number and cannot call this function,
      because it has no laid-out stage to measure. See `_shotEdCanvasRatio`. */
-  const r  = (typeof _shotEdRatio === 'function') ? _shotEdRatio(pid, landscape) : 16 / 10;
-  const cr = (typeof _shotEdCanvasRatio === 'function') ? _shotEdCanvasRatio(pid, landscape) : Math.max(r, 1.96);
+  const md = _shotEd.mode;
+  const r  = (typeof _shotEdRatio === 'function') ? _shotEdRatio(pid, landscape, md) : 16 / 10;
+  const cr = (typeof _shotEdCanvasRatio === 'function') ? _shotEdCanvasRatio(pid, landscape, md) : Math.max(r, 1.96);
   const CH = Math.round(CW / cr);
   if (r >= 1) return { CW, CH, FW: CW, FH: CH, full: true };
   return { CW, CH, FW: Math.round(CH * r), FH: CH, full: false };
@@ -16108,7 +16143,12 @@ function _shotEdSetZoom(z, fromSlider) {
 function _shotEdLoad(pid, shotId) {
   const orig = _shotEdOriginal(pid, shotId);
   if (!orig) return;
-  const src = _screenshotSrc(orig);
+  /* TWO SHAPES, ONE SRC — the same split `smAppIconSrc` was written for. A
+     screenshot entry carries `{ref}` / `{dataUrl}` / `{url}` and only
+     `_screenshotSrc` can resolve it; an asset-library record carries a flat
+     `.src`. Asking for the flat field first costs a screenshot nothing (it
+     has none) and is the whole reason the icon loads at all. */
+  const src = orig.src || _screenshotSrc(orig);
   if (!src) return;
 
   const saved = _shotEdPs(pid).crops[shotId] || {};
@@ -16314,6 +16354,26 @@ function _shotEdWireStrip(root, pid) {
   const strip = document.getElementById('shot-ed-strip');
   if (!strip) return;
 
+  /* ICON MODE STOPS HERE. A listing is a sequence, so its strip drags to
+     reorder and each tile carries its own ×; an icon is a CHOICE of one, so
+     neither gesture has anything to mean. Clicking a tile picks the icon —
+     which is a write to `state.uploads.appIcon`, not just a change of what is
+     on the stage — and removing a file belongs to the asset library, which
+     owns these records. */
+  if (_shotEd.mode === 'icon') {
+    strip.querySelectorAll('[data-shot-thumb]').forEach(t => {
+      t.removeAttribute('draggable');
+      t.addEventListener('click', () => appIconSelect(t.dataset.shotThumb));
+    });
+    root.querySelectorAll('[data-icon-add]').forEach(b => {
+      b.addEventListener('click', () => {
+        const input = b.querySelector('input[type=file]') || root.querySelector('.shot-thumb-add input[type=file]');
+        if (input) input.click();
+      });
+    });
+    return;
+  }
+
   strip.querySelectorAll('[data-shot-thumb]').forEach(t => {
     t.addEventListener('click', e => {
       if (e.target.closest('[data-shot-del]')) return;
@@ -16445,6 +16505,50 @@ function shotEdRemove(pid, shotId) {
   if (_shotEd.shotId === shotId) { _shotEd.shotId = null; _shotEd.img = null; }
   reRenderStepModalScreenshots(pid, null);
   renderDashboard();
+}
+
+/* ── The App Icon section's own two actions ───────────────────────────────
+   Everything else on that surface is the screenshots editor unchanged (see
+   buildAppIconSection, render.js). These two are what it does NOT have,
+   because choosing which file is the icon is a different act from choosing
+   which one to look at.
+
+   SELECTING WRITES THE SLOT, and that is the whole point: `state.uploads.
+   appIcon` is the one answer to "what is this game's icon" (smAppIcon), so the
+   choice reaches the topbar chip and every other store preview at once rather
+   than only the page it was made on. `renderDashboard` + `renderProjectBar`
+   for the surfaces outside the modal; `reRenderStepModal` for the strip's own
+   selected state and the stage behind it.
+
+   The pending crop is FLUSHED first, for the reason the file already states
+   at `_shotEdFlush`: a deferred write has to be flushed by anything that ends
+   the gesture, and switching which asset is being edited ends it. */
+function appIconSelect(assetId) {
+  if (!assetId) return;
+  if (typeof _shotEdFlush === 'function') _shotEdFlush();
+  state.uploads = state.uploads || {};
+  const a = (typeof smGet === 'function') ? smGet(assetId) : null;
+  state.uploads.appIcon = a ? smRef(assetId) : state.uploads.appIcon;
+  if (typeof renderDashboard === 'function') renderDashboard();
+  if (typeof renderProjectBar === 'function') renderProjectBar();
+  reRenderStepModal();
+}
+
+/* UPLOADING SAYS WHAT THE FILE IS. `smAddFile` classifies by geometry, and a
+   1024×1024 opaque square does reach 'icon' on its own — but only after the
+   async measure, and the selection below happens on the next line. `smSetKind`
+   with `kindBy: 'user'` also means the classifier will not later disagree with
+   the developer about a file they handed to the icon uploader specifically.
+   One file: an icon is a choice of one, so a multi-select would be offering a
+   gesture with no meaning. */
+function handleAppIconFiles(files) {
+  const file = files && files[0];
+  if (!file || typeof smAddFile !== 'function') return;
+  smAddFile(file, id => {
+    if (!id) return;
+    if (typeof smSetKind === 'function') smSetKind(id, 'icon');
+    appIconSelect(id);
+  });
 }
 
 function shotEdRestoreAll(pid) {

@@ -8042,6 +8042,71 @@ body.viewing-splash .app-subnav { display: none; }
   width: 100%; height: 100%; object-fit: cover; display: block;
   border-radius: inherit;
 }
+
+/* ── The icon is a door (v7.14) ───────────────────────────────────────────
+   The two Apple previews flip to the App Icon section from here, so the icon
+   answers the pointer the way every other editable thing on those pages does:
+   the hover ring the store-preview wells use, and a pencil that only appears
+   under the pointer. The pencil is absent until hover deliberately — an icon
+   is a picture the developer chose, and a badge parked on it permanently
+   would be chrome laid over their artwork.
+
+   `.ias-icon-empty` gets the same treatment and the same cursor: with no icon
+   at all the placeholder IS the invitation, and a dashed box you cannot press
+   is the worst of both.
+
+   No `:active` transform. This is a 76px square inside a page that is itself
+   a preview; a press that moves it reads as the page shifting. */
+.ias-icon--action { cursor: pointer; }
+.ias-icon--action:hover { box-shadow: 0 0 0 1px var(--border-hover); }
+.ias-icon-empty.ias-icon--action:hover { border-color: var(--border-hover); color: var(--text-dim); }
+.ias-icon-edit {
+  position: absolute; right: 5px; bottom: 5px;
+  width: 21px; height: 21px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .58);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26);
+  color: #fff; opacity: 0; transition: opacity .13s ease;
+  pointer-events: none;
+}
+.ias-icon--action:hover .ias-icon-edit,
+.ias-icon--action:focus-visible .ias-icon-edit { opacity: 1; }
+
+/* ── The App Icon editor's strip ──────────────────────────────────────────
+   The editor itself is the screenshots editor unchanged (buildAppIconSection,
+   render.js), so all this has to say is the two things an icon strip is not:
+   its tiles are square rather than 16:10, and they do not drag.
+
+   `cursor: pointer` on the tile, not `grab`: the gesture here is a choice,
+   and a hand that says "pick this up" would be promising a reorder that has
+   no meaning for a single selection. The selected tile keeps `.is-selected`'s
+   own ring from the screenshots strip — it means the same thing here, with
+   one more consequence behind it. */
+/* THE ICON'S STAGE IS NOT THE MODAL'S WIDTH, and that is the one place this
+   surface departs from the Screenshots editor it otherwise is.
+
+   That editor's stage is full width on purpose — the brief was *"la preview
+   ocupando todo el ancho del modal"* — and for a 16:10 screenshot that costs
+   619 × 387. An icon is SQUARE, so the same rule gives 619 × 619, half again
+   as tall as the thing it is previewing at a size no icon is ever seen at.
+   It also pushes the zoom row and the strip off the fold, which is the exact
+   problem v7.04 created and v7.06 reverted; there is no reason to walk back
+   into it for a control that does not need the room.
+
+   Capped in CSS rather than in the solver, deliberately: `_shotEdGeometry`
+   measures `stage.clientWidth` and derives everything from it, so a max-width
+   here IS the input and nothing downstream needs a second rule. Centred,
+   because a square pinned left in a wide modal reads as a layout mistake. */
+.shot-ed.is-icon-ed .shot-ed-stage {
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.shot-ed.is-icon-ed .shot-thumb {
+  width: 72px; aspect-ratio: 1 / 1; cursor: pointer;
+}
+.shot-ed.is-icon-ed .shot-thumb img { border-radius: inherit; }
+.shot-ed.is-icon-ed .shot-thumb-add { width: 72px; aspect-ratio: 1 / 1; }
 .ias-header-meta { flex: 1; min-width: 0; padding-top: 2px; }
 .ias-app-name {
   font-size: 16px; font-weight: 700; color: var(--text);
@@ -10046,6 +10111,35 @@ textarea.loc-review-field.ias-inline-input {
   border: 1px solid var(--border); background: var(--panel-3);
 }
 .ias-shot-img { height: 100%; width: auto; display: block; }
+
+/* ── The trailer, first in the strip (v7.14) ──────────────────────────────
+   It is a `.ias-shot-frame` and takes all of that frame's geometry, so it
+   sits at the strip's own height and keeps its own aspect — a 16:9 trailer
+   simply comes out wider than a 16:10 screenshot, which is what it is.
+
+   `object-fit: cover` on the video rather than the `height:100%;width:auto`
+   the image gets: a <video> with no metadata yet has no intrinsic size, so
+   `width:auto` collapses it to nothing for the length of the load and the
+   strip visibly reflows when the first frame arrives. A fixed box that fills
+   is the same trick `.shot-ed-stage` uses for the same reason.
+
+   The badge is the app's own Steam-trailer play badge in position, not a new
+   glyph: a still frame with nothing on it is indistinguishable from a
+   screenshot, which the asset library already learned. */
+.ias-shot-frame.ias-shot-trailer { position: relative; width: 409px; }
+.ias-shot-frame.ias-shot-trailer video.ias-shot-img,
+.ias-shot-frame.ias-shot-trailer img.ias-shot-img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.ias-shot-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  color: #fff; font-size: 13px; line-height: 1; padding-left: 2px;
+  pointer-events: none;
+}
 .ias-shot-empty {
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: var(--text-faint);

@@ -7018,6 +7018,7 @@ const SM_FLIP_LABELS = {
   business:      'Business Questions',
   data:          'Data Collection Questions',
   screenshots:   'Screenshots',
+  appIcon:       'App Icon',
   siteInfo:      'Site Details',
   webFactsheet:  'About',
   webDescription:'Description',
@@ -7606,6 +7607,9 @@ function buildStorePreviewFlipSection(platformId, target) {
   }
   if (target === 'screenshots') {
     return buildScreenshotsSection(platformId);
+  }
+  if (target === 'appIcon') {
+    return buildAppIconSection(platformId);
   }
   // Mac App Store Full only: Product Page Preview's own Information card
   // (buildMacFullStorePreviewSection's own Information block) — flips the whole
@@ -10288,9 +10292,18 @@ function buildStorePreviewSection() {
     ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
+  /* THE ICON IS A DOOR NOW (v7.14). It flips to the App Icon section, the same
+     way the screenshots strip flips to Screenshots — it is the one thing on
+     this page you could look at and not act on, and "which of these two
+     generated icons is ours" is a decision, not a read-only fact. The empty
+     state opens it too: with no icon at all, the placeholder IS the invitation.
+     Mac App Store Full keeps its plain icon, as asked. */
   const iconHtml = icon
-    ? `<span class="ias-icon ias-icon-art" role="img" aria-label="App icon"><img src="${smAppIconSrc()}" alt=""></span>`
-    : `<div class="ias-icon ias-icon-empty">
+    ? `<span class="ias-icon ias-icon-art ias-icon--action" role="button" tabindex="0" aria-label="Edit app icon"
+             title="Edit App Icon" onclick="openStorePreviewSection('${pid}','appIcon')"
+        ><img src="${smAppIconSrc()}" alt=""><span class="ias-icon-edit" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.3"/></svg></span></span>`
+    : `<div class="ias-icon ias-icon-empty ias-icon--action" role="button" tabindex="0" aria-label="Add an app icon"
+            title="Add App Icon" onclick="openStorePreviewSection('${pid}','appIcon')">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
           <polygon points="20,3 32,14 8,14" fill="#666"/>
@@ -10304,13 +10317,21 @@ function buildStorePreviewSection() {
      screenshot looked like it meant something. It does not: the step you land
      in adjusts the whole set. One veil over the strip, one press. (Mac Full
      keeps its per-frame handlers — it has no well and no veil.) */
-  const shotHtml = shots.length > 0
+  /* THE TRAILER GOES FIRST when there is one (v7.14) — see _sppFirstTrailer.
+     Prepended to the MARKUP and not to `shots`, deliberately: `shots` is the
+     listing, and what counts as "screenshots done" must not change because a
+     video exists. The placeholder trio still draws behind it on an empty
+     listing, because the absence of screenshots is still worth showing.
+
+     The two Apple previews only, as asked. Mac App Store Full keeps the plain
+     strip — it is a different surface with its own per-frame click targets. */
+  const shotHtml = _sppTrailerFrameHtml() + (shots.length > 0
     ? shots.map(s =>
         `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
         `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
-      ).join('');
+      ).join(''));
 
   const _infoRowHtml = r => `
     <div class="ias-info-row">
@@ -11158,9 +11179,18 @@ function buildMacStorePreviewSection() {
     ? releaseNotes.split('\n').filter(l => l.trim()).map(l => `<div class="ias-wn-line">- ${escHtml(l.trim().replace(/^[-–•]\s*/, ''))}</div>`).join('')
     : `<div class="ias-wn-line ias-wn-placeholder">Add release notes to your submission to populate this section.</div>`;
 
+  /* THE ICON IS A DOOR NOW (v7.14). It flips to the App Icon section, the same
+     way the screenshots strip flips to Screenshots — it is the one thing on
+     this page you could look at and not act on, and "which of these two
+     generated icons is ours" is a decision, not a read-only fact. The empty
+     state opens it too: with no icon at all, the placeholder IS the invitation.
+     Mac App Store Full keeps its plain icon, as asked. */
   const iconHtml = icon
-    ? `<span class="ias-icon ias-icon-art" role="img" aria-label="App icon"><img src="${smAppIconSrc()}" alt=""></span>`
-    : `<div class="ias-icon ias-icon-empty">
+    ? `<span class="ias-icon ias-icon-art ias-icon--action" role="button" tabindex="0" aria-label="Edit app icon"
+             title="Edit App Icon" onclick="openStorePreviewSection('${pid}','appIcon')"
+        ><img src="${smAppIconSrc()}" alt=""><span class="ias-icon-edit" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a1 1 0 011.4 1.4L4.5 9.9 2.5 10.5l.6-2 6.4-6.5z" stroke="currentColor" stroke-width="1.3"/></svg></span></span>`
+    : `<div class="ias-icon ias-icon-empty ias-icon--action" role="button" tabindex="0" aria-label="Add an app icon"
+            title="Add App Icon" onclick="openStorePreviewSection('${pid}','appIcon')">
         <svg viewBox="0 0 40 40" fill="none" width="24" height="24">
           <rect x="4" y="14" width="32" height="22" rx="3" fill="#555"/>
           <polygon points="20,3 32,14 8,14" fill="#666"/>
@@ -11179,13 +11209,21 @@ function buildMacStorePreviewSection() {
   // screenshot looked like it meant something. It does not: the step you land
   // in adjusts the whole set. One veil over the strip, one press. (iOS and Mac
   // Full keep their per-frame handlers — they have no well and no veil.)
-  const shotHtml = shots.length > 0
+  /* THE TRAILER GOES FIRST when there is one (v7.14) — see _sppFirstTrailer.
+     Prepended to the MARKUP and not to `shots`, deliberately: `shots` is the
+     listing, and what counts as "screenshots done" must not change because a
+     video exists. The placeholder trio still draws behind it on an empty
+     listing, because the absence of screenshots is still worth showing.
+
+     The two Apple previews only, as asked. Mac App Store Full keeps the plain
+     strip — it is a different surface with its own per-frame click targets. */
+  const shotHtml = _sppTrailerFrameHtml() + (shots.length > 0
     ? shots.map(s =>
         `<div class="ias-shot-frame"><img src="${_screenshotSrc(s)}" class="ias-shot-img" alt="Screenshot"></div>`
       ).join('')
     : ['Gameplay','Gameplay','Menu'].map(lbl =>
         `<div class="ias-shot-frame ias-shot-empty"><span>${lbl}</span></div>`
-      ).join('');
+      ).join(''));
 
   // Grid cell — label (with an optional chevron, for the fields the native
   // app lets you expand: Compatibility/Age Rating/Copyright) above its
@@ -20121,6 +20159,43 @@ function buildBuildDropdown(pid, inModal) {
    `_screenshotSrc` resolves a library reference BEFORE it looks at the bytes —
    left in place, the ref would win and the crop would never be drawn. The
    asset in the library is untouched, so clearing the crop really does revert. */
+/* THE FIRST TRAILER, AND WHAT "FIRST" MEANS (v7.14, by request: "the leftmost
+   asset should be first available trailer (from the Game Details - Assets
+   section), if at least one is available").
+
+   IT ASKS THE ASSETS SECTION'S OWN ORDER rather than inventing one. That well
+   builds its Video group as the pool's own videos, with the scraped Steam
+   trailer APPENDED as a synthetic entry (buildAssetsTab, app.js — see
+   SM_STEAM_TRAILER_ID for why it cannot be a real pool record). So "the first
+   available trailer" is the first uploaded video if there is one, and the
+   Steam trailer otherwise, which is exactly what the developer sees leftmost
+   in that group.
+
+   TWO SHAPES OUT, because the two sources are two different things and the
+   carousel has to draw them differently: a pool video is a file with a frame
+   to pull, while the Steam trailer is an HLS manifest whose only still is a
+   poster image. Resolved here so neither preview has to know it — the same
+   reason smAppIconSrc exists. */
+function _sppFirstTrailer() {
+  const vid = (state.assets || []).find(a => a.kind === 'video' && a.src);
+  if (vid) return { src: vid.src, poster: null, name: vid.name || 'Trailer' };
+  const st = state.uploads?.steamTrailer;
+  if (st && st.thumbnail) return { src: null, poster: st.thumbnail, name: st.name || 'Trailer' };
+  return null;
+}
+
+/* The frame it draws, shared by the two Apple previews so they cannot drift.
+   `#t=0.1` asks for a frame a tenth of a second in — the frame at exactly 0 is
+   black in a great many trailers, which the asset library already learned. */
+function _sppTrailerFrameHtml() {
+  const tr = _sppFirstTrailer();
+  if (!tr) return '';
+  const inner = tr.poster
+    ? `<img src="${escHtml(tr.poster)}" class="ias-shot-img" alt="">`
+    : `<video src="${escHtml(tr.src)}#t=0.1" class="ias-shot-img" muted playsinline preload="metadata"></video>`;
+  return `<div class="ias-shot-frame ias-shot-trailer" title="${escHtml(tr.name)}">${inner}<span class="ias-shot-play">▶</span></div>`;
+}
+
 function platformStoreShots(pid) {
   const ps          = state.platformScreenshots?.[pid] || {};
   const allUploaded = state.uploads?.screenshots || [];
@@ -20182,7 +20257,13 @@ function platformStoreShots(pid) {
    way round — so a set of landscape captures gets a landscape frame instead of
    asking the developer to answer a question the pictures already answer. Mac
    carries no `rot`: 16:10 only, always this way up. */
-function _shotEdRatio(pid, sampleLandscape) {
+function _shotEdRatio(pid, sampleLandscape, mode) {
+  /* AN ICON IS SQUARE ON EVERY STORE THAT ASKS FOR ONE, so the App Icon
+     surface answers before the table is consulted at all (v7.14). Passed
+     rather than read off `_shotEd`, because the EMPTY stage is sized by the
+     builder — before `_shotEdArm` has run and before there is a mode to read.
+     Same reason `_shotEdCanvasRatio` exists at all: three callers, one rule. */
+  if (mode === 'icon') return 1;
   const key  = pid === 'macos_full' ? 'macos' : pid;
   const reqs = (typeof SM_REQS !== 'undefined' && SM_REQS[key]) || [];
   const row  = reqs.find(r => r.shot);
@@ -20207,8 +20288,8 @@ function _shotEdRatio(pid, sampleLandscape) {
    can be drawn correctly: the ratio is a fact about the STORE, which this file
    has had to say twice already (once when the stage measured 0 until an image
    decoded, once when a `ResizeObserver` replaced a snapshot of the width). */
-function _shotEdCanvasRatio(pid, sampleLandscape) {
-  const r = _shotEdRatio(pid, sampleLandscape);
+function _shotEdCanvasRatio(pid, sampleLandscape, mode) {
+  const r = _shotEdRatio(pid, sampleLandscape, mode);
   return r >= 1 ? r : 1.96;
 }
 
@@ -20243,6 +20324,116 @@ function _shotEdCanvasRatio(pid, sampleLandscape) {
    set inside the first is the thing the Game Center pass had just finished
    removing. Everything commits as it happens, so there is nothing for a Done
    to mean. */
+/* ══════════════════════════════════════════════════════
+   APP ICON  (flipped to from the icon on either Apple preview)
+   ══════════════════════════════════════════════════════
+   IT IS THE SCREENSHOTS EDITOR WITH ONE THING TAKEN AWAY AND ONE ADDED, and
+   that is not a resemblance — it is literally the same editor. The markup it
+   emits carries the same `.shot-ed` ids, so `_shotEdArm` and every function
+   under it (the geometry solved from the store's own ratio, the ResizeObserver
+   that made the box a function of the width rather than a snapshot, the pan
+   clamped against the FRAME, the bake at source resolution, the debounced
+   commit and its flush on the way out) arm on this surface unchanged. What
+   tells them apart is `data-shot-ed-mode`, read once in `_shotEdArm`, which
+   four small seams branch on: the ratio (1:1 here), where the original comes
+   from, where the crop is filed, and whether the strip reorders.
+
+   A SECOND CROPPER WAS THE OBVIOUS ANSWER AND IS THE WRONG ONE. This file has
+   paid twice for a rule that was true on one surface and false on another —
+   `smAppIcon`'s five previews, `smCheckSVG`'s six stale glyphs. The crop maths
+   here has a documented history of subtle bugs (the square first-open, the
+   zero-height stage, the dropped last write); a copy inherits none of the
+   fixes and all of the traps.
+
+   WHAT IS TAKEN AWAY: order. A listing is a sequence and a strip that drags
+   says so; an icon is a CHOICE of one, so the strip is radio-style — click to
+   select, no reorder, no per-tile delete. Removing a file belongs to the asset
+   library, which owns these records.
+
+   WHAT IS ADDED: selection has a consequence. Clicking a tile writes
+   `state.uploads.appIcon`, which is the one place "what is this game's icon"
+   is answered (`smAppIcon`) — so the choice lands on the topbar chip and every
+   other store preview at the same time, not just on the page you came from. */
+function buildAppIconSection(pid) {
+  const cands  = (typeof smIconCandidates === 'function') ? smIconCandidates() : [];
+  const selId  = (typeof smAppIconId === 'function') ? smAppIconId() : null;
+  const sel    = cands.find(c => c.id === selId) || cands[0] || null;
+
+  /* The store's own line, off SM_REQS rather than typed here — the same source
+     the Screenshots head reads, and the reason this says "no transparency" is
+     that Apple's row is marked `noA`. */
+  const reqRow = (typeof SM_REQS !== 'undefined' && (SM_REQS[pid === 'macos_full' ? 'macos' : pid] || []))
+                   .find(r => r.k === 'icon') || null;
+  const reqLine = reqRow
+    ? `${reqRow.w} × ${reqRow.h}${reqRow.sq ? ' — square' : ''}${reqRow.noA ? ', no transparency' : ''}`
+    : '';
+
+  const panSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>`;
+
+  const tiles = cands.map(c => `
+    <div class="shot-thumb${c.id === (sel && sel.id) ? ' is-selected' : ''}" data-shot-thumb="${c.id}"
+         title="${escHtml(c.name || 'Icon')}">
+      <img src="${escHtml(c.src || (typeof smAppIconSrc === 'function' && c._slot ? smAppIconSrc() : ''))}" alt="" draggable="false">
+    </div>`).join('');
+
+  /* The + is a SLOT in the strip, the same argument the Screenshots strip
+     makes: uploading an icon is the same kind of act as picking one, and it
+     lands beside the ones already there. */
+  const addSlot = `
+    <button class="shot-thumb-add" data-icon-add title="Upload an icon">
+      <span class="shot-thumb-add-plus">+</span>
+      <input type="file" accept="image/*" hidden onchange="handleAppIconFiles(this.files)">
+    </button>`;
+
+  const stage = sel
+    ? `
+      <div class="shot-ed-stage" id="shot-ed-stage">
+        <div class="shot-ed-canvas" id="shot-ed-canvas">
+          <img class="shot-ed-img" id="shot-ed-img" alt="" draggable="false">
+          <div class="shot-ed-frame" id="shot-ed-frame"><div class="shot-ed-grid"></div></div>
+          <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
+        </div>
+      </div>`
+    /* The assets well's own voice, exactly as the Screenshots empty state
+       borrows it — same three classes, so the 20px arrow, the 13/600 label and
+       the 11px hint cannot drift from Game Details' well. `--shot-canvas-ratio`
+       is 1 rather than the store ratio helper's answer, because an icon is
+       square on every store that asks for one. */
+    : `
+      <div class="shot-ed-stage is-empty" id="shot-ed-stage" style="--shot-canvas-ratio:1">
+        <button class="shot-ed-empty" data-icon-add>
+          <div class="asset-dropzone-icon">↑</div>
+          <div class="asset-dropzone-label">Upload an app icon</div>
+          <div class="asset-dropzone-hint">PNG or JPG · 1024 × 1024, no transparency</div>
+        </button>
+      </div>`;
+
+  const n = cands.length;
+  return `
+    <div class="shot-ed is-icon-ed" data-shot-ed-pid="${pid}" data-shot-ed-mode="icon">
+      <div class="shot-ed-head">
+        <div class="shot-ed-count">${n} icon${n === 1 ? '' : 's'} available</div>
+        ${reqLine ? `<div class="shot-ed-req">${reqLine}</div>` : ''}
+      </div>
+
+      ${stage}
+
+      <div class="shot-ed-toolbar${sel ? '' : ' is-off'}">
+        <div class="shot-ed-zoom">
+          <span class="shot-ed-zoom-label">Zoom</span>
+          <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
+                 min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
+        </div>
+        <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
+      </div>
+
+      <div class="shot-ed-strip" id="shot-ed-strip">${tiles}${addSlot}</div>
+
+      ${n === 0 ? `
+      <p class="shot-ed-note">No icons yet. Shipmate builds two from a Steam page when it can find one — or upload your own here, or under Assets in Game Details.</p>` : ''}
+    </div>`;
+}
+
 function buildScreenshotsSection(pid) {
   const shots = platformStoreShots(pid);
   const pool  = state.uploads?.screenshots || [];

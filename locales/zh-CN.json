@@ -34,7 +34,7 @@
   "guide.item.desc": "撰写描述",
   "guide.item.platforms": "选择平台",
   "guide.item.countries": "选择目标国家/地区",
-  "guide.item.localizations": "列出本地化语言",
+  "guide.item.localizations": "选择语言",
   "guide.item.screenshots": "上传截图",
   "guide.item.trailer": "添加预告片",
   "guide.item.uploadBuild": "上传构建版本",

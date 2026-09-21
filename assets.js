@@ -311,7 +311,47 @@ function smAppIcon() {
 function smAppIconSrc() {
   const icon = smAppIcon();
   if (!icon) return '';
+  /* THE CROP, IF THERE IS ONE (v7.14). The App Icon editor bakes its result to
+     a data URL keyed by the asset's id, and this is the one function every
+     surface already asks for the icon's src — the topbar chip, five store
+     previews — so putting the lookup here is what makes a crop show up
+     everywhere at once instead of in the one preview it was made in. Falls
+     straight through when nothing has been cropped, which is every project
+     that never opens the editor. */
+  const c = state.appIconEd?.crops?.[smAppIconId()];
+  if (c && c.url) return c.url;
   return icon.src || (typeof _screenshotSrc === 'function' ? _screenshotSrc(icon) : '');
+}
+
+/* THE ID THE CROP IS FILED UNDER. The slot holds either an `smRef` ({ref}) or,
+   from before the pool existed, a bare upload entry — and the pool fallback
+   hands back a record with its own `.id`. One answer so the editor, the bake
+   and the lookup above cannot disagree about which asset is being edited. */
+function smAppIconId() {
+  const icon = smAppIcon();
+  if (!icon) return null;
+  return icon.ref || icon.id || null;
+}
+
+/* EVERY ICON THIS PROJECT COULD USE, in the order the editor offers them.
+
+   The pool's own `kind === 'icon'` records are the list — which is already
+   both of the automatically generated candidates (`_addSteamIconCandidates`
+   adopts them and calls `smSetKind(id,'icon')`) and anything the developer
+   has uploaded, with no special case for either. The slot is unioned in only
+   for the pre-pool shape that has no record behind it; an ordinary `smRef`
+   slot is already in the pool and is deduped by id.
+
+   Selection is NOT in here. Which of these is the app icon is
+   `state.uploads.appIcon`, and asking that question in one place is the whole
+   point of `smAppIcon`. */
+function smIconCandidates() {
+  const out = smPool().filter(a => a.kind === 'icon');
+  const slot = state.uploads?.appIcon;
+  if (slot && !slot.ref && !out.some(a => a.id === slot.id)) {
+    out.unshift({ id: slot.id || '__slot', name: slot.name || 'App icon', src: '', _slot: true });
+  }
+  return out;
 }
 
 /* THE RECORD. `origin` is the field that matters most, and it is a bug fix as
