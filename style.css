@@ -8142,23 +8142,32 @@ body.viewing-splash .app-subnav { display: none; }
 .icon-a-stage.is-active .shot-ed-hint,
 .icon-a-stage.is-grabbing .shot-ed-hint { opacity: 0; }
 
-/* EIGHT COLOURS AND A WORD, on the row under the zoom. Wraps rather than
-   scrolls: `_iconArtPalette` returns up to eight and sometimes three, so the
-   row has to look deliberate at either length, and a scroller with four
-   swatches in it does not. The selected ring is drawn OUTSIDE the swatch
-   (`box-shadow` spread, not a border) for v7.17's reason — a border would eat
-   into the colour it is pointing at, and the colour is the whole content. */
+/* SIXTEEN COLOURS AND A WORD, on the row under the zoom (v7.26).
+   A FIXED EIGHT COLUMNS, NOT A WRAPPING ROW, and the count is what forced the
+   change. Eight swatches beside their label fitted one line; sixteen do not,
+   and `flex-wrap` then breaks them wherever the column happens to end —
+   measured at 619px that is thirteen and three, which reads as an accident
+   rather than as a palette. A grid of eight puts the full row at 8 + 8 and
+   any short row (`_iconArtPalette` returns fewer when the art has fewer) at
+   8 + n, which looks deliberate at every length.
+
+   The label takes a line of its own (`1 / -1`) rather than a cell, because a
+   word in the first swatch position would read as a missing colour.
+
+   The selected ring is drawn OUTSIDE the swatch (`box-shadow` spread, not a
+   border) for v7.17's reason — a border would eat into the colour it is
+   pointing at, and the colour is the whole content. */
 .icon-a-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  justify-content: start;
   gap: 8px;
   margin-top: 10px;
 }
 .icon-a-swatch-label {
+  grid-column: 1 / -1;
   font-size: 11px;
   color: var(--text-dim);
-  margin-right: 2px;
 }
 .icon-a-swatch {
   width: 22px;

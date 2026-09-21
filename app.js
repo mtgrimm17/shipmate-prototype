@@ -9172,30 +9172,64 @@ function _iconArtColour(img) {
   } catch (_) { return '#242424'; }
 }
 
-/* THE SAME BUCKETS, EIGHT ANSWERS INSTEAD OF ONE (v7.25).
+/* THE SAME BUCKETS, SIXTEEN ANSWERS INSTEAD OF ONE (v7.25, widened v7.26).
    `_iconArtColour` picks the single colour a wordmark should sit on; the
    editor has to offer a CHOICE, and the choice has to come from the game's own
-   art or it is just a colour picker with the art beside it. Same 64x64
-   sample, same 5-bit buckets, same "throw the extremes away" rule — near-black
-   is the vignette and near-white is the sky, and neither is the game's colour.
+   art or it is just a colour picker with the art beside it. Same 5-bit
+   buckets and the same "throw the extremes away" rule as `_iconArtColour` —
+   near-black is the vignette and near-white is the sky, and neither is the
+   game's colour — on a denser sample (see below).
 
-   WHAT IS NEW IS THE SPREAD. Ranking by score alone returns eight neighbours
-   from one bucket cluster — measured on a purple hero, eight purples one step
-   apart, which is a choice you cannot see. So each colour has to clear a
-   distance from every colour already taken. 60 in summed RGB is roughly "a
-   person would call these two different", found by walking it down until the
-   swatch row stopped looking like a gradient.
+   THE SPREAD IS THE WHOLE PROBLEM. Ranking by score alone returns sixteen
+   neighbours from one bucket cluster — measured on a purple hero, sixteen
+   purples a step apart, which is a choice you cannot see. So each colour has
+   to clear a distance from every colour already taken.
 
-   IT FALLS SHORT RATHER THAN PADDING. Art with three colours in it returns
-   three; inventing five more from a palette generator would be offering the
-   developer colours their game does not contain. */
-function _iconArtPalette(img, n = 8) {
+   A FIXED DISTANCE CANNOT SERVE BOTH KINDS OF ART, and that is what widening
+   this from eight to sixteen exposed. 60 in summed RGB was tuned for eight and
+   is right for a photographic hero; hold it at sixteen and flat, stylised key
+   art — which is a great deal of key art — returns six or seven, because the
+   art genuinely does not contain sixteen colours that far apart. Lower it to
+   suit that art and the photographic hero comes back with sixteen shades of
+   the same sunset.
+
+   So the distance ADAPTS to what is there: the widest rung of the ladder that
+   still fills the row wins, and if none of them does, the longest list does.
+   Art with plenty of colour therefore gets sixteen maximally spread; flat art
+   gets its own colours admitted closer together rather than not at all.
+
+   THE FLOOR IS NOT NEGOTIABLE, AND IT IS WHERE THE LADDER STOPS. `SM_PAL_MIN`
+   is the distance at which two swatches stop being two swatches. 36 in summed
+   RGB is a full 36 in one channel (two obviously different reds) or 12 in each
+   (a lightness step you can still see in a 22px square); anything under it
+   would show the developer the same colour twice, which is worse than a short
+   row and is the one thing the request — "no repeated colors" — rules out
+   explicitly. Dropping the ladder below this to reach sixteen would be padding
+   with noise and calling it a palette, so it does not.
+
+   THE SAMPLE IS DENSER THAN `_iconArtColour`'S for the same reason. That
+   function wants the ONE dominant colour and 64x64 is ample; sixteen has to
+   find the art's smaller notes too, and on a 1920x620 hero a 64x64 downscale
+   averages each sample over roughly 30x10 source pixels, which is exactly
+   where a bright accent goes to die. 128 keeps them. The cost is 16k samples
+   instead of 4k, once, when the icon is generated.
+
+   IT STILL FALLS SHORT RATHER THAN PADDING. Flat, stylised key art with six
+   colours in it returns six; inventing ten more from a palette generator
+   would be offering the developer colours their game does not contain. */
+const SM_PAL_MIN = 36;   // summed RGB; below this two swatches read as one
+const SM_PAL_LADDER = [96, 80, 66, 54, 44, SM_PAL_MIN];
+
+const SM_PAL_SAMPLE = 128;
+
+function _iconArtPalette(img, n = 16) {
   try {
+    const S = SM_PAL_SAMPLE;
     const c = document.createElement('canvas');
-    c.width = c.height = 64;
+    c.width = c.height = S;
     const x = c.getContext('2d', { willReadFrequently: true });
-    x.drawImage(img, 0, 0, 64, 64);
-    const d = x.getImageData(0, 0, 64, 64).data;
+    x.drawImage(img, 0, 0, S, S);
+    const d = x.getImageData(0, 0, S, S).data;
     const buckets = {};
     for (let p = 0; p < d.length; p += 4) {
       const r = d[p], g = d[p + 1], b = d[p + 2];
@@ -9211,11 +9245,24 @@ function _iconArtPalette(img, n = 8) {
                r: Math.round(v.r / v.n), g: Math.round(v.g / v.n), b: Math.round(v.b / v.n) };
     }).sort((a, b) => b.score - a.score);
 
-    const out = [];
-    const far = (a) => out.every(o =>
-      Math.abs(o.r - a.r) + Math.abs(o.g - a.g) + Math.abs(o.b - a.b) >= 60);
-    for (const v of ranked) { if (out.length >= n) break; if (far(v)) out.push(v); }
-    return out.map(v => `rgb(${v.r},${v.g},${v.b})`);
+    /* One walk of the ranked list at one distance. Score order is kept, so the
+       prominent colours are still the ones admitted first — the distance only
+       decides which of the rest are close enough to be the same swatch. */
+    const pick = (thr) => {
+      const out = [];
+      for (const v of ranked) {
+        if (out.length >= n) break;
+        if (out.every(o => Math.abs(o.r - v.r) + Math.abs(o.g - v.g) + Math.abs(o.b - v.b) >= thr)) out.push(v);
+      }
+      return out;
+    };
+    let best = [];
+    for (const thr of SM_PAL_LADDER) {
+      const got = pick(thr);
+      if (got.length > best.length) best = got;
+      if (best.length >= n) break;       // the widest rung that fills the row
+    }
+    return best.slice(0, n).map(v => `rgb(${v.r},${v.g},${v.b})`);
   } catch (_) { return []; }
 }
 
@@ -9392,14 +9439,32 @@ async function _steamIconCandidates(appId) {
            where the spread filter or an empty palette says otherwise, because
            a swatch row that cannot reproduce the icon you are looking at is
            worse than one colour short. */
-        const palette = _iconArtPalette(hero, 8);
-        if (!palette.includes(bg)) palette.unshift(bg);
+        const palette = _iconArtPalette(hero, 16);
+        /* `_iconArtColour` and `_iconArtPalette` rank the same buckets by the
+           same score, so the default is normally already `palette[0]` and this
+           does nothing. When it is not, putting it in front is not enough on
+           its own: whatever sat too close to it has to come OUT, or the row
+           would carry the same colour twice under two swatches, which is the
+           one thing "no repeated colours" rules out. */
+        if (!palette.includes(bg)) {
+          const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(bg);
+          if (m) {
+            const [br, bgr, bb] = [+m[1], +m[2], +m[3]];
+            for (let i = palette.length - 1; i >= 0; i--) {
+              const q = /rgb\((\d+),(\d+),(\d+)\)/.exec(palette[i]);
+              if (q && Math.abs(+q[1] - br) + Math.abs(+q[2] - bgr) + Math.abs(+q[3] - bb) < SM_PAL_MIN) {
+                palette.splice(i, 1);
+              }
+            }
+          }
+          palette.unshift(bg);
+        }
         out.push({
           key: 'logo', src: c.toDataURL('image/png'),
           recipe: {
             kind: 'logo', heroUrl: heroPick.u, logoUrl: logoPick.u,
             ink: { x: k.x, y: k.y, w: k.w, h: k.h },
-            palette: palette.slice(0, 8), bg, bg0: bg,
+            palette: palette.slice(0, 16), bg, bg0: bg,
             z: 1, fx: 0.5, fy: 0.5,
           },
         });

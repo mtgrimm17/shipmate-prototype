@@ -20477,11 +20477,13 @@ function buildAppIconSection(pid) {
          ? _iconASliderFromZoom(rec.z || 1) : 0.5).toFixed(3)}"`
     : `min="1" max="4" step="0.01" value="1"`;
 
-  /* THE GAME'S OWN COLOURS, NOT A COLOUR PICKER (v7.25) — `_iconArtPalette`
-     reads them out of the key art, so every swatch is a colour the art
-     actually contains. It returns FEWER than eight rather than inventing
-     any, which is why this counts what came back instead of assuming a row
-     of eight, and hides the row entirely when there is no choice to make. */
+  /* THE GAME'S OWN COLOURS, NOT A COLOUR PICKER (v7.25; sixteen since v7.26)
+     — `_iconArtPalette` reads them out of the key art, so every swatch is a
+     colour the art actually contains, and none of them repeats: the ladder
+     there admits a colour only once it clears `SM_PAL_MIN` from every colour
+     already taken. It returns FEWER than sixteen rather than inventing any,
+     which is why this counts what came back instead of assuming a full row,
+     and hides the row entirely when there is no choice to make. */
   const swatches = (isA && (rec.palette || []).length > 1) ? `
     <div class="icon-a-swatches" role="group" aria-label="Icon background colour">
       <span class="icon-a-swatch-label">Background</span>
