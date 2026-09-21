@@ -9172,6 +9172,53 @@ function _iconArtColour(img) {
   } catch (_) { return '#242424'; }
 }
 
+/* THE SAME BUCKETS, EIGHT ANSWERS INSTEAD OF ONE (v7.25).
+   `_iconArtColour` picks the single colour a wordmark should sit on; the
+   editor has to offer a CHOICE, and the choice has to come from the game's own
+   art or it is just a colour picker with the art beside it. Same 64x64
+   sample, same 5-bit buckets, same "throw the extremes away" rule — near-black
+   is the vignette and near-white is the sky, and neither is the game's colour.
+
+   WHAT IS NEW IS THE SPREAD. Ranking by score alone returns eight neighbours
+   from one bucket cluster — measured on a purple hero, eight purples one step
+   apart, which is a choice you cannot see. So each colour has to clear a
+   distance from every colour already taken. 60 in summed RGB is roughly "a
+   person would call these two different", found by walking it down until the
+   swatch row stopped looking like a gradient.
+
+   IT FALLS SHORT RATHER THAN PADDING. Art with three colours in it returns
+   three; inventing five more from a palette generator would be offering the
+   developer colours their game does not contain. */
+function _iconArtPalette(img, n = 8) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, 64, 64);
+    const d = x.getImageData(0, 0, 64, 64).data;
+    const buckets = {};
+    for (let p = 0; p < d.length; p += 4) {
+      const r = d[p], g = d[p + 1], b = d[p + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx < 28 || mn > 232) continue;
+      const k = `${r >> 5},${g >> 5},${b >> 5}`;
+      (buckets[k] = buckets[k] || { n: 0, r: 0, g: 0, b: 0 });
+      buckets[k].n++; buckets[k].r += r; buckets[k].g += g; buckets[k].b += b;
+    }
+    const ranked = Object.values(buckets).map(v => {
+      const sat = Math.max(v.r, v.g, v.b) - Math.min(v.r, v.g, v.b);
+      return { score: v.n * (1 + sat / v.n / 128),
+               r: Math.round(v.r / v.n), g: Math.round(v.g / v.n), b: Math.round(v.b / v.n) };
+    }).sort((a, b) => b.score - a.score);
+
+    const out = [];
+    const far = (a) => out.every(o =>
+      Math.abs(o.r - a.r) + Math.abs(o.g - a.g) + Math.abs(o.b - a.b) >= 60);
+    for (const v of ranked) { if (out.length >= n) break; if (far(v)) out.push(v); }
+    return out.map(v => `rgb(${v.r},${v.g},${v.b})`);
+  } catch (_) { return []; }
+}
+
 /* CORS first and NO retry without it, which inverts smMeasure's dance on
    purpose. That function retries bare because DIMENSIONS are worth having
    even off a tainted image; here a tainted image is worth nothing at all —
@@ -9263,14 +9310,36 @@ const SM_LOGO_SOLID = 0.80;   // above this the "logotype" is a picture, not a w
 
 const SM_ICON_PX = 1024;   // Apple's App Store icon, and the largest any store asks for
 
+/* THE CANDIDATE IS A RECIPE, NOT JUST A PICTURE (v7.25).
+   Adam: *"Both types of icons should be editable in the App Icon section."*
+   They could not be, and the reason was one line up from the editor: both
+   candidates left this function as a FLATTENED 1024 bitmap — a colour, a
+   wordmark and a scale already burned into each other, with nothing left to
+   take apart. An editor handed that can only crop it, which is the one
+   operation neither candidate wants.
+
+   So each candidate now leaves here with the INGREDIENTS beside the bake: the
+   two URLs that actually won, the ink box already measured, the colour already
+   chosen, and the frame centre the salience pass landed on. The bitmap is
+   still returned and still what the library adopts, so every consumer
+   (`smAppIconSrc`, the five previews, the topbar chip) is untouched — the
+   recipe is filed alongside under the asset's id and read only by the editor.
+
+   WHICH URL WON HAS TO BE RECORDED, not re-derived. The logo pick is a filter
+   then a sort (see below), and re-running that later against a different cache
+   state is a second chance to choose differently. `heroPick`/`logoPick` keep
+   the image and its url together so the pair cannot come apart. */
 async function _steamIconCandidates(appId) {
+  const heroUrls = [steamLibraryHeroUrl2x(appId), steamLibraryHeroUrl(appId)];
+  const logoUrls = [steamLogoUrl(appId, true), steamLogoUrl(appId, false)];
   const [hero2, hero1, logo2, logo1] = await Promise.all([
-    _iconLoadCors(steamLibraryHeroUrl2x(appId)),
-    _iconLoadCors(steamLibraryHeroUrl(appId)),
-    _iconLoadCors(steamLogoUrl(appId, true)),
-    _iconLoadCors(steamLogoUrl(appId, false)),
+    _iconLoadCors(heroUrls[0]),
+    _iconLoadCors(heroUrls[1]),
+    _iconLoadCors(logoUrls[0]),
+    _iconLoadCors(logoUrls[1]),
   ]);
-  const hero = hero2 || hero1;
+  const heroPick = [{ i: hero2, u: heroUrls[0] }, { i: hero1, u: heroUrls[1] }].find(p => p.i) || null;
+  const hero = heroPick && heroPick.i;
   /* CUT OUT FIRST, THEN BIGGER — and the expression this replaces was simply
      wrong. `(a && b && a.w >= b.w) ? a : (a || b)` returns `a` in BOTH arms
      whenever `a` exists, so it never once picked the smaller file. On Spilled!
@@ -9281,9 +9350,10 @@ async function _steamIconCandidates(appId) {
 
      `_applySteamLogo` had this right already (transparency, then width), so
      this is the same two-line sort rather than a second rule. */
-  const logo = [logo2, logo1]
-    .filter(i => i && _logoClearFraction(i) >= SM_LOGO_MIN_CLEAR)
-    .sort((a, b) => b.naturalWidth - a.naturalWidth)[0] || null;
+  const logoPick = [{ i: logo2, u: logoUrls[0] }, { i: logo1, u: logoUrls[1] }]
+    .filter(p => p.i && _logoClearFraction(p.i) >= SM_LOGO_MIN_CLEAR)
+    .sort((a, b) => b.i.naturalWidth - a.i.naturalWidth)[0] || null;
+  const logo = logoPick && logoPick.i;
   const out = [];
   try {
     if (hero && logo) {
@@ -9293,7 +9363,8 @@ async function _steamIconCandidates(appId) {
       /* OPAQUE BY CONSTRUCTION, because SM_REQS marks the App Store and Mac
          App Store icons `noA: true` — Apple rejects an icon with alpha. The
          fill is not decoration, it is what makes this file legal. */
-      x.fillStyle = _iconArtColour(hero);
+      const bg = _iconArtColour(hero);
+      x.fillStyle = bg;
       x.fillRect(0, 0, SM_ICON_PX, SM_ICON_PX);
       const box = SM_ICON_PX * 0.76;   // the wordmark, with a margin that survives a rounded mask
       /* The INK, not the file — see `_iconInkBox`. Falls back to the whole
@@ -9314,7 +9385,25 @@ async function _steamIconCandidates(appId) {
          calling it an option. The logotype FILE is still in the library on its
          own terms (`_applySteamLogo`), so nothing is lost — only this derived
          icon is not made. */
-      if (k.density < SM_LOGO_SOLID) out.push({ key: 'logo', src: c.toDataURL('image/png') });
+      if (k.density < SM_LOGO_SOLID) {
+        /* The default colour is guaranteed to BE in the row. `_iconArtPalette`
+           ranks the same buckets by the same score, so its head is already
+           this colour on every art measured — the unshift is for the case
+           where the spread filter or an empty palette says otherwise, because
+           a swatch row that cannot reproduce the icon you are looking at is
+           worse than one colour short. */
+        const palette = _iconArtPalette(hero, 8);
+        if (!palette.includes(bg)) palette.unshift(bg);
+        out.push({
+          key: 'logo', src: c.toDataURL('image/png'),
+          recipe: {
+            kind: 'logo', heroUrl: heroPick.u, logoUrl: logoPick.u,
+            ink: { x: k.x, y: k.y, w: k.w, h: k.h },
+            palette: palette.slice(0, 8), bg, bg0: bg,
+            z: 1, fx: 0.5, fy: 0.5,
+          },
+        });
+      }
     }
     if (hero) {
       const c = document.createElement('canvas');
@@ -9324,7 +9413,18 @@ async function _steamIconCandidates(appId) {
       let sx = Math.round(_iconSalientX(hero) * hero.naturalWidth - s / 2);
       sx = Math.max(0, Math.min(hero.naturalWidth - s, sx));
       x.drawImage(hero, sx, Math.round((hero.naturalHeight - s) / 2), s, s, 0, 0, SM_ICON_PX, SM_ICON_PX);
-      out.push({ key: 'art', src: c.toDataURL('image/jpeg', 0.92) });
+      /* `fx` IS THE CLAMPED CENTRE, NOT `_iconSalientX`'S ANSWER. On art whose
+         salient window runs off an edge the two differ, and the editor has to
+         open on the crop the developer is looking at — the clamp is part of
+         where this icon actually is. */
+      out.push({
+        key: 'art', src: c.toDataURL('image/jpeg', 0.92),
+        recipe: {
+          kind: 'art', heroUrl: heroPick.u,
+          heroAR: hero.naturalWidth / hero.naturalHeight,
+          z: 1, fx: (sx + s / 2) / hero.naturalWidth, fy: 0.5,
+        },
+      });
     }
   } catch (_) {
     /* A tainted canvas, or no canvas at all. No icons rather than broken ones;
@@ -9363,6 +9463,13 @@ function _addSteamIconCandidates(appId, expectedTitle) {
          own — but only after smMeasure's async read, and the slot is written
          on the line below. */
       smSetKind(id, 'icon');
+      /* Filed under the ASSET's id, which is the id every other surface already
+         uses for this icon (`smAppIconId`, `state.appIconEd.crops`). One key,
+         so the editor cannot open a recipe belonging to a different file. */
+      if (c.recipe) {
+        state.iconRecipes = state.iconRecipes || {};
+        state.iconRecipes[id] = c.recipe;
+      }
       ids[c.key] = id;
     });
 
@@ -15964,6 +16071,15 @@ function _screenshotSrc(s) {
    which screenshot you have open is where the pointer is, not something the
    submission carries. The TRANSFORM lives in state (platformScreenshots[pid]
    .crops); this is the working copy while it is being dragged. */
+/* THE RECIPE BEHIND A GENERATED ICON, or null for one that was uploaded
+   (v7.25). Written by `_addSteamIconCandidates`, read by the editor and by
+   nothing else — an icon with no recipe is a file, and a file can only be
+   cropped, which is exactly what the editor already did for every icon before
+   this version. So a null here is not a missing case, it is the old path. */
+function smIconRecipe(id) {
+  return (id && state.iconRecipes && state.iconRecipes[id]) || null;
+}
+
 var _shotEd = {
   pid: null, shotId: null,
   /* 'shots' | 'icon' — which surface this editor is armed on. Set by
@@ -15973,6 +16089,11 @@ var _shotEd = {
      Everything else — the geometry, the pan clamp, the bake, the debounce and
      its flush — is the same editor. See buildAppIconSection (render.js). */
   mode: 'shots',
+  /* The selected icon's recipe, or null. Resolved once per selection rather
+     than looked up in each of the four places that branch on it — the geometry
+     runs BEFORE the load and would otherwise be asking about the previous
+     icon's id, which is how the canvas ends up the wrong shape for one frame. */
+  recipe: null,
   z: 1, tx: 0, ty: 0,          // zoom, and pan in CANVAS pixels
   img: null, natW: 0, natH: 0, // the decoded original
   FW: 0, FH: 0,                // the crop frame, measured
@@ -16008,6 +16129,18 @@ function _shotEdOriginal(pid, shotId) {
      under the same id (see smAppIconSrc's lookup). The `_slot` fallback is the
      pre-pool upload shape that has no pool record behind it. */
   if (_shotEd.mode === 'icon') {
+    /* CANDIDATE B IS EDITED FROM THE ART IT WAS CUT FROM (v7.25), not from its
+       own 1024 square — Adam: *"the full key art used to generate the Candidate
+       B logo should be present, such that the user can drag to reposition the
+       logo 'frame' to other parts of the key art."* Cropping the square would
+       only ever show less of a picture that is already one crop; loading the
+       hero makes the same editor a frame moving over the whole image, with the
+       square it exports unchanged. `cors` because the export reads pixels back
+       and Steam's CDN will send the header (see `_iconLoadCors`). */
+    const rec = smIconRecipe(shotId);
+    if (rec && rec.kind === 'art' && rec.heroUrl) {
+      return { id: shotId, name: 'Key art', src: rec.heroUrl, cors: true };
+    }
     const a = (typeof smGet === 'function') ? smGet(shotId) : null;
     if (a) return a;
     const slot = state.uploads?.appIcon;
@@ -16042,6 +16175,17 @@ function _shotEdArm() {
 
   _shotEdWireStrip(root, pid);
 
+  /* CANDIDATE A IS NOT A CROP AND DOES NOT COME HERE (v7.25). Its picture is
+     SMALLER than its frame and free to move inside it, on a background that is
+     itself part of the icon — so the pan clamp ("keep the frame covered"), the
+     cover scale and the single-layer bake are all the wrong rule, not a rule
+     with an extra case. `_iconEdA` is that editor; it shares this root's head,
+     strip, toolbar and add-slot, which is the part that really is the same. */
+  if (mode === 'icon' && document.getElementById('icon-a-stage')) {
+    _iconEdAArm(root, pid);
+    return;
+  }
+
   const stage = document.getElementById('shot-ed-stage');
   /* `is-trailer` joins `is-empty` as a stage with nothing to crop (v7.15). The
      selection is NOT cleared for it, unlike the empty case: the strip still
@@ -16057,6 +16201,11 @@ function _shotEdArm() {
   const selEl = root.querySelector('.shot-thumb.is-selected');
   const shotId = selEl?.dataset.shotThumb || null;
   if (!shotId) return;
+  /* Before the geometry, because the geometry ASKS it: an art recipe makes the
+     canvas the hero's shape with a square frame inside, and solving that from
+     the previously selected icon's recipe is the one-frame wrong box this
+     function's own comment block already paid for once. */
+  _shotEd.recipe = (mode === 'icon') ? smIconRecipe(shotId) : null;
 
   _shotEdWireStage(pid);
 
@@ -16159,9 +16308,23 @@ function _shotEdGeometry(pid, landscape) {
      because it has no laid-out stage to measure. See `_shotEdCanvasRatio`. */
   const md = _shotEd.mode;
   const r  = (typeof _shotEdRatio === 'function') ? _shotEdRatio(pid, landscape, md) : 16 / 10;
-  const cr = (typeof _shotEdCanvasRatio === 'function') ? _shotEdCanvasRatio(pid, landscape, md) : Math.max(r, 1.96);
+  let   cr = (typeof _shotEdCanvasRatio === 'function') ? _shotEdCanvasRatio(pid, landscape, md) : Math.max(r, 1.96);
+  /* THE THIRD CANVAS (v7.25). A store's canvas is its own frame (landscape) or
+     a 1.96 band (portrait); Candidate B's is neither — it is the KEY ART, so
+     the whole picture is on screen and the square frame moves over it. The
+     ratio is a fact about that file, recorded when the icon was generated, so
+     it is available before the hero decodes and the box is reserved correctly
+     on the first frame like every other case here. */
+  const rec = (md === 'icon') ? _shotEd.recipe : null;
+  if (rec && rec.kind === 'art' && rec.heroAR > 0) cr = Math.max(r, rec.heroAR);
   const CH = Math.round(CW / cr);
-  if (r >= 1) return { CW, CH, FW: CW, FH: CH, full: true };
+  /* `cr <= r` REPLACES `r >= 1`, and the two agree everywhere they used to be
+     asked: a landscape store has cr === r, a portrait store has cr 1.96 > r.
+     What the old test could not say is the new case — an icon frame is square
+     (r === 1, so `r >= 1` is true) inside a canvas three times as wide, which
+     is emphatically not a frame that fills its canvas. The real question was
+     always whether there is anything OUTSIDE the frame to dim. */
+  if (cr <= r) return { CW, CH, FW: CW, FH: CH, full: true };
   return { CW, CH, FW: Math.round(CH * r), FH: CH, full: false };
 }
 
@@ -16179,7 +16342,17 @@ function _shotEdWireStage(pid) {
   });
   canvas.addEventListener('pointermove', e => {
     if (!dragging) return;
-    _shotEd.tx += (e.clientX - lastX); _shotEd.ty += (e.clientY - lastY);
+    /* THE SIGN FLIPS WITH THE SUBJECT. Dragging a picture under a fixed window
+       moves the picture WITH the pointer, which moves the crop against it;
+       dragging a window over a fixed picture moves the window with the
+       pointer. Both read as "grab what you see and move it", and getting this
+       backwards is the classic inverted-scroll bug. */
+    if (_shotEdIsArt() && _shotEd.CW) {
+      _shotEd.fx = (_shotEd.fx == null ? 0.5 : _shotEd.fx) + (e.clientX - lastX) / _shotEd.CW;
+      _shotEd.fy = (_shotEd.fy == null ? 0.5 : _shotEd.fy) + (e.clientY - lastY) / _shotEd.CH;
+    } else {
+      _shotEd.tx += (e.clientX - lastX); _shotEd.ty += (e.clientY - lastY);
+    }
     lastX = e.clientX; lastY = e.clientY;
     _shotEd.dirty = true; _shotEdLayout();
   });
@@ -16233,6 +16406,7 @@ function _shotEdLoad(pid, shotId) {
 
   const saved = _shotEdPs(pid).crops[shotId] || {};
   _shotEd.pid = pid; _shotEd.shotId = shotId;
+  _shotEd.recipe = (_shotEd.mode === 'icon') ? smIconRecipe(shotId) : null;
   _shotEd.z = saved.z || 1; _shotEd.tx = saved.tx || 0; _shotEd.ty = saved.ty || 0;
   _shotEd.dirty = false; _shotEd.img = null;
 
@@ -16240,6 +16414,12 @@ function _shotEdLoad(pid, shotId) {
   if (zoom) zoom.value = _shotEd.z;
 
   const img = new Image();
+  /* Only where the source says so, which today is Candidate B's hero. Asking
+     for CORS on an IGDB screenshot would turn a picture that currently loads
+     and merely taints the bake into one that does not load at all — the
+     opposite trade from `_iconLoadCors`, and for the opposite reason: there,
+     a tainted image is worth nothing; here, it still draws. */
+  if (orig.cors) img.crossOrigin = 'anonymous';
   img.onload = () => {
     if (_shotEd.shotId !== shotId) return;   // selection changed while decoding
     _shotEd.img = img; _shotEd.natW = img.naturalWidth; _shotEd.natH = img.naturalHeight;
@@ -16249,11 +16429,66 @@ function _shotEdLoad(pid, shotId) {
     const g = _shotEdGeometry(pid, _shotEd.landscape);
     if (!g) return;
     _shotEdApplyGeometry(g);
+    /* CANDIDATE B IS PANNED IN FRACTIONS, not in canvas pixels — see
+       `_shotEdArtFrame`. `fx` is where the frame's centre sits across the art,
+       0 to 1, which is the coordinate the recipe was written in and the only
+       one that survives a stage of a different width. */
+    const rec = _shotEd.recipe;
+    if (rec && rec.kind === 'art') {
+      _shotEd.fx = (saved.fx != null) ? saved.fx : (rec.fx != null ? rec.fx : 0.5);
+      _shotEd.fy = (saved.fy != null) ? saved.fy : (rec.fy != null ? rec.fy : 0.5);
+      _shotEd.tx = 0; _shotEd.ty = 0;
+    }
     const el = document.getElementById('shot-ed-img');
-    if (el) el.src = src;
+    if (el) {
+      if (orig.cors) el.crossOrigin = 'anonymous';
+      el.src = src;
+    }
     _shotEdLayout();
   };
   img.src = src;
+}
+
+/* ── CANDIDATE B'S FRAME  (v7.25) ─────────────────────────────────────────
+   THE ART DOES NOT MOVE; THE FRAME DOES. That is the literal request — Adam:
+   *"the user can drag to reposition the logo 'frame' to other parts of the key
+   art and also resize the logo 'frame' using the zoom scroll"* — and it is
+   also the only arrangement in which the first half of the sentence, *"the
+   full key art… should be present"*, stays true for the whole gesture.
+
+   THE FIRST ATTEMPT MOVED THE PICTURE, because that is what this editor does
+   everywhere else, and it was wrong in a way a screenshot never reveals.
+   Measured: with the frame pinned to the canvas centre and the hero slid under
+   it, reaching a salient window at 82.5% of the art drags the art's right edge
+   200px INSIDE the canvas — so the surface whose whole purpose is showing the
+   developer their key art ends with a third of the stage empty and a third of
+   the art off the left side. Every constraint was satisfied and the picture
+   was still wrong.
+
+   So art mode inverts the two: the hero is laid out to fill the canvas exactly
+   and never moves, and the square selection travels over it. `z` stops being a
+   scale on the picture and becomes the frame's SIZE — side = CH / z, so z = 1
+   is the largest square the art can contain (its full height), which is
+   precisely what `_steamIconCandidates` cut. Zooming in shrinks the selection.
+
+   ONE FUNCTION, FOUR READERS — the layout, the geometry, the bake and the live
+   thumbnail — because a selection rectangle computed twice is a selection
+   rectangle that can be exported one pixel from where it was shown. */
+function _shotEdArtFrame() {
+  const CW = _shotEd.CW || 0, CH = _shotEd.CH || 0;
+  const fs = Math.max(8, Math.min(CW, CH / Math.max(1, _shotEd.z || 1)));
+  const cl = (f, half) => Math.max(Math.min(half, 1 - half),
+                                   Math.min(Math.max(half, 1 - half), f == null ? 0.5 : f));
+  const fx = CW ? cl(_shotEd.fx, fs / 2 / CW) : 0.5;
+  const fy = CH ? cl(_shotEd.fy, fs / 2 / CH) : 0.5;
+  return { fs, fx, fy, fl: fx * CW - fs / 2, ft: fy * CH - fs / 2 };
+}
+
+/* True when the open icon is Candidate B — asked in five places, so it is one
+   predicate rather than five copies of the same three-clause test. */
+function _shotEdIsArt() {
+  const rec = _shotEd.recipe;
+  return !!(_shotEd.mode === 'icon' && rec && rec.kind === 'art');
 }
 
 function _shotEdApplyGeometry(g) {
@@ -16262,10 +16497,14 @@ function _shotEdApplyGeometry(g) {
   const frame  = document.getElementById('shot-ed-frame');
   if (canvas) canvas.style.height = g.CH + 'px';
   if (frame) {
-    frame.style.width  = g.FW + 'px';
-    frame.style.height = g.FH + 'px';
-    frame.style.left   = ((g.CW - g.FW) / 2) + 'px';
-    frame.style.top    = ((g.CH - g.FH) / 2) + 'px';
+    /* A CENTRED FRAME IS THE ONE THING ART MODE DOES NOT WANT, and doing it
+       here first and correcting it in the layout would show a square jumping
+       from the middle of the key art to the crop on the first paint. */
+    const f = _shotEdIsArt() ? _shotEdArtFrame() : null;
+    frame.style.width  = (f ? f.fs : g.FW) + 'px';
+    frame.style.height = (f ? f.fs : g.FH) + 'px';
+    frame.style.left   = (f ? f.fl : (g.CW - g.FW) / 2) + 'px';
+    frame.style.top    = (f ? f.ft : (g.CH - g.FH) / 2) + 'px';
     frame.classList.toggle('is-full', !!g.full);
   }
 }
@@ -16279,6 +16518,25 @@ function _shotEdApplyGeometry(g) {
 function _shotEdLayout() {
   const el = document.getElementById('shot-ed-img');
   if (!el || !_shotEd.natW || !_shotEd.FW) return;
+  /* ART MODE LAYS OUT THE OTHER WAY ROUND — see `_shotEdArtFrame`. The hero
+     fills the canvas and stays there; what is positioned is the selection. */
+  if (_shotEdIsArt() && _shotEd.CW) {
+    const f = _shotEdArtFrame();
+    _shotEd.fx = f.fx; _shotEd.fy = f.fy;      // the clamp is the state, not a display trick
+    el.style.width  = _shotEd.CW + 'px';
+    el.style.height = _shotEd.CH + 'px';
+    el.style.left   = '0px';
+    el.style.top    = '0px';
+    const frame = document.getElementById('shot-ed-frame');
+    if (frame) {
+      frame.style.width = frame.style.height = f.fs + 'px';
+      frame.style.left  = f.fl + 'px';
+      frame.style.top   = f.ft + 'px';
+    }
+    _shotEdLiveThumb();
+    _shotEdScheduleCommit();
+    return;
+  }
   const s0 = Math.max(_shotEd.FW / _shotEd.natW, _shotEd.FH / _shotEd.natH);
   const s  = s0 * _shotEd.z;
   const dispW = _shotEd.natW * s, dispH = _shotEd.natH * s;
@@ -16308,6 +16566,20 @@ function _shotEdScheduleCommit() {
 
 function _shotEdBake() {
   if (!_shotEd.img || !_shotEd.natW || !_shotEd.FW) return null;
+  /* The selection mapped straight back into the hero's own pixels: the art
+     fills the canvas exactly, so one factor converts both axes. Always
+     SM_ICON_PX square — an icon's size is Apple's number, not the stage's. */
+  if (_shotEdIsArt() && _shotEd.CW) {
+    const f = _shotEdArtFrame();
+    const k = _shotEd.natW / _shotEd.CW;
+    const N = (typeof SM_ICON_PX === 'number' ? SM_ICON_PX : 1024);
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    try {
+      c.getContext('2d').drawImage(_shotEd.img, f.fl * k, f.ft * k, f.fs * k, f.fs * k, 0, 0, N, N);
+      return c.toDataURL('image/jpeg', 0.92);
+    } catch (_) { return null; }   // tainted — see below
+  }
   const s0 = Math.max(_shotEd.FW / _shotEd.natW, _shotEd.FH / _shotEd.natH);
   const s  = s0 * _shotEd.z;
   const left = _shotEd.FW / 2 + _shotEd.tx - (_shotEd.natW * s) / 2;
@@ -16319,6 +16591,18 @@ function _shotEdBake() {
   let ow = cw, oh = ch;
   const cap = 1400, longest = Math.max(ow, oh);
   if (longest > cap) { const k = cap / longest; ow *= k; oh *= k; }
+  /* AN ICON HAS A FLOOR AS WELL AS A CAP (v7.25), because unlike a screenshot
+     its size is not "whatever the source had" — Apple asks for 1024 and the
+     generator has always produced exactly that. Candidate B's crop is the
+     hero's HEIGHT, which is 620px on the 1x file, so without this the act of
+     opening the editor and moving nothing would quietly halve the icon's
+     resolution. Upscaling is the lesser wrong: the store rejects the small
+     one outright. */
+  if (_shotEd.mode === 'icon') {
+    const floor = (typeof SM_ICON_PX === 'number' ? SM_ICON_PX : 1024);
+    const longEdge = Math.max(ow, oh);
+    if (longEdge > 0 && longEdge < floor) { const k = floor / longEdge; ow *= k; oh *= k; }
+  }
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(ow)); c.height = Math.max(1, Math.round(oh));
   try {
@@ -16337,10 +16621,18 @@ function _shotEdBake() {
 function _shotEdCommit() {
   if (!_shotEd.dirty || !_shotEd.shotId) return;
   const ps = _shotEdPs(_shotEd.pid);
-  ps.crops[_shotEd.shotId] = {
+  const entry = {
     z: _shotEd.z, tx: _shotEd.tx, ty: _shotEd.ty,
     url: _shotEdBake() || undefined,
   };
+  /* The stage-independent copy of the same pan — see `_shotEdLoad`. Written in
+     addition to `tx`/`ty` rather than instead of them, so nothing that reads
+     the old pair has to learn about this one. */
+  if (_shotEdIsArt() && _shotEd.CW) {
+    const f = _shotEdArtFrame();
+    entry.fx = f.fx; entry.fy = f.fy;
+  }
+  ps.crops[_shotEd.shotId] = entry;
   _shotEd.dirty = false;
   /* The STRIP and the store row both read the crop, and the step modal is not
      rebuilt here — a render mid-drag would take the canvas out from under the
@@ -16378,6 +16670,10 @@ function _shotEdCommit() {
 function _shotEdFlush() {
   clearTimeout(_shotEdCommitT);
   if (_shotEd.dirty && _shotEd.shotId) _shotEdCommit();
+  /* The other editor on this surface, under the same rule and through the same
+     two doors — a composition left mid-drag is as losable as a crop, and there
+     is only one flush for `openStepModal`/`closeStepModal` to call. */
+  if (typeof _iconEdAFlush === 'function') _iconEdAFlush();
 }
 
 function _shotEdReset() {
@@ -16385,10 +16681,22 @@ function _shotEdReset() {
   const ps = _shotEdPs(_shotEd.pid);
   delete ps.crops[_shotEd.shotId];
   _shotEd.z = 1; _shotEd.tx = 0; _shotEd.ty = 0; _shotEd.dirty = false;
+  /* RESET MEANS "BACK TO WHAT SHIPMATE MADE", and for Candidate B that is not
+     the centre of the key art — it is the salient window this file chose when
+     it generated the icon. Zero pan would revert it to a crop the developer
+     has never seen, which is a different picture wearing the word Reset. */
+  const rec = _shotEd.recipe;
+  if (_shotEdIsArt()) {
+    _shotEd.fx = (rec.fx != null) ? rec.fx : 0.5;
+    _shotEd.fy = (rec.fy != null) ? rec.fy : 0.5;
+  }
   const zoom = document.getElementById('shot-ed-zoom');
   if (zoom) zoom.value = 1;
   _shotEdLayout();
-  _shotEdLiveThumb(true);
+  /* An icon's reset has a PICTURE to go back to (the default crop), not an
+     uncropped original — `_shotEdLayout` has just redrawn it, so forcing the
+     source back into the tile would put the whole 3:1 hero in a square hole. */
+  _shotEdLiveThumb(_shotEd.mode !== 'icon');
   renderDashboard();
 }
 
@@ -16401,7 +16709,7 @@ function _shotEdLiveThumb(force) {
   if (!el || !_shotEd.img) return;
   if (force) {
     const orig = _shotEdOriginal(_shotEd.pid, _shotEd.shotId);
-    if (orig) el.src = _screenshotSrc(orig);
+    if (orig) el.src = orig.src || _screenshotSrc(orig);   // two shapes, one src — see _shotEdLoad
     return;
   }
   if (_shotEdThumbRAF) return;
@@ -16409,6 +16717,17 @@ function _shotEdLiveThumb(force) {
     _shotEdThumbRAF = 0;
     const t = document.querySelector('.shot-thumb.is-selected img');
     if (!t || !_shotEd.img || !_shotEd.FW) return;
+    if (_shotEdIsArt() && _shotEd.CW) {
+      const f = _shotEdArtFrame();
+      const k = _shotEd.natW / _shotEd.CW;
+      const c = document.createElement('canvas');
+      c.width = c.height = 200;                 // the thumbnail IS the export, seen small
+      try {
+        c.getContext('2d').drawImage(_shotEd.img, f.fl * k, f.ft * k, f.fs * k, f.fs * k, 0, 0, 200, 200);
+        t.src = c.toDataURL('image/jpeg', 0.82);
+      } catch (_) { /* tainted — see _shotEdBake */ }
+      return;
+    }
     const s0 = Math.max(_shotEd.FW / _shotEd.natW, _shotEd.FH / _shotEd.natH);
     const s  = s0 * _shotEd.z;
     const left = _shotEd.FW / 2 + _shotEd.tx - (_shotEd.natW * s) / 2;
@@ -16422,6 +16741,302 @@ function _shotEdLiveThumb(force) {
         _shotEd.FW / s, _shotEd.FH / s, 0, 0, c.width, c.height);
       t.src = c.toDataURL('image/jpeg', 0.82);
     } catch (_) { /* tainted — see _shotEdBake */ }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CANDIDATE A'S EDITOR  (v7.25)
+   ══════════════════════════════════════════════════════════════════════════
+   Adam: *"For Candidate A, the user should be able to drag the logo to
+   reposition it, as well as control the logo's size via the scroll. In
+   addition, the user should be able to select the icon's background color…
+   from 8 background colors… based on the key art's color palette."*
+
+   A SECOND EDITOR, WHICH THIS FILE'S OWN RULE SAYS TO AVOID — so the reason
+   has to be better than "it was easier". `buildAppIconSection` argued against
+   a second cropper and was right: the crop maths there has a history of subtle
+   bugs and a copy inherits none of the fixes. This is not a copy of it. Every
+   invariant that editor is built on is FALSE here:
+
+     · it clamps the pan so the frame stays COVERED. Candidate A's logo is
+       deliberately smaller than the frame — 76% of it by default — so the
+       clamp has to keep it INSIDE, which is the opposite inequality.
+     · its zoom floor is cover, so 1 is the smallest the picture can be. A
+       wordmark on a colour can shrink as far as you like; there is no gap to
+       open because the background is part of the icon.
+     · it exports one layer. This exports two, and the lower one is a COLOUR
+       the developer picks, which is not a crop parameter at all.
+
+   Three different rules is a different editor, and the honest way to have one
+   is to write one rather than to grow `_shotEd` four branches. What IS shared
+   is shared for real: the same root, head, strip, add-slot, toolbar and Reset,
+   the same 350ms auto-save, the same `state.appIconEd.crops[id].url` output —
+   so `smAppIconSrc` and every preview downstream cannot tell which editor made
+   the picture, which is the only part that has to agree.
+
+   AND IT IS THE ONE SLIDER THAT CAN HONESTLY START IN THE MIDDLE. Adam asked
+   for that on all three surfaces; it is only true here. See ICON_A_ZMAX. */
+
+var _iconEdA = { id: null, rec: null, img: null, dirty: false };
+
+/* SYMMETRIC IN LOG SPACE, WHICH IS WHAT PUTS 1 AT THE MIDDLE. A linear 0.4–2.5
+   slider has the default sitting at 29% — mid-BAR was the request, not
+   mid-range, and on a scale where "half as big" and "twice as big" are the
+   same gesture in opposite directions the two coincide. 2.5 up because past
+   that the wordmark is being cropped by its own icon; 1/2.5 down because
+   below it there is more background than mark. */
+const ICON_A_ZMAX = 2.5;
+const ICON_A_ZMIN = 1 / ICON_A_ZMAX;
+function _iconAZoomFromSlider(v) { return Math.pow(ICON_A_ZMAX, (Number(v) - 0.5) * 2); }
+function _iconASliderFromZoom(z) {
+  return 0.5 + Math.log(Math.max(ICON_A_ZMIN, Math.min(ICON_A_ZMAX, z || 1))) / Math.log(ICON_A_ZMAX) / 2;
+}
+
+/* The 76% the generator reserves for the wordmark, quoted rather than
+   repeated: `z` is a multiple OF THE DEFAULT, so z = 1 reproduces the icon in
+   the strip exactly and Reset has something exact to return to. */
+const ICON_A_BOX = 0.76;
+
+function _iconEdAArm(root, pid) {
+  const stage = document.getElementById('icon-a-stage');
+  if (!stage) return;
+  const selEl  = root.querySelector('.shot-thumb.is-selected');
+  const id     = selEl?.dataset.shotThumb || null;
+  const rec    = smIconRecipe(id);
+  if (!id || !rec || rec.kind !== 'logo' || !rec.logoUrl) return;
+
+  /* `_shotEd.shotId` IS STILL THE SELECTION, even though `_shotEd` is not
+     driving. The strip, the live thumbnail lookup and the builder's fallback
+     all read it to decide which tile is open, and leaving it pointing at the
+     previously edited icon would light the wrong tile. */
+  _shotEd.shotId = id; _shotEd.recipe = rec;
+
+  if (_iconEdA.id !== id) { _iconEdA.img = null; _iconEdA.dirty = false; }
+  _iconEdA.id = id; _iconEdA.rec = rec;
+
+  _iconEdAWire(stage);
+  const zoom = document.getElementById('shot-ed-zoom');
+  if (zoom) zoom.value = _iconASliderFromZoom(rec.z || 1);
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';         // the bake reads it back — see _iconLoadCors
+  img.onload = () => {
+    if (_iconEdA.id !== id) return;      // selection changed while decoding
+    _iconEdA.img = img;
+    _iconEdALayout();
+  };
+  img.src = rec.logoUrl;
+}
+
+function _iconEdAWire(stage) {
+  if (stage._iconAWired) return;
+  stage._iconAWired = true;
+
+  let drag = false, lx = 0, ly = 0;
+  stage.addEventListener('pointerdown', e => {
+    if (!_iconEdA.img) return;
+    drag = true; lx = e.clientX; ly = e.clientY;
+    stage.classList.add('is-grabbing', 'is-active');
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!drag || !_iconEdA.rec) return;
+    /* IN FRACTIONS OF THE ICON, not in canvas pixels — the same lesson
+       `_shotEdLoad` states for Candidate B, applied from the start here
+       because this editor has no pixel copy to fall back on. A drag of half
+       the stage moves the mark half the icon at any stage width. */
+    const C = stage.clientWidth || 1;
+    _iconEdA.rec.fx = (_iconEdA.rec.fx == null ? 0.5 : _iconEdA.rec.fx) + (e.clientX - lx) / C;
+    _iconEdA.rec.fy = (_iconEdA.rec.fy == null ? 0.5 : _iconEdA.rec.fy) + (e.clientY - ly) / C;
+    lx = e.clientX; ly = e.clientY;
+    _iconEdA.dirty = true;
+    _iconEdALayout();
+  });
+  const end = e => {
+    if (!drag) return;
+    drag = false;
+    stage.classList.remove('is-grabbing');
+    setTimeout(() => stage.classList.remove('is-active'), 500);
+    try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+
+  /* MULTIPLICATIVE, because the scale is. `_shotEd` adds a delta to a linear
+     zoom and gets a wheel that bites hard when zoomed out and barely moves
+     when zoomed in; here one notch is the same proportion at any size, which
+     is also what makes the slider and the wheel agree. `passive: false` for
+     the same reason as there: otherwise the modal scrolls under the pointer. */
+  stage.addEventListener('wheel', e => {
+    if (!_iconEdA.img || !_iconEdA.rec) return;
+    e.preventDefault();
+    _iconEdASetZoom((_iconEdA.rec.z || 1) * Math.exp(-e.deltaY * 0.0016));
+    stage.classList.add('is-active');
+    clearTimeout(stage._wheelT);
+    stage._wheelT = setTimeout(() => stage.classList.remove('is-active'), 500);
+  }, { passive: false });
+
+  /* The same answer `_shotEdWatchWidth` gives, for the same reason and in two
+     lines because this stage has no geometry to re-solve: the modal animates
+     from 1000px down as the card flips, so a layout computed on the first
+     frame is a layout computed against a width that is about to change.
+     Making it a FUNCTION of the width rather than a snapshot costs nothing and
+     cannot loop — what it writes is the logo's box, never the stage's. */
+  if (typeof ResizeObserver === 'function' && !stage._iconARO) {
+    stage._iconARO = new ResizeObserver(() => _iconEdALayout());
+    stage._iconARO.observe(stage);
+  }
+
+  const zoom = document.getElementById('shot-ed-zoom');
+  if (zoom) zoom.addEventListener('input', () => _iconEdASetZoom(_iconAZoomFromSlider(zoom.value), true));
+
+  const reset = document.getElementById('shot-ed-reset');
+  if (reset) reset.addEventListener('click', () => _iconEdAReset());
+
+  document.querySelectorAll('[data-icon-bg]').forEach(b => {
+    b.addEventListener('click', () => {
+      if (!_iconEdA.rec) return;
+      _iconEdA.rec.bg = b.dataset.iconBg;
+      document.querySelectorAll('[data-icon-bg]').forEach(o => o.classList.toggle('is-sel', o === b));
+      _iconEdA.dirty = true;
+      _iconEdALayout();
+    });
+  });
+}
+
+function _iconEdASetZoom(z, fromSlider) {
+  if (!_iconEdA.rec) return;
+  _iconEdA.rec.z = Math.max(ICON_A_ZMIN, Math.min(ICON_A_ZMAX, z || 1));
+  const el = document.getElementById('shot-ed-zoom');
+  if (el && !fromSlider) el.value = _iconASliderFromZoom(_iconEdA.rec.z);
+  _iconEdA.dirty = true;
+  _iconEdALayout();
+}
+
+/* Where the mark sits and how big it is, in icon fractions, for a given square
+   of side `C`. ONE FUNCTION, TWO READERS — the live stage and the bake — so
+   the picture in the editor and the file it writes cannot drift apart. This
+   file has paid for that rule enough times to state it every time.
+
+   The clamp is the pan clamp INVERTED: while the mark is smaller than the
+   icon its whole box has to stay inside, and once it is larger the icon has to
+   stay covered. Both are "the centre lives between h and 1 − h", which swap
+   ends as h passes 0.5, so `Math.min`/`Math.max` express it without a branch. */
+function _iconEdAGeom(rec, img, C) {
+  const ink = (rec && rec.ink) || { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+  const box = C * ICON_A_BOX * (rec.z || 1);
+  const s   = Math.min(box / ink.w, box / ink.h);
+  const dw  = ink.w * s, dh = ink.h * s;
+  const cl  = (f, d) => {
+    const h = d / 2 / C;
+    return Math.max(Math.min(h, 1 - h), Math.min(Math.max(h, 1 - h), f == null ? 0.5 : f));
+  };
+  return { ink, s, dw, dh, fx: cl(rec.fx, dw), fy: cl(rec.fy, dh) };
+}
+
+function _iconEdALayout() {
+  const stage = document.getElementById('icon-a-stage');
+  const el    = document.getElementById('icon-a-logo');
+  const rec   = _iconEdA.rec, img = _iconEdA.img;
+  if (!stage || !el || !rec || !img) return;
+  const C = stage.clientWidth || 0;
+  if (!C) return;
+  stage.style.background = rec.bg || '#242424';
+  const g = _iconEdAGeom(rec, img, C);
+  rec.fx = g.fx; rec.fy = g.fy;            // the clamp is the state, not a display trick
+  /* The <img> shows the WHOLE file and the ink box is a window into it, so the
+     file is laid out at the ink's scale and shifted back by the ink's own
+     origin — the same substitution `_steamIconCandidates` makes with a nine-
+     argument drawImage, which the DOM has no equivalent of. */
+  el.style.width  = (img.naturalWidth  * g.s) + 'px';
+  el.style.height = (img.naturalHeight * g.s) + 'px';
+  el.style.left   = (g.fx * C - g.dw / 2 - g.ink.x * g.s) + 'px';
+  el.style.top    = (g.fy * C - g.dh / 2 - g.ink.y * g.s) + 'px';
+  if (!el.src) el.src = rec.logoUrl;
+  _iconEdALiveThumb();
+  _iconEdAScheduleCommit();
+}
+
+function _iconEdABake(px) {
+  const rec = _iconEdA.rec, img = _iconEdA.img;
+  if (!rec || !img) return null;
+  const C = px || (typeof SM_ICON_PX === 'number' ? SM_ICON_PX : 1024);
+  const c = document.createElement('canvas');
+  c.width = c.height = C;
+  const x = c.getContext('2d');
+  /* OPAQUE BY CONSTRUCTION, the same reason `_steamIconCandidates` states:
+     Apple's row is marked `noA`, so the fill is what makes the file legal. */
+  x.fillStyle = rec.bg || '#242424';
+  x.fillRect(0, 0, C, C);
+  const g = _iconEdAGeom(rec, img, C);
+  try {
+    x.drawImage(img, g.ink.x, g.ink.y, g.ink.w, g.ink.h,
+                g.fx * C - g.dw / 2, g.fy * C - g.dh / 2, g.dw, g.dh);
+    /* PNG, as the generator does: a wordmark on flat colour is exactly the
+       picture JPEG rings around. There is no alpha in it — the fill covered
+       the frame — so the format costs nothing the store cares about. */
+    return c.toDataURL('image/png');
+  } catch (_) {
+    /* A tainted logo (a CDN that dropped the header between generation and
+       now). The recipe still holds the change, so the editor keeps showing it;
+       only the baked file is missing, and the previews fall back to the icon
+       Shipmate generated. Stated rather than swallowed. */
+    return null;
+  }
+}
+
+var _iconEdACommitT = 0;
+function _iconEdAScheduleCommit() {
+  clearTimeout(_iconEdACommitT);
+  _iconEdACommitT = setTimeout(() => { if (_iconEdA.dirty) _iconEdACommit(); }, 350);
+}
+
+function _iconEdACommit() {
+  if (!_iconEdA.dirty || !_iconEdA.id) return;
+  const ps = _shotEdPs(_shotEd.pid);       // mode is 'icon', so this is state.appIconEd
+  const url = _iconEdABake();
+  /* THE SAME SHELF `_shotEdCommit` WRITES TO, deliberately: `smAppIconSrc`
+     looks the crop up under the asset's id and knows nothing about which
+     editor produced it, so Candidate A reaches the topbar chip and all five
+     previews through plumbing that already existed. */
+  ps.crops[_iconEdA.id] = { url: url || undefined };
+  _iconEdA.dirty = false;
+  renderDashboard();
+}
+
+function _iconEdAFlush() {
+  clearTimeout(_iconEdACommitT);
+  if (_iconEdA.dirty && _iconEdA.id) _iconEdACommit();
+}
+
+function _iconEdAReset() {
+  const rec = _iconEdA.rec;
+  if (!rec || !_iconEdA.id) return;
+  rec.z = 1; rec.fx = 0.5; rec.fy = 0.5;
+  rec.bg = rec.bg0 || (rec.palette && rec.palette[0]) || rec.bg;
+  /* Deleting the entry is the whole revert: with no crop filed, `smAppIconSrc`
+     falls through to the asset's own src, which IS this composition at z = 1 —
+     the file the generator baked. Non-destructive for the same reason the crop
+     editor is: the original bytes were never touched. */
+  delete _shotEdPs(_shotEd.pid).crops[_iconEdA.id];
+  const zoom = document.getElementById('shot-ed-zoom');
+  if (zoom) zoom.value = 0.5;
+  document.querySelectorAll('[data-icon-bg]')
+    .forEach(o => o.classList.toggle('is-sel', o.dataset.iconBg === rec.bg));
+  _iconEdA.dirty = false;
+  _iconEdALayout();
+  renderDashboard();
+}
+
+var _iconEdAThumbRAF = 0;
+function _iconEdALiveThumb() {
+  if (_iconEdAThumbRAF) return;
+  _iconEdAThumbRAF = requestAnimationFrame(() => {
+    _iconEdAThumbRAF = 0;
+    const t = document.querySelector('.shot-thumb.is-selected img');
+    if (!t) return;
+    const url = _iconEdABake(200);        // the thumbnail IS the export, seen small
+    if (url) t.src = url;
   });
 }
 

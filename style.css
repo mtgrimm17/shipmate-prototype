@@ -8107,6 +8107,81 @@ body.viewing-splash .app-subnav { display: none; }
 }
 .shot-ed.is-icon-ed .shot-thumb img { border-radius: inherit; }
 .shot-ed.is-icon-ed .shot-thumb-add { width: 72px; aspect-ratio: 1 / 1; }
+/* ── THE APP ICON EDITOR'S OTHER TWO STAGES (v7.25) ───────────────────────
+   The 320px cap above is right for a SQUARE stage and wrong for Candidate B,
+   whose stage is the whole key art: capped at 320 a 3:1 hero leaves a 103px
+   frame, which is an icon being edited through a letterbox. B takes the
+   column, so the square frame lands near 200px — smaller than the 320 an icon
+   gets on its own, and the trade is the entire picture being visible, which is
+   the point of the surface. */
+.shot-ed.is-icon-ed .shot-ed-stage.is-icon-art { max-width: none; }
+
+/* Candidate A's stage IS a `.shot-ed-stage` (radius, clip, hairline, the 320
+   cap) plus the two things that element never needed: a shape of its own,
+   because there is no canvas inside to set the height, and the grab cursor the
+   canvas used to carry. The background is written inline from the recipe —
+   it is content here, not chrome. */
+.icon-a-stage {
+  aspect-ratio: 1 / 1;
+  cursor: grab;
+  touch-action: none;          /* or the browser pans the modal mid-drag */
+  user-select: none;
+}
+.icon-a-stage.is-grabbing { cursor: grabbing; }
+/* Same rules as `.shot-ed-img`, and stated rather than shared because the two
+   are laid out by different editors: this one is positioned by its INK box,
+   which is a window into the file, so the file overflows the frame on purpose. */
+.icon-a-logo {
+  position: absolute;
+  pointer-events: none;
+  max-width: none;             /* the app's global img rule would cap it */
+  user-select: none;
+}
+/* The hint leaves when the instruction is answered — `.shot-ed-hint`'s own
+   rule, which keys off `.shot-ed-canvas` and so cannot see this stage. */
+.icon-a-stage.is-active .shot-ed-hint,
+.icon-a-stage.is-grabbing .shot-ed-hint { opacity: 0; }
+
+/* EIGHT COLOURS AND A WORD, on the row under the zoom. Wraps rather than
+   scrolls: `_iconArtPalette` returns up to eight and sometimes three, so the
+   row has to look deliberate at either length, and a scroller with four
+   swatches in it does not. The selected ring is drawn OUTSIDE the swatch
+   (`box-shadow` spread, not a border) for v7.17's reason — a border would eat
+   into the colour it is pointing at, and the colour is the whole content. */
+.icon-a-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.icon-a-swatch-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 2px;
+}
+.icon-a-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.icon-a-swatch:hover { transform: translateY(-1px); }
+/* `--pill-on-color` is the app's "this one is chosen" blue — the same ring
+   `.sm-pick-tile.is-current` draws round the selected icon and video in the
+   Assets well (v7.15/v7.17). Two surfaces answering "which one is selected"
+   in two different colours would be two languages; `--accent` was the obvious
+   reach and is not in `:root` at all (see the loader, which declares it
+   locally), so it would have silently fallen back here. */
+.icon-a-swatch.is-sel {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18),
+              0 0 0 2px var(--bg), 0 0 0 4px var(--pill-on-color, #52BAFF);
+}
+
 .ias-header-meta { flex: 1; min-width: 0; padding-top: 2px; }
 .ias-app-name {
   font-size: 16px; font-weight: 700; color: var(--text);

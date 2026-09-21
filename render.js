@@ -20404,7 +20404,7 @@ function buildAppIconSection(pid) {
   const tiles = cands.map(c => `
     <div class="shot-thumb${c.id === (sel && sel.id) ? ' is-selected' : ''}" data-shot-thumb="${c.id}"
          title="${escHtml(c.name || 'Icon')}">
-      <img src="${escHtml(c.src || (typeof smAppIconSrc === 'function' && c._slot ? smAppIconSrc() : ''))}" alt="" draggable="false">
+      <img src="${escHtml(state.appIconEd?.crops?.[c.id]?.url || c.src || (typeof smAppIconSrc === 'function' && c._slot ? smAppIconSrc() : ''))}" alt="" draggable="false">
     </div>`).join('');
 
   /* The + is a SLOT in the strip, the same argument the Screenshots strip
@@ -20416,13 +20416,37 @@ function buildAppIconSection(pid) {
       <input type="file" accept="image/*" hidden onchange="handleAppIconFiles(this.files)">
     </button>`;
 
-  const stage = sel
+  /* WHICH EDITOR THIS ICON NEEDS (v7.25). Both generated candidates now carry
+     a recipe (`smIconRecipe`, app.js) saying what they are made of, and the
+     two are made of different things:
+
+       A — a wordmark on a colour. The mark moves inside the frame, shrinks
+           below it, and the colour underneath is a choice. Its own editor,
+           `_iconEdA`, for the three reasons written above that function.
+       B — a square cut out of the key art. Same cropper as the screenshots,
+           re-sourced from the HERO so the whole picture is on screen and the
+           square frame moves over it.
+
+     An icon with NO recipe — an upload, or one Shipmate merely recognised in
+     the pool — is a file, and a file can only be cropped. That is the v7.14
+     path, unchanged, and it is what this falls back to. */
+  const rec  = (sel && typeof smIconRecipe === 'function') ? smIconRecipe(sel.id) : null;
+  const isA  = !!(rec && rec.kind === 'logo' && rec.logoUrl);
+  const isB  = !!(rec && rec.kind === 'art' && rec.heroAR > 0);
+
+  const stage = isA
     ? `
-      <div class="shot-ed-stage" id="shot-ed-stage">
+      <div class="shot-ed-stage icon-a-stage" id="icon-a-stage" style="background:${escHtml(rec.bg || '#242424')}">
+        <img class="icon-a-logo" id="icon-a-logo" alt="" draggable="false">
+        <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
+      </div>`
+    : sel
+    ? `
+      <div class="shot-ed-stage${isB ? ' is-icon-art' : ''}" id="shot-ed-stage"${isB ? ` style="--shot-canvas-ratio:${rec.heroAR.toFixed(4)}"` : ''}>
         <div class="shot-ed-canvas" id="shot-ed-canvas">
           <img class="shot-ed-img" id="shot-ed-img" alt="" draggable="false">
           <div class="shot-ed-frame" id="shot-ed-frame"><div class="shot-ed-grid"></div></div>
-          <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
+          <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag ${isB ? 'the frame over the art' : 'to reposition'}</div>
         </div>
       </div>`
     /* The assets well's own voice, exactly as the Screenshots empty state
@@ -20439,6 +20463,33 @@ function buildAppIconSection(pid) {
         </button>
       </div>`;
 
+  /* THE SLIDER STARTS IN THE MIDDLE ONLY WHERE THERE IS SOMETHING TO ITS LEFT.
+     Adam asked for a mid-bar start on all three surfaces so the developer can
+     zoom OUT from the default. That is true for Candidate A, whose mark can
+     shrink on its background — and it cannot be true for the other two, given
+     the answer to the question that came with the request: zoom-out clamps at
+     COVER, no gap is ever shown. Candidate B's default framing IS the cover
+     floor (the square window is already the key art's full height) and an
+     uploaded 1024 square is its own floor, so a bar with the handle in the
+     middle would have a dead left half. One is reported, not hidden. */
+  const zoomAttrs = isA
+    ? `min="0" max="1" step="0.005" value="${(typeof _iconASliderFromZoom === 'function'
+         ? _iconASliderFromZoom(rec.z || 1) : 0.5).toFixed(3)}"`
+    : `min="1" max="4" step="0.01" value="1"`;
+
+  /* THE GAME'S OWN COLOURS, NOT A COLOUR PICKER (v7.25) — `_iconArtPalette`
+     reads them out of the key art, so every swatch is a colour the art
+     actually contains. It returns FEWER than eight rather than inventing
+     any, which is why this counts what came back instead of assuming a row
+     of eight, and hides the row entirely when there is no choice to make. */
+  const swatches = (isA && (rec.palette || []).length > 1) ? `
+    <div class="icon-a-swatches" role="group" aria-label="Icon background colour">
+      <span class="icon-a-swatch-label">Background</span>
+      ${rec.palette.map(col => `<button type="button" class="icon-a-swatch${col === rec.bg ? ' is-sel' : ''}"
+        data-icon-bg="${escHtml(col)}" style="background:${escHtml(col)}"
+        title="${escHtml(col)}" aria-label="${escHtml(col)}"></button>`).join('')}
+    </div>` : '';
+
   const n = cands.length;
   return `
     <div class="shot-ed is-icon-ed" data-shot-ed-pid="${pid}" data-shot-ed-mode="icon">
@@ -20453,10 +20504,12 @@ function buildAppIconSection(pid) {
         <div class="shot-ed-zoom">
           <span class="shot-ed-zoom-label">Zoom</span>
           <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
-                 min="1" max="4" step="0.01" value="1" ${sel ? '' : 'disabled'}>
+                 ${zoomAttrs} ${sel ? '' : 'disabled'}>
         </div>
         <button class="shot-ed-reset" id="shot-ed-reset" ${sel ? '' : 'disabled'}>Reset</button>
       </div>
+
+      ${swatches}
 
       <div class="shot-ed-strip" id="shot-ed-strip">${tiles}${addSlot}</div>
 
