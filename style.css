@@ -4577,7 +4577,28 @@ body.viewing-splash .app-subnav { display: none; }
   background: #1c1c1c;
   border: 1px solid var(--border-hover);
   border-radius: 12px;
-  max-height: 340px; overflow-y: auto;
+  /* NO SCROLL, AND THE LIST IS SHORT ENOUGH TO SAY SO (v7.10). Jaco: *"en el
+     'add platforms' menú desplegable del submission menu, no quiero que exista
+     scroll, por favor, queda feísimo."*
+
+     The `max-height: 340px; overflow-y: auto` arrived with `.loc-dropdown`'s
+     shape, borrowed wholesale — and that one really can be long, because it
+     lists LANGUAGES and there are dozens. This lists the platforms you have
+     not added, and `PLATFORMS` is a closed set the model cannot grow past.
+
+     TEN, NOT SEVEN, which is worth stating because the first version of this
+     note said seven and drew the wrong conclusion from it. Counted off the
+     literal in state.js: steam, ios, macos, macos_full, android, egs, psn,
+     xbox, nintendo, web — and the coming-soon ones are LISTED rather than
+     filtered (`.add-plat-item.is-coming-soon`, disabled), so a fresh project
+     really can show all ten. At 13px in a 9px/10px row that is ~36 a piece
+     plus 2 of gap and 12 of the menu's own padding: about 390. So the cap was
+     reachable after all, and it is removed rather than merely raised, which is
+     the point — the ask was not for a bigger box, it was for no scroller.
+
+     It costs nothing at the foot of the screen: this menu hangs off a pill in
+     the sub-nav row, which is at the top of the page by construction. */
+  max-height: none; overflow: visible;
   z-index: 300;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
 }

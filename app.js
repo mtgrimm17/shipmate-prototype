@@ -146,8 +146,25 @@ function showMainApp(view = 'dashboard') {
 /* ── Top-level tab switch: Add Game Details · Submit to Platforms · Spread the Word ── */
 const VIEW_IDS = { details: 'details', dashboard: 'dashboard', broadcast: 'broadcast', performance: 'performance', calendar: 'calendarview' };
 const VIEW_NAV = { details: 'nav-details', dashboard: 'nav-dashboard', broadcast: 'nav-broadcast', performance: 'nav-performance', calendar: 'nav-calendar' };
+/* A FIXED OVERLAY HAS TO BE TOLD WHEN YOU LEAVE (v7.10). Jaco: *"en
+   descripción, si cambio a otra tab mientras está cargando la animación verde,
+   deberías ocultarlo para que no se vea como un overlay en la siguiente tab."*
+
+   `_masCommitGlimmer` draws its sweep as a `position: fixed` box pinned to the
+   field's rect — deliberately tied to nothing, which is the property that made
+   it work at all (see its own note: a confirmation that waits on a render is
+   not a confirmation). The cost of being tied to nothing is that it does not
+   know the field has gone: it already ends on scroll, resize and typing, and a
+   tab change is none of those, so 900ms of green letters were left floating
+   over whatever came next.
+
+   Both doors, and for the reason `setView` states about the step modal: every
+   route into a view goes through it, and every route between Game Details'
+   sub-tabs goes through `gdSetSection`, so these are the two places that
+   cannot be forgotten by whatever adds the next way of navigating. */
 function setView(view) {
   if (!VIEW_IDS[view]) view = 'dashboard';
+  _masGlimmerCancelAll();
   /* LEAVING THE TAB LEAVES WHAT WAS OPEN ON IT.
 
      A step modal belongs to the tab it was opened from — it is editing that
@@ -798,6 +815,7 @@ function mktSetSection(id) {
 
 /* ── Game Details sub-tabs (Game Details / Distribution / Localization / Content / Assets) ── */
 function gdSetSection(id) {
+  _masGlimmerCancelAll();   // see the note at setView
   state.details.section = id;
   scrollContentToTop();
   if (id === 'localization') state.localizationSeen = true;   // visiting completes it
@@ -23446,8 +23464,16 @@ const SM_WELL_LAST = ['screenshot', 'other'];
    NOT needed — `#sm-library` already stops the well's own click, which is why
    this has to reach the input by name. */
 function _smIconMissingHtml() {
+  /* `hideGlobalTip()` FIRST, and it is the thumbnail ×'s own lesson arriving on
+     a second control. Jaco: *"si subo un archivo desde el icon rojo, al
+     subirlo, se queda pendiente un tooltip."* Pressing this opens the OS file
+     dialog, so the pointer leaves for somewhere the page cannot see; picking a
+     file then repaints the library and this button stops existing, so the
+     `mouseout` that would have dismissed its bubble never fires and the hint
+     is stranded over a tile that is no longer there. Anything that removes its
+     own anchor has to take the tooltip down by hand. */
   return `<button type="button" class="sm-thumb sm-thumb-missing"
-                  onclick="document.getElementById('ob-screenshot-input')?.click()"
+                  onclick="window.hideGlobalTip?.(); document.getElementById('ob-screenshot-input')?.click()"
                   data-tip="Upload an app icon">Icon</button>`;
 }
 
