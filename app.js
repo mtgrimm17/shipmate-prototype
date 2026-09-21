@@ -814,11 +814,31 @@ function mktSetSection(id) {
 }
 
 /* ── Game Details sub-tabs (Game Details / Distribution / Localization / Content / Assets) ── */
+/* VISITING COMPLETES IT, AND THERE ARE TWO DOORS (v7.12). Jaco: *"un bug que
+   veo a veces en el checklist de shippy con el List Localizations: es como que
+   a veces no se marca aunque marque las locs."*
+
+   `state.localizationSeen` was written in exactly one place — `gdSetSection`,
+   the sub-tab rail — while `chkGo`, the checklist's OWN navigation, sets
+   `state.details.section` directly and then calls `setView`. So pressing
+   "Select target languages" in Shippy's list landed you on the Localization
+   pane with the flag still false, and since that flag was the row's whole
+   done-state, adding languages from there never ticked it. Reaching the same
+   pane from the rail ticked it instantly — before you had chosen anything —
+   which is where the "a veces" comes from: same pane, two routes, two answers.
+
+   One rule, both doors. A third way of getting there calls this too rather
+   than repeating the condition, which is the inventory this file keeps being
+   bitten by. */
+function _gdMarkSectionSeen(id) {
+  if (id === 'localization') state.localizationSeen = true;
+}
+
 function gdSetSection(id) {
   _masGlimmerCancelAll();   // see the note at setView
   state.details.section = id;
   scrollContentToTop();
-  if (id === 'localization') state.localizationSeen = true;   // visiting completes it
+  _gdMarkSectionSeen(id);
   renderDetails(); renderSubnav();
   if (typeof renderGuide === 'function') renderGuide();
 }
@@ -1783,7 +1803,7 @@ function chkGoStep(key) {
 
 function chkGo(view, anchor, section) {
   if (section && view === 'broadcast') state.marketing.section = section;
-  if (section && view === 'details') state.details.section = section;
+  if (section && view === 'details') { state.details.section = section; _gdMarkSectionSeen(section); }
   setView(view);
   if (anchor) requestAnimationFrame(() => {
     const el = document.getElementById(anchor);

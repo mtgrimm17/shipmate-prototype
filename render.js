@@ -3955,7 +3955,24 @@ function _chkGroups() {
       // presets read the primary/supported languages chosen here, so the
       // checklist now walks the developer through them in the order the data
       // actually flows rather than the order the sub-tabs happen to sit in.
-      { label: t('guide.item.localizations') || 'Select target languages', section: 'localization', anchor: 'ob-lang-list-wrap', done: !!state.localizationSeen },
+      /* THE LANGUAGES YOU PICKED COUNT, NOT ONLY THE VISIT (v7.12). This was
+         `!!state.localizationSeen` alone — the one row in this group whose
+         done-state is a VISIT rather than a fact about the submission, where
+         title, description, platforms, countries, screenshots and trailer all
+         read the data. That made it the only row a navigation bug could break,
+         and one did (see `_gdMarkSectionSeen`, app.js).
+
+         The flag STAYS as the second half, because it is the escape hatch for
+         a real answer the data cannot express: a game shipping in one language
+         has nothing to select, and without it that developer would carry an
+         unfinished row forever. Same shape as the countries row below, which
+         is satisfied by a preset OR by a list.
+
+         `fd.localizations` has seven writers across three functions, so
+         reading it means every route in — a preset, the [+] search, a toggle,
+         or whatever adds the next one — ticks this by construction rather than
+         by remembering to. */
+      { label: t('guide.item.localizations') || 'Select target languages', section: 'localization', anchor: 'ob-lang-list-wrap', done: (fd.localizations || []).length > 0 || !!state.localizationSeen },
       { label: t('guide.item.countries') || 'Select target countries', section: 'distribution', anchor: 'ob-q-distribution',  done: !!fd.distributionPreset || ((fd.selectedCountries || []).length > 0) },
       { label: t('guide.item.screenshots') || 'Upload screenshots',    section: 'assets',       anchor: 'ob-q-screenshots',   done: hasScreenshots },
       { label: t('guide.item.trailer') || 'Add a trailer',             section: 'assets',       anchor: 'ob-q-screenshots',   done: hasTrailer },
