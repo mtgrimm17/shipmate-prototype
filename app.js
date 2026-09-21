@@ -4361,6 +4361,8 @@ function _enqueueTranslateTask(taskFn) {
        drawn, or a red tooltip would follow the pointer onto the next control. */
     tip.classList.toggle('g-tip--danger', anchor.dataset.tipTone === 'danger');
     tip.classList.add('is-visible');
+    tipAnchor = anchor;
+    if (!tipWatching) { tipWatching = true; requestAnimationFrame(watchAnchor); }
 
     const r = anchor.getBoundingClientRect();
     const vw = window.innerWidth;
@@ -4388,6 +4390,35 @@ function _enqueueTranslateTask(taskFn) {
   function hideTip() {
     const tip = document.getElementById('g-tip');
     if (tip) tip.classList.remove('is-visible');
+    tipAnchor = null;
+  }
+
+  /* A TOOLTIP OUTLIVES ITS ANCHOR, AND NO CALLER SHOULD HAVE TO REMEMBER THAT.
+     `hideGlobalTip` below was published for exactly this case and it is an
+     INVENTORY: an anchor REMOVED by a render never fires `mouseout`, so every
+     render site that can replace a hovered control has to call it by hand. The
+     asset thumbnail's × remembered. The platform card's gear and its cancel
+     hold did not — and their bubbles then sat on screen until the pointer
+     happened to cross some other anchor. Measured: hover the gear, run one
+     `renderDashboard()`, and the anchor reads `isConnected: false` while
+     "Account settings" is still up.
+
+     An inventory of consequences goes stale every time something new starts
+     removing an anchor, which is this file's standing argument against
+     surgical repaints. So the bubble watches its OWN anchor instead: one rule,
+     nothing to keep in sync, and it covers controls added after today.
+
+     It costs nothing when nothing is showing — the loop exists only while a
+     tooltip is up, which is rare and short — and `tipWatching` is what stops
+     `mouseover` (which fires continuously across a control) from starting a
+     second one. `hideGlobalTip` stays published: the hold that rewrites its
+     own label still takes its bubble down deliberately, which is a different
+     act from this one. */
+  let tipAnchor = null, tipWatching = false;
+  function watchAnchor() {
+    if (!tipAnchor)              { tipWatching = false; return; }
+    if (!tipAnchor.isConnected)  { tipWatching = false; hideTip(); return; }
+    requestAnimationFrame(watchAnchor);
   }
 
   /* REDRAW A BUBBLE THAT IS ALREADY UP, FROM ITS ANCHOR (v6.81).
@@ -11052,15 +11083,33 @@ async function runImproveSubmissionAnalysis(platformId) {
 
   const ups  = state.uploads;
   const icon = ups.appIcon;
-  const shots = (ups.screenshots || []).filter(s => s.dataUrl);
+  /* RESOLVED, NOT READ RAW — the same reason as the icon block below. A
+     scraped project's screenshot entries are `{ref}` into the asset pool, so a
+     bare `.dataUrl` test matched none of them and the vision analysis ran with
+     no screenshots at all while its prompt announced it had them. Remote URLs
+     still drop out (they cannot be inlined as base64 without fetching), but a
+     pool-backed data URL — a crop bake, an upload adopted into the library —
+     now reaches it. */
+  const shotSrc = s => (typeof _screenshotSrc === 'function' ? _screenshotSrc(s) : s.dataUrl);
+  const shots = (ups.screenshots || []).filter(s => /^data:/.test(shotSrc(s) || ''));
   // Note: don't gate on images — the analysis also scores store page text + metadata.
   // If no images are available, Claude evaluates text only and notes missing assets.
 
   state.improveSubmissionAnalysis = { loading: true };
   reRenderStepModal();
 
-  // Helper: strip data-URL prefix → bare base64 + media type
+  /* Helper: strip data-URL prefix → bare base64 + media type.
+
+     NULL-SAFE, AND THAT GUARD IS THE WHOLE OF THE "IMPROVE NEVER LOADS" BUG.
+     Its two callers hand it whatever the asset model happens to hold, which is
+     not always a string. A throw here lands OUTSIDE the try that wraps the
+     fetch (below), so it rejected the function before it ever started, nothing
+     caught it, and `state.improveSubmissionAnalysis` was left on
+     `{ loading: true }` for the rest of the session — a spinner that can never
+     resolve, on a step whose own error path is perfectly good and was never
+     reached. Declining a value is an answer; throwing is not. */
   function parseDataUrl(dataUrl) {
+    if (typeof dataUrl !== 'string') return null;
     const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     if (!m) return null;
     return { mediaType: m[1], data: m[2] };
@@ -11135,7 +11184,23 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
 
   // Attach icon if present
   if (icon) {
-    const parsed = parseDataUrl(icon.dataUrl);
+    /* THE ICON HAS TWO DOORS AND THREE SHAPES, and this read only knew one.
+       `{dataUrl}` is the uploader's; `{ref}` is what `smUseAsAppIcon` writes
+       once one has been chosen out of the pool; and a bare pool record with a
+       flat `.src` is what `smAppIcon` falls back to when nothing has been
+       chosen at all. Only the first carries `.dataUrl` — so for every project
+       whose icon Shipmate generated from a Steam page this was `undefined`,
+       and the `.match` on it threw. That is why the failure looked
+       game-specific: upload your own icon and it worked, let Shipmate build
+       one and the step never loaded again.
+
+       `smAppIconSrc` (assets.js) is the function that already knows all three
+       and is what the topbar chip and all five store previews ask. A remote
+       URL resolves to something parseDataUrl declines, which is the right
+       answer — we cannot inline it as base64 without fetching it — rather
+       than an error. */
+    const iconSrc = (typeof smAppIconSrc === 'function') ? smAppIconSrc() : icon.dataUrl;
+    const parsed = parseDataUrl(iconSrc);
     if (parsed) {
       content.push({ type: 'text', text: 'APP ICON:' });
       content.push({ type: 'image', source: { type: 'base64', media_type: parsed.mediaType, data: parsed.data } });
@@ -11145,7 +11210,7 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
   // Attach up to 5 screenshots
   const toAnalyze = shots.slice(0, 5);
   toAnalyze.forEach((s, i) => {
-    const parsed = parseDataUrl(s.dataUrl);
+    const parsed = parseDataUrl(shotSrc(s));
     if (parsed) {
       content.push({ type: 'text', text: `SCREENSHOT ${i + 1}:` });
       content.push({ type: 'image', source: { type: 'base64', media_type: parsed.mediaType, data: parsed.data } });
