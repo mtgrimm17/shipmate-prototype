@@ -23716,6 +23716,34 @@ body.sm-picker-open { overflow: hidden; }
   font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
   letter-spacing: .04em; color: rgba(255,255,255,.72); text-align: center;
 }
+/* The caption's two icon states — see `_smIconPickHtml` (app.js). Green for
+   "this IS the icon", because that is done; the selection blue for the action,
+   because pressing it is the press that confirms. Both inherit the caption's
+   face and size: they are one more fact on that line, not a control bolted to
+   it, which is what keeps a lightbox from turning into a toolbar. */
+.sm-zoom-iscur { color: #31DC80; }
+.sm-zoom-use {
+  background: none; border: none; padding: 0; margin: 0;
+  font: inherit; letter-spacing: inherit;
+  color: var(--pill-on-color, #52BAFF);
+  cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  transition: color .15s;
+}
+.sm-zoom-use:hover { color: #fff; }
+/* WHAT THE KEYS DO. A step quieter than the caption — it is about the window
+   rather than about the file, and it has to be findable without competing with
+   the thing you opened this to look at.
+
+   NO CURSOR OF ITS OWN, deliberately. The first pass gave it `default` so it
+   would not read as pressable, and that is the cursor LYING: this lightbox
+   closes on anything that is not the picture, so pressing the hint really does
+   close it. Inheriting the backdrop's `zoom-out` is the truth, and it is what
+   the caption beside it already does. */
+#sm-lightbox .sm-zoom-hint {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+  letter-spacing: .06em; color: rgba(255,255,255,.34);
+  text-align: center; margin-top: -4px;
+}
 
 /* ── Coverage ─────────────────────────────────────────────────────────── */
 .sm-cov-set {

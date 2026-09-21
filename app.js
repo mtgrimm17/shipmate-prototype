@@ -23749,16 +23749,57 @@ function _smIsAppIcon(a) {
   const cur = (typeof smAppIconSrc === 'function') ? smAppIconSrc() : '';
   return !!cur && cur === a.src;
 }
-/* The zoom keeps the STATE and gives up the CONTROL. Jaco: *"no es la mejor
-   forma tener que apretar en el icono para luego elegir con un texto pequeño,
-   funciona, pero quizás estaría bien algo que desde el thumbnail fuera
-   accesible."* He is right: an action you can only reach by opening something
-   is an action nobody finds. It moved under the tile (`_smPickWrap`), and
-   what is left here is a fact rather than a second door — "two controls in one
-   role" is what this file refuses, where a caption naming what you are looking
-   at is just the caption doing its job. */
+
+/* THE PACK YOU ARE INSIDE, in the order the library drew it (v7.11). Jaco:
+   *"quiero que me dejes navegar con las flechas si estoy dentro de un mismo
+   pack de thumbnails, porque así es más cómodo."*
+
+   "Pack" is the GROUP as displayed, which is not quite the same as the kind:
+   `_smLibraryHTML` merges portrait art into Key art, so the two read as one row
+   and arrowing through them has to agree with that or the keys would skip past
+   something plainly sitting in the same run. Everything else is its own kind.
+
+   Read off the pool in pool order, which IS the display order — the library
+   filters that same array rather than sorting it, so this cannot drift from
+   what is on screen without the library drifting too. */
+function _smZoomPack(a) {
+  const pool = (typeof state !== 'undefined' && state.assets) || [];
+  const grp = k => (k === 'art-port' ? 'art-land' : k);
+  return pool.filter(x => grp(x.kind) === grp(a.kind));
+}
+/* AND THE CONTROL IS BACK HERE TOO, WHICH REVERSES MY OWN ARGUMENT (v7.11).
+   Jaco: *"me has quitado el 'use this icon' de la full screen preview, y me
+   gustaba."*
+
+   It was removed when `Use this` moved under the tile, on the rule this file
+   states repeatedly: two controls in one role is one too many. That rule is
+   about a control DUPLICATED for no reason, and these two are not that. The
+   tile is for switching between candidates you can already tell apart at 42px;
+   the lightbox is the only place you can make the choice when you CANNOT —
+   which is the entire reason it exists ("a thumbnail at 42px cannot be
+   judged"). Taking the action away from the one surface where the decision is
+   actually informed was applying the rule past what it is for.
+
+   So: the state when it IS the icon, the action when it is not. */
 function _smIconPickHtml(a) {
-  return _smIsAppIcon(a) ? ` · <span class="sm-zoom-iscur">Current app icon</span>` : '';
+  if (!a || a.kind !== 'icon') return '';
+  if (_smIsAppIcon(a)) return ` · <span class="sm-zoom-iscur">Current app icon</span>`;
+  return ` · <button type="button" class="sm-zoom-use" onclick="smUseAsAppIcon('${a.id}')">Use this icon</button>`;
+}
+
+/* WHAT THE KEYS DO, SAID WHERE THE KEYS ARE. Jaco: *"y que en algún sitio ponga
+   'press esc to exit' o algo así."* Escape has closed this since it was built
+   and nothing ever said so — a shortcut nobody is told about is a shortcut for
+   whoever wrote it.
+
+   AND ESCAPE IS THE ONLY ONE IT NAMES. Jaco: *"quítame el 'browse' y las
+   flechas, debería ser un extra."* The arrows still work; they are simply not
+   advertised, which is the difference between a legend and an inventory. Esc
+   earns the line because it is the way OUT — someone who does not know it is
+   stuck with the mouse — where the arrows are a convenience for a second
+   look, and nothing is lost by the person who never finds them. */
+function _smZoomHintHtml() {
+  return `<div class="sm-zoom-hint">Esc to close</div>`;
 }
 
 /* `renderDetails` rather than a surgical repaint: the icon reaches the project
@@ -23774,21 +23815,57 @@ function smUseAsAppIcon(id) {
   else if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
 }
 
-function smZoom(id) {
-  const a = (typeof smGet === 'function') && smGet(id);
-  if (!a) return;
-  smZoomClose();
-  const box = document.createElement('div');
-  box.id = 'sm-lightbox';
-  box.innerHTML =
-    `<figure>
+/* The picture, its caption and the legend — one function, because the open and
+   the swap below have to produce the same thing and two copies of this would
+   be two chances to differ. */
+function _smZoomFigureHtml(a) {
+  return `<figure>
        ${a.kind === 'video'
          ? `<video src="${escHtml(a.src)}" controls autoplay muted playsinline></video>`
          : `<img src="${escHtml(a.src)}" alt="${escHtml(a.name)}">`}
        <figcaption>${escHtml(a.name)} · ${a.w || '?'}×${a.h || '?'}${
          a.alpha ? ' · transparent' : ''} · ${escHtml(SM_KIND_SHORT[a.kind] || a.kind)}${
          _smIconPickHtml(a)}</figcaption>
+       ${_smZoomHintHtml()}
      </figure>`;
+}
+
+function smZoom(id) {
+  const a = (typeof smGet === 'function') && smGet(id);
+  if (!a) return;
+
+  /* BROWSING SWAPS THE FIGURE; IT DOES NOT REBUILD THE WINDOW (v7.12). Jaco:
+     *"cada vez que browseo, hay un flashazo en el que se ve el fondo de la
+     página, no debería."*
+
+     Arrowing called this function, and this function opened by CLOSING first —
+     so every step removed the backdrop from the document and appended a new
+     one, and between those two the page underneath was on screen. One frame,
+     and a black overlay is exactly the thing whose absence for one frame
+     reads as a flash. `sm-lb-in` made it worse by fading the replacement in
+     over 140ms, so the flash was really a dip.
+
+     With the box already up, only the figure is replaced. The backdrop, its
+     click handler and the Escape listener are never touched, which is also why
+     this cannot leak a listener per step. Nothing is animated because nothing
+     arrived: the window did not open, its contents changed. */
+  /* `_smZoomId` IS PART OF THE TEST, not decoration. `smZoomSteamTrailer` draws
+     into this same `#sm-lightbox` and is the one caller that mounts hls.js —
+     swapping a figure into ITS box would drop the player on the floor still
+     fetching segments, which is the leak `smZoomClose` exists to prevent. That
+     function never sets `_smZoomId`, so a null one means the window on screen
+     is not ours to swap and the full path runs, teardown included. */
+  const open = _smZoomId && document.getElementById('sm-lightbox');
+  if (open) {
+    open.innerHTML = _smZoomFigureHtml(a);
+    _smZoomId = id;
+    return;
+  }
+
+  smZoomClose();
+  const box = document.createElement('div');
+  box.id = 'sm-lightbox';
+  box.innerHTML = _smZoomFigureHtml(a);
   /* Anywhere but the picture itself closes it. Testing for the IMG rather than
      for the backdrop means the caption and the margin around the image close
      it too, which is what "click outside" means to the hand. */
@@ -23798,6 +23875,7 @@ function smZoom(id) {
     if (e.target.tagName !== 'IMG' && e.target.tagName !== 'VIDEO') smZoomClose();
   });
   document.body.appendChild(box);
+  _smZoomId = id;
   /* CAPTURE PHASE, and it stops the event dead. Escape is spoken for twice
      over on this screen — the step modal closes on it, and so does the
      full-page website preview — and closing the modal behind the lightbox
@@ -23806,11 +23884,30 @@ function smZoom(id) {
   document.addEventListener('keydown', _smZoomKey, true);
 }
 
+/* Remembered rather than re-derived from the DOM: the lightbox draws the image
+   and the caption, not the id, and asking the markup which asset it is showing
+   would be parsing our own output back. */
+let _smZoomId = null;
 function _smZoomKey(e) {
-  if (e.key !== 'Escape') return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    smZoomClose();
+    return;
+  }
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const a = (typeof smGet === 'function') && _smZoomId && smGet(_smZoomId);
+  if (!a) return;
+  const pack = _smZoomPack(a);
+  if (pack.length < 2) return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  smZoomClose();
+  /* WRAPS, because a pack is a ring rather than a document: with four
+     screenshots open, arrowing off the end and stopping dead reads as the key
+     having broken rather than as the end of anything. */
+  const i = pack.findIndex(x => x.id === a.id);
+  const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + pack.length) % pack.length;
+  smZoom(pack[n].id);
 }
 
 /* The scraped trailer opens the same lightbox an uploaded video does. It can't
@@ -23856,6 +23953,7 @@ function smZoomSteamTrailer() {
 let _smZoomHls = null;
 
 function smZoomClose() {
+  _smZoomId = null;
   if (_smZoomHls) { try { _smZoomHls.destroy(); } catch (_) {} _smZoomHls = null; }
   document.removeEventListener('keydown', _smZoomKey, true);
   const box = document.getElementById('sm-lightbox');
