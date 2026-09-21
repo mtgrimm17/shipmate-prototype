@@ -1,12 +1,35 @@
 # Shipmate Prototype — Claude Context
 
+## HARD RULES — read before touching anything
+
+1. **Claude runs NO git command in this repo. None.** Not `push`, not `commit`,
+   not `pull`, not `status`, not `gc`. The Cowork sandbox cannot delete files
+   inside `.git`, so every git command Claude runs leaves a stale
+   `.git/index.lock` and half-written `.git/objects/tmp_obj_*` behind, which
+   then breaks the human's `./ship.sh`. If a pull is needed, say so and stop —
+   the contributor runs it. The long version is under Git Workflow.
+2. **Never put real API keys in `index.html`.** The `__CLAUDE_API_KEY__`
+   placeholders stay. Real keys live in the gitignored `config.js` only, and
+   GitHub Actions injects them at deploy. See Security.
+3. **Bump the version once per publish**, and read the current number off
+   `index.html`'s own `?v=` params — never off the "Current version" line
+   below, which goes stale. See Versioning.
+4. **Finish every batch with `.ship-message` plus a copiable `./ship.sh`
+   one-liner.** Both, every time. See "The commit message comes from
+   `.ship-message`".
+
+---
+
 ## What This Is
 
 Shipmate is a web app that helps game developers prepare and submit their games to app stores (iOS App Store, Google Play, Steam, Epic, PlayStation, Xbox, Nintendo). It walks developers through content ratings, data collection disclosures, business categories, screenshots, and binary analysis — using AI to infer answers where possible.
 
 This is a **static HTML/CSS/JS prototype** hosted on GitHub Pages. There is no build system, no npm, no bundler. Everything runs directly in the browser.
 
-Current version: **v6.82** &rarr; next is **v6.83**.
+Current version: read it off `index.html`'s `?v=` params or the footer badge.
+**This line is not the source of truth** — it went stale by 44 versions (it
+said v6.82 while live was v7.26), which is exactly why rule 3 above says not to
+trust it.
 
 ---
 
