@@ -20528,22 +20528,85 @@ body.is-splash .ai-disclaimer { display: none; }
    This is the Mac case: 16:10 at the full width IS the canvas. */
 .shot-ed-frame.is-full { box-shadow: none; }
 
-/* Rule of thirds, and only while something is happening — a permanent grid is
-   a mark that never stops pointing at anything, which is the argument that
-   took the Submit row's orange ring out. */
+/* QUARTERS AND THE CENTRE — 25%, 50%, 75% on both axes (v7.27).
+   It was the rule of thirds, and it was not even that. `background-position:
+   33.333%` with a tile 33.333% wide does NOT put a line at 33.333%: a
+   percentage in `background-position` aligns the P% point of the IMAGE with
+   the P% point of the BOX, so the offset is a third of the REMAINING width —
+   ⅓ × (W − W/3) = 2W/9 = 22.2%. `repeat` then laid one down every third from
+   there. Measured, on Mac and on iOS: lines at 22.2%, 55.6% and 88.9%. The
+   spacing was right and the phase was 11.1% out, which is why it passed for a
+   grid — one line pushed off the left edge, an extra one pulled in at the far
+   right, and neither of the two that were supposed to mark the thirds present.
+
+   SO IT IS NOT THIRDS ANY MORE, AND THAT IS A DECISION RATHER THAN A FIX.
+   Thirds is a guide for the shot you are TAKING. This editor drags an already
+   composed image under a frame the store fixed: you can translate and scale,
+   you cannot recompose. The questions it has to answer are "is the subject
+   centred", "is the inset even", "have I drifted" — and classic thirds has no
+   centre mark at all, which is a strange thing to omit from a tool whose most
+   common question is whether something is middled. Game screenshots lean
+   centre-composed too: the character sits in the middle and the HUD anchors to
+   the corners, which is the opposite of what thirds assumes.
+
+   25/50/75 OVER 33/50/67 for evenness. Both carry the centre; quarters divide
+   the frame 25/25/25/25 and read as one lattice, where thirds-plus-centre
+   gives 33/17/17/33 — two lines crowded either side of the middle and a wide
+   empty margin outside them. That crowding is worst exactly where the room is
+   tightest: the iOS portrait crop frame measures 145px wide, which would put
+   the 33% line 24px from the centre line. Quarter lines also answer a question
+   thirds cannot — touch 25 and 75 with the subject's edges and it is centred
+   AND evenly inset, in one glance.
+
+   DRAWN AS ONE FULL-SIZE GRADIENT PER AXIS, not as a repeating tile. The
+   percentages inside a gradient resolve against the gradient line — the whole
+   box — so 25%, 50% and 75% here mean 25%, 50% and 75%, and the source says
+   where the lines are instead of encoding it as an offset that has to be
+   worked out. That is the actual lesson of the bug above.
+
+   EACH LINE IS THE 1px ENDING ON ITS MARK, not a half-pixel either side of it,
+   which is a choice about sharpness. Straddling the mark centres the line
+   exactly and guarantees it antialiases across two columns at half strength on
+   every box — a guide that is always slightly soft. Ending on the mark keeps
+   it a single crisp column wherever the percentage lands on a whole pixel (the
+   320px icon stage: lines at 79, 159, 239) and costs half a pixel of position,
+   which is invisible and uniform. Spacing, which is what the eye actually
+   reads, stays exact either way — measured 80.0px between each pair there. */
 .shot-ed-grid {
+  --shot-grid-line: rgba(255, 255, 255, .28);
   position: absolute;
   inset: 0;
+  /* STATED HERE RATHER THAN INHERITED, and that is v7.27's own bug caught in
+     its own test. In the cropper this element sits inside `.shot-ed-frame`,
+     which is already `pointer-events: none`, so it had never needed to say so.
+     Candidate A's stage has no frame — the grid is a direct child — so the
+     moment it was added there it became a transparent sheet over the whole
+     icon that ate the drag it was drawn to guide. The guide must never be the
+     thing you grab, on any surface, so the rule belongs to the guide. */
+  pointer-events: none;
   opacity: 0;
   transition: opacity .16s ease;
   background-image:
-    linear-gradient(to right,  rgba(255,255,255,.28) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255,255,255,.28) 1px, transparent 1px);
-  background-size: 33.333% 33.333%;
-  background-position: 33.333% 0, 0 33.333%;
-  background-repeat: repeat;
+    linear-gradient(to right,
+      transparent calc(25% - 1px), var(--shot-grid-line) calc(25% - 1px) 25%,
+      transparent 25% calc(50% - 1px), var(--shot-grid-line) calc(50% - 1px) 50%,
+      transparent 50% calc(75% - 1px), var(--shot-grid-line) calc(75% - 1px) 75%,
+      transparent 75%),
+    linear-gradient(to bottom,
+      transparent calc(25% - 1px), var(--shot-grid-line) calc(25% - 1px) 25%,
+      transparent 25% calc(50% - 1px), var(--shot-grid-line) calc(50% - 1px) 50%,
+      transparent 50% calc(75% - 1px), var(--shot-grid-line) calc(75% - 1px) 75%,
+      transparent 75%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 .shot-ed-canvas.is-active .shot-ed-grid { opacity: 1; }
+/* Candidate A's stage is not a `.shot-ed-canvas` — it is its own editor with
+   its own drag (see `_iconEdAWire`, app.js) — so it needs the rule saying so,
+   exactly as it already needs one for the hint. Same grid element, same class,
+   same 25/50/75: placing a wordmark on a colour is the one job on this whole
+   surface where a centre mark is the entire question. */
+.icon-a-stage.is-active .shot-ed-grid { opacity: 1; }
 
 /* The hint is the opposite of the grid: it says what to do until you do it,
    then leaves. Not "recedes" — its only content is the instruction, and the

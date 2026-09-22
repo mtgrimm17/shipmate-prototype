@@ -16393,6 +16393,27 @@ function _shotEdGeometry(pid, landscape) {
   return { CW, CH, FW: Math.round(CH * r), FH: CH, full: false };
 }
 
+/* ONE CANCELLABLE TIMER PER STAGE, and it is a fix rather than a tidy-up.
+   `is-active` is what draws the alignment grid, and it was taken off by a bare
+   `setTimeout(… 500)` that nothing cancelled — so releasing and re-grabbing
+   inside half a second let the FIRST drag's timer fire during the second one
+   and strip the grid out from under the pointer. Reproduced: grid on at
+   pointerdown, still on 120ms later on the re-grab, gone 570ms in while still
+   dragging. Wheel-then-drag did the same, because the wheel kept its own
+   separate handle and the two removed the same class without knowing about
+   each other.
+
+   Repositioning a screenshot is exactly a sequence of short grabs, so this was
+   not an edge case — it is the ordinary way the guide is used. One handle on
+   the element, cleared whenever a gesture starts and whenever another one
+   schedules its own end, makes the last gesture the one that decides. */
+function _edActive(el, on) {
+  if (!el) return;
+  clearTimeout(el._edActiveT);
+  if (on) { el.classList.add('is-active'); return; }
+  el._edActiveT = setTimeout(() => el.classList.remove('is-active'), 500);
+}
+
 function _shotEdWireStage(pid) {
   const canvas = document.getElementById('shot-ed-canvas');
   if (!canvas || canvas._shotEdWired) return;
@@ -16402,7 +16423,8 @@ function _shotEdWireStage(pid) {
   canvas.addEventListener('pointerdown', e => {
     if (!_shotEd.img) return;
     dragging = true; lastX = e.clientX; lastY = e.clientY;
-    canvas.classList.add('is-grabbing', 'is-active');
+    canvas.classList.add('is-grabbing');
+    _edActive(canvas, true);
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
@@ -16425,7 +16447,7 @@ function _shotEdWireStage(pid) {
     if (!dragging) return;
     dragging = false;
     canvas.classList.remove('is-grabbing');
-    setTimeout(() => canvas.classList.remove('is-active'), 500);
+    _edActive(canvas, false);
     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
   };
   canvas.addEventListener('pointerup', end);
@@ -16438,9 +16460,12 @@ function _shotEdWireStage(pid) {
     if (!_shotEd.img) return;
     e.preventDefault();
     _shotEdSetZoom(_shotEd.z - e.deltaY * 0.0016);
-    canvas.classList.add('is-active');
-    clearTimeout(canvas._wheelT);
-    canvas._wheelT = setTimeout(() => canvas.classList.remove('is-active'), 500);
+    _edActive(canvas, true);
+    /* A wheel tick re-arms the countdown, but only when nothing else is
+       holding the guide up. Scheduling the fade while a drag is still live is
+       the same bug one level down: the pointer is still on the picture and the
+       grid would leave halfway through the gesture it is there for. */
+    if (!dragging) _edActive(canvas, false);
   }, { passive: false });
 
   const zoom = document.getElementById('shot-ed-zoom');
@@ -16901,7 +16926,8 @@ function _iconEdAWire(stage) {
   stage.addEventListener('pointerdown', e => {
     if (!_iconEdA.img) return;
     drag = true; lx = e.clientX; ly = e.clientY;
-    stage.classList.add('is-grabbing', 'is-active');
+    stage.classList.add('is-grabbing');
+    _edActive(stage, true);
     stage.setPointerCapture(e.pointerId);
   });
   stage.addEventListener('pointermove', e => {
@@ -16921,7 +16947,7 @@ function _iconEdAWire(stage) {
     if (!drag) return;
     drag = false;
     stage.classList.remove('is-grabbing');
-    setTimeout(() => stage.classList.remove('is-active'), 500);
+    _edActive(stage, false);
     try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
   };
   stage.addEventListener('pointerup', end);
@@ -16936,9 +16962,8 @@ function _iconEdAWire(stage) {
     if (!_iconEdA.img || !_iconEdA.rec) return;
     e.preventDefault();
     _iconEdASetZoom((_iconEdA.rec.z || 1) * Math.exp(-e.deltaY * 0.0016));
-    stage.classList.add('is-active');
-    clearTimeout(stage._wheelT);
-    stage._wheelT = setTimeout(() => stage.classList.remove('is-active'), 500);
+    _edActive(stage, true);
+    if (!drag) _edActive(stage, false);   // see the cropper's wheel handler
   }, { passive: false });
 
   /* The same answer `_shotEdWatchWidth` gives, for the same reason and in two

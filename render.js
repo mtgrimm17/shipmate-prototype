@@ -20438,6 +20438,7 @@ function buildAppIconSection(pid) {
     ? `
       <div class="shot-ed-stage icon-a-stage" id="icon-a-stage" style="background:${escHtml(rec.bg || '#242424')}">
         <img class="icon-a-logo" id="icon-a-logo" alt="" draggable="false">
+        <div class="shot-ed-grid"></div>
         <div class="shot-ed-hint" aria-hidden="true">${panSVG}Drag to reposition</div>
       </div>`
     : sel
