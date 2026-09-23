@@ -5623,13 +5623,13 @@ function _subStepRow(pid, step, i, openId) {
   const isOpen   = openId === step.id;
   const done     = _paneComplete(pid, step.id);
   const numClass = 'ios-step-num' + (done ? ' is-done' : '');
-  /* NO STATUS DOT ON A PANE ROW. The card's rows carry one — an amber or red
-     pip from the App Store questionnaire's risk scoring — and next to the
-     "N unanswered" count it was a second, coarser reading of the same fact,
-     three pixels away from a number that says it exactly. The count is the
-     better instrument, so the dot goes rather than the two competing.
-     _paneRisk stays; it is the card's, and the card still draws it. */
-  const riskDot  = '';
+  /* NO STATUS DOT ON A ROW ANYWHERE NOW (v7.28). This row never drew one: next
+     to the "N unanswered" count it was a second, coarser reading of the same
+     fact, three pixels from a number that says it exactly. The card's rows did
+     draw one, and Adam's answer to what it was for is that it should not —
+     so the placeholder that existed to mark the difference has nothing left to
+     mark. `_paneRisk` and the compute*SectionRisk functions stay: they are
+     read elsewhere, and what was wrong was the pip, not the scoring. */
   const binProc  = !!(state.platformBuildProcessing?.[pid]);
   const trailing = (step.id === 'improveSubmission' && binProc)
     ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
@@ -5666,7 +5666,6 @@ function _subStepRow(pid, step, i, openId) {
         <div class="ios-step-name">${stepLabel(pid, step)}</div>
       </div>
       ${countEl}
-      ${riskDot}
       ${trailing}
     </div>`;
 
@@ -6746,11 +6745,6 @@ function buildIOSActiveCard(pid, force) {
         </div>`;
     }
 
-    const risk      = _appStoreSectionRisk(pid, step.id);
-    const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
-    // Only show risk dot after the user has attempted to save/close this step at least once
-    const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
-      ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     // Binary processing indicator on the Improve Your Submission step row
     const trailingEl = (step.id === 'improveSubmission' && binProc)
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
@@ -6762,7 +6756,6 @@ function buildIOSActiveCard(pid, force) {
         <div class="ios-step-info">
           <div class="ios-step-name">${stepLabel(pid, step)}</div>
         </div>
-        ${riskDot}
         ${trailingEl}
       </div>`;
   }).join('');
@@ -6805,10 +6798,6 @@ function buildAndroidActiveCard(pid, force) {
         </div>`;
     }
 
-    const risk      = computeAndroidSectionRisk(step.id);
-    const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
-    const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
-      ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     const trailingEl = (step.id === 'improveSubmission' && binProcAndroid)
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
       : SM_STEP_CHEVRON;
@@ -6819,7 +6808,6 @@ function buildAndroidActiveCard(pid, force) {
         <div class="ios-step-info">
           <div class="ios-step-name">${stepLabel(pid, step)}</div>
         </div>
-        ${riskDot}
         ${trailingEl}
       </div>`;
   }).join('');
@@ -9845,7 +9833,7 @@ function sppRequiredElements(pid, lang) {
     { id: 'screenshots',  label: 'Media Carousel',                    required: true,  done: complete('screenshots'),  short: 'Media Carousel' },
     { id: 'description',  label: 'Description',                       required: true,  done: !!val('description'),  bad: over('description') },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
-    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: complete('privacy'),      short: 'Data privacy' },
+    { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: complete('privacy'),      short: 'App Privacy' },
   ];
 }
 
@@ -13496,10 +13484,33 @@ function _buildPrivacyPresetChips() {
 }
 
 /* Returns true once the user has saved/closed this step at least once.
-   Used to suppress required-field alerts on first entry. */
+   Used to suppress required-field alerts on first entry.
+
+   IT ASKS WHICH STEP IT IS IN RATHER THAN BEING TOLD (v7.28), and until now
+   every one of its six callers told it the same wrong thing: `'questionnaire'`.
+   No platform has a step with that id — `PLATFORMS[pid].steps` has not carried
+   one for a long time — and `stepSaveAttempted` only ever receives REAL step
+   ids, from `state.submission.openStep[pid]` and `state.stepModal.stepId`. So
+   `ios-questionnaire` could never be in the set, this could never return true,
+   and six "Required." alerts were permanently suppressed. Measured with every
+   field blank and every step opened and closed: zero `.ios-risk-note` elements
+   in the DOM. One of them names an automatic App Review rejection.
+
+   Passing the right literal at each call site would have fixed it once.
+   Defaulting to the open step fixes it for good: the SAME builder is reached
+   under different step ids on different platforms (`buildPrivacySection` is
+   App Store, Mac App Store and Mac App Store Full), so a literal would have
+   had to be right three times over. `state.stepModal` is "which step am I in"
+   on BOTH surfaces — the inline pane sets it too (see toggleStepSection,
+   app.js) — so the answer is already sitting there.
+
+   An explicit `stepId` still wins when one is passed, for a caller that wants
+   to ask about a step other than the open one. */
 function _stepAttempted(stepId) {
-  const pid = state.stepModal?.platformId;
-  return !!(pid && state.stepSaveAttempted?.has(`${pid}-${stepId}`));
+  const sm  = state.stepModal;
+  const pid = sm?.platformId;
+  const id  = stepId || sm?.stepId;
+  return !!(pid && id && state.stepSaveAttempted?.has(`${pid}-${id}`));
 }
 
 // pid defaults to 'ios'; buildStorePreviewFlipSection passes 'macos' through
@@ -13540,7 +13551,7 @@ function buildPrivacySection(pid = 'ios') {
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${(noUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
+      ${(noUrl && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
     ${collectBlock}`;
@@ -18100,7 +18111,7 @@ function buildAndroidBusinessSection() {
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Title</label>
       <div class="form-input is-complete" style="background:var(--bg-2);cursor:default;color:var(--text);">${escHtml(fd.title || '')}</div>
-      ${(!titleOk && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Title is required — add it in Game Details.</div>' : ''}
+      ${(!titleOk && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Title is required — add it in Game Details.</div>' : ''}
     </div>
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Short description <span style="color:var(--text-faint);font-weight:400;">(first 80 chars of description)</span></label>
@@ -18109,7 +18120,7 @@ function buildAndroidBusinessSection() {
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Full description</label>
       <div class="form-input is-complete" style="background:var(--bg-2);cursor:default;color:var(--text);min-height:72px;white-space:pre-wrap;">${escHtml(fd.description || '')}</div>
-      ${(!descOk && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Description is required — add it in Game Details.</div>' : ''}
+      ${(!descOk && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Description is required — add it in Game Details.</div>' : ''}
     </div>`;
 }
 
@@ -18238,7 +18249,7 @@ function buildAndroidDataSafetySection() {
              value="${escHtml(a.deleteAccountUrl)}"
              placeholder="https://yourgame.com/delete-account"
              oninput="answerAndroidTextField('deleteAccountUrl', this.value)">
-      ${(!a.deleteAccountUrl.trim() && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. Provide a URL where users can request account deletion.</div>' : ''}
+      ${(!a.deleteAccountUrl.trim() && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Required. Provide a URL where users can request account deletion.</div>' : ''}
     </div>` : '';
 
   const otherField = a.accountMethod === 'other' ? `
@@ -18336,7 +18347,7 @@ function buildAndroidDataSafetySection() {
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${(!privUrl && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL will block your submission.</div>' : ''}
+      ${(!privUrl && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL will block your submission.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsOrSharesData === null ? androidYNRow('Collects or shares user data', 'collectsOrSharesData',
@@ -18472,10 +18483,6 @@ function buildSteamActiveCard(pid, force) {
         </div>`;
     }
 
-    const risk      = computeSteamSectionRisk(step.id);
-    const attempted = state.stepSaveAttempted?.has(`${pid}-${step.id}`);
-    const riskDot   = (done || !attempted || risk === 'LOW' || risk === 'NONE')
-      ? '' : `<span class="ios-step-risk ios-step-risk-${risk.toLowerCase()}"></span>`;
     const trailingEl = (step.id === 'improveSubmission' && binProcSteam)
       ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
       : SM_STEP_CHEVRON;
@@ -18486,7 +18493,6 @@ function buildSteamActiveCard(pid, force) {
         <div class="ios-step-info">
           <div class="ios-step-name">${stepLabel(pid, step)}</div>
         </div>
-        ${riskDot}
         ${trailingEl}
       </div>`;
   }).join('');
@@ -18713,7 +18719,7 @@ function buildSteamStoreTagsSection() {
     <div class="ios-content-step-label" style="margin-top:0;">Top-Level Genre
       <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Required. Choose one or two top-level genres to categorize your title on Steam.</span></span>
     </div>
-    ${(topCount === 0 && _stepAttempted('questionnaire')) ? '<div class="ios-risk-note risk-HIGH" style="margin-bottom:8px;">Required — select at least one.</div>' : ''}
+    ${(topCount === 0 && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH" style="margin-bottom:8px;">Required — select at least one.</div>' : ''}
     <div class="cq-check-list">${topGenreChecks}</div>
 
     <div class="ios-q-divider"></div>

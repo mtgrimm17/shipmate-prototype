@@ -881,7 +881,7 @@ const PLATFORMS = {
          own "Answer Data Collection Questions" element — a second door, exactly
          as Content Rating has had both a step and a preview cell for as long as
          both have existed. */
-      { id: 'privacy',           label: 'Data Safety'                                  },
+      { id: 'privacy',           label: 'App Privacy'                                  },
       { id: 'localizations',    label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
@@ -928,7 +928,7 @@ const PLATFORMS = {
          own "Answer Data Collection Questions" element — a second door, exactly
          as Content Rating has had both a step and a preview cell for as long as
          both have existed. */
-      { id: 'privacy',           label: 'Data Safety'                                  },
+      { id: 'privacy',           label: 'App Privacy'                                  },
       { id: 'localizations',    label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },

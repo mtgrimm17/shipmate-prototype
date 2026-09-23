@@ -5698,7 +5698,8 @@ body.viewing-splash .app-subnav { display: none; }
    This was red — #ff6b6b on a red fill, with a red halo pulsing every 2.4s —
    which is the loudest thing on the card for a state that only means "there
    is a setting still to fill in". Red is this app's colour for wrong
-   (.ios-step-risk-high, the power button's hover); amber is its colour for
+   (the power button's hover; the step rows' own red pip went in v7.28, and its
+   removal is the same argument one surface over); amber is its colour for
    needs-attention, and it already says so in three other places:
    .ios-step-num.is-risk-warn, the prototype's .bd-warn and the binary pill's
    is-processing all use this same rgba(255,184,107,…) family. Now so does
@@ -7842,15 +7843,18 @@ body.viewing-splash .app-subnav { display: none; }
 }
 
 
-.ios-step-risk {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.ios-step-risk-high   { background: var(--magenta, #ff3b78); }
-.ios-step-risk-medium { background: var(--orange, #f5a623); }
-.ios-step-risk-low    { background: var(--green, #4ade80); }
-.ios-step-risk-none   { background: var(--text-faint, #555); opacity: 0.5; }
+/* THE RISK PIP IS GONE (v7.28). It was a 7px dot between a step's name and its
+   chevron, red when any answer in that step was still blank and amber when one
+   was a low-confidence inference the developer had not confirmed — but only
+   after they had opened that step and closed it once, which is what made it
+   appear and disappear for reasons nobody could name from the outside.
+
+   Two readings of the same fact were on screen at once: the disc already says
+   whether a step is done, and the open row prints "N unanswered", which is the
+   better instrument because it is a NUMBER. A coloured dot three pixels from
+   it added a second, coarser vocabulary with a visit-based trigger of its own.
+   The scoring behind it (`_paneRisk`, compute*SectionRisk) is untouched and
+   still read elsewhere; what is removed is the pip. */
 
 /* THE CHEVRON, from the prototype: a 13px glyph rotated -90deg, at 26% white
    and lifting to 62% when the row is lit. It was a text '›' at 16px, whose

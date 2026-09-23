@@ -2137,47 +2137,38 @@ function taskOverlayClick(e) {
    The disc's content has to change too. It holds the step number when
    pending, so completing it swaps the digit for the tick — which the old code
    never did, because the old `.task-dot` was empty and drew its check in CSS. */
-/* A DONE ROW CANNOT CARRY A RISK DOT, AND ONLY THE BUILDERS KNEW IT (v7.08).
-   Jaco: *"sigo viendo en la platform card view, a veces cuando entro y salgo de
-   un modal como content rating o data safety, una pelotita roja al lado del
-   chevron. Como si faltase algo por completar. Pero creo que está todo."*
+/* THE RISK DOT IS GONE, AND THIS IS THE SECOND REPORT THAT KILLED IT (v7.28).
 
-   All three step-row builders emit the dot as
-   `(done || !attempted || risk === 'LOW' || risk === 'NONE') ? '' : <span>` —
-   so **`done` suppressing the dot is an invariant of the markup**, and while a
-   row is only ever drawn by a render the two cannot disagree.
+   Jaco, at v7.08: *"sigo viendo en la platform card view, a veces cuando entro
+   y salgo de un modal como content rating o data safety, una pelotita roja al
+   lado del chevron. Como si faltase algo por completar. Pero creo que está
+   todo."* Adam, now, asking what causes them at all — and then: they should
+   never appear there.
 
-   Four functions draw one surgically instead: `_paintStepRow` here, and
-   `updateIOSCard` / `updateAndroidCard` / `updateSteamCard`. Every one of them
-   repaints the disc's `is-done`, the disc's glyph and the row's `is-complete` —
-   and **none of them has ever touched the `.ios-step-risk` span**, which is a
-   sibling of the chevron rather than anything inside the disc. So a row drawn
-   incomplete-and-risky (which needs `stepSaveAttempted`, i.e. you opened the
-   step and came back out — exactly the gesture reported) and then completed
-   without a full render keeps a red dot beside a green tick: the card claiming
-   a problem in a step that is finished.
+   v7.08 answered the first report by fixing WHEN the dot was wrong: the four
+   surgical repainters (`_paintStepRow` here, `updateIOSCard`,
+   `updateAndroidCard`, `updateSteamCard`) each rebuilt the disc and the row's
+   `is-complete` without touching the `.ios-step-risk` span beside the chevron,
+   so completing a step without a full render left a red dot next to a green
+   tick. A `_clearStepRiskDot` helper was added to all four.
 
-   That is this file's own recurring shape — a surgical repaint is an inventory
-   of consequences, and the inventory was one item short. It is a helper rather
-   than the same line four times, because four copies is how the next item goes
-   missing in three of them.
+   The better answer was that the dot should not have been there. Its trigger
+   was unnameable from the outside — it needed the step to be incomplete AND to
+   have been opened and closed at least once — which is exactly why the report
+   says *"a veces cuando entro y salgo"*: the gesture that made it appear was
+   the gesture the user had just performed, and nothing on screen said so. Next
+   to it the disc already says whether the step is done, and the open row
+   prints "N unanswered", which is the same fact as a number.
 
-   IT ONLY REMOVES, which is deliberate and is the half worth knowing about.
-   Putting a dot BACK needs `risk` too, and that comes from a different function
-   per platform (`_appStoreSectionRisk`, `computeAndroidSectionRisk`,
-   `computeSteamSectionRisk`), so a row going done → not-done still waits for a
-   full render to warn. A stale FALSE ALARM is what was reported and is the
-   worse failure of the two; the missing warning is real, pre-existing, and
-   wants deciding rather than sweeping. */
-function _clearStepRiskDot(row, done) {
-  if (row && done) row.querySelector('.ios-step-risk')?.remove();
-}
-
+   So the span, the helper and the four calls to it are all gone. `_paintStepRow`
+   now repaints exactly what it names: the disc, its glyph, and the row.
+   The scoring behind the dot (`_paneRisk`, `_appStoreSectionRisk`,
+   `computeAndroidSectionRisk`, `computeSteamSectionRisk`) is untouched — it is
+   read elsewhere, and what was wrong was the pip, not the arithmetic. */
 function _paintStepRow(platformId, stepId, done) {
   const disc = document.getElementById(`dot-${platformId}-${stepId}`);
   if (!disc) return;
   const row = disc.closest('.ios-step-card');
-  _clearStepRiskDot(row, done);
   disc.classList.toggle('is-done', done);
   // The row's number is its position among the non-submit steps, 1-based —
   // the same expression buildActiveCard numbers them with. Uses
@@ -3439,7 +3430,6 @@ function updateIOSCard(pid) {
     if (!card) return;
     const done = _appStoreSectionComplete(pid, step.id);
     card.classList.toggle('is-complete', done);
-    _clearStepRiskDot(card, done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
       numEl.classList.toggle('is-done', done);
@@ -22430,7 +22420,6 @@ function updateAndroidCard() {
     if (!card) return;
     const done = isAndroidSectionComplete(step.id);
     card.classList.toggle('is-complete', done);
-    _clearStepRiskDot(card, done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
       numEl.classList.toggle('is-done', done);
@@ -22668,7 +22657,6 @@ function updateSteamCard() {
     if (!card) return;
     const done = isSteamSectionComplete(step.id);
     card.classList.toggle('is-complete', done);
-    _clearStepRiskDot(card, done);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
       numEl.classList.toggle('is-done', done);
