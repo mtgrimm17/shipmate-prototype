@@ -448,9 +448,13 @@ function selectPlatformTab(pid) {
    Pressing the OPEN section closes it. There is no separate close control and
    there is no footer button: every answer handler already writes straight to
    state as it is made, so a section has nothing left to "save" by the time you
-   fold it. What collapsing does record is stepSaveAttempted — the flag that
-   lets a risk dot appear on a row you have actually visited — which is the one
-   piece of bookkeeping closeStepModal was doing that had to come with it. */
+   fold it. What collapsing does record is stepSaveAttempted — "this step has
+   been closed at least once" — which is the one piece of bookkeeping
+   closeStepModal was doing that had to come with it. Nothing reads it any more
+   (v7.29): it gated the row risk dots, removed in v7.28, and the required-field
+   alerts, removed here. Kept because it is two lines and a Set, and "which
+   steps has this developer been through" is a question this app has wanted
+   answered twice already. */
 async function toggleStepSection(pid, stepId) {
   // Honour the layout flag even when something calls this directly (the submit
   // gate opens Upload Build this way), so there is one behaviour per mode.
@@ -476,9 +480,9 @@ async function toggleStepSection(pid, stepId) {
   state.submission.openStep[pid] = stepId;
   // Expanding the row in the inline pane is the same visit the modal records
   // at the top of openStepModal — see STEP_REQUIRES_VISIT (state.js). Distinct
-  // from stepSaveAttempted above, which means "closed at least once" and only
-  // drives risk dots; this fires on OPEN, so a step opened and left open still
-  // counts as looked at.
+  // from stepSaveAttempted above, which means "closed at least once" and is
+  // currently read by nothing; this fires on OPEN, drives step completeness,
+  // and counts a step opened and left open as looked at.
   markStepSectionSeen(pid, stepId);
 
   /* `state.stepModal` IS "WHICH STEP AM I IN", NOT "IS A MODAL OPEN" — and the
@@ -3254,8 +3258,9 @@ function closeStepModal() {
      or closing with the × instead of the back arrow leaves the next sub-section
      believing it was opened from a pane that has since moved on. */
   if (state.submission) state.submission.flipFromPane = null;
-  // Record that this step has been saved/attempted at least once
-  // (drives red-dot visibility and required-field alert visibility)
+  // Record that this step has been closed at least once. Read by nothing as of
+  // v7.29 — it drove the row risk dots (gone in v7.28) and the required-field
+  // alerts (gone in v7.29). Kept deliberately; see toggleStepSection's comment.
   const sm = state.stepModal;
   if (sm?.platformId && sm?.stepId) {
     if (!state.stepSaveAttempted) state.stepSaveAttempted = new Set();

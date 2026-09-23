@@ -13483,35 +13483,30 @@ function _buildPrivacyPresetChips() {
     </div>`;
 }
 
-/* Returns true once the user has saved/closed this step at least once.
-   Used to suppress required-field alerts on first entry.
+/* THE "Required." ALERTS ARE GONE, AND SO IS THE GATE THEY WAITED ON (v7.29).
 
-   IT ASKS WHICH STEP IT IS IN RATHER THAN BEING TOLD (v7.28), and until now
-   every one of its six callers told it the same wrong thing: `'questionnaire'`.
-   No platform has a step with that id — `PLATFORMS[pid].steps` has not carried
-   one for a long time — and `stepSaveAttempted` only ever receives REAL step
-   ids, from `state.submission.openStep[pid]` and `state.stepModal.stepId`. So
-   `ios-questionnaire` could never be in the set, this could never return true,
-   and six "Required." alerts were permanently suppressed. Measured with every
-   field blank and every step opened and closed: zero `.ios-risk-note` elements
-   in the DOM. One of them names an automatic App Review rejection.
+   Six of them lived in buildPrivacySection, buildAndroidBusinessSection,
+   buildAndroidDataSafetySection and buildSteamStoreTagsSection, each one a red
+   note that appeared under an empty required field. Every one was written
+   `${(empty && _stepAttempted()) ? … : ''}`, and `_stepAttempted` answered
+   "has this step been opened and closed at least once" so a field could not
+   scold you before you had been given a chance to fill it.
 
-   Passing the right literal at each call site would have fixed it once.
-   Defaulting to the open step fixes it for good: the SAME builder is reached
-   under different step ids on different platforms (`buildPrivacySection` is
-   App Store, Mac App Store and Mac App Store Full), so a literal would have
-   had to be right three times over. `state.stepModal` is "which step am I in"
-   on BOTH surfaces — the inline pane sets it too (see toggleStepSection,
-   app.js) — so the answer is already sitting there.
+   v7.28 discovered that all six passed `'questionnaire'` — an id no platform's
+   steps array carries — so the gate could never open and none of the six had
+   ever rendered. Fixing the gate made them appear for the first time. Adam,
+   seeing them: don't show these. So they go, and the gate goes with them
+   rather than sitting here with no callers.
 
-   An explicit `stepId` still wins when one is passed, for a caller that wants
-   to ask about a step other than the open one. */
-function _stepAttempted(stepId) {
-  const sm  = state.stepModal;
-  const pid = sm?.platformId;
-  const id  = stepId || sm?.stepId;
-  return !!(pid && id && state.stepSaveAttempted?.has(`${pid}-${id}`));
-}
+   WHAT IS NOT REMOVED is `state.stepSaveAttempted` (app.js), which is still
+   written on every step close and is now read by nothing. It is two `add`
+   calls and a Set; leaving it costs nothing and removing it would throw away
+   the only record of which steps have been closed, which is a question this
+   app has wanted answered twice. Flagged rather than swept.
+
+   The fields themselves are unchanged: still required, still counted by the
+   step's own completeness, still blocking Submit. What is removed is the red
+   note beside them. */
 
 // pid defaults to 'ios'; buildStorePreviewFlipSection passes 'macos' through
 // for Mac App Store's own Data Collection Questions modal — but every field
@@ -13524,7 +13519,6 @@ function _stepAttempted(stepId) {
 // Store's own Data Privacy questions from a different door.
 function buildPrivacySection(pid = 'ios') {
   const a = _appStoreAnswers(pid, 'privacyPolicyUrl');
-  const noUrl = !a.privacyPolicyUrl.trim();
 
   let collectBlock = '';
   if (a.collectsData === 'yes') {
@@ -13551,7 +13545,6 @@ function buildPrivacySection(pid = 'ios') {
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${(noUrl && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL is an automatic App Review rejection.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
     ${collectBlock}`;
@@ -18103,15 +18096,12 @@ function buildAndroidLocalizationsSection() {
 function buildAndroidBusinessSection() {
   const fd      = state.formData;
   const a       = state.androidSubmitAnswers;
-  const titleOk = !!(fd.title?.trim());
-  const descOk  = !!(fd.description?.trim());
   return `
     <div class="ios-section-head">Business</div>
     <p class="ios-section-desc">Review the metadata that will appear on your Google Play store listing. Additional business details (pricing, in-app purchases) are configured directly in the Google Play Console. Edit via <strong>Game Details</strong> if anything needs to change.</p>
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Title</label>
       <div class="form-input is-complete" style="background:var(--bg-2);cursor:default;color:var(--text);">${escHtml(fd.title || '')}</div>
-      ${(!titleOk && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Title is required — add it in Game Details.</div>' : ''}
     </div>
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Short description <span style="color:var(--text-faint);font-weight:400;">(first 80 chars of description)</span></label>
@@ -18120,7 +18110,6 @@ function buildAndroidBusinessSection() {
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">Full description</label>
       <div class="form-input is-complete" style="background:var(--bg-2);cursor:default;color:var(--text);min-height:72px;white-space:pre-wrap;">${escHtml(fd.description || '')}</div>
-      ${(!descOk && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Description is required — add it in Game Details.</div>' : ''}
     </div>`;
 }
 
@@ -18249,7 +18238,6 @@ function buildAndroidDataSafetySection() {
              value="${escHtml(a.deleteAccountUrl)}"
              placeholder="https://yourgame.com/delete-account"
              oninput="answerAndroidTextField('deleteAccountUrl', this.value)">
-      ${(!a.deleteAccountUrl.trim() && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Required. Provide a URL where users can request account deletion.</div>' : ''}
     </div>` : '';
 
   const otherField = a.accountMethod === 'other' ? `
@@ -18347,7 +18335,6 @@ function buildAndroidDataSafetySection() {
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
              onblur="reRenderStepModal()">
-      ${(!privUrl && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH">Required. A missing privacy policy URL will block your submission.</div>' : ''}
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsOrSharesData === null ? androidYNRow('Collects or shares user data', 'collectsOrSharesData',
@@ -18711,7 +18698,6 @@ function buildSteamStoreTagsSection() {
       <span>${escHtml(g)}</span></label>`;
   }).join('');
 
-  const topCount   = a.topGenres.length;
   const genreCount = a.genres.length;
   const subCount   = a.subGenres.length;
 
@@ -18719,7 +18705,6 @@ function buildSteamStoreTagsSection() {
     <div class="ios-content-step-label" style="margin-top:0;">Top-Level Genre
       <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Required. Choose one or two top-level genres to categorize your title on Steam.</span></span>
     </div>
-    ${(topCount === 0 && _stepAttempted()) ? '<div class="ios-risk-note risk-HIGH" style="margin-bottom:8px;">Required — select at least one.</div>' : ''}
     <div class="cq-check-list">${topGenreChecks}</div>
 
     <div class="ios-q-divider"></div>
