@@ -25108,15 +25108,21 @@ function _smCoverageHTML() {
 
    The rail's own switch was already on by default and resets when the modal
    closes; this is about which ARM you land in. */
-/* THE DEFAULT IS THE APP AS IT SHIPPED. Jaco: "que la versión default de
-   Shipmate sea la que era hace 2 días, y sólo si añado los comandos se muestre
-   como quiero."
+/* THE DEFAULT IS THE CANDIDATE. Jaco: "creo que la versión ?beside=panel es la
+   que debería ser."
 
-   This sat at 'panel' while the two candidates were being built, which meant a
-   plain visit to the live site got the experiment. `off` is the untouched
-   modal, so anyone arriving with no query sees what they saw before; the arms
-   are one query away and still remembered per session once asked for. */
-let _smMode = 'off';
+   It went to `off` this morning — "que la versión default sea la que era hace
+   2 días" — and that was right for the state the arms were in: half-built,
+   with a modal that resized between steps, a dismiss button that moved 440px
+   and a status line that vanished. Fixed, `panel` is a thing to show rather
+   than to protect people from, and a default of `off` would have meant nobody
+   ever saw it: people do not compare by typing query strings into the address
+   bar, they compare by living in one.
+
+   `?beside=off` is the escape hatch now, which is the same relationship
+   inverted, and it is one word to invert again. The other two arms stay
+   reachable for the comparison. */
+let _smMode = 'panel';
 let _smGuideBesideOn = false;
 let _smShippyStep = true;
 /* NOTHING MOVES IN THE PAGE ARM, FOR NOW. Jaco: "que por ahora no haya
@@ -25348,6 +25354,22 @@ function _smRailMount() {
    the modal is open — it has been re-parented into the rail — and the ghost is
    literally the box it would occupy. Measured with nothing open: guide card
    935 → 1225. */
+/* The overlay's own scrollbar lane, handed to CSS. See style.css's "MINUS THIS
+   OVERLAY'S OWN SCROLLBAR": the padding that holds the modal on the page's
+   content column is written in percentages of a FIXED element, so it is blind
+   to the 6px this element takes for its own bar. Measured and paid back, so
+   the modal's right edge is the card's at any bar width, including zero. */
+function _smOverlayBar() {
+  const ov = document.getElementById('submit-overlay');
+  if (!ov) return;
+  const lane = ov.offsetWidth - ov.clientWidth;
+  if (!(lane >= 0)) return;
+  const cur = parseFloat(getComputedStyle(document.documentElement)
+                .getPropertyValue('--sm-ov-bar')) || 0;
+  if (Math.abs(lane - cur) < 0.5) return;
+  document.documentElement.style.setProperty('--sm-ov-bar', lane + 'px');
+}
+
 function _smRailAlign() {
   if (_smMode !== 'panel') return;
   const ov = document.getElementById('submit-overlay');
@@ -25425,6 +25447,7 @@ function _smRailRelease() {
 const SM_GUIDE_BESIDE_GAP = 24;
 
 function _smGuideBesideSolve() {
+  _smOverlayBar();
   const body = document.body, root = document.documentElement;
   /* IT ONLY CLEARS WHAT IT OWNS. `sm-step-preview` is written by two functions
      — here for the page paradigm, and by `_smModeClasses` for `mid` / `panel` —
@@ -26520,7 +26543,13 @@ function _smCrRiskGo(id, retried) {
     if (src) {
       const copy = src.cloneNode(true);
       copy.classList.add('sm-cr-line-moved');
-      card.insertBefore(copy, card.firstChild);
+      /* AFTER THE EYEBROW, NOT AT THE VERY TOP. It was `card.firstChild`, which
+         put a STATUS above the line that names the column — "All 24 answered."
+         and then "Shippy Guide" — so the panel introduced itself second. The
+         name comes first in both arms and the status is the first thing under
+         it, which is where a status about the step belongs. */
+      const eb = card.querySelector(':scope > .guide-eyebrow');
+      card.insertBefore(copy, eb ? eb.nextSibling : card.firstChild);
     }
     card.classList.toggle('sm-has-cr-line', !!src);
 
@@ -27632,9 +27661,36 @@ const SM_STEP_HERO = {
        Gated on there being a step list at all: with none the panel is the
        submission checklist, which is the dashboard's card and keeps the
        dashboard's eyebrow. */
+    /* AND IN THE PAGE ARM IT NAMES THE PAGE INSTEAD. Jaco: "¿debería ser, en
+       el caso de ON, el Shippy Guide el título de la página en la que estamos,
+       como para que sea todavía más contextual?"
+
+       Yes, and the two arms wanting different words is the argument rather than
+       an exception to it. The reason the eyebrow says "Shippy Guide" at all is
+       that in `panel` the column ARRIVES — inside a modal, beside a body about
+       something else — so it has to say whose it is. In `on` the column is
+       furniture: it has been in that lane since the dashboard, it does not
+       arrive anywhere, and what changed is the page. Naming the card there
+       answers a question nobody asked.
+
+       It also fills a real hole. In `on` the page has NO title of its own —
+       `.submit-modal-hicon` and the head titles are hidden in that arm because
+       the trail absorbed them — so the only thing naming the level is a
+       CONTROL, the picker at the far right of the row. The panel is the one
+       surface that can carry the page's name.
+
+       The name comes from the modal's own title node, the same source the
+       trail's picker reads, so the two cannot print different words for one
+       level. Upper-casing is the eyebrow's own rule (`text-transform`), not
+       done here, so a locale without case is unaffected. */
     if (_smStepItems()) {
       const eb = document.querySelector('#app-guide .guide-eyebrow');
-      if (eb) eb.textContent = 'Shippy Guide';
+      if (eb) {
+        const pageName = _smGuideBesideOn
+          ? (document.querySelector('#submit-overlay .submit-modal-title')?.textContent.trim() || '')
+          : '';
+        eb.textContent = pageName || 'Shippy Guide';
+      }
     }
 
     const flipData = id === 'storePreview' && _smFlipTarget(sm.platformId) === 'data';

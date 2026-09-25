@@ -25193,7 +25193,27 @@ body.sm-guide-beside #submit-overlay {
   align-items: flex-start;
   padding-top:   var(--sm-guide-top, 24px);
   padding-left:  calc(var(--edge) + var(--content-inset));
-  padding-right: calc(var(--edge) + var(--sm-bar) + var(--guide-w) + var(--split-gap) + var(--content-inset));
+  /* MINUS THIS OVERLAY'S OWN SCROLLBAR, WHICH THE PERCENTAGES CANNOT SEE.
+     Jaco: "el botón picklist de arriba a la derecha no está alineado en su
+     derecha con el content card right edge."
+
+     Measured: the picker lands on 897, which IS the card's right edge, and the
+     modal died at 891. This element is `position: fixed`, so the `100%` above
+     resolves against the VIEWPORT (1268) while its content box is only 1262
+     once a scrollbar appears — so the sum already subtracts `--sm-bar` (the 11
+     `.main` reserves in the page, which is right and is why the pack lines up
+     with the page at all) and then loses 6 more it never accounted for.
+
+     Worse than a constant 6: the lane comes and goes with the CONTENT, so the
+     modal's right edge was 891 on Content Rating and the preview and 897 on
+     Upload Build. `scrollbar-gutter: stable` stops it appearing and
+     disappearing; `--sm-ov-bar`, measured in JS because no CSS expression can
+     ask an element how wide its own scrollbar is, pays it back. It is written
+     as the measurement rather than as 6, so a browser whose bars are wider —
+     or overlay bars, which measure 0 — lands just the same. */
+  scrollbar-gutter: stable;
+  padding-right: calc(var(--edge) + var(--sm-bar) + var(--guide-w) + var(--split-gap)
+                      + var(--content-inset) - var(--sm-ov-bar, 0px));
 }
 body.sm-guide-beside #submit-overlay .submit-modal { max-width: none; width: 100%; }
 body.sm-guide-beside .app-guide { z-index: 101; }
@@ -26875,3 +26895,10 @@ body.sm-guide-panel #submit-overlay {
    because it still carries the filter. */
 body.sm-guide-mid   #submit-overlay .cr-pinned .sw-tip-text,
 body.sm-guide-panel #submit-overlay .cr-pinned .sw-tip-text { display: none; }
+
+/* AND THE PAGE ARM KEEPS THE ONE-LINE SUB. See app.js's "AND IN THE PAGE ARM
+   IT NAMES THE PAGE INSTEAD": with the eyebrow carrying the step's name, the
+   hero's TITLE would be a second headline in a 290px column and stays hidden,
+   but the sub is what says what the rows do — and in this arm it is the only
+   sentence the page has, since the step's own header is not drawn. */
+body.sm-guide-beside .guide-card.sm-step-guide .guide-sub { display: block; }
