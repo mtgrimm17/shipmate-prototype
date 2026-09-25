@@ -27142,3 +27142,40 @@ body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot.is-live.is-hiding {
 .ios-step-card.sm-step-won::before,
 .ios-step-card.sm-step-won + .ios-step-card::before { display: none; }
 .ios-step-cards:has(> .ios-step-card:first-child.sm-step-won)::before { display: none; }
+
+/* ── THE PACK LIVES UNDER THE TOPBAR, AND THE PANEL REACHES THE BOTTOM ────
+   Jaco, on a short laptop screen: "deberías bajar el modal+panel para que esté
+   como realmente se vería en una pantalla normal. Y evita ese error extraño de
+   que el Shippy panel no llega al final."
+
+   Two separate faults, both only visible when the window is short. Measured at
+   1400 × 620:
+
+   THE PACK WAS CENTRED IN THE WHOLE VIEWPORT, so with a 560px modal in 620px
+   of window it landed at top 30 — and the topbar ends at 64. It was sitting 34px
+   UNDER the chrome, which is why it read as pinned to the top rather than as a
+   dialog over the page. The overlay reserves the bar now and centres in what is
+   left, so on a tall screen nothing moves and on a short one the pack stops
+   where the app does. The 64 is the same number `.guide-card`'s own max-height
+   already subtracts for the same bar, two rules apart.
+
+   AND THE MODAL IS CAPPED TO THAT SPACE. Its base `clamp(560px, 88vh, 860px)`
+   has a FLOOR of 560, so under ~660px of window it is taller than the room it
+   has and the pack overflows the space it was just given. The cap wins here;
+   the body already scrolls inside it.
+
+   THE PANEL'S GAP WAS A MEASUREMENT OF ANOTHER SURFACE. `.guide-card` carries
+   `max-height: calc(100vh - 64px - var(--subnav-h) - var(--main-gap) - 16px)`,
+   which is exactly right on the DASHBOARD — the column must not outgrow the
+   window — and meaningless in a rail whose height the modal decides. At 620 it
+   computed to 464 against a rail of 558: 88px of empty modal under the panel,
+   which is the dark band in the report. Its `overflow-y` stays, so a panel with
+   more rows than room still scrolls. */
+body.sm-guide-panel #submit-overlay {
+  padding-top: calc(64px + 24px);
+  padding-bottom: 24px;
+}
+body.sm-guide-panel #submit-overlay .submit-modal {
+  max-height: calc(100vh - 64px - 48px);
+}
+body.sm-guide-panel #submit-overlay .sm-rail .guide-card { max-height: none; }
