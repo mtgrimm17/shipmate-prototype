@@ -26603,6 +26603,13 @@ function _smCrRiskGo(id, retried) {
     card.querySelectorAll(':scope > .sm-cr-line-moved').forEach(n => n.remove());
     if (src) {
       const copy = src.cloneNode(true);
+      /* THE PANEL TAKES THE STATUS AND LEAVES THE INSTRUCTION. "Click All to
+         review before submitting" is about the TOGGLE, which stayed in the
+         modal — and it carries the pill itself, so a copy here would draw a
+         second `All` 300px from the one you can press. Dropped from the clone
+         rather than hidden in it: a control's own words belong beside the
+         control, and this is a copy being made, not a thing being moved. */
+      copy.querySelectorAll('.cr-inferred-howto').forEach(n => n.remove());
       copy.classList.add('sm-cr-line-moved');
       /* AFTER THE EYEBROW, NOT AT THE VERY TOP. It was `card.firstChild`, which
          put a STATUS above the line that names the column — "All 24 answered."
@@ -27797,4 +27804,158 @@ const SM_STEP_HERO = {
     if (su) su.textContent = hero[1];
     return out;
   };
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMING BACK FROM A FINISHED STEP SAYS WHICH PLATFORM IT WAS
+
+   Jaco: "cuando completo un paso y vuelvo al dashboard, deberíamos hacer una
+   minicelebración para saber qué ha sucedido. Creo que lo oportuno es dimear
+   el resto y marcar cómo se ha cambiado el checklist a verde en la platform
+   card. Como para saber, eh, esto ha sucedido en esta plataforma (por si hay
+   varias abiertas)."
+
+   That last clause is the whole reason it is worth building: with one card on
+   screen the change is obvious, and with three it is a green disc appearing
+   somewhere in a grid you were not looking at. The answer is his — dim the
+   rest, and light the row that just turned.
+
+   IT IS READ OFF THE SCREEN, NOT DERIVED. `_platformAnswersComplete` is the
+   router and would have been the obvious source; the rows' own `is-complete`
+   is what the card actually DREW, and this repo has already paid for the
+   difference once — `smReadyToShip` reported four ticks while the card showed
+   none, because it wrote a status nothing read. `_sppCelebrate` reads its bar
+   the same way, for the same reason.
+
+   AND THE FLANK CANNOT BE DERIVED EITHER. A render knows "this step is
+   complete"; it cannot tell that from "it was already complete when you
+   opened it". So the state is compared against what was last SEEN, with an
+   `undefined` guard so the first paint never celebrates — `_sppCelebrate`'s
+   shape, and `_impPostRender`'s before it.
+
+   THE SNAPSHOT IS FROZEN WHILE A MODAL IS UP, which is the one thing neither
+   of those two had to solve. `renderDashboard` runs behind an open step, so
+   the tick would land — and the flank be spent — while the card is under a
+   scrim and nobody can see it; by the time you closed the modal there would be
+   nothing left to notice. Skipping the update while the overlay is open means
+   the comparison is made against the dashboard you LEFT, which is the one you
+   are coming back to. */
+const _smStepsSeen = {};
+
+function _smCardCelebrate() {
+  const ov = document.getElementById('submit-overlay');
+  if (ov && !ov.classList.contains('hidden')) return;   /* frozen: see above */
+
+  document.querySelectorAll('.active-card[id^="active-card-"]').forEach(card => {
+    const pid  = card.id.slice('active-card-'.length);
+    const rows = [...card.querySelectorAll('.ios-step-card')];
+    const now  = rows.map(r => r.classList.contains('is-complete'));
+    const prev = _smStepsSeen[pid];
+    _smStepsSeen[pid] = now;
+
+    /* First paint, or a card whose step list changed under us (a platform
+       gaining a step mid-session): record and say nothing. Comparing two
+       lists of different lengths by index would celebrate a row that merely
+       moved. */
+    if (!prev || prev.length !== now.length) return;
+
+    const i = now.findIndex((v, k) => v && !prev[k]);
+    if (i < 0) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    _smCelebrateRow(card, rows[i]);
+  });
+}
+
+/* The two classes are stripped on a timer rather than on `animationend`,
+   because the DIM is a transition on a different element and would otherwise
+   outlive the wash it belongs to. One number for both, so they cannot drift.
+   1100 is the platform card's own spotlight duration. */
+const SM_CELEBRATE_MS = 1100;
+let _smCelebrateTimer = null;
+
+function _smCelebrateRow(card, row) {
+  const col = card.closest('.dash-column') || card.parentElement;
+  if (!col || !row) return;
+  clearTimeout(_smCelebrateTimer);
+  col.querySelectorAll('.sm-celebrant').forEach(n => n.classList.remove('sm-celebrant'));
+  col.querySelectorAll('.sm-step-won').forEach(n => n.classList.remove('sm-step-won'));
+  /* Restarted rather than left running if a second step lands inside the
+     window — `void offsetWidth` is what makes the animation begin again. */
+  void row.offsetWidth;
+  col.classList.add('sm-celebrating');
+  card.classList.add('sm-celebrant');
+  row.classList.add('sm-step-won');
+  _smCelebrateTimer = setTimeout(() => {
+    col.classList.remove('sm-celebrating');
+    card.classList.remove('sm-celebrant');
+    row.classList.remove('sm-step-won');
+  }, SM_CELEBRATE_MS);
+}
+
+/* IT WATCHES THE CARDS INSTEAD OF GUESSING WHEN THEY REPAINT.
+
+   Two hooks were tried and both were a frame out of step. `renderDashboard`
+   never fires at all — instrumented across answering a question and closing
+   the step it was called ZERO times while `updateIOSCard` and
+   `updateSteamCard` ran four; the Submission cards are repainted by those two.
+   Wrapping THOSE and deferring a `requestAnimationFrame` still read the card
+   as it was BEFORE the repaint: measured, the snapshot recorded 4 complete
+   while the screen showed 3, so by the time the step really was done the two
+   agreed and there was no flank left to see.
+
+   A `MutationObserver` on the column asks the only question that matters —
+   "did these rows just change" — and is immune to which function repainted
+   them, how many times, or on what schedule. Same reasoning as the dropwell's
+   observer: the case a render hook alone gets wrong is the one where nothing
+   you wrapped is what moved.
+
+   IT CANNOT LOOP, and that is worth stating because the callback writes to the
+   very subtree it watches. Celebrating adds `sm-celebrant` / `sm-step-won`,
+   which fires the observer again — and the second pass finds the flank already
+   spent, because the snapshot was updated in the same call that celebrated.
+   The rAF coalesces the burst either way. */
+/* ONE OBSERVER ON THE DOCUMENT, NOT A HANDSHAKE WITH THE COLUMN.
+
+   The first version armed itself on `.dash-column` and, if that was not there
+   yet, watched `<body>` until it appeared. Measured on a cold load, it never
+   armed at all: zero calls, an empty snapshot, and a column that plainly
+   existed by then — a two-phase handshake with a surface this app rebuilds
+   with innerHTML has a window in which neither phase is holding anything.
+
+   So there is no handshake. It watches the document and asks whether the
+   mutation touched a platform card, which is one question and cannot be in the
+   wrong state. The cost is a callback on every DOM change, and it is bounded
+   by the three cheap guards it runs into: a rAF that coalesces a burst into
+   one pass, the early return while a modal is open, and the flank itself.
+
+   It cannot loop: celebrating writes into the very subtree it watches, and the
+   second pass finds the flank already spent because the snapshot is updated in
+   the same call that celebrated. */
+(() => {
+  let pending = false;
+  const tick = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      try { _smCardCelebrate(); } catch (_) {}
+    });
+  };
+  const start = () => {
+    new MutationObserver(muts => {
+      for (const m of muts) {
+        const n = m.target;
+        if (n && n.nodeType === 1 && (n.closest?.('.dash-column') || n.querySelector?.('.dash-column'))) {
+          return tick();
+        }
+      }
+    }).observe(document.documentElement, {
+      subtree: true, childList: true, attributes: true, attributeFilter: ['class'],
+    });
+    tick();   /* record a first snapshot so the guard has something to be undefined against */
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();

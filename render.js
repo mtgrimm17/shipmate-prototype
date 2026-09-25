@@ -13578,11 +13578,33 @@ function buildPrivacySection(pid = 'ios') {
           <span class="tooltip-icon">?</span>
           <span class="tooltip-body">${t('ios.privacy.url.tooltip') || 'Apple requires a live, reachable URL. A missing or broken link is an automatic rejection reason.'}</span>
         </span>
+      <!-- DEFERRED, NOT SYNCHRONOUS — AND THIS IS WHY THE FIRST CLICK DID NOTHING.
+           Jaco: "he tocado YES, NO, he dado a Done y no ha funcionado el primer
+           click… ¿puede ser porque estaba focused en el privacy policy?" Yes, and
+           the trace says it exactly: pointerdown and pointerup on YES, no click
+           event at all, and the answer unchanged.
+      
+           A click only exists when the down and the up share a target. Pressing any
+           other control blurs this field, the blur rebuilt the whole modal
+           SYNCHRONOUSLY, and the button the mousedown landed on was gone before the
+           mouseup — so the browser had nothing to fire a click on. The step ate the
+           first press after anyone typed a URL.
+      
+           _deferredRerenderStepModal is the door this app already built for it: it
+           holds the rebuild while a gesture is in flight and flushes on pointerup
+           behind a setTimeout(0), which lands after the click. Same bug and same fix
+           as the Mac preview inline editors; these four fields were the family that
+           never got it.
+      
+           No backticks in here: this comment sits INSIDE a template literal, and one
+           backtick ends the string and turns the next word into an identifier — the
+           failure this repo already recorded once, which parses clean until it does
+           not. -->
       </label>
       <input class="form-input" type="url" id="${pid}-privacy-url" value="${a.privacyPolicyUrl}"
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
-             onblur="reRenderStepModal()">
+             onblur="_deferredRerenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
     ${collectBlock}`;
@@ -14320,21 +14342,35 @@ function buildContentRatingSection(pid = 'ios') {
     }).length, 0);
 
   const crAllPillHtml = `<span class="cr-inferred-all-word">All</span>`;
+  /* TWO KINDS OF SENTENCE, NAMED. One of these is a STATUS about the step —
+     how many are answered, how many Shipmate inferred — and one is an
+     INSTRUCTION about the toggle sitting next to it, pill and all. They were
+     both plain `.cr-inferred-row`s, so whatever moved one moved the other:
+     Jaco, on the panel carrying both, "hemos movido el texto de Click All to…
+     que quizás debería mantenerse en la barra pinned."
+
+     Right, and it is this file's own rule about where a control's own words
+     live: the toggle stayed in the modal, so an instruction for pressing it
+     cannot be in a column 300px away. `.cr-inferred-status` is what the guide
+     panel copies; `.cr-inferred-howto` is what stays beside the control it is
+     about. Every arm that does not move anything sees them as one block, which
+     is what they were. */
+  const _crStatus = html => `<div class="cr-inferred-row cr-inferred-status">${html}</div>`;
   const inferredText = crInferredCount > 0
     ? (showAll
-        ? (t('cr.showing_all', { total: crTotalQuestions })
+        ? _crStatus(t('cr.showing_all', { total: crTotalQuestions })
            || `All ${crTotalQuestions} questions from Apple's content questionnaire.`)
-        : `<div class="cr-inferred-row">${
+        : _crStatus(
              t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
                || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses.`
-           }</div><div class="cr-inferred-row">${
+           ) + `<div class="cr-inferred-row cr-inferred-howto">${
              t('cr.inferred_click_all', { allPill: crAllPillHtml })
                || `Click ${crAllPillHtml} to review before submitting.`
            }</div>`)
     : crUnanswered > 0
-      ? (t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
+      ? _crStatus(t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
          || `${crUnanswered} of ${crTotalQuestions} still to answer.`)
-      : (t('cr.all_answered', { total: crTotalQuestions })
+      : _crStatus(t('cr.all_answered', { total: crTotalQuestions })
          || `All ${crTotalQuestions} answered.`);
   const inferredBanner = '';
 
@@ -14412,7 +14448,7 @@ function buildContentRatingSection(pid = 'ios') {
       <input class="form-input" type="url" value="${a.ageSuitabilityUrl}"
              placeholder="${t('ios.age.suitability.placeholder') || 'https://yourgame.com/age-suitability'}"
              oninput="updateIOSTextField('ageSuitabilityUrl', this.value)"
-             onblur="reRenderStepModal()">
+             onblur="_deferredRerenderStepModal()">
     </div>`}`;
 
   /* THE FILTER AND ITS SENTENCE STAY ON SCREEN. Both are controls for the list
@@ -14476,7 +14512,7 @@ function buildExportComplianceSection(pid = 'ios') {
               <label class="form-label">${t('ios.export.ern.label') || 'ERN Number'}</label>
               <input class="form-input" type="text" value="${a.ernNumber}" placeholder="${t('ios.export.ern.placeholder') || 'ENC-XXXXXXXX'}"
                      oninput="updateIOSTextField('ernNumber', this.value)"
-                     onblur="reRenderStepModal()">
+                     onblur="_deferredRerenderStepModal()">
             </div>` : ''}
           ${a.hasERN === 'no' ? '<div class="ios-risk-note risk-HIGH">An ERN is required before submitting apps with non-exempt encryption. Apply at bis.doc.gov.</div>' : ''}
         </div>` : ''}
@@ -18372,7 +18408,7 @@ function buildAndroidDataSafetySection() {
              value="${escHtml(privUrl)}"
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
-             onblur="reRenderStepModal()">
+             onblur="_deferredRerenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsOrSharesData === null ? androidYNRow('Collects or shares user data', 'collectsOrSharesData',

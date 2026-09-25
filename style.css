@@ -26501,7 +26501,10 @@ body.sm-guide-panel #submit-overlay .submit-modal {
      old base modal had, and it is the price of the box not resizing under you
      between steps. Nothing else in this arm asks for more than 680; if that
      table is ever made narrower, this number follows it down. */
-  --sm-body-w: 810px;
+  /* Declared on `body` (below) so the OVERLAY can read it too — its cold-open
+     padding is solved from the pack's width, and a `var()` that resolves on one
+     element and not on its parent makes the whole `calc` invalid: measured, the
+     modal painted at left 0 for one frame. */
   /* THE WHOLE THING IS CENTRED — MODAL PLUS PANEL. Jaco: "make sure
      ?beside=panel has the modal + panel Shippy centred on the website."
 
@@ -26892,11 +26895,27 @@ body.sm-guide-panel #submit-overlay .submit-modal {
   grid-template-columns: var(--sm-body-w) calc(var(--guide-w) + 12px);
   max-width: calc(var(--sm-body-w) + var(--guide-w) + 12px + 2px);
 }
+body.sm-guide-panel { --sm-body-w: 810px; }
 body.sm-guide-panel #submit-overlay {
   justify-content: flex-start;
-  /* The fallback keeps a cold first paint centred-ish rather than hard left,
-     in the frame before the solve lands. */
-  padding-left: var(--sm-pack-left, 8vw);
+  /* THE FALLBACK IS THE SAME GEOMETRY, NOT A GUESS. It was `8vw`, a number
+     picked to look centred-ish for the one frame before `_smRailAlign` lands —
+     and measured on a cold first open, the modal really did paint at 101.4 and
+     jump to 117 on the next frame. 15.6px is small and it is a control moving
+     under a pointer that is already travelling towards it, which is the one
+     thing this file refuses everywhere else.
+
+     So the fallback is solved in CSS from the same tokens the page lays itself
+     out with: the split's box (viewport minus two gutters, capped at
+     `--nav-w`), its left edge, and then the pack's own width taken off its
+     RIGHT edge — because what this alignment fixes is the right-hand column,
+     not the left. `_smRailAlign` still runs and still corrects whatever a
+     border or a scrollbar leaves over; it just no longer has 15px to travel. */
+  --sm-split-w: min(100vw - var(--sm-bar) - 2 * var(--chrome-gutter), var(--nav-w));
+  --sm-edge:    calc((100vw - var(--sm-bar) - var(--sm-split-w)) / 2);
+  --sm-pack-w:  calc(var(--sm-body-w) + var(--guide-w) + 12px + 2px);
+  padding-left: var(--sm-pack-left,
+    calc(var(--sm-edge) + var(--sm-split-w) + 6px + 1px - var(--sm-pack-w)));
 }
 
 /* THE STATUS LINE IS HIDDEN AT ITS SOURCE, NOT REMOVED FROM IT. See app.js's
@@ -26905,8 +26924,17 @@ body.sm-guide-panel #submit-overlay {
    invisible there, or the same sentence is printed twice a few inches apart.
    The page arm hides the whole bar for its own reason; here the bar survives
    because it still carries the filter. */
-body.sm-guide-mid   #submit-overlay .cr-pinned .sw-tip-text,
-body.sm-guide-panel #submit-overlay .cr-pinned .sw-tip-text { display: none; }
+/* AND IT HIDES THE STATUS, NOT THE WHOLE SENTENCE BLOCK. Only the status has
+   gone to the panel; the "Click All…" instruction belongs to the toggle it
+   names, which is right here. The block itself is hidden only when there is
+   nothing left in it — which is every case except an inferred, unanswered
+   view, and is what stops an empty box paying its own margin. */
+body.sm-guide-mid   #submit-overlay .cr-pinned .cr-inferred-status,
+body.sm-guide-panel #submit-overlay .cr-pinned .cr-inferred-status { display: none; }
+body.sm-guide-mid   #submit-overlay .cr-pinned .sw-tip-text:not(:has(.cr-inferred-howto)),
+body.sm-guide-panel #submit-overlay .cr-pinned .sw-tip-text:not(:has(.cr-inferred-howto)) {
+  display: none;
+}
 
 /* AND THE PAGE ARM KEEPS THE ONE-LINE SUB. See app.js's "AND IN THE PAGE ARM
    IT NAMES THE PAGE INSTEAD": with the eyebrow carrying the step's name, the
@@ -27059,3 +27087,44 @@ body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot.is-live.is-hiding {
    `visibility`, never `display` — a `display: none` box contributes no height,
    which is the entire thing it is here to contribute. */
 .guide-card.sm-step-guide .sm-cr-line-slot { visibility: hidden; }
+
+/* ── THE FINISHED STEP SAYS WHICH CARD IT WAS ─────────────────────────────
+   See app.js's "COMING BACK FROM A FINISHED STEP". The dim is `opacity` on the
+   other cards, which is the one case this app's "dim by colour, never by
+   opacity" rule allows: those cards are not being READ, they are being stepped
+   back from for a beat, and .35 is this file's own value for "still true, just
+   not what you asked for" — the cancel hold's number.
+
+   The row itself changes only LIGHT, on the sine the carousel's glint uses.
+   No ring: a ring is the one mark this app does not use, and the disc has
+   already gone green — this says WHICH one did, not that something is done. */
+.dash-column.sm-celebrating .active-card { transition: opacity .18s ease; }
+.dash-column.sm-celebrating .active-card:not(.sm-celebrant) { opacity: .35; }
+
+@keyframes smStepWon {
+  0%   { background: rgba(47, 220, 128, 0); }
+  35%  { background: rgba(47, 220, 128, .13); }
+  100% { background: rgba(47, 220, 128, 0); }
+}
+.ios-step-card.sm-step-won {
+  animation: smStepWon 1.1s cubic-bezier(.37, 0, .63, 1);
+}
+
+/* THE ROW LOSES ITS RULES WHILE IT CELEBRATES. Jaco: "quita las líneas
+   divisorias horizontales de encima y debajo cuando saques la animación."
+
+   A wash is a BOX, and a box with a hairline across each end reads as a
+   highlighter laid over a table rather than as one row lighting up — the same
+   thing this app decided three times over on the Submit row: a border that
+   curved, a divider that duplicated the border, and a divider that duplicated
+   the fill. Here the fill IS the mark, so for as long as it is on there is
+   nothing left for a line to separate.
+
+   THREE RULES, BECAUSE THE LINE ABOVE A ROW IS NOT ALWAYS THE ROW'S. Each row
+   draws its own `::before` as the line above it, so "below" is the NEXT row's
+   — and the line above the FIRST row belongs to `.ios-step-cards`, which is
+   why it is named separately (it was moved onto the container so a row's hover
+   could not blink it away). */
+.ios-step-card.sm-step-won::before,
+.ios-step-card.sm-step-won + .ios-step-card::before { display: none; }
+.ios-step-cards:has(> .ios-step-card:first-child.sm-step-won)::before { display: none; }
