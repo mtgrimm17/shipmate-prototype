@@ -14099,7 +14099,12 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .submit-modal {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  /* THE CARD'S RADIUS, THROUGH THE CARD'S TOKEN. A modal that is drawn as the
+     content column (see the guide-beside experiment) cannot round differently
+     from the panels it stands in for — 14 against .sec-panel's 20 read as two
+     kinds of box on one grid. Written as --panel-radius rather than as 20, so
+     one number still decides every panel in the app. */
+  border-radius: var(--panel-radius);
   width: 100%;
   /* 680, not 640: the box's 1px borders leave 638px of content, and at that
      width the step bodies were crowding their own padding. +40 goes entirely
@@ -14801,7 +14806,12 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    so this is a belt to that braces rather than the mechanism. */
 .spp-pin-tick.is-bad {
   background: var(--magenta);
-  color: #2E0713;
+  /* WHITE INK (Jaco). The done disc's dark ink is right for a CHECK, a thin
+     open stroke that needs a light ground to read against. A cross is denser
+     and sits on a hue that is already loud, so in near-black it read as a
+     blot. White is the most separation the palette allows, and the glyph
+     comes down too — see --sm-cross-scale, one number for both surfaces. */
+  color: #fff;
 }
 /* THE SELECTED PILL IS THE APP'S CHIP, NOT A LOCAL ONE — the translucent
    `--chip-fill` plus the masked gradient stroke that every other selected thing
@@ -23044,6 +23054,23 @@ body.viewing-splash #app-guide { display: none; }
 .intensity-btn.is-sel-none::after,
 .intensity-btn.is-sel-infrequent::after,
 .intensity-btn.is-sel-frequent::after,
+/* THE FOURTH SELECTED INTENSITY, WHICH THIS LIST NEVER KNEW ABOUT. Jaco: "las
+   pills seleccionadas de cosas rojas tienen que seguir teniendo el stroke azul
+   del resto de selected pills, no inventes."
+
+   Right — repainting `is-sel-unrated` with `--pill-on-*` gave it the fill and
+   the ink of a selected pill and left it without the ring, so it was a selected
+   pill drawn two ways. The ring belongs to the SELECTION, and that class is a
+   selected state like the three above it; it is only separate at all because it
+   used to carry a different colour.
+
+   Joining the shared list rather than redrawing the gradient locally is that
+   list's own stated reason: it is the only way "the same stroke" stays true
+   after the next change to it. */
+.intensity-btn.is-sel-unrated::after,
+/* The step picker in the trail — the project chip's own edge, because it is the
+   project chip's own format. */
+.sm-hd-steppick::after,
 .project-selector-wrap #projectSelector::after,
 .bar-nav-btn .ic.cover::after,
 .ias-icon-art::after,
@@ -25116,3 +25143,1735 @@ body.sm-picker-open { overflow: hidden; }
   background-color: rgba(255, 59, 118, .16);
   border-color: var(--alert-color);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT — SHIPPY STAYS BESIDE THE MODAL  (local only, flag: smGuideBeside)
+
+   The complaint: a step modal drops a full-viewport scrim over everything, so
+   the guide stops being the source of help and each modal has had to grow its
+   own (Content Rating's pinned bar is exactly that divergence).
+
+   Measured, the modal is NOT what hides it: at 1366 the modal spans 343–1023
+   and the guide 988–1278, so they overlap by 35px. What puts the guide at a
+   quarter of its light is the scrim. So the whole experiment is two lines —
+   reserve the guide's band on the right, and lift the guide over the scrim.
+
+   The reserve is SOLVED in JS (_smGuideBesideSolve) rather than written here,
+   for _subnavAddSolve's own reason: the number is the guide's real left edge,
+   and a constant is wrong the moment the guide collapses or the split wraps.
+   The first attempt reserved the guide's WIDTH (290) and was quietly wrong —
+   there are 88px of page margin to its right, so wide modals still overlapped
+   while the arithmetic said they fitted.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* THE MODAL SITS ON THE CONTENT COLUMN — the same box a Game Details card gets.
+
+   Jaco: "cómo de difícil sería adaptar los modals para que siempre fueran así,
+   para que en un cambio de paradigma no hubiera que cambiarlo todo?" The reason
+   it was hard is that these were two coordinate systems: a .sec-panel is
+   DERIVED (.app-split at max-width --nav-w, centred, minus --split-gap and
+   --guide-w, inset by --content-inset), while the modal was fixed and centred
+   in the VIEWPORT with a per-variant max-width. Nothing tied them, so moving
+   the grid left every modal behind.
+
+   Written in the grid's own tokens, the two cannot drift: change --guide-w,
+   --nav-w or --content-inset and both move. Measured against a real card at
+   1392: modal 112.5 → 962.5 at 850 wide, card 112.5 → 962.5 at 850. Zero on
+   all three.
+
+   --sm-bar IS NOT OPTIONAL AND IS NOT COSMETIC. .main reserves a scrollbar lane
+   and the split is centred inside that; this overlay is fixed and spans the
+   whole viewport, so it has to pay the same 11px or it lands 5.5 off — half a
+   lane, exactly, which reads like a rounding bug and is arithmetic.
+
+   THE TOP IS THE ONE THING CSS CANNOT ASK FOR, so --sm-guide-top is solved in
+   _smGuideBesideSolve. align-items: flex-start, because a modal centred in the
+   viewport starts wherever it happens to be tall; a card starts where content
+   starts. */
+body.sm-guide-beside #submit-overlay {
+  --split-w: min(calc(100% - var(--sm-bar) - 2 * var(--chrome-gutter)), var(--nav-w));
+  --edge:    calc((100% - var(--sm-bar) - var(--split-w)) / 2);
+  align-items: flex-start;
+  padding-top:   var(--sm-guide-top, 24px);
+  padding-left:  calc(var(--edge) + var(--content-inset));
+  padding-right: calc(var(--edge) + var(--sm-bar) + var(--guide-w) + var(--split-gap) + var(--content-inset));
+}
+body.sm-guide-beside #submit-overlay .submit-modal { max-width: none; width: 100%; }
+body.sm-guide-beside .app-guide { z-index: 101; }
+
+/* ── EXPERIMENT 2 — the Preview gives its bar to the panel ─────────────────
+   With sppRequiredElements drawn as Shippy's checklist, the in-modal pinned
+   nav is the same list twice on one screen, which is the "two marks on one
+   object" this file refuses everywhere else. So it is not drawn, and the width
+   that existed to hold it comes down to what the store page needs. */
+/* The preview's pinned section bar, in every arm whose panel already lists
+   those eight sections. See app.js's note at `sm-step-preview`. */
+body.sm-guide-beside.sm-step-preview .spp-pinned,
+body.sm-guide-mid.sm-step-preview .spp-pinned,
+body.sm-guide-panel.sm-step-preview .spp-pinned { display: none; }
+
+/* Invalid in the panel is the pinned bar's own third state, value for value —
+   see .spp-pin-tick.is-bad. Two classes so it outranks .gd-task.is-done's one. */
+.gd-task.sm-task-bad .gd-task-box   { background: var(--magenta); }
+.gd-task.sm-task-bad .gd-task-label { color: var(--text); }
+
+/* ── THE CROSS IS SMALLER THAN THE CHECK, IN BOTH PLACES ───────────────────
+   The check is sized to the FULL width of its disc — that is the app's rule and
+   the reason the ink lands at the same 38.3% everywhere. A cross at the same
+   size does not read the same: it carries more ink per unit and its corners
+   reach further from the centre than the check's furthest point does, so at
+   100% it fills the disc where the check sits inside it.
+
+   One number for both surfaces, so the panel and the pinned bar cannot drift
+   into two sizes for one glyph — which is the whole argument for the panel
+   borrowing the bar's state in the first place. */
+:root { --sm-cross-scale: 76%; }
+.gd-task.sm-task-bad .gd-task-box svg,
+.spp-pin-tick.is-bad svg { width: var(--sm-cross-scale); height: var(--sm-cross-scale); }
+
+/* Invalid in the panel is the pinned bar's own third state — white ink on the
+   same magenta, per the note at .spp-pin-tick.is-bad. */
+.gd-task.sm-task-bad .gd-task-box { color: #fff; }
+
+/* A status row is not a destination — see _smBusinessItems. This app does not
+   put a pointer on something that cannot be pressed, so it does not get one. */
+.gd-task.sm-task-status { cursor: default; }
+.gd-task.sm-task-status:hover { background: transparent; }
+
+/* A row that LEAVES the page wears the step row's own chevron — the same glyph
+   the platform cards use to say "this opens something". Pushed to the far end
+   the way .ios-step-card does, so the label column is unchanged. */
+.gd-task.sm-task-goes { position: relative; }
+.gd-task.sm-task-goes .ios-step-arrow { margin-left: auto; opacity: .55; flex: 0 0 auto; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 3 — NO SCRIM, BREADCRUMB IN THE SUB-NAV ROW.
+   See app.js's block of the same name for the argument. Flag-scoped, so
+   smGuideBeside(false) puts the scrim and the plain title back.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* POINTER-EVENTS, NOT DISPLAY — the overlay still positions the modal on the
+   grid, it just stops catching presses aimed past it. That is the whole of
+   what made the sub-nav row visible-but-dead. */
+/* THE BLUR IS THE SCRIM'S OTHER HALF AND GOES WITH IT. Jaco: "que la
+   navegación no esté blurreada." The overlay carries backdrop-filter: blur(4px)
+   and spans the VIEWPORT, so with the wash gone it was still smearing the one
+   row this experiment exists to make readable — a scrim with its colour
+   removed and its lens left on. Dropping it also retires a backdrop-filter
+   sitting beside an element that animates a transform, which this file records
+   as a Safari layer bug waiting to happen. */
+body.sm-guide-beside #submit-overlay {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
+}
+body.sm-guide-beside #submit-overlay .submit-modal { pointer-events: auto; }
+
+/* The modal now floats over live page rather than over a wash, so its own edge
+   has to do what the scrim was doing: say where it stops. Borrowed from
+   .submit-ready's pair — an edge carrying a state — rather than invented. */
+body.sm-guide-beside #submit-overlay .submit-modal {
+  box-shadow: 0 24px 64px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+}
+
+/* THE CRUMBS ARE THE SUB-NAV TITLE'S OWN TYPE. Only the separator and the
+   pressable halves are new — inheriting means a trail cannot drift away from
+   the word it replaces. */
+/* A CRUMB IS A PILL IN THIS ROW, BECAUSE EVERY OTHER PRESSABLE THING IN IT IS.
+   Jaco: "al hacer hover sobre Submission, o sobre MAS: Product Page, debería
+   marcarse un rectángulo hover idéntico a lo que ya hacemos en game details con
+   las 4 sub tabs."
+
+   Right — the row is the same row. Game Details puts four `.app-subtab`s in it
+   and they are transparent at rest with a wash on approach; a breadcrumb in the
+   same strip that only changed its text colour was a second answer to "you can
+   press this" ten pixels from the first.
+
+   THE PADDING MOVES OFF THE TITLE AND ONTO THE CRUMBS, which is what keeps the
+   first word where it has always been. `.app-subnav-title` carries a sub-tab's
+   exact `10px 18px` and a transparent border precisely so a plain label starts
+   on the line a pill's label would — so the crumbs inherit that job rather than
+   paying it twice. Measured: the trail's first glyph lands on the same x as
+   "Submission" did, and as a sub-tab's does on Game Details.
+
+   The values are `.app-subtab`'s own, not approximations of them: the same
+   `--pill-radius`, the same 1px transparent border the fill is placed against,
+   the same `rgba(255,255,255,.035)` and the same lift to `--text`. Only the
+   type is this row's rather than a sub-tab's — a trail is 15/500 like the label
+   it replaces, not 14/600 like a tab. */
+.app-subnav.sm-crumbs .app-subnav-title {
+  display: flex; align-items: center; gap: 8px;
+  /* BOTH THE PADDING AND THE BORDER GO, because the crumb brings its own of
+     each. `.app-subnav-title` is `1px border + 18px padding` from its own left
+     edge and says so in its comment — a crumb inside it re-pays exactly that,
+     so the title must pay neither or the two stack and the trail starts one
+     pixel right of every other label this row draws.
+
+     THE ONE-PIXEL HUNT THAT PRECEDED THIS WAS ALL MEASUREMENT ERROR, twice, in
+     both directions: `left + paddingLeft` on one box against
+     `left + border + padding` on the other, which makes a correct pair look 1px
+     out and then makes the broken pair look right. Measure both boxes with the
+     SAME formula before correcting either — ink x is left + border + padding,
+     always. Verified 73 and 73. */
+  padding: 0; border: 0;
+}
+.sm-crumb {
+  padding: 10px 18px; border-radius: var(--pill-radius);
+  border: 1px solid transparent; background: transparent;
+  margin: 0; font: inherit; color: var(--text-dim); cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.sm-crumb:hover:not(:disabled) { color: var(--text); background: rgba(255, 255, 255, .035); }
+/* Where you are is not a control, so it draws no box on approach — the one
+   thing in this row that is a statement rather than a destination. */
+.sm-crumb:disabled { cursor: default; }
+/* THE LAST CRUMB DOES NOT SHOUT, AND IT DID FOR TWO VERSIONS. It wore the
+   title's full weight on the standard argument — the trail ends in you — and
+   that argument only holds when the trail is the ONLY thing saying where you
+   are. It is not: the page's own heading says it 40px below, bold, at twice the
+   size. So "Content Rating" was being said twice and the QUIETER of the two was
+   the real heading, which is what made the line hard to read as navigation.
+
+   The whole trail is one register now. Position states the hierarchy — the last
+   one is last — and the leaf is emphasised by the H1 under it, not by the
+   breadcrumb. What still separates the crumbs is behaviour: the ones you can
+   press brighten on approach, and this one does not. */
+.sm-crumb.is-last { cursor: default; }
+.sm-crumb-sep { color: var(--text-faint); opacity: .5; }
+
+/* ADD PLATFORM BELONGS TO THE DASHBOARD, NOT TO THE TRAIL. Jaco: "Add platform
+   should disappear, only exist within the Submission dashboard."
+
+   It is the sub-nav row's own control and was right there for as long as that
+   row only ever said "Submission". Turned into a breadcrumb the row stops being
+   the dashboard's header and becomes the trail to where you ARE — so a button
+   that adds a platform to the page BEHIND you is offering an act belonging to a
+   surface you are four crumbs away from. Same argument as the submitted card's
+   Marketing nudge leaving: a control in the wrong place, not a control that is
+   merely repeated.
+
+   `body.sm-guide-beside` is set only while a step modal is open (see
+   _smGuideBesideSolve), so this IS "while you are inside something" with no
+   second test to keep true. */
+/* OPACITY, NOT `display`, SO IT CAN TRAVEL WITH THE MOTION. Jaco: "el add
+   platforms aparece de golpe al final del todo." It did, and could not do
+   otherwise: it was keyed on `body.sm-guide-beside`, which the real close
+   removes at the END of the shrink, and `display` does not transition anyway.
+
+   It also stops the row reflowing. With `display: none` the pill left the flex
+   line entirely on every open and came back on every close. */
+/* IT ALSO HAS TO STOP TAKING SPACE — AND NOT DOING SO PUSHED THE WHOLE PAGE
+   DOWN 37px. Jaco: "cuando accedo desde la store page preview a content
+   questions, la content card baja como 20 o 30 píxeles." Measured: the card
+   does not change height (860 either way); its TOP goes 140 → 177.
+
+   The chain is exact. `.app-subnav` is `flex-wrap: wrap`, and at three crumbs
+   the row holds title 722 + pill 155.4 + the pill's solved 306px margin =
+   1183.4 in a 1160 row, so it wrapped to two lines — +36.5px — and the guide,
+   the dashboard and the modal all hang off that row. With `display: none` the
+   pill had freed its space; swapping to `opacity` for the fade left it there.
+
+   So it collapses as well as fades: no width, no padding, no margin. The crumbs
+   are on the left and the pill is pushed right by `margin-left: auto`, so
+   collapsing it moves nothing that is on screen. `overflow: hidden` keeps its
+   label from spilling while the box is narrower than the text. */
+body.sm-guide-beside .subnav-add-wrap {
+  opacity: 0; pointer-events: none;
+  max-width: 0; padding-left: 0; padding-right: 0; margin-right: 0;
+  overflow: hidden;
+}
+/* Coming back rides the close: same clock, same curve as the panel and the
+   dashboard, started at the beginning of the motion rather than at its end. */
+body.sm-guide-beside.sm-step-closing .subnav-add-wrap {
+  opacity: 1; max-width: 400px;
+}
+.subnav-add-wrap {
+  max-width: 400px;
+  transition: opacity .32s cubic-bezier(.22, .61, .36, 1),
+              max-width .32s cubic-bezier(.22, .61, .36, 1);
+}
+body.sm-step-closing .subnav-add-wrap {
+  transition: opacity var(--sm-close, 120ms) cubic-bezier(.4, 0, .6, 1),
+              max-width var(--sm-close, 120ms) cubic-bezier(.4, 0, .6, 1);
+}
+
+/* The platform half of a crumb — a qualifier, not a name. One step down from
+   the step it qualifies, so "Mac App Store: Content Rating" reads as one phrase
+   ending in where you are. Takes currentColor's own family rather than a hue,
+   so it recedes identically whether its crumb is the last one or not. */
+.sm-crumb-qual { color: var(--text-faint); font-weight: inherit; }
+
+/* THE × GOES, BECAUSE THIS IS NOT A DIALOG ANY MORE. Jaco: "mi duda es si el X
+   tiene sentido si ya no es realmente un modal."
+
+   A × means DISMISS — put away the thing that interrupted you. With the scrim
+   gone and a trail above it, this is a PLACE you navigated to, and a place gets
+   a way back, not a dismissal. It had also become the third exit on one box,
+   beside "Submission" in the trail and Save & Close in the footer: three
+   controls for one act is the "two marks on one object" argument with one more
+   mark on it.
+
+   Only the top-level step wears it — a flipped panel already shows a back arrow
+   instead — so this reaches exactly the case that stopped being a dialog.
+   Flag-scoped: .task-modal-close is shared by five modals and the other four
+   are still dialogs. */
+body.sm-guide-beside #submit-overlay .task-modal-close { display: none; }
+
+/* THE PLATFORM IS SAID TWICE, 40px APART — so the header gives it up. Jaco,
+   pointing at "Submission / App Store: Content Rating" sitting directly above
+   "Content Rating / App Store".
+
+   Which of the two loses is decided by what each row is FOR. The trail states
+   where you are in the app, and the platform is part of that address — it is
+   the only thing in the crumb distinguishing this Content Rating from the one
+   on Steam. The subtitle states it as a caption on a heading, which is the same
+   fact with no second job. A breadcrumb ending in the page's own title is
+   ordinary; a platform appearing twice in 40px is not.
+
+   Nothing is lost visually: the mark beside the title is that store's own
+   measured glyph (smMarkFor), so which store you are in is still said at a
+   glance, in a channel the trail does not use.
+
+   The TITLE stays. It is the page's heading, and this file's own rule is that
+   position states hierarchy while the name states the thing — the trail is
+   navigation, not a headline. */
+body.sm-guide-beside #submit-overlay .submit-modal-subtitle { display: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UN SOLO CRITERIO: LA NAVEGACIÓN VIVE ARRIBA, LA CAJA SÓLO TIENE CONTENIDO.
+
+   Jaco: "si entro a product page preview, y accedo a content questions desde
+   ahí, estoy dos levels deep, y ahora el back vive dentro del 'fake modal', con
+   lo cual volvemos a tener doble navegación. Necesito que tengamos un criterio
+   único."
+
+   Right, and the × was the same bug one level up — it got removed on the same
+   argument and the arrow was left standing because it happened to be the only
+   door into Game Center. Two systems for one act is what we were trying to
+   leave behind, not a depth we had not thought about.
+
+   THE CRITERION, AND IT DECIDES EVERY FUTURE LEVEL BY ITSELF:
+
+     · SUBIR O SALIR → siempre el trail. Un nivel, un crumb, a cualquier
+       profundidad.
+     · LA CAJA → sólo contenido y las acciones de ese contenido (Save & Close,
+       el selector de idioma). Nunca una salida.
+
+   A single back arrow was the other candidate — "una flecha atrás sin más,
+   diciendo Submission" — and it fails at exactly the depth that exposed this:
+   it names ONE destination, so three levels down it can offer the preview or
+   Submission and not both. The trail offers every ancestor at once and needs no
+   rule about which one it means.
+
+   The button stays in the DOM rather than being removed by the builder, because
+   the trail's own "back one layer" presses it — one definition of what up means,
+   and .click() works on a hidden element. It is the mechanism now, not a
+   control. */
+body.sm-guide-beside #submit-overlay .submit-modal-back { display: none; }
+
+/* The push and the pop. See app.js's "GOING DEEPER IS A PUSH" for the argument;
+   these four keyframes are only what the existing .is-flip-* classes draw while
+   the experiment is on. modalIn STAYS AT INDEX 0 of every list — dropping or
+   reordering it is the "flash al asentarse" bug, and that fix is engine-level
+   CSS semantics, not a property of the flip. */
+/* FADE-LED, WITH THE SLIDE ONLY SAYING WHICH WAY. Jaco: "faster animation,
+   puedes mover menos px laterales y que sea más fade in out."
+
+   Apple's full-width parallax was the previous version and it is right for a
+   phone, where a screen really is the whole device and the travel IS the
+   navigation. Here the panel is one column of a page that stays put, with the
+   trail above already naming the level — so a 727px journey was a big motion
+   restating something the line above had said in words. Opacity carries it now
+   and the 6/10% is direction, not distance: enough to read as a push and not
+   enough to be a journey.
+
+   THE NUMBERS ARE HALVED RATHER THAN RE-PICKED — .16/.28 → .08/.14 — so the
+   exit-to-enter ratio the original flip was tuned on survives. */
+@keyframes sm-push-exit  { from { transform: translateX(0);    opacity: 1 }
+                           to   { transform: translateX(-6%);  opacity: 0 } }
+@keyframes sm-push-enter { from { transform: translateX(10%);  opacity: 0 }
+                           to   { transform: translateX(0);    opacity: 1 } }
+@keyframes sm-pop-exit   { from { transform: translateX(0);    opacity: 1 }
+                           to   { transform: translateX(10%);  opacity: 0 } }
+@keyframes sm-pop-enter  { from { transform: translateX(-6%);  opacity: 0 }
+                           to   { transform: translateX(0);    opacity: 1 } }
+
+/* THE FRAME STAYS, THE CONTENT TRAVELS. Jaco: "ahora mismo desaparece la card
+   en sí cuando paso al siguiente nivel. Quiero que se mantenga en el sitio, y
+   que lo que desaparezca/aparezca sea el contenido de dentro."
+
+   Right, and it is what makes this a push rather than a slide of the whole box.
+   A frame that leaves with its contents is still saying "this thing goes away
+   and another arrives" — the flip's own claim, drawn sideways. A frame that
+   holds still while its contents travel says "same place, next screen", which
+   is what an iOS push is and what the trail above already states.
+
+   THE MODAL'S OWN ANIMATION IS RESTATED AS EXACTLY `modalIn`, NOT REMOVED.
+   Dropping the property would let the base .is-flip-* rule through with its
+   rotateY; writing it as `animation: none` would change the list and mint a new
+   modalIn when the class comes off, which is the "flash al asentarse" bug this
+   file spent weeks on. Written this way the modal's list is IDENTICAL to its
+   resting state, so nothing is created or destroyed on that element at all.
+
+   AND THE TRAVEL CAN FINALLY BE A REAL ONE. The 28px above was a consequence of
+   animating the box, which nothing clips — a 100% push would have sailed across
+   Shippy and the live page. The CHILDREN are clipped by the modal's own
+   `overflow: hidden`, so this is the genuine gesture: the outgoing screen eases
+   30% left under the incoming one, which comes the full width from the right.
+   Apple's parallax, in the box it belongs to.
+
+   Only the DIRECT children move, so the box, its border, its radius and its
+   shadow are the fixed frame. The header goes with them on purpose: its title
+   is the level's name and its controls belong to the level, not to the
+   frame. */
+/* AND IT IS EVERY STEP-AWARE ARM, NOT THE PAGE ONE. Jaco: "en cosas como
+   Content Rating DENTRO de la Mac App Store store preview, no debería funcionar
+   el flip, tendría que ser lo que hemos hablado antes del navigation de iOS
+   clásico, slide barrido."
+
+   Right, and the reason is the trail rather than the arm: wherever a level says
+   its own name in a line above the box, a rotation is the box claiming to be a
+   different object while the words say you are one level down inside the same
+   one. `openStorePreviewSection` applies these very classes to `.submit-modal`
+   for its own three-phase sequence, so widening the selector re-points the
+   preview's sub-sections at the push with no second code path — the flip and
+   the push were always one pair of class names.
+
+   `:not(.sm-rail)` IS LOAD-BEARING IN THE PANEL ARM. There the modal is a grid
+   and Shippy's rail is one of its direct children, so a bare `> *` would send
+   him sliding off the right-hand column every time you opened a sub-section.
+   He is not part of the level — he is beside it, and the whole argument for the
+   rail is that he STAYS while the step changes underneath him. */
+body.sm-guide-beside  .submit-modal.is-flip-exit,
+body.sm-guide-beside  .submit-modal.is-flip-enter,
+body.sm-guide-mid     .submit-modal.is-flip-exit,
+body.sm-guide-mid     .submit-modal.is-flip-enter,
+body.sm-guide-panel   .submit-modal.is-flip-exit,
+body.sm-guide-panel   .submit-modal.is-flip-enter {
+  animation: modalIn .25s cubic-bezier(.2,.8,.2,1); }
+
+body.sm-guide-beside .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-mid    .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-panel  .submit-modal.is-flip-exit  > *:not(.sm-rail) {
+  animation: sm-push-exit .08s ease-in forwards; }
+body.sm-guide-beside .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-mid    .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-panel  .submit-modal.is-flip-enter > *:not(.sm-rail) {
+  animation: sm-push-enter .14s cubic-bezier(.22,.61,.36,1) forwards; }
+body.sm-guide-beside.sm-nav-back .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-mid.sm-nav-back    .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-panel.sm-nav-back  .submit-modal.is-flip-exit  > *:not(.sm-rail) {
+  animation: sm-pop-exit .08s ease-in forwards; }
+body.sm-guide-beside.sm-nav-back .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-mid.sm-nav-back    .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-panel.sm-nav-back  .submit-modal.is-flip-enter > *:not(.sm-rail) {
+  animation: sm-pop-enter .14s cubic-bezier(.22,.61,.36,1) forwards; }
+
+/* THE FILTER, NOW THAT IT LIVES IN A 254px COLUMN. See app.js's "THE FILTER
+   MOVES TO THE PANEL". The node is the step's own, re-parented, so everything
+   here is about the new box rather than about the control. */
+/* The toggle stays in the modal and is untouched; only the sentence leaves, so
+   there is nothing to hide in there — the bar simply has one child fewer. */
+.app-guide .sw-tip-text.sm-cr-line-moved {
+  flex: none; margin: 8px 0 0;
+  font-size: 11px; line-height: 1.5; color: var(--text-dim);
+}
+/* The line answers the same question the head's count does, in the units the
+   step itself uses, so the head keeps its label and gives up its number. */
+.guide-card.sm-has-cr-line .guide-tasks-head span:last-child { display: none; }
+
+/* A FLAGGED ANSWER IS AMBER AND WRAPS, WHICH IS WHY IT IS NOT A `.gd-task`.
+   Every row in the list above is ONE LINE with a tick at the end of it; this is
+   a sentence, and a warning clipped at the column's edge is a warning you have
+   to hover to read. Reusing the task row gave two overlapping paragraphs.
+
+   It keeps the list's COLUMN — same 20px mark, same gap, same left edge — so it
+   reads as belonging to the checklist while being a different kind of thing.
+   The mark is a disc with an exclamation because a tick would be a lie and a
+   cross would say the answer is invalid: this is amber's own sentence, THIS
+   NEEDS YOU, and it is the same amber `.ios-risk-note` paints inside the step. */
+.sm-guide-risks { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+/* An eyebrow, in the guide's own label register, so the block announces what
+   kind of statement it is before you read a word of it. It is true of every row
+   under it, which is the test this file sets for a heading over part of a
+   column — otherwise the rows below have to be pushed apart to escape it. */
+.sm-risk-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .8px; text-transform: uppercase;
+  color: rgba(255, 184, 107, .75);
+}
+/* Baselines, not centres: `.guide-tasks-head`'s two spans share a line and so
+   do these. The count is brighter than its label for the same reason the
+   checklist's is — the label names the block, the number is the fact. */
+.sm-risk-count { color: #FFB86B; letter-spacing: 0; }
+/* NO DISC. A disc in this column is a thing you complete, and a warning is not:
+   it leaves when you change the answer, never when you finish it. The rail is
+   the flagged question's own, so the note in the panel and the row in the form
+   are one shape in two places. */
+/* The panel's note takes the same stripe, for the same reason the form's does —
+   one shape in two places. It KEEPS its faint ground: there it is a standalone
+   note in a column of its own, not a tint laid over a row of somebody else's
+   content, so the ground is the note's own box rather than a highlight on
+   something you are reading. */
+.sm-risk-row {
+  position: relative;
+  display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+  background: rgba(255, 184, 107, .04);
+  border: 0; border-radius: 4px;
+  margin: 0; padding: 7px 10px 7px 13px;
+  transition: background .12s;
+}
+.sm-risk-row::before {
+  content: ''; position: absolute;
+  left: 0; top: 3px; bottom: 3px; width: 3px;
+  border-radius: 3px;
+  background: rgba(255, 184, 107, .75);
+}
+.sm-risk-text { color: #FFB86B; font-size: 11px; line-height: 1.5; }
+.sm-risk-row:hover { background: rgba(255, 184, 107, .09); }
+
+/* ONE WARNING, ONE PLACE — AND THE PANEL IS THE PLACE. Jaco: "es raro que se
+   marque el mensaje en los dos sitios."
+
+   The inline `.ios-risk-note` is where these lived before the panel existed,
+   and now they are the same sentence twice within one screen. Which one loses
+   follows from the split this whole experiment rests on: the panel says what is
+   outstanding, the step says what you are answering. A warning is outstanding
+   work, so it belongs in the panel — which is also what was asked for.
+
+   And the inline note has a cost the panel's version does not: it is inserted
+   IN FLOW under the question, so answering "Yes" pushes every row below it down
+   under your own pointer. The panel states the same fact without moving the
+   form you are filling in.
+
+   Hidden rather than removed from the builder, so `smGuideBeside(false)` puts
+   them straight back. */
+body.sm-guide-beside #submit-overlay .ios-risk-note,
+body.sm-guide-mid #submit-overlay .ios-risk-note,
+body.sm-guide-panel #submit-overlay .ios-risk-note { display: none; }
+
+/* The filter, on the title's line. `margin-left: auto` is the whole placement —
+   the title row is already a flex line at `align-items: center`, so being
+   centred against "Content Rating" is a fact of the layout rather than a number
+   anyone has to keep true (the add-platform pill's own argument). */
+/* The title row shrink-wraps its own content (`flex: 0 1 auto`), so
+   `margin-left: auto` inside it only pushes the toggle past the title — it
+   stopped 415px short of the modal's edge. The row takes the free space while
+   it is carrying the toggle, and the header's `space-between` still keeps the
+   actions block on the right. */
+.submit-modal-header:has(.sm-cr-toggle-moved) .submit-modal-title-row { flex: 1; }
+.submit-modal-title-row .cr-toggle-bar.sm-cr-toggle-moved {
+  margin: 0 0 0 auto; flex: none;
+  /* Its own centring, not the row's: `.cr-toggle-bar` carries a bottom margin
+     from the band it used to live in, and a margin makes `align-items: center`
+     centre the MARGIN box — which put it 2px high on the title's line. Same
+     arithmetic as the privacy table's baseline pass. */
+  align-self: center;
+}
+.submit-modal-title-row .cr-toggle-bar.sm-cr-toggle-moved .app-subtab {
+  /* A step's chrome, not a nav: one notch down from the sub-tabs it borrows its
+     paint from, so it sits beside a 20px title without competing with it. */
+  padding: 7px 14px; font-size: 12px;
+}
+/* With both its children gone the pinned box would draw an empty bordered strip
+   above the first question. It keeps its place in the DOM — the toggle and the
+   line are taken FROM it on every render — and simply stops painting. */
+body.sm-guide-beside #submit-overlay .cr-pinned { display: none; }
+
+/* THE CARDS STEP BACK WHILE THE STEP IS OPEN. Jaco: "cuando se está
+   produciendo esa animación, el fondo del dashboard (las platform cards) que
+   estén o bien blurry o faded out."
+
+   FADED, NOT BLURRED, and the choice is not taste. A blur is a `filter`, and
+   this file has just retired one next to an element that animates a transform —
+   WebKit re-rasterises that layer and guillotines what it painted outside its
+   own box. The modal growing out of a card is exactly such a transform, so a
+   blur here would be re-introducing the bug on the frame it was built to fire.
+
+   AND IT IS NOT THE SCRIM COMING BACK. The scrim covered the VIEWPORT — the
+   nav, the trail, Shippy, everything — which is what took the guide out of play
+   and made each step grow its own help. This is `#dashboard` alone: the one
+   surface the modal stands in for. The trail above it and the panel beside it
+   stay at full strength, because they are still doing their jobs.
+
+   `.35` is this app's own value for "still true, just not what you asked for" —
+   the submitted card's cancel hold, whose note reads exactly that. The cards
+   have not stopped being true; they are not what you are looking at.
+
+   POINTER-EVENTS GO WITH IT, and that is a bug fix rather than a flourish.
+   `#submit-overlay` is `pointer-events: none` under this experiment, so the
+   dashboard behind a modal has been LIVE this whole time: a press aimed past
+   the panel opened a second step under the one you were reading. Dimmed and
+   inert is one statement — this is not what you are pointing at.
+
+   The curve and the duration are the open animation's own (SM_OPEN_FROM_MS), so
+   the cards recede at exactly the rate the modal grows: one motion, two halves.
+   Coming back is the same, which is right for the reverse of one gesture. */
+body.sm-guide-beside #dashboard {
+  opacity: .35;
+  pointer-events: none;
+}
+#dashboard {
+  transition: opacity .32s cubic-bezier(.22, .61, .36, 1);
+}
+
+/* The cards come back up WITH the shrink, not after it — see app.js's "AND IT
+   GOES BACK THE SAME WAY". Three classes, so it outranks the dim's two.
+
+   AND ON THE CLOSE'S OWN CLOCK, NOT THE OPEN'S. Jaco: "queda feo el overlay
+   extraño cuando las dos cosas están luminosas — lo que se cierra y lo que está
+   surgiendo debajo."
+
+   The transition was one rule for both directions, so leaving ran at the open's
+   320ms and the open's easing while the panel left in 240 on a different curve.
+   The cards were therefore already bright with the panel still solid on top of
+   them: two full-strength surfaces overlapping, which is the one thing a
+   dissolve must not look like. Matched to SM_CLOSE_TO_MS and the close's own
+   easing, the two are one motion read in reverse — and the panel's own fade now
+   ends at zero rather than at .35, so what is underneath arrives into empty space
+   rather than under a ghost. */
+body.sm-guide-beside.sm-step-closing #dashboard {
+  opacity: 1;
+  /* The pop's own duration, handed over in `--sm-close` (app.js) so the two
+     cannot drift: the cards must be back exactly as the panel finishes
+     leaving, not after it. */
+  transition: opacity var(--sm-close, 120ms) cubic-bezier(.4, 0, .6, 1);
+}
+
+
+/* THE TRAIL LEAVES WITH THE PANEL, AND ONLY ITS TAIL HAS TO. Jaco: "cuando
+   cierro una pestaña, no deja de desaparecer la crumb hasta que ya se ha
+   reducido del todo."
+
+   Same cause as the add pill: the crumbs are replaced by the plain title when
+   the close really lands, which is 240ms after the motion starts.
+
+   WHAT FADES IS EVERYTHING AFTER "Submission", and that is the whole trick.
+   The first crumb IS the resting title — same word, same type, and its ink
+   measured on the same x (73 and 73, verified when the crumbs became pills). So
+   the tail dissolves while the panel does, the first crumb never moves, and the
+   swap back to a plain label at the end lands under a word that is already
+   there. No cross-fade, no flicker, nothing to line up. */
+.sm-crumb, .sm-crumb-sep { transition: opacity .32s cubic-bezier(.22, .61, .36, 1); }
+body.sm-step-closing .sm-crumb:not(:first-child),
+body.sm-step-closing .sm-crumb-sep,
+body.sm-step-closing .sm-hd-back,
+body.sm-step-closing .sm-hd-right {
+  opacity: 0;
+  transition: opacity var(--sm-close, 120ms) cubic-bezier(.4, 0, .6, 1);
+}
+/* Arriving is the same statement in reverse, and it must fire ONLY on the paint
+   that creates the trail — `_smPaintBreadcrumb` runs on every render, so an
+   unconditional animation would replay the entrance every time you answered a
+   question. `.is-entering` is set only when the title had no crumbs before. */
+.app-subnav-title.is-entering .sm-crumb:not(:first-child),
+.app-subnav-title.is-entering .sm-crumb-sep { animation: sm-crumb-in .32s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes sm-crumb-in { from { opacity: 0 } to { opacity: 1 } }
+
+/* The question a warning is about, marked on the rail it already has. See
+   app.js's "AND THE QUESTION THAT CAUSED IT IS MARKED IN THE FORM". Scoped to
+   the experiment, and it cannot collide with validation's own amber: that one
+   only paints while `.is-validating` is on an unanswered row, and a flagged row
+   is by definition answered. */
+body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-flagged,
+body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-flagged,
+body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged {
+  /* A STRIPE, NOT A RAIL, AND NO WASH. Jaco: "no me gusta ese tipo de rail;
+     prefiero una stripe con rounded corners y sin el highlight naranja, al
+     menos en la zona del content."
+
+     The wash goes because it tints a whole row of a form you are reading —
+     twenty-four rows at the same weight and one of them faintly orange reads as
+     a defect in the row rather than as a mark beside it. The stripe says the
+     same thing without touching the content.
+
+     It is a `::before` rather than the border it replaces, because a border
+     cannot round its own ends independently: `.ios-q-row` carries
+     `border-radius: 0 4px 4px 0` for the wash's sake and the left edge would
+     have stayed square. The 3px transparent border STAYS — it is what holds the
+     text column where it is — and the stripe is painted over it at `left: -3px`,
+     so this costs no layout at all. Inset 3px top and bottom, so it reads as a
+     mark laid beside the row rather than as its edge. */
+  position: relative;
+  background: none;
+}
+body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-flagged::before,
+body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-flagged::before,
+body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged::before {
+  content: ''; position: absolute;
+  /* ON THE SECTION TITLES' COLUMN. Jaco: "que en el caso de content card, esté
+     alineada con el título de las subsecciones."
+
+     `.ios-q-row` is pulled `margin-left: -11px` and pays it back as a 3px
+     border plus 8px of padding — machinery the amber validation rail needs so
+     that lighting a row does not indent its text. A stripe drawn on that border
+     therefore sits 11px LEFT of the column FEATURES and MATURE THEMES start on.
+     `left: 8px` is that 11 minus the 3 the padding box already excludes, so the
+     stripe's left edge lands exactly on the section titles' x.
+
+     And it costs nothing to put it there, because the questions themselves are
+     indented a further 12px inside the column (`.ios-q-label`'s own padding —
+     see "THE INDENT IS ON THE LABEL, NOT THE ROW"). The stripe lives in that
+     gutter: on the titles' column, clear of every word. */
+  left: 8px; top: 3px; bottom: 3px; width: 3px;
+  border-radius: 3px;
+  /* A touch stronger than the rail was: with no wash under it, the stripe is
+     the whole of the mark. */
+  background: rgba(255, 184, 107, .75);
+}
+
+/* THE SECOND SEVERITY, IN THE HUE THE APP ALREADY USES FOR IT. `#ff3b78` is
+   `.g-tip--danger`'s, the red pill's and the cancel hold's — an answer the
+   store will not take is WRONG, which is the one thing red means here. Same
+   stripe, same box, same geometry as the amber note: severity changes the
+   colour and nothing else, so the two read as one kind of statement at two
+   weights rather than as two designs. */
+.sm-risk-row.is-danger { background: rgba(255, 59, 120, .05); }
+.sm-risk-row.is-danger::before { background: rgba(255, 59, 120, .8); }
+.sm-risk-row.is-danger .sm-risk-text { color: #FF7FA6; }
+.sm-risk-row.is-danger:hover { background: rgba(255, 59, 120, .10); }
+/* The head takes the stronger of the two, because a block containing a refusal
+   is not merely "what this commits you to" — it is answered by the ROWS, and
+   the eyebrow must not undersell them. */
+.sm-guide-risks:has(.is-danger) .sm-risk-head { color: rgba(255, 127, 166, .8); }
+.sm-guide-risks:has(.is-danger) .sm-risk-count { color: #FF7FA6; }
+
+/* And the question that cannot ship wears the same red stripe in the form. */
+body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-danger,
+body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-danger,
+body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-danger { position: relative; background: none; }
+body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-danger::before,
+body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-danger::before,
+body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-danger::before {
+  content: ''; position: absolute;
+  left: 8px; top: 3px; bottom: 3px; width: 3px;
+  border-radius: 3px;
+  background: rgba(255, 59, 120, .8);
+}
+
+/* AND THE PILL GOES BACK TO BLUE. Jaco: "no deberías marcar en rojo las pills
+   de respuesta para no meter más cacofonía."
+
+   Right, and it is the same removal the amber made two steps earlier. That
+   answer was being marked THREE times — the pill's own fill, the row's stripe,
+   and a note in the panel — and the pill is the worst of the three at it: red
+   INSIDE a control says the control is wrong, when what is wrong is the
+   consequence of choosing it. "Infrequent" is a perfectly valid thing to click;
+   the app just cannot ship with it.
+
+   So the marks split by what they are about: the PILL says what you picked, in
+   the selection blue every other answer in this app wears; the STRIPE says this
+   row is the problem; the PANEL says why and what it costs. One fact per
+   object.
+
+   `is-sel-unrated` REPLACES `is-sel-frequent` in the markup (both are (0,2,0),
+   and that rule's own note says source order has been paid for twice here), so
+   it cannot simply be dropped — it is repainted instead, with the three values
+   `.is-sel-frequent` carries. Scoped to the experiment, so the blocked Save &
+   Return and every other surface keep the red. */
+/* EVERY ARM THAT HAS THE WARNINGS, NOT JUST THE PAGE ONE. Jaco, on the panel
+   arm: "little bug while clicking on Frequent" — one row blue and the one below
+   it red, because this was scoped to `sm-guide-beside` and the other two arms
+   fell back to the red pill.
+
+   The rule it states is about the MARKS, not about the layout: the pill says
+   what you picked, the stripe says which row is the problem, the panel says why.
+   So it applies wherever those other two exist — and `off` keeps the red,
+   correctly, because there the pill is the only signal there is. */
+body.sm-guide-beside #submit-overlay .intensity-btn.is-sel-unrated:not(.ai-confident),
+body.sm-guide-mid #submit-overlay .intensity-btn.is-sel-unrated:not(.ai-confident),
+body.sm-guide-panel #submit-overlay .intensity-btn.is-sel-unrated:not(.ai-confident) {
+  background: var(--pill-on-bg);
+  border-color: transparent;
+  color: var(--pill-on-color);
+}
+body.sm-guide-beside #submit-overlay .intensity-btn.is-sel-unrated:not(.ai-confident):hover,
+body.sm-guide-mid #submit-overlay .intensity-btn.is-sel-unrated:not(.ai-confident):hover,
+body.sm-guide-panel #submit-overlay .intensity-btn.is-sel-unrated:not(.ai-confident):hover {
+  background: var(--pill-on-bg);
+  color: var(--pill-on-color);
+}
+/* AND THE INFERRED ONE IS VIOLET ALL THROUGH, which is the other half of the
+   same fix. `.ai-confident` sets the RING for every selected intensity, but the
+   fill and the ink are set per state — and `is-sel-unrated` was never in that
+   list, so excluding it above dropped it back to the red fill under a violet
+   ring: two colours for one answer, which is what "stroke rojizo" was looking
+   at all along.
+
+   Violet proposes, blue confirms: an unrated answer Shipmate inferred is a
+   PROPOSAL like any other, so it wears the proposal's colour completely and
+   turns blue the moment you press it. */
+body.sm-guide-beside #submit-overlay .intensity-btn.is-sel-unrated.ai-confident,
+body.sm-guide-mid #submit-overlay .intensity-btn.is-sel-unrated.ai-confident,
+body.sm-guide-panel #submit-overlay .intensity-btn.is-sel-unrated.ai-confident {
+  background: var(--pill-ai-bg);
+  border-color: transparent;
+  color: var(--pill-ai-color);
+}
+
+/* The guide's hero, while the panel is a step's own checklist. See app.js's
+   "THE HERO GOES WHILE THE PANEL IS A STEP'S CHECKLIST". The eyebrow and the
+   face toggle stay: those name the CARD and switch it, which is still true. */
+.guide-card.sm-step-guide .guide-title,
+.guide-card.sm-step-guide .guide-sub { display: none; }
+/* THE EYEBROW COMES BACK, AND THE ARGUMENT FOR HIDING IT WAS THE WRONG WAY
+   ROUND. Jaco: "I think the Shippy panel needs a title still, Shippy Guide
+   sounds good."
+
+   It used to go on the reasoning that it names the CARD and the card no longer
+   needs introducing once it is attached to a step with the octopus beside it.
+   That holds on the dashboard, where the column is the only thing in its lane
+   and has been there all along. Inside a step it is the opposite: the panel
+   ARRIVES, in a modal, beside a body that is about something else entirely, and
+   every other line in it is about the step — the title names the level and the
+   rows are its parts. With the eyebrow gone there was nothing saying whose
+   column this is, which is the one thing a panel that appears has to say.
+
+   What it says changes with it — `guide.eyebrow.list` / `.cal` name the FACE
+   (Shippy Checklist / Shippy Calendar), and the face toggle is hidden here, so
+   naming a face you cannot switch is a label for a control that is not there.
+   It is the panel's own name in a step: Shippy Guide. Written in JS beside the
+   title and the sub, because those three are one header and one post-pass. */
+/* The moved Content Rating line is inserted after `.guide-sub`, so with the sub
+   hidden it becomes the first thing under the eyebrow and takes the margin the
+   hero was paying. */
+/* First in the column, so the panel opens with the one fact that changes. */
+.guide-card.sm-step-guide .sw-tip-text.sm-cr-line-moved { margin: 0 0 14px; }
+
+/* The step body's spotlight. See app.js's "ARRIVING SOMEWHERE FROM SHIPPY DIMS
+   EVERYTHING ELSE" — the platform card's own mechanism at the locator's
+   settings. `.35`, not the card's `.18`: those rows are still true, they are
+   just not what you asked for. No `pointer-events: none`, because this is a
+   locator and not a prerequisite. The transition is the card's own, so one
+   dim does not run at two speeds in one app. */
+.sm-cr-spot .ios-q-row,
+.sm-cr-spot .ios-content-step-label,
+.sm-cr-spot .ios-q-divider,
+.sm-cr-spot .ios-followup { transition: opacity .22s ease; }
+.sm-cr-spot.is-spotlight .ios-q-row:not(.is-spotlit),
+.sm-cr-spot.is-spotlight .ios-content-step-label:not(.is-spotlit),
+.sm-cr-spot.is-spotlight .ios-q-divider:not(.is-spotlit),
+.sm-cr-spot.is-spotlight .ios-followup:not(.is-spotlit) { opacity: .35; }
+
+/* The risk states have to beat `.is-done`, which is the same (0,2,0) and sits
+   sixteen lines above them — source order alone would hand a finished step its
+   green back. Three classes, and scoped to the experiment. */
+/* WHITE INK ON THE RED, and it is the pinned bar's own finding: a cross is a
+   denser mark than a check — four stroke ends and a crossing at the centre —
+   so it needs the maximum separation from whatever it sits on. That bar's bad
+   disc was changed from `#2E0713` to white for exactly this, and the card's
+   disc is the same mark in the same situation. */
+/* NOT SCOPED TO THE EXPERIMENT, AND IT CANNOT BE. The card lives on the
+   dashboard, where `body.sm-guide-beside` is by definition absent — that class
+   is only on while a step modal is open. The first version carried it and the
+   white never applied: measured `rgb(255,59,118)` on a disc that was supposed
+   to be white.
+
+   It is safe unscoped because `_smPaintStepRisks` is the ONLY thing in this
+   repo that adds these classes (two `remove`, zero `add`, before it), so no
+   other surface can reach this rule; and `smGuideBeside(false)` stops the
+   painter, which reverts it. Three classes on the done arm so it beats
+   `.ios-step-num.is-done`, and later in the file than the base rule for the
+   undone one. */
+/* SOLID, WITH THE INK DARK — IT IS `.is-done` IN THE OTHER HUE. Jaco: "el rojo
+   debería ser más opaco, y la X queda feísima en blanco; quizás en el fondo del
+   platform card mejor."
+
+   Both halves are one correction. A 16% wash is what a STATE wears on this
+   card; a verdict wears a fill — `.ios-step-num.is-done` is solid
+   `rgb(49,220,128)` with `rgb(15,42,26)` ink, and "this cannot ship" is a
+   verdict of exactly the same kind as "this is finished", pointing the other
+   way. So the red takes the green's own recipe rather than a new one: the hue
+   at full strength, and the mark in a darkened version of that hue.
+
+   `#2E0713` RATHER THAN THE CARD'S LITERAL `#141414`, and that is the one place
+   this departs from what was asked. A neutral dark on a saturated fill reads as
+   a hole punched THROUGH the disc; a dark tinted with the disc's own hue reads
+   as the disc's shadow — which is precisely the relationship `rgb(15,42,26)`
+   has with the green, and the value the app already carries for this (it is
+   what `.spp-pin-tick.is-bad` was built with). Same colour, one step more
+   deliberate.
+
+   The white this replaces came from the pinned bar's "a cross is denser than a
+   check and needs maximum separation" — true of a 15px disc on a light bar, and
+   wrong here on a 22px solid one. THE TWO CROSSES NOW DISAGREE, which is worth
+   settling: the bar's should probably come down to this as well. */
+.ios-step-num.is-risk-high,
+.ios-step-num.is-done.is-risk-high {
+  background: #ff3b78; color: #2E0713;
+}
+.ios-step-num.is-done.is-risk-warn {
+  background: rgba(255, 184, 107, .16); color: #FFB86B;
+}
+
+/* THE MONTH IS A DASHBOARD QUESTION. Jaco: "cuando estoy con modales de
+   responder cosas, omíteme el toggle calendar de shippy, sólo tiene sentido
+   cuando estoy en la platforms view."
+
+   Right: the calendar face answers "when do I hear back, and what until then",
+   which is what `_doFinalSubmit` flips the guide to at the moment of sending.
+   Inside a step the panel IS that step's checklist — a month floating beside a
+   form you are filling in answers nothing you are doing.
+
+   The eyebrow stays and still names the face, so the card is not left unlabelled;
+   what goes is the control for a face that has nothing to say here. */
+.guide-card.sm-step-guide .guide-faces { display: none; }
+
+/* THE HEAD HAS NOTHING LEFT TO SAY IN CONTENT RATING. Jaco: "quita la palabra
+   'Submission' del shippy panel en content rating, no dice nada."
+
+   It is `.guide-tasks-head`, a label and a count — and in this step the count
+   is already hidden (the moved line states it in the units Apple's own step
+   counts in, and two counters with different denominators in one 254px column
+   read as a contradiction). What is left is the word SUBMISSION over seven
+   groups of Content Rating: the name of the VIEW, printed above rows that
+   belong to a step, with the trail saying the same word two inches higher.
+
+   Scoped to `.sm-has-cr-line`, so it only goes where the count went. On the
+   Product Page Preview face the head still carries a real "5/8" and stays —
+   though its label is wrong there too, and that is the next thing to settle. */
+/* AND IT IS WRONG IN EVERY STEP, WHICH IS WHAT SETTLES IT. The note above
+   scoped this to `.sm-has-cr-line` and left the label as "the next thing to
+   settle", because at the time only one other step had a contextual panel.
+   Now all five do, and the head measured the same way in each: "Submission
+   0/3" over App Privacy's three parts, "Submission 4/8" over the preview's
+   eight sections. The word names the VIEW and the count counts the STEP — one
+   line disagreeing with itself, with the trail saying "Submission" two inches
+   higher and the title right underneath naming the level properly.
+
+   So the head goes wherever the panel is a step's own, and what replaces it is
+   the pair that was already there: the title says where you are and the sub
+   says what the rows do. */
+.guide-card.sm-step-guide .guide-tasks-head { display: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   A PAGE IS AS LONG AS IT NEEDS TO BE. Jaco: "en esta versión el modal no
+   debería tener scroll, porque será lo largo que tenga que ser la página."
+
+   Right, and it is the same sentence as the breadcrumb and the missing ×: this
+   stopped being a dialog. A dialog is a fixed box with its own scrollbar
+   because it is laid OVER a page; a page has one length and one scroll.
+
+   WHAT IT ACTUALLY TAKES IS THE OVERLAY SCROLLING, not the modal growing —
+   `#submit-overlay` is `position: fixed; inset: 0`, so content taller than the
+   viewport inside it is simply unreachable. The modal goes to its natural
+   height and the overlay becomes the scroller.
+
+   AND THAT TURNS OUT TO BE BETTER THAN A TRUE PAGE SCROLL: the trail and Shippy
+   sit OUTSIDE the overlay, so they hold still while the step's own content
+   moves — which is what a breadcrumb and a sidebar are for. A real page scroll
+   would carry both away.
+
+   TWO STEPS ARE EXCLUDED, and not by preference. The Mac Product Page Preview
+   hands scrolling to `.mac-spp-main` because it is two columns with a rail that
+   must not move, and the privacy table owns its own scroller so the preset
+   chips stay put — both are designs whose whole argument is an inner scroll.
+   Anything else is an ordinary form and is a page.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.sm-guide-beside #submit-overlay:has(.submit-modal) {
+  overflow-y: auto;
+  /* THE SCROLLPORT STARTS WHERE THE PAGE DOES, AND IT HAS TO. As a scroller the
+     overlay's own `padding-top` scrolls away with everything else, so the step
+     rode up over the trail and the top bar — measured, the first question was
+     drawn at y=45 with `.app-subnav-title` still sitting at 84 underneath it.
+     Moving the box's TOP edge instead of padding it means content cannot cross
+     that line at any scroll position: the trail stays readable, which is the
+     whole reason it is up there. */
+  top: var(--sm-guide-top, 24px);
+  padding-top: 0;
+  /* 50px OF AIR AFTER THE CARD, AND IT IS NOT DECORATION. Jaco: "el scroll
+     hasta abajo debería dejar 50px de espacio libre después de la content card,
+     ahora el botón final de Done está como tapado."
+
+     Two things were sitting on that edge at once: the app's own fixed footer
+     bar, and this overlay's bottom fade — 80px of gradient hanging over the
+     last thing in the page, which at full scroll is the one control the step
+     ends with. 24 was not enough to clear either. 50 is his number and it is
+     also the fade's own quiet half: past 50px the ramp is under 15% and the
+     button is read against the page rather than through it.
+
+     100 IN THE END, HIS CALL AFTER SEEING 50 — and the reason 50 still looked
+     tight is that the 80px fade eats most of it: at 50 the button's own bottom
+     edge sat INSIDE the gradient (measured −9px), faint enough not to tint it
+     and close enough to read as the page ending on top of it. At 100 the whole
+     control clears the fade's full height with room to spare, so the end of the
+     step is air rather than a boundary. */
+  padding-bottom: 100px;
+}
+body.sm-guide-beside #submit-overlay .submit-modal {
+  height: auto;
+  max-height: none;
+}
+body.sm-guide-beside #submit-overlay .submit-modal .submit-modal-scroll {
+  overflow: visible;
+}
+/* AND THE TWO INNER SCROLLERS LET GO TOO. Jaco: "hazme lo mismo en todos los
+   modales, en todos los steps."
+
+   These were the two exclusions, and the reason for each was real: the Mac
+   Product Page Preview hands scrolling to `.mac-spp-main` so its sidebar rail
+   never moves, and the privacy table owns `.pvt-scroll` so the preset chips
+   stay put while you work down the groups. Both are designs whose argument is
+   an inner scroll — and both arguments are answers to a question the page no
+   longer asks. There is one scroll now; a box that keeps its own is a scroller
+   inside a scroller, which is the one arrangement guaranteed to feel wrong.
+
+   What each gives up is stated rather than hidden: the Mac sidebar scrolls away
+   with the page, and the privacy presets scroll away with the table. If either
+   turns out to be load-bearing the fix is `position: sticky` against the
+   overlay, not a second scrollbar. */
+body.sm-guide-beside #submit-overlay .mac-spp-main { overflow: visible; }
+body.sm-guide-beside #submit-overlay .pvt-scroll {
+  overflow: visible; max-height: none; flex: none;
+}
+/* `min-height: 0` ON THOSE BOXES WAS ADDED HERE AND IMMEDIATELY REMOVED, and
+   it is worth the line: it collapsed every step. `.submit-modal-body-wrap` is
+   `flex: 1 1 0%`, and in an AUTO-height flex column an item with a zero basis
+   contributes its min-content size — which is exactly what the default
+   `min-height: auto` is doing. Setting it to 0 takes that away, leaving nothing
+   to contribute: Content Rating measured 207px tall against its real 1629, and
+   Upload Build 155. The flex chain needs no help at all here; releasing the
+   overflow is the whole change. */
+/* Both fades go with the scroller they belonged to: a gradient over a boundary
+   that no longer exists is a shadow claiming content that is not there. */
+body.sm-guide-beside #submit-overlay .submit-modal .submit-modal-fade-top,
+body.sm-guide-beside #submit-overlay .submit-modal .submit-modal-fade-bottom {
+  display: none;
+}
+
+/* The page's own two fades, at the overlay's scrollport edges. See app.js's
+   "THE PAGE DISSOLVES AT BOTH ENDS". `position: fixed` because the overlay IS
+   the scroller — an absolutely positioned child of a scroll container is laid
+   out against its content box and scrolls away with it, which is the trap the
+   Mac preview's own fades are written under. The overlay's top edge is
+   `--sm-guide-top`, so the top fade hangs from exactly the line the trail sits
+   above. */
+body.sm-guide-beside #submit-overlay::before,
+body.sm-guide-beside #submit-overlay::after {
+  content: ''; position: fixed; left: 0; right: 0;
+  z-index: 6; pointer-events: none;
+  opacity: 0; transition: opacity .3s ease;
+}
+/* THE COLOUR FOLLOWS THE GROUND, AND THE GROUND IS NOT `--panel`. Jaco: "el
+   corte es abrupto, pasa de sólido negro a directamente visible en vez de un
+   fade."
+
+   The stops were `.submit-modal-fade-*`'s, which are `rgba(20,20,20,…)` because
+   inside the modal they sit on `--panel`. Out here the page above the line is
+   `--bg`, `rgb(10,10,10)` — measured — so the fade was painting a strip TEN
+   POINTS LIGHTER than what it covers: a glow with a hard edge above it, not a
+   dissolve. Same mistake the Mac preview's own fade records when its container
+   was removed and its stops had to be re-solved.
+
+   AND IT REACHES A TRUE 1.0. The old top stop was .95, so content never quite
+   stopped existing before the edge — which is the other half of what reads as a
+   cut.
+
+   NINE STOPS ON A RAISED COSINE, not three: `(1+cos(πt))/2` is flat at both
+   ends and steepest in the middle, so there is no corner where the ramp starts
+   and none where it lands. Three stops put all of their bend in two places,
+   which the eye finds. 50px at the top, his number; the bottom keeps its 80 and
+   the same profile scaled to it — it covers a footer bar rather than a line of
+   text and has further to travel. */
+body.sm-guide-beside #submit-overlay::before {
+  top: var(--sm-guide-top, 24px); height: 50px;
+  background: linear-gradient(to bottom,
+    rgba(10,10,10,1.0) 0.0px,
+    rgba(10,10,10,0.9619) 6.2px,
+    rgba(10,10,10,0.8536) 12.5px,
+    rgba(10,10,10,0.6913) 18.8px,
+    rgba(10,10,10,0.5) 25.0px,
+    rgba(10,10,10,0.3087) 31.2px,
+    rgba(10,10,10,0.1464) 37.5px,
+    rgba(10,10,10,0.0381) 43.8px,
+    rgba(10,10,10,0.0) 50.0px);
+}
+body.sm-guide-beside #submit-overlay::after {
+  bottom: 0; height: 80px;
+  background: linear-gradient(to top,
+    rgba(10,10,10,1.0) 0.0px,
+    rgba(10,10,10,0.9619) 9.9px,
+    rgba(10,10,10,0.8536) 20.0px,
+    rgba(10,10,10,0.6913) 30.1px,
+    rgba(10,10,10,0.5) 40.0px,
+    rgba(10,10,10,0.3087) 49.9px,
+    rgba(10,10,10,0.1464) 60.0px,
+    rgba(10,10,10,0.0381) 70.1px,
+    rgba(10,10,10,0.0) 80.0px);
+}
+body.sm-guide-beside #submit-overlay.is-scrolled::before { opacity: 1; }
+body.sm-guide-beside #submit-overlay.is-scrollable-down::after { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ONE HEADER: THE TRAIL IS THE TITLE. See app.js's "THE TRAIL IS THE TITLE
+   NOW". The panel's own icon and title go with it — they were the louder half
+   of a duplication, and with the card morphing into the panel a second
+   introduction is the first thing that reads as redundant.
+   ══════════════════════════════════════════════════════════════════════════ */
+.app-subnav.sm-crumbs .app-subnav-title {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0; border: 0;
+  /* NO SIZE OF ITS OWN. Jaco: "que las palabras de título de arriba tengan el
+     mismo tamaño que el de Submission, no inventes."
+
+     `.app-subnav-title` is already 15/500 and that IS this row's title size —
+     the word "Submission" it replaces. The 21 was mine, invented to make the
+     trail read as a heading once it absorbed the panel's; the trail does not
+     need to be bigger to be the title, it needs to be the only one, and it
+     already is. Everything here now inherits. */
+  color: var(--text);
+}
+/* `.sm-hd-back` IS GONE — the chevron lives inside the platform pill now, so a
+   40px square with no word is no longer one of this row's objects. */
+
+/* THE PLATFORM PILL IS GONE — see "ONE BUTTON, AND WHAT IT SAYS IS WHERE IT
+   GOES" at the end of this file. It was a switcher, then an inert label, then
+   the back control, and in each shape it was one row carrying two jobs: a name
+   for where you are and a door out. The door won and took the row with it; the
+   platform is a mark on the picker now. Its rules are DELETED rather than left
+   sitting here, because a rule that outlives its markup does not go inert — it
+   waits for the next element that happens to match. This file has one of those
+   on record already: `.sm-hd-plat:hover .sm-hd-plat-name { visibility: hidden }`
+   stayed behind when its partner left, and hovering the platform made it
+   VANISH. */
+/* The chevron: points LEFT, so the control reads as a direction and not as a
+   menu — the picker's own chevron points down for exactly the opposite
+   reason. Shared with `.sm-hd-back`, which is its only consumer now. */
+.sm-hd-outchev { display: flex; width: 16px; height: 16px; color: var(--text-dim); }
+.sm-hd-outchev svg { width: 100%; height: 100%; }
+/* The mark follows the line it leads — 18 against 15px type, overshooting it
+   slightly for the guide's own reason: a mark the exact height of its label
+   reads smaller, because letters have no counters to lose. */
+.sm-hd-mark { display: flex; width: 18px; height: 18px; }
+.sm-hd-mark svg { width: 100%; height: 100%; }
+
+/* The step: where you are, so it is a statement and draws no box. An ancestor
+   step (the one above a flip) is a link and lifts on approach. */
+.sm-hd-step { font: inherit; color: var(--text); }
+.sm-hd-step.is-link {
+  background: none; border: 0; padding: 0; color: var(--text-dim);
+  cursor: pointer; transition: color .12s;
+}
+.sm-hd-step.is-link:hover { color: var(--text); }
+.app-subnav.sm-crumbs .sm-crumb-sep { color: var(--text-faint); opacity: .55; }
+
+
+/* AND THE PANEL STOPS INTRODUCING ITSELF. The mark and the title move up into
+   the header; the row stays because it still carries the language picker and
+   the step's own filter, which are controls rather than a name. */
+body.sm-guide-beside #submit-overlay .submit-modal-hicon,
+body.sm-guide-beside #submit-overlay .submit-modal-head-titles { display: none; }
+
+/* The step picker. A ghost trigger like the rest of this header's chrome — no
+   fill until you approach — with the caret that says a press opens something.
+   See app.js's "THE STEP CRUMB IS A PICKER". */
+/* THE PROJECT CHIP'S FORMAT, not an approximation of it. Jaco: "usa el mismo
+   formato de botón con chevron que el de 'My Game'." Same `--chip-fill`, same
+   `--pill-radius`, the same masked ring — which it gets by joining that
+   selector list at the end of this file rather than redrawing the gradient,
+   the list's own stated reason — and the same `.bar-chev` rotating on open.
+
+   THE HEIGHT IS THE BACK BUTTON'S 40, NOT THE CHIP'S 42. The chip is 42 because
+   it stacks cover art over two lines (6 + 30 + 6, its own note) and this holds
+   one line — so the number has to come from somewhere, and the only other real
+   box in this row is the back button's square. Two controls in one line at two
+   heights is the thing that makes a row look assembled rather than designed;
+   at 40 they are one band, and the row's height stops depending on which of
+   them happens to be taller.
+
+   `height` with the padding left to centre it, rather than padding arithmetic:
+   the label is one line of 15px mono and the box is a fixed square's worth of
+   it, so stating the height directly is the thing that cannot go stale when
+   the type moves. */
+.sm-hd-steppick {
+  --ring-top: var(--chip-stroke-top); --ring-bottom: var(--chip-stroke-bottom);
+  position: relative;
+  display: flex; align-items: center; gap: 9px;
+  height: 40px;
+  background: var(--chip-fill); border: 0; border-radius: var(--pill-radius);
+  padding: 0 13px; margin: 0;
+  font-family: var(--mono); font-size: var(--nav-tab-fs); font-weight: 500;
+  color: var(--text); cursor: pointer; white-space: nowrap;
+  transition: background .12s;
+}
+.sm-hd-steppick:hover { background: var(--chip-fill-hover); }
+/* The chevron's rotation belongs to the state, exactly as it does on the chip:
+   the glyph is already a DOWN chevron, so closed is unrotated. */
+.sm-hd-steppick .bar-chev {
+  display: flex; margin-left: 2px;
+  transform: rotate(0deg); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
+}
+.sm-hd-steppick.is-open .bar-chev { transform: rotate(180deg); }
+
+/* The menu is the app's own dropdown ground, hung under its trigger. */
+.sm-hd-menu {
+  /* `.loc-dropdown` is `display: none` by default — it is shown by an `is-open`
+     class on ITS OWN wrapper in Localization. This menu is created and removed
+     rather than toggled, so being in the DOM is what "open" means and it has to
+     say so. Measured 0 wide before this line, with every row correctly built
+     inside it. */
+  display: block;
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 320;
+  min-width: 100%; width: max-content; padding: 6px;
+}
+.sm-hd-menu-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: 0; border-radius: 8px; padding: 7px 10px;
+  font-family: var(--mono); font-size: 13px; color: var(--text-dim);
+  cursor: pointer; text-align: left; transition: background .12s, color .12s;
+}
+.sm-hd-menu-row:hover { background: var(--surface-hover, rgba(255,255,255,.06)); color: var(--text); }
+.sm-hd-menu-row.is-on { color: var(--text); }
+/* The disc is `.ios-step-num` itself, sized through `--pico` — the documented
+   lever — so its pending fill, its green, its risk states and its 38.3% ink
+   ratio are the card's and cannot drift from it. */
+.sm-hd-menu-disc { --pico: 18px; flex: 0 0 auto; font-size: 10px; }
+.sm-hd-menu-disc svg { width: 18px; height: 18px; }
+
+
+/* The right end of the row: the step picker in Add platform's own slot, on the
+   same solved gap so the two land on one column. */
+.sm-hd-right {
+  margin-left: auto;
+  margin-right: var(--subnav-add-gap, calc(var(--guide-w) + var(--split-gap)));
+  display: flex; align-items: center;
+}
+/* Its menu hangs from the right edge, because its trigger is at one. */
+.sm-hd-right .sm-hd-menu { left: auto; right: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ARM `mid` — THE OLD MODAL, WITH THE SCRIM GONE AND SHIPPY STEP-AWARE.
+   The one-line version of this session's founding insight: the problem was the
+   wash, not the dialog. Everything else the app already had stays exactly as it
+   was, which is the point — this arm exists to be compared, not improved.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.sm-guide-mid #submit-overlay {
+  background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
+  pointer-events: none;
+}
+body.sm-guide-mid #submit-overlay .submit-modal {
+  pointer-events: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+}
+body.sm-guide-mid .app-guide { z-index: 101; }
+/* The scrim's one real job, done narrowly: the cards say they are paused
+   without the nav, the guide and the trail being dimmed with them. */
+body.sm-guide-mid #dashboard { opacity: .35; pointer-events: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ARM `panel` — SHIPPY INSIDE THE MODAL, SCRIM AND ALL.
+   See app.js's "THE FOURTH ARM". The modal becomes two columns and grows by the
+   rail's width: ONE rounded box holding both, never a wing stuck to the side —
+   two boxes with their own radii meet at the seam and cut a notch out of each
+   other, which is the thing the reference's own note is complaining about.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* THE RAIL OPENS TO ONE SIDE — THE CONTENT DOES NOT MOVE. Jaco: "lo que me
+   molesta es que las letras de las preguntas se vuelven locas; debería ser una
+   operación limpia de expansión a un lado, sin re-sizear el modal de contenido."
+
+   Measured, the content column never changed width: 678 with the rail and 678
+   without, questions 495 either way. What moved was the whole box — the overlay
+   centres it, so adding 290px of rail slid the form 145px LEFT. Nothing
+   reflowed; everything translated, which at reading size looks exactly like it
+   did.
+
+   So the negative margin takes the rail out of the centring sum: the flex
+   centre is computed as if the modal were only its content column, and the rail
+   extends to the right of it. Opening and closing the panel then costs the form
+   zero movement, which is the whole ask.
+
+   The cost, stated: on a viewport narrow enough that the rail cannot fit to the
+   right of a centred 680, it will run under the edge rather than pushing the
+   form over. That is the correct failure for a comparison arm — the form is
+   what must not move — and the number to watch is 680 + 290 + gutters. */
+body.sm-guide-panel #submit-overlay .submit-modal {
+  /* NO WIDTH TRANSITION, AND THIS IS THE RE-WRAP HE COULD SEE. `.submit-modal`
+     carries `transition: max-width .2s ease` (14288), so toggling the rail
+     ANIMATED the box from 680 to 970 — and the content column is `1fr` of that,
+     so for 200ms it interpolated 390 → 680 and the questions re-wrapped on
+     every frame.
+
+     I measured the two settled states, found 678 and 678, and told him nothing
+     moved. The settled states were never the complaint: he was describing the
+     200ms in between, which is exactly where a measurement of endpoints cannot
+     look. MEASURE THE TRANSITION, NOT ITS ENDS — this file has the same lesson
+     for the flip's projected rects and for the privacy jump that landed short.
+
+     Killing the transition is the fix rather than sizing the column, because
+     "una operación limpia de expansión a un lado, y ya" is a request for no
+     intermediate states at all. The rail's own fade is what carries the change
+     now, and it changes nothing about the form's box. */
+  /* THE BOX ITSELF GROWS, LEFT EDGE FIXED. Jaco: "la expansión debería ser
+     expandiendo la forma del modal; se mueve de derecha a izquierda en vez de
+     izquierda a derecha."
+
+     Killing the transition stopped the re-wrap and cost the gesture its shape:
+     the right edge jumped 290px out in one frame and the rail then wiped in, so
+     what you read was an empty extension filling backwards. Now the modal's
+     width really does animate — and the reason that is safe this time is the
+     line below it.
+
+     THE CONTENT COLUMN IS A FIXED WIDTH, NOT `1fr`. That was the whole cause of
+     the re-wrap: a fraction of an animating box is an animating column. Named
+     once as `--sm-body-w` and used twice — for the column and for the modal's
+     own max-width — so the two cannot drift, and every variant states its own
+     body width instead of its total.
+
+     The rail's clip reveal runs at the same duration and the same curve, so the
+     panel is uncovered exactly as fast as the box makes room for it. */
+  /* ONE WIDTH FOR EVERY STEP, AND IT IS THE PAGE'S OWN CONTENT COLUMN. Jaco:
+     "¿cómo de difícil sería que en el modo modal todos los modales midieran el
+     mismo ancho? Quizás el mismo ancho que tienen las content cards."
+
+     Measured before: three widths in this arm — 972 for the ordinary steps,
+     1220 for App Privacy and 1220 for the Mac preview — so the box resized
+     under you every time you opened a different step, which is the same
+     complaint as a control that moves when pressed, one scale up. Two more
+     widths (`submit-modal-wide`'s 920 and Steam's 1180) were being silently
+     squeezed to 680 by this very rule, which nobody had decided either.
+
+     AND THE NUMBER IS THE WIDEST CONTENT, NOT THE PAGE'S COLUMN. It was tried
+     the other way first — the Game Details card's 843, measured and matched to
+     the pixel — and Jaco killed it in one sentence: "una de las pegas de que el
+     modal sea tan ancho es que no se ve el dashboard detrás, y entonces pierde
+     la gracia del modal… el scrim no puede hacer nada porque no hay nada que
+     mostrar detrás."
+
+     He is right, and it is the argument against dressing the symptom: a scrim
+     ATTENUATES what is behind it, so with 67px of gutter left either side there
+     is nothing for it to attenuate and no amount of shadow makes the box read
+     as a layer. At the card's width this arm stops being a modal at all, which
+     is the one thing that distinguishes it from the page arm it is being
+     compared against.
+
+     So the width is solved from the other end: the SMALLEST single number every
+     step fits in. Every surface here lives inside 680 except one — the privacy
+     data-types table — and that table is `table-layout: fixed` at `width: 100%`,
+     so it has no width of its own, only a floor. Measured: its name column is
+     116 and the widest line in any of its eight headings is 66 ("Personaliz." /
+     "Functional."), so the floor is 116 + 8 × 70 = 676, plus 48 of scroller
+     padding, 9 of its own scrollbar lane and the modal's 2 borders = 735.
+
+     740 WAS TRIED FIRST — the floor plus the chrome — AND THE TABLE DOES NOT
+     SHRINK TO ITS FLOOR. `.prv-matrix` states `min-width: 748`, written out as
+     116 + 8 × 79 so the two move together, so at 740 it kept its width and
+     spent the difference on 65px of sideways scroll. That is not the designed
+     degradation it looks like: the name column is NOT sticky, so scrolling
+     ate the row names and the groups read "PE", "& FITNESS", "AL INFO",
+     "NTENT" — the one column you need in order to read any row.
+
+     Narrowing `--pvt-col` to 70 would close it and is refused for the reason
+     written at that token: 79 leaves 75 after padding against a widest heading
+     line of 66, and 70 leaves 66 — zero slack, so the first re-measure or
+     translation wraps the headings.
+
+     So the single width is what the widest surface really needs: 748 of table
+     + 48 of scroller padding + 9 of its own lane + 2 borders = 807, rounded to
+     810. At 1268 that leaves 83px of page either side — less than the 148 the
+     old base modal had, and it is the price of the box not resizing under you
+     between steps. Nothing else in this arm asks for more than 680; if that
+     table is ever made narrower, this number follows it down. */
+  --sm-body-w: 810px;
+  /* THE WHOLE THING IS CENTRED — MODAL PLUS PANEL. Jaco: "make sure
+     ?beside=panel has the modal + panel Shippy centred on the website."
+
+     It was not: a negative `margin-right` of the rail's width took the panel
+     OUT of the flex centring so the BODY column sat on the page's centre and
+     the rail hung off its right. That was written to keep the form still while
+     the rail toggles, and it bought that with the panel being off-centre for
+     the whole time you are reading it — a resting state paid for by a 180ms
+     one.
+
+     So the margin goes and the box centres as one object. The form does now
+     travel half the rail's width when you toggle, and it TRAVELS rather than
+     re-wrapping: `--sm-body-w` is fixed, so what moves is a column of settled
+     text, which is what the fixed column was really for. */
+  transition: max-width .18s cubic-bezier(.22, .61, .36, 1);
+  display: grid;
+  grid-template-columns: var(--sm-body-w) var(--guide-w);
+  grid-template-rows: auto 1fr auto;
+  column-gap: 0;
+  /* THE TWO BORDERS ARE PART OF THE SUM. `box-sizing: border-box` means a
+     max-width of body + rail leaves the CONTENT box 2px short of its own two
+     columns, so the grid overflowed and the rail sat 1px past the modal's right
+     edge — which is why the gap round the panel measured 7 / 7 / 7 / 5. */
+  max-width: calc(var(--sm-body-w) + var(--guide-w) + 2px);
+}
+/* Every existing child keeps the column it always had; only the rail is new. */
+body.sm-guide-panel #submit-overlay .submit-modal > * { grid-column: 1; min-width: 0; }
+body.sm-guide-panel #submit-overlay .submit-modal > .sm-rail {
+  grid-column: 2; grid-row: 1 / -1;
+  min-width: 0;
+  /* THE RULE IS BACK, ASKED FOR AND THEN ASKED BACK. It went on the "two marks
+     on one object" argument — a border beside a card that has its own edge —
+     and the counter-argument is stronger here: this is not a card floating in a
+     column, it is one of TWO COLUMNS of a single box, and what separates two
+     columns is a line. Without it the rail reads as empty modal that happens to
+     contain a card.
+
+     `overflow` still stays off, because the mascot lives ABOVE his card by
+     design and a scroller would cut him in half. */
+  /* 6px ALL ROUND — HE DOES NOT POKE OUT ANY MORE. Jaco: "quizás Shippy no
+     debería estar asomando igual que lo hace cuando está fuera, porque es como
+     que vive dentro de una pestaña lateral ahora."
+
+     Right, and the overhang was never about the octopus: it is a behaviour for
+     a card FLOATING IN A PAGE COLUMN, where perching on its top edge is what
+     makes him belong to the page rather than to the card. In a rail he is a
+     resident of the panel, and a resident who climbs out of his own box reads
+     as a mistake. So the rail stops reserving room above the card and he moves
+     INSIDE it — same rig, same size, same animations, one exposed variable. */
+  padding: 6px;
+  border-left: 1px solid var(--border);
+}
+/* `position: relative`, NOT `static`, AND THIS IS THE DOCUMENTED BUG. The
+   mascot and the `::after` bloom are absolutely positioned against `.app-guide`
+   — a media query that set this to `static` once left both resolving against
+   `<body>`, hundreds of pixels from their card, and that note is in this file.
+   Making the guide a plain column inside the rail reproduced it exactly: Shippy
+   was in the DOM and nowhere on screen. The card keeps its own padding; the
+   guide only gives up the width it needs out in the layout. */
+body.sm-guide-panel #submit-overlay .sm-rail .app-guide {
+  width: auto; max-width: none; position: relative; padding: 0;
+  /* FULL HEIGHT — the modal's, minus the rail's padding, fixed. The rail is
+     `grid-row: 1 / -1` and the modal is `height: clamp(560px, 88vh, 860px)`, so
+     this is a number that does not depend on how long the step's content is.
+
+     `top: 0` IS THE FIX, AND WITHOUT IT THE PANEL OVERFLOWED THE MODAL. Out in
+     the layout `.app-guide` carries its own `top: 76px` — the room the octopus
+     needs above his card, made there by offsetting the column. In here the RAIL
+     already reserves that (its 62px of padding-top), so the offset was being
+     paid twice: measured, the card started 138px down inside an 858px rail and
+     ran 70px past the modal's bottom edge. One reservation, and it belongs to
+     the box that has the room. */
+  top: 0;
+  height: 100%; display: flex; flex-direction: column;
+  /* `--shippy-body-top` is the rig's own control for where his crown sits
+     relative to the card. Neutralised here because the mascot is placed by its
+     own rule below — one thing deciding his position, not two. */
+  --shippy-body-top: 0px;
+}
+/* HE PEEKS FROM THE EDGE INSTEAD OF STANDING IN THE COLUMN. Jaco: "quizás
+   podríamos quitar la mascota del panel lateral e incorporarlo de otro modo,
+   asomando por el lateral del panel del modal, con la cabeza rotadita. Y así el
+   panel llegaría hasta arriba."
+
+   Standing inside the rail he was costing the panel 96px of its own height for
+   a decoration — and the panel is the thing with something to say. Hanging off
+   the divider costs nothing: he is absolutely positioned, so the card starts at
+   the padding and runs to the bottom, which is the "modal's height minus the
+   padding" that has now been asked for twice.
+
+   The tilt is what makes it read as PEEKING rather than as a sprite parked on a
+   line. −14deg about his own base, so he leans INTO the panel he belongs to
+   rather than away from it. */
+/* OUT OF THE MODAL'S RIGHT EDGE, so he is beside the panel rather than sitting
+   on the seam between the two columns. Jaco: "tiene que asomar por la derecha
+   del panel del modal."
+
+   That means the modal has to stop clipping, which it does only for its own
+   rounded corners — nothing inside it overflows, because the body has its own
+   scroller. `overflow: visible` in this arm is the whole of it, and it is
+   scoped so every other surface keeps the clip. */
+body.sm-guide-panel #submit-overlay .submit-modal { overflow: visible; }
+body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot {
+  /* ONLY THE HEAD CLEARS THE EDGE. He is `z-index: 0` and the card is a later
+     sibling, so whatever overlaps the panel is painted behind it — which makes
+     "how much shows" a question of how far past the modal's right edge his box
+     reaches, not of clipping. At −34 the whole octopus was outside and you saw
+     the arms too; −24 leaves the head and the eyes out and tucks the rest
+     behind the panel. */
+  left: auto; right: -24px; top: 26px;
+  /* `rotate`, NOT `transform` — AND THAT IS THE RIG, NOT A PREFERENCE. The bob
+     is an `element.animate()` pinned to `startTime = 0` (shippy-live.js), and a
+     WAAPI animation on `transform` composites ABOVE the cascade: measured, the
+     computed `transform` came back as the animation's and the rotation simply
+     never appeared. CSS `rotate` is its own property, so it composes with the
+     bob instead of fighting it — he leans AND still breathes. */
+  /* 29°, TEN MORE AGAIN. Turning him about his own base is what trades arms for
+     head: every degree swings the crown further past the modal's right edge and
+     drops the tentacles back behind the panel, so the angle IS the "how much of
+     him shows" control. 14 → 19 → 29 across three passes, all of it Jaco's eye
+     on the same question. */
+  rotate: 29deg; transform-origin: 50% 100%;
+}
+/* And the card takes the whole rail — nothing reserved above it. */
+body.sm-guide-panel #submit-overlay .sm-rail .guide-card {
+  margin-top: 0;
+  /* THE RADII NEST. The modal is `--panel-radius` and the panel sits 6px inside
+     it, so its own curve is that minus the inset — the rule this app already
+     follows on the Content Rating bar (13 inside 16 inside 23) and on the
+     pinned nav. At the modal's own 20 the two corners were concentric only by
+     accident of being equal; one inside the other they have to differ by
+     exactly the gap between them. */
+  border-radius: calc(var(--panel-radius) - 6px);
+}
+body.sm-guide-panel #submit-overlay .sm-rail .guide-card { flex: 1; min-height: 0; }
+/* THE PER-STEP WIDTHS ARE DELETED, not narrowed. App Privacy asked for 933
+   because its table is 748 wide and the Mac preview for 1011 because its
+   pinned bar of eight pills needs 996 — both true of those surfaces and
+   neither true of this arm any more. The content column leaves 887 − 48 of
+   scroller padding − 11 of lane = 828, which seats the privacy table with 80
+   to spare; and the preview's pinned bar is not drawn here at all, because the
+   panel beside it is already the same eight sections (`sm-step-preview`).
+
+   Jaco, when this came up: "respecto a la barra de pills, recuerda que para eso
+   tenemos el Shippy panel." Exactly — the bar exists because the scrim used to
+   take Shippy out of play, and wherever the panel carries those sections there
+   is nothing left for it to say. */
+
+/* Dismissed: the rail's column collapses and the modal returns to the width it
+   has in every other arm — one rule, because the width is a `max-width` on the
+   same element the grid is on. */
+/* THE OFF STATE IS GONE WITH ITS BUTTON. See app.js's "SHIPPY IS NOT
+   DISMISSIBLE HERE": the modal's one-column variant, `.sm-rail { display:
+   none }` and the switch's own shape rule all existed to serve a control that
+   no longer exists, and a rule that outlives its markup waits for the next
+   element that happens to match. Deleted, not zeroed. */
+
+
+/* IT UNFOLDS LEFT TO RIGHT, AND NOTHING IN IT MOVES. Jaco: "el side panel se
+   activa como de derecha a izquierda después de desplegarse; la motion de
+   expansión tiene que ser sólo izquierda a derecha."
+
+   The first version translated from +14 to 0, so it arrived FROM the right and
+   settled leftwards — the opposite reading of the same event. A clip is the
+   right tool rather than a transform: the panel is REVEALED from its left edge
+   outward, at rest the whole time, so the rows, the discs and Shippy never
+   travel. `scaleX` was the other candidate and squashes its own content for
+   180ms, which is the re-wrap complaint in another shape.
+
+   THE RIGHT INSET IS NEGATIVE AND CONSTANT, and that is load-bearing: Shippy
+   hangs 34px past the rail's right edge, and a plain `inset(0 0 0 …)` would
+   guillotine him for the length of the animation. −70 keeps him outside the
+   clip at every frame. */
+body.sm-guide-panel #submit-overlay .sm-rail.is-entering { animation: sm-rail-in .18s cubic-bezier(.22,.61,.36,1) both; }
+/* THE CLIP TRAVELS ON THE RIGHT, NOT THE LEFT — and that is what stopped the
+   panel arriving early. Jaco: "the Shippy panel starts appearing before the
+   modal has expanded."
+
+   Uncovering from the left inset looks identical for the card, because the
+   rail's own box never moves: it is laid out at its final place from frame one
+   and only the reveal travels. But the MASCOT hangs 34px past its right edge,
+   and the clip carried a constant −70 there so he could not be cut — which
+   meant he was fully painted, at his final position, while the modal was still
+   its closed width. The one thing outside the box was the one thing not being
+   revealed.
+
+   Clipping from the RIGHT instead uncovers exactly the strip the growing modal
+   has just made room for, and Shippy comes last because he is furthest right.
+   `var(--guide-w)` rather than a literal, so the reveal is the rail's own
+   width by construction. */
+@keyframes sm-rail-in {
+  /* THE MIDDLE STOP IS WHAT KEEPS THE REVEAL BEHIND THE BOX. Running straight
+     from `--guide-w` to −70 the clip covers 360px while the modal only grows
+     290, so the uncovered edge outran the modal's own: measured, ahead by 19px
+     at 27ms and 67px at 127ms. Reaching 0 at 80% makes the reveal exactly the
+     rail's width over the same curve, and the last fifth is the mascot's
+     overhang arriving once there is a modal for him to lean on. */
+  from  { clip-path: inset(0 var(--guide-w) 0 0) }
+  80%   { clip-path: inset(0 0 0 0) }
+  to    { clip-path: inset(0 -70px 0 0) }
+}
+
+/* The guide's seat while he is in the modal's rail — see app.js's "A GHOST
+   HOLDS HIS SEAT". Same width and the same place in `.app-split`'s order, so
+   the content column keeps the width it had and the platform cards behind the
+   modal do not reflow. It draws nothing. */
+.sm-guide-ghost { flex: 0 0 auto; width: var(--guide-w); align-self: stretch; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE WAY OUT IS A GHOST, AND THE PAGE BEHIND IT GOES QUIET (arm `on`)
+   ══════════════════════════════════════════════════════════════════════════
+   Jaco: "el recuadro de back chevron y la plataforma en la que estamos debería
+   ser muchiiisimo más sutil, tipo cuando haces hover sobre una de las tabs del
+   header. Y en esta opción no debería verse el dashboard debajo, sólo el
+   contenido en el que estoy."
+
+   THE PILL WAS WEARING THE PROJECT CHIP'S FILL — `--chip-fill`, white 15% —
+   which is the loudest resting treatment in this header and belongs to a
+   control that is SELECTED. This one is a way out. Bare until you approach it
+   is what every other micro-button in this app does (the platform card's gear,
+   every modal's ×, the guide's own two), and the wash it takes on approach is
+   `.app-subtab:hover`'s own `rgba(255,255,255,.035)` — literally the header tab
+   hover he named, and the same value `.sm-crumb:hover` already uses, so the
+   two halves of this row finally agree.
+
+   (Retired with the pill.) */
+
+/* AND THE DASHBOARD IS NOT UNDERNEATH ANY MORE. This arm removed the scrim on
+   purpose — that is its whole argument, that a step is a PAGE rather than a
+   dialog — and the cost it had been paying is that the page it replaces was
+   still sitting there behind it, greyed by nothing, reading as a modal with the
+   wash forgotten. A page does not show the previous page through itself.
+
+   `visibility`, never `display`: `_smGuideBesideSolve` measures `#dashboard`'s
+   rect against the guide's to decide whether there is a right-hand column to
+   reserve, and a display:none box reports zeros — the modal would centre itself
+   as though the guide had wrapped. Hidden, the box is still there and still
+   measures, which is the same reason the screenshots carousel's arrows hide
+   rather than unmount.
+
+   Only `#dashboard`: the sub-nav row carrying the trail is its sibling, and so
+   is the guide. Both stay. */
+body.sm-guide-beside #dashboard { visibility: hidden; }
+
+
+/* ── THE PILL'S SECOND LABEL IS GONE ──────────────────────────────────────
+   It stacked "Mac App Store" and a hover label in one grid cell. The hover
+   label left when the chevron became its own control, and these rules did not:
+   `.sm-hd-plat:hover .sm-hd-plat-name { visibility: hidden }` went on hiding
+   the name with nothing left to reveal, so going near the platform made it
+   VANISH. Jaco: "ahora al hoverear sobre Mac App Store se pone invisible."
+
+   The rule this leaves, and it is the one this file already states about dead
+   code: a rule that survives the markup it was written for does not become
+   inert, it becomes a bug with no author. Delete the pair, not one of them. */
+
+/* ── AND THE PAGE ARM HOLDS STILL (for now) ───────────────────────────────
+   The JS half is `_smNoAnim` in app.js, where the reasoning is. This is the
+   same switch stated in CSS, because three of the four motions are keyframes
+   rather than WAAPI: the modal's entrance, the push/pop on its children, and
+   the crumb trail's fade.
+
+   `animation: none` on the BASE rule as well as on the two flip classes is
+   load-bearing rather than thorough. The "flash al asentarse" bug is what
+   happens when the animation LIST changes as a class comes off — the engine
+   mints a fresh `modalIn` at its own 0%, i.e. opacity 0. With every state of
+   this element declaring the same empty list there is nothing to create and
+   nothing to destroy, which is the same argument the push rule makes by
+   restating `modalIn` verbatim instead of removing it. */
+body.sm-guide-beside #submit-overlay .submit-modal,
+body.sm-guide-beside #submit-overlay .submit-modal.is-flip-exit,
+body.sm-guide-beside #submit-overlay .submit-modal.is-flip-enter,
+body.sm-guide-beside #submit-overlay .submit-modal.is-flip-exit  > *,
+body.sm-guide-beside #submit-overlay .submit-modal.is-flip-enter > *,
+body.sm-guide-beside .app-subnav-title.is-entering .sm-crumb,
+body.sm-guide-beside .app-subnav-title.is-entering .sm-crumb-sep {
+  animation: none !important;
+}
+/* The crumbs fade by TRANSITION, not by keyframes, so they need the other
+   property said too — and the trail is part of the same gesture: a header that
+   eases while the body it names has already swapped is the worst of both.
+
+   The pill's and the step link's own hover fades are deliberately NOT in this
+   list. What was asked to stop is the NAVIGATION — opening a step and coming
+   back — and a control easing under the pointer is feedback about the pointer,
+   which is a different thing and is what every other hover in this app does. */
+body.sm-guide-beside .sm-crumb,
+body.sm-guide-beside .sm-crumb-sep { transition: none !important; }
+
+/* (The separator and its pay-back retired with the trail: the row is one
+   button now, so there are no two names for a glyph to sit between.) */
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BACK IS ONE CONTROL, AND IT GOES UP ONE
+   ══════════════════════════════════════════════════════════════════════════
+   Jaco: "quizás en estos casos de doble layer, el back no es a Mac App Store,
+   es a Product Page Preview." The argument is at `upTo` / `upGo` in app.js.
+
+   The chevron is its own button now, which is what lets it have ONE meaning at
+   every depth. It takes the app's micro-button shape — bare until the pointer
+   arrives, then a wash, no stroke — the pattern the platform card's gear and
+   every modal's × already keep, and `.app-subtab:hover`'s own value so this
+   row's two hover states are one number. */
+.app-subnav.sm-crumbs .sm-hd-up {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex: none;
+  background: none; border: 0; padding: 0; margin: 0 -4px 0 0;
+  border-radius: 8px; color: var(--text-dim); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.app-subnav.sm-crumbs .sm-hd-up:hover { background: rgba(255, 255, 255, .035); color: var(--text); }
+.app-subnav.sm-crumbs .sm-hd-up svg { width: 16px; height: 16px; }
+
+/* AND THE PLATFORM IS A LABEL. It never had a destination of its own — pressing
+   it went to Submission, which is the incoherence this row has been carrying
+   since the switcher was deleted — so with the chevron carrying back it stops
+   pretending to be pressable: no fill, no hover, no pointer. The stacked
+   labels and the width they reserved go with it. */
+/* The 14px pay-back was cancelling the pill's own right padding. The label has
+   none, so the row's 10px gap is the whole of the air on both sides of the "/"
+   and the separator is centred with nothing to correct. */
+
+/* ── ONE BUTTON, AND WHAT IT SAYS IS WHERE IT GOES ────────────────────────
+   See app.js's "THE LEFT SIDE IS ONE BUTTON". It is the row's only control on
+   this side at every depth, so it takes the app's ghost-trigger shape — bare
+   until the pointer arrives, then `.app-subtab:hover`'s own wash — the same
+   pattern as the platform card's gear and every modal's ×. Not a pill: a pill
+   is what this app draws for something SELECTED, and this is a door. */
+.app-subnav.sm-crumbs .sm-hd-back {
+  display: flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 14px 0 10px; margin: 0;
+  background: none; border: 0; border-radius: var(--pill-radius);
+  font-family: var(--mono); font-size: var(--nav-tab-fs); font-weight: 500;
+  color: var(--text-dim); cursor: pointer; white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.app-subnav.sm-crumbs .sm-hd-back:hover { background: rgba(255, 255, 255, .035); color: var(--text); }
+.app-subnav.sm-crumbs .sm-hd-back .sm-hd-outchev { display: flex; width: 16px; height: 16px; }
+.app-subnav.sm-crumbs .sm-hd-back .sm-hd-outchev svg { width: 100%; height: 100%; }
+
+/* THE PLATFORM'S MARK RIDES WITH THE STEP'S NAME, which is the one place in
+   this row that is about where you are. 18 against 15px type, overshooting it
+   slightly for the guide's own reason: a mark the exact height of its label
+   reads smaller, because letters have no counters to lose. */
+.app-subnav.sm-crumbs .sm-hd-steppick .sm-hd-mark {
+  display: flex; width: 18px; height: 18px; margin-right: 9px; flex: none;
+}
+.app-subnav.sm-crumbs .sm-hd-steppick .sm-hd-mark svg { width: 100%; height: 100%; }
+
+/* `.sm-rail` keeps `position: relative` — the guide's mascot and its bloom
+   resolve against it, the same reason `.app-guide` must stay positioned. */
+body.sm-guide-panel #submit-overlay .sm-rail { position: relative; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PACK LANDS ON THE PAGE'S OWN GUIDE COLUMN (arm `panel`)
+   ══════════════════════════════════════════════════════════════════════════
+   Jaco: "alinéame el pack modal + panel de forma que el Shippy Guide esté en
+   el mismo sitio que el Shippy Guide cuando no hay ningún modal, aunque eso
+   implique descentramiento. Esto nos permitirá ver asomar por el lado
+   izquierdo del modal las platform cards difuminadas."
+
+   Two things were in the way and both are measurements. The rail was `--guide-w`
+   INCLUDING its own 6px padding, so the card inside it came out 277 against the
+   dashboard's 290 — the same panel at two sizes. And the pack was centred in
+   the viewport, which put that card at 901 where the page keeps its guide at
+   935.
+
+   So the rail column grows by its own padding, and the pack stops being centred:
+   `justify-content: flex-start` plus a solved `padding-left` means the modal's
+   left edge is a number JS can write rather than the by-product of centring
+   something. `_smRailAlign` solves it against the GHOST — the placeholder the
+   guide leaves behind in `.app-split` — which is the honest target because it
+   is literally the box the guide would occupy if this modal were not open.
+
+   What it buys is the point: the pack now ends where the page ends, so the
+   whole offset shows up on the LEFT as dashboard you can see. */
+body.sm-guide-panel #submit-overlay .submit-modal > .sm-rail {
+  /* +12 so the CARD is `--guide-w`, not the column. The dashboard's guide has
+     no padding around it; this one does, and the card is what has to match. */
+  width: calc(var(--guide-w) + 12px);
+}
+body.sm-guide-panel #submit-overlay .submit-modal {
+  grid-template-columns: var(--sm-body-w) calc(var(--guide-w) + 12px);
+  max-width: calc(var(--sm-body-w) + var(--guide-w) + 12px + 2px);
+}
+body.sm-guide-panel #submit-overlay {
+  justify-content: flex-start;
+  /* The fallback keeps a cold first paint centred-ish rather than hard left,
+     in the frame before the solve lands. */
+  padding-left: var(--sm-pack-left, 8vw);
+}
+
+/* THE STATUS LINE IS HIDDEN AT ITS SOURCE, NOT REMOVED FROM IT. See app.js's
+   "IT IS COPIED, NOT MOVED": the panel draws a clone, so the original has to
+   stay in `.cr-pinned` for the next render to read — and it has to stay
+   invisible there, or the same sentence is printed twice a few inches apart.
+   The page arm hides the whole bar for its own reason; here the bar survives
+   because it still carries the filter. */
+body.sm-guide-mid   #submit-overlay .cr-pinned .sw-tip-text,
+body.sm-guide-panel #submit-overlay .cr-pinned .sw-tip-text { display: none; }

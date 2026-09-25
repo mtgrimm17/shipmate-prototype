@@ -3106,6 +3106,33 @@ async function openStepModal(pid, stepId) {
   // have to be repeated in five places (and be forgotten in the sixth).
   // Gates the steps in STEP_REQUIRES_VISIT; a no-op for every other step.
   markStepSectionSeen(pid, stepId);
+
+  /* WHERE YOU CAME FROM IS A FACT, NOT A LIST OF STEP IDS. Jaco: "el único
+     punto flaco es el de los dobles levels deep — Business Questions,
+     Screenshots, dentro de la Store Page. Necesitamos algo consistente para
+     volver a la store después de rellenar cada modal."
+
+     `renderStepModal`'s `cameFromPreview` was `stepId === 'gameCenter'`, which
+     is this repo's own "inventory of consequences" — right about Game Center
+     and silent about every other step the preview can open. Measured from the
+     Screenshots well: no back arrow, a × that dismisses the store page you
+     were reading, a footer saying "Done", and the trail's only way out
+     pointing at Submission. Two doors into one situation, one of them
+     chromed and the other not.
+
+     So the SITUATION is recorded where it is known — here, at the one door
+     every step goes through, before the per-platform branches that all return
+     early. `storePreview` opening is what CLEARS it: arriving at the preview
+     is not arriving from it, and a flag that only ever gets set is a flag that
+     eventually sends you back to a page you never opened.
+
+     It is a step id rather than a boolean so that a third level later (a step
+     opened from a step opened from the preview) has somewhere to say so. */
+  state.stepModalFrom =
+    (stepId !== 'storePreview' && state.stepModal && state.stepModal.platformId === pid
+      && state.stepModal.stepId === 'storePreview')
+      ? 'storePreview'
+      : null;
   // Always reset storePreview sub-section — never restore last flip position
   if (stepId === 'storePreview') {
     if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = {};
@@ -3258,6 +3285,10 @@ function closeStepModal() {
      or closing with the × instead of the back arrow leaves the next sub-section
      believing it was opened from a pane that has since moved on. */
   if (state.submission) state.submission.flipFromPane = null;
+  /* And the same for where you came from — set by the one door in, dropped by
+     every exit, so nothing can leave a "back to the store page" behind it for
+     a step opened later from the dashboard. */
+  state.stepModalFrom = null;
   // Record that this step has been closed at least once. Read by nothing as of
   // v7.29 — it drove the row risk dots (gone in v7.28) and the required-field
   // alerts (gone in v7.29). Kept deliberately; see toggleStepSection's comment.
@@ -25024,3 +25055,2596 @@ function _smCoverageHTML() {
 
   return masters + `<div class="sm-cov-stores">${perStore}</div>`;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   smGuideBeside(on) — EXPERIMENT, console only, off by default.
+
+   Keeps the Shippy panel lit and usable beside an open step modal instead of
+   behind the scrim. See the block of the same name in style.css for why.
+
+   IT ONLY APPLIES WHERE THE MODAL KEEPS ITS DESIGNED WIDTH, and that test is
+   the whole reason this is solved rather than hard-coded. `.submit-modal` is
+   `width: 100%` capped by a per-variant `max-width` (680 / 807 / 1000), so
+   narrowing the overlay does not make a wide modal overflow — it SHRINKS it.
+   Measured on the Product Page Preview: 1000 → 939 at a 1366 viewport and
+   → 896 at 1280, and its pinned nav went from 934 of content in 934 of box to
+   933 in 873 — 60px off the end, then 103. That width is derived from the
+   eight pills and seven separators precisely so Data privacy cannot fall off,
+   so squeezing it undoes the reason it exists. Reading `max-width` BEFORE
+   reserving is what lets the wide modals opt out with no flash.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* ON BY DEFAULT (Jaco) — while this is the arrangement being tried, the panel
+   is the point. smGuideBeside(false) still puts the old behaviour back. */
+/* ══════════════════════════════════════════════════════════════════════════
+   THREE ARMS, BECAUSE TWO MADE AN UNFAIR COMPARISON.
+
+   Jaco: "el tema de beside=off sigue siendo que no tenemos a Shippy para
+   ayudarnos en la versión modal." Exactly — `off` is v7.29, which is the old
+   modal WITHOUT the thing this whole session was about. So the A/B was asking
+   "old and blind, or new and helpful", which is not a question about the
+   paradigm at all.
+
+   `mid` is the version the paradigm's own evidence supports: THE PROBLEM WAS
+   THE SCRIM, NOT THE MODAL. Take the wash away and Shippy is back in play —
+   that is the one-line change that delivers the founding insight. Everything
+   after it (the page scroll, the breadcrumb, the merged header, the step
+   picker, the push at the dashboard boundary) was following the logic further
+   than the evidence went, and it is what `on` still carries.
+
+     off — v7.29 exactly. Scrim, modal, Shippy showing the platform's steps.
+     mid — the modal, unchanged, with no scrim and a step-aware Shippy.
+     on  — the step as a page: breadcrumb, one scroll, push/pop.
+
+   `_smGuideBesideOn` keeps meaning "the page paradigm", so every existing test
+   is untouched; `_smShippyStep` is the new one, true in BOTH mid and on, and it
+   is what the guide's own content hangs off. Splitting them is the whole of the
+   mechanism — the rest is one CSS block.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* THE DEFAULT IS `panel`. Jaco: "the Shippy panel should be always on, by
+   default." It is the arm that answers the founding problem without spending
+   the loop — the modal stays a modal, the dashboard stays home, and Shippy is
+   simply in the room — so it is what someone who opens the URL with no query
+   should get. `on` (the page paradigm) and `mid` and `off` stay one query away.
+
+   The rail's own switch was already on by default and resets when the modal
+   closes; this is about which ARM you land in. */
+/* THE DEFAULT IS THE APP AS IT SHIPPED. Jaco: "que la versión default de
+   Shipmate sea la que era hace 2 días, y sólo si añado los comandos se muestre
+   como quiero."
+
+   This sat at 'panel' while the two candidates were being built, which meant a
+   plain visit to the live site got the experiment. `off` is the untouched
+   modal, so anyone arriving with no query sees what they saw before; the arms
+   are one query away and still remembered per session once asked for. */
+let _smMode = 'off';
+let _smGuideBesideOn = false;
+let _smShippyStep = true;
+/* NOTHING MOVES IN THE PAGE ARM, FOR NOW. Jaco: "que por ahora no haya
+   animación al clicar un paso de una platform card o volver — que nada esté
+   animado, que sea inmediato."
+
+   "Por ahora" is the whole of it, so this is ONE switch rather than a set of
+   deletions: the push, the pop, the modal's entrance and the crumb fades are
+   all still written and still what `mid` and `panel` play. Flip this to false
+   and the arm has its motion back — which is exactly what a comparison between
+   two paradigms needs, since a motion is the kind of thing that reads as right
+   on the second look and wrong on the tenth.
+
+   It is deliberately NOT `prefers-reduced-motion`: that is a person's standing
+   preference and this is a judgement about one arm, so the two must not be
+   spelled with the same mechanism or turning this back on would also override
+   the setting. Both are checked, separately, everywhere motion starts. */
+const _smNoAnim = true;
+
+function _smApplyMode() {
+  _smGuideBesideOn = (_smMode === 'on');
+  _smShippyStep    = (_smMode !== 'off');
+  /* THE ARM CLASSES ARE ONLY ON WHILE A STEP IS OPEN, and getting that wrong
+     froze the whole app. Jaco: "?beside=mid has the dashboard blocked and I
+     can't click anything." `sm-guide-mid` dims `#dashboard` and takes its
+     pointer events away — which is the scrim's job, done narrowly — and it was
+     being applied from here, i.e. ALWAYS. With no modal open that is a
+     dashboard you can see and cannot touch.
+
+     `sm-guide-beside` never had this bug because `_smGuideBesideSolve` has
+     always keyed it on the overlay being open; these two now follow the same
+     rule. */
+  _smModeClasses();
+  if (_smMode !== 'panel') _smRailRelease();
+}
+let _smRailFresh = false;
+let _smWasOpen = false;
+function _smModeClasses() {
+  const ov = document.getElementById('submit-overlay');
+  const open = !!ov && !ov.classList.contains('hidden');
+  /* THE ENTRANCE BELONGS TO THE OPEN, NOT TO EVERY RENDER. Jaco: "clicking
+     All/Unanswered re-writes the panel and hits."
+
+     `renderStepModal` writes the modal's innerHTML, so the rail is destroyed
+     and rebuilt on every press — and a CSS animation on a brand-new node runs
+     every time, which is why answering a question flashed the whole panel. The
+     flag is raised on the hidden → open edge only, and spent by the first
+     mount after it. Same shape as the breadcrumb's `is-entering` and the
+     carousel's one-shot glint. */
+  if (open && !_smWasOpen) _smRailFresh = true;
+  _smWasOpen = open;
+  /* `sm-step-preview` IS SET FOR EVERY STEP-AWARE ARM, NOT JUST THE PAGE ONE.
+     Jaco: "en Product Page Preview, si tengo el Shippy panel NO NECESITO el tab
+     superior de elementos."
+
+     Right — the pinned bar and the panel are the same eight sections, and that
+     bar only exists because the scrim used to take Shippy out of play. Wherever
+     the panel carries them it has nothing left to say. The class was only being
+     set by `_smGuideBesideSolve`, which runs in `on` alone, so `mid` and
+     `panel` kept both.
+
+     ONE OWNER PER ARM, AND THAT IS WHAT THE FIRST VERSION GOT WRONG. Setting it
+     from here for EVERY arm left two writers on one class: `_smGuideBesideSolve`
+     runs in all four and its `clear()` — the `!_smGuideBesideOn` early return —
+     strips `sm-step-preview` along with `sm-guide-beside`. It runs AFTER this in
+     the render chain (renderStepModal → here, then `_smGuideAfterStep` → solve),
+     so the class was being set and removed inside one paint, every time. The
+     tell was a measurement that made no sense: all three conditions true at the
+     call, the toggle firing, and the class absent a frame later.
+
+     So `on` stays the solve's (it knows whether the guide really is beside the
+     modal, which below 1100px it is not), and `mid` / `panel` are this
+     function's. Neither touches the other's arm. */
+  const smNow = _smOpenStep();
+  const smStepArm = open && (_smMode === 'mid' || _smMode === 'panel');
+  if (smStepArm || !_smGuideBesideOn) {
+    document.body.classList.toggle('sm-step-preview',
+      smStepArm && !!smNow && smNow.stepId === 'storePreview');
+  }
+  document.body.classList.toggle('sm-guide-mid',   open && _smMode === 'mid');
+  document.body.classList.toggle('sm-guide-panel', open && _smMode === 'panel');
+  /* DISMISSING THE PANEL LASTS FOR THAT VISIT, NOT FOR THE SESSION. Jaco: "ahora
+     cuando cierro a Shippy, no vuelve a renderizarse donde está normalmente."
+
+     The flag was sticky, so closing the panel once meant every later step
+     opened without him and he never came back on his own — which reads as
+     having lost him rather than as having put him away. Closing the modal
+     resets it: the dismissal belongs to the step you were in.
+
+     With the modal up he is home and blurred behind the scrim, which is where
+     he belongs; with the modal closed he is home at full strength. Same place
+     either way — only the wash over it changes. */
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE FOURTH ARM: SHIPPY INSIDE THE MODAL, AND THE SCRIM STAYS.
+
+   Jaco: "¿podríamos tener una opción en la que el modal se queda con el
+   difuminado de detrás, pero pasa a tener un Shippy integrado en el propio
+   panel del modal?"
+
+   This is the version that keeps the whole argument and spends none of it. The
+   founding problem was that the scrim took Shippy out of play; every arm so far
+   has answered it by weakening the scrim, which is what dragged in the
+   breadcrumb, the page scroll and a navigation model the app cannot back up.
+   Bringing the panel INSIDE the modal answers it without touching the loop at
+   all: the dashboard is still home, the modal is still a modal, × still
+   returns, and there is no tree to describe because nothing claims to be a
+   place.
+
+   ONE NODE, RE-PARENTED, NEVER A COPY. `#app-guide` itself moves — not its
+   contents — so `renderGuide()` keeps finding it by id wherever it is, and
+   every wrapper that paints the step's rows into it works untouched. A copy
+   would be a second guide that can disagree with the first; this is the same
+   guide, standing somewhere else.
+
+   Its home is remembered as a PARENT PLUS A NEXT SIBLING, because `.app-split`
+   has children either side of it and "append it back" would silently reorder
+   the columns.
+
+   AND THE MODAL RE-SIZES; THE RAIL IS NOT AN ALA PEGADA. Jaco's own note in the
+   reference: "que sea el propio rectángulo del modal el que se reescale, no un
+   ala pegada." So the modal becomes a two-column grid and grows by the rail's
+   width — one rounded box containing both, rather than two boxes whose corners
+   meet and cut a notch out of each other.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* AND THE GUIDE MUST BE OUT OF THE MODAL BEFORE THE MODAL IS REBUILT — this
+   ate the panel whole on the first try. `renderStepModal` writes the modal's
+   innerHTML, so anything appended to it is destroyed on the next render, and
+   with the guide living inside the rail the guide went with it: measured,
+   `.app-split` came back holding only `app-content` and `#app-guide` was gone
+   from the document.
+
+   So the rail is released BEFORE every render and mounted after. It is the same
+   shape as OCTO's re-parented SVG and the moved Content Rating line — a node
+   you own inside a surface that rebuilds itself has to be taken out of the way
+   first, not merely put back afterwards. */
+let _smRailHome = null;
+/* A SWITCH FOR THE PANEL, FOR TESTING. Jaco: "para probar, añádeme un botón
+   para dismissear el panel de Shippy, al lado de la X."
+
+   It sits beside the × because it is the same kind of control — something you
+   do to the modal rather than to its content — and it is the only honest place
+   for it while this arm is a comparison rather than a decision.
+
+   CLOSING THE RAIL SENDS HIM HOME, IT DOES NOT DELETE HIM. Jaco: "quiero que
+   vuelva a renderizarse en el dashboard, blurreado, porque es como si Shippy se
+   hubiera cambiado de sitio." Seeing him back in his column, dimmed behind the
+   scrim with everything else, is what makes the two positions read as ONE
+   octopus who moved — which is exactly what the node being re-parented rather
+   than copied makes true. */
+/* SHIPPY IS NOT DISMISSIBLE HERE, AND THAT DELETED A CONTROL AND A STATE.
+   Jaco: "en el modo modal, que no se pueda disminuir a Shippy, y ya está. De
+   ese modo no hace falta ni botón."
+
+   The toggle existed from the day the rail did, on the reasoning that anything
+   occupying a column should be dismissible. That is true of a panel you PUT
+   there and false of this one: the rail is half of what this arm IS — the
+   whole proposal being compared is "the step and its guide in one box" — so a
+   press that takes the guide away leaves a modal that is no longer the thing
+   under test, and the only way back was a second button in a different place.
+
+   Removing it takes the whole apparatus with it rather than hiding a button:
+   `smRailToggle`, `_smRailOn`, the `sm-rail-off` body class, its two CSS
+   rules, the glyph, and all three button builders — one for the rail, one for
+   the header and the element factory they shared, plus the re-render hook that
+   had to re-plant the button whenever the modal was rebuilt in the OFF state.
+   A control left switched off is one waiting to be turned back on, and this
+   file has paid twice for rules that outlived their markup.
+
+   The dismissal note that used to live here is worth carrying as a finding
+   even though the feature is gone: the guide is RE-PARENTED rather than
+   copied, so when it was put away it reappeared in its own column on the
+   dashboard, dimmed behind the scrim — which is what made the two positions
+   read as one octopus who moved. That is still what the re-parenting buys on
+   every open and close. */
+
+function _smRailMount() {
+  if (_smMode !== 'panel') return;
+  const ov = document.getElementById('submit-overlay');
+  if (!ov || ov.classList.contains('hidden')) return _smRailRelease();
+  const modal = ov.querySelector('.submit-modal');
+  const guide = document.getElementById('app-guide');
+  if (!modal || !guide) return;
+  let rail = modal.querySelector('.sm-rail');
+  if (!rail) {
+    rail = document.createElement('div');
+    rail.className = 'sm-rail';
+    modal.appendChild(rail);
+  }
+  if (guide.parentElement !== rail) {
+    if (!_smRailHome) _smRailHome = { parent: guide.parentElement, next: guide.nextElementSibling };
+    /* A GHOST HOLDS HIS SEAT, AND WITHOUT IT THE DASHBOARD RESIZES BEHIND THE
+       MODAL. Jaco: "pulling the panel and contracting it changes something in
+       the dimensions of the platform card (build, version moves)."
+
+       `.app-split` is a flex row of the content column and the guide, so taking
+       the guide out gives the content its width back: measured, `#dashboard`
+       went 894 → 1200 and the cards reflowed 418 → 376. The cards are supposed
+       to be untouched by what the modal is doing — they are the surface you are
+       coming back to.
+
+       So the seat stays occupied: same width, same place in the order, nothing
+       drawn. Removed when he returns to it. */
+    const ghost = document.createElement('div');
+    ghost.className = 'sm-guide-ghost';
+    _smRailHome.parent.insertBefore(ghost, _smRailHome.next || null);
+    rail.appendChild(guide);
+  }
+  if (_smRailFresh) {
+    _smRailFresh = false;
+    rail.classList.add('is-entering');
+    setTimeout(() => rail.classList.remove('is-entering'), 400);
+  }
+  /* After the card is in the rail, or there is nothing to measure. */
+  requestAnimationFrame(_smRailAlign);
+}
+/* THE PACK IS ALIGNED TO THE PAGE, NOT CENTRED. See style.css's "THE PACK
+   LANDS ON THE PAGE'S OWN GUIDE COLUMN" for the why; this is the solve.
+
+   IT IS A DELTA, WHICH IS WHAT MAKES IT CONVERGE IN ONE PASS. It reads where
+   the rail's card IS and where the ghost SAYS it should be, and moves the
+   modal's left edge by exactly that difference — so it needs to know nothing
+   about the body's width, the rail's padding, the modal's borders or how the
+   overlay used to centre things. Any of those can change and this still lands.
+   Same shape as `_smDropwellSolve`'s correction and `_subnavAddSolve`.
+
+   THE TARGET IS THE GHOST because the guide itself is not on the page while
+   the modal is open — it has been re-parented into the rail — and the ghost is
+   literally the box it would occupy. Measured with nothing open: guide card
+   935 → 1225. */
+function _smRailAlign() {
+  if (_smMode !== 'panel') return;
+  const ov = document.getElementById('submit-overlay');
+  if (!ov || ov.classList.contains('hidden')) return;
+  const modal = ov.querySelector('.submit-modal');
+  const card  = modal && modal.querySelector('.sm-rail .guide-card');
+  const ghost = document.querySelector('.sm-guide-ghost');
+  if (!modal || !card || !ghost) return;
+  const g = ghost.getBoundingClientRect(), c = card.getBoundingClientRect();
+  if (!g.width || !c.width) return;
+  const cur = parseFloat(getComputedStyle(ov).paddingLeft) || 0;
+  const want = cur + (g.left - c.left);
+  /* Never off the left edge: on a window too narrow to hold the pack beside
+     the page, being clipped is worse than being off-column. */
+  const next = Math.max(0, Math.round(want * 100) / 100);
+  if (Math.abs(next - cur) < 0.5) return;
+  document.documentElement.style.setProperty('--sm-pack-left', next + 'px');
+}
+
+/* Re-solved when the WINDOW moves, which is the case a render hook alone
+   misses: nothing re-renders, the split re-centres, and the pack would keep a
+   number solved for the old width. It cannot loop — what it writes is padding
+   on the overlay, and the ghost lives in `.app-split`, which the overlay does
+   not touch. */
+(function _smRailAlignWatch() {
+  if (typeof ResizeObserver !== 'function') return;
+  const ro = new ResizeObserver(() => _smRailAlign());
+  const arm = () => { const el = document.getElementById('dashboard'); if (el) ro.observe(el); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arm);
+  else arm();
+})();
+
+function _smRailRelease() {
+  const guide = document.getElementById('app-guide');
+  if (guide && _smRailHome && guide.parentElement !== _smRailHome.parent) {
+    const ghost = _smRailHome.parent.querySelector(':scope > .sm-guide-ghost');
+    _smRailHome.parent.insertBefore(guide, ghost || _smRailHome.next || null);
+  }
+  document.querySelectorAll('.sm-guide-ghost').forEach(n => n.remove());
+  document.querySelectorAll('#submit-overlay .sm-rail').forEach(n => n.remove());
+}
+
+/* ?beside=off / ?beside=on, REMEMBERED UNDER `sm.beside`. Jaco: "lo digo por si
+   quisiera poder tener una version live en la que pruebo lo antiguo y lo
+   nuevo."
+
+   THE SHAPE IS `sm.wait`'s, NOT `sm.layout`'s, AND THE DIFFERENCE IS THE WHOLE
+   REASON THIS ONE REMEMBERS. `sm.layout` had its storage DELETED in v6.46
+   because the default was settled and a remembered key is a default with an
+   invisible per-machine exception. Here nothing is settled: two presentations
+   are genuinely being weighed, which is the one case that entry says a key is
+   worth having — comparing an arm over a working day should not mean carrying a
+   query string through every reload.
+
+   So it is an aid with an expiry: when the comparison is decided, the loser
+   comes out and this block, the flag and the key go with it, the way the dev
+   bar was deleted rather than left switched off.
+
+   `?beside=` with anything else CLEARS the key, which is the door back to the
+   published default on a machine that has been pinned — the exact escape
+   sm.layout could not offer. try/catch is the house style: private browsing
+   throws on get, set and remove alike, and a presentation you are merely
+   LOOKING at is never worth an exception. */
+(() => {
+  try {
+    const ok = v => v === 'on' || v === 'off' || v === 'mid' || v === 'panel';
+    const q = new URLSearchParams(location.search).get('beside');
+    if (ok(q)) localStorage.setItem('sm.beside', q);
+    else if (q !== null) localStorage.removeItem('sm.beside');
+    const saved = localStorage.getItem('sm.beside');
+    if (ok(saved)) _smMode = saved;
+  } catch (_) {}
+  _smApplyMode();
+})();
+const SM_GUIDE_BESIDE_GAP = 24;
+
+function _smGuideBesideSolve() {
+  const body = document.body, root = document.documentElement;
+  /* IT ONLY CLEARS WHAT IT OWNS. `sm-step-preview` is written by two functions
+     — here for the page paradigm, and by `_smModeClasses` for `mid` / `panel` —
+     and this `clear()` used to strip it unconditionally. Since the solve runs in
+     every arm and lands AFTER `_smModeClasses` in the render chain (render →
+     classes, then `_smGuideAfterStep` → solve), the class was being set and
+     removed inside one paint on every open, which is why hiding the preview's
+     pinned bar in the panel arm did nothing while calling `_smModeClasses()` by
+     hand did. Two writers, one class, and the later one silently won. */
+  const clear = () => { body.classList.remove('sm-guide-beside');
+                        if (_smGuideBesideOn) body.classList.remove('sm-step-preview');
+                        root.style.removeProperty('--sm-guide-top'); };
+  if (!_smGuideBesideOn) return clear();
+
+  const ov = document.getElementById('submit-overlay');
+  if (!ov || ov.classList.contains('hidden')) return clear();
+  const modal = ov.querySelector('.submit-modal');
+  const guide = document.querySelector('.app-guide');
+  const dash  = document.getElementById('dashboard');
+  if (!modal || !guide || !dash) return clear();
+
+  /* Below 1100px .app-split wraps and the guide drops UNDER the content, so
+     there is no right-hand column to reserve and the modal centres as before.
+     Asked of the real boxes rather than of a media query, so a collapsed rail
+     or any later arrangement answers for itself. */
+  const g = guide.getBoundingClientRect(), d = dash.getBoundingClientRect();
+  if (g.left < d.right - 2) return clear();
+
+  /* THE ONLY NUMBER LEFT IN JS IS THE TOP, because CSS cannot ask where the
+     content column starts. Everything horizontal is derived from the grid's
+     own tokens now (see the block in style.css) and measured at 0.0 delta
+     against a real Game Details card, so there is nothing here to keep in sync.
+
+     It is read off the GUIDE rather than computed from the topbar: the guide is
+     the thing the modal lines up beside, and it is sticky, so when the page is
+     scrolled its pinned top is exactly where the modal wants to be. */
+  root.style.setProperty('--sm-guide-top', Math.round(g.top) + 'px');
+  const sm     = _smOpenStep();
+  const isPrev = !!(sm && sm.stepId === 'storePreview');
+  body.classList.add('sm-guide-beside');
+  body.classList.toggle('sm-step-preview', isPrev);
+}
+
+/* The overlay's `hidden` class is the one signal that a modal opened or
+   closed, and watching the attribute costs nothing where hooking every
+   openStepModal branch would be an inventory — six of them return early. */
+(function _smGuideBesideWatch() {
+  const ov = document.getElementById('submit-overlay');
+  if (!ov) return;
+  /* Opening or closing a modal changes BOTH the geometry and what the
+     checklist should say, so this goes through the one function that does
+     both. Declared later in the file; called by name, so the order is fine. */
+  const tick = () => (typeof _smGuideAfterStep === 'function')
+    ? _smGuideAfterStep() : _smGuideBesideSolve();
+  new MutationObserver(tick).observe(ov, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('resize', tick);
+})();
+
+window.smGuideBeside = function (on) {
+  /* Now takes a MODE as well as a boolean: `smGuideBeside('mid')`. The boolean
+     form still works and still means the two ends. */
+  _smMode = (on === 'mid' || on === 'on' || on === 'off' || on === 'panel') ? on
+          : (on === undefined) ? (_smMode === 'on' ? 'off' : 'on')
+          : (on ? 'on' : 'off');
+  _smApplyMode();
+  /* The console door writes the same key the URL does, so flipping it live and
+     reloading agree — sm.wait's own arrangement. Without this the switch you
+     just used would be undone by the next refresh. */
+  try { localStorage.setItem('sm.beside', _smMode); } catch (_) {}
+  if (typeof _smGuideAfterStep === 'function') _smGuideAfterStep(); else _smGuideBesideSolve();
+  console.log('[guide-beside]', _smGuideBesideOn ? 'ON' : 'OFF',
+              '— reserve:', getComputedStyle(document.documentElement)
+                              .getPropertyValue('--sm-guide-reserve').trim() || '(not applied)');
+  return _smGuideBesideOn;
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 2 — THE CHECKLIST FOLLOWS THE MODAL YOU ARE IN.
+
+   Jaco: the pinned bar at the top of the Product Page Preview lists the eight
+   sections you still have to fill, and that IS a checklist — Shippy's own job.
+   So while a step modal is open, the panel shows that step's sections instead
+   of the tab's setup tasks.
+
+   IT IS NOT A THIRD FACE, AND THE FIRST VERSION GOT THAT WRONG. That one
+   bypassed renderGuide and painted its own card, which quietly invented a face
+   with its own eyebrow and no Checklist/Calendar control — a new tab nobody
+   asked for. Jaco: "el shippy checklist toggle ya es este checklist". Right:
+   the face exists, so only its ROWS should change.
+
+   So the hook is _chkGroups, the one place renderGuide reads its items from.
+   renderGuide is untouched — same eyebrow, same segmented control, same
+   .gd-task markup, same progress head — and the rows come from
+   sppRequiredElements(), which is the same function _sppPinnedNav paints its
+   pills from. The panel and the bar therefore cannot disagree about what is
+   done, which is the whole argument: not a second checklist, the same one
+   shown where it can be read.
+
+   AND IT IS WHAT LETS THE WIDE MODAL FIT. The Preview's 1000px is derived from
+   those eight pills (919 of content plus chrome) — measured, squeezing it to
+   939 pushed 60px of the bar off the end. With the list in the panel the bar
+   is not drawn, so the modal can come down to a width that sits beside Shippy.
+
+   Everything WRAPS rather than edits, so the flag off leaves the app as it was.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SM_PREVIEW_BESIDE_MAX = 880;
+
+function _smOpenStep() {
+  const ov = document.getElementById('submit-overlay');
+  if (!ov || ov.classList.contains('hidden')) return null;
+  const sm = state.stepModal;
+  return (sm && sm.platformId && sm.stepId) ? sm : null;
+}
+
+/* The rows for the step you are in, in _chkGroups' own item shape, or null to
+   leave the guide alone. Only storePreview is implemented; Content Rating's
+   pinned bar is the same argument and belongs here rather than in a second
+   mechanism. */
+/* WHICH SUB-PANEL YOU ARE IN, if any. Flipping into Business / Content / Data
+   keeps the step id at storePreview and records the target here, so the panel
+   has to ask this before it answers with the eight sections. */
+function _smFlipTarget(pid) {
+  /* A FLIP IS ONLY A FLIP WHILE ITS OWN STEP IS OPEN. `storePreviewFlipTarget`
+     is cleared by `openStepModal` for `storePreview` and by nothing else, so
+     after visiting a sub-section the value survives into every OTHER step —
+     and this function was reading it raw. Measured on Content Rating opened
+     straight after a Business flip: the trail grew a phantom ancestor crumb
+     reading "Content Rating" (the step naming itself as its own parent) whose
+     press called `closeStorePreviewSection`. A trail that says something
+     different depending on where you were ten seconds ago is the flattest
+     version of "the navigation is not coherent". */
+  const sm = _smOpenStep();
+  if (!sm || sm.platformId !== pid || sm.stepId !== 'storePreview') return null;
+  return (state.storePreviewFlipTarget && state.storePreviewFlipTarget[pid]) || null;
+}
+
+/* Business's own questions, derived from the SAME fields
+   isMacSectionComplete('business') reads — so the panel cannot say a section is
+   finished while the step disagrees. The conditional rows appear exactly when
+   that predicate starts asking for them.
+
+   THESE ROWS ARE STATUS, NOT DESTINATIONS. The questions carry no anchors to
+   scroll to, and this app does not put a pointer on something that cannot be
+   pressed, so they are marked and neutered below rather than given a target
+   that would quietly do nothing. Give them ids and they become a map. */
+function _smBusinessItems(pid) {
+  const a = (typeof _appStoreAnswers === 'function') ? _appStoreAnswers(pid) : null;
+  if (!a) return null;
+  const rows = [
+    { label: 'In-app purchases', done: a.hasIAP !== null },
+    { label: 'Uses encryption',  done: a.usesEncryption !== null },
+  ];
+  if (a.usesEncryption === 'yes') {
+    rows.push({ label: 'Exemption', done: a.encryptionExempt !== null });
+    if (a.encryptionExempt === 'no') {
+      rows.push({ label: 'ERN', done: a.hasERN !== null &&
+                   !(a.hasERN === 'yes' && !String(a.ernNumber || '').trim()) });
+    }
+  }
+  return rows.map(r => ({ label: r.label, done: r.done, bad: false, step: 'spp:__status' }));
+}
+
+function _smStepItems() {
+  if (!_smShippyStep) return null;
+  const sm = _smOpenStep();
+  if (!sm || sm.stepId !== 'storePreview') return null;
+  if (typeof sppRequiredElements !== 'function') return null;
+  /* A flip is a different question, so it gets a different list. Unknown
+     targets fall through to the eight sections rather than emptying the panel:
+     you are still on the product page, and the parent context is a better
+     answer than none. */
+  const flip = _smFlipTarget(sm.platformId);
+  if (flip === 'business') { const b = _smBusinessItems(sm.platformId); if (b) return b; }
+  const lang = (state.formData && state.formData.primaryLanguage) || 'en';
+  const els = sppRequiredElements(sm.platformId, lang) || [];
+  if (!els.length) return null;
+  /* `step` carries the section id behind a prefix because that is the only
+     field renderGuide's row builder forwards; chkGoStep is wrapped below to
+     read it. The alternative was teaching the builder a third kind of target,
+     which is an edit to a function this experiment is trying not to touch. */
+  return els.map(e => ({
+    label: e.short || e.label,
+    step:  'spp:' + e.id,
+    done:  !!e.done && !e.bad,
+    bad:   !!e.bad,
+  }));
+}
+
+const _smOrigChkGroups = window._chkGroups;
+window._chkGroups = function () {
+  const groups = _smOrigChkGroups.apply(this, arguments);
+  const items  = _smStepItems();
+  if (!items) return groups;
+  return groups.map(g => g.view === state.activeView ? { ...g, items } : g);
+};
+
+/* ══ A ROW DOES WHAT ITS ELEMENT DOES ══════════════════════════════════════
+   Jaco: pressing Content should take you to the content questions, not park
+   you beside the closed door.
+
+   It parked you there because the behaviour was INHERITED, not decided: the row
+   copied the pinned bar, and the bar could only ever scroll because it lived
+   INSIDE the page it indexed. Focusing was all it could do. The panel is not
+   inside anything, so it was imitating a limit that no longer exists — and a
+   checklist row promises "this is outstanding, deal with it", which showing you
+   where the work would be does not honour.
+
+   THE RULE IS ONE SENTENCE AND THERE IS NO TABLE TO KEEP IN SYNC: the row
+   forwards its element's own action. Measured, the eight split three ways —
+   Business / Content / App Privacy / Screenshots open a layer
+   (openStorePreviewSection), Achievements swaps the step (openStepModal, and
+   Game Center already knows to come back via cameFromPreview), and Title /
+   Subtitle / Description carry no action at all because you edit them where
+   they are. Nothing here lists which is which; the DOM is asked, the way
+   `data-iso` and `data-spp-pin` are asked elsewhere.
+
+   IT WALKS UP, because the click is not always on the marked element —
+   Screenshots' lives two levels above it, on .spp-shots-row. And it accepts
+   only NAVIGATION, so a stray ancestor handler cannot turn a text field into a
+   door: four levels, and the action has to be one of the two openers. */
+const SM_ROW_NAV = /^\s*(openStorePreviewSection|openStepModal)\s*\(/;
+
+function _smRowAction(id) {
+  let n = document.querySelector('[data-spp-el="' + id + '"]');
+  for (let i = 0; n && i < 4; i++, n = n.parentElement) {
+    const oc = n.getAttribute && n.getAttribute('onclick');
+    if (oc && SM_ROW_NAV.test(oc)) return n;
+  }
+  return null;
+}
+
+const _smOrigChkGoStep = window.chkGoStep;
+window.chkGoStep = function (step) {
+  if (typeof step === 'string' && step.slice(0, 4) === 'spp:') {
+    if (step === 'spp:__status') return;     // a status row, not a destination
+    const sm = _smOpenStep();
+    if (!sm) return;
+    const id  = step.slice(4);
+    const act = _smRowAction(id);
+    /* .click() rather than re-implementing the call: the element's handler is
+       the definition of what that door does, and a copy here is a second one
+       that can drift. */
+    if (act) return act.click();
+    if (typeof setStorePreviewFocus === 'function') {
+      return setStorePreviewFocus(sm.platformId, id);   // a field: go to it
+    }
+    return;
+  }
+  return _smOrigChkGoStep.apply(this, arguments);
+};
+
+/* The guide is not rebuilt by the modal's own render — the trap _doFinalSubmit
+   and setLaunchDate are already written under — so the doors that change what
+   this list says have to say so. Wrapped, never edited. */
+function _smGuideAfterStep() {
+  _smModeClasses();
+  _smRailMount();
+  if (_smGuideBesideOn) { try { renderGuide(); } catch (e) {} }
+  _smGuideBesideSolve();
+}
+/* openStorePreviewSection is the flip — it changes WHICH list is right, so it
+   belongs on this list beside the three that change what the list says. */
+for (const fn of ['setStorePreviewFocus', '_sppFocusHere', 'reRenderStepModal',
+                  'openStorePreviewSection']) {
+  const orig = window[fn];
+  if (typeof orig !== 'function') continue;
+  window[fn] = function () { const r = orig.apply(this, arguments); _smGuideAfterStep(); return r; };
+}
+
+/* ── The two things renderGuide's row builder cannot carry ─────────────────
+   It forwards `label`, `done` and a target, and nothing else — so the hero
+   copy and the INVALID state are applied to the card after it is drawn rather
+   than by teaching that builder two more fields. A DOM pass on eight rows, and
+   the day this stops being an experiment both belong in the builder itself.
+
+   THE HERO NAMES THE MODAL, NOT THE TAB. "Submit to every platform, the right
+   way" plus four lines of prose is the SUBMISSION tab's pitch; with the
+   checklist showing one store page it is answering a question nobody asked
+   here. Two lines, and the second one says what the rows do.
+
+   AND INVALID IS RED, WHICH IS THE BAR'S OWN ANSWER. `.spp-pin-tick.is-bad` is
+   `--magenta` with #2E0713 ink and a cross in place of the check, and its note
+   says why it is a third state rather than a retired tick: an over-limit Title
+   is neither finished nor untouched, and collapsing it into the empty socket
+   is what sends you opening all eight to find the broken one. Same values, same
+   glyph, so the panel and the bar say it identically. `smCrossSVG()` takes no
+   size argument — the disc sizes it in CSS, per the standing rule. */
+const _smOrigRenderGuide = window.renderGuide;
+window.renderGuide = function () {
+  const out = _smOrigRenderGuide.apply(this, arguments);
+  const items = _smStepItems();
+  if (!items) return out;
+  const el = document.getElementById('app-guide');
+  if (!el) return out;
+
+  /* THE HERO GOES WHILE THE PANEL IS A STEP'S CHECKLIST. Jaco: "quítame el
+     'What's in your game' y el párrafo descriptivo, no ayudan y sólo chupan
+     espacio."
+
+     Right, and the reason is that they were written for the OTHER face. On the
+     dashboard a hero introduces a surface you arrive at cold; inside a step the
+     panel is a list ABOUT the thing filling the screen beside it, whose own
+     title is three inches to the left — so the two lines describe something you
+     are already looking at, and they cost ~70px of a column whose whole
+     argument is that its list fits without scrolling.
+
+     Hidden on a class rather than blanked, so the rest of the app's guide is
+     untouched and switching the experiment off restores it. The two strings are
+     still written below: harmless, and the first thing to delete if this stays. */
+  /* NOT ON THE MONTH. Everything this class does — hiding the hero, hiding the
+     face toggle — assumes the panel is showing the step's checklist. If you
+     were on the calendar face when the step opened, the toggle is the only way
+     back to it, so it stays. */
+  (el.querySelector('.guide-card') || el)
+    .classList.toggle('sm-step-guide', !state.guideCal);
+
+  const sm   = _smOpenStep();
+  const flip = sm ? _smFlipTarget(sm.platformId) : null;
+  const HERO = {
+    business: { t: 'A few business questions',
+                s: 'Purchases and export compliance — Apple asks, we keep track.' },
+    null:     { t: "Let's make your store page shine",
+                s: 'Press a line to jump straight to it.' },
+  };
+  const hero = HERO[flip] || HERO.null;
+  const ti = el.querySelector('.guide-title');
+  const su = el.querySelector('.guide-sub');
+  if (ti) ti.textContent = hero.t;
+  if (su) su.textContent = hero.s;
+
+  const byStep = new Map(items.map(i => [i.step, i]));
+  el.querySelectorAll('.gd-task').forEach(btn => {
+    const m  = (btn.getAttribute('onclick') || '').match(/chkGoStep\('([^']+)'\)/);
+    const it = m && byStep.get(m[1]);
+    if (it && it.step === 'spp:__status') btn.classList.add('sm-task-status');
+    /* A CHEVRON ON THE ROWS THAT LEAVE. Four of these move you inside the page
+       and five take you off it, and nothing on the row said which. Read from
+       _smRowAction, never from a list, so the mark cannot promise a door the
+       press does not open. */
+    if (it && it.step && it.step.slice(0,4) === 'spp:' && _smRowAction(it.step.slice(4))) {
+      btn.classList.add('sm-task-goes');
+      if (!btn.querySelector('.ios-step-arrow') && typeof SM_STEP_CHEVRON === 'string') {
+        btn.insertAdjacentHTML('beforeend', SM_STEP_CHEVRON);
+      }
+    }
+    if (!it || !it.bad) return;
+    btn.classList.add('sm-task-bad');
+    const box = btn.querySelector('.gd-task-box');
+    if (box && typeof smCrossSVG === 'function') box.innerHTML = smCrossSVG();
+  });
+  return out;
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 3 — NO SCRIM, AND THE ROW ABOVE BECOMES A BREADCRUMB.
+
+   Jaco: "elimina el scrim y encima pon la navegación, tipo Submission / Mac
+   App Store / Content Rating. Así podemos probar cómo de terrible es."
+
+   THE SCRIM HAD ALREADY LOST ITS ARGUMENT. Measured with the modal open: the
+   sub-nav row said "Submission", was VISIBLE, and was DEAD — elementFromPoint
+   over it returned overlay-bg. So it dimmed a row you could read and not press,
+   which is the worst of both readings, while Shippy sat lit above it because we
+   had already lifted him through. Lifting the first thing out was the
+   admission; this finishes it.
+
+   A MODAL THAT IS THE CONTENT COLUMN IS NOT A DIALOG, it is a place. Places get
+   navigation, not an ×. The row above is the app's own breadcrumb line and was
+   the obvious home for it — it is where "Submission" already is.
+
+   POINTER-EVENTS, NOT DISPLAY. The overlay still exists and still positions the
+   modal on the grid; it simply stops catching what is not aimed at it. That is
+   what makes the row live again without moving a single box.
+
+   This is a TEST of how terrible it is, in Jaco's words, so everything is
+   behind the same flag and reverts with smGuideBeside(false).
+   ══════════════════════════════════════════════════════════════════════════ */
+function _smBreadcrumbHTML() {
+  const sm = _smOpenStep();
+  if (!sm) return null;
+  const pid  = sm.platformId;
+  const plat = (typeof PLATFORMS !== 'undefined' && PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
+  const steps = (typeof _visiblePlatformSteps === 'function') ? _visiblePlatformSteps(pid) : [];
+  /* THE TRAIL TAKES THE PANEL'S OWN TITLE WHEN THE PLATFORM DOES NOT LIST THE
+     STEP — which is how a step opened from the preview's wells arrives. It read
+     the raw id before (`screenshots`, lower-case, in a row of proper names),
+     because `_visiblePlatformSteps` is the platform's five and this is not one
+     of them. The title node is the same source the flip name already uses, so
+     the header and the trail cannot print two different words for one level. */
+  const step  = (steps.find(s => s.id === sm.stepId) || {}).label
+             || document.querySelector('.submit-modal-title')?.textContent.trim()
+             || sm.stepId;
+  const flip  = _smFlipTarget(pid);
+  const flipName = flip
+    ? (document.querySelector('.submit-modal-title')?.textContent.trim() || flip) : null;
+
+  /* THE TRAIL FINALLY DRAWS THE LEVEL IT PROMISED. Jaco: "¿deberíamos tener un
+     back arrow dentro del content card para salir de cada double layer?"
+
+     The answer is no and the question is right, which is why this is a fix
+     rather than a refusal. The in-card arrow is hidden in this arm on purpose
+     (style.css, `.submit-modal-back`): the rule there is SUBIR O SALIR →
+     siempre el trail, un nivel un crumb, a cualquier profundidad — and the box
+     holds content and the actions of that content, never an exit. A second way
+     up inside the card is the duplication that rule exists to prevent.
+
+     Except the trail was drawing ONE level. `left` was the platform pill and
+     `right` the picker naming the DEEPEST place, so two levels down the row
+     read "Mac App Store › Media Carousel" and the Product Page Preview — the
+     thing you were actually reading, and the thing you want back — appeared
+     nowhere. The arrow felt missing because the only control that could take
+     you there did not exist, in the card OR in the header. "Un nivel, un
+     crumb" was a claim about a trail that had no middle.
+
+     So the ancestor is a crumb: a link at every depth, going up exactly one.
+     Which ancestor is a fact the app already records — a flip's parent is the
+     step it is flipped inside, and a step opened from the preview's wells says
+     so in `state.stepModalFrom` (see openStepModal). Neither is guessed. */
+  const fromPreview = state.stepModalFrom === 'storePreview' && sm.stepId !== 'storePreview';
+  const upLabel = flip ? step
+                : fromPreview ? ((steps.find(s => s.id === 'storePreview') || {}).label || 'Product Page Preview')
+                : null;
+  const upAction = flip ? `closeStorePreviewSection('${pid}')`
+                 : fromPreview ? `openStepModal('${pid}','storePreview')`
+                 : null;
+  /* AND THE CHEVRON GOES UP ONE, WHICH IS THE RULE THE ROW WAS MISSING. Jaco:
+     "quizás en estos casos de doble layer, el back no es a Mac App Store, es a
+     Product Page Preview."
+
+     That is the sentence that makes this row coherent, and it is why the
+     chevron leaves the platform pill. Inside it, the glyph meant "out to
+     Submission" at every depth — one fixed destination — so two levels down
+     the only back affordance on screen skipped the level you were actually in
+     and the pill had to change its own word on hover to admit it. Pulled out,
+     it has ONE meaning at every depth: up exactly one. Its destination is the
+     nearest ancestor, which is the same thing the last crumb points at, which
+     is the same door the footer's Save & Return presses.
+
+     THE PLATFORM STOPS BEING A CONTROL, and that is the other half. It never
+     had an honest destination — pressing "Mac App Store" went to Submission,
+     the incoherence recorded at the top of this function — and with the
+     chevron carrying back, it no longer has to pretend: it is a qualifier of
+     the step, which is what it always was. The hover swap and the two stacked
+     labels go with it, and so does the width trick they needed. */
+  const upTo = upLabel || 'Submission';
+  const upGo = upAction || 'closeStepModal()';
+  /* It presses the same door the footer's Save & Return presses, so the two
+     cannot disagree about what up means — and `_smNavDir(true)` is already
+     wrapped around both of those functions, so this reads as a pop wherever
+     the motion is on. */
+  const up = upLabel
+    ? '<span class="sm-crumb-sep">/</span>' +
+      '<button class="sm-hd-step is-link" onclick="' + upAction + '">' + upLabel + '</button>'
+    : '';
+
+  /* THE TRAIL IS THE TITLE NOW. Jaco: "the navigation bar could be much better,
+     much more clear" — and the answer was not to retouch it but to merge it
+     with the header it was duplicating.
+
+     The panel's own title row said the same words 40px below, at twice the
+     size, which is why the trail kept reading as small print: it was the
+     quieter of two headings. One header, at page-title size, carrying what only
+     it can carry — the store's MARK (this app identifies everything by its mark
+     first: the card's rows, the guide's waits, the pinned nav), the platform as
+     a PICKER, and the step.
+
+     THE PLATFORM IS A LABEL, AND THE SWITCHER IT BRIEFLY WAS IS DELETED. Jaco:
+     "no debería poder elegir la plataforma desde cada pantalla, sólo en la
+     dashboard view."
+
+     Right, and it is the same boundary the rest of this paradigm keeps drawing.
+     Choosing WHICH platform is the dashboard's question — that view exists to
+     show them all at once — and answering it from three levels inside one step
+     makes "where am I" harder rather than easier: you would change context
+     without changing place. Here the platform says which submission you are
+     in, which is the one thing the step's own title cannot say.
+
+     The menu, its switch and their CSS are removed rather than hidden, the way
+     the dev bar was: a control left dormant is one waiting to be turned back
+     on.
+
+     And the back chevron earns its place here for the first time: it no longer
+     competes with anything inside the box, because the box has no chrome of its
+     own left. */
+  const mark = (typeof smMarkFor === 'function' && smMarkFor(pid)) || '';
+
+  /* THE LEFT IS THE WAY OUT, THE RIGHT IS THE WAY AROUND. Jaco: "¿el back es
+     muy pequeño? ¿el selector debería estar a la derecha, donde suele estar Add
+     platform, y que toda la pastilla de Mac App Store con el chevron sea
+     tocable para volver?"
+
+     Both doubts had one cause. The back button was not small in pixels — 40 is
+     a fine pointer target — it was small in MEANING: the only thing in a row of
+     words with no word. And beside it sat a platform label that was the one
+     element of this header that was neither a control nor where you are.
+
+     Merging them cancels both: the chevron goes inside the pill, the whole
+     ~150px pill is the target, and the platform stops being inert by doing the
+     only honest thing it can do — taking you back to where its card lives.
+     The step picker moves to the slot this row already keeps its controls in.
+
+     Pressing it is LEAVING, not switching, so it does not reopen the question
+     the platform switcher was deleted over. */
+  /* THE LEFT SIDE IS ONE BUTTON, AND ITS LABEL IS WHERE BACK GOES. Jaco:
+     "quizás no debería ser Mac App Store / Product Page Preview cuando estoy
+     en otra capa deep, sino que debería ser un único botón de ir hacia atrás,
+     todo ello."
+
+     Every version before this tried to make one row carry two jobs — a PATH
+     (here is the hierarchy) and an EXIT (here is the way back) — and each
+     attempt was a different compromise between them: a pill that was a label
+     but pressed like a door, a chevron that meant "out" while the crumb beside
+     it meant "up one", a hover that swapped one word for another to admit the
+     mismatch. The incoherence he kept naming was never a detail; it was those
+     two jobs sharing a row.
+
+     A path is worth its complexity when there is somewhere to jump to. Here
+     there is not: the tree is three levels deep at most, every level above you
+     is exactly one press away, and the only thing you ever want from the left
+     of this row is OUT OF WHERE YOU ARE. So the row keeps the exit and drops
+     the path — one button, one meaning, one press, at every depth. What it
+     says is its destination, never where you are standing:
+
+         Submission / Mac App Store: Content Rating   →   ‹ Submission
+         … / Product Page Preview / Media Carousel    →   ‹ Product Page Preview
+
+     THE PLATFORM MOVES ONTO THE PICKER, as a MARK. It was the last thing in
+     the row that was neither a control nor a destination, and this app names
+     platforms with their glyph everywhere else — the card headers, the guide's
+     waits, the calendar rows. Beside the step's name it says which submission
+     you are in, which is the one fact it was there for, and it says it in the
+     one place that is already about where you are. */
+  const left =
+    '<button class="sm-hd-back" onclick="' + upGo + '"' +
+    ' title="Back to ' + upTo + '" aria-label="Back to ' + upTo + '">' +
+      '<span class="sm-hd-outchev">' + SM_HD_CHEVRON + '</span>' +
+      '<span class="sm-hd-back-name">' + upTo + '</span>' +
+    '</button>';
+
+  /* The picker names the DEEPEST place, so inside a flip it says the sub-panel.
+     Its menu still lists the platform's STEPS — see the incoherence noted at
+     `_smStepMenu`. */
+  const right =
+    '<button class="sm-hd-steppick" onclick="_smStepMenu(event)" aria-haspopup="true">' +
+      '<span class="sm-hd-mark">' + mark + '</span>' +
+      '<span class="sm-hd-step-name"></span>' + SM_HD_CARET +
+    '</button>';
+
+  return { left, right, plat, step, flipName, deep: flipName || step };
+
+}
+
+/* THE PROJECT CHIP'S OWN CHEVRON, verbatim. Jaco: "usa el mismo formato de
+   botón con chevron que el de 'My Game' arriba a la derecha." It is 11px on a
+   24 viewBox at stroke 2.5, in a `.bar-chev` wrapper — which is also what
+   carries the rotation, so open/closed is the chip's behaviour rather than a
+   second one. The glyph IS a down chevron, so closed is unrotated and open is
+   the 180; that note lives at `.project-selector-wrap`'s rule and is the one
+   thing not to "fix" by redrawing the polyline. */
+const SM_HD_CARET =
+  '<span class="bar-chev"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+  '<polyline points="6 9 12 15 18 9"/></svg></span>';
+const SM_HD_CHEVRON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+
+window._smCrumbBack = function () {
+  const b = document.querySelector('.submit-modal-back');
+  if (b) b.click();
+};
+
+function _smPaintBreadcrumb() {
+  const row = document.getElementById('app-subnav');
+  if (!row) return;
+  const title = row.querySelector('.app-subnav-title');
+  if (!title) return;
+  const data = _smGuideBesideOn ? _smBreadcrumbHTML() : null;
+
+  let right = row.querySelector('.sm-hd-right');
+  if (!data) {
+    if (title.dataset.smPlain) { title.textContent = title.dataset.smPlain; delete title.dataset.smPlain; }
+    if (right) right.remove();
+    row.classList.remove('sm-crumbs');
+    return;
+  }
+  const first = !title.dataset.smPlain;
+  if (first) title.dataset.smPlain = title.textContent.trim();
+  title.innerHTML = data.left;
+  /* The platform's NAME is no longer printed on this side — the back button
+     names its destination and the picker carries the platform's mark. Nothing
+     to fill in here any more; `data.plat` survives for the picker's tooltip. */
+  row.classList.add('sm-crumbs');
+
+  /* The picker is a SIBLING of the title, not a child: it belongs to the right
+     end of the row, which is the slot Add platform holds when no step is open.
+     Same solved gap, so the two land on the same column. */
+  if (!right) {
+    right = document.createElement('div');
+    right.className = 'sm-hd-right';
+    row.appendChild(right);
+  }
+  if (right.dataset.smDeep !== data.deep) {
+    right.innerHTML = data.right;
+    right.querySelector('.sm-hd-step-name').textContent = data.deep;
+    right.dataset.smDeep = data.deep;
+  }
+
+  /* Only the paint that CREATES the header animates it in — this runs on every
+     render, and an unconditional entrance would replay itself every time you
+     answered a question. */
+  if (first) {
+    title.classList.add('is-entering');
+    clearTimeout(_smPaintBreadcrumb._t);
+    _smPaintBreadcrumb._t = setTimeout(() => title.classList.remove('is-entering'), 400);
+  }
+  if (state.submission && state.submission.addOpen) state.submission.addOpen = false;
+}
+
+/* It rides the same tick every other half of this experiment does. */
+const _smOrigAfterStep = _smGuideAfterStep;
+_smGuideAfterStep = function () {
+  _smOrigAfterStep();
+  /* TURNING THE FLAG OFF HAS TO REPAINT TOO. _smOrigAfterStep only renders the
+     guide while the experiment is ON, so switching it off left the hero text
+     and the store-page rows on screen until some unrelated render came along —
+     a revert that looks like it did not work. The wrapper on renderGuide
+     returns the untouched original once _smStepItems() is null, so calling it
+     here is the same one line for both directions. */
+  if (!_smGuideBesideOn) { try { renderGuide(); } catch (e) {} }
+  _smPaintBreadcrumb();
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GOING DEEPER IS A PUSH, NOT A FLIP.
+
+   Jaco: "en esta versión, creo que el flip para ir a los siguientes levels deep
+   no tiene sentido, me imagino un slide tipo ios de contenido."
+
+   AND THIS FILE ALREADY SETTLED THE ARGUMENT ONE SURFACE OVER. `_doFinalSubmit`
+   is written under it verbatim: "the flip is already spoken for, and it means
+   one specific thing — the other side of this card." The gear turns a platform
+   card over and the same gear turns it back: a reversible look at the REVERSE
+   of one object, nothing changed in between. Content Questions is not the other
+   side of the Product Page Preview, it is a place UNDER it — and once the trail
+   above says so in words, a rotation contradicts the navigation drawn 40px
+   higher up.
+
+   So: exit left, enter from the right, and the reverse on the way back. The
+   DIRECTION is the whole reason this is JS and not four keyframes — the app
+   uses one pair of classes for both journeys, so without a flag a pop would be
+   drawn identically to a push and the motion would say nothing.
+
+   IT IS A CONTAINED SLIDE, NOT A FULL-WIDTH ONE, and that is a consequence of
+   removing the scrim rather than a compromise on the idea. iOS pushes inside a
+   clipped viewport; this box is clipped by nothing, so a 100% travel would send
+   the panel sailing across Shippy and the live page beside it. 28px reads as
+   the same gesture and stays inside its own frame — the app's own standing
+   preference for short travels.
+
+   The three-phase sequence, the 160/280ms and the class names are untouched:
+   only what those classes DRAW changes, so nothing about the flip's timing or
+   its modalIn-at-index-0 fix is at risk.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _smNavDir(back) {
+  /* Every arm that pushes has to be able to pop — gated on the page paradigm,
+     going back out of a preview sub-section in `panel` played the FORWARD push:
+     measured, the outgoing screen left to the left and the returning one came
+     from the right, which is the motion for going deeper. */
+  if (!_smShippyStep) return;
+  const b = document.body;
+  b.classList.toggle('sm-nav-back', !!back);
+  clearTimeout(_smNavDir._t);
+  /* Cleared after the longest phase, so a class left behind cannot make the
+     NEXT push draw itself as a pop. 600 > 160 exit + 280 enter plus the
+     inference beat between them. */
+  _smNavDir._t = setTimeout(() => b.classList.remove('sm-nav-back'), 900);
+}
+
+(() => {
+  const fwd = window.openStorePreviewSection;
+  if (typeof fwd === 'function') {
+    window.openStorePreviewSection = function () { _smNavDir(false); return fwd.apply(this, arguments); };
+  }
+  const back = window.closeStorePreviewSection;
+  if (typeof back === 'function') {
+    window.closeStorePreviewSection = function () { _smNavDir(true); return back.apply(this, arguments); };
+  }
+  /* The crumb is the only door back now that the panel's arrow is hidden, and
+     Game Center returns through openStepModal rather than closeStorePreview —
+     so the direction is marked where the GESTURE is, not where the handler is. */
+  const crumb = window._smCrumbBack;
+  window._smCrumbBack = function () { _smNavDir(true); return crumb.apply(this, arguments); };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHIPPY INSIDE CONTENT RATING — THE CATEGORIES, NOT THE QUESTIONS.
+
+   The step is 25 questions in six groups plus the age categorisation, and the
+   guide column is 254px wide: a row per question would be a second copy of the
+   form, scrolling beside the form. So the rows are the SIX GROUPS the step is
+   already divided into — the same `IOS_CR_CATEGORIES` the body renders from and
+   the same `_getLiveAnswer` the pinned line counts with, deliberately not a
+   second definition of "answered", because the panel and the bar inside the
+   modal would then be able to disagree in front of you.
+
+   That is the same move the store preview made: Shippy's rows are the step's
+   own sections, so the panel answers "how much is left and where" and the step
+   answers "what exactly".
+
+   AGE CATEGORY IS A ROW AND IS NOT A CONTENT QUESTION. The step prints it under
+   its own "Additional Information" header for that reason, and this keeps that
+   distinction rather than folding it into a seventh group of questions.
+
+   Reached by both doors: the step opened from the card, and the `content` flip
+   opened from the Product Page Preview — one body, one panel.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SM_CR_AGE_HEAD = 'Additional Information';
+
+function _smIsContentBody(sm) {
+  if (!sm) return false;
+  if (sm.stepId === 'contentRating') return true;
+  return sm.stepId === 'storePreview' && _smFlipTarget(sm.platformId) === 'content';
+}
+
+function _smContentItems(pid) {
+  if (typeof IOS_CR_CATEGORIES === 'undefined' || typeof _getLiveAnswer !== 'function') return null;
+  if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return null;
+  const blank = v => v === undefined || v === null || v === '';
+  const rows = IOS_CR_CATEGORIES.map(cat => {
+    const left = cat.questions.filter(q => blank(_getLiveAnswer(pid, q.id))).length;
+    return { label: cat.label, step: 'cr:' + cat.label, done: left === 0, bad: false };
+  });
+  /* The age row reads the same field `_crAgeAnswered` gates the section on, so
+     "answered" means here exactly what it means to the step. */
+  const age = _getLiveAnswer(pid, 'ageCategory');
+  rows.push({ label: 'Age category', step: 'cr:' + SM_CR_AGE_HEAD, done: !blank(age), bad: false });
+  return rows;
+}
+
+/* A ROW SCROLLS TO ITS OWN HEADER, matched on the header's TEXT rather than on
+   an index. The body drops a category's header entirely while the Unanswered
+   filter is on, so the Nth row is not the Nth header — and the labels are the
+   very strings these rows are built from, so the match cannot drift. Travel is
+   `_smScrollCentre` for its own reason: this modal stacks two scrollers and
+   scrollIntoView picks its own. */
+/* ══════════════════════════════════════════════════════════════════════════
+   ARRIVING SOMEWHERE FROM SHIPPY DIMS EVERYTHING ELSE.
+
+   Jaco: "cuando navego a través de shippy para encontrar o bien una sección o
+   bien un error, quiero que me dimees el resto con la animación típica que ya
+   tenemos cuando damos a submit en la platform card."
+
+   It is `_smSpotlight` — the platform card's own mechanism — with the step's
+   body standing in for the card, exactly as the Mac preview's pinned nav uses
+   it with the shell standing in. Not a second one: this list is a MAP of seven
+   groups and a press can move you past five of them, so arriving somewhere you
+   did not travel through leaves you hunting for the thing you asked for.
+
+   IT TAKES THE LOCATOR'S SETTINGS, NOT THE CARD'S. `.35` rather than `.18`,
+   because the rows you did not ask for are still perfectly true — the value
+   this app uses for "still true, just not what you asked for" — and 900ms
+   rather than 1100, which is `_smScrollCentre`'s 420 of travel plus under half
+   a second of "here it is". And it does NOT lock the pointer: the card's
+   spotlight is explaining a prerequisite and can afford to freeze the page,
+   where this one is a locator and you are free to go anywhere.
+
+   THE DIM STARTS WITH THE TRAVEL rather than on arrival, so it is what carries
+   the eye across the scroll instead of a second event happening to you after
+   it — hence the call BEFORE the scroll in each of the three doors.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _smCrSpot(targets) {
+  if (!_smShippyStep) return;
+  const host = document.querySelector('#submit-overlay .ios-step-body-content')
+            || document.querySelector('#submit-overlay .submit-modal-scroll');
+  if (!host) return;
+  host.classList.add('sm-cr-spot');
+  _smSpotlight(host, targets.filter(Boolean), 900);
+}
+
+/* A GROUP'S SPOTLIGHT IS ITS HEADER PLUS THE ROWS UNDER IT, walked in document
+   order until the next header — the body is a flat list, so "the section" is
+   not a box that can be lit, it is a run. */
+function _smCrSectionEls(head) {
+  const out = [head];
+  let n = head.nextElementSibling;
+  while (n && !n.classList.contains('ios-content-step-label')) {
+    if (!n.classList.contains('ios-q-divider')) out.push(n);
+    n = n.nextElementSibling;
+  }
+  return out;
+}
+
+function _smCrGo(label) {
+  const heads = [...document.querySelectorAll('#submit-overlay .ios-content-step-label')];
+  const el = heads.find(h => h.textContent.trim() === label);
+  if (!el) return false;
+  _smCrSpot(_smCrSectionEls(el));
+  _smCrScrollWhenSettled(el);
+  return true;
+}
+
+/* Hooking the three places the guide already knows about, rather than teaching
+   any of them a second model: WHAT the rows are, WHERE a row goes, and the two
+   lines above them. */
+(() => {
+  const origItems = _smStepItems;
+  _smStepItems = function () {
+    if (!_smShippyStep) return null;
+    const sm = _smOpenStep();
+    if (_smIsContentBody(sm)) return _smContentItems(sm.platformId);
+    return origItems.apply(this, arguments);
+  };
+
+  const origGo = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string' && step.slice(0, 3) === 'cr:') return _smCrGo(step.slice(3));
+    return origGo.apply(this, arguments);
+  };
+
+  /* The hero is written after the guide paints, the same post-pass the store
+     page's uses — and it has to run AFTER that one, or the preview's copy would
+     win on the content flip. */
+  const origRender = window.renderGuide;
+  window.renderGuide = function () {
+    const out = origRender.apply(this, arguments);
+    if (!_smShippyStep || !_smIsContentBody(_smOpenStep())) return out;
+    const el = document.getElementById('app-guide');
+    if (!el) return out;
+    const ti = el.querySelector('.guide-title');
+    const su = el.querySelector('.guide-sub');
+    /* Apple's word, not ours: every row here is a DECLARATION, which is why this
+       step is read more carefully than any other in the app. The sub says what
+       the rows do rather than describing the step twice. */
+    if (ti) ti.textContent = "What's in your game";
+    if (su) su.textContent = 'Every answer is a declaration. Press a group to jump to it.';
+    return out;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE FILTER MOVES TO THE PANEL, AND A FLAGGED ANSWER BECOMES A ROW.
+
+   Jaco: "la advertencia de arriba con el toggle All/Unanswered y el número de
+   respuestas inferidas, que se desplace al shippy panel. Y cuando activo algo
+   flagueable, como YES a loot boxes, que el mensaje salga en el shippy panel,
+   con un check que sea exclamación naranja."
+
+   THE BAR IS MOVED, NOT REBUILT. `.cr-pinned` is one node holding the toggle
+   and the sentence, and both are computed inside buildContentRatingSection from
+   numbers nothing else exports — so a copy in the guide would be a second
+   definition of "how many are left", which is the thing this file refuses
+   everywhere else. The live node is RE-PARENTED into the panel after each
+   paint, the way SHIPPY_LIVE's SVG is, and the modal's own copy is hidden in
+   CSS rather than removed by the builder: one object, one source, and turning
+   the experiment off puts it straight back where it was.
+
+   It lands ABOVE the rows because that is what it is — a control for the list
+   under it, which is the argument `.cr-pinned` was made sticky for in the first
+   place. Here it does not need to stick: nothing scrolls past it.
+
+   THE RISKS ARE ROWS, IN AMBER, AND THE COLOUR IS FORCED. Green done, amber
+   THIS NEEDS YOU, red wrong — a loot-box disclosure is work waiting on you
+   outside this app, which is amber's own sentence and exactly what `.ios-risk-
+   note` already paints inside the step. A tick would be a lie and a cross would
+   say the answer is invalid; it is neither, so the disc takes an exclamation.
+
+   The text comes from `IOS_CR_RISK_NOTES` — the same map the step renders —
+   first sentence only, because the panel's job is "this needs you and here is
+   where", and the full note is already printed beside the question it belongs
+   to. Pressing the row goes there.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SM_CR_RISK_SEL = { realMoneyGambling: '.ios-risk-note.risk-HIGH',
+                         lootBoxes:         '.ios-risk-note.risk-MEDIUM' };
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AN UNPUBLISHABLE ANSWER IS A SECOND SEVERITY, AND THE APP ALREADY PAINTS IT.
+
+   Jaco: "al marcar INFREQUENT/FREQUENT en Extended Graphic o en Sexual, se
+   marca la pill en rojo, y quizás debería pasar lo mismo — aviso peligroso en
+   el shippy panel, y marca roja a la izquierda."
+
+   Graphic Sexual Content and Nudity, or Prolonged Graphic or Sadistic Realistic
+   Violence, at ANY frequency put the app in Apple's Unrated value — which is
+   not a high rating, it is a refusal: Apple does not publish unrated apps. The
+   step already knows this twice over (the pill turns red, and Save & Return
+   refuses) and the panel said nothing at all.
+
+   SO THE PANEL GETS TWO LEVELS AFTER ALL, and they are the two the colour table
+   already distinguishes: amber THIS NEEDS YOU for work waiting outside the app,
+   red WRONG for an answer the store will not take. Flattening both to amber was
+   right while the only warnings were obligations; it stops being right the
+   moment one of them means "this cannot ship".
+
+   THE FIELDS COME FROM THE FLOOR TABLE, not a list of two names.
+   `appleAgeUnratedFields` reads the same APPLE_AGE_FLOORS_INTENSITY the rating
+   and the red pill read, so a third question added to that table appears here
+   with no edit — the rule this repo states as "it asks the floor table".
+
+   And the sentence is the one the blocked Save button already carries, so the
+   two places that explain a refusal cannot drift into two explanations. */
+function _smCrDangerRows(pid) {
+  if (typeof appleAgeUnratedFields !== 'function' ||
+      typeof APPLE_AGE_FLOORS_INTENSITY === 'undefined') return [];
+  /* Built field by field rather than handed `_appStoreAnswers(pid)`: Content
+     Rating's answers are SHARED, so Mac's own bucket does not contain them —
+     the routing trap this file records. `_getLiveAnswer` is the router. */
+  const a = {};
+  for (const f of Object.keys(APPLE_AGE_FLOORS_INTENSITY)) a[f] = _getLiveAnswer(pid, f);
+  const label = id => (typeof IOS_INTENSITY_QUESTIONS !== 'undefined' &&
+    (IOS_INTENSITY_QUESTIONS.find(q => q.id === id) || {}).label) || id;
+  return appleAgeUnratedFields(a).map(f => ({
+    label: label(f) + ' at this frequency makes the app Unrated — Apple does not publish unrated apps.',
+    step: 'cr:f:' + f, done: false, bad: false, danger: true,
+  }));
+}
+
+function _smCrRiskRows(pid) {
+  if (typeof IOS_CR_RISK_NOTES === 'undefined') return [];
+  const out = [];
+  for (const id of Object.keys(IOS_CR_RISK_NOTES)) {
+    let html = '';
+    try { html = IOS_CR_RISK_NOTES[id]({ [id]: _getLiveAnswer(pid, id) }) || ''; } catch (_) {}
+    if (!html) continue;
+    const txt = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const first = txt.split(/(?<=\.)\s/)[0] || txt;
+    out.push({ label: first, step: 'cr:q:' + id, done: false, bad: false, risk: true });
+  }
+  return out;
+}
+
+/* A risk row goes to its own note inside the step. Matched on the note's RISK
+   CLASS rather than on the question's label — the labels are translated and the
+   classes are the step's own machine-readable statement of severity. */
+function _smCrRiskGo(id, retried) {
+  const sel = SM_CR_RISK_SEL[id];
+  const note = sel && document.querySelector('#submit-overlay ' + sel);
+  /* THE TARGET IS THE QUESTION, NOT THE NOTE — and it has to be, now that the
+     inline note is hidden: a `display: none` element has no box, so scrolling
+     to it would aim at 0,0. The note is rendered immediately after the row that
+     causes it, so its previous sibling IS that row; reading it off the DOM
+     needs no per-question id and cannot drift from the builder.
+
+     It is also the better destination on its own terms. The row is what you
+     came to look at — the answer the warning is about — where the note is the
+     warning you have already read in the panel. */
+  const el = note && (note.previousElementSibling || note);
+  if (el) {
+    _smCrSpot([el]);
+    _smCrScrollWhenSettled(el);
+    return true;
+  }
+  /* A WARNING IS ALWAYS CAUSED BY AN ANSWERED QUESTION, which is exactly what
+     the Unanswered filter hides — so the row that says "this needs you" pointed
+     at nothing in the view it is most often read in. Pressing it switches the
+     filter and goes, rather than failing silently: you asked to see the thing,
+     and the only reason it was not there is a filter you can change.
+
+     The retry guard is what keeps that from becoming a loop if the note is
+     genuinely absent (another platform's question set, say). */
+  if (retried || typeof toggleContentRatingExpanded !== 'function') return false;
+  toggleContentRatingExpanded(true);
+  setTimeout(() => _smCrRiskGo(id, true), 60);
+  return true;
+}
+
+(() => {
+  /* A RISK IS NOT A TASK, so it is NOT in the counted list — and the first
+     version put it there. The head prints "6 of 9", and a warning has no tick:
+     it leaves when you change the answer, not when you finish it. Nine could
+     therefore never be reached, which this file's own rule calls a fault rather
+     than an exemption ("an item that can never complete reads as a fault").
+     It also collided with itself, because `.gd-task` is a one-line row.
+
+     So the risks are their own block under the list: same disc, same column,
+     their own box. */
+
+  const origGo = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string' && step.startsWith('cr:f:')) return _smCrFieldGo(step.slice(5));
+    if (typeof step === 'string' && step.startsWith('cr:q:')) return _smCrRiskGo(step.slice(5));
+    return origGo.apply(this, arguments);
+  };
+
+  const origRender = window.renderGuide;
+  window.renderGuide = function () {
+    const out = origRender.apply(this, arguments);
+    const sm = _smOpenStep();
+    if (!_smShippyStep || !_smIsContentBody(sm)) return out;
+    const el = document.getElementById('app-guide');
+    if (!el) return out;
+
+    /* THE SENTENCE MOVES, THE TOGGLE STAYS. Jaco: "¿o quizás el toggle de
+       unanswered/all debería mantenerse dentro de la card?"
+
+       Yes, and it is the navigation criterion applied to controls: going up or
+       out lives above, and anything that ACTS ON THE CONTENT lives with the
+       content. The toggle is a filter on the list directly beneath it — direct
+       manipulation, in the box, next to what it changes. The sentence is a
+       STATUS about the step, which is the panel's whole job.
+
+       And one of them cannot survive the move. The guide collapses to a rail,
+       so a filter in there is a control you can lose by folding a panel; a
+       status you can fold away is just a status you are not reading.
+
+       Only `.sw-tip-text` is re-parented, taken fresh from the modal every
+       paint — a kept reference would go stale the first time you answered a
+       question. */
+    /* AND THE TOGGLE GOES UP ONTO THE TITLE'S LINE. Jaco: "¿podría el
+       unanswered/all estar alineado con el Content Rating title?"
+
+       It is the step's own chrome — a filter on everything below it — and the
+       header is where this modal already keeps chrome: the language picker sits
+       there for exactly that reason. Down in the scroller it was a band of its
+       own above the first question, the first thing you read in a step whose
+       first thing should be a question.
+
+       It goes into `.submit-modal-title-row` rather than into
+       `.submit-modal-header-actions`, and that is not a preference: a flipped
+       panel renders no actions block at all (`isSubPanel ? '' : …`), so the
+       Content flip would have had nowhere to put it. The title row exists in
+       both arms, is already a flex line, and is the line he named. */
+    /* THE TWO MOVES BELONG TO THE PAGE ARM ONLY. In `mid` and `panel` the modal
+       keeps its own header and its own pinned bar, so lifting the filter into
+       the title row and the count into the panel would leave an empty bordered
+       strip where the bar used to be.
+
+       IT IS A BRANCH, NOT A RETURN, AND THAT WAS THE BUG. Jaco: "the red
+       warnings don't appear in the integrated Shippy panel version." They did
+       not, because this early-returned before the rest of the function — the
+       danger rows, the amber notes and the question stripes all live BELOW it.
+       An early return is a claim about the whole function; only these two
+       paragraphs are about the arm. */
+    /* `card` is needed on BOTH sides of this branch — the risks block below
+       hangs off it — so it is declared before the branch rather than inside it.
+       Left in, it was a `const` scoped to the page arm and the warnings never
+       painted in the other two: the exact bug this branch was written to fix,
+       one line further down. */
+    const card = el.querySelector('.guide-card') || el;
+    if (_smGuideBesideOn) {
+      const toggle = document.querySelector('#submit-overlay .cr-toggle-bar');
+      const titleRow = document.querySelector('#submit-overlay .submit-modal-title-row');
+      if (toggle && titleRow && toggle.parentElement !== titleRow) {
+        toggle.classList.add('sm-cr-toggle-moved');
+        titleRow.appendChild(toggle);
+      }
+
+
+    }
+
+    /* THE STATUS LINE GOES TO THE TOP, IN EVERY ARM THAT HAS THE PANEL. Jaco:
+       "no sé si 'Shippy Checklist' y '7/7 Submission' ayudan o dicen algo."
+
+       They did not. The eyebrow names the CARD, which is right on the dashboard
+       — you arrive at that object cold — and is the one line in this column that
+       never changes once you are inside a step. And the head was wrong in both
+       halves: "Submission" is the name of the VIEW printed over rows that belong
+       to a STEP, and `7/7` counts GROUPS, which is a unit nobody holds. Apple's
+       step counts questions, and there are 24 — so the panel could read 7/7
+       with two red warnings under it.
+
+       What replaces them is the step's own sentence, in the step's own units,
+       first thing in the column: "2 of 24 still to answer." Moved rather than
+       rebuilt, for the reason it has always been moved — the number is computed
+       inside `buildContentRatingSection` and a copy here would be a second
+       definition of how much is left.
+
+       The TOGGLE stays behind in the modal in `mid` and `panel` (above), which
+       is the split this file already argued: the filter acts on the list it
+       sits over, the status is about the step and belongs to the panel. */
+    /* IT IS COPIED, NOT MOVED — AND MOVING IT WAS A ONE-WAY DOOR. Jaco:
+       "desaparece en Content Rating el número de preguntas contestadas si toco
+       alguno de los warnings."
+
+       Re-parenting took the node OUT of `.cr-pinned`, so the modal no longer
+       had one. This pass runs on every `renderGuide`, and `renderGuide`
+       rewrites the column with innerHTML — so the first guide render that was
+       not preceded by a modal render destroyed the only copy and then found
+       nothing to move. Measured: line "2 of 24 still to answer." → a bare
+       `renderGuide()` → `line: null`, `sm-has-cr-line` off, and `.cr-pinned
+       .sw-tip-text` gone from the modal too. Permanent until the step was
+       re-opened.
+
+       A clone costs nothing here and is not the "second definition" the move
+       was protecting against: the number is still computed once, inside
+       `buildContentRatingSection`, and this transcribes it fresh on every pass
+       — a cached STRING would go stale, a clone re-read from the live node
+       cannot. The source stays where its builder put it and is hidden in the
+       modal by CSS, the way the whole bar is hidden in the page arm. */
+    const src = document.querySelector('#submit-overlay .cr-pinned .sw-tip-text');
+    const old = card.querySelector(':scope > .sm-cr-line-moved');
+    if (old) old.remove();
+    if (src) {
+      const copy = src.cloneNode(true);
+      copy.classList.add('sm-cr-line-moved');
+      card.insertBefore(copy, card.firstChild);
+    }
+    card.classList.toggle('sm-has-cr-line', !!src);
+
+    /* AND THE QUESTION THAT CAUSED IT IS MARKED IN THE FORM. Jaco: "¿habría que
+       poner una marca en las preguntas correspondientes dudosas?"
+
+       Yes, and it is a gap I opened: taking the inline note out left the form
+       saying nothing at all about which answer the panel is warning about. The
+       row scrolls into view and then sits there looking like the twenty-four
+       around it.
+
+       IT IS THE RAIL `.ios-q-row` ALREADY HAS. That element carries a 3px
+       transparent left border precisely so a state can colour it — validation
+       uses it for unanswered rows — and it is drawn OUTSIDE the text column, so
+       lighting it indents nothing. One mark, no new shape, no layout.
+
+       The hue is the panel's `#FFB86B` rather than validation's `#fb923c`: the
+       warning and its cause are one fact in two places, and that orange is the
+       retired Subwoofer one this file keeps out of the tip vocabulary.
+
+       The row is found as the note's PREVIOUS SIBLING, the same lookup the
+       warning's own press uses — the builder renders the note immediately after
+       the question, so there is one definition of "which row is this about". */
+    document.querySelectorAll('#submit-overlay .ios-q-row.sm-q-flagged')
+      .forEach(n => n.classList.remove('sm-q-flagged'));
+    for (const id of Object.keys(SM_CR_RISK_SEL)) {
+      const note = document.querySelector('#submit-overlay ' + SM_CR_RISK_SEL[id]);
+      const row = note && note.previousElementSibling;
+      if (row && row.classList.contains('ios-q-row')) row.classList.add('sm-q-flagged');
+    }
+    /* The unpublishable rows are read off the PAINT, not off the state: the red
+       pill is `.is-sel-unrated`, so the stripe cannot disagree with the pill
+       about which answer is the problem. Same discipline as `_sppCelebrate`. */
+    document.querySelectorAll('#submit-overlay .ios-q-row.sm-q-danger')
+      .forEach(n => n.classList.remove('sm-q-danger'));
+    document.querySelectorAll('#submit-overlay .intensity-btn.is-sel-unrated')
+      .forEach(b => { const row = b.closest('.ios-q-row');
+                      if (row) { row.classList.add('sm-q-danger'); row.classList.remove('sm-q-flagged'); } });
+
+    /* The risks, under the list. Rebuilt on every paint rather than patched,
+       so an answer you take back removes its warning in the same render. */
+    card.querySelectorAll('.sm-guide-risks').forEach(n => n.remove());
+    /* Danger first: severity is the order, which is also the one thing the
+       panel can say about it that a single hue cannot. */
+    const risks = _smCrDangerRows(sm.platformId).concat(_smCrRiskRows(sm.platformId));
+    if (risks.length) {
+      const list = card.querySelector('.guide-tasks') || card.querySelector('.gd-task')?.parentElement;
+      if (list) {
+        const box = document.createElement('div');
+        box.className = 'sm-guide-risks';
+        /* THE WARNINGS STOPPED WEARING A DISC, AND THAT IS THE FIX. Jaco: "si
+           veo que el check del grupo de preguntas está completo y luego abajo,
+           una exclamación, me quedo confundido."
+
+           He is right, and my previous answer — that a section says "have you
+           answered" while a warning says "what it commits you to" — is a true
+           distinction that the READER does not hold. What they see is one
+           column of discs that says "all done" and then two discs that say
+           "not". The contradiction is in the FORM, not in the content.
+
+           So the warnings stop being checklist items: no disc, an amber rail,
+           and an eyebrow that names what the block is. A disc in this column
+           means a thing you complete, and these are not completed — they are
+           left, on purpose, for as long as the answer stands. Nesting them
+           under their group was the other candidate and fails harder: a group
+           is flagged precisely because it is FINISHED, so the row would have to
+           say "done" and "attention" at once — the two marks on one object this
+           app has refused four times.
+
+           The rail is the same one the flagged question wears in the form, so
+           the note and its cause are one shape in two places. */
+        box.innerHTML =
+          '<div class="sm-risk-head"></div>' + risks.map(r =>
+          '<button class="sm-risk-row' + (r.danger ? ' is-danger' : '') +
+          '" onclick="chkGoStep(\'' + r.step + '\')">' +
+          '<span class="sm-risk-text"></span></button>').join('');
+        /* THE HEAD IS THE GUIDE'S OWN: A LABEL AND A COUNT. Jaco asked for
+           "2 Warnings"; `.guide-tasks-head` two inches above is
+           `<span>label</span><span>6/7</span>`, so this takes that shape rather
+           than inventing a third. The number goes on the right and the WORD
+           stays out of it — the label already says what these are, so "2
+           Warnings" beside "WHAT THIS COMMITS YOU TO" would say it twice, which
+           is what the platform crumb and the inline note both lost for.
+
+           It also survives truncation for the reason the privacy table's group
+           counts do: the sentences are long and wrap, and the number is the one
+           thing that is still readable at a glance. */
+        const head = box.querySelector('.sm-risk-head');
+        head.innerHTML = '<span></span><span class="sm-risk-count"></span>';
+        head.firstElementChild.textContent = 'What this commits you to';
+        head.lastElementChild.textContent = String(risks.length);
+        [...box.querySelectorAll('.sm-risk-text')].forEach((n, i) => { n.textContent = risks[i].label; });
+        list.insertAdjacentElement('afterend', box);
+      }
+    }
+    return out;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE STEP GROWS OUT OF THE CARD IT BELONGS TO.
+
+   Jaco: "cuando apriete algún step de cualquier plataforma, que el nuevo
+   content card se cree como si se animase desde la posición de la platform card
+   en la que estoy. Como una forma de indicar: ah, viene de aquí."
+
+   It is the same argument the push/pop made one level down, at the level above
+   it. A modal that fades in at the centre of the screen is a NEW thing
+   appearing; one that grows out of the card you pressed is the SAME thing
+   opening — which is what it is, since every step in it belongs to that
+   platform and nothing else. With the scrim gone the card is still on screen
+   behind it, so the relationship is visible rather than asserted.
+
+   MEASURED, NOT AUTHORED. The origin is the card's real rect at the moment of
+   the press, so it is right for any card in the grid, at any scroll position
+   and any window size — there is no number here that can go stale. If the card
+   is not on screen (another layout arm, a step opened from somewhere else) the
+   animation simply does not run and the modal arrives as it always did.
+
+   UNIFORM SCALE, FROM THE WIDTH. A card is 418 × 376 and the modal is 810 wide:
+   scaling each axis by its own ratio would stretch the type horizontally for
+   300ms, which reads as a distortion rather than as a zoom. One scale, and the
+   two top-left corners are what coincide — the corner nearest the card is the
+   one the eye is already on.
+
+   IT IS A WAAPI ANIMATION AND NOT A CSS CLASS, deliberately: `.submit-modal`
+   carries `animation: modalIn` and this file has a long, expensive note about
+   modalIn having to stay at index 0 of that list. A Web Animations object is
+   not in the list at all — it composites ABOVE the CSS animation while it runs
+   and leaves nothing behind when it ends, so the cascade is untouched.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* `SM_OPEN_FROM_MS` is gone with the zoom it timed — see `_smOpenFrom`. The
+   open's duration is the push's, which lives in CSS beside its keyframes. */
+
+function _smOpenFrom() {
+  /* THERE IS NO MORPH ANY MORE, AND THAT IS THE THIRD ANSWER TO THE SAME
+     QUESTION. Jaco, on the clip-reveal: "no me convence la animación de
+     expandido, para nada."
+
+     Both versions were trying to say "this came from that card", and both
+     failed for the same underlying reason: THE TWO THINGS SHARE NOTHING TO
+     MORPH. A container transform works when the before and after hold the same
+     content — a thumbnail becoming a photo. Here the card is a header, a
+     release block and six step rows, and the panel is a form; since the title
+     moved up into the trail they do not even share a name. All they have in
+     common is a rectangle, so the animation could only ever be a rectangle
+     growing, which reads as a wipe.
+
+     And it was answering a question nobody has. You know where it came from:
+     you pressed it. The dashboard dimming behind and the trail rewriting itself
+     already say the rest.
+
+     SO OPENING A STEP IS THE PUSH — the same motion as going one level deeper
+     inside the panel, because it IS the same move, one level further up the
+     tree. That leaves the app with ONE motion vocabulary: push forward, pop
+     back, and nothing else. A third gesture that exists only at the dashboard
+     boundary was a dialect.
+
+     What this deletes: the origin rect, `_smHideOrigin`, the clip arithmetic
+     and its own duration constant. Kept as a function so the call site does
+     not have to know the answer changed. */
+  _smAdvanceInPlace();
+}
+
+(() => {
+  const orig = window.openStepModal;
+  if (typeof orig !== 'function') return;
+  window.openStepModal = function (pid) {
+    /* WAS ANYTHING ALREADY OPEN? This is the whole difference between the two
+       motions, and getting it wrong is the bug Jaco caught: reaching Game
+       Center from inside the Product Page Preview zoomed the panel up from the
+       platform card, as though you had just arrived from the dashboard.
+
+       You had not. `openStepModal` is BOTH doors — arriving from a card, and
+       advancing a level from inside a panel that is already open — and only the
+       first has an origin on screen. The second is exactly the push this file
+       argued for two entries up: a place UNDER the one you are in, which the
+       trail states in words and which a zoom contradicts.
+
+       Measured before the fix: scale 0.63 → 1 on a press that should not have
+       scaled at all. */
+    const ovNow = document.getElementById('submit-overlay');
+    const wasOpen = !!ovNow && !ovNow.classList.contains('hidden');
+
+    /* Only a card that is really on screen is an origin. A zero-height rect —
+       an unmounted arm, a collapsed grid — would collapse the modal to a point
+       and read as a glitch rather than as a journey. */
+    /* Anything still closing loses. Opening is the newer intent. */
+    _smAbortClose();
+    const r = orig.apply(this, arguments);
+    _smAdvanceInPlace();
+    if (!wasOpen) _smJumpToFirstDanger(pid, arguments[1]);
+    return r;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AND IT GOES BACK THE SAME WAY. Jaco: "cuando pulso Submission de vuelta, una
+   animación rápida de des-colocación, igual que la de generación pero a la
+   inversa."
+
+   Which is the whole point of having measured the origin: if opening says "this
+   came from here", closing has to say "it went back there" or the first claim
+   was decoration. Same rect, same easing, same uniform scale from the top-left
+   corner — one gesture and its reverse, which is the distinction this file
+   keeps making between a REVERSE (the card's gear) and an ADVANCE (submitting).
+
+   FASTER, AND THE ASYMMETRY IS DELIBERATE. 240 against the open's 320: arriving
+   is worth watching because you are about to read what arrived, where leaving
+   is a decision you have already taken — the same trade the submitted card's
+   step list makes with its instant hide and its eased return, in the other
+   direction.
+
+   THE CLOSE WAITS FOR IT. `closeStepModal` hides the overlay outright, so the
+   modal would vanish on frame one and the animation would run on nothing. It is
+   deferred to `onfinish`, and `cancel` is wired to the same handler so a
+   browser that refuses the animation still closes rather than stranding a modal
+   nobody can dismiss.
+
+   AND THE DASHBOARD COMES BACK UP WITH IT, not after. The dim is keyed on
+   `body.sm-guide-beside`, which is removed by the real close — i.e. at the END
+   — so the cards would have stayed at .35 through the whole shrink and then
+   popped. `sm-step-closing` lifts them on the same curve, so the two halves of
+   one motion stay one motion.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* 120, DOWN FROM 240. Jaco: "dar a la flecha de back debería ser más rápido,
+   casi instantáneo."
+
+   Leaving is a decision you have already taken, and it lands somewhere that is
+   already on screen — the dashboard has been visible behind the panel this
+   whole time, at .35. There is nothing to narrate: the motion only has to say
+   which direction, and 120ms says it. The open keeps its own pace because
+   arriving is different — you are about to read what arrived.
+
+   Same asymmetry the submitted card's step list uses, and the one this file
+   argued for when the close was first written: instant out is decisive, a
+   gentle return is what an undo should feel like. This is that taken further,
+   now that the back arrow is the ONLY way out of the header.
+
+   ONE NUMBER, TWO CONSUMERS: the panel's pop and the dashboard's un-dim have to
+   move together or the cards come back after the panel has gone. `--sm-close`
+   carries it to the CSS, the way `--cancel-hold` does for the hold. */
+const SM_CLOSE_TO_MS = 120;
+try { document.documentElement.style.setProperty('--sm-close', SM_CLOSE_TO_MS + 'ms'); } catch (_) {}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LEAVING FOR SOMEWHERE ELSE IS NOT THE SAME GESTURE AS CLOSING.
+
+   Jaco: "si toco Game Details o cualquier cosa cuando tengo una card abierta,
+   no hagas la animación de disminuir visible. Llévame inmediatamente donde yo
+   quiero, y haz en el background el cambio a dashboard platform view por si
+   quisiera volver."
+
+   The shrink says "this went back into that card", which is TRUE when you press
+   Submission in the trail and a lie when you press Game Details: the card is
+   not where you are going, and watching a 240ms animation about it is 240ms
+   between you and the thing you asked for. An animation that describes a place
+   you are leaving behind is a toll.
+
+   So the close still happens — `setView` already performs it, the dashboard is
+   left on the platform grid, and coming back finds it there — it simply happens
+   in the same frame. Same rule the submitted card's step list follows: instant
+   out is decisive, and only the RETURN deserves easing.
+   ══════════════════════════════════════════════════════════════════════════ */
+let _smInstantClose = false;
+(() => {
+  const orig = window.setView;
+  if (typeof orig !== 'function') return;
+  window.setView = function () {
+    _smInstantClose = true;
+    try { return orig.apply(this, arguments); }
+    finally { _smInstantClose = false; }
+  };
+})();
+
+/* A CLOSE THAT IS WAITING ON AN ANIMATION IS A CLOSE THAT CAN BE OVERTAKEN.
+   Held here so the OPEN path can abort it — see the note at `_smAbortClose`. */
+let _smPendingClose = null;
+function _smAbortClose() {
+  const p = _smPendingClose;
+  _smPendingClose = null;
+  if (p) p.abort();
+}
+
+(() => {
+  const orig = window.closeStepModal;
+  if (typeof orig !== 'function') return;
+  let closing = false;
+  window.closeStepModal = function () {
+    const args = arguments, self = this;
+    const ov = document.getElementById('submit-overlay');
+    const sm = _smOpenStep();
+    const modal = ov && ov.querySelector('.submit-modal');
+    const card = sm && document.getElementById('active-card-' + sm.platformId);
+    const r = card ? card.getBoundingClientRect() : null;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (closing || !_smGuideBesideOn || !modal || !r || !r.width || !r.height || reduce ||
+        _smNoAnim || _smInstantClose) {
+      return orig.apply(self, args);
+    }
+    const m = modal.getBoundingClientRect();
+    if (!m.width || !m.height) return orig.apply(self, args);
+
+    closing = true;
+    document.body.classList.add('sm-step-closing');
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(guard);
+      _smPendingClose = null;
+      /* Braces to the open's belt: the fill is cancelled in the same task as
+         the close, so the browser paints once with `hidden` already applied and
+         there is no frame at full size. */
+      if (a) { a.onfinish = null; a.oncancel = null; try { a.cancel(); } catch (_) {} }
+      done();
+    };
+    /* ABORT, NOT FINISH. If a step is opened while this close is still running,
+       the pending close must let go rather than complete — otherwise it hides
+       the modal that has just been opened. That is the "every second open did
+       nothing" bug, and its real cause is that a WAAPI animation does not
+       progress in a hidden tab: `onfinish` never fires, the close sits pending,
+       and it lands on whatever is open by the time the tab comes back. */
+    const abort = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(guard);
+      closing = false;
+      document.body.classList.remove('sm-step-closing');
+      if (a) { a.onfinish = null; a.oncancel = null; try { a.cancel(); } catch (_) {} }
+    };
+    /* And a close must never be able to not happen. If the animation neither
+       finishes nor is cancelled — a throttled tab, an engine that refuses it —
+       this closes anyway, a little late. */
+    const guard = setTimeout(finish, SM_CLOSE_TO_MS + 400);
+    _smPendingClose = { abort };
+    const done = () => {
+      closing = false;
+      document.body.classList.remove('sm-step-closing');
+      orig.apply(self, args);
+    };
+    /* AND LEAVING IS THE POP. Same argument as the open: the panel is not
+       going back into the card, it is the page you are leaving. It slides the
+       way a pop slides and fades, which is what every other "back" in this
+       paradigm already does. */
+    a = modal.animate(
+      [{ transform: 'none', opacity: 1 },
+       { transform: 'translateX(10%)', opacity: 0 }],
+      { duration: SM_CLOSE_TO_MS, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
+    );
+    a.onfinish = finish;
+    a.oncancel = finish;
+  };
+})();
+
+
+/* ADVANCING INSIDE AN OPEN PANEL IS THE PUSH'S ENTER HALF, AND NOTHING ELSE.
+   There is no exit to play: `openStepModal` replaces the body synchronously,
+   so by the time this runs the outgoing screen is already gone — which is what
+   makes `is-flip-enter` on its own the honest motion rather than half of one.
+
+   It reuses the flip classes rather than repeating their keyframes, so the
+   advance and the preview's own flip cannot drift into two speeds. The class is
+   stripped on `animationend` for the reason the carousel's glint is: left
+   behind, the next render inherits a finished animation. */
+function _smAdvanceInPlace() {
+  /* `_smShippyStep`, NOT `_smGuideBesideOn`: the push belongs to the arms that
+     carry a trail, which is all three of them, and gating it on the page
+     paradigm left `mid` and `panel` opening a level with no motion at all. */
+  /* `_smNoAnim` is the PAGE ARM's switch and only its own: `mid` and `panel`
+     keep the push. */
+  if (!_smShippyStep || (_smGuideBesideOn && _smNoAnim)) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  requestAnimationFrame(() => {
+    const modal = document.querySelector('#submit-overlay .submit-modal');
+    if (!modal) return;
+    /* CANCEL WHAT THE LAST CLOSE LEFT BEHIND — THIS IS WHY THE PANEL OPENED
+       INVISIBLE. The close animates to `translateX(10%)` + `opacity: 0` with
+       `fill: 'forwards'`, and `renderStepModal` writes innerHTML rather than
+       replacing the element, so `.submit-modal` is the SAME NODE next time. A
+       forwards-filling animation on a reused node never expires: measured, the
+       panel sat at `opacity 0` and `translateX(84.4px)` for every frame of the
+       next open while its children pushed in perfectly underneath.
+
+       The zoom used to carry this guard and it went with the zoom — the fill it
+       was compensating for did not. It belongs here, on the ONE path both doors
+       (arriving from the dashboard, advancing a level) now share. */
+    try { modal.getAnimations().forEach(x => x.cancel()); } catch (_) {}
+    /* IT DOES NOT SET THE DIRECTION, and it must not: the GESTURE already has.
+       `_smCrumbBack` marks a pop before pressing, and Game Center's own return
+       is an `openStepModal` — so forcing forward here made going BACK play the
+       forward push. Measured: `sm-push-enter` on a press that means up. With no
+       class the default is forward, which is what a row opening a deeper step
+       already means. */
+    modal.classList.remove('is-flip-enter');
+    void modal.offsetWidth;            /* restart it if one is already running */
+    modal.classList.add('is-flip-enter');
+    const off = () => { modal.classList.remove('is-flip-enter'); clearTimeout(t); };
+    const t = setTimeout(off, 500);
+    modal.addEventListener('animationend', off, { once: true });
+  });
+}
+
+
+/* A danger row goes to its own question, found through the button that writes
+   that field — `answerIOSField('<id>', …)` is in the markup already, so this is
+   a lookup rather than a second map of ids to rows. */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SCROLL ONLY ONCE THE PAGE HAS STOPPED MOVING UNDER THE TARGET.
+
+   Switching the filter to All inserts ~17 rows, and the retry that followed it
+   was on a 60ms timer: measured, the jump landed 214px short (scrollTop 297
+   where 511 centres it), and calling the very same function by hand a moment
+   later was exact. The row existed when we measured; what changed afterwards is
+   everything ABOVE it.
+
+   So this waits for the target's own `offsetTop` to be the same on two
+   consecutive frames — the honest test, because it asks the thing that was
+   wrong rather than guessing a delay that happens to be long enough today.
+   Capped, so a surface that never settles still travels rather than never
+   arriving.
+
+   Same family as this repo's "re-query anything the modal owns after a render"
+   and its scroll-restore note: a number read before layout is not a number. */
+function _smCrScrollWhenSettled(el, tries) {
+  if (!el) return;
+  const t0 = el.offsetTop;
+  requestAnimationFrame(() => {
+    if (el.offsetTop !== t0 && (tries || 0) < 12) return _smCrScrollWhenSettled(el, (tries || 0) + 1);
+    if (typeof _smScrollCentre === 'function') _smScrollCentre(el);
+    else el.scrollIntoView({ block: 'center' });
+  });
+}
+
+function _smCrFieldGo(fieldId, retried) {
+  const btn = document.querySelector(
+    '#submit-overlay [onclick^="answerIOSField(\'' + fieldId + '\'"]');
+  const row = btn && btn.closest('.ios-q-row');
+  if (row) {
+    _smCrSpot([row]);
+    _smCrScrollWhenSettled(row);
+    return true;
+  }
+  /* The same rescue the warnings' press needed, and for the same reason: an
+     unpublishable answer is by definition an ANSWERED one, which is exactly
+     what the Unanswered filter hides. Switch the filter and go, rather than
+     failing silently at the one row that must not be missable. */
+  if (retried || typeof toggleContentRatingExpanded !== 'function') return false;
+  toggleContentRatingExpanded(true);
+  setTimeout(() => _smCrFieldGo(fieldId, true), 60);
+  return true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   A STEP OPENED WHILE IT IS RED LANDS ON THE THING THAT IS RED.
+
+   Jaco: "si entro a un paso marcado en rojo desde la platform card, llévame
+   directamente a la primera pregunta marcada en rojo."
+
+   The card now says a step cannot ship; opening it and landing at question one
+   of twenty-four makes you go and find what the card already knows. This is the
+   card's claim followed through — the same press, one level in.
+
+   ONLY RED, AND ONLY FROM THE CARD. Amber is an obligation outside the app
+   (get the entitlement, publish the odds) and there is nothing in the form to
+   go and fix, so jumping you somewhere would be answering a question you did
+   not ask. And only on the way IN from the dashboard: `openStepModal` is also
+   how you advance a level from inside a panel, and a scroll you did not ask
+   for on every advance would be the opposite of a locator.
+
+   It rides `_smCrFieldGo`, so it arrives with the spotlight and through the
+   filter rescue — one definition of "go to that question", three doors into it.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _smJumpToFirstDanger(pid, stepId) {
+  if (!_smShippyStep) return;
+  if (_smStepRisk(pid, stepId) !== 'high') return;
+  const rows = _smCrDangerRows(pid);
+  if (!rows.length) return;
+  const field = rows[0].step.slice(5);      /* 'cr:f:<id>' */
+  /* IT STILL WAITS, and the reason survives the animation that caused it. The
+     open used to SCALE the panel 0.49 → 1 for 320ms, and `_smScrollCentre`
+     works in `getBoundingClientRect` — so both the target's position and the
+     scroller's height came back as the animation's projection, roughly half.
+     Measured then: it settled at scrollTop 339 where 511 centres the row, with
+     the row's `offsetTop` constant at 855 throughout, which is what proved the
+     layout was fine and the reading was not.
+
+     The push does not scale anything, so the rects are honest from the first
+     frame — but the panel's CONTENT is still travelling for 140ms, and reading
+     a box mid-travel is the same class of mistake. The wait is shorter now
+     because the motion is. */
+  setTimeout(() => _smCrFieldGo(field), 220);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE CARD'S DISC CARRIES THE RISK — AND THE VOCABULARY HAS BEEN SITTING HERE
+   UNUSED SINCE IT WAS WRITTEN.
+
+   Jaco: "si hay errores, en la platform card el circulito de checkmark que esté
+   o bien en naranja, o rojo con una x si tiene algo mortal que va a
+   cancelarnos."
+
+   `.ios-step-num.is-risk-warn` and `.is-risk-high` exist in style.css (7827,
+   7832), are cited in four of this repo's own notes as the app's amber
+   reference — and NOTHING HAS EVER SET THEM. Grepped: two `classList.remove`
+   (app.js 3441 and 22668) and zero `add`, anywhere. So the card could not point
+   at a problem because the mechanism for doing it was never wired, not because
+   nobody had designed one.
+
+   AMBER AND RED MEAN WHAT THEY MEAN EVERYWHERE ELSE HERE, which is why this
+   needs no new decision: amber is work waiting on you outside the app (the
+   loot-box disclosure, the gambling entitlement), red is an answer the store
+   will not take. Same two levels as the panel's notes and the same two hues, so
+   the card, the panel and the form say one thing in three places.
+
+   THE CROSS ONLY REPLACES THE TICK ON RED. An amber step is finished and
+   carries an obligation, so its tick is still true and only its colour changes
+   — the platform card's own argument that a soft disc going green is the same
+   object changing colour rather than a change of kind. A red step is NOT
+   finished in any sense that matters, so the mark itself has to change, and it
+   changes to `smCrossSVG` — the same glyph the store preview's pinned bar uses
+   for a bad section, at the same 100% of its disc.
+
+   It is a post-pass over the DOM rather than an edit to the three builders,
+   because every one of them recomputes the disc from scratch: `updateIOSCard`,
+   `updateSteamCard` and a full `renderDashboard` all rewrite `innerHTML` and
+   strip these classes on the way past. One pass, wrapped onto all three, is one
+   definition; three edits would be an inventory.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _smStepRisk(pid, stepId) {
+  if (stepId !== 'contentRating') return null;
+  if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return null;
+  if (_smCrDangerRows(pid).length) return 'high';
+  if (_smCrRiskRows(pid).length)   return 'warn';
+  return null;
+}
+
+function _smPaintStepRisks() {
+  if (!_smShippyStep) return;
+  document.querySelectorAll('.active-card .ios-step-card[id]').forEach(card => {
+    const m = /^(.+)-step-card-(.+)$/.exec(card.id);
+    if (!m) return;
+    const disc = card.querySelector('.ios-step-num');
+    if (!disc) return;
+    disc.classList.remove('is-risk-warn', 'is-risk-high');
+    const risk = _smStepRisk(m[1], m[2]);
+    if (!risk) return;
+    disc.classList.add(risk === 'high' ? 'is-risk-high' : 'is-risk-warn');
+    /* RED ALWAYS CARRIES THE CROSS, FINISHED OR NOT. This first replaced the
+       glyph only on a `is-done` disc, on the argument that an unfinished step
+       should keep its number — and that leaves a red disc with a "2" in it,
+       which reads as a step you have not reached rather than one that is
+       wrong. Jaco: "no dejes el número 2."
+
+       The step's position in the list is the one thing a red disc has no need
+       to say: you are not going to work through it in order, you are going to
+       fix it. So the mark is the state, exactly as it is on the pinned bar,
+       where a bad section's disc drops its tick for a cross rather than keeping
+       a number nobody asked for. */
+    if (risk === 'high' && typeof smCrossSVG === 'function') {
+      disc.innerHTML = smCrossSVG();
+    }
+  });
+}
+
+(() => {
+  for (const fn of ['renderDashboard', 'updateIOSCard', 'updateSteamCard', 'renderSubmission']) {
+    const orig = window[fn];
+    if (typeof orig !== 'function') continue;
+    window[fn] = function () {
+      const r = orig.apply(this, arguments);
+      try { _smPaintStepRisks(); } catch (_) {}
+      return r;
+    };
+  }
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PAGE DISSOLVES AT BOTH ENDS. Jaco: "el gradiente del top fader de la web
+   debería ser un gradiente tipo el que teníamos en el modal en top y bottom."
+
+   The modal's own two fades were deleted when the inner scroller went — right,
+   because a gradient over a boundary that no longer exists is a shadow claiming
+   content that is not there. But the boundary MOVED rather than disappeared: it
+   is the overlay's scrollport now, and its edges are exactly where the step is
+   cut — under the trail at the top, and on the footer bar at the bottom.
+
+   So the same fades come back, one level out, with `.submit-modal-fade-*`'s own
+   stops rather than new ones: `rgba(20,20,20,…)` over 40px at the top and 80 at
+   the bottom, because that is `--panel` and it is what the page sits on.
+
+   AND ONLY WHILE THERE IS SOMETHING THAT WAY, which is the rule those two were
+   written under and the reason they earn their place: a fade at `scrollTop 0`
+   is a shadow over content that is not there, and one at the end claims a page
+   that has ended. Stated positively (`is-scrolled` / `is-scrollable-down`) so
+   the resting state at each end needs no class at all — the Mac preview's own
+   arrangement.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _smOverlayFades() {
+  const ov = document.getElementById('submit-overlay');
+  if (!ov) return;
+  const scrollable = ov.scrollHeight > ov.clientHeight + 2;
+  ov.classList.toggle('is-scrolled', scrollable && ov.scrollTop > 2);
+  ov.classList.toggle('is-scrollable-down',
+    scrollable && ov.scrollTop + ov.clientHeight < ov.scrollHeight - 2);
+}
+
+(() => {
+  const ov = document.getElementById('submit-overlay');
+  if (!ov) return;
+  ov.addEventListener('scroll', _smOverlayFades, { passive: true });
+  window.addEventListener('resize', _smOverlayFades);
+  /* Re-armed after every step render for `_smModalFades`'s own reason: the
+     content's height changes with the filter, the flip and every answer, so
+     "is there more below" is not a fact you can take once. */
+  const after = _smGuideAfterStep;
+  _smGuideAfterStep = function () { after(); _smRailMount(); requestAnimationFrame(_smOverlayFades); };
+})();
+
+
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE STEP CRUMB IS A PICKER, AND THE ASYMMETRY WITH THE PLATFORM IS THE POINT.
+
+   Jaco: "¿debería ser posible navegar a los otros lugares de cada plataforma
+   desde el crumbs header?" — and then the honest doubt about pills for all six.
+
+   PILLS DO NOT FIT AND WOULD NOT BE RIGHT EVEN IF THEY DID. At 15px mono
+   "Improve Your Submission" alone measures 296px on the card; six pills with a
+   disc and a label clear 900, in a row already carrying the back button, the
+   platform and the step. It would have to scroll sideways. And the deciding
+   reason is not the width: the CARD'S STEP ROWS ALREADY ARE THAT CONTROL, with
+   the discs, the risk colours, the chevrons and the release block beside them.
+   A second copy in the header is a second definition, which is how two things
+   that mean one thing start to disagree.
+
+   WHY THE STEP GETS A PICKER WHEN THE PLATFORM JUST LOST ONE. Choosing a
+   platform is the DASHBOARD's question — that view exists to show them all at
+   once — so answering it from inside a step changes context without changing
+   place. The steps are different: they belong to the submission you are already
+   in, so moving between them is a move WITHIN the context, which is exactly
+   what a breadcrumb's last link is for. It turns three presses (back, card,
+   other step) into one.
+
+   AND THE DISCS BELONG HERE, WHICH ANSWERS THE OTHER HALF. The trail itself
+   stays an address and carries no status — but the menu it opens is where "how
+   is this platform doing" can be read from anywhere, in the card's own disc
+   vocabulary rather than a new one.
+
+   THE CURRENT STEP IS IN THE LIST ON PURPOSE. Flipped into a sub-panel,
+   choosing it is how you come back up — so the menu is also the flip's own
+   "back one layer", and that gesture needed no second control.
+   ══════════════════════════════════════════════════════════════════════════ */
+window._smStepMenu = function (ev) {
+  ev && ev.stopPropagation();
+  const sm = _smOpenStep();
+  if (!sm) return;
+  const host = document.querySelector('.sm-hd-right .sm-hd-steppick');
+  if (!host) return;
+  const open = document.querySelector('.sm-hd-menu');
+  if (open) { open.remove(); host.classList.remove('is-open'); return; }
+
+  const pid   = sm.platformId;
+  const steps = (typeof _visiblePlatformSteps === 'function') ? _visiblePlatformSteps(pid) : [];
+  const flip  = _smFlipTarget(pid);
+  const menu  = document.createElement('div');
+  menu.className = 'sm-hd-menu loc-dropdown';
+
+  steps.forEach((st, i) => {
+    /* The card's own predicate, never a second one — `_appStoreSectionComplete`
+       is what paints the disc three inches below, so the menu and the card
+       cannot disagree about what "done" means. Platforms outside the App Store
+       family fall through to no disc rather than to a guess. */
+    const done = (typeof _appStoreSectionComplete === 'function' &&
+                  (pid === 'ios' || pid === 'macos' || pid === 'macos_full'))
+      ? _appStoreSectionComplete(pid, st.id) : null;
+    const risk = _smStepRisk(pid, st.id);
+    const cur  = st.id === sm.stepId;
+
+    const b = document.createElement('button');
+    b.className = 'sm-hd-menu-row' + (cur ? ' is-on' : '');
+    const disc = document.createElement('span');
+    disc.className = 'ios-step-num sm-hd-menu-disc' +
+      (done ? ' is-done' : '') +
+      (risk === 'high' ? ' is-risk-high' : risk === 'warn' ? ' is-risk-warn' : '');
+    disc.innerHTML = risk === 'high' && typeof smCrossSVG === 'function' ? smCrossSVG()
+                   : done && typeof smCheckSVG === 'function' ? smCheckSVG()
+                   : String(i + 1);
+    const name = document.createElement('span');
+    name.textContent = st.label;
+    b.append(disc, name);
+    b.onclick = e => {
+      e.stopPropagation(); menu.remove(); host.classList.remove('is-open');
+      if (cur) { if (flip) _smCrumbBack(); return; }
+      openStepModal(pid, st.id);
+    };
+    menu.appendChild(b);
+  });
+
+  host.appendChild(menu);
+  host.classList.add('is-open');
+  /* Deferred, or the press that opened it closes it on the same click —
+     `toggleAddPlatform`'s own trap. */
+  setTimeout(() => document.addEventListener('click', function off() {
+    menu.remove(); host.classList.remove('is-open');
+    document.removeEventListener('click', off);
+  }, { once: true }), 0);
+};
+
+
+(() => {
+  const orig = window.renderStepModal;
+  if (typeof orig !== 'function') return;
+  window.renderStepModal = function () {
+    _smRailRelease();
+    const r = orig.apply(this, arguments);
+    _smRailMount();
+    return r;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NO KEY IS NOT A FAILURE — IT IS A LOCAL RUN.
+
+   Jaco: "¿puedes quitar el 'Analysis failed: No API key set' cuando estamos
+   probando en local?"
+
+   The keys are injected by GitHub Actions at deploy, so every local session
+   ends with `NO_KEY` — and the app answers that with the same red banner it
+   uses for a real failure, on every step, forever. It is the loudest thing on
+   the surface we are looking at and it is never about the surface.
+
+   IT IS NOT A NEW STATE, IT IS THE ABSENCE OF THE OLD ONE. Rather than teaching
+   the banner a third mode, this clears the inference record when the error IS
+   the missing key: no status, no error, so the step renders exactly as it does
+   before any analysis has been asked for — which is the truth of a local run.
+   A REAL failure (a network error, a refused request) keeps the banner, because
+   that one is about the submission.
+
+   It runs after the render and then re-renders once, guarded by the record
+   already being clear, so it cannot loop. */
+function _smHushNoKey() {
+  const sm = state.stepModal;
+  if (!sm) return false;
+  const err = sm.inferenceError || '';
+  if (!/API key/i.test(err) && sm.inferenceStatus !== 'loading') return false;
+  /* A run that can never come back is not "loading" either: with no key the
+     request rejects immediately, and any status left on the record keeps the
+     step showing a spinner instead of its questions. */
+  if (/API key/i.test(err) || (sm.inferenceStatus === 'loading' && typeof CLAUDE_API_KEY !== 'undefined' && !CLAUDE_API_KEY)) {
+    sm.inferenceStatus = null;
+    sm.inferenceError  = null;
+    return true;
+  }
+  return false;
+}
+(() => {
+  const orig = window.renderStepModal;
+  if (typeof orig !== 'function') return;
+  window.renderStepModal = function () {
+    const r = orig.apply(this, arguments);
+    if (_smHushNoKey()) orig.apply(this, arguments);
+    return r;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE FILTER DEFAULTS TO WHAT THERE IS TO SEE.
+
+   Jaco: "si respondo todas, aun así el toggle debería estar en ALL; sólo si no
+   has respondido todas, que esté en Unanswered. Como concepto."
+
+   The concept is right and the current default has a failure mode rather than
+   a preference problem: `Unanswered` with nothing unanswered is an EMPTY LIST.
+   The step opens showing you nothing at all, on the one surface whose whole job
+   is to show you what you have declared.
+
+   So the filter is set from the count, not from a constant — and it is a
+   DEFAULT, applied on the way in, so pressing either half still wins for as
+   long as you are in there. The one live exception is the count reaching zero
+   while `Unanswered` is showing: that is not a preference being overridden, it
+   is the last row leaving the screen, and a filter that empties itself has
+   stopped being a filter.
+
+   `_stepUnansweredCount` is the step's own reduce — the same one the pinned
+   line prints — so the switch and the sentence cannot disagree about what is
+   left. Platforms outside the App Store family return null and are untouched.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SM_CR_EXPAND_FIELD = {
+  ios: 'iosContentRatingExpanded',
+  macos: 'macContentRatingExpanded',
+  macos_full: 'macFullContentRatingExpanded',
+};
+/* WHICH FIELD HOLDS THE FILTER'S FROZEN SET, per platform. It is the existence
+   of this Set — not its contents — that decides whether the toggle is drawn at
+   all: `collapseMode = answered !== null` (render.js), and `buildCRTogglePill`
+   returns the empty string when that is false. */
+const SM_CR_SNAP_FIELD = {
+  ios:        'iosAnsweredAtInference',
+  macos:      'macAnsweredAtInference',
+  macos_full: 'macFullAnsweredAtInference',
+};
+
+function _smCrFilterDefault(pid) {
+  /* THE TOGGLE WAS NOT HIDDEN, IT WAS NEVER BUILT. Jaco, on a screenshot of
+     Content Rating with no filter anywhere: "ya me dirás tú dónde está."
+
+     Measured on that exact state: zero `.cr-toggle-bar` in the document. The
+     control is gated on the filter SNAPSHOT existing, and the only thing that
+     writes one is `_postInferenceSetup` — i.e. an inference. There is no API
+     key locally, by design ("AI inference features won't work locally"), so on
+     this machine the toggle has never existed in any arm, and live it appears
+     only after a call comes back. Force a snapshot by hand and it draws
+     exactly where this experiment moved it: 153.6 × 32, in the modal's title
+     row at x 770. So the answer to "where is it" is that the question it
+     answers — which of these have I not done — is not one the app lets you ask
+     until a model has spoken.
+
+     WHICH IS BACKWARDS FOR A FILTER OVER YOUR OWN ANSWERS. The snapshot is the
+     right source for WHAT TO HIDE, and it is not a precondition for the
+     question: with everything answered by hand, "Unanswered" is still a
+     meaningful view (it is empty, and the line beside it says so). So a step
+     that opens with no snapshot takes one HERE, which is also the honest
+     content — at the moment you arrive, these are the ones already answered.
+
+     Scoped to the arms under test: `off` is the control and has to stay
+     bit-for-bit what shipped, or the comparison is measuring two changes. And
+     it never overwrites an existing snapshot — inference's own is better,
+     because it is taken at the moment that matters. */
+  if (_smShippyStep) {
+    const sf = SM_CR_SNAP_FIELD[pid];
+    if (sf && !state[sf] && typeof takeFilterSnapshot === 'function') takeFilterSnapshot(pid);
+  }
+
+  const f = SM_CR_EXPAND_FIELD[pid];
+  if (!f || typeof _stepUnansweredCount !== 'function') return;
+  /* AND THE FILTER DEFAULT IS THE EXPERIMENT'S TOO. It changes what Content
+     Rating opens on, so under "the default is the app as it shipped" it has to
+     answer to the same flag the snapshot above does — otherwise `off` is not
+     the control it is there to be. */
+  if (!_smShippyStep) return;
+  const left = _stepUnansweredCount(pid, 'contentRating');
+  if (left === null) return;
+  if (left === 0) state[f] = true;
+}
+/* The live half: only ever from "nothing left" to All, never back. */
+function _smCrFilterGuard() {
+  if (!_smShippyStep) return;
+  const sm = _smOpenStep();
+  if (!sm || sm.stepId !== 'contentRating') return;
+  const f = SM_CR_EXPAND_FIELD[sm.platformId];
+  if (!f || state[f]) return;
+  if (typeof _stepUnansweredCount !== 'function') return;
+  if (_stepUnansweredCount(sm.platformId, 'contentRating') === 0) state[f] = true;
+}
+
+(() => {
+  const open = window.openStepModal;
+  if (typeof open === 'function') {
+    window.openStepModal = function (pid, stepId) {
+      if (stepId === 'contentRating') _smCrFilterDefault(pid);
+      return open.apply(this, arguments);
+    };
+  }
+  const render = window.renderStepModal;
+  if (typeof render === 'function') {
+    window.renderStepModal = function () {
+      _smCrFilterGuard();
+      const r = render.apply(this, arguments);
+      /* `sm-step-preview` is set from here as well as from the observer: the
+         observer fires on the overlay's class change, which can precede the
+         write to `state.stepModal`, so the condition was false on the one tick
+         that mattered and the preview kept both its pinned bar and the panel. */
+      try { _smModeClasses(); } catch (_) {}
+      return r;
+    };
+  }
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PANEL IS ABOUT THE STEP YOU ARE IN — ALL OF THEM, NOT TWO OF THEM.
+
+   Jaco: "can you make it so that Shippy in each step is contextual to that
+   area? Content Rating works, and Store Page Review works, but the rest don't."
+
+   Right, and the shape of the gap is the tell: `_smStepItems` answered for
+   `storePreview` and (through its own wrapper) for the content body, and
+   returned null everywhere else — null meaning "draw the submission
+   checklist". So three of Mac App Store's five steps opened a panel listing
+   the OTHER steps, which is the dashboard's question asked inside the answer.
+
+   Each of the three below is written the same way and under the same two
+   rules this file already keeps:
+
+   - THE ROWS ARE THE STEP'S OWN PARTS, and `done` is read from the same place
+     the step reads it. Nothing here re-derives a completion — `collectsData`,
+     `privacyPolicyUrl` and `dataPerType` come through `_appStoreAnswers`, the
+     app's own router (Mac shares Content Rating and Data Privacy with the App
+     Store, so reading `state.macSubmitAnswers` directly would be asking a
+     bucket nothing writes); Improve's three batches are read off the CARDS
+     that are on screen, because their grades are computed inside
+     `buildImproveSubmissionSection` from numbers nothing exports, and a copy
+     here would be a second definition of a grade — the thing this repo refuses
+     everywhere else.
+
+   - A ROW GOES SOMEWHERE. Pressing one spotlights its own part of the body and
+     scrolls to it, through `_smCrSpot` / `_smCrScrollWhenSettled`, which are
+     the locator Content Rating's rows already use. One mechanism, so the three
+     new steps cannot drift into three ways of pointing at something. */
+
+function _smAnchorGo(el, extra) {
+  if (!el) return false;
+  _smCrSpot(extra && extra.length ? extra : [el]);
+  _smCrScrollWhenSettled(el);
+  return true;
+}
+
+/* A label is matched on its OWN text rather than on a selector, because these
+   three bodies are built by four different builders and the only thing they
+   agree on is what they say. `startsWith` and not equality: several of these
+   nodes carry a tooltip handle's "?" inside them. */
+function _smFindByText(sel, text) {
+  return [...document.querySelectorAll('#submit-overlay ' + sel)]
+    .find(n => n.textContent.trim().toLowerCase().startsWith(text.toLowerCase())) || null;
+}
+
+/* ── APP PRIVACY ─────────────────────────────────────────────────────────── */
+function _smPrivacyItems(pid) {
+  if (typeof _appStoreAnswers !== 'function') return null;
+  const a = _appStoreAnswers(pid) || {};
+  const collects = a.collectsData;
+  const types    = Object.keys(a.dataPerType || {}).length;
+  /* `privacyPresets` is an ARRAY of the chosen ids, not a map — measured, not
+     assumed, and the two read very differently under `Object.keys`. */
+  const pre      = state.privacyPresets;
+  const presets  = Array.isArray(pre) ? pre.length
+                 : Object.keys(pre || {}).filter(k => pre[k]).length;
+
+  /* SAYING "NO" FINISHES THE STEP, so the two rows underneath it stop being
+     outstanding rather than staying forever undone. Apple asks one question
+     and the table only exists because the answer was yes — a panel that went
+     on nagging for data types after a developer declared they collect nothing
+     would be pointing at a door that is shut, which is this file's own rule
+     about the locked Submit row. */
+  const noData = collects === 'no';
+  const rows = [
+    { label: 'Data collection',   step: 'prv:collect', done: collects !== null },
+    { label: 'Privacy policy URL', step: 'prv:url',    done: !!(a.privacyPolicyUrl || '').trim() },
+  ];
+  if (!noData) {
+    rows.push({ label: 'Quick setup',  step: 'prv:presets', done: presets > 0 });
+    /* THE ROW EXISTS IF THE TABLE DOES, ASKED OF THE BODY RATHER THAN OF THE
+       ANSWER — and the first version asked the answer, which was wrong twice
+       over. `collectsData === 'yes'` looked like the condition (with it null
+       there is no `.prv-matrix-header` and no `.pvt-scroll`, so a press had
+       nothing to land on) and it is not: measured with the answer set to yes,
+       Mac App Store's `privacy` step STILL draws only the question, the URL
+       and the presets. The data-types table has two doors — Product Page
+       Preview's Data flip, and `macos_full`, which lists privacy as a step of
+       its own — and this is neither.
+
+       So the test is the element. It is free of which platform, which door and
+       which answer, and it cannot go stale the day a fourth surface grows one.
+       A row pointing at something the body has not drawn is the "control lying
+       about having worked" this block refuses one function down. */
+    if (document.querySelector('#submit-overlay .prv-matrix-header, #submit-overlay .pvt-scroll, #submit-overlay .prv-matrix-wrap')) {
+      rows.push({ label: types ? types + ' data types' : 'Data types',
+                  step: 'prv:types', done: types > 0 });
+    }
+  }
+  return rows;
+}
+
+function _smPrivacyGo(key) {
+  if (key === 'collect') return _smAnchorGo(_smFindByText('.ios-q-label', 'does your app collect'));
+  if (key === 'url')     return _smAnchorGo(_smFindByText('.form-label',  'privacy policy url'));
+  if (key === 'presets') {
+    const h = _smFindByText('.prv-preset-heading', 'quick setup');
+    const grid = h && h.parentElement ? h.parentElement.querySelector('.prv-preset-grid, .prv-presets') : null;
+    return _smAnchorGo(h, grid ? [h, grid] : null);
+  }
+  if (key === 'types') {
+    const bar = document.querySelector('#submit-overlay .prv-matrix-header');
+    const tbl = document.querySelector('#submit-overlay .pvt-scroll, #submit-overlay .prv-matrix-wrap');
+    return _smAnchorGo(bar || tbl, bar && tbl ? [bar, tbl] : null);
+  }
+  return false;
+}
+
+/* ── IMPROVE YOUR SUBMISSION ─────────────────────────────────────────────── */
+/* THE GRADE TAB IS A SIBLING OF ITS CARD, not a child — the card is offset
+   `margin-right: 52px` so the tab sticks out from BEHIND it — so it is matched
+   by position in the wrapper rather than by descent. */
+function _smImproveItems() {
+  const cards = [...document.querySelectorAll('#submit-overlay .iv-card')];
+  if (!cards.length) return null;
+  const tabs = [...document.querySelectorAll('#submit-overlay .iv-grade-tab')];
+  return cards.map((c, i) => {
+    const name  = (c.querySelector('.iv-type') || {}).textContent || '';
+    const grade = ((tabs[i] || {}).textContent || '').trim();
+    /* Collapsed or printing its all-clear line IS the step's own statement that
+       the batch is no longer asking anything — the same pair
+       `buildImproveSubmissionSection` draws them from. A grade is not the test:
+       Localization goes to A for accepting a language and stays at C for a
+       submission that is merely no longer being nagged about. */
+    const done = c.classList.contains('iv-card-collapsed') || !!c.querySelector('.iv-strong-line');
+    return {
+      label: (name.trim() || 'Batch') + (grade && grade !== '–' ? '  ' + grade : ''),
+      step:  'imp:' + i,
+      done,
+    };
+  });
+}
+
+function _smImproveGo(i) {
+  const cards = [...document.querySelectorAll('#submit-overlay .iv-card')];
+  return _smAnchorGo(cards[+i]);
+}
+
+/* ── UPLOAD BUILD ────────────────────────────────────────────────────────── */
+/* THIS STEP'S MODAL BODY IS EMPTY, AND THAT IS NOT THIS BLOCK'S DOING.
+   Measured on a card with a build and a track: `#step-modal-body` holds zero
+   characters. The build pill and the release block came down onto the CARD
+   when the steps went inline, so in the modal layout the step opens onto
+   nothing — a real hole, older than this experiment, and flagged rather than
+   papered over.
+
+   Which makes the panel the only thing in that modal that can say anything, so
+   these two rows are a STATUS rather than a locator: they name the two facts
+   the step is about and report them. They deliberately do not pretend to jump
+   — `_smBuildGo` returns true and travels nowhere, because there is nowhere on
+   this surface to travel to, and a row that scrolls an empty box would be a
+   control lying about having worked. */
+function _smBuildItems(pid) {
+  const b = (state.platformBuilds || {})[pid];
+  const t = (state.selectedTracks || {})[pid];
+  const opts = (typeof PLATFORM_TRACKS !== 'undefined' && PLATFORM_TRACKS[pid]) || [];
+  const rows = [{ label: b ? (b.name || 'Build uploaded') : 'Upload a build',
+                  step: 'bld:file', done: !!b }];
+  if (opts.length) {
+    const lbl = (opts.find(o => o.id === t) || {}).label;
+    rows.push({ label: lbl ? 'Sending to ' + lbl : 'Choose a destination',
+                step: 'bld:track', done: !!t });
+  }
+  return rows;
+}
+
+/* ── WIRING ──────────────────────────────────────────────────────────────── */
+/* The same three hooks the content body uses, for the same reason: WHAT the
+   rows are, WHERE a row goes, and the two lines above them. The step ids are
+   Mac App Store's; iOS and Mac Full share every one of these bodies, so they
+   answer too — nothing here is keyed on the platform. */
+const SM_STEP_HERO = {
+  privacy: ['What you collect',
+            'Apple prints this as a label on your page. Press a part to jump to it.'],
+  improveSubmission: ['Before you send it',
+            'Three checks on what you have written. Press one to read it.'],
+  uploadBuild: ['The build and where it goes',
+            'Two facts this step is about.'],
+};
+
+(() => {
+  const prev = _smStepItems;
+  _smStepItems = function () {
+    if (!_smShippyStep) return null;
+    const sm = _smOpenStep();
+    const id = sm && sm.stepId;
+    /* A FLIP OUTRANKS THE STEP, and it has to: Product Page Preview's Data
+       flip renders the privacy body inside `storePreview`, so testing the step
+       id alone would have left that level showing the eight page sections
+       while the body underneath asked about data types. */
+    if (sm && id === 'storePreview' && _smFlipTarget(sm.platformId) === 'data') {
+      return _smPrivacyItems(sm.platformId);
+    }
+    if (id === 'privacy')           return _smPrivacyItems(sm.platformId);
+    if (id === 'improveSubmission') return _smImproveItems();
+    if (id === 'uploadBuild')       return _smBuildItems(sm.platformId);
+    return prev.apply(this, arguments);
+  };
+
+  const go = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string') {
+      if (step.slice(0, 4) === 'prv:') return _smPrivacyGo(step.slice(4));
+      if (step.slice(0, 4) === 'imp:') return _smImproveGo(step.slice(4));
+      if (step.slice(0, 4) === 'bld:') return true;
+    }
+    return go.apply(this, arguments);
+  };
+
+  /* Last wrapper wins, so this runs after the preview's and the content body's
+     own post-passes and only claims the steps neither of them answers for. */
+  const render = window.renderGuide;
+  window.renderGuide = function () {
+    const out = render.apply(this, arguments);
+    if (!_smShippyStep) return out;
+    const sm = _smOpenStep();
+    const id = sm && sm.stepId;
+
+    /* THE PANEL SAYS WHOSE IT IS, IN EVERY STEP. See the eyebrow's note in
+       style.css. It is written here rather than in the per-step passes because
+       it is the one line that does NOT change with the step — and it is set
+       before the hero's early return, so the steps whose title and sub are
+       written by the preview's and the content body's own passes get it too.
+       Gated on there being a step list at all: with none the panel is the
+       submission checklist, which is the dashboard's card and keeps the
+       dashboard's eyebrow. */
+    if (_smStepItems()) {
+      const eb = document.querySelector('#app-guide .guide-eyebrow');
+      if (eb) eb.textContent = 'Shippy Guide';
+    }
+
+    const flipData = id === 'storePreview' && _smFlipTarget(sm.platformId) === 'data';
+    const hero = SM_STEP_HERO[flipData ? 'privacy' : id];
+    if (!hero) return out;
+    const el = document.getElementById('app-guide');
+    const ti = el && el.querySelector('.guide-title');
+    const su = el && el.querySelector('.guide-sub');
+    if (ti) ti.textContent = hero[0];
+    if (su) su.textContent = hero[1];
+    return out;
+  };
+})();

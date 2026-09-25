@@ -7329,7 +7329,24 @@ function renderStepModal() {
   const applePreview = platformId === 'ios' || platformId === 'macos';
   const displayStepLabel = isFlipped
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
-    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
+    /* AND A STEP THE PLATFORM DOES NOT LIST STILL HAS A NAME. `step?.label`
+       comes from that platform's own steps, so any step reached from somewhere
+       ELSE — the preview's wells — resolved to `undefined` and the title row
+       came out EMPTY. Measured on Screenshots opened from the Media Carousel
+       well: no title, and the page-header trail fell back to printing the raw
+       id, `screenshots`. Game Center was special-cased here and was the only
+       one, which is the same inventory-of-one `cameFromPreview` was.
+
+       The tables below already hold these names, so this is a lookup rather
+       than a new list. The Apple override goes first for the reason it exists:
+       on those previews the element is called Media Carousel, and a panel
+       titled "Screenshots" after pressing a well labelled Media Carousel is
+       two names for one thing — which is what this row is supposed to stop. */
+    : (step?.label
+       || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : '')
+       || (applePreview && APPLE_FLIP_LABELS[stepId])
+       || FLIP_LABELS[stepId]
+       || '');
 
   // Step body — one dispatcher, shared with the inline Submission pane.
   const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
@@ -7370,8 +7387,22 @@ function renderStepModal() {
      the header and footer read now. Nothing about the flip changes — the title
      still comes from `step?.label`, the body is still Game Center's own builder,
      and a flipped panel is untouched. */
-  const cameFromPreview = stepId === 'gameCenter'
-    && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full');
+  /* AND IT IS EVERY STEP THE PREVIEW OPENS, NOT A LIST OF ONE. See
+     `state.stepModalFrom`'s note in openStepModal (app.js): this used to be
+     `stepId === 'gameCenter'`, which named the one case anybody had looked at
+     and left Screenshots — reached from the preview's own shots well — with a
+     × that threw away the store page and a footer saying "Done". The flag is
+     written at the door, so a step that is reached BOTH ways (Screenshots is
+     also a step in its own right on some platforms) gets the chrome that
+     matches how you actually got there rather than one answer for both.
+
+     Game Center's own derivation stays beside it and is not redundant: it is
+     not in any platform's `steps`, so the preview is its only door even on a
+     path where the flag was never written — a deep link, a restored state, or
+     any later caller that opens it directly. */
+  const cameFromPreview = state.stepModalFrom === 'storePreview'
+    || (stepId === 'gameCenter'
+        && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full'));
   const isSubPanel = isFlipped || cameFromPreview;
 
   const returnAction = flipTarget === 'iapLocalizations'
