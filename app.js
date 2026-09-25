@@ -27875,22 +27875,44 @@ function _smCardCelebrate() {
 const SM_CELEBRATE_MS = 1100;
 let _smCelebrateTimer = null;
 
+/* THE COLOUR IS READ OFF THE DISC, NOT RECOMPUTED. Jaco: a step that came
+   back with a warning must not flash green.
+
+   `_paintStepRow` has already put `is-risk-warn` / `is-risk-high` on this
+   row's own `.ios-step-num` by the time the flank is detected, so asking the
+   DOM is asking the thing the user is looking at — where a second derivation
+   from state would be a copy of that logic, free to drift from the mark it is
+   supposed to agree with. Same reason `_sppCelebrate` reads "filled" off the
+   page rather than out of `state`.
+
+   Both risk states answer true: the wash takes the checklist's one bad hue
+   and the disc keeps the distinction. See @keyframes smStepWarn. */
+function _smRowHasRisk(row) {
+  return !!row.querySelector('.ios-step-num.is-risk-warn, .ios-step-num.is-risk-high');
+}
+
 function _smCelebrateRow(card, row) {
   const col = card.closest('.dash-column') || card.parentElement;
   if (!col || !row) return;
   clearTimeout(_smCelebrateTimer);
   col.querySelectorAll('.sm-celebrant').forEach(n => n.classList.remove('sm-celebrant'));
   col.querySelectorAll('.sm-step-won').forEach(n => n.classList.remove('sm-step-won'));
+  col.querySelectorAll('.sm-step-warn').forEach(n => n.classList.remove('sm-step-warn'));
   /* Restarted rather than left running if a second step lands inside the
      window — `void offsetWidth` is what makes the animation begin again. */
   void row.offsetWidth;
   col.classList.add('sm-celebrating');
   card.classList.add('sm-celebrant');
   row.classList.add('sm-step-won');
+  /* Added BEFORE the strip below and alongside `sm-step-won`, never instead of
+     it: the three divider rules key off that class, so a warning row that wore
+     only the modifier would light up with its hairlines still across it. */
+  if (_smRowHasRisk(row)) row.classList.add('sm-step-warn');
   _smCelebrateTimer = setTimeout(() => {
     col.classList.remove('sm-celebrating');
     card.classList.remove('sm-celebrant');
     row.classList.remove('sm-step-won');
+    row.classList.remove('sm-step-warn');
   }, SM_CELEBRATE_MS);
 }
 
