@@ -25634,22 +25634,117 @@ body.sm-guide-panel.sm-nav-back  .submit-modal.is-flip-enter > *:not(.sm-rail) {
    note in a column of its own, not a tint laid over a row of somebody else's
    content, so the ground is the note's own box rather than a highlight on
    something you are reading. */
+/* ── THE RAIL IS GONE, AND SO IS THE TINT ─────────────────────────────────
+   Jaco: "no me gusta la raya a la izquierda, es como muy ai."
+
+   He is right on the reference and the app already agreed with him five times:
+   the step modal's section headers lost their rule, the metadata strip its
+   bottom one, the Submit row its border AND then its divider, the calendar its
+   launch-day rule — every one for the same sentence, that a group saying "I
+   start here" with a graphic element is doing what position does more quietly.
+   A 3px accent bar with a tinted box is the admonition component every docs
+   site ships, which is exactly why it reads as generic rather than as ours.
+
+   THE RAIL WAS CARRYING THE ROW, WHICH IS WHY THE TINT WENT WITH IT. Measured
+   on the guide card's own ground, rgb(27,28,43): the amber fill at .04
+   composites to a 6.5-point rise in luminance and the magenta at .05 to 3.8 —
+   the same order as the Submit row's "ready" fill, which this file already
+   calls unreadable at 6.2 points out of 255. So the tint was never the thing
+   you saw; it was a box drawn around a bar. Dropping the bar and keeping it
+   would have left a rectangle nobody can find.
+
+   WHAT SAYS "WARNING" IS THE COLOUR OF THE WORDS, and it always was. Amber is
+   this app's "you have work waiting outside it" and magenta its "this is
+   wrong", both at full strength on the text — so severity survives the removal
+   untouched, which is the colour rule's own line that colour carries the
+   emphasis and everything else rides along.
+
+   SO A WARNING IS NOW THE SAME KIND OF OBJECT AS A CHECKLIST ROW: no resting
+   box, a fill on approach, a head above naming the group. That is what the
+   rail was standing in for when it replaced the disc — and it did not need
+   standing in for, because `.sm-risk-head` names the block in words.
+
+   AND THE TEXT JOINS ITS OWN HEAD'S COLUMN. The 13px left padding existed to
+   clear the bar, so every warning sat 13px right of the head that introduces
+   it — measured 1136 against 1123. The row now bleeds ±10 to take the
+   checklist's box (so the hover is the same width as a `.gd-task`'s) and pays
+   it back as padding, which puts the words on 1123 with the head. */
 .sm-risk-row {
   position: relative;
-  display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
-  background: rgba(255, 184, 107, .04);
-  border: 0; border-radius: 4px;
-  margin: 0; padding: 7px 10px 7px 13px;
+  display: block; text-align: left; cursor: pointer; font: inherit;
+  background: none;
+  border: 0; border-radius: 8px;
+  margin: 0 -10px; padding: 7px 10px;
   transition: background .12s;
 }
-.sm-risk-row::before {
-  content: ''; position: absolute;
-  left: 0; top: 3px; bottom: 3px; width: 3px;
-  border-radius: 3px;
-  background: rgba(255, 184, 107, .75);
-}
 .sm-risk-text { color: #FFB86B; font-size: 11px; line-height: 1.5; }
-.sm-risk-row:hover { background: rgba(255, 184, 107, .09); }
+
+/* A WARNING WITH NOWHERE TO GO IS A SENTENCE, NOT A CONTROL. App Privacy's
+   tracking note is true on all three doors into that step and only two of them
+   draw the table it would jump to — see `_smPrivacyRisks`. So it keeps the
+   colour and the type, which are what say "this is a warning", and gives up
+   only the pointer and the hover, which are what promise a press.
+   `.gd-task.sm-task-status` does exactly this one block up, for the same
+   reason: same object, one of its two jobs removed. */
+.sm-risk-row.is-note { cursor: default; }
+
+/* ── THE ROW IS A BOX, THE PRESS IS INSIDE IT ─────────────────────────────
+   Forced by the source link: an `<a>` cannot live inside a `<button>`, so the
+   row stopped being one. `.sm-risk-go` is the press that used to be the row —
+   bare, full width, inheriting everything — and the box keeps the padding and
+   the hover, which is now the only fill it has.
+
+   THE HOVER MOVED ONTO THE PRESS, and that is the point rather than a side
+   effect. A fill on `.sm-risk-row:hover` would light the whole box while the
+   pointer sat on the link, which is a different destination — the row now has
+   two, so the mark has to say which one you are on. */
+.sm-risk-go {
+  display: block; width: 100%; text-align: left;
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+}
+/* It keeps the row's own hue rather than the checklist's white wash, for the
+   Submit row's reason inverted: there a white hover over a green resting state
+   greyed it, here there is no resting state at all and the hue is the only
+   thing left saying which block you are in. It also went .09 → .10, because it
+   is no longer a step up from a tint — it is the whole of the box. */
+.sm-risk-row:has(.sm-risk-go:hover) { background: rgba(255, 184, 107, .10); }
+.sm-risk-row.is-danger:has(.sm-risk-go:hover) { background: rgba(255, 59, 120, .10); }
+
+/* THE SOURCE TAKES ITS ROW'S HUE, NOT `.doc-link`'S BLUE — the long form is at
+   `SM_DOC_SOURCE` in app.js. Short version: blue here would be a second colour
+   inside a block whose identity IS the colour, and blue already means "you
+   confirmed this" everywhere else in the app. One alpha of the row's own
+   amber, which is the move `.prv-preset-chip`'s sub-label made for the same
+   reason — one lever instead of a colour plus an opacity. */
+/* THE UNDERLINE IS AT REST, WHICH IS THE WHOLE POINT OF DROPPING THE ARROW —
+   see the `link` template in `_smRiskBox`. `.doc-link` underlines only on
+   hover because it also carries a glyph; with the glyph gone, a hover-only
+   underline would leave the source looking like a second line of caption until
+   you happened to cross it, and this block already contains a press that draws
+   nothing. The underline is what separates the two.
+
+   AND THE RULE IS FAINTER THAN THE WORDS IT SITS UNDER, .32 against the text's
+   .68. That is the privacy table's own lesson about its header line: a
+   boundary brighter than the thing it belongs to reads as a mark of its own.
+   `text-underline-offset` keeps it off the descenders at 10px, which is the
+   size that made it worth tuning rather than leaving to the default. */
+.sm-risk-src {
+  display: inline-block; margin-top: 5px;
+  font-size: 10px; letter-spacing: .2px;
+  color: rgba(255, 184, 107, .68);
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 184, 107, .32);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color .12s, text-decoration-color .12s;
+}
+.sm-risk-src:hover { color: #FFB86B; text-decoration-color: #FFB86B; }
+.sm-risk-row.is-danger .sm-risk-src {
+  color: rgba(255, 127, 166, .68);
+  text-decoration-color: rgba(255, 127, 166, .32);
+}
+.sm-risk-row.is-danger .sm-risk-src:hover { color: #FF7FA6; text-decoration-color: #FF7FA6; }
 
 /* ONE WARNING, ONE PLACE — AND THE PANEL IS THE PLACE. Jaco: "es raro que se
    marque el mensaje en los dos sitios."
@@ -25836,21 +25931,23 @@ body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged::before {
      gutter: on the titles' column, clear of every word. */
   left: 8px; top: 3px; bottom: 3px; width: 3px;
   border-radius: 3px;
-  /* A touch stronger than the rail was: with no wash under it, the stripe is
-     the whole of the mark. */
+  /* With no wash under it, the stripe is the whole of the mark — which is why
+     it survives here and the panel's own rail did not: this one marks ONE row
+     inside a form of thirty, where that one was drawn around a paragraph that
+     was already the only amber thing in its column. */
   background: rgba(255, 184, 107, .75);
 }
 
 /* THE SECOND SEVERITY, IN THE HUE THE APP ALREADY USES FOR IT. `#ff3b78` is
    `.g-tip--danger`'s, the red pill's and the cancel hold's — an answer the
-   store will not take is WRONG, which is the one thing red means here. Same
-   stripe, same box, same geometry as the amber note: severity changes the
-   colour and nothing else, so the two read as one kind of statement at two
-   weights rather than as two designs. */
-.sm-risk-row.is-danger { background: rgba(255, 59, 120, .05); }
-.sm-risk-row.is-danger::before { background: rgba(255, 59, 120, .8); }
+   store will not take is WRONG, which is the one thing red means here.
+   Severity changes the COLOUR and nothing else, so the two read as one kind of
+   statement at two weights rather than as two designs — which is the whole of
+   this rule now that the stripe and the wash are gone from both. */
 .sm-risk-row.is-danger .sm-risk-text { color: #FF7FA6; }
-.sm-risk-row.is-danger:hover { background: rgba(255, 59, 120, .10); }
+/* Its hover moved up beside the amber one, onto `.sm-risk-go`, when the row
+   stopped being a button — left here it would light the box from the source
+   link too, which now goes somewhere else. */
 /* The head takes the stronger of the two, because a block containing a refusal
    is not merely "what this commits you to" — it is answered by the ROWS, and
    the eyebrow must not undersell them. */

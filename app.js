@@ -26658,17 +26658,35 @@ function _smCrRiskGo(id, retried) {
                       if (row) { row.classList.add('sm-q-danger'); row.classList.remove('sm-q-flagged'); } });
 
     /* The risks, under the list. Rebuilt on every paint rather than patched,
-       so an answer you take back removes its warning in the same render. */
-    card.querySelectorAll('.sm-guide-risks').forEach(n => n.remove());
-    /* Danger first: severity is the order, which is also the one thing the
-       panel can say about it that a single hue cannot. */
-    const risks = _smCrDangerRows(sm.platformId).concat(_smCrRiskRows(sm.platformId));
-    if (risks.length) {
-      const list = card.querySelector('.guide-tasks') || card.querySelector('.gd-task')?.parentElement;
-      if (list) {
-        const box = document.createElement('div');
-        box.className = 'sm-guide-risks';
-        /* THE WARNINGS STOPPED WEARING A DISC, AND THAT IS THE FIX. Jaco: "si
+       so an answer you take back removes its warning in the same render.
+
+       THE BUILDER IS `_smRiskBox`, AND IT IS SHARED — App Privacy grows a
+       warning of its own (tracking), and a second copy of this markup is how
+       two blocks that are one object start disagreeing about their head, their
+       hue or their order. Danger first: severity is the order, which is also
+       the one thing the panel can say about it that a single hue cannot. */
+    _smRiskBox(card, _smCrDangerRows(sm.platformId).concat(_smCrRiskRows(sm.platformId)));
+    return out;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE WARNINGS BLOCK, ONE DEFINITION.
+
+   Lifted out of the Content Rating pass verbatim when App Privacy needed one
+   too. Everything below is that block's own reasoning, kept at the code it
+   belongs to.
+
+   A ROW CAN BE A NOTE RATHER THAN A BUTTON, and that is the one thing added in
+   the lift. Every Content Rating warning has somewhere to go — the question
+   that caused it is in the body you are looking at. App Privacy's does not
+   always: tracking is set in the data-types table, and two of the three doors
+   into this step do not draw that table. A button that lands nowhere is the
+   "control lying about having worked" this file refuses elsewhere, so a
+   warning with no target is drawn as what it is — a sentence. The press is
+   the variable; the warning is not.
+
+   THE WARNINGS STOPPED WEARING A DISC, AND THAT IS THE FIX. Jaco: "si
            veo que el check del grupo de preguntas está completo y luego abajo,
            una exclamación, me quedo confundido."
 
@@ -26689,12 +26707,109 @@ function _smCrRiskGo(id, retried) {
 
            The rail is the same one the flagged question wears in the form, so
            the note and its cause are one shape in two places. */
-        box.innerHTML =
-          '<div class="sm-risk-head"></div>' + risks.map(r =>
-          '<button class="sm-risk-row' + (r.danger ? ' is-danger' : '') +
-          '" onclick="chkGoStep(\'' + r.step + '\')">' +
-          '<span class="sm-risk-text"></span></button>').join('');
-        /* THE HEAD IS THE GUIDE'S OWN: A LABEL AND A COUNT. Jaco asked for
+/* ══ A WARNING CARRIES ITS SOURCE ═══════════════════════════════════════════
+   Jaco: "¿puedes hacerme una prueba con el link al tracking info? Y lo mismo
+   con el loot boxes / sexual content de Apple."
+
+   THE LINK BELONGS TO THE WARNING, NOT TO THE FOOT OF THE PANEL. Every
+   sentence in this block is a claim about somebody else's rule — Apple's, in
+   all four cases — and the panel states it in its own words because the whole
+   rule is longer than a row. The source is what lets you check it. Put at the
+   base of the column instead it would be one link for a block of several,
+   which separates each obligation from the document that imposes it.
+
+   KEYED ON THE ROW'S `step`, WHICH IS THE ONE THING EVERY WARNING ALREADY
+   CARRIES. So no builder gains a field, `_smCrRiskRows` and `_smPrivacyRisks`
+   are untouched, and a warning added later either has a source here or does
+   not — it never half-has one.
+
+   URLS ARE VERIFIED, NOT REMEMBERED. All four were fetched: the three
+   guideline anchors really exist on the page (`in-app-purchase`,
+   `gaming-gambling-and-lotteries`, `objectionable-content`, read off its own
+   DOM), the privacy page really names App Tracking Transparency, and the age
+   ratings URL is the one it REDIRECTS to — `…/reference/age-ratings/` still
+   resolves but lands on `…/app-information/age-ratings-values-and-definitions`,
+   so the short form is already a link that moves. `buildDocPaneContent` still
+   points at the short one; worth fixing there too, some day.
+
+   THE LABEL NAMES THE DOCUMENT AND THE CLAUSE, never "Learn more" — the
+   Submit row's own rule that a control says what it is. A guideline number is
+   also the only form of this that survives Apple reorganising the page.
+
+   IT DOES NOT TAKE `.doc-link`'S BLUE, and that is the one thing it refuses
+   from the existing convention. The arrow, the `target`/`rel` and the 11px are
+   that class's; the colour is #5b9cf6, which inside an amber rail would be a
+   second hue in a block whose identity is the hue — and blue in this app means
+   "you confirmed this". So the link takes its own row's colour at a lower
+   alpha and the ARROW does the "this leaves" work, which is what the arrow
+   means everywhere else here. */
+const SM_DOC_GUIDELINES = 'https://developer.apple.com/app-store/review/guidelines/';
+const SM_DOC_SOURCE = {
+  'prv:tracking':           { label: 'User Privacy and Data Use',
+                              url: 'https://developer.apple.com/app-store/user-privacy-and-data-use/' },
+  'cr:q:lootBoxes':         { label: 'App Review Guidelines 3.1.1',
+                              url: SM_DOC_GUIDELINES + '#in-app-purchase' },
+  'cr:q:realMoneyGambling': { label: 'App Review Guidelines 5.3',
+                              url: SM_DOC_GUIDELINES + '#gaming-gambling-and-lotteries' },
+  'cr:f:graphicSexual':     { label: 'App Review Guidelines 1.1.4',
+                              url: SM_DOC_GUIDELINES + '#objectionable-content' },
+};
+/* Every OTHER danger row is a rating floor rather than a guideline breach, and
+   they all have one source: Apple's own table of what each answer rates. The
+   prefix fallback is what keeps that from being eleven identical entries. */
+const SM_DOC_SOURCE_PREFIX = {
+  'cr:f:': { label: 'Age ratings, App Store Connect',
+             url: 'https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions' },
+};
+function _smDocSource(step) {
+  if (typeof step !== 'string') return null;
+  if (SM_DOC_SOURCE[step]) return SM_DOC_SOURCE[step];
+  for (const p of Object.keys(SM_DOC_SOURCE_PREFIX)) {
+    if (step.slice(0, p.length) === p) return SM_DOC_SOURCE_PREFIX[p];
+  }
+  return null;
+}
+
+/* THE ROW BECOMES A BOX HOLDING CONTROLS, which is forced rather than chosen:
+   an anchor cannot live inside a button. It is the calendar day panel's own
+   shape — "a row is three controls, not one" — so the visual box keeps its
+   rail, fill and type, and what was the row's press moves onto a bare
+   `.sm-risk-go` filling it. A row with no target and no source is still a
+   plain `<div>`, so nothing gains a control it cannot use. */
+function _smRiskBox(card, risks) {
+  if (!card) return;
+  card.querySelectorAll('.sm-guide-risks').forEach(n => n.remove());
+  if (!risks || !risks.length) return;
+  const list = card.querySelector('.guide-tasks') || card.querySelector('.gd-task')?.parentElement;
+  if (!list) return;
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                            .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const box = document.createElement('div');
+  box.className = 'sm-guide-risks';
+  box.innerHTML =
+    '<div class="sm-risk-head"></div>' + risks.map(r => {
+      const src  = _smDocSource(r.step);
+      const body = r.note
+        ? '<span class="sm-risk-text"></span>'
+        : '<button class="sm-risk-go" onclick="chkGoStep(\'' + r.step + '\')">' +
+          '<span class="sm-risk-text"></span></button>';
+      /* NO ARROW — the underline is the link. Jaco: "no hace falta que pongas
+         la flecha esa, quizás vale con subrayarlo." The `↗` came along from
+         `.doc-link`, where it is the only mark a bare blue label gets; here
+         the row already holds a second destination (the sentence itself, which
+         is a press), so what the source has to say is not "this leaves" but
+         "this one is a link" — and an underline is the oldest and least
+         invented way of saying it. It also stops the block from carrying a
+         glyph at 10px, which is the size at which this app has twice found a
+         mark stops reading. */
+      const link = src
+        ? '<a class="sm-risk-src" href="' + esc(src.url) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(src.label) + '</a>'
+        : '';
+      return '<div class="sm-risk-row' + (r.danger ? ' is-danger' : '') +
+             (r.note ? ' is-note' : '') + '">' + body + link + '</div>';
+    }).join('');
+  /* THE HEAD IS THE GUIDE'S OWN: A LABEL AND A COUNT. Jaco asked for
            "2 Warnings"; `.guide-tasks-head` two inches above is
            `<span>label</span><span>6/7</span>`, so this takes that shape rather
            than inventing a third. The number goes on the right and the WORD
@@ -26705,17 +26820,13 @@ function _smCrRiskGo(id, retried) {
            It also survives truncation for the reason the privacy table's group
            counts do: the sentences are long and wrap, and the number is the one
            thing that is still readable at a glance. */
-        const head = box.querySelector('.sm-risk-head');
-        head.innerHTML = '<span></span><span class="sm-risk-count"></span>';
-        head.firstElementChild.textContent = 'What this commits you to';
-        head.lastElementChild.textContent = String(risks.length);
-        [...box.querySelectorAll('.sm-risk-text')].forEach((n, i) => { n.textContent = risks[i].label; });
-        list.insertAdjacentElement('afterend', box);
-      }
-    }
-    return out;
-  };
-})();
+  const head = box.querySelector('.sm-risk-head');
+  head.innerHTML = '<span></span><span class="sm-risk-count"></span>';
+  head.firstElementChild.textContent = 'What this commits you to';
+  head.lastElementChild.textContent = String(risks.length);
+  [...box.querySelectorAll('.sm-risk-text')].forEach((n, i) => { n.textContent = risks[i].label; });
+  list.insertAdjacentElement('afterend', box);
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    THE STEP GROWS OUT OF THE CARD IT BELONGS TO.
@@ -27551,11 +27662,32 @@ function _smFindByText(sel, text) {
 }
 
 /* ── APP PRIVACY ─────────────────────────────────────────────────────────── */
+/* ══ THE ANSWERS ARE SHARED, SO THEY COME THROUGH THE ROUTER ═══════════════
+   Jaco: "data collection debería marcarse como check si la IA lo ha inferido."
+
+   It should be checked when it is ANSWERED, by the inference or by hand, and
+   on Mac App Store it never was — by anyone. This read `_appStoreAnswers(pid)`
+   with no field, and that hands back the platform's OWN bucket; Data Privacy
+   is in `IOS_MAC_SHARED_ANSWER_FIELDS`, so for `macos` the answers are not in
+   there. Measured with the step filled in: `collectsData` null in the bucket
+   and `"no"` through the router, `privacyPolicyUrl` empty against a real URL.
+   The panel could not mark a single row done no matter what you answered.
+
+   THE ROUTING TRAP THIS REPO ALREADY RECORDS, and `_smCrDangerRows` already
+   pays for it in the note right beside it: "built field by field rather than
+   handed `_appStoreAnswers(pid)` — Content Rating's answers are SHARED, so
+   Mac's own bucket does not contain them." Same fix, same reason, one step
+   over. `_getLiveAnswer` is the router and is what every reader here uses now.
+
+   Nothing about inference is special-cased, deliberately: the AI writes the
+   same fields a person does, so a row that reads the answer is already reading
+   the inference. A test for "was this inferred" would be a second definition
+   of answered, free to disagree with the one the step itself gates on. */
 function _smPrivacyItems(pid) {
-  if (typeof _appStoreAnswers !== 'function') return null;
-  const a = _appStoreAnswers(pid) || {};
-  const collects = a.collectsData;
-  const types    = Object.keys(a.dataPerType || {}).length;
+  if (typeof _getLiveAnswer !== 'function') return null;
+  const collects = _getLiveAnswer(pid, 'collectsData');
+  const url      = _getLiveAnswer(pid, 'privacyPolicyUrl');
+  const types    = Object.keys(_getLiveAnswer(pid, 'dataPerType') || {}).length;
   /* `privacyPresets` is an ARRAY of the chosen ids, not a map — measured, not
      assumed, and the two read very differently under `Object.keys`. */
   const pre      = state.privacyPresets;
@@ -27570,31 +27702,111 @@ function _smPrivacyItems(pid) {
      about the locked Submit row. */
   const noData = collects === 'no';
   const rows = [
-    { label: 'Data collection',   step: 'prv:collect', done: collects !== null },
-    { label: 'Privacy policy URL', step: 'prv:url',    done: !!(a.privacyPolicyUrl || '').trim() },
+    { label: 'Data collection',    step: 'prv:collect', done: collects !== null && collects !== undefined },
+    { label: 'Privacy policy URL', step: 'prv:url',     done: !!(url || '').trim() },
   ];
-  if (!noData) {
-    rows.push({ label: 'Quick setup',  step: 'prv:presets', done: presets > 0 });
-    /* THE ROW EXISTS IF THE TABLE DOES, ASKED OF THE BODY RATHER THAN OF THE
-       ANSWER — and the first version asked the answer, which was wrong twice
-       over. `collectsData === 'yes'` looked like the condition (with it null
-       there is no `.prv-matrix-header` and no `.pvt-scroll`, so a press had
-       nothing to land on) and it is not: measured with the answer set to yes,
-       Mac App Store's `privacy` step STILL draws only the question, the URL
-       and the presets. The data-types table has two doors — Product Page
-       Preview's Data flip, and `macos_full`, which lists privacy as a step of
-       its own — and this is neither.
-
-       So the test is the element. It is free of which platform, which door and
-       which answer, and it cannot go stale the day a fourth surface grows one.
-       A row pointing at something the body has not drawn is the "control lying
-       about having worked" this block refuses one function down. */
-    if (document.querySelector('#submit-overlay .prv-matrix-header, #submit-overlay .pvt-scroll, #submit-overlay .prv-matrix-wrap')) {
-      rows.push({ label: types ? types + ' data types' : 'Data types',
-                  step: 'prv:types', done: types > 0 });
-    }
-  }
+  if (!noData) rows.push({ label: 'Quick setup', step: 'prv:presets', done: presets > 0 });
   return rows;
+}
+
+/* ══ A COUNT IS NOT A TASK ══════════════════════════════════════════════════
+   Jaco: "'Data types' no debería ser un checklist, es extraño."
+
+   It was strange because a checkbox promises a DONE state and this has none.
+   Every other row here is a question with one answer — did you say yes or no,
+   is there a URL, did you pick a preset — where "6 data types" is a running
+   total that is as true at 2 as at 20. Ticking it said "that's enough of
+   those", which is a judgement the panel cannot make and Apple does not ask
+   for. It also read as the one row you complete by doing more of something.
+
+   THE COUNT IS A STATUS, AND THE PANEL ALREADY HAS A PLACE FOR ONE. Content
+   Rating's "All 24 answered." sits above the checklist in `.sm-cr-line-moved`,
+   and every step reserves that line's height whether or not it fills it — so
+   this costs no layout and lands in the register the app already uses for a
+   number about the step. Same object, second consumer: a fact over the list
+   rather than an item in it.
+
+   IT SAYS WHAT IS TRUE AND NOTHING ELSE. With the question unanswered the
+   slot stays empty — there is no count yet and inventing "0 data types" would
+   report a total for a table nobody has opened. */
+function _smPrivacyStatus(pid) {
+  if (typeof _getLiveAnswer !== 'function') return '';
+  const collects = _getLiveAnswer(pid, 'collectsData');
+  if (collects === 'no')  return 'No data collected.';
+  if (collects !== 'yes') return '';
+  const n = Object.keys(_getLiveAnswer(pid, 'dataPerType') || {}).length;
+  if (!n) return 'No data types declared yet.';
+  return n === 1 ? '1 data type declared.' : n + ' data types declared.';
+}
+
+/* ══ TRACKING IS A COMMITMENT, SO IT GOES WHERE COMMITMENTS GO ══════════════
+   Jaco: "¿Shippy guide podría dar algo de información relativa a cuando se ha
+   seleccionado algo con tracking?"
+
+   Yes, and it needs no new surface: "What this commits you to" already exists
+   two steps away, built for exactly this claim — a thing that is not a task,
+   cannot be completed, and stays true for as long as the answer stands. A
+   tracked data type obliges you to implement App Tracking Transparency and ask
+   the user, which is work waiting on you OUTSIDE this app: amber's own
+   sentence in this palette, and the hue that block already wears.
+
+   THE COUNT IS THE INFORMATION THE PILL CANNOT GIVE. The table prints an amber
+   `Tracking` pill beside its header, and that pill says THAT tracking is on;
+   it cannot say how much of your declaration is tracked, and it is inside the
+   table, which two of the three doors into this step never draw. The panel is
+   the one surface present on all of them.
+
+   The press goes to the first tracked ROW rather than to the Tracking column,
+   because the column is a heading and the row is the answer you would change.
+   With no table on screen there is nothing to press and the warning is drawn
+   as a note — see `_smRiskBox`. */
+function _smPrivacyRisks(pid) {
+  if (typeof _getLiveAnswer !== 'function') return [];
+  const per = _getLiveAnswer(pid, 'dataPerType') || {};
+  const n = Object.values(per).filter(t => t && t.tracking === 'yes').length;
+  if (!n) return [];
+  const target = _smPrivacyTrackTarget();
+  return [{
+    label: (n === 1 ? '1 data type is' : n + ' data types are') +
+           " used for tracking. You must implement Apple's App Tracking " +
+           'Transparency and get permission before collecting any of it.',
+    step: 'prv:tracking',
+    done: false, bad: false, risk: true, note: !target,
+  }];
+}
+
+/* ══ THE TARGET IS THE PILL, BECAUSE THE TABLE OPENS FOLDED ═════════════════
+   The first version aimed at the first tracked ROW (`.pvt-r.is-trk`) and it
+   was measured as never existing: v6.70 made the accordion open with every
+   group closed, so a freshly drawn table has ZERO `.pvt-r` in the document —
+   measured 0 of them with the Tracking pill plainly on screen. The warning
+   therefore fell to its own note fallback every time, which is the fallback
+   working and the target being wrong.
+
+   The pill is drawn exactly when tracking is on, which is exactly when this
+   warning exists, so the two cannot disagree. A row is still the nicer landing
+   when a group happens to be open, so it is tried first.
+
+   ONE FUNCTION, TWO READERS. `_smPrivacyRisks` asks it whether to draw a
+   button or a sentence and this asks it where to go — split in two, the panel
+   could offer a press that lands nowhere, which is the whole thing the note
+   fallback exists to prevent. */
+function _smPrivacyTrackTarget() {
+  return document.querySelector('#submit-overlay .pvt-r.is-trk, #submit-overlay .prv-data-row.is-trk')
+      || document.querySelector('#submit-overlay .pvt-trk');
+}
+
+/* Spotlit the way every other panel row arrives. `_smCrSpot` and
+   `_smCrScrollWhenSettled` are named for the step they were written in and are
+   about a row in a scroller, which is what this is — reusing them is why a
+   press here looks identical to a press in Content Rating rather than merely
+   similar. */
+function _smPrivacyTrackingGo() {
+  const el = _smPrivacyTrackTarget();
+  if (!el) return false;
+  if (typeof _smCrSpot === 'function') _smCrSpot([el]);
+  if (typeof _smCrScrollWhenSettled === 'function') _smCrScrollWhenSettled(el);
+  return true;
 }
 
 function _smPrivacyGo(key) {
@@ -27605,6 +27817,10 @@ function _smPrivacyGo(key) {
     const grid = h && h.parentElement ? h.parentElement.querySelector('.prv-preset-grid, .prv-presets') : null;
     return _smAnchorGo(h, grid ? [h, grid] : null);
   }
+  if (key === 'tracking') return _smPrivacyTrackingGo();
+  /* `types` no longer has a row — the count is a status line now, see
+     `_smPrivacyStatus` — and the target is kept because the table is still the
+     obvious place to send anything that later wants to point at it. */
   if (key === 'types') {
     const bar = document.querySelector('#submit-overlay .prv-matrix-header');
     const tbl = document.querySelector('#submit-overlay .pvt-scroll, #submit-overlay .prv-matrix-wrap');
@@ -27795,6 +28011,39 @@ const SM_STEP_HERO = {
     }
 
     const flipData = id === 'storePreview' && _smFlipTarget(sm.platformId) === 'data';
+
+    /* ══ APP PRIVACY GETS A STATUS AND A WARNING ═══════════════════════════
+       The two halves of Jaco's note, and they land in machinery that already
+       exists: the count goes in the line Content Rating uses for "All 24
+       answered.", the tracking obligation in the block Content Rating uses for
+       "What this commits you to". Nothing new is drawn — this step simply
+       stops being the one that leaves both of them empty.
+
+       BOTH DOORS, WHICH IS WHY THE TEST IS THE SAME ONE `_smStepItems` USES.
+       The privacy body is reached as a step of its own (`macos_full`) and as
+       Product Page Preview's Data flip, and a pass that only knew the step id
+       would have said nothing on the door most people use.
+
+       IT RUNS AFTER THE SLOT ABOVE, so the placeholder is in place and gets
+       replaced rather than fought over; the Content Rating pass does the same
+       thing to the same element two wrappers down. With nothing to say the
+       placeholder is left exactly as it is, and the column keeps its height. */
+    if (flipData || id === 'privacy') {
+      const gcard = document.querySelector('#app-guide .guide-card') || document.getElementById('app-guide');
+      if (gcard) {
+        const status = _smPrivacyStatus(sm.platformId);
+        if (status) {
+          gcard.querySelectorAll(':scope > .sm-cr-line-moved').forEach(n => n.remove());
+          const line = document.createElement('div');
+          line.className = 'sw-tip-text sm-cr-line-moved';
+          line.textContent = status;
+          const eb2 = gcard.querySelector(':scope > .guide-eyebrow');
+          gcard.insertBefore(line, eb2 ? eb2.nextSibling : gcard.firstChild);
+        }
+        _smRiskBox(gcard, _smPrivacyRisks(sm.platformId));
+      }
+    }
+
     const hero = SM_STEP_HERO[flipData ? 'privacy' : id];
     if (!hero) return out;
     const el = document.getElementById('app-guide');
