@@ -7156,9 +7156,16 @@ function _stepCtaHtml(platformId, stepId, isSubPanel, returnAction, complete) {
     typeof appleAgeRating === 'function' &&
     appleAgeRating(_appStoreAnswers(platformId, 'ageCategory')) === AGE_UNRATED;
 
+  /* BLOCKED IS NOT INERT — see `crGoFirstUnrated` (app.js). The press cannot
+     finish the step, and the one other thing it can honestly mean is "show me
+     why", so it goes to the first answer that made the app Unrated. `aria-
+     disabled` stays and `disabled` is still not used, which is what keeps it
+     focusable and pressable; the tooltip keeps saying why. */
   return blocked
     ? `<button class="imp-cta is-blocked" aria-disabled="true"
-               data-tip="Unrated apps cannot be published on the App Store." data-tip-tone="danger"
+               onclick="crGoFirstUnrated('${platformId}')"
+               data-tip="Unrated apps cannot be published on the App Store. Press to see why."
+               data-tip-tone="danger"
        >${label}</button>`
     : `<button class="imp-cta" onclick="${action}">${label}</button>`;
 }

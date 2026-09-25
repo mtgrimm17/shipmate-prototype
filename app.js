@@ -3128,9 +3128,28 @@ async function openStepModal(pid, stepId) {
 
      It is a step id rather than a boolean so that a third level later (a step
      opened from a step opened from the preview) has somewhere to say so. */
+  /* AND "COMING FROM" MEANS THE PREVIEW WAS ON SCREEN. Jaco: "cuando accedo a
+     Content Rating directamente desde la platform card, me obliga a salir a
+     través de Product Page Preview."
+
+     `state.stepModal` is NOT cleared on close — it keeps the last step so the
+     modal can be re-rendered — so after closing the preview it still read
+     `storePreview`, and the next step opened from the dashboard inherited a
+     parent it never had: a back arrow and "Save & Return" where an × and
+     "Save & Close" belong. Measured: overlay `hidden`, `stepModal.stepId`
+     still `storePreview`, and Content Rating opening with no way out but
+     through a page nobody had been on.
+
+     The overlay's own `hidden` class is the app's one signal that a modal is
+     up — the same one `_smGuideBesideWatch` keys on — so the test asks it
+     rather than trusting a field that outlives the thing it describes. */
+  const _smOvOpen = (() => {
+    const ov = document.getElementById('submit-overlay');
+    return !!ov && !ov.classList.contains('hidden');
+  })();
   state.stepModalFrom =
-    (stepId !== 'storePreview' && state.stepModal && state.stepModal.platformId === pid
-      && state.stepModal.stepId === 'storePreview')
+    (_smOvOpen && stepId !== 'storePreview' && state.stepModal
+      && state.stepModal.platformId === pid && state.stepModal.stepId === 'storePreview')
       ? 'storePreview'
       : null;
   // Always reset storePreview sub-section — never restore last flip position
@@ -25332,10 +25351,18 @@ function _smRailMount() {
     _smRailHome.parent.insertBefore(ghost, _smRailHome.next || null);
     rail.appendChild(guide);
   }
+  /* THE RAIL'S REVEAL IS PART OF THE SAME SWITCH. It is a `clip-path` wipe
+     tied to the modal's own width transition, so with the box no longer
+     easing it was uncovering a panel that was already fully there — the
+     "expansión rara de Shippy" half of the report. The flag is still raised
+     and spent on the hidden → open edge, so nothing else about the one-shot
+     changes when this comes back. */
   if (_smRailFresh) {
     _smRailFresh = false;
-    rail.classList.add('is-entering');
-    setTimeout(() => rail.classList.remove('is-entering'), 400);
+    if (!_smNoAnim) {
+      rail.classList.add('is-entering');
+      setTimeout(() => rail.classList.remove('is-entering'), 400);
+    }
   }
   /* After the card is in the rail, or there is nothing to measure. */
   requestAnimationFrame(_smRailAlign);
@@ -26365,6 +26392,38 @@ function _smCrDangerRows(pid) {
   }));
 }
 
+/* THE BLOCKED CTA TAKES YOU TO WHAT IS BLOCKING IT. Jaco: "cuando tengo un
+   warning, el Done se bloquea; quiero que si clico, me lleves a la primera
+   pregunta que causa problema."
+
+   `_stepCtaHtml` (render.js) draws that button with `aria-disabled`, a red
+   tooltip and NO `onclick` — so the one control anybody presses when they want
+   to leave did nothing at all, and the reason it refused was a sentence in a
+   hover bubble. Its own note already says the right thing and stops one step
+   short: "what you cannot do is leave by pressing the control that means this
+   is finished." Going to the blocker is not leaving; it is the only other
+   thing that press can honestly mean.
+
+   THE FIELDS COME FROM THE SAME TABLE THE GATE READS. `appleAgeRating(...) ===
+   AGE_UNRATED` is what blocks it, and `appleAgeUnratedFields` is the same
+   floor table asked for WHICH answers did it — so the button cannot point at
+   a question that is not the reason. Built field by field through
+   `_getLiveAnswer` for the routing reason recorded at `_smCrDangerRows`: Mac's
+   own bucket does not hold Content Rating's shared answers.
+
+   It reuses `_smCrFieldGo`, which already finds the row through the button
+   that writes that field, spotlights it, waits for the list to settle and
+   rescues the Unanswered filter on the way — an unpublishable answer is by
+   definition an ANSWERED one, which is exactly what that filter hides. */
+window.crGoFirstUnrated = function (pid) {
+  if (typeof appleAgeUnratedFields !== 'function' ||
+      typeof APPLE_AGE_FLOORS_INTENSITY === 'undefined') return;
+  const a = {};
+  for (const f of Object.keys(APPLE_AGE_FLOORS_INTENSITY)) a[f] = _getLiveAnswer(pid, f);
+  const first = (appleAgeUnratedFields(a) || [])[0];
+  if (first && typeof _smCrFieldGo === 'function') _smCrFieldGo(first);
+};
+
 function _smCrRiskRows(pid) {
   if (typeof IOS_CR_RISK_NOTES === 'undefined') return [];
   const out = [];
@@ -26538,8 +26597,10 @@ function _smCrRiskGo(id, retried) {
        cannot. The source stays where its builder put it and is hidden in the
        modal by CSS, the way the whole bar is hidden in the page arm. */
     const src = document.querySelector('#submit-overlay .cr-pinned .sw-tip-text');
-    const old = card.querySelector(':scope > .sm-cr-line-moved');
-    if (old) old.remove();
+    /* Any previous copy AND the reserved placeholder — the slot above puts one
+       in for every step, and this is the step that has a real line to put in
+       its place. */
+    card.querySelectorAll(':scope > .sm-cr-line-moved').forEach(n => n.remove());
     if (src) {
       const copy = src.cloneNode(true);
       copy.classList.add('sm-cr-line-moved');
@@ -26920,9 +26981,11 @@ function _smAdvanceInPlace() {
   /* `_smShippyStep`, NOT `_smGuideBesideOn`: the push belongs to the arms that
      carry a trail, which is all three of them, and gating it on the page
      paradigm left `mid` and `panel` opening a level with no motion at all. */
-  /* `_smNoAnim` is the PAGE ARM's switch and only its own: `mid` and `panel`
-     keep the push. */
-  if (!_smShippyStep || (_smGuideBesideOn && _smNoAnim)) return;
+  /* `_smNoAnim` covers BOTH arms under test now. Jaco: "podemos por ahora
+     quitar la animación al arrancar cada modal? Que sea inmediato, porque
+     hacen cosas raras de expansión de Shippy y del modal." `mid` keeps the
+     push, which is the point of having it as a control. */
+  if (!_smShippyStep || (_smNoAnim && (_smGuideBesideOn || _smMode === 'panel'))) return;
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   requestAnimationFrame(() => {
     const modal = document.querySelector('#submit-overlay .submit-modal');
@@ -27690,6 +27753,37 @@ const SM_STEP_HERO = {
           ? (document.querySelector('#submit-overlay .submit-modal-title')?.textContent.trim() || '')
           : '';
         eb.textContent = pageName || 'Shippy Guide';
+
+        /* THE CHECKLIST STARTS AT ONE HEIGHT IN EVERY STEP. Jaco: "quiero que
+           la checklist empiece siempre en la misma altura, para evitar
+           descoloque visual cuando estoy editando la tienda y voy a Content
+           Rating y vuelvo atrás."
+
+           Measured: the rows began at 47.2 in five steps and at 77.7 in
+           Content Rating — 30.5px, which is the status line plus its margin.
+           Only that step has one, so moving between steps shifted the whole
+           column by a line.
+
+           The slot is RESERVED rather than the line removed, and it is
+           reserved with a real one: a copy of the same element carrying a
+           non-breaking space, hidden by `visibility`. Its height is a line's
+           height BY CONSTRUCTION, so nothing here states 30.5 or 16.5 and a
+           change of type or margin moves both cases together — the same
+           mechanism as the Submit row's two stacked labels and the trail's
+           two names.
+
+           It is inserted here, in the pass that runs for EVERY step, and the
+           Content Rating pass removes it before putting the real line in the
+           same place. Order-independent: whichever of the two runs second
+           finds what the other left and does the right thing. */
+        const card = eb.parentElement;
+        if (card && !card.querySelector(':scope > .sm-cr-line-moved')) {
+          const slot = document.createElement('div');
+          slot.className = 'sw-tip-text sm-cr-line-moved sm-cr-line-slot';
+          slot.innerHTML = '&nbsp;';
+          slot.setAttribute('aria-hidden', 'true');
+          card.insertBefore(slot, eb.nextSibling);
+        }
       }
     }
 

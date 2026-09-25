@@ -25957,7 +25957,16 @@ body.sm-guide-panel #submit-overlay .intensity-btn.is-sel-unrated.ai-confident {
    hidden it becomes the first thing under the eyebrow and takes the margin the
    hero was paying. */
 /* First in the column, so the panel opens with the one fact that changes. */
-.guide-card.sm-step-guide .sw-tip-text.sm-cr-line-moved { margin: 0 0 14px; }
+/* 5px OF AIR UNDER THE NAME. Jaco: "sepárame un poco más, baja el All
+   answered otros 5px quizás." Measured, the two boxes were TOUCHING — eyebrow
+   bottom 146.2, line top 146.2 — so the only gap was the leading inside each
+   line, which is why it read as one block rather than a name and a status
+   under it.
+
+   It goes on `.sm-cr-line-moved`, which is the class the real line AND the
+   reserved placeholder both carry, so the slot grows by the same 5 and the
+   checklist keeps starting at one height in every step. */
+.guide-card.sm-step-guide .sw-tip-text.sm-cr-line-moved { margin: 5px 0 14px; }
 
 /* The step body's spotlight. See app.js's "ARRIVING SOMEWHERE FROM SHIPPY DIMS
    EVERYTHING ELSE" — the platform card's own mechanism at the locator's
@@ -26603,6 +26612,9 @@ body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot {
      the arms too; −24 leaves the head and the eyes out and tucks the rest
      behind the panel. */
   left: auto; right: -24px; top: 26px;
+  /* The lean is a TOKEN because the tantrum below divides by its cosine —
+     one number, two consumers, so they cannot drift apart. */
+  --sm-rail-lean: 29deg;
   /* `rotate`, NOT `transform` — AND THAT IS THE RIG, NOT A PREFERENCE. The bob
      is an `element.animate()` pinned to `startTime = 0` (shippy-live.js), and a
      WAAPI animation on `transform` composites ABOVE the cascade: measured, the
@@ -26614,7 +26626,7 @@ body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot {
      drops the tentacles back behind the panel, so the angle IS the "how much of
      him shows" control. 14 → 19 → 29 across three passes, all of it Jaco's eye
      on the same question. */
-  rotate: 29deg; transform-origin: 50% 100%;
+  rotate: var(--sm-rail-lean, 29deg); transform-origin: 50% 100%;
 }
 /* And the card takes the whole rail — nothing reserved above it. */
 body.sm-guide-panel #submit-overlay .sm-rail .guide-card {
@@ -26902,3 +26914,148 @@ body.sm-guide-panel #submit-overlay .cr-pinned .sw-tip-text { display: none; }
    but the sub is what says what the rows do — and in this arm it is the only
    sentence the page has, since the step's own header is not drawn. */
 body.sm-guide-beside .guide-card.sm-step-guide .guide-sub { display: block; }
+
+/* ── THE PAGE SHOWS THROUGH, BECAUSE GOING BACK LANDS ON IT ───────────────
+   Jaco: "¿podría ser en la versión panel la opacidad del fondo un pelín menos,
+   para que se intuya que si doy atrás vuelvo?" — and, looking at it: "se
+   intuye detrás la platform card, pero si se intuyese UN PELÍN más sería
+   fetén."
+
+   The app's scrim is black at 75% with a 4px blur, which is right for a dialog
+   that replaces what is under it. This arm spends real effort putting the page
+   BACK on screen — the pack is aligned to the page's own guide column
+   precisely so 85px of platform cards show on the left — and at 75% that
+   gesture paid nothing: measured, a card composites to 5 against the page's
+   2.5, so the only thing showing was two shades of black.
+
+   A black scrim is exact arithmetic, `colour × (1 − α)`, so what decides
+   whether anything is legible is the DISTANCE between `--panel` (20) and
+   `--bg` (10):
+
+       α .75 → 5 vs 2.5   separation 2.5   "something dark is behind"
+       α .45 → 11 vs 5.5  separation 5.5   "there are cards behind"
+       α .35 → 13 vs 6.5  separation 6.5   the green ticks start to read
+
+   .45 is where the silhouette arrives and the done-ticks are still only
+   hinted at — past it the dashboard starts competing with the step, which is
+   the opposite failure. The blur is untouched: it is what keeps this an
+   INTUITION rather than a second thing to read.
+
+   Scoped to this arm. `off` and `mid` are dialogs over a page they replace and
+   keep the app's own 75%; `on` has no scrim at all. */
+body.sm-guide-panel #submit-overlay { background: rgba(0, 0, 0, .45); }
+
+/* ── THE BLOOM FOLLOWS SHIPPY, IT DOES NOT STAY WHERE HE USED TO BE ───────
+   Jaco: "se sigue marcando la luminosidad de Shippy, cuando debería moverse al
+   sitio en el que está ahora."
+
+   `.app-guide::after` is the painted glow that fakes light spilling from
+   behind the octopus (v6.81 — a `radial-gradient`, not a filter, for the
+   Safari layer bug recorded there). Its base rule centres it on the mascot's
+   own box, `--shippy-inset + --shippy-w / 2`, which is where he lives on the
+   DASHBOARD: pinned to the left edge of his column.
+
+   In this rail he was moved to the other side — `left: auto; right: -24px;
+   top: 26px` — and the glow stayed behind. Measured: bloom centred on 995.5,
+   Shippy centred on 1248.7, **253px apart**, and ~60 out vertically too. A
+   glow with nothing glowing is this file's own recorded failure, and here it
+   was worse than absent: it read as a second light source on the modal's edge.
+
+   THE TWO NUMBERS ARE RECOMPOSED, NOT INVENTED. Horizontally the base centres
+   the 240px disc on the mascot's box, so from the other side that is the same
+   expression with the rail's own `-24px` in place of the inset. Vertically the
+   base is `--shippy-body-top (-58.5) + 86.5 - 120`, and that 86.5 is the drop
+   from the top of his box to the glow's centre — the glow sits on his BODY,
+   not on his box, which is why it is not simply centred. Both keep that
+   relationship with the rail's `26px` top.
+
+   Change `right`/`top` on `.sm-rail .guide-mascot` and these follow; they are
+   written as the same terms so the pair cannot silently drift. */
+body.sm-guide-panel #submit-overlay .sm-rail .app-guide::after {
+  left: auto;
+  right: calc(-24px + var(--shippy-w) / 2 - 120px);
+  top:   calc(26px + var(--sm-bloom-drop, 86.5px) - 120px);
+}
+
+/* ── AND THE PANEL ARM HOLDS STILL TOO (for now) ──────────────────────────
+   Jaco: "¿podemos por ahora quitar la animación al arrancar cada modal? Que
+   sea inmediato, porque hacen cosas raras de expansión de Shippy y del modal."
+
+   Same switch as the page arm's, on the two motions that arm does not have:
+   the modal's `max-width` TRANSITION — written when each step opened at its
+   own width, and with one width for every step since this morning it has
+   nothing left to travel except from nothing to 810 on the first paint — and
+   the rail's `clip-path` reveal, which was tied to that transition and so was
+   uncovering a panel that had already arrived.
+
+   `animation: none` on the BASE rule as well as on the flip classes is
+   load-bearing rather than thorough, for the reason written at the page arm's
+   copy: a changing animation LIST is what mints a fresh `modalIn` at its own
+   0% when a class comes off, which is the "flash al asentarse" bug. Every
+   state declares the same empty list, so there is nothing to create or
+   destroy.
+
+   `mid` is deliberately untouched — it is the control that still shows what
+   the motion was. */
+body.sm-guide-panel #submit-overlay .submit-modal,
+body.sm-guide-panel #submit-overlay .submit-modal.is-flip-exit,
+body.sm-guide-panel #submit-overlay .submit-modal.is-flip-enter,
+body.sm-guide-panel #submit-overlay .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-panel #submit-overlay .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-panel #submit-overlay .sm-rail.is-entering {
+  animation: none !important;
+}
+body.sm-guide-panel #submit-overlay .submit-modal { transition: none !important; }
+
+/* ── IN THE RAIL HE HIDES SIDEWAYS, NOT DOWNWARDS ─────────────────────────
+   Jaco: "en el Shippy panel del modal, si toco la cabeza a Shippy, que se meta
+   hacia la izquierda perfecto, en vez del descenso que hace ahora (que
+   funciona cuando estamos en el Shippy panel del dashboard)."
+
+   The dive is `translateY(64%)`, and its own note says why: on the dashboard
+   the card covers him from above, so dropping his own height is enough to put
+   him behind it. In this rail he is on the OTHER SIDE — `right: -24px`, leaning
+   29° — so down is not where the cover is; the card is to his LEFT, and a dive
+   read as him sinking into the modal's edge rather than tucking away.
+
+   HOW FAR IS MEASURED, NOT GUESSED. His BOX is `--shippy-w` (57) hanging 24
+   past the guide's right edge, but the SVG draws outside its box — measured,
+   his ink reaches 78.9px past that edge. `24px + var(--shippy-w)` is 81, which
+   clears it with 2 to spare and is written from the two numbers that put him
+   there, so moving him moves this with him.
+
+   `rotate(var(--body-rot))` is kept inside the transform because the base rule
+   carries it; the lean itself is the independent `rotate` property (the rig's
+   own rule — a WAAPI bob owns `transform`), so it survives untouched. */
+body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot.is-live.is-hiding {
+  /* IT TRAVELS ON THE PAGE'S X, NOT ON HIS OWN. Jaco: "podemos hacer que el
+     desplazamiento sea en el eje X real, no el eje propio x de Shippy después
+     de haber sido rotado."
+
+     The first version divided by cos(29°), because a `translateX` INSIDE
+     `transform` runs along the element's rotated axes — measured, 4px of
+     transform moved the painted box 3.5, so 81 left him 8px past the card and
+     the fix was 81/.8746 = 92.6. That is arithmetic compensating for the wrong
+     frame.
+
+     CSS composes the individual properties as translate → rotate → scale →
+     transform, so `translate` is applied BEFORE the rotation and is therefore
+     in the page's own axes: 81px of `translate` moves him 81px sideways, flat,
+     whatever he is leaning. No cosine, no token to keep in sync, and the
+     distance is once again just the overhang — his box hangs `24px` past the
+     edge and is `--shippy-w` wide, and his ink reaches 78.9, so 81 clears it
+     with 2 to spare.
+
+     `transform` keeps `rotate(var(--body-rot))` because the base rule carries
+     it, and the transition names both properties — the base only eases
+     `transform`, and a `translate` nobody transitions would teleport. */
+  transform: rotate(var(--body-rot));
+  translate: calc(-1 * (24px + var(--shippy-w)));
+  transition: transform .3s cubic-bezier(.4, 0, .9, .6),
+              translate .3s cubic-bezier(.4, 0, .9, .6);
+}
+
+/* The reserved status-line slot: it holds a line's height and shows nothing.
+   `visibility`, never `display` — a `display: none` box contributes no height,
+   which is the entire thing it is here to contribute. */
+.guide-card.sm-step-guide .sm-cr-line-slot { visibility: hidden; }
