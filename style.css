@@ -27098,6 +27098,20 @@ body.sm-guide-panel #submit-overlay .sm-rail .guide-mascot.is-live.is-hiding {
    The row itself changes only LIGHT, on the sine the carousel's glint uses.
    No ring: a ring is the one mark this app does not use, and the disc has
    already gone green — this says WHICH one did, not that something is done. */
+/* THE TRANSITION LIVES IN THE RESTING RULE, WHICH IS THE WHOLE FIX. Jaco: "la
+   animación que dimea el resto de platforms se quita muy brusca, que tenga un
+   smooth out."
+
+   It was declared on `.sm-celebrating .active-card` — inside the state it was
+   animating. Going IN worked, because the class arrives and the rule with it;
+   coming OUT there was nothing left to animate, since the selector stopped
+   matching the moment the class was removed and the cards snapped back to 1.
+
+   So the base carries the transition, which makes the return the one that
+   eases, and the active state overrides it with a shorter one: the dim should
+   arrive with the green wash it belongs to and leave in its own time. .18 in,
+   .42 out. */
+.dash-column .active-card { transition: opacity .42s cubic-bezier(.22, .61, .36, 1); }
 .dash-column.sm-celebrating .active-card { transition: opacity .18s ease; }
 .dash-column.sm-celebrating .active-card:not(.sm-celebrant) { opacity: .35; }
 
