@@ -26071,14 +26071,45 @@ body.sm-guide-panel #submit-overlay .intensity-btn.is-sel-unrated.ai-confident {
    just not what you asked for. No `pointer-events: none`, because this is a
    locator and not a prerequisite. The transition is the card's own, so one
    dim does not run at two speeds in one app. */
-.sm-cr-spot .ios-q-row,
-.sm-cr-spot .ios-content-step-label,
-.sm-cr-spot .ios-q-divider,
-.sm-cr-spot .ios-followup { transition: opacity .22s ease; }
-.sm-cr-spot.is-spotlight .ios-q-row:not(.is-spotlit),
-.sm-cr-spot.is-spotlight .ios-content-step-label:not(.is-spotlit),
-.sm-cr-spot.is-spotlight .ios-q-divider:not(.is-spotlit),
-.sm-cr-spot.is-spotlight .ios-followup:not(.is-spotlit) { opacity: .35; }
+/* ── IT DIMS WHAT IS THERE, NOT WHAT CONTENT RATING HAPPENS TO CONTAIN ────
+   Jaco: "en App Privacy, el checklist al tocar cada item no activa
+   correctamente, dimeando el resto, la parte importante."
+
+   THIS RULE WAS AN INVENTORY OF ONE STEP'S CLASS NAMES — `.ios-q-row`,
+   `.ios-content-step-label`, `.ios-q-divider`, `.ios-followup` — so every
+   other step got NO dim at all. App Privacy's body is built from
+   `.form-group`, `.prv-preset-wrap` and `.prv-nlp-wrap`, none of which is on
+   that list: measured, pressing any of its three rows dimmed nothing.
+
+   AND THE ONE THING IT DID DIM WAS BACKWARDS. App Privacy shares exactly one
+   class with that list, `.ios-q-row` — the "does your app collect any data"
+   question — and `_smPrivacyGo` marks the LABEL inside it, not the row. So
+   `:not(.is-spotlit)` still matched the row and the one element you had asked
+   for was the only one that faded. Measured .35 on the target, 1 on
+   everything else, in all three presses.
+
+   SO THE TEST IS STRUCTURAL: a direct child of the body that neither IS the
+   mark nor CONTAINS it steps back. That is `_sppSpotlight`'s own rule on the
+   Mac preview — "a child that CONTAINS the mark stays at full" — and it is
+   free of which step is open, which classes that step's builder uses, and
+   whether the mark landed on a row or on something inside one.
+
+   IT COSTS CONTENT RATING NOTHING, which is what made it safe to generalise
+   rather than extend: measured, that body is FLAT — all 25 questions, 7
+   section labels and 7 dividers are direct children of
+   `.ios-step-body-content` — so the four-class list WAS "the direct children",
+   written as an inventory. The one thing it named that this does not is the
+   trailing `.form-group`, which now dims with everything else and should:
+   spotlight a question and the age-rating URL field is not what you asked for.
+
+   `.cr-pinned` IS THE ONE EXEMPTION AND IT IS A REAL ONE. It is the sticky bar
+   carrying the step's status and its Unanswered/All filter — chrome about the
+   whole list rather than a part of it, and still true while you are looking
+   somewhere else. Same argument as the cancel hold's ".35 is only what remains
+   TRUE": the bar remains true. It also never scrolls away, so dimming it would
+   put a faded control permanently at the top of the step. */
+.sm-cr-spot > * { transition: opacity .22s ease; }
+.sm-cr-spot.is-spotlight > *:not(.cr-pinned):not(.is-spotlit):not(:has(.is-spotlit)) { opacity: .35; }
 
 /* The risk states have to beat `.is-done`, which is the same (0,2,0) and sits
    sixteen lines above them — source order alone would hand a finished step its
