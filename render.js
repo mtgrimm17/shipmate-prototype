@@ -20201,11 +20201,16 @@ function buildBuildDropdown(pid, inModal) {
      what will be transformed and which Steam features go dark on Mac — which is
      the one thing worth reading before pressing. Drawn only in the no-build
      state and only for macos_full; without the agent nothing here changes. */
+  /* ICON ONLY, 30px, no label (v7.41). A second labelled pill squeezed the step's
+     own name out of its row ("Upload Build" read as "|"). This is the card's
+     micro-button — bare until hovered, then the gear's soft fill — so it costs
+     the row 38px and no words; the words are in the tooltip, through `data-tip`
+     so it is the app's instant bubble rather than the browser's. */
   const upfPill = (noBuild && typeof UPF !== 'undefined' && UPF.ready(pid)) ? `
-      <div class="build-pill no-build is-upf" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')" title="${escHtml(UPF.summary() || 'Build the Mac App Store version from the installed Steam build')}">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M4 17l6-6M14 4l6 6-8 8-6-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="build-pill-label">Build from Steam</span>
-      </div>` : '';
+      <button type="button" class="build-magic" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')"
+              data-tip="${escHtml('Build from Steam — ' + (UPF.summary() || 'the Mac App Store version, from the installed Steam build'))}" aria-label="Build from Steam">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 19l9-9M12 3l.9 2.1L15 6l-2.1.9L12 9l-.9-2.1L9 6l2.1-.9zM19 12l.6 1.4L21 14l-1.4.6L19 16l-.6-1.4L17 14l1.4-.6zM6 4l.5 1 1 .5-1 .5-.5 1-.5-1-1-.5 1-.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>` : '';
   /* THE TOOLTIP IS THE HINT, WHICH IS AN INSTRUCTION RATHER THAN A FORMAT LIST.
      It read "Upload build — accepts .pkg or .zip", i.e. what the control will
      swallow — and `hint`'s own note in state.js is explicit that this is the

@@ -5877,9 +5877,33 @@ body.viewing-splash .app-subnav { display: none; }
    is the release block's own trade for its picker. */
 .build-pill-group {
   display: inline-flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   max-width: 100%;
+}
+/* The magic button: the card's gear, with a wand in it. 30px, no stroke, bare
+   at rest, `--surface-hover` on approach — the micro-button pattern this file
+   uses for every control that lives in a card's chrome. Icon only, so the step
+   row keeps its name. */
+.build-magic {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, .62);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.build-magic:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, .06));
+  color: #fff;
 }
 .build-pill.has-build {
   border: 1px solid rgba(52, 209, 122, .32);
