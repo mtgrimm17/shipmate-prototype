@@ -20183,13 +20183,29 @@ function buildBuildDropdown(pid, inModal) {
   const spinHTML   = `<span class="build-proc-spin" style="flex-shrink:0;"></span>`;
 
   if (processing) {
+    /* A UPF build in flight prints the agent's own line (upf.js) instead of
+       the fake "Analyzing…": the pill is the only place the progress shows. */
+    const upfLine = (pid === 'macos_full' && state.upf?.job && state.upf.progress) ? state.upf.progress : '';
     return `
-      <div class="build-pill is-processing" title="Analyzing binary…">
+      <div class="build-pill is-processing" title="${escHtml(upfLine || 'Analyzing binary…')}">
         ${spinHTML}
-        <span class="build-pill-label">Analyzing…</span>
+        <span class="build-pill-label">${escHtml(upfLine || 'Analyzing…')}</span>
       </div>`;
   }
   const noBuild = !build;
+  /* BUILD FROM STEAM (v7.39). When the local UPF agent is running and this
+     project's Steam title is installed in the Steam library, the Mac App Store
+     platform gets a second pill beside Upload Build: press it and the agent
+     builds, signs, packages and uploads the Mac App Store version of the Steam
+     build (upfBuildAndUpload, upf.js). Its tooltip is the inspect verdict —
+     what will be transformed and which Steam features go dark on Mac — which is
+     the one thing worth reading before pressing. Drawn only in the no-build
+     state and only for macos_full; without the agent nothing here changes. */
+  const upfPill = (noBuild && typeof UPF !== 'undefined' && UPF.ready(pid)) ? `
+      <div class="build-pill no-build is-upf" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')" title="${escHtml(UPF.summary() || 'Build the Mac App Store version from the installed Steam build')}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M4 17l6-6M14 4l6 6-8 8-6-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="build-pill-label">Build from Steam</span>
+      </div>` : '';
   /* THE TOOLTIP IS THE HINT, WHICH IS AN INSTRUCTION RATHER THAN A FORMAT LIST.
      It read "Upload build — accepts .pkg or .zip", i.e. what the control will
      swallow — and `hint`'s own note in state.js is explicit that this is the
@@ -20204,7 +20220,7 @@ function buildBuildDropdown(pid, inModal) {
      replacing it means exporting another. `accept` is unchanged and still
      filters the dialog — what we recommend and what we permit are two different
      things, which is that note's other half. */
-  return `
+  const uploadPill = `
     <div class="build-pill ${noBuild ? 'no-build' : 'has-build'}"
          onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${escHtml(fmt.hint)}">
       <input type="file" id="${inputId}" accept="${accept}" hidden
@@ -20212,6 +20228,9 @@ function buildBuildDropdown(pid, inModal) {
       ${noBuild ? uploadSVG : checkSVG}
       <span class="build-pill-label">${noBuild ? 'Upload Build' : escHtml(build.name)}</span>
     </div>`;
+  /* Two pills share one flex group so the second wraps under the first when
+     the cell cannot seat both — the release block's own rule for its picker. */
+  return upfPill ? `<span class="build-pill-group">${uploadPill}${upfPill}</span>` : uploadPill;
 }
 
 /* ══════════════════════════════════════════════════════

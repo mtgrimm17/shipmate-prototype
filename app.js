@@ -8918,6 +8918,9 @@ function selectPicklistItem(igdbId) {
     Promise.resolve(_applySteamAboutData(item.steamAppId, item.name, item))
       .finally(() => _setDescLoading(false));
     _applySteamHeroBanner(item.steamAppId, item.name);
+    /* UPF (v7.39): is this title installed in the local Steam library? Silent
+       unless the agent is running; see upf.js. */
+    if (typeof upfOnSteamGame === 'function') upfOnSteamGame(item.steamAppId, item.name);
     _applySteamAchievements(item.steamAppId, item.name);
     // Steam's logotype into the pool when it is genuinely transparent, and
     // then the two built icons. Two calls rather than one: the logotype is a

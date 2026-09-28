@@ -5868,6 +5868,19 @@ body.viewing-splash .app-subnav { display: none; }
   color: #fff;
   background: rgba(255, 255, 255, .06);
 }
+/* BUILD FROM STEAM (v7.39, upf.js). A second pill beside Upload Build on the
+   Mac App Store platform while the local UPF agent has a matching Steam build.
+   It is the same object as Upload Build — the no-build pill, unchanged — so the
+   two read as two ways of answering one question. The group wraps rather than
+   clipping: a build pill whose label is cut is the "4…" the release block
+   refused, and the second pill dropping under the first costs one row, which
+   is the release block's own trade for its picker. */
+.build-pill-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
 .build-pill.has-build {
   border: 1px solid rgba(52, 209, 122, .32);
   color: #4FE39A;
@@ -20542,7 +20555,7 @@ body.is-splash .ai-disclaimer { display: none; }
    This is the Mac case: 16:10 at the full width IS the canvas. */
 .shot-ed-frame.is-full { box-shadow: none; }
 
-/* QUARTERS AND THE CENTRE — 25%, 50%, 75% on both axes (v7.27).
+/* QUARTERS AND THE CENTRE — 25%, 50%, 75% on both axes (v7.39).
    It was the rule of thirds, and it was not even that. `background-position:
    33.333%` with a tile 33.333% wide does NOT put a line at 33.333%: a
    percentage in `background-position` aligns the P% point of the IMAGE with
@@ -20590,7 +20603,7 @@ body.is-splash .ai-disclaimer { display: none; }
   --shot-grid-line: rgba(255, 255, 255, .28);
   position: absolute;
   inset: 0;
-  /* STATED HERE RATHER THAN INHERITED, and that is v7.27's own bug caught in
+  /* STATED HERE RATHER THAN INHERITED, and that is v7.39's own bug caught in
      its own test. In the cropper this element sits inside `.shot-ed-frame`,
      which is already `pointer-events: none`, so it had never needed to say so.
      Candidate A's stage has no frame — the grid is a direct child — so the
