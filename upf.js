@@ -42,6 +42,8 @@ state.upf = state.upf || {
   manifest: null,   // /inspect result: classification, transformations, disabled Steam features
   job:      null,   // { id, kind } while prepare/upload runs
   progress: '',     // latest agent line, shown in the processing pill
+  lines:    [],     // every agent line of the current/last run, for the Upload Build panel
+  result:   null,   // { buildVersion, buildId } after a successful run
   error:    '',
 };
 
@@ -190,6 +192,8 @@ async function upfBuildAndUpload(pid) {
   state.platformBuildProcessing = state.platformBuildProcessing || {};
   state.platformBuildProcessing[pid] = true;
   state.upf.error = '';
+  state.upf.result = null;
+  state.upf.lines = [];
   state.upf.progress = 'Starting build…';
   state.upf.job = { id: null, kind: 'prepare' };
   _upfRepaint(pid, true);
@@ -198,9 +202,10 @@ async function upfBuildAndUpload(pid) {
   const onLine = (line) => {
     const s = String(line).trim();
     if (!s) return;
+    state.upf.lines.push(s);
     state.upf.progress = s.replace(/^stage [A-F][^:]*:\s*/i, '').slice(0, 60);
     const now = Date.now();
-    if (now - lastPaint > 2000) { lastPaint = now; _upfRepaint(pid, false); }
+    if (now - lastPaint > 2000) { lastPaint = now; _upfRepaint(pid, true); }
   };
 
   try {
@@ -230,6 +235,7 @@ async function upfBuildAndUpload(pid) {
       ascAppId: up.appId,
     };
     state.upf.progress = '';
+    state.upf.result = { buildVersion: up.buildVersion, buildId: up.buildId, appId: up.appId };
     if (typeof bcToast === 'function') bcToast(`Mac App Store build ${up.buildVersion} is in App Store Connect (build ${up.buildId}).`);
   } catch (e) {
     console.warn('[UPF] build failed', e);
@@ -244,9 +250,102 @@ async function upfBuildAndUpload(pid) {
 }
 
 /* The same two repaints handleBuildUpload does, so the card and an open step
-   modal both follow. `full` is for the start and the end; progress ticks only
-   need the pill, but _refreshBuildUI is the one door and it is cheap enough. */
+   modal both follow. Progress ticks repaint the modal too (throttled by the
+   caller), because that is where the log is read. */
 function _upfRepaint(pid, full) {
   if (typeof _refreshBuildUI === 'function') _refreshBuildUI(pid);
   if (full && typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* ── THE UPLOAD BUILD PANEL ──────────────────────────────────────────────────
+   Rendered by _subStepBodyInner (render.js) under the release block of the
+   Upload Build step, Mac platforms only, and only while the agent is running.
+   It is the confirmation screen: what will change in the build, which Steam
+   features go dark on Mac, and — once pressed — the agent's own log, then the
+   App Store Connect result. Reads state, never writes it. */
+/* The run, as the developer sees it: seven stages, matched against the agent's
+   own progress lines. `test` is what the agent prints when that stage begins. */
+const UPF_STAGES = [
+  { label: 'Prepare the Steam build',        test: /inspecting|preflight|copying|provisioning/i },
+  { label: 'Replace Steam with the shim',     test: /stage a\/b|compiling shim/i },
+  { label: 'Sandbox and entitlements',        test: /stage c/i },
+  { label: 'Sign',                            test: /stage d/i },
+  { label: 'Package for the Mac App Store',   test: /stage e|stage f/i },
+  { label: 'Upload to App Store Connect',     test: /uploading|chunk|%$/i },
+  { label: 'Apple processes the build',       test: /waiting for apple|build \d+:/i },
+];
+
+function _upfStageIndex(lines) {
+  let idx = -1;
+  for (const l of lines) {
+    UPF_STAGES.forEach((s, i) => { if (s.test.test(l) && i > idx) idx = i; });
+  }
+  return idx;
+}
+
+function upfBuildPanelHTML(pid) {
+  if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return '';
+  const u = state.upf;
+  if (u.agent === false || u.agent === null) { UPF.health().then(h => { if (h) UPF.ensureMatch(); }); return ''; }
+  if (!u.game) return '';   // not installed here: the ordinary file row stays
+  if (state.platformBuilds && state.platformBuilds[pid] && !u.job && !u.result) return '';  // a build is in already
+  const esc = (s) => (typeof escHtml === 'function') ? escHtml(String(s)) : String(s);
+
+  const m = u.manifest || {};
+  const planned = m.plannedTransformations || [];
+  const degraded = ((m.steamApis && m.steamApis.degraded) || []).map(k => k.split('::')[0]).filter((v, i, a) => a.indexOf(v) === i);
+  const blockers = m.blockers || [];
+  const running = !!u.job;
+  const done = !!u.result;
+  const head = `<div class="upf-head">Build from Steam <span class="upf-muted">— ${esc(u.game.name)}, from the Steam build on this Mac</span></div>`;
+
+  /* ── Phase 3: done ─────────────────────────────────────────────────── */
+  if (done) {
+    return `<div class="upf-panel">${head}
+      <div class="upf-result">Build ${esc(u.result.buildVersion)} is in App Store Connect · build id ${esc(u.result.buildId)}</div>
+      <div class="upf-muted" style="margin-top:6px">Add it to a TestFlight group in App Store Connect to install it.</div>
+    </div>`;
+  }
+
+  /* ── Phase 2: running status ───────────────────────────────────────── */
+  if (running || (u.error && u.lines.length)) {
+    const cur = _upfStageIndex(u.lines);
+    const failed = !running && !!u.error;
+    const rows = UPF_STAGES.map((s, i) => {
+      const st = failed && i === cur ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
+      const mark = st === 'is-done' ? '✓' : (st === 'is-bad' ? '✕' : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : '·'));
+      return `<li class="upf-stage ${st}"><span class="upf-stage-mark">${mark}</span>${esc(s.label)}</li>`;
+    }).join('');
+    const err = failed ? `<div class="upf-error">${esc(u.error)}</div>` : '';
+    const retry = failed ? `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Try again</button></div>` : '';
+    return `<div class="upf-panel">${head}
+      <ul class="upf-stages">${rows}</ul>
+      ${err}${retry}
+      <div class="upf-label">${running ? 'Agent log' : 'Agent log (last run)'}</div>
+      <div class="upf-log">${u.lines.slice(-14).map(l => `<div>${esc(l)}</div>`).join('')}</div>
+    </div>`;
+  }
+
+  /* ── Phase 1: the steps, and the confirmation ──────────────────────── */
+  const verdict = `<div class="upf-verdict ${blockers.length ? 'is-blocked' : ''}">
+      <span class="upf-verdict-word">${esc(m.classification || 'Inspected')}</span>
+      <span class="upf-muted">· ${planned.length} changes · ${(m.warnings || []).length} warnings · ${blockers.length} blockers</span>
+    </div>`;
+  const changes = planned.length ? `
+    <div class="upf-label">What changes in the build</div>
+    <ul class="upf-list">${planned.map(t => `<li><span class="upf-id">${esc(t.id)}</span>${esc(t.name)}</li>`).join('')}</ul>` : '';
+  const dark = degraded.length ? `
+    <div class="upf-label">Steam features that go dark on Mac</div>
+    <div class="upf-chips">${degraded.map(d => `<span class="upf-chip">${esc(d.replace(/^Steam/, ''))}</span>`).join('')}</div>` : '';
+  const blocks = blockers.length ? `
+    <div class="upf-label">Blocked</div>
+    <ul class="upf-list is-bad">${blockers.map(b => `<li>${esc(b.message || b)}</li>`).join('')}</ul>` : '';
+  const confirm = blockers.length
+    ? `<button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button>`
+    : `<div class="upf-confirm">
+         <div class="upf-confirm-text">The Steam build is left untouched. A copy is transformed as listed, signed with your Mac App Store certificate, packaged and uploaded to App Store Connect. About ten minutes, plus Apple's processing.</div>
+         <button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Build &amp; upload to App Store Connect</button>
+       </div>`;
+  const err = u.error ? `<div class="upf-error">${esc(u.error)}</div>` : '';
+  return `<div class="upf-panel">${head}${verdict}${changes}${dark}${blocks}<div class="upf-actions">${confirm}</div>${err}</div>`;
 }

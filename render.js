@@ -5755,8 +5755,15 @@ function _subStepBodyInner(pid, stepId) {
         ${buildBuildDropdown(pid)}
         <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
       </div>`;
+    /* BUILD FROM STEAM (v7.42, upf.js): on the Mac platforms, while the agent
+       has this game and no file has been dropped in, the panel REPLACES the
+       file row — the steps the agent will take, a confirm button, then the
+       running status. Once a build is in (from either door) the row is the
+       file pill again, and without the agent nothing here changes. */
+    const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
+    const top = upfPanel ? upfPanel : uploadRow;
     return banner
-      + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
+      + `<div class="ios-step-body-content"><div class="sub-upload-body">${top}${buildReleaseBlock(pid)}</div></div>`
       + _localSaveNote(pid)
       + SM_SCROLL_CUE;
   }
@@ -20193,24 +20200,23 @@ function buildBuildDropdown(pid, inModal) {
       </div>`;
   }
   const noBuild = !build;
-  /* BUILD FROM STEAM (v7.39). When the local UPF agent is running and this
-     project's Steam title is installed in the Steam library, the Mac App Store
-     platform gets a second pill beside Upload Build: press it and the agent
-     builds, signs, packages and uploads the Mac App Store version of the Steam
-     build (upfBuildAndUpload, upf.js). Its tooltip is the inspect verdict —
-     what will be transformed and which Steam features go dark on Mac — which is
-     the one thing worth reading before pressing. Drawn only in the no-build
-     state and only for macos_full; without the agent nothing here changes. */
-  /* ICON ONLY, 30px, no label (v7.41). A second labelled pill squeezed the step's
-     own name out of its row ("Upload Build" read as "|"). This is the card's
-     micro-button — bare until hovered, then the gear's soft fill — so it costs
-     the row 38px and no words; the words are in the tooltip, through `data-tip`
-     so it is the app's instant bubble rather than the browser's. */
-  const upfPill = (noBuild && typeof UPF !== 'undefined' && UPF.ready(pid)) ? `
-      <button type="button" class="build-magic" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')"
-              data-tip="${escHtml('Build from Steam — ' + (UPF.summary() || 'the Mac App Store version, from the installed Steam build'))}" aria-label="Build from Steam">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 19l9-9M12 3l.9 2.1L15 6l-2.1.9L12 9l-.9-2.1L9 6l2.1-.9zM19 12l.6 1.4L21 14l-1.4.6L19 16l-.6-1.4L17 14l1.4-.6zM6 4l.5 1 1 .5-1 .5-.5 1-.5-1-1-.5 1-.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>` : '';
+  /* BUILD FROM STEAM (v7.42, upf.js). When the local UPF agent is running and
+     this project's Steam title is installed in the Steam library, the Upload
+     Build pill IS "Build from Steam" — same pill, same slot, one control — and
+     pressing it opens the step's modal, where the transformations are listed,
+     the build is confirmed, and the run is watched (upfBuildPanelHTML). Mark:
+     "replace the Upload Build button on the step with Build from Steam.
+     Clicking that opens a modal with steps, a confirmation dialog, and then a
+     running status." Without the agent, or once a build is in, the pill is the
+     file pill it always was. */
+  if (noBuild && typeof UPF !== 'undefined' && UPF.ready(pid)) {
+    return `
+    <div class="build-pill no-build is-upf" onclick="event.stopPropagation();openStepModal('${pid}','uploadBuild')"
+         data-tip="${escHtml(UPF.summary() || 'Build the Mac App Store version from the Steam build on this Mac')}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M4 17l6-6M14 4l6 6-8 8-6-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="build-pill-label">Build from Steam</span>
+    </div>`;
+  }
   /* THE TOOLTIP IS THE HINT, WHICH IS AN INSTRUCTION RATHER THAN A FORMAT LIST.
      It read "Upload build — accepts .pkg or .zip", i.e. what the control will
      swallow — and `hint`'s own note in state.js is explicit that this is the
@@ -20233,9 +20239,7 @@ function buildBuildDropdown(pid, inModal) {
       ${noBuild ? uploadSVG : checkSVG}
       <span class="build-pill-label">${noBuild ? 'Upload Build' : escHtml(build.name)}</span>
     </div>`;
-  /* Two pills share one flex group so the second wraps under the first when
-     the cell cannot seat both — the release block's own rule for its picker. */
-  return upfPill ? `<span class="build-pill-group">${uploadPill}${upfPill}</span>` : uploadPill;
+  return uploadPill;
 }
 
 /* ══════════════════════════════════════════════════════

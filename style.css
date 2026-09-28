@@ -5868,43 +5868,104 @@ body.viewing-splash .app-subnav { display: none; }
   color: #fff;
   background: rgba(255, 255, 255, .06);
 }
-/* BUILD FROM STEAM (v7.39, upf.js). A second pill beside Upload Build on the
-   Mac App Store platform while the local UPF agent has a matching Steam build.
-   It is the same object as Upload Build — the no-build pill, unchanged — so the
-   two read as two ways of answering one question. The group wraps rather than
-   clipping: a build pill whose label is cut is the "4…" the release block
-   refused, and the second pill dropping under the first costs one row, which
-   is the release block's own trade for its picker. */
-.build-pill-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
+/* BUILD FROM STEAM (v7.42, upf.js). The Upload Build pill wears this label
+   while the local UPF agent has the project's Steam build; it is the no-build
+   pill, unchanged — one control, one slot. Pressing it opens the step's modal,
+   where THE PANEL below replaces the file row: the steps the agent will take
+   and a confirmation first, then the running status. Text colours only — it is
+   information — with the app's green for done and the magenta for a failure;
+   the transformation ids take the pending disc's register. The log is a --bg
+   well like every other well in the app. */
+.upf-panel {
+  font-family: 'IBM Plex Mono', monospace;
+  margin-bottom: 22px;
 }
-/* The magic button: the card's gear, with a wand in it. 30px, no stroke, bare
-   at rest, `--surface-hover` on approach — the micro-button pattern this file
-   uses for every control that lives in a card's chrome. Icon only, so the step
-   row keeps its name. */
-.build-magic {
+.upf-confirm-text {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dim, #a0a0a0);
+  margin-bottom: 12px;
+}
+.upf-stages { list-style: none; margin: 6px 0 16px; padding: 0; }
+.upf-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .42);
+}
+.upf-stage.is-current { color: var(--text, #f5f5f5); }
+.upf-stage.is-done { color: var(--text, #f5f5f5); }
+.upf-stage.is-bad { color: var(--magenta, #ff3b78); }
+.upf-stage-mark {
   flex: none;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  margin: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, .62);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  font-size: 12px;
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .42);
 }
-.build-magic:hover {
-  background: var(--surface-hover, rgba(255, 255, 255, .06));
-  color: #fff;
+.upf-stage.is-done .upf-stage-mark { background: #31DC80; color: #0F2A1A; }
+.upf-stage.is-bad .upf-stage-mark { background: var(--magenta, #ff3b78); color: #2E0713; }
+.upf-stage .build-proc-spin { width: 12px; height: 12px; }
+.upf-head {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text, #f5f5f5);
+  margin-bottom: 8px;
 }
+.upf-muted { color: var(--text-dim, #a0a0a0); font-size: 12px; }
+.upf-verdict { font-size: 12px; margin-bottom: 14px; }
+.upf-verdict-word { color: #31DC80; font-weight: 500; }
+.upf-verdict.is-blocked .upf-verdict-word { color: var(--magenta, #ff3b78); }
+.upf-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  color: var(--text-dim, #a0a0a0);
+  margin: 14px 0 6px;
+}
+.upf-list { list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--text, #f5f5f5); }
+.upf-list li { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; }
+.upf-list.is-bad li { color: var(--magenta, #ff3b78); }
+.upf-id {
+  flex: none;
+  min-width: 26px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, .42);
+}
+.upf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.upf-chip {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--text-dim, #a0a0a0);
+  background: rgba(255, 255, 255, .06);
+}
+.upf-actions { margin-top: 16px; }
+.upf-result { font-size: 12px; color: #31DC80; }
+.upf-error { margin-top: 10px; font-size: 12px; color: var(--magenta, #ff3b78); }
+.upf-log {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg, #0a0a0a);
+  border: 1px solid rgba(255, 255, 255, .08);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-dim, #a0a0a0);
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.upf-log div:last-child { color: var(--text, #f5f5f5); }
 .build-pill.has-build {
   border: 1px solid rgba(52, 209, 122, .32);
   color: #4FE39A;
