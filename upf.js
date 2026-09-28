@@ -33,6 +33,8 @@
    ============================================================ */
 
 const UPF_AGENT = 'http://127.0.0.1:7343';
+/* Both Mac App Store platforms take the pill; the Steam build is the same. */
+const UPF_MAC_PIDS = ['macos', 'macos_full'];
 
 state.upf = state.upf || {
   agent:    null,   // /health payload, or false once a probe has failed
@@ -96,9 +98,38 @@ const UPF = {
     }
   },
 
-  achievementsForBuild() {
+  /* The project's Steam app id, wherever the page currently holds it: the
+     picked search result, or the achievements baseline that came off Steam. */
+  currentSteamAppId() {
+    return (state.liveSearch && state.liveSearch.steamAppId)
+        || (state.steamAchievementsBaseline && state.steamAchievementsBaseline.appId)
+        || null;
+  },
+
+  /* Match lazily, once, for a project whose game was chosen before this page
+     loaded (selectPicklistItem never ran, so upfOnSteamGame never did). */
+  _matchAttempted: false,
+  ensureMatch() {
+    if (this._matchAttempted || state.upf.game || state.upf.agent === false) return;
+    const appId = this.currentSteamAppId();
+    if (!appId) return;
+    this._matchAttempted = true;
+    this.match(appId, state.formData?.title || '')
+      .then(g => { if (g) _upfRepaintAll(); })
+      .catch(e => console.warn('[UPF] match failed', e));
+  },
+
+  isMac(pid) { return UPF_MAC_PIDS.includes(pid); },
+
+  /* Console helper: why is the pill (not) showing? */
+  debug() {
+    return { agent: state.upf.agent, game: state.upf.game, steamAppId: this.currentSteamAppId(),
+             classification: state.upf.manifest && state.upf.manifest.classification, job: state.upf.job, error: state.upf.error };
+  },
+
+  achievementsForBuild(pid) {
     const base = (state.steamAchievementsBaseline && state.steamAchievementsBaseline.achievements) || [];
-    const gc   = state.macFullGameCenterAchievements || [];
+    const gc   = (pid === 'macos_full' ? state.macFullGameCenterAchievements : state.macGameCenterAchievements) || [];
     return base
       .filter(a => a.identifier)
       .map(a => {
@@ -119,9 +150,22 @@ const UPF = {
   },
 
   ready(pid) {
-    return pid === 'macos_full' && !!state.upf.game && !!state.upf.agent && !state.upf.job;
+    if (!this.isMac(pid)) return false;
+    if (!state.upf.game) this.ensureMatch();   // async; a later repaint picks it up
+    return !!state.upf.game && !!state.upf.agent && !state.upf.job;
   },
 };
+
+function _upfRepaintAll() {
+  if (typeof _refreshBuildUI !== 'function') return;
+  for (const pid of UPF_MAC_PIDS) {
+    if (state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(pid)) _refreshBuildUI(pid);
+  }
+}
+
+/* A project restored with its game already chosen: ask once the page has
+   settled, so the pill is there the first time the card is looked at. */
+setTimeout(() => { try { UPF.ensureMatch(); } catch (_) {} }, 1500);
 
 /* Touchpoint 1 — fire-and-forget from selectPicklistItem. Never renders: the
    matched game only changes what buildBuildDropdown draws NEXT time, and that
@@ -129,8 +173,9 @@ const UPF = {
 function upfOnSteamGame(steamAppId, name) {
   state.upf.game = null;
   state.upf.manifest = null;
+  UPF._matchAttempted = true;
   UPF.match(steamAppId, name)
-    .then(g => { if (g && typeof _refreshBuildUI === 'function' && state.activePlatforms?.includes?.('macos_full')) _refreshBuildUI('macos_full'); })
+    .then(g => { if (g) _upfRepaintAll(); })
     .catch(e => console.warn('[UPF] match failed', e));
 }
 
@@ -160,7 +205,7 @@ async function upfBuildAndUpload(pid) {
 
   try {
     const target = { version: state.formData?.version || undefined };
-    const p = await UPF._post('/prepare', { game: game.app, target, achievements: UPF.achievementsForBuild() });
+    const p = await UPF._post('/prepare', { game: game.app, target, achievements: UPF.achievementsForBuild(pid) });
     state.upf.job = { id: p.job, kind: 'prepare' };
     const prep = await UPF.waitJob(p.job, onLine);
     if (!prep || prep.status !== 'ready') {

@@ -20185,7 +20185,7 @@ function buildBuildDropdown(pid, inModal) {
   if (processing) {
     /* A UPF build in flight prints the agent's own line (upf.js) instead of
        the fake "Analyzing…": the pill is the only place the progress shows. */
-    const upfLine = (pid === 'macos_full' && state.upf?.job && state.upf.progress) ? state.upf.progress : '';
+    const upfLine = (typeof UPF !== 'undefined' && UPF.isMac(pid) && state.upf?.job && state.upf.progress) ? state.upf.progress : '';
     return `
       <div class="build-pill is-processing" title="${escHtml(upfLine || 'Analyzing binary…')}">
         ${spinHTML}
