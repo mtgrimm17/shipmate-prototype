@@ -28230,3 +28230,1029 @@ function _smCelebrateRow(card, row) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 5 — ONE PLATFORM AT A TIME, AS A PAGE.
+
+   Jaco: "en vez de las platform cards tal y como las concebimos en la view de
+   dashboard, lo que tengamos es siempre una plataforma seleccionada. Y que si
+   tengo 3 plataformas abiertas, en el ancho de la content card hubiera espacio
+   para 3 pills, igual que hacemos en game details, pero PLATFORM 1, PLATFORM
+   2, PLATFORM 3. Y al clicar en cada una estarían todos los pasos que están en
+   la platform card, pero con scroll infinito."
+
+   IT IS BUILT ON MARK'S INLINE ARM, NOT BESIDE IT. `?layout=inline` already
+   ships a platform strip and a pane holding every step of the selected
+   platform as a row — the model's whole skeleton. What it does NOT do is show
+   more than one step at a time: `state.submission.openStep[pid]` is a single
+   id and `.sub-step-body` is capped at 556px with a scroller inside it. So
+   this arm is three changes to that one, rather than a fifth presentation of
+   the submission tab.
+
+   THE NUMBER THAT DECIDES THE MODEL, measured before a line was written. Mac
+   App Store's five steps at their natural heights: Upload Build 119, Content
+   Rating 1448, App Privacy 277, Product Page Preview 1517, Improve 856 —
+   4217, plus the rows, 4467. That is 4.2 screens at 1070 and 6.4 on a 700px
+   laptop, with every answer filled in at its quietest. Four screens is an
+   ordinary page; what it is not is a page you can find anything in by
+   scrolling. Which is the argument for the rail rather than a second row of
+   pills: both are the same control, and only the vertical one has room for the
+   card's discs, ticks and risk marks beside each name.
+
+   `?beside=rail`, and it FORCES `layout: inline` on the way in, because half
+   of it is Mark's and the two flags would otherwise have to agree by hand.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* The arm reuses the pane's own two functions for the rail's rows — the same
+   `_paneSteps` and `_paneComplete` the rows underneath are built from — so the
+   table of contents cannot drift from the thing it indexes. `_smStepRisk` is
+   the card's, so an amber or red step reads the same in all three places. */
+function _smRailRows(pid) {
+  if (typeof _paneSteps !== 'function') return [];
+  return _paneSteps(pid).map((step, i) => ({
+    id:    step.id,
+    label: (typeof stepLabel === 'function' ? stepLabel(pid, step) : step.label) || step.id,
+    done:  typeof _paneComplete === 'function' ? !!_paneComplete(pid, step.id) : false,
+    risk:  typeof _smStepRisk === 'function' ? _smStepRisk(pid, step.id) : null,
+    n:     i + 1,
+  }));
+}
+
+/* ══ SHIPPY CARRIES THE PLATFORM'S STEPS ═══════════════════════════════════
+   `_chkGroups` is the panel's one source of rows, and wrapping it is how every
+   other arm in this experiment makes the panel contextual. Here the dashboard
+   group — a generic six-item "Upload build / Set content ratings / …" that
+   answers for EVERY platform at once — becomes the selected platform's own
+   steps, which is the question you are actually holding once one platform is
+   the page.
+
+   THE GROUP'S NAME BECOMES THE PLATFORM'S, because "SUBMISSION 2/6" over a
+   list of Steam's five steps is a heading about something else. The count
+   comes free: the panel prints done-over-total from the items it is given.
+
+   `bad` ON A HIGH RISK, so a step that the store will refuse wears the
+   checklist's cross rather than a tick — the same `sm-task-bad` the store
+   preview's sections use, which is already built and already magenta. */
+function _smRailChkItems(pid) {
+  return _smRailRows(pid).map(r => ({
+    label: r.label,
+    step:  'rail:' + r.id,
+    done:  r.done && r.risk !== 'high',
+    bad:   r.risk === 'high',
+  }));
+}
+
+/* Pressing a rail row SCROLLS, it does not open: every step is already open in
+   this arm, so there is nothing to toggle and the row is a locator. It travels
+   on the app's own animator for "The travel is ours, not the browser's" — one
+   named scroller, written frame by frame, no engine's smooth implementation in
+   the path. */
+/* ══ IT LANDS AT THE TOP, AND THE REST STEPS BACK ══════════════════════════
+   Jaco: "cuando doy en Shippy, el scroll debería llevar el content hasta el
+   punto más alto visualmente, para que sea cómodo, y dimear el resto."
+
+   CENTRING IS THE WRONG VERB FOR A SECTION. `_smScrollCentre` is right when
+   the target is a ROW — one line you have to find in a list, where putting it
+   in the middle of the viewport is what makes it findable. Here the target is
+   a whole step, 1434px of it in Content Rating's case, and centring a thing
+   taller than the screen means landing in the MIDDLE of it: you arrive at
+   question nine with its title off screen above you. Top-aligned, you arrive
+   at the beginning of the thing you asked for, which is the only place a
+   section can usefully start.
+
+   THE PAD IS THE CARD'S OWN TOP PADDING, so the title lands exactly where it
+   would sit if that step were the first thing in the card. Nothing here
+   states a number that is not already on screen. */
+const SM_RAIL_TOP_PAD = 22;
+function _smRailScrollTop(el) {
+  const sc = (typeof _smNearestScroller === 'function' && _smNearestScroller(el))
+           || document.scrollingElement;
+  if (!sc) return;
+  const scTop = sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top;
+  const to = Math.max(0, Math.min(
+    sc.scrollTop + (el.getBoundingClientRect().top - scTop) - SM_RAIL_TOP_PAD,
+    sc.scrollHeight - sc.clientHeight));
+  if (typeof _smScrollTo === 'function') _smScrollTo(sc, to);
+  else sc.scrollTop = to;
+}
+
+/* THE DIM IS THE STEP SPOTLIGHT, ONE SURFACE OVER. `_smSpotlight` is the same
+   function the platform card and the Mac preview use, and the rule it drives
+   is the one this session made structural: a direct child of the host that
+   neither IS the mark nor CONTAINS it steps back. So the host is the step
+   list, the marks are the pressed title AND its body — two children, because
+   in this arm a step is exactly those two — and everything else fades.
+
+   1600ms, not the card's 1100, for `_sppSpotlight`'s reason: the dim starts
+   with the TRAVEL rather than on arrival, so it has to outlast the longest
+   journey and still leave a beat of "here it is" after you land. And no
+   `pointer-events` lock — this is a locator, not a prerequisite, so the rest
+   of the page stays live while it is quiet. */
+function _smRailSpot(row, body) {
+  const host = row && row.closest('.sub-step-list');
+  if (!host || typeof _smSpotlight !== 'function') return;
+  host.classList.add('sm-rail-spot');
+  _smSpotlight(host, [row, body].filter(Boolean), 1600);
+}
+
+window.smRailGo = function (pid, stepId) {
+  const row  = document.getElementById(pid + '-step-card-' + stepId);
+  if (!row) return false;
+  const body = document.getElementById('sub-step-body-' + pid + '-' + stepId);
+  _smRailScrollTop(row);
+  _smRailSpot(row, body);
+  _smRailMark(stepId);
+  return true;
+};
+
+/* WHICH ROW IS LIT IS READ OFF THE SCROLL, NOT OFF A PRESS. A press sets it
+   immediately so the mark is not waiting on a 400ms travel, and the observer
+   corrects it from then on — the same "a hover is not a state change" rule the
+   calendar's wait rows are written under: this touches two class names and
+   never renders, because rendering would rebuild the pane you are scrolling. */
+let _smRailHere = null;
+function _smRailMark(stepId) {
+  _smRailHere = stepId || null;
+  /* The rows are the guide's own `.gd-task`s now, and that builder forwards
+     only `step` — no data attribute survives it — so the row is found by the
+     handler it was given, exactly as `_smGuideAfterStep` already finds them to
+     hang a chevron on. One shape for "which row is this", not two. */
+  document.querySelectorAll('.gd-task.sm-rail-here').forEach(n => n.classList.remove('sm-rail-here'));
+  if (!stepId) return;
+  const row = [...document.querySelectorAll('.gd-task')].find(n =>
+    (n.getAttribute('onclick') || '').includes("chkGoStep('rail:" + stepId + "')"));
+  if (row) row.classList.add('sm-rail-here');
+}
+
+let _smRailObs = null;
+function _smRailSpy() {
+  if (_smRailObs) { _smRailObs.disconnect(); _smRailObs = null; }
+  if (_smMode !== 'rail') return;
+  /* IT GUARDS ON WHAT IT OBSERVES, NOT ON WHERE THE ROWS ARE DRAWN. This
+     asked for `.sm-rl` — the left rail — and kept asking after that rail was
+     deleted, so the observer was never created once: the mark moved on a press
+     and then sat still for the rest of the page, which looks exactly like a
+     spy that cannot see. A test for a thing that has been removed is the
+     quiet half of removing it.
+
+     The targets are the step bodies, and they are what decides whether there
+     is anything to spy on — true wherever the rows themselves end up. */
+  const targets = document.querySelectorAll('[data-sm-step]');
+  if (!targets.length) return;
+  const seen = new Map();
+  _smRailObs = new IntersectionObserver(entries => {
+    entries.forEach(e => seen.set(e.target, e.intersectionRatio));
+    /* The step you are IN is the topmost one still on screen, not the most
+       visible one: a tall step and a short one are never comparable by ratio,
+       so Content Rating at 1448 would hold the mark while Privacy sat fully
+       visible underneath it. */
+    let best = null, bestTop = Infinity;
+    seen.forEach((ratio, el) => {
+      if (ratio <= 0) return;
+      const t = el.getBoundingClientRect().top;
+      if (t < bestTop) { bestTop = t; best = el; }
+    });
+    /* THE LAST STEP CANNOT WIN "TOPMOST", so the bottom of the page is a case
+       of its own. Measured at full scroll: Improve Your Submission is on
+       screen and marked Product Page Preview, because a short final step never
+       reaches the top of the viewport before the scroller runs out. Anything
+       that ends a scroll has to name the end — the same reason
+       `_smModalFades` tests `scrollTop + clientHeight` rather than trusting a
+       ratio. 2px of slack because this scroller is fractional on a scaled
+       pane, which is the tolerance `_macShotsArrows` already pays for. */
+    const sc = _smNearestScroller(targets[0]) || document.scrollingElement;
+    if (sc && sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) {
+      return _smRailMark(targets[targets.length - 1].getAttribute('data-sm-step'));
+    }
+    if (best) _smRailMark(best.getAttribute('data-sm-step'));
+  }, { threshold: [0, .01] });
+  targets.forEach(n => _smRailObs.observe(n));
+}
+
+/* ══ THE THREE CHANGES TO THE INLINE ARM ═══════════════════════════════════
+   1. every step renders its body, 2. nothing is capped, 3. a rail indexes it.
+   All three are wrappers, so `layout=inline` is untouched in every other arm
+   and this block is deletable in one piece when the comparison is over. */
+(() => {
+  /* ONE: EVERY ROW IS AN OPEN ROW. `_subStepRow` renders a body only when the
+     id it is handed matches its own, so handing it its own is the whole of it
+     — no second builder, no second idea of what an open step looks like.
+
+     AND THE BODY'S id HAD TO BECOME UNIQUE. That builder emits a literal
+     `id="sub-step-body"`, which is fine while exactly one exists and is five
+     duplicate ids the moment they all do. Rewritten on the way out rather than
+     in render.js, because in every other arm the single id is correct and is
+     what `_renderSubPane` looks up. */
+  const origRow = _subStepRow;
+  _subStepRow = function (pid, step, i, openId) {
+    if (_smMode !== 'rail') return origRow.apply(this, arguments);
+    const html = origRow.call(this, pid, step, i, step.id);
+    return html.replace('id="sub-step-body"',
+      'id="sub-step-body-' + pid + '-' + step.id + '" data-sm-step="' + step.id + '"');
+  };
+
+  /* TWO: THE RAIL IS PART OF THE RENDER, NOT MOUNTED AFTER IT. `renderDashboard`
+     rebuilds this pane with innerHTML, so anything appended afterwards has to be
+     re-appended and re-owned on every pass — the trap `renderGuide` already
+     costs this file three notes. Returned from the builder, it simply exists
+     whenever the pane does.
+
+     The two faces that are NOT a step list keep the pane to themselves: the
+     account settings face and the submitted card are single objects with
+     nothing for a table of contents to index. */
+  /* TWO: THE NAVIGATION IS SHIPPY'S, NOT A COLUMN OF ITS OWN. Jaco: "no
+     necesito el mini menú a la izquierda. O bien lo acomodamos contextualmente
+     en Shippy panel, de forma que cada vez que abro una plataforma vemos el
+     checklist/navigation de cada plataforma."
+
+     THE LEFT RAIL WAS A THIRD COLUMN SAYING WHAT THE SECOND ALREADY SAYS.
+     Shippy is on screen in this arm anyway, it is already a checklist of
+     submission steps, and it already knows how to become contextual — the
+     `_chkGroups` hook below is the same door the modal arms use to make the
+     panel carry the open step's own sections. So the rail was a new object
+     duplicating a surface that was sitting there answering a vaguer version of
+     the same question.
+
+     It also cost the page a column: with the rail gone the pane is the full
+     content width, which is what the store previews inside it want.
+
+     `_smStepRailHTML` and `.sm-rl*` are DELETED rather than left unused —
+     a builder nobody calls is a control waiting to be switched back on, which
+     is the argument the dev bar was removed under. What survives is the part
+     that was never about the rail: the rows, the travel and the spy. */
+  /* TWO: IT ALL LIVES IN ONE CONTENT CARD. Jaco: "no me gustan los bordes
+     picudos, que las cosas estén todas dentro de una content card como las que
+     tenemos en game details. Una larga, y ahora vemos cómo fragmentamos."
+
+     Measured, the pane had no card at all: `.sub-pane` is transparent, no
+     border, radius 0, and the step headers inside it are square boxes at white
+     4% — so the page was a bare column of hard-edged bands against the app's
+     ground. In the modal arms that is invisible, because the modal IS the
+     card; take the modal away and nothing was left holding them.
+
+     IT JOINS `.sec-panel` RATHER THAN COPYING ITS FOUR VALUES — the same class
+     Game Details' own content cards wear, which is what makes "como las que
+     tenemos en game details" true by construction instead of true today.
+     `.sm-rail-card` rides along only so this arm has something to hang the
+     inside on without reaching into that rule.
+
+     ONE CARD, deliberately, because that is what was asked and because the
+     alternative decides the fragmentation before we have looked at it. How it
+     breaks up is the next question, not this one. */
+  const origPane = buildSubmissionPane;
+  buildSubmissionPane = function (pid) {
+    const inner = origPane.apply(this, arguments);
+    if (_smMode !== 'rail' || !pid) return inner;
+    return '<div class="sec-panel sm-rail-card">' + inner + '</div>';
+  };
+
+  /* THREE: the spy is re-armed after every render, for `_smModalFades`' own
+     reason — the pane is rebuilt with innerHTML and the old nodes, listeners
+     and observed targets go with it. rAF because the markup has to be laid out
+     before an IntersectionObserver has anything to measure. */
+  const origRender = window.renderDashboard;
+  if (typeof origRender === 'function') {
+    window.renderDashboard = function () {
+      const out = origRender.apply(this, arguments);
+      if (_smMode === 'rail') requestAnimationFrame(() => { _smRailSubnav(); _smRailSpy(); });
+      return out;
+    };
+  }
+  /* The guide is rebuilt by its own render, which takes the marked row with
+     it — so the mark is re-applied from the same place the spy is re-armed,
+     rather than being left for the next scroll event to restore. */
+  const origGuide = window.renderGuide;
+  if (typeof origGuide === 'function') {
+    window.renderGuide = function () {
+      const out = origGuide.apply(this, arguments);
+      if (_smMode !== 'rail') return out;
+      /* THE HEAD IS THE VIEW'S NAME, NOT THE GROUP'S — measured: it reads
+         `t('guide.tab.' + view)`, so setting `group` on the object changed
+         nothing and the panel said "Submission" over a list of one platform's
+         steps. Written after the paint, the way the eyebrow already is in the
+         other arms, and only its first span: the count beside it is computed
+         from the items we handed over and is already right. */
+      const head = document.querySelector('#app-guide .guide-tasks-head');
+      const pid  = typeof submissionTab === 'function' ? submissionTab() : null;
+      /* `label`, not `name` — measured. `PLATFORMS[pid]` carries id / label /
+         color / steps and nothing else, so the first version read undefined
+         and the head silently kept saying "Submission". */
+      const name = pid && typeof PLATFORMS !== 'undefined' && PLATFORMS[pid] && PLATFORMS[pid].label;
+      if (head && head.firstElementChild && name) head.firstElementChild.textContent = name;
+      if (_smRailHere) _smRailMark(_smRailHere);
+      return out;
+    };
+  }
+  const origSubnav = window.renderAppSubnav;
+  if (typeof origSubnav === 'function') {
+    window.renderAppSubnav = function () {
+      const out = origSubnav.apply(this, arguments);
+      if (_smMode === 'rail') requestAnimationFrame(_smRailSubnav);
+      return out;
+    };
+  }
+
+  /* FOUR: the platform strip takes the sub-nav row. Jaco: "no tiene sentido la
+     línea de Submission y el add platform, tendría que ser exclusivamente la
+     línea de pills de platform ocupando ese espacio, y la de + a la derecha
+     del todo."
+
+     Right, and it is the arm's own logic: with one platform being the whole
+     page, "Submission" names a view nobody is in any more — the pills say
+     where you are and the word above them says it again, vaguer. The `+` stays
+     because adding a platform is still a real act, and it is already solved to
+     the content panel's right edge by `_subnavAddSolve`, so it needs no number
+     from here.
+
+     IT MOVES THE NODE RATHER THAN REBUILDING IT, which is safe here for a
+     reason it is not usually: BOTH boxes are rebuilt from scratch on every
+     render, so there is no state in the strip to lose and nothing to put back
+     — the next render makes a fresh one and this moves that. It is re-run
+     after the dashboard's render AND the sub-nav's own, because either can be
+     the one that lands second. */
+  window._smRailSubnav = function () {
+    if (_smMode !== 'rail') return;
+    const row = document.getElementById('app-subnav');
+    if (!row) return;
+    /* IT TAKES THE FRESH ONE AND THROWS THE STALE ONE AWAY, and the first
+       version did neither. It asked for `.sub-tabs` in document order, which
+       after the first move is the copy ALREADY in the sub-nav — so the guard
+       said "nothing to do" while `renderDashboard` had just built a second
+       strip in the pane. Measured: two strips, one in `app-subnav` and one in
+       `sec-solo`, both drawn.
+
+       The source is therefore named by where the RENDER puts it, and any
+       previous copy is removed before the new one lands: the strip is rebuilt
+       from state every pass, so the one in the pane is by definition the
+       current one and the one up here is by definition last paint's. */
+    const fresh = document.querySelector('#dashboard .sub-tabs');
+    if (!fresh) return;
+    row.querySelectorAll(':scope > .sub-tabs').forEach(n => n.remove());
+    row.insertBefore(fresh, row.querySelector('.subnav-add-wrap') || null);
+    /* AND THE STEP BAR GOES BACK WITH IT. `renderAppSubnav` writes this row's
+       innerHTML, so anything living inside it is destroyed by that render —
+       measured, the bar mounted during `renderDashboard` and was gone a frame
+       later, every time. This function is the one that already runs after both
+       renders to put the strip back, so it is where the row's other tenant
+       belongs too: one place that knows what this row owns. */
+    if (_smMode === 'steps' && typeof _smStepsMountBar === 'function') {
+      _smStepsMountBar(typeof submissionTab === 'function' ? submissionTab() : null);
+    }
+  };
+})();
+
+/* ══ REGISTERING THE ARM ═══════════════════════════════════════════════════
+   It forces `layout: inline`, because half of this arm IS the inline arm and
+   two flags that have to agree by hand are two flags that will not. Leaving
+   `?beside=rail&layout=modal` reachable would give a platform strip with a
+   pane of rows that open modals and a rail indexing a page that is not there.
+
+   It needs NO overlay machinery at all, which is the cheap part: the steps
+   expand inside the dashboard, so there is no modal to place beside the guide,
+   no scrim to suppress and nothing for `_smGuideBesideSolve` to solve. That is
+   why `_smGuideBesideOn` stays false here — `rail` is a dashboard arm where
+   `on` is an overlay one. */
+(() => {
+  /* IT PUTS MARK'S FLAG BACK WHEN IT LEAVES. Jaco: "no quiero que te cargues
+     la opción de Mark, quiero que la mantengas tal cual."
+
+     Forcing `layout: inline` on the way in is right — half this arm IS his —
+     and forcing it is a WRITE to shared state, so leaving without undoing it
+     would hand whatever arm you switch to a layout it did not ask for. Within
+     one session `smGuideBeside('off')` would have dropped you into `off` with
+     Mark's inline pane still underneath, which is neither arm and is exactly
+     the kind of thing that gets read as his being broken.
+
+     The previous value is remembered rather than assumed, so it restores what
+     was really there — a person who was deliberately in `inline` stays in it.
+     `null` is a real answer and is kept apart from "nothing remembered", since
+     the field is undefined until something sets it and the default is `modal`. */
+  let _prevLayout;
+  const apply = () => {
+    const on = _smMode === 'rail';
+    document.body.classList.toggle('sm-arm-rail', on);
+    if (!state.submission) state.submission = {};
+    if (on) {
+      if (_prevLayout === undefined) _prevLayout = state.submission.layout ?? null;
+      state.submission.layout = 'inline';
+    } else if (_prevLayout !== undefined) {
+      if (_prevLayout === null) delete state.submission.layout;
+      else state.submission.layout = _prevLayout;
+      _prevLayout = undefined;
+    }
+  };
+  const origApplyMode = _smApplyMode;
+  _smApplyMode = function () { const out = origApplyMode.apply(this, arguments); apply(); return out; };
+
+  const origSwitch = window.smGuideBeside;
+  window.smGuideBeside = function (on) {
+    if (on === 'rail') {
+      _smMode = 'rail';
+      _smApplyMode();
+      try { localStorage.setItem('sm.beside', 'rail'); } catch (_) {}
+      if (typeof renderDashboard === 'function') renderDashboard();
+      console.log('[guide-beside] RAIL — inline layout forced, steps all open');
+      return true;
+    }
+    return origSwitch.apply(this, arguments);
+  };
+
+  /* The URL door. The parse block above only recognises four words and would
+     have CLEARED the key on `?beside=rail`, which is its documented behaviour
+     for anything it does not know — right for a typo and wrong for an arm that
+     exists. Read again here rather than editing that block, so the escape
+     hatch it provides keeps working unchanged for the other four. */
+  try {
+    const q = new URLSearchParams(location.search).get('beside');
+    if (q === 'rail') { localStorage.setItem('sm.beside', 'rail'); _smMode = 'rail'; }
+    else if (q === null && localStorage.getItem('sm.beside') === 'rail') _smMode = 'rail';
+  } catch (_) {}
+  _smApplyMode();
+})();
+
+
+/* ══ THE PANEL BECOMES THE PLATFORM'S CHECKLIST ════════════════════════════
+   Same hook the modal arms use, one view up: `_chkGroups` is where the panel's
+   rows come from, so replacing the dashboard group's items is the whole of it
+   — no second list, no second builder, and the collapsed rail keeps working
+   because it reads the same rows.
+
+   It chains rather than replaces, so the storePreview wrapper further up stays
+   in the path; that one returns its groups untouched in this arm, since
+   `_smStepItems` needs an open step modal and there is none here. */
+(() => {
+  const origGroups = window._chkGroups;
+  window._chkGroups = function () {
+    const groups = origGroups.apply(this, arguments);
+    if (_smMode !== 'rail') return groups;
+    const pid = typeof submissionTab === 'function' ? submissionTab() : null;
+    if (!pid) return groups;
+    if (state.submission?.settings === pid) return groups;
+    if (state.platformFlipped?.[pid]) return groups;
+    const items = _smRailChkItems(pid);
+    if (!items.length) return groups;
+    const name = (typeof PLATFORMS !== 'undefined' && PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
+    return groups.map(g => g.view === 'dashboard' ? { ...g, group: name, items } : g);
+  };
+
+  const origGo = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string' && step.slice(0, 5) === 'rail:') {
+      return smRailGo(submissionTab(), step.slice(5));
+    }
+    return origGo.apply(this, arguments);
+  };
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 6 — `?beside=steps`. TWO ROWS OF PILLS, AND SHIPPY ADVISES.
+
+   Jaco: "debajo de la fila de pills de plataforma, están las pills de los
+   pasos, todas seguiditas, estilo el top pinned de la store page preview. Y
+   Shippy es contextual a cada step seleccionado, y no funciona tanto como un
+   navigator sino como info de cada elemento."
+
+   IT IS THE ANSWER TO THE QUESTION `rail` LEAVES OPEN, which is what makes it
+   worth building beside it rather than instead of it. In `rail` the panel is a
+   TABLE OF CONTENTS: five rows, one per step, and pressing one travels down a
+   4.4k page. Here navigation leaves the panel entirely and becomes a row of
+   pills, which frees Shippy to do the thing the modal arms already taught it —
+   carry the OPEN STEP's own parts, its status and its warnings. Index versus
+   adviser, built both ways, which is the question this experiment has been
+   circling since the first panel review.
+
+   SO IT SHOWS ONE STEP AT A TIME, and that is forced rather than chosen: a
+   selected pill and a continuous page are two different claims about where you
+   are, and the pill wins because it is the thing you pressed. It is Mark's own
+   `openStep[pid]` doing it — no new state, and `toggleStepSection` is still
+   what opens a step.
+
+   The pills ARE `.spp-pinned-bar`'s, joined rather than copied: same bar, same
+   `.spp-pin`, same `.spp-pin-tick ios-step-num` disc, same `|` separators with
+   the same hide-either-side-of-the-lit-one rule. That bar was built for
+   exactly this — eight sections of one page, one of them current — and the
+   only thing local here is which list it is fed.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* The panel's router, without a modal. `_smStepItems` reads `_smOpenStep()`,
+   which is the open step MODAL and is null in every inline arm — so the four
+   builders it routes to are reached directly instead. They already take a pid
+   and nothing else, which is why this is a router and not a reimplementation:
+   the panels in this arm are literally the panels in `panel` and `mid`. */
+function _smStepsPanelItems(pid, stepId) {
+  if (!pid || !stepId) return null;
+  if (stepId === 'privacy' || stepId === 'dataSafety') {
+    return typeof _smPrivacyItems === 'function' ? _smPrivacyItems(pid) : null;
+  }
+  if (stepId === 'improveSubmission') {
+    return typeof _smImproveItems === 'function' ? _smImproveItems() : null;
+  }
+  if (stepId === 'uploadBuild') {
+    return typeof _smBuildItems === 'function' ? _smBuildItems(pid) : null;
+  }
+  if (stepId === 'contentRating') {
+    return typeof _smContentItems === 'function' ? _smContentItems(pid) : null;
+  }
+  /* The store preview's eight elements come from the app's own required-element
+     table rather than from anything here, exactly as `_smStepItems` does it. */
+  if (stepId === 'storePreview' || stepId === 'storePreviewPrototype') {
+    if (typeof sppRequiredElements !== 'function') return null;
+    const lang = (state.formData && state.formData.primaryLanguage) || 'en';
+    const els = sppRequiredElements(pid, lang) || [];
+    if (!els.length) return null;
+    return els.map(e => ({ label: e.short || e.label, step: 'spp:' + e.id,
+                           done: !!e.done && !e.bad, bad: !!e.bad }));
+  }
+  return null;
+}
+
+/* The step pills. `cur` is Mark's open step, so the lit pill and the body
+   below it cannot disagree about which step is showing. */
+function _smStepsPillsHTML(pid) {
+  if (typeof _paneSteps !== 'function') return '';
+  const steps = _paneSteps(pid);
+  if (!steps.length) return '';
+  const cur = state.submission?.openStep?.[pid] || null;
+  const done = s => typeof _paneComplete === 'function' && !!_paneComplete(pid, s.id);
+  const bad  = s => typeof _smStepRisk === 'function' && _smStepRisk(pid, s.id) === 'high';
+  const disc = (on, isBad) => '<span class="spp-pin-tick ios-step-num' +
+    (isBad ? ' is-bad' : on ? ' is-done' : '') + '" aria-hidden="true">' +
+    (isBad && typeof smCrossSVG === 'function' ? smCrossSVG()
+     : on && typeof smCheckSVG === 'function' ? smCheckSVG() : '') + '</span>';
+  /* The separator beside the lit pill is HIDDEN, never removed — `.app-subnav`'s
+     own rule, and the reason is that dropping it from the DOM lets a selected
+     pill and its hovered neighbour meet, so the row reflows as you move along
+     it. */
+  const sep = off => '<span class="spp-pin-sep' + (off ? ' is-off' : '') +
+                     '" aria-hidden="true">|</span>';
+  const wrap = document.createElement('div');
+  wrap.className = 'spp-pinned sm-steps-pinned';
+  wrap.innerHTML = '<div class="spp-pinned-bar"><div class="spp-pinned-row">' +
+    steps.map((s, i) =>
+      (i ? sep(s.id === cur || steps[i - 1].id === cur) : '') +
+      '<button type="button" class="spp-pin' + (s.id === cur ? ' is-on' : '') +
+      '" data-sm-steppill="' + s.id + '" onclick="smStepsGo(\'' + pid + '\',\'' + s.id + '\')">' +
+      disc(done(s), bad(s)) + '<span class="sm-steps-pin-label"></span></button>').join('') +
+    '</div></div>';
+  /* Labels as TEXT, so a store name with an apostrophe cannot close the
+     attribute above it. */
+  [...wrap.querySelectorAll('.sm-steps-pin-label')].forEach((n, i) => {
+    n.textContent = typeof stepLabel === 'function' ? stepLabel(pid, steps[i]) : steps[i].label;
+  });
+  return wrap.outerHTML;
+}
+
+/* Pressing a pill opens that step through Mark's own door. Pressing the LIT
+   one is a no-op rather than a close: `toggleStepSection` toggles, and a
+   selected pill that unselects itself leaves a bar with nothing lit over a
+   body that is gone — which is the "pressing the half that is already lit
+   must not turn the face off" rule the guide's segmented control is built
+   under. */
+window.smStepsGo = function (pid, stepId) {
+  if (state.submission?.openStep?.[pid] === stepId) return false;
+  if (typeof toggleStepSection === 'function') toggleStepSection(pid, stepId);
+  return true;
+};
+
+/* ══ WIRING THE ARM ════════════════════════════════════════════════════════
+   `steps` shares `rail`'s two foundations and differs in the third. Same
+   inline layout and same platform strip in the sub-nav row; what it does NOT
+   take is the all-open page or the panel-as-index. So the wrappers test the
+   two arms separately rather than a single "is this an inline experiment"
+   flag, which would have coupled them the first time either one moved. */
+(() => {
+  const isSteps = () => _smMode === 'steps';
+  const isRail  = () => _smMode === 'rail';
+  const armOn   = () => isSteps() || isRail();
+
+  /* The pills ride above the pane, inside the same content card, so they
+     scroll with the step rather than pinning over it — `.spp-pinned`'s own
+     `sticks` flag is deliberately NOT set. In the store preview that bar
+     sticks because a long page scrolls beneath it; here only one step is on
+     screen at a time and the bar is its header. */
+  /* A STEP HAS TO BE OPEN, AND THE DEFAULT IS SET HERE RATHER THAN AT
+     `_smApplyMode`. It was set there first and never fired: that runs on the
+     arm being applied, which on a cold load is before any platform is active,
+     so `submissionTab()` was null and there was nothing to open a step ON.
+     Measured — the bar drew five pills with none lit over an empty card.
+
+     The pane is the one place that is guaranteed to have a pid, because it is
+     being built FOR one. Writing state inside a builder is not free, so it is
+     written only when nothing is set: idempotent, and it cannot loop, since
+     the next render finds the value it just wrote.
+
+     THE FIRST STEP, not the first unfinished one — that is where a submission
+     starts, and "first unfinished" would move the landing under you as you
+     answer things. */
+  const ensureOpen = pid => {
+    if (!pid || typeof _paneSteps !== 'function') return;
+    if (state.submission?.openStep?.[pid]) return;
+    const first = _paneSteps(pid)[0];
+    if (!first) return;
+    if (!state.submission.openStep) state.submission.openStep = {};
+    state.submission.openStep[pid] = first.id;
+  };
+
+  const origPane = buildSubmissionPane;
+  buildSubmissionPane = function (pid) {
+    if (isSteps() && pid && state.submission?.settings !== pid && !state.platformFlipped?.[pid]) {
+      ensureOpen(pid);
+    }
+    const inner = origPane.apply(this, arguments);
+    if (!isSteps() || !pid) return inner;
+    if (state.submission?.settings === pid) return inner;
+    if (state.platformFlipped?.[pid]) return inner;
+    return '<div class="sec-panel sm-steps-card">' + inner + '</div>';
+  };
+
+  /* SHIPPY BECOMES THE STEP'S OWN PARTS. Same `_chkGroups` hook the rail arm
+     uses one line over, and the difference is the whole comparison: there it
+     is handed the PLATFORM's steps (an index), here the OPEN STEP's elements
+     (an adviser). With no step open it is left alone — the generic submission
+     checklist is the right thing to see before you have chosen one. */
+  const origGroups = window._chkGroups;
+  window._chkGroups = function () {
+    const groups = origGroups.apply(this, arguments);
+    if (!isSteps()) return groups;
+    const pid = typeof submissionTab === 'function' ? submissionTab() : null;
+    if (!pid || state.submission?.settings === pid || state.platformFlipped?.[pid]) return groups;
+    const stepId = state.submission?.openStep?.[pid] || null;
+    const items = _smStepsPanelItems(pid, stepId);
+    if (!items || !items.length) return groups;
+    const steps = typeof _paneSteps === 'function' ? _paneSteps(pid) : [];
+    const step  = steps.find(s => s.id === stepId);
+    const name  = (step && typeof stepLabel === 'function' ? stepLabel(pid, step) : null) || stepId;
+    return groups.map(g => g.view === 'dashboard' ? { ...g, group: name, items } : g);
+  };
+
+  /* The head is the VIEW's name, not the group's — the same measured trap the
+     rail arm pays for, so the same post-paint write. */
+  const origGuide = window.renderGuide;
+  window.renderGuide = function () {
+    const out = origGuide.apply(this, arguments);
+    if (!isSteps()) return out;
+    const pid = typeof submissionTab === 'function' ? submissionTab() : null;
+    const stepId = pid && state.submission?.openStep?.[pid];
+    if (!stepId) return out;
+    const steps = typeof _paneSteps === 'function' ? _paneSteps(pid) : [];
+    const step  = steps.find(s => s.id === stepId);
+    const name  = step && typeof stepLabel === 'function' ? stepLabel(pid, step) : null;
+    const head  = document.querySelector('#app-guide .guide-tasks-head');
+    if (head && head.firstElementChild && name) head.firstElementChild.textContent = name;
+    return out;
+  };
+
+  /* The platform strip moves into the sub-nav row in BOTH arms. `_smRailSubnav`
+     already does it and already guards on the mode, so the guard is widened
+     rather than the function copied.
+
+     AND IT PUTS THE STEP BAR BACK TOO. `renderAppSubnav` writes this row's
+     innerHTML, so anything living inside it is destroyed by that render —
+     measured, the bar mounted during `renderDashboard` and was gone a frame
+     later, every time. This is the one function that already runs after both
+     renders to restore the row's contents, so its other tenant belongs here:
+     one place that knows what this row owns.
+
+     (The same edit was made to the rail IIFE's definition first and did
+     nothing, because THIS one replaces it — two definitions of one name, the
+     later one wins, which is the `setPrivacyMeta` lesson in a new shape. The
+     one above is now dead weight and can go whenever someone is in there.) */
+  const origSubnav = _smRailSubnav;
+  window._smRailSubnav = function () {
+    if (!armOn()) return;
+    const row = document.getElementById('app-subnav');
+    if (!row) return;
+    const fresh = document.querySelector('#dashboard .sub-tabs');
+    if (!fresh) return;
+    row.querySelectorAll(':scope > .sub-tabs').forEach(n => n.remove());
+    row.insertBefore(fresh, row.querySelector('.subnav-add-wrap') || null);
+    if (isSteps() && typeof _smStepsMountBar === 'function') {
+      _smStepsMountBar(typeof submissionTab === 'function' ? submissionTab() : null);
+    }
+  };
+
+  const origRender = window.renderDashboard;
+  window.renderDashboard = function () {
+    const out = origRender.apply(this, arguments);
+    if (!isSteps()) return out;
+    requestAnimationFrame(_smRailSubnav);
+    /* THE PREVIEW'S OWN ELEMENT BAR GOES WHEN THE PANEL CARRIES IT. Jaco's
+       own rule from the panel arms: "en Product Page Preview, si tengo el
+       Shippy panel NO NECESITO el tab superior de elementos." Here it lands
+       twice over — the eight sections are in Shippy AND the bar would sit
+       directly under the STEP bar, two rows of pills about different things
+       stacked on each other.
+
+       `sm-step-preview` is the class that already does this; it is written by
+       `_smModeClasses` for the modal arms and by `_smGuideBesideSolve` for the
+       page one, and neither runs for an inline arm. One owner per arm is that
+       class's own standing rule, so this is a third owner rather than a change
+       to either of theirs. */
+    const pid = typeof submissionTab === 'function' ? submissionTab() : null;
+    const open = pid && state.submission?.openStep?.[pid];
+    document.body.classList.toggle('sm-step-preview',
+      open === 'storePreview' || open === 'storePreviewPrototype');
+    _smStepsMountBar(pid);
+    return out;
+  };
+})();
+
+/* ══ THE STEP BAR IS A SECOND NAV ROW ══════════════════════════════════════
+   Jaco: "me imagino la segunda fila de pills, la de los steps, fuera de la
+   content card, como una segunda fila de navegación bajo la fila de
+   plataformas."
+
+   Which is what it is: the platform row says WHICH submission and this one
+   says which part of it — two levels of the same navigation, so they belong in
+   the same chrome rather than one of them being the card's header. It also
+   frees the card to be only what the step contains, which is the whole point
+   of the arm.
+
+   IT IS REBUILT, NOT MOVED, and that distinction is the bug this session just
+   fixed one function up. Moving a node out of the pane works right up until
+   you leave the arm, at which point nothing rebuilds it and the orphan sits
+   in the chrome over another presentation's layout. This owns a host of its
+   own, refills it from `_smStepsPillsHTML` on every render, and removes it the
+   moment there is nothing to put in it — so there is no state in it to lose
+   and no way for it to outlive the arm. It is also in `cleanUp`'s sweep. */
+function _smStepsMountBar(pid) {
+  const row = document.getElementById('app-subnav');
+  let host = document.getElementById('sm-steps-bar');
+  const want = _smMode === 'steps' && pid
+            && state.submission?.settings !== pid
+            && !state.platformFlipped?.[pid]
+            ? _smStepsPillsHTML(pid) : '';
+  if (!want) { if (host) host.remove(); return; }
+  if (!row) return;
+  /* IT LIVES INSIDE THE SUB-NAV ROW, AS A SECOND LINE OF IT. Mounted as a
+     SIBLING first, and measured it spanned the whole window — left 0 against
+     the row's 104 — because the inset is `#app-subnav`'s own `margin: 0 104px`
+     and a sibling of it inherits none of that. Restating the 104 here would be
+     a second copy of a number that belongs to the shell.
+
+     Inside, it costs no number at all: the row wraps and this is a child at
+     `flex-basis: 100%`, so it starts on the same column the platform pills do
+     and ends where they end, at any width and whatever the shell's inset
+     becomes. It is also true to what he asked for — a second row of the same
+     navigation, in the same chrome, rather than a strip near it. */
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sm-steps-bar';
+  }
+  if (host.parentElement !== row) row.appendChild(host);
+  host.innerHTML = want;
+}
+
+/* Registering it. Same shape as `rail`: it forces Mark's inline layout,
+   remembers what was there and puts it back on the way out, and carries its
+   own body class. The two arms are mutually exclusive by construction — the
+   mode is one string — so nothing has to un-set the other. */
+(() => {
+  let _prev;
+  const apply = () => {
+    const on = _smMode === 'steps';
+    document.body.classList.toggle('sm-arm-steps', on);
+    if (!state.submission) state.submission = {};
+    if (on) {
+      if (_prev === undefined) _prev = state.submission.layout ?? null;
+      state.submission.layout = 'inline';
+      /* The open-step default lives in the pane builder, not here — see
+         `ensureOpen`. This runs before any platform is active on a cold
+         load, so there was nothing to open a step on. */
+    } else if (_prev !== undefined) {
+      if (_prev === null) delete state.submission.layout;
+      else state.submission.layout = _prev;
+      _prev = undefined;
+    }
+  };
+  const origApply = _smApplyMode;
+  _smApplyMode = function () { const out = origApply.apply(this, arguments); apply(); return out; };
+
+  const origSwitch = window.smGuideBeside;
+  window.smGuideBeside = function (on) {
+    if (on === 'steps') {
+      _smMode = 'steps';
+      _smApplyMode();
+      try { localStorage.setItem('sm.beside', 'steps'); } catch (_) {}
+      if (typeof renderDashboard === 'function') renderDashboard();
+      console.log('[guide-beside] STEPS — step pills, Shippy advises the open step');
+      return true;
+    }
+    return origSwitch.apply(this, arguments);
+  };
+
+  try {
+    const q = new URLSearchParams(location.search).get('beside');
+    if (q === 'steps') { localStorage.setItem('sm.beside', 'steps'); _smMode = 'steps'; }
+    else if (q === null && localStorage.getItem('sm.beside') === 'steps') _smMode = 'steps';
+  } catch (_) {}
+  _smApplyMode();
+})();
+
+
+/* ══ LEAVING AN INLINE ARM HAS TO PUT THE ROOM BACK ════════════════════════
+   Jaco: "he puesto smGuideBeside('panel') y ahora es un frankenstein la
+   submission view, mezclando el inline con las platform cards."
+
+   Reproduced exactly. Going `rail` → `panel` restores the mode, the layout and
+   the body classes correctly — and leaves the platform strip sitting in
+   `#app-subnav`, because `_smRailSubnav` MOVED that node there and nothing
+   moves it back. The modal layout then draws its card grid without ever
+   touching the orphan, so you get a tab strip from one presentation over the
+   cards of another, with "Submission" back beside it.
+
+   A MOVE IS ONLY SAFE WHILE SOMETHING KEEPS REBUILDING BOTH ENDS. That is the
+   argument `_smRailSubnav` is written under — the strip and the row are both
+   rebuilt every render, so there is no state to lose — and it holds INSIDE the
+   arm and stops holding the moment you leave it, because the thing that
+   rebuilds the strip is the inline pane and the inline pane is gone. This file
+   has the same lesson at `_smGuideBesideSolve`'s `clear()`: whatever an arm
+   does on the way in, it owns on the way out.
+
+   AND THE SWITCH DID NOT RE-RENDER. `smGuideBeside('panel')` re-applies the
+   mode and repaints nothing, which is right for the four arms it was written
+   for — they differ only in CSS and in where a modal sits. `rail` and `steps`
+   change the LAYOUT, so the view has to be rebuilt or you keep looking at the
+   old one: measured, `layout` read `modal` with the inline pane still on
+   screen.
+
+   Both are fixed in ONE place rather than in each arm's own `apply()`: this
+   asks only "did we just leave an inline arm", which is a fact about the
+   transition and not about either arm. */
+(() => {
+  const INLINE_ARMS = new Set(['rail', 'steps']);
+  const cleanUp = () => {
+    /* The strip belongs to the pane; if the pane is not drawing one, the one up
+       here is last paint's. Removed rather than moved back, because the next
+       inline render mints a fresh one — the same reason `_smRailSubnav` takes
+       the pane's copy and drops any it finds in the row. */
+    document.querySelectorAll('#app-subnav > .sub-tabs').forEach(n => n.remove());
+    document.getElementById('sm-steps-bar')?.remove();
+  };
+
+  const origSwitch = window.smGuideBeside;
+  window.smGuideBeside = function () {
+    const before = _smMode;
+    const out = origSwitch.apply(this, arguments);
+    const after = _smMode;
+    if (before === after) return out;
+    if (INLINE_ARMS.has(before) && !INLINE_ARMS.has(after)) cleanUp();
+    /* Repainted whenever an inline arm is on either side of the change, since
+       that is exactly when the layout differs between the two. */
+    if (INLINE_ARMS.has(before) || INLINE_ARMS.has(after)) {
+      if (typeof renderAppSubnav === 'function') renderAppSubnav();
+      if (typeof renderDashboard === 'function') renderDashboard();
+    }
+    return out;
+  };
+
+  /* THE SAME ORPHAN CAN SURVIVE A RELOAD INTO ANOTHER ARM, because the strip
+     is moved by a render and the mode is read from localStorage before any
+     render happens. One sweep on the way in, which costs nothing when there is
+     nothing to sweep. */
+  if (!INLINE_ARMS.has(_smMode)) cleanUp();
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SAYING "NO" PUTS THE TABLE AWAY — IT DOES NOT KEEP IT AS THE ANSWER.
+
+   Jaco: "en app privacy, si toqueteo la data table y luego pongo que NO
+   recopilamos datos, me sigue manteniendo la info de la tabla como si fuera lo
+   que vale. Si he marcado no, no debería confiar, y guardar los datos por si
+   marco SÍ."
+
+   REPRODUCED, AND THE VISIBLE HALF IS THE CHIP. With Advertising picked and
+   the answer flipped to NO: `dataPerType` still held `device_id` and `ad_data`,
+   `privacyDescription` still held 371 characters, and the Advertising chip was
+   still lit directly under the words "does your app collect any data? NO". The
+   matrix itself is already gated — `buildPrivacySection` only draws it on
+   'yes' — so what survived was the DATA behind it, and one control that
+   contradicted the answer above it.
+
+   IT IS A STASH AND NOT A "JUST IGNORE IT", and measuring is what changed my
+   mind. The cheaper design is to leave everything in place and have the
+   readers skip it while the answer is 'no' — no second home for the truth,
+   nothing to restore. That works for `dataPerType`, which nothing draws while
+   the matrix is hidden, and it CANNOT work for the presets: a lit chip is
+   state you can see, so un-lighting it means really changing
+   `state.privacyPresets`. Once one of the three has to move, moving all three
+   together is one idea instead of two.
+
+   GUEST PLAY IS THE EXCEPTION AND IT IS A REAL ONE. Measured, that preset is
+   already exclusive — pressing it replaces the selection and writes
+   `collectsData: 'no'` itself — and it is the one chip that MEANS "no data",
+   so it is exactly what a developer who answered NO should still see lit. It
+   survives the stash; every other preset is a claim about collecting and goes
+   with the table.
+
+   THE HOOK IS THE TWO WRITERS, NAMED. `answerIOSField` (the question row) and
+   `togglePrivacyPreset` (the Guest path) are the only two things that write
+   this field today. A flank test inside a render would catch any future third
+   one, and would also land a frame late — the chips would paint once from the
+   old array — so the write is intercepted where it happens instead. If a third
+   writer ever appears, this is the note that says to add it.
+   ══════════════════════════════════════════════════════════════════════════ */
+(() => {
+  const KEEP = new Set(['guest']);   /* the preset that MEANS "no data" */
+
+  const stashFor = pid => {
+    if (!state.privacyStash) state.privacyStash = {};
+    return state.privacyStash;
+  };
+
+  /* THE WHOLE "BEFORE" IS PASSED IN, NOT READ HERE, and the Guest path is why.
+     Measured twice, the same lesson each time: pressing Guest Play replaces
+     `state.privacyPresets` with `['guest']` AND blanks `privacyDescription`
+     INSIDE the original handler, so by the time this runs both are already
+     gone — the stash saved two types with no preset beside them and an empty
+     description, and a later YES brought the table back with nothing lit and
+     no text. A wrapper that reads state AFTER delegating is reading the
+     handler's work, not the person's; the snapshot is taken before. */
+  function _smPrivacyPutAway(pid, prev) {
+    const ans = _appStoreAnswers(pid, 'dataPerType');
+    const dsc = _appStoreAnswers(pid, 'privacyDescription');
+    const types   = (prev && prev.types) || ans.dataPerType || {};
+    const descVal = (prev && prev.desc)  || dsc.privacyDescription || '';
+    const presets = ((prev && prev.presets) || state.privacyPresets || []).filter(p => !KEEP.has(p));
+    /* Nothing to put away, and — the part that matters — nothing to OVERWRITE
+       a real stash with. Pressing NO twice must not replace what the first
+       press saved with the empty set the first press created. */
+    if (!Object.keys(types).length && !presets.length) return;
+    stashFor(pid)[pid] = { dataPerType: types, privacyDescription: descVal, presets };
+    ans.dataPerType = {};
+    dsc.privacyDescription = '';
+    state.privacyPresets = (state.privacyPresets || []).filter(p => KEEP.has(p));
+  }
+
+  function _smPrivacyBringBack(pid) {
+    const saved = state.privacyStash?.[pid];
+    if (!saved) return;
+    const ans = _appStoreAnswers(pid, 'dataPerType');
+    /* Only into an EMPTY table. Answering yes and declaring something new is a
+       real answer, and pouring the old set back over it would be the stash
+       overruling the person — the trap `_masFieldValue`'s fall-back is written
+       under one surface over. */
+    if (Object.keys(ans.dataPerType || {}).length) { delete state.privacyStash[pid]; return; }
+    ans.dataPerType = saved.dataPerType;
+    _appStoreAnswers(pid, 'privacyDescription').privacyDescription = saved.privacyDescription;
+    /* AND GUEST PLAY DOES NOT SURVIVE THE RETURN. It is kept while the answer
+       is NO because it is the one chip that MEANS "no data" — and the moment
+       the answer is YES it is false, so restoring on top of it lit "I collect
+       nothing" beside "I collect advertising identifiers", measured, in the
+       same row. `KEEP` is about the NO state only. */
+    state.privacyPresets = [...new Set(saved.presets)];
+    delete state.privacyStash[pid];
+  }
+
+  /* One entry point, so the two writers cannot drift on what a transition
+     means. It reads the value that is ALREADY written — both callers set the
+     field first — so there is no second opinion about what the answer is. */
+  window._smPrivacySync = function (pid, prev) {
+    const now = _getLiveAnswer(pid, 'collectsData');
+    if (now === prev.collects) return;
+    if (now === 'no') _smPrivacyPutAway(pid, prev);
+    else if (now === 'yes') _smPrivacyBringBack(pid);
+  };
+
+  /* One snapshot, both wrappers, so they cannot disagree about what "before"
+     means. `dataPerType` is copied rather than referenced: the handlers mutate
+     that object in place, so a reference would be the handler's result by the
+     time it is read. */
+  const _smPrivacyBefore = pid => ({
+    collects: _getLiveAnswer(pid, 'collectsData'),
+    presets:  [...(state.privacyPresets || [])],
+    types:    { ...(_appStoreAnswers(pid, 'dataPerType').dataPerType || {}) },
+    desc:     _appStoreAnswers(pid, 'privacyDescription').privacyDescription || '',
+  });
+
+  const origAnswer = window.answerIOSField;
+  window.answerIOSField = function (field, value) {
+    if (field !== 'collectsData') return origAnswer.apply(this, arguments);
+    const pid = state.stepModal?.platformId || 'ios';
+    const prev = _smPrivacyBefore(pid);
+    const before = prev.collects;
+    const out = origAnswer.apply(this, arguments);
+    _smPrivacySync(pid, prev);
+    /* The original already rendered, and it rendered from the state as it was
+       BEFORE this sync — so the chips would paint once from the old array.
+       One more pass, only when something actually moved. */
+    if (_getLiveAnswer(pid, 'collectsData') !== before) reRenderStepModal();
+    return out;
+  };
+
+  const origPreset = window.togglePrivacyPreset;
+  if (typeof origPreset === 'function') {
+    window.togglePrivacyPreset = function () {
+      const pid = state.stepModal?.platformId || 'ios';
+      const prev = _smPrivacyBefore(pid);
+      const before = prev.collects;
+      const out = origPreset.apply(this, arguments);
+      _smPrivacySync(pid, prev);
+      if (_getLiveAnswer(pid, 'collectsData') !== before) reRenderStepModal();
+      return out;
+    };
+  }
+})();

@@ -23076,6 +23076,13 @@ body.viewing-splash #app-guide { display: none; }
 .ias-icon-art::after,
 .profile-avatar::after,
 .spp-pin.is-on::after,
+/* The selected platform pill in the two inline arms. Jaco: "para la selected
+   platform, utiliza el mismo lenguaje que las main selected tabs, con el
+   stroke bonito." It JOINS this list rather than redrawing the gradient —
+   the list's own stated reason, and the only way "the same stroke" stays true
+   after the next change to it. */
+body.sm-arm-steps .sub-tab.is-on::after,
+body.sm-arm-rail .sub-tab.is-on::after,
 .prv-preset-chip.is-active::after,
 /* The Apple Data Types table's 14px mark (v6.52). The class that carries the
    state is on the BUTTON and the ring is drawn on the square inside it, which
@@ -25227,7 +25234,14 @@ body.sm-guide-beside .app-guide { z-index: 101; }
    those eight sections. See app.js's note at `sm-step-preview`. */
 body.sm-guide-beside.sm-step-preview .spp-pinned,
 body.sm-guide-mid.sm-step-preview .spp-pinned,
-body.sm-guide-panel.sm-step-preview .spp-pinned { display: none; }
+body.sm-guide-panel.sm-step-preview .spp-pinned,
+/* `steps` joins the list rather than writing its own rule — it is the same
+   claim (the panel carries those eight sections, so the bar has nothing left
+   to say) and a second rule is how one idea starts being maintained twice.
+   `:not(.sm-steps-pinned)` is what this arm adds: it is the only one with a
+   pinned bar OF ITS OWN in the same card, and that one is the STEP list, a
+   different set about a different thing. */
+body.sm-arm-steps.sm-step-preview .spp-pinned:not(.sm-steps-pinned) { display: none; }
 
 /* Invalid in the panel is the pinned bar's own third state, value for value —
    see .spp-pin-tick.is-bad. Two classes so it outranks .gd-task.is-done's one. */
@@ -27338,3 +27352,556 @@ body.sm-guide-panel #submit-overlay .submit-modal {
   max-height: calc(100vh - 64px - 48px);
 }
 body.sm-guide-panel #submit-overlay .sm-rail .guide-card { max-height: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 5 — `?beside=rail`. One platform as a page, indexed by a rail.
+   The long form is at "EXPERIMENT 5" in app.js. Deletable in one piece.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* NOTHING IS CAPPED, WHICH IS THE ARM. `.sub-step-body` is 556px with a
+   scroller inside it, which is the right answer when one step is open under a
+   list of rows you must not push off screen — and the wrong one when every
+   step is open, because then each box is a window onto its own content and the
+   page is five scrollbars deep. Measured, the five uncap to 4217px. */
+body.sm-arm-rail .sub-step-body {
+  max-height: none;
+  overflow: visible;
+}
+
+/* THE LEFT RAIL IS DELETED, NOT LEFT UNUSED. Jaco: "no necesito el mini menú
+   a la izquierda... lo acomodamos contextualmente en Shippy panel." It was a
+   third column saying what the second already says, and a rule with no
+   consumer is a control waiting to be switched back on — the dev bar's
+   argument. `.sm-rl-wrap`, `.sm-rl-main`, `.sm-rl`, `.sm-rl-head`,
+   `.sm-rl-row` and `.sm-rl-name` all went with their builder. What replaced
+   them is `_smRailChkItems` feeding the guide's own rows. */
+
+/* WHERE YOU ARE, ON THE GUIDE'S OWN ROW. The checklist rows draw nothing at
+   rest and fill on hover, so "you are here" takes the one thing that leaves
+   free: a resting fill plus white ink — the selected pill's language, and
+   deliberately not a left stroke, which is the mark this session just removed
+   from the warnings for reading as generic. The disc is already spoken for by
+   done, amber and red. */
+body.sm-arm-rail .gd-task.sm-rail-here { background: rgba(255, 255, 255, .08); }
+body.sm-arm-rail .gd-task.sm-rail-here .gd-task-label { color: var(--text); }
+
+/* THE SUB-NAV ROW IS THE PLATFORM STRIP. Jaco: "no tiene sentido la línea de
+   Submission y el add platform, tendría que ser exclusivamente la línea de
+   pills de platform, y la de + a la derecha del todo." With one platform being
+   the whole page, the word "Submission" names a view nobody is in and the
+   pills under it said the same thing better. The `+` keeps its own solve to
+   the content panel's right edge, so nothing here states a number. */
+body.sm-arm-rail .app-subnav-title { display: none; }
+body.sm-arm-rail #app-subnav .sub-tabs {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+
+/* THE PLATFORM STRIP BECOMES GAME DETAILS' PILLS. Jaco: "igual que hacemos en
+   game details, pero PLATFORM 1, PLATFORM 2, PLATFORM 3."
+
+   It JOINS `.app-subtab`'s rule rather than reproducing it — the argument
+   `buildSubnavAddPlatform` is written under, and the only way "exactamente
+   igual" stays true after the next change to that pill. The strip keeps its
+   own markup and its gear and power buttons; what changes is the paint. */
+body.sm-arm-rail .sub-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+body.sm-arm-rail .sub-tab {
+  width: auto; flex: 0 0 auto;
+  padding: 10px 18px; border-radius: var(--pill-radius, 999px);
+  background: transparent; border: 0;
+  color: rgba(255, 255, 255, .5);
+  transition: background .12s, color .12s;
+}
+body.sm-arm-rail .sub-tab:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
+body.sm-arm-rail .sub-tab.is-on { background: rgba(255, 255, 255, .15); color: #fff; }
+
+/* ── A STEP IS AS TALL AS IT NEEDS TO BE ──────────────────────────────────
+   Jaco: "en esta versión, necesito que cada sección (step) tenga la altura que
+   necesiten, SIN SCROLL."
+
+   MEASURED, ONLY ONE STEP WAS STILL A WINDOW. With `.sub-step-body` uncapped
+   the other four already stand at their own height — Upload Build 104,
+   Content Rating 1434, App Privacy 263, Improve 690, every one of them
+   `overflow: visible` with nothing clipped. The Product Page Preview is the
+   exception and it is a deliberate one everywhere else: it is a DRAWING of a
+   Mac App Store window, so `.mac-spp-main` carries `overflow-y: scroll` and
+   the shell is a fixed 1440 with the store page moving inside it.
+
+   That is exactly right in a modal, where the window is the modal, and wrong
+   here, where the page IS the page. So the scroller is released and the shell
+   takes its content's height — measured 1440 fixed before, the store page's
+   own after.
+
+   THE TWO FADES GO WITH IT, and that is not tidying: they are `::before` and
+   `::after` on that scroller, sticky, and they exist to say "there is more
+   above / below". With nothing scrolling they would be two permanent gradients
+   laid across the top and bottom of a page that is entirely visible — the
+   "a mark whose only content is the question itself" failure this session
+   already removed from the screenshots veil.
+
+   WHAT IS NOT TOUCHED, deliberately: `.ias-page`'s own `overflow: hidden`,
+   which is what clips `.spp-just-changed`'s 9999px scrim to the store page —
+   release that and the confirmation pop dims the whole app. And the two
+   HORIZONTAL scrollers stay: the pinned pill row and the screenshots
+   carousel are meant to scroll sideways, and neither is what "sin scroll"
+   was about. */
+body.sm-arm-rail .mac-spp-main {
+  overflow: visible;
+  /* The bleed-and-pay-back that moved the scrollbar out of the page has no
+     bar to move any more, so it would just be 24px of asymmetric padding. */
+  margin-right: 0;
+  padding-right: 0;
+}
+body.sm-arm-rail .mac-spp-main::before,
+body.sm-arm-rail .mac-spp-main::after { display: none; }
+body.sm-arm-rail .mac-spp-shell,
+body.sm-arm-rail .mac-spp-main > .ias-device-wrap { height: auto; }
+
+/* ── NOTHING INSIDE THE CARD HAS A HARD CORNER ────────────────────────────
+   The card itself is `.sec-panel`, joined in `buildSubmissionPane` so it is
+   Game Details' own rule rather than four values copied out of it. What is
+   left is the inside: the step headers are `.ios-step-card` at white 4% with
+   `border-radius: 0`, which reads as a stack of square bands the moment there
+   is a rounded box around them.
+
+   THE ROWS BLEED TO THE CARD'S OWN EDGE, which is the platform card's trick
+   and not a new one: a row is padded 12px inside, so a list sitting in the
+   card's 24px padding puts its content on 36 while the card's own text column
+   is on 24. `.ios-step-cards` pulls itself back out by the padding and the row
+   pays it back — the same `margin: 0 -12px` the submitted card's read-only
+   list uses, solved here against `.sec-panel`'s 24. */
+body.sm-arm-rail .sm-rail-card .sub-step-list { margin: 0 -24px; }
+body.sm-arm-rail .sm-rail-card .ios-step-card { padding-left: 24px; padding-right: 24px; }
+body.sm-arm-rail .sm-rail-card .sub-step-body { padding-left: 24px; padding-right: 24px; }
+
+/* The header rows keep their fill and lose their corners. 8px is the app's
+   `--field-radius`, which is what every other pressable box in a card takes. */
+body.sm-arm-rail .sm-rail-card .ios-step-card { border-radius: 8px; }
+
+/* AND THE FIRST ROW DOES NOT NEED A LINE ABOVE IT. `.ios-step-cards` draws one
+   as its own `::before` — right when the list is the card's whole content and
+   wrong under 22px of the card's top padding, where it rules off nothing. */
+body.sm-arm-rail .sm-rail-card .sub-step-list::before { display: none; }
+
+/* AND THE HEADER ROW'S TOP BORDER GOES, WHICH IS THIS REPO'S OWN v6.62 BUG
+   ARRIVING AGAIN. The row carries a 1.5px border on all four sides with only
+   the top one coloured — a divider drawn as a border — and it now has a
+   `border-radius: 8px`. A border FOLLOWS the radius, so that line curls up
+   into a hook at each end and the row wears a third of an outline: exactly
+   what the Submit row was diagnosed with ("sigo viendo el stroke curvado
+   raro"), for exactly the same reason.
+
+   The fill is already the boundary — white 4% against the card's own ground,
+   with each row's body between it and the next — so there is nothing left for
+   a line to separate. Same conclusion that entry reached twice over.
+
+   THE WIDTH STAYS AND ONLY THE COLOUR GOES, so the box does not move: 1.5px
+   on four sides is 3px of height and 3px of width this row has always
+   occupied, and zeroing it would shift every step on the page to fix a
+   corner. */
+body.sm-arm-rail .sm-rail-card .ios-step-card { border-color: transparent; }
+
+/* ── ONE DOCUMENT, SEPARATED BY TITLES ────────────────────────────────────
+   Jaco: "coges el contenido de todos los pasos, lo metes en la card, y lo
+   separas con títulos como está, pero sin section headers."
+
+   The step name stays exactly where it is and stops being a HEADER. What made
+   it one was chrome for a job that no longer exists: the fill, the hover and
+   the chevron all say "press me to open this", and in this arm every step is
+   already open — so they were three marks promising a toggle that does
+   nothing. Shippy carries the navigation now, which is what freed them.
+
+   WHAT STAYS IS THE DISC, and that is the one thing deliberately kept from the
+   old row. It is not chrome: it carries done, amber and red, and it is the
+   platform card's own `.ios-step-num`, so a step that the store will refuse
+   still says so here. A title with no status would be the one place in this
+   app where a step's state is invisible.
+
+   The title takes the app's own section register — 13px mono, uppercase,
+   tracked, `--text-dim` — which is what `.ios-content-step-label` inside these
+   very steps already uses for its own groups one level down. Same hierarchy
+   read twice: the step's name over the step, its sections inside it. */
+body.sm-arm-rail .sm-rail-card .ios-step-card {
+  background: none;
+  cursor: default;
+  padding: 0 24px;
+  margin-top: 34px;
+  gap: 10px;
+}
+body.sm-arm-rail .sm-rail-card .ios-step-card:first-child { margin-top: 0; }
+body.sm-arm-rail .sm-rail-card .ios-step-card:hover { background: none; }
+body.sm-arm-rail .sm-rail-card .sub-row-chev,
+body.sm-arm-rail .sm-rail-card .sub-row-count { display: none; }
+body.sm-arm-rail .sm-rail-card .ios-step-name {
+  font-family: var(--mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 13px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--text-dim);
+}
+/* The body follows its title rather than sitting in the middle of the gap —
+   the guide wait-list's own asymmetry, where the smaller gap is what binds a
+   thing to what it belongs to. 34 above the title, 14 under it. */
+body.sm-arm-rail .sm-rail-card .sub-step-body { margin-top: 14px; }
+
+/* AND THE BODY'S BOTTOM RULE GOES WITH THE HEADERS. `.sub-step-body` carries
+   `border-bottom: 1.5px` — right in the accordion, where it closed the open
+   body off from the next collapsed ROW, and wrong in one document, where the
+   thing below it is a title with 34px of air above it. Sixth rule this
+   session removed for the same sentence: position says it more quietly.
+
+   AND IT WAS ON ALL FOUR SIDES, WHICH IS THE DOUBLED STROKE. Jaco: "sigue
+   existiendo un doblez de stroke." Killing only `border-bottom` left the LEFT
+   and RIGHT ones drawing a full-height line at x 68 and 916 — one pixel inside
+   the card's own border at 67 and 917. Two parallel greys a pixel apart down
+   the whole page, and in the gap between two steps the inner one stops while
+   the card's continues, so the line visibly jogs sideways. That kink is the
+   two borders taking turns.
+
+   The body is not a panel any more — it has no fill, no cap and no rule under
+   it — so it has no edge left to draw. COLOUR, not width: 1.5px on four sides
+   is 3px of box this element has always occupied, and zeroing it would move
+   every step's content to fix a hairline. Same trade as the header row's own
+   border two rules up. */
+body.sm-arm-rail .sm-rail-card .sub-step-body { border-color: transparent; }
+
+/* AND THE BODY GIVES UP ITS WELL, WHICH IS THE LAST THING MAKING FIVE BOXES.
+   `.sub-step-body` is `rgba(0,0,0,.22)` — over the card's rgb(20,20,20) that
+   composites to about rgb(16), so every step was a recessed dark panel and the
+   edge where it met the card read as a rule. Correct in the accordion, where
+   ONE body is open and being sunk into the card is exactly what it is doing;
+   wrong here, where five of them turn "todo seguido" into five boxes stacked.
+
+   The content now sits on the card's own ground, which is what makes the
+   titles the only thing separating anything — and leaves the fragmentation
+   entirely open, which is where Jaco wanted it.
+
+   The scroll cue goes too: it is a hint that there is more inside this box,
+   and there is no box and no inside any more. */
+body.sm-arm-rail .sm-rail-card .sub-step-body { background: none; }
+body.sm-arm-rail .sm-rail-card .sub-scroll-cue { display: none; }
+
+/* ── ARRIVING FROM SHIPPY DIMS THE REST OF THE PAGE ───────────────────────
+   Driven by `_smRailSpot`. The selector is the structural one this session
+   settled for `.sm-cr-spot`: a direct child of the list that neither IS the
+   mark nor CONTAINS it steps back — free of which step is open and of which
+   classes its builder happens to use.
+
+   `.35`, the app's value for "still true, just not what you asked for" — not
+   the platform card's `.18`, which is for explaining a PREREQUISITE. This is a
+   locator: the rest of the submission is perfectly true, it is simply not the
+   part you pressed. Same reading, same number, as the Mac preview's. */
+body.sm-arm-rail .sm-rail-spot > * { transition: opacity .22s ease; }
+body.sm-arm-rail .sm-rail-spot.is-spotlight > *:not(.is-spotlit):not(:has(.is-spotlit)) {
+  opacity: .35;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPERIMENT 6 — `?beside=steps`. Two rows of pills; Shippy advises.
+   Long form at "EXPERIMENT 6" in app.js. Deletable in one piece.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* The sub-nav row is the platform strip here too — same reason as `rail`, and
+   the same two rules, because with one platform being the page the word
+   "Submission" names a view nobody is in. */
+body.sm-arm-steps .app-subnav-title { display: none; }
+body.sm-arm-steps #app-subnav .sub-tabs {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+body.sm-arm-steps .sub-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+body.sm-arm-steps .sub-tab {
+  width: auto; flex: 0 0 auto;
+  padding: 10px 18px; border-radius: var(--pill-radius, 999px);
+  background: transparent; border: 0;
+  color: rgba(255, 255, 255, .5);
+  transition: background .12s, color .12s;
+}
+body.sm-arm-steps .sub-tab:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
+body.sm-arm-steps .sub-tab.is-on { background: rgba(255, 255, 255, .15); color: #fff; }
+
+/* THE STEP BAR IS THE STORE PREVIEW'S, AND IT KEEPS ITS OWN GEOMETRY. Every
+   value — the container's fill, its inset ring, the pill's padding, the disc,
+   the `|` and the hidden-either-side rule — comes from `.spp-pinned-bar` and
+   `.spp-pin`, joined rather than reproduced. What is local is only where it
+   sits: it is the card's first child rather than a sticky strip, since one
+   step is on screen at a time and there is nothing to scroll under it.
+
+   It bleeds to the card's own padding so the bar spans the card's full inner
+   width, the same ±24 the step list takes. */
+/* ── THE STEP BAR IS A SECOND NAV ROW, NOT THE CARD'S HEADER ──────────────
+   Jaco: "la segunda fila de pills, fuera de la content card, como una segunda
+   fila de navegación bajo la fila de plataformas."
+
+   It WAS the card's header for a version — bled to the card's edges, taking
+   its top radius — and that was the right answer to "aprovechar el espacio"
+   and the wrong object. The platform row says WHICH submission and this says
+   which part of it: two levels of one navigation, which belong in the same
+   chrome. As a header it was chrome for the card instead, which is a different
+   claim, and it left the card being two things at once.
+
+   SO IT DROPS THE CONTAINER ENTIRELY. `.spp-pinned-bar`'s fill and ring exist
+   to hold a floating strip together against a page scrolling under it; a nav
+   row has the page's own ground under it and the row above it draws no
+   container either. What is left is the pills, which is all a nav row is.
+
+   Its margins are the sub-nav row's relationship to what follows, so the two
+   rows read as one block of chrome with the card under them. */
+body.sm-arm-steps #app-subnav { flex-wrap: wrap; }
+/* IT ENDS WHERE THE CONTENT PANEL ENDS, and the number is the one already
+   solved. `#app-subnav` spans all three columns of `.app-split`, so a child at
+   100% ran to 1282 against the card's 976 — the last pills sitting under the
+   Shippy column. `--subnav-add-gap` is `_subnavAddSolve`'s measurement of
+   exactly that difference, written for the `+` pill and re-read here rather
+   than restated: it is right in all three arrangements the solve exists for
+   (three columns, collapsed guide, wrapped under 1100px). */
+#sm-steps-bar {
+  /* THE GAP COMES OUT OF THE BASIS, NOT OFF THE MARGIN. At `flex: 0 0 100%`
+     the item is sized to the container and a margin-right does not shrink it —
+     it overflows by exactly that much, which is why the first version still
+     measured 1282 with the margin applied. Subtracting it from the basis is
+     the same number doing the same job where flex can see it. */
+  flex: 0 0 calc(100% - var(--subnav-add-gap, 0px));
+  margin: 12px 0 -4px;
+}
+body.sm-arm-steps #sm-steps-bar .spp-pinned { padding: 0; }
+body.sm-arm-steps #sm-steps-bar .spp-pinned-bar {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* ── THE FIVE PILLS FIT ON ONE LINE ──────────────────────────────────────
+   Jaco: "no hay ninguna forma en la que quepan las 5 pills en una sola línea."
+
+   MEASURED, THEY MISS BY 21px: 805 of content in 784 of row. So it was never
+   a question of space, it was a question of what the pill is carrying.
+
+   THE SEPARATORS GO, AND THEY ARE 28 OF THE 21. The `|` exists on
+   `.app-subnav` because those pills draw NOTHING at rest, so without it they
+   read as one run-on line of words — that is the reason written at its own
+   rule, and it does not hold here: every pill in this bar leads with a 15px
+   disc, which separates far better than a hairline and is the mark the eye is
+   already scanning for. Two separators for one job, and the weaker one is the
+   one that costs the line.
+
+   AND IT NEVER WRAPS AGAIN, which is the half that survives a translation.
+   Fitting at 850px today is not the same as fitting: five labels are five
+   strings and the next language is longer. `nowrap` + `overflow-x: auto` is
+   the bar's OWN behaviour in the store preview, written there for exactly
+   this — "a nav that wraps to two lines changes its own height, which moves
+   the page under the pointer the moment a label grows in another language".
+   So the row is one line by construction and scrolls in the case where it
+   cannot be, rather than silently becoming two. */
+body.sm-arm-steps .sm-steps-pinned .spp-pinned-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+body.sm-arm-steps .sm-steps-pinned .spp-pinned-row::-webkit-scrollbar { display: none; }
+/* ── THE SEPARATORS COME BACK, AND THE ROW HAS THE WIDTH FOR THEM NOW ─────
+   Jaco: "separado con barritas verticales, misma distancia siempre."
+
+   They were dropped to buy 28px when the bar lived inside the card, where the
+   row had 784 to work with and the pills wanted 805. Out of the card it is a
+   nav row on the content column — 850 — and measured, the five pills plus the
+   four `|` come to exactly that. So the trade that removed them is void: it
+   was paying for a constraint that no longer exists.
+
+   "MISMA DISTANCIA SIEMPRE" IS WHAT `is-off` ALREADY GUARANTEES. The bar hides
+   the separator either side of the lit pill with `visibility`, never
+   `display`, precisely so the box stays and the row cannot reflow as you move
+   along it — `.app-subnav`'s own rule, and the reason nothing shifts when the
+   selection changes. Left to `display: none` the row would re-space itself on
+   every press. */
+
+/* ── THE PENDING DISC IS A RING HERE, NOT A SOCKET ────────────────────────
+   Jaco: "deja circulito sin relleno para los pendientes, igual que en la store
+   page preview."
+
+   Same reading, and it needs the opposite paint because the ground flipped.
+   `.spp-pin-tick`'s pending state is `rgba(0,0,0,.22)` — a recess — and its
+   own note says why: it sits on that bar's white-15% container, where black
+   22% composites to rgb(43) on rgb(55) and reads as an empty socket. This bar
+   has no container at all, so the same alpha lands on the page's near-black
+   and composites to about rgb(8): invisible.
+
+   IT IS A FILL, NOT A STROKE. Jaco: "no pongas los circulitos con stroke, que
+   sigan el mismo estilo que en la checklist, enteros pero más transparentes
+   que si fueran opacos, en gris." A ring was the first answer and it was the
+   wrong object: measured, the checklist's own pending disc is
+   `rgba(160,120,255,.42)` — its accent, solid, at under half strength — so
+   what "pending" looks like in this app is a WHOLE disc turned down, never an
+   outline. That is the platform card's argument too, in its own words: an
+   empty ring becoming a solid disc is a change of KIND, where a soft disc
+   turning green is the same object changing colour.
+
+   GREY AT .22, AND THE NUMBER IS SOLVED RATHER THAN PICKED. The checklist's
+   .42 is right against the guide card's rgb(27,28,43), where it composites to
+   about rgb(83,66,123) — a step of some forty points. This bar has no ground
+   of its own, so the disc sits on the page's near-black, and white at .22
+   lands on rgb(64): the same order of separation on a ground that is much
+   darker. Change the ground and this is the line to re-solve.
+
+   Scoped to the pending state, so done keeps the card's solid green and bad
+   its magenta — the two states that are news. */
+body.sm-arm-steps #sm-steps-bar .spp-pin-tick:not(.is-done):not(.is-bad) {
+  background: rgba(255, 255, 255, .22);
+  box-shadow: none;
+}
+body.sm-arm-steps .sm-steps-pinned .spp-pin { flex: 0 0 auto; }
+
+/* THE OLD HEADER ROWS GO ENTIRELY. The pills ARE the step list now, so a row
+   above the body repeating the open step's name — with its own disc, fill and
+   chevron — is the same fact drawn twice, six pixels apart. This is the one
+   place the two arms diverge inside the card: `rail` keeps the rows as the
+   document's titles, `steps` has a bar instead. */
+body.sm-arm-steps .sm-steps-card .ios-step-card { display: none; }
+
+/* The body loses the accordion's panel treatment for `rail`'s own reasons —
+   it is the card's only content now, so a recessed well inside a card is a
+   box inside a box, and its four borders are what drew a doubled stroke a
+   pixel inside the card's own. */
+body.sm-arm-steps .sm-steps-card .sub-step-body {
+  background: none;
+  border-color: transparent;
+  max-height: none;
+  overflow: visible;
+  margin: 0; padding: 0;
+}
+body.sm-arm-steps .sm-steps-card .sub-scroll-cue { display: none; }
+
+/* The store preview is a DRAWING of a window everywhere else and a page here,
+   so its own scroller is released — same argument, same three rules as the
+   rail arm. */
+body.sm-arm-steps .mac-spp-main { overflow: visible; margin-right: 0; padding-right: 0; }
+body.sm-arm-steps .mac-spp-main::before,
+body.sm-arm-steps .mac-spp-main::after { display: none; }
+body.sm-arm-steps .mac-spp-shell,
+body.sm-arm-steps .mac-spp-main > .ias-device-wrap { height: auto; }
+
+/* ── THE PLATFORM PILL DROPS ITS PROGRESS SEGMENTS ────────────────────────
+   Jaco: "quítame los segmentos que indican cumplimiento en el pill de
+   plataforma."
+
+   `.sub-tab-dashes` is six little bars under each platform's name, one per
+   step, filling in as the submission progresses. It earns its place in Mark's
+   own arm, where the strip is a row of CARDS and that is the only reading of
+   how far along each platform is.
+
+   It does not earn it here, and the reason is this arm's whole shape: the row
+   directly underneath IS those six steps, each with its own disc carrying
+   done, amber and red. So the pill was a coarse, six-pixel summary of a bar
+   sitting twelve pixels below it, at full size, in words. The same fact twice,
+   and the worse version on top — which is the argument the submitted card's
+   own progress note makes about a dot beside a number.
+
+   Hidden rather than removed from the builder, because the strip is shared
+   with `rail` and with Mark's arm, and in both of those it is still the right
+   thing. `visibility` is not enough: the point is to give the space back, so
+   the pill is the height of its own label. */
+body.sm-arm-steps .sub-tab-dashes { display: none; }
+
+/* ── THE POWER BUTTON GETS THE PILL'S VERTICAL PADDING ON ITS RIGHT ───────
+   Jaco: "mismo padding a la derecha que arriba y abajo con el botón de
+   apagar." Measured: 10 above, 10 below, 18 to the right — so the button sat
+   in a box that was wider than it was tall, and the corner made the gap read
+   as uneven rather than generous.
+
+   18 IS THE RIGHT NUMBER FOR TEXT AND THE WRONG ONE FOR A BUTTON. `.sub-tab`
+   is `10px 18px`, and that 18 is the breathing room a LABEL needs before the
+   pill's edge — the same 18 `.app-subtab` uses. A 30px icon button is not a
+   label: it already carries its own hover box, so its edge is a real edge and
+   what it needs is the 10 the top and bottom already give it. Same argument
+   the release block makes about a ghost pill hanging into a label's gutter.
+
+   `:has()` ON THE LIVE ACTS, NOT A FLAT PADDING. The buttons are in the markup
+   on every tab and only their VISIBILITY changes — that is deliberate, so a
+   tab is the same shape selected or not — so a flat `padding-right: 10` would
+   pull the LABEL of every unselected tab 8px closer to its edge, and those
+   have no button to justify it. The test is whether the acts are actually
+   showing. */
+body.sm-arm-steps .sub-tab:has(.sub-tab-acts:not(.is-off)) { padding-right: 10px; }
+
+/* ── THE SELECTED PLATFORM IS THE APP'S SELECTED TAB ──────────────────────
+   Jaco: "para la selected platform, utiliza el mismo lenguaje que las main
+   selected tabs, con el stroke bonito."
+
+   The pill already took `.app-subtab.is-on`'s fill and ink; what it was
+   missing is the masked gradient ring, which is the half that actually says
+   "selected" across this app — the onboarding pills, the yes/no answers, the
+   project chip and the store preview's lit pill all wear it. It is added by
+   joining the shared `::after` selector list above rather than by drawing a
+   second gradient here.
+
+   `--pill-bw: 0px` because `.sub-tab` declares `border: 0` in this arm, so its
+   padding box IS its border box — the project chip's case, and getting it
+   wrong is what used to paint fill on both sides of the ring. `position:
+   relative` because an absolutely positioned `::after` needs a positioned
+   parent, and a static element has none.
+
+   AND THE FILL COMES DOWN 15 → 12 NOW THAT THE STROKE IS THERE. That is the
+   trade `.app-subtab.is-on` itself made going 20 → 15 — "the stroke does half
+   of it" — applied here: a flat wash was carrying the whole selected state on
+   its own and does not have to any more. */
+body.sm-arm-steps .sub-tab, body.sm-arm-rail .sub-tab {
+  position: relative;
+  /* THE RING'S COLOURS ARE `.app-subtab`'s OWN TOKENS, not its values. That
+     rule reads `--chip-stroke-top` / `--chip-stroke-bottom`, which is where
+     "the main selected tabs" keep their stroke — so naming the tokens is what
+     makes this pill follow them if they ever move, and writing the two rgba
+     literals out would have been a copy that silently stops matching. The
+     shared `::after` above paints them; nothing here draws a gradient. */
+  --ring-top: var(--chip-stroke-top);
+  --ring-bottom: var(--chip-stroke-bottom);
+}
+body.sm-arm-steps .sub-tab.is-on, body.sm-arm-rail .sub-tab.is-on {
+  --pill-bw: 0px;
+  background: rgba(255, 255, 255, .12);
+}
+
+/* ── THE STEP PILLS STAND AS TALL AS GAME DETAILS' SUB-TABS ───────────────
+   Jaco: "is it possible to have the height of the tasks pills be the same as
+   the ones in game details subtabs?"
+
+   Measured against a live `.app-subtab`: `padding: 10px 18px`, a 1px
+   transparent border, and a line box of 18.5 — so its height is 40.5. The step
+   pill was 28: `.spp-pin`'s own size, tuned for a bar floating inside a modal,
+   which is not what this is any more.
+
+   THE 18.5 IS MEASURED, AND THE FIRST VERSION DERIVED IT AND WAS WRONG. It
+   assumed the modal body's 1.4 ratio — 14 × 1.4 = 19.6, giving 41.6 — and the
+   rule declares `line-height: normal`, which at 14px in IBM Plex Mono is 18.5.
+   One pixel out, and the sort of thing that only shows up next to the real
+   control. Check the computed value; do not multiply the font by the body's
+   ratio.
+
+   THE HEIGHT MATCHES AND THE TYPE DELIBERATELY DOES NOT, and that is a trade
+   rather than an oversight. Taking the sub-tab's font AND padding is the
+   fuller answer to "the same as", and measured it does not fit: the row is
+   exactly 850 of content in 850, so 11.5 → 14px on five labels plus 12 → 18px
+   of padding each side overflows it by a wide margin. Height is the half he
+   asked for and the half that reads — two rows of chrome at two different
+   heights is what made them look like different kinds of control.
+
+   Written as the sub-tab's own terms rather than as 41.6, so each number is
+   traceable to the rule it came from. `align-items: center` because the pill
+   holds a 15px disc beside an 11.5px label and neither should decide the
+   baseline on its own. */
+body.sm-arm-steps #sm-steps-bar .spp-pin {
+  min-height: calc(10px + 18.5px + 10px + 2px);
+  display: inline-flex;
+  align-items: center;
+  /* ONE RADIUS FOR EVERY PILL ON SCREEN. Jaco: "same corner radius all pills
+     of tabs and header tabs — I like header tabs radiuses."
+
+     Measured, the header tabs (`.bar-nav-btn`) are 13 and so is the platform
+     pill below them, because both read `--pill-radius`. The step pill was the
+     odd one at 8: that is `.spp-pin`'s own `--field-radius`, right for a small
+     chip inside a modal's bar and wrong for a row of nav pills sitting under
+     two others that curve differently.
+
+     It takes the TOKEN, not the 13 — which is the whole point of there being a
+     token, and what keeps these three agreeing if it ever moves. The gradient
+     ring follows for free: that `::after` is `border-radius: inherit`. */
+  border-radius: var(--pill-radius);
+}
