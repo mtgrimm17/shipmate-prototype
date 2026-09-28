@@ -7046,9 +7046,28 @@ const SM_FLIP_LABELS = {
    The two loading screens stay INSIDE it. They are what the body IS while a
    call is in flight, not chrome around it — the inline pane wants the same
    "Shipmate is working…" in the same place the modal put it. */
+/* UPLOAD BUILD, AS A MODAL (v7.42). This step never had a modal body: on the
+   card it is a file pill, and _stepBodyFor fell through to '' for it, which is
+   the blank modal Mark saw. Now it opens for one reason — Build from Steam
+   (upf.js) — and shows the same two things the inline pane shows: the file row
+   (or, while the agent has this game and no build is in, the Build from Steam
+   panel in its place) and the release block. */
+function buildUploadBuildModalBody(pid) {
+  const fmt = smBuildAccept(pid);
+  const uploadRow = `
+      <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
+        ${buildBuildDropdown(pid, true)}
+        <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
+      </div>`;
+  const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
+  return `<div class="sub-upload-body">${upfPanel || uploadRow}${buildReleaseBlock(pid)}</div>`;
+}
+
 function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
   let body = '';
-  if (inferenceStatus === 'loading') {
+  if (stepId === 'uploadBuild') {
+    body = buildUploadBuildModalBody(platformId);
+  } else if (inferenceStatus === 'loading') {
     const msgs = _getInferenceMsgs(platformId, stepId);
     body = _infLoadingScreen('Shipmate is working…', msgs);
   } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
