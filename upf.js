@@ -123,6 +123,37 @@ const UPF = {
 
   isMac(pid) { return UPF_MAC_PIDS.includes(pid); },
 
+  /* ── Export compliance, both directions ──────────────────────────────
+     ITSAppUsesNonExemptEncryption in the built app's Info.plist and the
+     Business step's encryption questions are ONE question. */
+
+  /* What the developer has answered, as the plist value: true (non-exempt
+     encryption), false (none, or exempt), or null (not answered). */
+  encryptionAnswer(pid) {
+    const a = (typeof _appStoreAnswers === 'function') ? _appStoreAnswers(pid, 'usesEncryption') : null;
+    if (!a || a.usesEncryption === null || a.usesEncryption === undefined) return null;
+    if (a.usesEncryption === 'no') return false;
+    if (a.encryptionExempt === 'no') return true;
+    if (a.encryptionExempt === 'yes') return false;
+    return null;   // "uses encryption" answered, exemption not yet
+  },
+
+  /* Pre-answer "No" as an INFERRED answer — violet until the developer confirms
+     — for a matched game that has not answered yet. It is the right default
+     for a game whose only encryption is HTTPS (exempt), which is what inspect
+     sees; it is a strong default and not a finding, because inspection cannot
+     prove the absence of custom crypto inside a game's own code, so the
+     developer still confirms it. Same meta shape smReadyToShip writes. */
+  prefillEncryption(pid) {
+    if (typeof _appStoreAnswers !== 'function' || typeof _appStoreAnswerMeta !== 'function') return false;
+    const a = _appStoreAnswers(pid, 'usesEncryption');
+    if (!a || a.usesEncryption !== null) return false;
+    a.usesEncryption = 'no';
+    const meta = _appStoreAnswerMeta(pid, 'usesEncryption');
+    if (meta) meta.usesEncryption = { confidence: 0.85, humanConfirmed: false, source: 'upf' };
+    return true;
+  },
+
   /* Console helper: why is the pill (not) showing? */
   debug() {
     return { agent: state.upf.agent, game: state.upf.game, steamAppId: this.currentSteamAppId(),
@@ -159,10 +190,14 @@ const UPF = {
 };
 
 function _upfRepaintAll() {
-  if (typeof _refreshBuildUI !== 'function') return;
+  let prefilled = false;
   for (const pid of UPF_MAC_PIDS) {
-    if (state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(pid)) _refreshBuildUI(pid);
+    if (state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(pid)) {
+      if (UPF.prefillEncryption(pid)) prefilled = true;
+      if (typeof _refreshBuildUI === 'function') _refreshBuildUI(pid);
+    }
   }
+  if (prefilled && typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
 }
 
 /* A project restored with its game already chosen: ask once the page has
@@ -209,7 +244,10 @@ async function upfBuildAndUpload(pid) {
   };
 
   try {
-    const target = { version: state.formData?.version || undefined };
+    /* The developer's answer is what goes into the plist; unanswered means the
+       exempt default (false), which is also what the pre-fill says. */
+    const enc = UPF.encryptionAnswer(pid);
+    const target = { version: state.formData?.version || undefined, usesNonExemptEncryption: enc === null ? false : enc };
     const p = await UPF._post('/prepare', { game: game.app, target, achievements: UPF.achievementsForBuild(pid) });
     state.upf.job = { id: p.job, kind: 'prepare' };
     const prep = await UPF.waitJob(p.job, onLine);
@@ -340,6 +378,15 @@ function upfBuildPanelHTML(pid) {
   const blocks = blockers.length ? `
     <div class="upf-label">Blocked</div>
     <ul class="upf-list is-bad">${blockers.map(b => `<li>${esc(b.message || b)}</li>`).join('')}</ul>` : '';
+  /* The plist values the build will carry, and where each comes from. */
+  const enc = UPF.encryptionAnswer(pid);
+  const tgt = m.target || {};
+  const settings = `
+    <div class="upf-label">Set in the app</div>
+    <ul class="upf-list">
+      <li><span class="upf-id">plist</span>Minimum macOS ${esc(tgt.minMacOS || '—')} · category ${esc((tgt.category || '').replace('public.app-category.', '') || '—')}</li>
+      <li><span class="upf-id">plist</span>Export compliance: ${enc === true ? 'uses non-exempt encryption' : 'no non-exempt encryption'} <span class="upf-muted">${enc === null ? '(default — confirm it under Business)' : '(from your Business answer)'}</span></li>
+    </ul>`;
   const confirm = blockers.length
     ? `<button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button>`
     : `<div class="upf-confirm">
@@ -347,5 +394,5 @@ function upfBuildPanelHTML(pid) {
          <button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Build &amp; upload to App Store Connect</button>
        </div>`;
   const err = u.error ? `<div class="upf-error">${esc(u.error)}</div>` : '';
-  return `<div class="upf-panel">${head}${verdict}${changes}${dark}${blocks}<div class="upf-actions">${confirm}</div>${err}</div>`;
+  return `<div class="upf-panel">${head}${verdict}${changes}${dark}${settings}${blocks}<div class="upf-actions">${confirm}</div>${err}</div>`;
 }
