@@ -7713,6 +7713,7 @@ function buildStorePreviewFlipSection(platformId, target) {
   // Store; see buildMacLocalizationReviewSection's/buildSteamLocalizationReviewSection's
   // own header comments for why).
   if (target === 'localization') {
+    if (platformId === 'egs') return buildEgsLocalizationReviewSection();
     if (platformId === 'macos') return buildMacLocalizationReviewSection();
     if (platformId === 'macos_full') return buildMacFullLocalizationReviewSection();
     if (platformId === 'steam') return buildSteamLocalizationReviewSection();
@@ -12805,6 +12806,220 @@ const STEAM_LOC_REVIEW_FIELDS = [
   { value: 'publisher',   label: 'Publisher' },
   { value: 'aboutGame',   label: 'About This Game' },
 ];
+
+
+/* Epic's own field dropdown for buildEgsLocalizationReviewSection below.
+   Shape-matches STEAM_LOC_REVIEW_FIELDS above and deliberately uses the SAME
+   underlying field keys, because it is the same text — see that function's own
+   header. Only the nouns differ, and they differ because the stores differ:
+   Steam's long body copy is "About This Game" and Epic's product page just
+   calls it the description. Getting that wrong would put a Steam label on an
+   Epic page, which is the kind of detail this whole preview exists to catch. */
+const EGS_LOC_REVIEW_FIELDS = [
+  { value: 'title',       label: 'Product Name' },
+  { value: 'description', label: 'Short Description' },
+  { value: 'developer',   label: 'Developer' },
+  { value: 'publisher',   label: 'Publisher' },
+  { value: 'aboutGame',   label: 'Description' },
+];
+
+/* ── EPIC GAMES STORE — LOCALIZATION REVIEW  (v7.31) ──────────────────────
+   Epic's Localizations step was a stub: a heading and a tip, ticked on first
+   visit. This is the step.
+
+   IT IS A SECOND VIEW OF THE SAME TEXT, NOT A SECOND COPY OF IT, and that is
+   the whole design. Every accessor here is Steam's — `_steamFieldValue`,
+   `_steamSetFieldValue`, the auto-translate trigger, the pending/retry state,
+   the source badge, the undo history — because the values live in
+   `state.webSite.localizedStoreText` (and, for Product Name,
+   `state.formData`), neither of which was ever Steam-specific. Two PC
+   storefronts selling one game do not want two French short descriptions, and
+   a developer who has already had Shipmate translate their copy for Steam
+   should find it here rather than being asked again. It is the same argument
+   Adam approved for IARC one version ago: one questionnaire, two storefronts.
+
+   The consequence is worth stating plainly rather than discovering: editing a
+   language's Short Description here changes it on Steam's page too. That is
+   intended. Anything genuinely per-store — Epic's own character limits, which
+   field is on screen, whether this surface is flipped to review — is Epic's
+   own, so the two surfaces never fight over each other's UI state.
+
+   WHAT THIS DOES NOT HAVE, so nobody has to find out by looking: the Review
+   flip's back-translation is here, but its content comes from the shared
+   back-translation store, so a back-translation refreshed on one surface is
+   the one the other shows. That is consistent with the text being shared and
+   is the reason it was not given its own. */
+function buildEgsLocalizationReviewSection() {
+  const langCodes = _iasAllPreviewLangCodes();
+  const field     = state.egsLocReviewField || 'title';
+  const limit     = STEAM_FIELD_CHAR_LIMITS[field];
+  const primary   = state.formData.primaryLanguage || 'en';
+  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
+  const reviewMode  = state.egsLocReviewMode === 'review';
+  const isLongField = field === 'description' || field === 'aboutGame';
+
+  const fieldOptions = EGS_LOC_REVIEW_FIELDS.map(f => ({
+    value: f.value,
+    label: f.label,
+    warning: _steamFieldHasOverLimitLang(f.value, langCodes),
+  }));
+
+  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const undoRedoGroup = (kind, forField, lang) => {
+    const st = _steamLocReviewUndoState(kind, forField, lang);
+    return `
+        <span class="loc-review-undo-redo">
+          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); steamLocReviewUndo('${kind}','${forField}','${lang}')"
+                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
+          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
+                  onclick="event.stopPropagation(); steamLocReviewRedo('${kind}','${forField}','${lang}')"
+                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
+        </span>`;
+  };
+
+  const spinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
+  const errorHtml   = `<span class="loc-review-status is-error">Translation failed</span>`;
+  const statusHtml  = (s) => s === 'loading' ? spinnerHtml : s === 'error' ? errorHtml : '';
+
+  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row loc-review-counter-row--no-count">
+          ${undoRedoHtml}
+        </div>`;
+  };
+
+  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    if (limit == null) return fieldBlockNoLimit(value, onclickAttr, undoRedoHtml);
+    const overLimit = value.length > limit;
+    const remaining = limit - value.length;
+    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
+    return `
+        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
+             onclick="${onclickAttr}" title="Click to edit">${display}</div>
+        <div class="ias-char-counter-row">
+          ${undoRedoHtml}
+          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
+          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
+        </div>`;
+  };
+
+  const cards = langCodes.map(lang => {
+    const isPrimary = lang === primary;
+    const langName  = escHtml(OB_LANG_NAMES[lang] || lang);
+    const raw       = _steamFieldValue(field, lang);
+
+    if (reviewMode && !isPrimary) {
+      const back = _steamLocReviewBackTranslationValue(field, lang);
+      const topStatusHtml = _steamFieldTranslatePending(field, lang) ? spinnerHtml : statusHtml(back.forwardStatus);
+      return `
+      <div class="loc-review-card">
+        <div class="loc-review-side">
+          <div class="loc-review-half loc-review-half--top">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
+            ${fieldBlock(raw, `startSteamLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+          </div>
+          <div class="loc-review-half loc-review-half--bottom">
+            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml(back.status)}</div>
+            ${fieldBlockNoLimit(back.text, `startSteamLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    /* THE BADGE SAYS WHERE THE WORDS CAME FROM, and on Epic that matters more
+       than it does on Steam: text pulled off a Steam store page is a real
+       human translation the studio already paid for, and seeing Steam's mark
+       on an Epic card is how a developer knows this line is not a machine
+       guess. `_steamLocReviewSourceBadge` returns 'steam' for exactly that,
+       so the mark drawn is Steam's — the source, not the surface. */
+    const isPending = !isPrimary && _steamFieldTranslatePending(field, lang);
+    const srcBadge  = _steamLocReviewSourceBadge(field, lang);
+    const badgeHtml = isPending
+      ? spinnerHtml
+      : srcBadge === 'steam'
+        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
+        : srcBadge === 'ai'
+          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
+          : '';
+
+    return `
+      <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
+        <div class="loc-review-card-head">
+          <div class="loc-review-card-lang">${langName}</div>
+          ${badgeHtml}
+        </div>
+        ${fieldBlock(raw, `startSteamLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
+      </div>`;
+  }).join('');
+
+  /* The gear writes the SHARED settings, for the same reason the values are
+     shared: "translate Short Description automatically" is a fact about the
+     copy, not about which store page you happen to be looking at. Product
+     Name is the App Store's own shared setting, exactly as Steam's gear has
+     it. */
+  const autoCfg = state.steamAutoTranslateFields
+    || { description: true, developer: false, publisher: false, aboutGame: true };
+  const iasAutoCfg = state.iasAutoTranslateFields
+    || { title: false, subtitle: true, description: true, releaseNotes: true };
+  const settingsOpen = !!state.egsReviewSettingsOpen;
+  const settingsRow = (key, label) => `
+        <label class="cq-check-row loc-review-settings-row">
+          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_steamToggleAutoTranslateField('${key}')">
+          <span>${label}</span>
+        </label>`;
+  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+  const settingsMenu = `
+      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="egs-loc-review-settings-wrap">
+        <button class="loc-review-settings-btn" type="button" onclick="_egsToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
+        <div class="loc-dropdown loc-review-settings-dropdown">
+          <div class="loc-review-settings-heading">Automatically translated fields</div>
+          <label class="cq-check-row loc-review-settings-row">
+            <input type="checkbox" ${iasAutoCfg.title ? 'checked' : ''} onchange="_iasToggleAutoTranslateField('title')">
+            <span>Product Name</span>
+          </label>
+          ${settingsRow('description', 'Short Description')}
+          ${settingsRow('developer', 'Developer')}
+          ${settingsRow('publisher', 'Publisher')}
+          ${settingsRow('aboutGame', 'Description')}
+        </div>
+      </div>`;
+
+  /* NO LANGUAGES, NO TABLE. `_visiblePlatformSteps` already hides this row
+     until a supporting language exists, so this is the belt to that braces —
+     reached only through the Store Page Preview's own Localizations button,
+     which has no such gate. A row of one card saying "English" is not a
+     localization review. */
+  if (langCodes.length <= 1) {
+    return buildStepStubSection(
+      'Localizations',
+      'Pick the languages your Epic Games Store page will carry under Game Details, and every localizable field will appear here to review — translated from your primary language, or pulled from your Steam page where you already have a real translation.'
+    );
+  }
+
+  return `
+    <div class="loc-review-header">
+      <div class="loc-review-title-group">
+        <!-- Not "Localizations": the step modal's header says that two lines
+             up. This row still needs a label, because the gear beside it has
+             to be about something — so it says what the cards below are. -->
+        <div class="loc-review-title">Store copy by language</div>
+        ${settingsMenu}
+      </div>
+      <div class="loc-review-header-controls">
+        <button class="loc-review-toggle-btn" onclick="toggleEgsLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
+        ${swSelect('egs-loc-review-field', field, fieldOptions, 'setEgsLocReviewField', '170px', 'right')}
+      </div>
+    </div>
+    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
+}
 
 /* ── Steam Store Page Preview - Prototype flip section: "Localization
    Review" ──────────────────────────────────────────────────────────────
@@ -18276,11 +18491,9 @@ function buildEgsTechnicalSection() {
         "The EOS overlay is what Epic's own Testing Guide exercises. Integrating it is how features such as the in-game store and social panel reach your players.")}`;
 }
 
+/* The step now renders the review itself rather than describing it (v7.31). */
 function buildEgsLocalizationsSection() {
-  return buildStepStubSection(
-    'Localizations',
-    'Epic lets you localize your store presence per language — product name, descriptions, and the artwork on your product page — under Localize Store Presence. Reviewing those translations will happen here. Nothing is required of you yet.'
-  );
+  return buildEgsLocalizationReviewSection();
 }
 
 
@@ -18384,9 +18597,18 @@ function buildEgsStorePreviewSection() {
       ${stripHtml ? `<div class="egs-spp-strip">${stripHtml}</div>` : ''}
     </div>`;
 
+  /* The same door Steam's prototype and both Apple previews carry: the page
+     is where you notice a language is missing something, so the way into the
+     review belongs on the page. */
+  const locCount = (state.formData.localizations || [])
+    .filter(l => l !== (state.formData.primaryLanguage || 'en')).length;
+  const locBtnHtml = locCount ? `
+      <button class="ias-all-locs-btn" onclick="openStorePreviewSection('egs','localization')"
+              title="Review every localized field side by side">Localizations</button>` : '';
+
   const aboutHtml = `
     <div class="egs-spp-block${desc ? '' : ' egs-spp-glow-empty'}">
-      <div class="egs-spp-h2">About</div>
+      <div class="egs-spp-h2">About${locBtnHtml}</div>
       <p class="egs-spp-p">${desc
         ? escHtml(desc)
         : '<span class="egs-spp-placeholder">Your description appears here once it is filled in under Game Details.</span>'}</p>

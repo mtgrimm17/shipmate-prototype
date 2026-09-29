@@ -2860,7 +2860,24 @@ function isEgsSectionComplete(sectionId) {
         && a.patchNotes !== null
         && a.eosOverlay !== null;
   }
-  if (sectionId === 'localizations')     return !!a.localizationsSeen;
+  /* LOCALIZATIONS IS NO LONGER A VISIT (v7.31). It was `localizationsSeen`
+     while it was a stub, which is the only claim a placeholder can honestly
+     make. Now that the step is a real review, ticking it for having glanced
+     at it would be the "green while empty" failure this file keeps fighting —
+     so it asks for the two fields Epic's product page actually prints, in
+     every supporting language. Auto-translate fills them the moment a
+     language is added, so a developer who does nothing still sees this go
+     green; one who turns auto-translate off sees it wait, correctly. */
+  if (sectionId === 'localizations') {
+    const langs = (state.formData.localizations || [])
+      .filter(l => l !== (state.formData.primaryLanguage || 'en'));
+    if (!langs.length) return !!a.localizationsSeen;   // nothing to translate yet
+    const store = (state.webSite && state.webSite.localizedStoreText) || {};
+    return langs.every(l => {
+      const e = store[l] || {};
+      return !!(e.description || '').trim() && !!(e.aboutGame || '').trim();
+    });
+  }
   if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
 
   if (sectionId === 'screenshots') {
@@ -4606,6 +4623,16 @@ const state = {
   // IARC, shared with Google Play through state.cqAnswers (see
   // isEgsSectionComplete).
   egsSubmitAnswers: makeBlankEgsAnswers(),
+
+  /* Epic's Localizations surface state (v7.31). Which field is on screen,
+     whether the cards are flipped to review, and whether the gear is open —
+     all three are about the SURFACE, not the copy, which is why Epic keeps its
+     own rather than sharing Steam's: the text is shared (see
+     buildEgsLocalizationReviewSection) and flipping one store's review should
+     not flip the other's. */
+  egsLocReviewField:     'title',
+  egsLocReviewMode:      'all',    // 'all' | 'review'
+  egsReviewSettingsOpen: false,
 
   // Per-field AI inference metadata for Steam (mirrors iosAnswerMeta)
   steamAnswerMeta: {},

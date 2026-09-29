@@ -13552,9 +13552,16 @@ function _steamLocReviewBackTranslationEntry(field, lang) {
   return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
 }
 
-function _steamLocReviewSyncBackTranslations() {
+/* `fieldOverride` exists because Epic's Localizations surface shares this
+   machinery but not its field selector (v7.31). Without it, flipping Epic to
+   Review synced back-translations for whatever field STEAM happened to have
+   selected — so Epic's bottom halves would fill with a back-translation of a
+   field that was not on screen, which reads as the feature being broken
+   rather than as the wrong field. Defaults to Steam's own selection, so every
+   existing caller is unchanged. */
+function _steamLocReviewSyncBackTranslations(fieldOverride) {
   const fd = state.formData;
-  const field = state.steamLocReviewField || 'title';
+  const field = fieldOverride || state.steamLocReviewField || 'title';
   const supportedLangs = fd.localizations || [];
 
   const jobs = [];
@@ -22457,6 +22464,31 @@ function reRenderAndroidStepModal() {
 
 /* Answer a yes/no android field */
 /* Toggle a yes/no or single-choice field — clicking same value again deselects to null */
+/* Epic's Localizations surface controls (v7.31). Field, flip and gear only —
+   every handler that touches the TEXT is Steam's, because the text is shared.
+   See buildEgsLocalizationReviewSection (render.js). */
+function setEgsLocReviewField(value) {
+  state.egsLocReviewField = value || 'title';
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function toggleEgsLocReviewMode() {
+  state.egsLocReviewMode = state.egsLocReviewMode === 'review' ? 'all' : 'review';
+  /* Entering review asks for a back-translation of everything on screen, the
+     same way Steam's own toggle does — otherwise the bottom halves open empty
+     and look broken rather than pending. */
+  if (state.egsLocReviewMode === 'review' && typeof _steamLocReviewSyncBackTranslations === 'function') {
+    _steamLocReviewSyncBackTranslations(state.egsLocReviewField || 'title');
+  }
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function _egsToggleReviewSettingsMenu(ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  state.egsReviewSettingsOpen = !state.egsReviewSettingsOpen;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 /* ── EPIC GAMES STORE HANDLERS (v7.30) ────────────────────────────────────
    Same shape as answerAndroidField below — press an answered pill again to
    clear it, then repaint the open step and the card behind it. They repaint
