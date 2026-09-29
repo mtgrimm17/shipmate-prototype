@@ -42,7 +42,10 @@ state.upf = state.upf || {
   manifest: null,   // /inspect result: classification, transformations, disabled Steam features
   job:      null,   // { id, kind } while prepare/upload runs
   progress: '',     // latest agent line, shown in the processing pill
-  lines:    [],     // every agent line of the current/last run, for the Upload Build panel
+  lines:    [],     // every agent line of the current/last run
+  stage:    -1,     // index into UPF_STAGES of the stage now running
+  stages:   [],     // per stage: { start, end } timestamps
+  uploadPct: 0,     // upload progress, from the agent's "NN%" lines
   result:   null,   // { buildVersion, buildId } after a successful run
   error:    '',
 };
@@ -229,18 +232,25 @@ async function upfBuildAndUpload(pid) {
   state.upf.error = '';
   state.upf.result = null;
   state.upf.lines = [];
+  state.upf.stage = 0;
+  state.upf.stages = [{ start: Date.now() }];
+  state.upf.uploadPct = 0;
   state.upf.progress = 'Starting build…';
   state.upf.job = { id: null, kind: 'prepare' };
   _upfRepaint(pid, true);
+  _upfStartTicker();
 
   let lastPaint = 0;
   const onLine = (line) => {
     const s = String(line).trim();
     if (!s) return;
     state.upf.lines.push(s);
+    const before = state.upf.stage;
+    _upfTrackLine(s);
     state.upf.progress = s.replace(/^stage [A-F][^:]*:\s*/i, '').slice(0, 60);
     const now = Date.now();
-    if (now - lastPaint > 2000) { lastPaint = now; _upfRepaint(pid, true); }
+    // repaint when a stage changes (the list must move), else at most every 2s
+    if (state.upf.stage !== before || now - lastPaint > 2000) { lastPaint = now; _upfRepaint(pid, true); }
   };
 
   try {
@@ -273,6 +283,8 @@ async function upfBuildAndUpload(pid) {
       ascAppId: up.appId,
     };
     state.upf.progress = '';
+    const last = state.upf.stages[state.upf.stage];
+    if (last && !last.end) last.end = Date.now();
     state.upf.result = { buildVersion: up.buildVersion, buildId: up.buildId, appId: up.appId };
     if (typeof bcToast === 'function') bcToast(`Mac App Store build ${up.buildVersion} is in App Store Connect (build ${up.buildId}).`);
   } catch (e) {
@@ -302,23 +314,65 @@ function _upfRepaint(pid, full) {
    features go dark on Mac, and — once pressed — the agent's own log, then the
    App Store Connect result. Reads state, never writes it. */
 /* The run, as the developer sees it: seven stages, matched against the agent's
-   own progress lines. `test` is what the agent prints when that stage begins. */
+   own progress lines. `test` is what the agent prints when that stage begins;
+   `usual` is the expected duration in seconds, from the Monster Train 2 runs
+   (a 2 GB game — smaller games are quicker; Apple's side varies most). */
 const UPF_STAGES = [
-  { label: 'Prepare the Steam build',        test: /inspecting|preflight|copying|provisioning/i },
-  { label: 'Replace Steam with the shim',     test: /stage a\/b|compiling shim/i },
-  { label: 'Sandbox and entitlements',        test: /stage c/i },
-  { label: 'Sign',                            test: /stage d/i },
-  { label: 'Package for the Mac App Store',   test: /stage e|stage f/i },
-  { label: 'Upload to App Store Connect',     test: /uploading|chunk|%$/i },
-  { label: 'Apple processes the build',       test: /waiting for apple|build \d+:/i },
+  { label: 'Copy and inspect the Steam build',   test: /inspecting|preflight|copying|provisioning/i, usual: 60 },
+  { label: 'Replace Steam with the shim',        test: /stage a\/b|compiling shim/i,                usual: 30 },
+  { label: 'Sandbox and entitlements',           test: /stage c/i,                                  usual: 5 },
+  { label: 'Sign every binary',                  test: /stage d/i,                                  usual: 40 },
+  { label: 'Package for the Mac App Store',      test: /stage e|stage f/i,                          usual: 60 },
+  { label: 'Upload to App Store Connect',        test: /uploading|chunk|^\d+%$/i,                   usual: 300 },
+  { label: 'Process the build (Apple’s side)', test: /waiting for apple|build \d+:/i,           usual: 600 },
 ];
 
-function _upfStageIndex(lines) {
+function _upfStageOf(line) {
   let idx = -1;
-  for (const l of lines) {
-    UPF_STAGES.forEach((s, i) => { if (s.test.test(l) && i > idx) idx = i; });
-  }
+  UPF_STAGES.forEach((s, i) => { if (s.test.test(line) && i > idx) idx = i; });
   return idx;
+}
+
+/* Called for every agent line: advances the stage clock and reads the upload
+   percentage. Stages are { start, end } timestamps on state.upf.stages. */
+function _upfTrackLine(line) {
+  const u = state.upf;
+  const now = Date.now();
+  const idx = _upfStageOf(line);
+  if (idx > u.stage) {
+    for (let i = Math.max(u.stage, 0); i < idx; i++) {
+      if (!u.stages[i]) u.stages[i] = { start: now };
+      if (!u.stages[i].end) u.stages[i].end = now;
+    }
+    u.stage = idx;
+    u.stages[idx] = u.stages[idx] || { start: now };
+  }
+  const pct = /^(\d{1,3})%$/.exec(line);
+  if (pct && u.stage === 5) u.uploadPct = Math.min(100, Number(pct[1]));
+}
+
+function _upfFmt(sec) {
+  sec = Math.max(0, Math.round(sec));
+  return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
+}
+
+/* One-second ticker while a run is up: writes the current stage's elapsed time
+   and the upload bar straight into the DOM. It touches the DOM, it does not
+   render — the modal is rebuilt only when a new agent line arrives. */
+let _upfTicker = null;
+function _upfStartTicker() {
+  if (_upfTicker) return;
+  _upfTicker = setInterval(() => {
+    const u = state.upf;
+    if (!u.job) { clearInterval(_upfTicker); _upfTicker = null; return; }
+    const cur = u.stages[u.stage];
+    const el = document.querySelector(`[data-upf-elapsed="${u.stage}"]`);
+    if (el && cur) el.textContent = _upfFmt((Date.now() - cur.start) / 1000) + ' · usually ~' + _upfFmt(UPF_STAGES[u.stage].usual);
+    const bar = document.querySelector('[data-upf-bar]');
+    if (bar) bar.style.width = (u.uploadPct || 0) + '%';
+    const pctEl = document.querySelector('[data-upf-pct]');
+    if (pctEl) pctEl.textContent = (u.uploadPct || 0) + '%';
+  }, 1000);
 }
 
 function upfBuildPanelHTML(pid) {
@@ -347,21 +401,35 @@ function upfBuildPanelHTML(pid) {
 
   /* ── Phase 2: running status ───────────────────────────────────────── */
   if (running || (u.error && u.lines.length)) {
-    const cur = _upfStageIndex(u.lines);
+    const cur = u.stage;
     const failed = !running && !!u.error;
+    const total = UPF_STAGES.reduce((n, s) => n + s.usual, 0);
     const rows = UPF_STAGES.map((s, i) => {
       const st = failed && i === cur ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
-      const mark = st === 'is-done' ? '✓' : (st === 'is-bad' ? '✕' : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : '·'));
-      return `<li class="upf-stage ${st}"><span class="upf-stage-mark">${mark}</span>${esc(s.label)}</li>`;
+      const mark = st === 'is-done' ? (typeof smCheckSVG === 'function' ? smCheckSVG() : '✓')
+                 : (st === 'is-bad' ? '✕' : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : ''));
+      const t = u.stages[i];
+      let time;
+      if (st === 'is-done' && t && t.end)      time = _upfFmt((t.end - t.start) / 1000);
+      else if (st === 'is-current' && t)       time = `<span data-upf-elapsed="${i}">${_upfFmt((Date.now() - t.start) / 1000)} · usually ~${_upfFmt(s.usual)}</span>`;
+      else if (st === 'is-bad' && t)           time = _upfFmt(((t.end || Date.now()) - t.start) / 1000);
+      else                                      time = `~${_upfFmt(s.usual)}`;
+      const bar = (i === 5 && (st === 'is-current' || st === 'is-done')) ? `
+        <div class="upf-bar"><div class="upf-bar-fill" data-upf-bar style="width:${st === 'is-done' ? 100 : (u.uploadPct || 0)}%"></div></div>
+        <span class="upf-bar-pct" data-upf-pct>${st === 'is-done' ? 100 : (u.uploadPct || 0)}%</span>` : '';
+      return `<li class="upf-stage ${st}">
+        <span class="upf-stage-mark">${mark}</span>
+        <span class="upf-stage-label">${esc(s.label)}${bar}</span>
+        <span class="upf-stage-time">${time}</span>
+      </li>`;
     }).join('');
+    const started = u.stages[0] ? u.stages[0].start : Date.now();
+    const foot = running
+      ? `<div class="upf-muted">Started ${_upfFmt((Date.now() - started) / 1000)} ago · the whole run usually takes ~${_upfFmt(total)}. You can close this; it keeps going.</div>`
+      : '';
     const err = failed ? `<div class="upf-error">${esc(u.error)}</div>` : '';
     const retry = failed ? `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Try again</button></div>` : '';
-    return `<div class="upf-panel">${head}
-      <ul class="upf-stages">${rows}</ul>
-      ${err}${retry}
-      <div class="upf-label">${running ? 'Agent log' : 'Agent log (last run)'}</div>
-      <div class="upf-log">${u.lines.slice(-14).map(l => `<div>${esc(l)}</div>`).join('')}</div>
-    </div>`;
+    return `<div class="upf-panel">${head}<ul class="upf-stages">${rows}</ul>${foot}${err}${retry}</div>`;
   }
 
   /* ── Phase 1: the steps, and the confirmation ──────────────────────── */

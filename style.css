@@ -5911,8 +5911,35 @@ body.viewing-splash .app-subnav { display: none; }
   color: rgba(255, 255, 255, .42);
 }
 .upf-stage.is-done .upf-stage-mark { background: #31DC80; color: #0F2A1A; }
+.upf-stage.is-done .upf-stage-mark svg { width: 100%; height: 100%; }
 .upf-stage.is-bad .upf-stage-mark { background: var(--magenta, #ff3b78); color: #2E0713; }
 .upf-stage .build-proc-spin { width: 12px; height: 12px; }
+.upf-stage-label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.upf-stage-time {
+  flex: none;
+  font-size: 11px;
+  color: rgba(255, 255, 255, .42);
+  font-variant-numeric: tabular-nums;
+}
+.upf-stage.is-current .upf-stage-time, .upf-stage.is-done .upf-stage-time { color: var(--text-dim, #a0a0a0); }
+/* The upload bar sits on the upload row's own line, between the label and the
+   time, and the percentage rides beside it. No hue: it is progress, not a state. */
+.upf-bar {
+  flex: 1;
+  min-width: 60px;
+  max-width: 220px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .10);
+  overflow: hidden;
+}
+.upf-bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--text, #f5f5f5);
+  transition: width .6s linear;
+}
+.upf-bar-pct { flex: none; font-size: 11px; color: var(--text-dim, #a0a0a0); font-variant-numeric: tabular-nums; }
 .upf-head {
   font-size: 13px;
   font-weight: 500;
@@ -5951,21 +5978,6 @@ body.viewing-splash .app-subnav { display: none; }
 .upf-actions { margin-top: 16px; }
 .upf-result { font-size: 12px; color: #31DC80; }
 .upf-error { margin-top: 10px; font-size: 12px; color: var(--magenta, #ff3b78); }
-.upf-log {
-  margin-top: 4px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bg, #0a0a0a);
-  border: 1px solid rgba(255, 255, 255, .08);
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--text-dim, #a0a0a0);
-  max-height: 240px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.upf-log div:last-child { color: var(--text, #f5f5f5); }
 .build-pill.has-build {
   border: 1px solid rgba(52, 209, 122, .32);
   color: #4FE39A;
