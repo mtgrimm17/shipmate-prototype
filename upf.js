@@ -266,11 +266,10 @@ async function upfBuildAndUpload(pid) {
     /* The developer's answer is what goes into the plist; unanswered means the
        exempt default (false), which is also what the pre-fill says. */
     const enc = UPF.encryptionAnswer(pid);
-    /* The version is the PROJECT's (the release block reads the same field), so
-       the package, the release block and App Store Connect all say one thing.
-       Without it the agent kept the Steam build's own version (2.2.1 beside a
-       card reading v1.0, Mark's screenshot). */
-    const target = { version: UPF.projectVersion() || undefined, usesNonExemptEncryption: enc === null ? false : enc };
+    /* The build keeps the STEAM build's own version (2.2.1, what App Store
+       Connect should carry). Shipmate's project version is cosmetic and is not
+       sent — v7.47 sent it, and it would have shipped every game as "1.0". */
+    const target = { usesNonExemptEncryption: enc === null ? false : enc };
     /* ONE JOB ON THE AGENT for prepare AND upload. The chain used to live here,
        in the page — so closing or reloading it after prepare meant nothing ever
        started the upload. The agent owns the whole run now; the page only
@@ -299,7 +298,7 @@ function _upfFinish(pid, res, game) {
     state.platformBuilds[pid] = {
       name: pkgPath.split('/').pop() || `${game.name}.pkg`,
       size: 0,
-      buildNumber: Number(up.buildVersion) || up.buildVersion,
+      buildNumber: String(up.buildVersion),   // Steam's build id, possibly dotted (17325648.1) — a label, not a number
       uploadedAt: Date.now(),
       source: 'upf',
       ascBuildId: up.buildId,
@@ -541,7 +540,7 @@ function upfBuildPanelHTML(pid) {
   const settings = `
     <div class="upf-label">Set in the app</div>
     <ul class="upf-list">
-      <li><span class="upf-id">plist</span>Version ${esc(UPF.projectVersion() || tgt.version || '—')} <span class="upf-muted">(this project's)</span> · build ${esc(tgt.build || '—')} · minimum macOS ${esc(tgt.minMacOS || '—')} · category ${esc((tgt.category || '').replace('public.app-category.', '') || '—')}</li>
+      <li><span class="upf-id">plist</span>Version ${esc(tgt.version || '—')} <span class="upf-muted">(the Steam build's)</span> · build ${esc(tgt.build || '—')} · minimum macOS ${esc(tgt.minMacOS || '—')} · category ${esc((tgt.category || '').replace('public.app-category.', '') || '—')}</li>
       <li><span class="upf-id">plist</span>Export compliance: ${enc === true ? 'uses non-exempt encryption' : 'no non-exempt encryption'} <span class="upf-muted">${enc === null ? '(default — confirm it under Business)' : '(from your Business answer)'}</span></li>
     </ul>`;
   const confirm = blockers.length
