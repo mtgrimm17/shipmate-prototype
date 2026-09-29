@@ -126,6 +126,15 @@ const UPF = {
 
   isMac(pid) { return UPF_MAC_PIDS.includes(pid); },
 
+  /* The project's active version number, the way buildReleaseBlock reads it,
+     without a leading "v". Null when the project has none. */
+  projectVersion() {
+    const proj = (state.projects || []).find(p => p.id === state.activeProjectId);
+    const ver = proj && proj.versions && (proj.versions.find(v => v.id === state.activeVersionId) || proj.versions[proj.versions.length - 1]);
+    const n = ver && ver.versionNumber;
+    return n ? String(n).replace(/^v/i, '') : null;
+  },
+
   /* ── Export compliance, both directions ──────────────────────────────
      ITSAppUsesNonExemptEncryption in the built app's Info.plist and the
      Business step's encryption questions are ONE question. */
@@ -257,7 +266,11 @@ async function upfBuildAndUpload(pid) {
     /* The developer's answer is what goes into the plist; unanswered means the
        exempt default (false), which is also what the pre-fill says. */
     const enc = UPF.encryptionAnswer(pid);
-    const target = { version: state.formData?.version || undefined, usesNonExemptEncryption: enc === null ? false : enc };
+    /* The version is the PROJECT's (the release block reads the same field), so
+       the package, the release block and App Store Connect all say one thing.
+       Without it the agent kept the Steam build's own version (2.2.1 beside a
+       card reading v1.0, Mark's screenshot). */
+    const target = { version: UPF.projectVersion() || undefined, usesNonExemptEncryption: enc === null ? false : enc };
     /* ONE JOB ON THE AGENT for prepare AND upload. The chain used to live here,
        in the page — so closing or reloading it after prepare meant nothing ever
        started the upload. The agent owns the whole run now; the page only
@@ -528,7 +541,7 @@ function upfBuildPanelHTML(pid) {
   const settings = `
     <div class="upf-label">Set in the app</div>
     <ul class="upf-list">
-      <li><span class="upf-id">plist</span>Minimum macOS ${esc(tgt.minMacOS || '—')} · category ${esc((tgt.category || '').replace('public.app-category.', '') || '—')}</li>
+      <li><span class="upf-id">plist</span>Version ${esc(UPF.projectVersion() || tgt.version || '—')} <span class="upf-muted">(this project's)</span> · build ${esc(tgt.build || '—')} · minimum macOS ${esc(tgt.minMacOS || '—')} · category ${esc((tgt.category || '').replace('public.app-category.', '') || '—')}</li>
       <li><span class="upf-id">plist</span>Export compliance: ${enc === true ? 'uses non-exempt encryption' : 'no non-exempt encryption'} <span class="upf-muted">${enc === null ? '(default — confirm it under Business)' : '(from your Business answer)'}</span></li>
     </ul>`;
   const confirm = blockers.length
