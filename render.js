@@ -1281,17 +1281,20 @@ function buildObPlatTilesHTML() {
     { id:'ios',     iconKey:'ios',         label:'App Store',   comingSoon: false },
     { id:'android', iconKey:'android',     label:'Google Play', comingSoon: false },
     { id:'web',     iconKey:'web',         label:'Web',         comingSoon: false },
-    // The four grayed-out/unselectable (comingSoon) tiles below are kept in
-    // alphabetical order by label (Epic, Nintendo, PlayStation, Xbox), by
-    // request — this is purely a display-order convention among themselves;
-    // the always-available tiles above keep their own existing order.
+    // The grayed-out/unselectable (comingSoon) tiles below are kept in
+    // alphabetical order by label (Nintendo, PlayStation, Xbox), by request —
+    // this is purely a display-order convention among themselves; the
+    // always-available tiles above keep their own existing order. Epic sits
+    // among them and is NOT one of them any more (v7.30): it keeps its place
+    // in this alphabetical run rather than moving up, because the run is
+    // where someone looking for it will look.
     // Nintendo and Xbox: neither has a measured SM_TILE_MARKS entry
     // (platform-icons.js) or a PROTO_PLATFORM_ICONS one, so iconKey falls
     // straight through protoTileIcon() to this repo's own
     // PLATFORM_ICONS['nintendo']/['xbox'] SVG path (state.js) — already
     // monochrome/currentColor and evenodd-correct (EVENODD_ICONS, above),
     // same as every other tile here.
-    { id:'egs',      iconKey:'epic',        label:'Epic',        comingSoon: true  },
+    { id:'egs',      iconKey:'epic',        label:'Epic',        comingSoon: false },
     { id:'nintendo', iconKey:'nintendo',    label:'Nintendo',    comingSoon: true  },
     { id:'psn',      iconKey:'playstation', label:'PlayStation', comingSoon: true  },
     { id:'xbox',     iconKey:'xbox',        label:'XBOX',        comingSoon: true  },
@@ -5755,15 +5758,8 @@ function _subStepBodyInner(pid, stepId) {
         ${buildBuildDropdown(pid)}
         <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
       </div>`;
-    /* BUILD FROM STEAM (v7.42, upf.js): on the Mac platforms, while the agent
-       has this game and no file has been dropped in, the panel REPLACES the
-       file row — the steps the agent will take, a confirm button, then the
-       running status. Once a build is in (from either door) the row is the
-       file pill again, and without the agent nothing here changes. */
-    const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
-    const top = upfPanel ? upfPanel : uploadRow;
     return banner
-      + `<div class="ios-step-body-content"><div class="sub-upload-body">${top}${buildReleaseBlock(pid)}</div></div>`
+      + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
       + _localSaveNote(pid)
       + SM_SCROLL_CUE;
   }
@@ -6442,6 +6438,7 @@ function buildActiveCard(pid, force) {
   if (pid === 'macos_full') return buildIOSActiveCard(pid, force);
   if (pid === 'android') return buildAndroidActiveCard(pid, force);
   if (pid === 'steam')   return buildSteamActiveCard(pid, force);
+  if (pid === 'egs')     return buildEgsActiveCard(pid, force);
 
   // Deploy/Submit flip: once flipped, show the submitted (post-deploy) card
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
@@ -6829,7 +6826,10 @@ function buildAndroidActiveCard(pid, force) {
     </div>`;
 }
 
-const COMING_SOON_PLATFORMS = new Set(['egs', 'psn', 'xbox', 'nintendo']);
+/* Epic left this set in v7.30 — it is built out now (PLATFORMS.egs, state.js)
+   and has its own card, its own steps and its own Store Page Preview, which is
+   what "coming soon" was ever standing in for. */
+const COMING_SOON_PLATFORMS = new Set(['psn', 'xbox', 'nintendo']);
 
 function buildInactiveCard(pid) {
   const p          = PLATFORMS[pid];
@@ -7028,6 +7028,7 @@ const SM_FLIP_LABELS = {
   iapLocalizations: 'IAP Localizations',
   achievementLocalizations: 'Achievement Localizations',
   appInformation: 'App Information',
+  pricing:       'Regions & Pricing',
 };
 
 /* ── THE STEP BODY DISPATCHER ────────────────────────────────────────────────
@@ -7046,28 +7047,9 @@ const SM_FLIP_LABELS = {
    The two loading screens stay INSIDE it. They are what the body IS while a
    call is in flight, not chrome around it — the inline pane wants the same
    "Shipmate is working…" in the same place the modal put it. */
-/* UPLOAD BUILD, AS A MODAL (v7.42). This step never had a modal body: on the
-   card it is a file pill, and _stepBodyFor fell through to '' for it, which is
-   the blank modal Mark saw. Now it opens for one reason — Build from Steam
-   (upf.js) — and shows the same two things the inline pane shows: the file row
-   (or, while the agent has this game and no build is in, the Build from Steam
-   panel in its place) and the release block. */
-function buildUploadBuildModalBody(pid) {
-  const fmt = smBuildAccept(pid);
-  const uploadRow = `
-      <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
-        ${buildBuildDropdown(pid, true)}
-        <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
-      </div>`;
-  const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
-  return `<div class="sub-upload-body">${upfPanel || uploadRow}${buildReleaseBlock(pid)}</div>`;
-}
-
 function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
   let body = '';
-  if (stepId === 'uploadBuild') {
-    body = buildUploadBuildModalBody(platformId);
-  } else if (inferenceStatus === 'loading') {
+  if (inferenceStatus === 'loading') {
     const msgs = _getInferenceMsgs(platformId, stepId);
     body = _infLoadingScreen('Shipmate is working…', msgs);
   } else if (stepId === 'improveSubmission' && (state.storePageInsights?.loading || state.improveSubmissionAnalysis?.loading)) {
@@ -7099,6 +7081,20 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     else if (stepId === 'localizations')      body = buildSteamLocalizationsSection();
     else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
+  } else if (platformId === 'egs') {
+    /* CONTENT RATING IS GOOGLE PLAY'S BUILDER, CALLED BY NAME. Both stores use
+       IARC, `buildAndroidContentRatingSection` renders the IARC tree out of the
+       shared `state.cqAnswers`, and neither the tree nor the answers were ever
+       Google-specific — only the function's name is. Copying 107 lines to
+       rename them would have produced two questionnaires to keep in step with
+       each other, which is the bug this file has paid for more than once. */
+    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsStorePreviewSection();
+    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
+    else if (stepId === 'regionsPricing')     body = buildEgsRegionsPricingSection();
+    else if (stepId === 'technical')          body = buildEgsTechnicalSection();
+    else if (stepId === 'localizations')      body = buildEgsLocalizationsSection();
+    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
+    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
   } else if (platformId === 'web') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection('web', flipTarget) : buildWebSitePreviewSection();
   } else if (platformId === 'macos_full') {
@@ -7182,16 +7178,9 @@ function _stepCtaHtml(platformId, stepId, isSubPanel, returnAction, complete) {
     typeof appleAgeRating === 'function' &&
     appleAgeRating(_appStoreAnswers(platformId, 'ageCategory')) === AGE_UNRATED;
 
-  /* BLOCKED IS NOT INERT — see `crGoFirstUnrated` (app.js). The press cannot
-     finish the step, and the one other thing it can honestly mean is "show me
-     why", so it goes to the first answer that made the app Unrated. `aria-
-     disabled` stays and `disabled` is still not used, which is what keeps it
-     focusable and pressable; the tooltip keeps saying why. */
   return blocked
     ? `<button class="imp-cta is-blocked" aria-disabled="true"
-               onclick="crGoFirstUnrated('${platformId}')"
-               data-tip="Unrated apps cannot be published on the App Store. Press to see why."
-               data-tip-tone="danger"
+               data-tip="Unrated apps cannot be published on the App Store." data-tip-tone="danger"
        >${label}</button>`
     : `<button class="imp-cta" onclick="${action}">${label}</button>`;
 }
@@ -7362,24 +7351,7 @@ function renderStepModal() {
   const applePreview = platformId === 'ios' || platformId === 'macos';
   const displayStepLabel = isFlipped
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
-    /* AND A STEP THE PLATFORM DOES NOT LIST STILL HAS A NAME. `step?.label`
-       comes from that platform's own steps, so any step reached from somewhere
-       ELSE — the preview's wells — resolved to `undefined` and the title row
-       came out EMPTY. Measured on Screenshots opened from the Media Carousel
-       well: no title, and the page-header trail fell back to printing the raw
-       id, `screenshots`. Game Center was special-cased here and was the only
-       one, which is the same inventory-of-one `cameFromPreview` was.
-
-       The tables below already hold these names, so this is a lookup rather
-       than a new list. The Apple override goes first for the reason it exists:
-       on those previews the element is called Media Carousel, and a panel
-       titled "Screenshots" after pressing a well labelled Media Carousel is
-       two names for one thing — which is what this row is supposed to stop. */
-    : (step?.label
-       || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : '')
-       || (applePreview && APPLE_FLIP_LABELS[stepId])
-       || FLIP_LABELS[stepId]
-       || '');
+    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
   // Step body — one dispatcher, shared with the inline Submission pane.
   const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
@@ -7420,22 +7392,8 @@ function renderStepModal() {
      the header and footer read now. Nothing about the flip changes — the title
      still comes from `step?.label`, the body is still Game Center's own builder,
      and a flipped panel is untouched. */
-  /* AND IT IS EVERY STEP THE PREVIEW OPENS, NOT A LIST OF ONE. See
-     `state.stepModalFrom`'s note in openStepModal (app.js): this used to be
-     `stepId === 'gameCenter'`, which named the one case anybody had looked at
-     and left Screenshots — reached from the preview's own shots well — with a
-     × that threw away the store page and a footer saying "Done". The flag is
-     written at the door, so a step that is reached BOTH ways (Screenshots is
-     also a step in its own right on some platforms) gets the chrome that
-     matches how you actually got there rather than one answer for both.
-
-     Game Center's own derivation stays beside it and is not redundant: it is
-     not in any platform's `steps`, so the preview is its only door even on a
-     path where the flag was never written — a deep link, a restored state, or
-     any later caller that opens it directly. */
-  const cameFromPreview = state.stepModalFrom === 'storePreview'
-    || (stepId === 'gameCenter'
-        && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full'));
+  const cameFromPreview = stepId === 'gameCenter'
+    && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full');
   const isSubPanel = isFlipped || cameFromPreview;
 
   const returnAction = flipTarget === 'iapLocalizations'
@@ -7638,6 +7596,10 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'webMedia')       return buildWebMediaEditSection();
   if (target === 'webKeyArt')      return buildWebKeyArtEditSection();
   if (target === 'content') {
+    /* Epic gets Google Play's builder for the same reason the step does: one
+       IARC questionnaire, one set of answers. See the 'egs' arm in
+       _stepBodyFor. */
+    if (platformId === 'egs')     return buildAndroidContentRatingSection();
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
     return buildContentRatingSection(platformId);
@@ -7706,7 +7668,14 @@ function buildStorePreviewFlipSection(platformId, target) {
   // internal header, same as 'tags'/'steamAssets' — the modal's own title
   // (FLIP_LABELS.technical, above) already reads "Technical".
   if (target === 'technical') {
+    if (platformId === 'egs') return `<div class="qs-section">${buildEgsTechnicalSection()}</div>`;
     return `<div class="qs-section">${buildSteamTechnicalSection()}</div>`;
+  }
+  /* Epic's own — Store Settings' regions plus the Base Product Offer. Its own
+     target rather than 'business' because Epic has no business questionnaire:
+     what the buy box on its page is missing is a region, a tier and a date. */
+  if (target === 'pricing') {
+    return `<div class="qs-section">${buildEgsRegionsPricingSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Languages" block (see
   // languagesHtml, buildSteamStorePreviewPrototypeSection) — the editable
@@ -9083,6 +9052,7 @@ function buildImproveSubmissionSection(platformId) {
   else if (isAndroid) state.androidSubmitAnswers.improveSubmissionSeen = true;
   else if (isMac)     state.macSubmitAnswers.improveSubmissionSeen     = true;
   else if (isMacFull) state.macFullSubmitAnswers.improveSubmissionSeen = true;
+  else if (platformId === 'egs') state.egsSubmitAnswers.improveSubmissionSeen = true;
   else                state.steamSubmitAnswers.improveSubmissionSeen   = true;
 
   const spi = state.storePageInsights;
@@ -13604,33 +13574,11 @@ function buildPrivacySection(pid = 'ios') {
           <span class="tooltip-icon">?</span>
           <span class="tooltip-body">${t('ios.privacy.url.tooltip') || 'Apple requires a live, reachable URL. A missing or broken link is an automatic rejection reason.'}</span>
         </span>
-      <!-- DEFERRED, NOT SYNCHRONOUS — AND THIS IS WHY THE FIRST CLICK DID NOTHING.
-           Jaco: "he tocado YES, NO, he dado a Done y no ha funcionado el primer
-           click… ¿puede ser porque estaba focused en el privacy policy?" Yes, and
-           the trace says it exactly: pointerdown and pointerup on YES, no click
-           event at all, and the answer unchanged.
-      
-           A click only exists when the down and the up share a target. Pressing any
-           other control blurs this field, the blur rebuilt the whole modal
-           SYNCHRONOUSLY, and the button the mousedown landed on was gone before the
-           mouseup — so the browser had nothing to fire a click on. The step ate the
-           first press after anyone typed a URL.
-      
-           _deferredRerenderStepModal is the door this app already built for it: it
-           holds the rebuild while a gesture is in flight and flushes on pointerup
-           behind a setTimeout(0), which lands after the click. Same bug and same fix
-           as the Mac preview inline editors; these four fields were the family that
-           never got it.
-      
-           No backticks in here: this comment sits INSIDE a template literal, and one
-           backtick ends the string and turns the next word into an identifier — the
-           failure this repo already recorded once, which parses clean until it does
-           not. -->
       </label>
       <input class="form-input" type="url" id="${pid}-privacy-url" value="${a.privacyPolicyUrl}"
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
-             onblur="_deferredRerenderStepModal()">
+             onblur="reRenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
     ${collectBlock}`;
@@ -14368,35 +14316,21 @@ function buildContentRatingSection(pid = 'ios') {
     }).length, 0);
 
   const crAllPillHtml = `<span class="cr-inferred-all-word">All</span>`;
-  /* TWO KINDS OF SENTENCE, NAMED. One of these is a STATUS about the step —
-     how many are answered, how many Shipmate inferred — and one is an
-     INSTRUCTION about the toggle sitting next to it, pill and all. They were
-     both plain `.cr-inferred-row`s, so whatever moved one moved the other:
-     Jaco, on the panel carrying both, "hemos movido el texto de Click All to…
-     que quizás debería mantenerse en la barra pinned."
-
-     Right, and it is this file's own rule about where a control's own words
-     live: the toggle stayed in the modal, so an instruction for pressing it
-     cannot be in a column 300px away. `.cr-inferred-status` is what the guide
-     panel copies; `.cr-inferred-howto` is what stays beside the control it is
-     about. Every arm that does not move anything sees them as one block, which
-     is what they were. */
-  const _crStatus = html => `<div class="cr-inferred-row cr-inferred-status">${html}</div>`;
   const inferredText = crInferredCount > 0
     ? (showAll
-        ? _crStatus(t('cr.showing_all', { total: crTotalQuestions })
+        ? (t('cr.showing_all', { total: crTotalQuestions })
            || `All ${crTotalQuestions} questions from Apple's content questionnaire.`)
-        : _crStatus(
+        : `<div class="cr-inferred-row">${
              t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
                || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses.`
-           ) + `<div class="cr-inferred-row cr-inferred-howto">${
+           }</div><div class="cr-inferred-row">${
              t('cr.inferred_click_all', { allPill: crAllPillHtml })
                || `Click ${crAllPillHtml} to review before submitting.`
            }</div>`)
     : crUnanswered > 0
-      ? _crStatus(t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
+      ? (t('cr.left_to_answer', { count: crUnanswered, total: crTotalQuestions })
          || `${crUnanswered} of ${crTotalQuestions} still to answer.`)
-      : _crStatus(t('cr.all_answered', { total: crTotalQuestions })
+      : (t('cr.all_answered', { total: crTotalQuestions })
          || `All ${crTotalQuestions} answered.`);
   const inferredBanner = '';
 
@@ -14474,7 +14408,7 @@ function buildContentRatingSection(pid = 'ios') {
       <input class="form-input" type="url" value="${a.ageSuitabilityUrl}"
              placeholder="${t('ios.age.suitability.placeholder') || 'https://yourgame.com/age-suitability'}"
              oninput="updateIOSTextField('ageSuitabilityUrl', this.value)"
-             onblur="_deferredRerenderStepModal()">
+             onblur="reRenderStepModal()">
     </div>`}`;
 
   /* THE FILTER AND ITS SENTENCE STAY ON SCREEN. Both are controls for the list
@@ -14538,7 +14472,7 @@ function buildExportComplianceSection(pid = 'ios') {
               <label class="form-label">${t('ios.export.ern.label') || 'ERN Number'}</label>
               <input class="form-input" type="text" value="${a.ernNumber}" placeholder="${t('ios.export.ern.placeholder') || 'ENC-XXXXXXXX'}"
                      oninput="updateIOSTextField('ernNumber', this.value)"
-                     onblur="_deferredRerenderStepModal()">
+                     onblur="reRenderStepModal()">
             </div>` : ''}
           ${a.hasERN === 'no' ? '<div class="ios-risk-note risk-HIGH">An ERN is required before submitting apps with non-exempt encryption. Apply at bis.doc.gov.</div>' : ''}
         </div>` : ''}
@@ -18192,6 +18126,332 @@ function buildAndroidLocalizationsSection() {
   );
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EPIC GAMES STORE — STEP SECTIONS  (v7.30)
+   ══════════════════════════════════════════════════════════════════════════
+   Built against Epic's published flow rather than invented. Their Get Started
+   breaks the work into lettered sub-steps under "Publish Your Product Home
+   Page" and "Finalize and Test Configurations" — Store Settings (Product
+   Configuration, Regions and Ratings), Base Product Offer, Offer Dates,
+   Product Home Page, Binaries and Artifacts, Optional: Localize — and the
+   Requirements & Guidelines section adds the technical ones. The three
+   builders below are the two of those that are Epic's own; Content Rating is
+   not here, because it is IARC and Google Play already draws it (see the
+   'egs' arm in _stepBodyFor). */
+
+const EGS_REGION_GROUPS = [
+  { id: 'na',   label: 'North America' },
+  { id: 'eu',   label: 'Europe' },
+  { id: 'uk',   label: 'United Kingdom' },
+  { id: 'latam',label: 'Latin America' },
+  { id: 'apac', label: 'Asia-Pacific' },
+  { id: 'kr',   label: 'South Korea' },
+  { id: 'jp',   label: 'Japan' },
+  { id: 'cn',   label: 'Mainland China' },
+  { id: 'mena', label: 'Middle East & North Africa' },
+];
+
+/* Epic publishes tiers rather than free-form prices, so this is a picker and
+   not a number field. The set is deliberately short and round — the real
+   ladder is long, and a prototype that lists forty tiers is asking the
+   developer to scroll rather than to decide. Custom tiers exist on Epic's side
+   (Create Custom Price Tiers) and are reachable here as the last option. */
+const EGS_PRICE_TIERS = ['$4.99', '$9.99', '$14.99', '$19.99', '$24.99', '$29.99',
+                         '$39.99', '$49.99', '$59.99', '$69.99', 'Custom tier'];
+
+function buildEgsRegionsPricingSection() {
+  const a = state.egsSubmitAnswers;
+
+  const distHtml = singleSelectRow(
+    'Distribution',
+    a.distribution,
+    [{ value: 'worldwide', label: 'Worldwide', onSelect: `answerEgsField('distribution','worldwide')` },
+     { value: 'select',    label: 'Selected regions', onSelect: `answerEgsField('distribution','select')` }],
+    'Epic asks which regions your product is sold in when you configure Store Settings. Worldwide is every region Epic operates in; Selected regions lets you exclude individual ones.');
+
+  /* The exclusion list only exists once "Selected regions" is the answer —
+     the same reveal-on-answer pattern Steam's multiplayer breakdown uses. A
+     region list shown under "Worldwide" would be a control with nothing to do. */
+  const regionsHtml = a.distribution === 'select' ? `
+    <div class="ios-content-step-label">Exclude from</div>
+    <div class="cq-check-list">
+      ${EGS_REGION_GROUPS.map(r => `
+        <label class="cq-check-row">
+          <input type="checkbox" ${a.excludedRegions.includes(r.id) ? 'checked' : ''}
+                 onchange="toggleEgsRegion('${r.id}', this.checked)">
+          <span>${escHtml(r.label)}</span>
+        </label>`).join('')}
+    </div>
+    ${a.excludedRegions.length === 0
+      ? `<div class="steam-spp-muted" style="margin-top:6px;">Select at least one region to exclude, or switch back to Worldwide.</div>` : ''}
+    <div class="ios-q-divider"></div>` : '';
+
+  /* KOREA IS ITS OWN QUESTION BECAUSE EPIC MAKES IT ONE. Their Ratings and
+     Content Guidelines carry a separate "Distribution in Korea" page: the GRAC
+     requires its own rating, which IARC does not issue, so shipping there is a
+     decision with paperwork attached rather than a tick on a region list. */
+  const koreaHtml = ynRow(
+    'Distributing in South Korea',
+    a.korea,
+    `answerEgsField('korea','yes')`,
+    `answerEgsField('korea','no')`,
+    'South Korea requires a Game Rating and Administration Committee (GRAC) rating, which IARC does not issue. Epic documents this separately from the rest of your regions.');
+
+  const priceHtml = singleSelectRow(
+    'Price model',
+    a.priceModel,
+    [{ value: 'paid', label: 'Paid',      onSelect: `answerEgsField('priceModel','paid')` },
+     { value: 'free', label: 'Free',      onSelect: `answerEgsField('priceModel','free')` }],
+    "Epic's Base Product Offer is either free or set to a price tier. Custom regional tiers can be created in the Developer Portal.");
+
+  const tierHtml = a.priceModel === 'paid' ? `
+    <div class="ios-q-row" data-answered="${a.priceTier.trim() ? '1' : '0'}">
+      <div class="ios-q-left"><div class="ios-q-label">Price tier</div></div>
+      ${swSelect('egs-tier', a.priceTier || null,
+        EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
+        'answerEgsTier', '180px', 'right', 'Select tier')}
+    </div>` : '';
+
+  /* Epic's "Offer Dates" sub-step, which is the offer's own start date and not
+     the same thing as the build going live — a product can be purchasable
+     before, at, or after the moment its artifact is released. */
+  const dateHtml = `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Release date <span style="color:#e0555a;">*</span></label>
+      <input type="date" class="form-input${a.releaseDate.trim() ? ' is-complete' : ''}"
+             value="${escHtml(a.releaseDate)}"
+             onchange="answerEgsTextField('releaseDate', this.value)">
+      <div class="form-hint">The start date on your Base Product Offer. Epic calls this the offer's date rather than the build's.</div>
+    </div>`;
+
+  return `
+    <div class="ios-section-head">Regions &amp; Pricing</div>
+    <p class="ios-section-desc">Epic's Store Settings and Base Product Offer: where the product is sold, what it costs, and when the offer starts. Set in the Developer Portal under Store Presence.</p>
+    ${distHtml}
+    ${regionsHtml}
+    ${koreaHtml}
+    <div class="ios-q-divider"></div>
+    ${priceHtml}
+    ${tierHtml}
+    <div class="ios-q-divider"></div>
+    ${dateHtml}`;
+}
+
+/* Epic's Store Requirements Overview, as questions. Four of them, each one a
+   requirement Epic states rather than a preference: patch notes are required
+   on update, cross-platform multiplayer for PC has its own guidelines page,
+   Achievements are a documented store feature, and the EOS overlay is what
+   their Testing Guide checks. */
+function buildEgsTechnicalSection() {
+  const a = state.egsSubmitAnswers;
+
+  const crossHtml = singleSelectRow(
+    'Cross-platform multiplayer (PC)',
+    a.crossPlatformMultiplayer,
+    [{ value: 'yes',           label: 'Supported',    onSelect: `answerEgsField('crossPlatformMultiplayer','yes')` },
+     { value: 'no',            label: 'Not yet',      onSelect: `answerEgsField('crossPlatformMultiplayer','no')` },
+     { value: 'noMultiplayer', label: 'No multiplayer', onSelect: `answerEgsField('crossPlatformMultiplayer','noMultiplayer')` }],
+    "Epic asks that PC multiplayer titles let Epic Games Store players play with players who bought the game on other PC stores. Their Cross-Platform Multiplayer Guidelines page sets out what qualifies.");
+
+  return `
+    <div class="ios-section-head">Technical Requirements</div>
+    <p class="ios-section-desc">Epic's distribution requirements for the build itself. The Epic Games Store team confirms these when you submit for review.</p>
+    ${crossHtml}
+    <div class="ios-q-divider"></div>
+    ${ynRow('Epic Games Store Achievements',
+        a.achievements,
+        `answerEgsField('achievements','yes')`,
+        `answerEgsField('achievements','no')`,
+        'Epic Games Store Achievements are configured through Epic Online Services. Declaring none is a valid answer; declaring some means they must be live at launch.')}
+    ${ynRow('Patch notes prepared',
+        a.patchNotes,
+        `answerEgsField('patchNotes','yes')`,
+        `answerEgsField('patchNotes','no')`,
+        'Epic requires patch notes with product updates, and documents what they must contain. A launch build still needs the first set written.')}
+    ${ynRow('Epic Online Services overlay integrated',
+        a.eosOverlay,
+        `answerEgsField('eosOverlay','yes')`,
+        `answerEgsField('eosOverlay','no')`,
+        "The EOS overlay is what Epic's own Testing Guide exercises. Integrating it is how features such as the in-game store and social panel reach your players.")}`;
+}
+
+function buildEgsLocalizationsSection() {
+  return buildStepStubSection(
+    'Localizations',
+    'Epic lets you localize your store presence per language — product name, descriptions, and the artwork on your product page — under Localize Store Presence. Reviewing those translations will happen here. Nothing is required of you yet.'
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EPIC GAMES STORE — STORE PAGE PREVIEW  (v7.30)
+   ══════════════════════════════════════════════════════════════════════════
+   Epic's "Product Home Page", drawn as the page rather than described as a
+   form. Same argument the Steam prototype and the two Apple previews are
+   written under: a store listing is a PICTURE, and the only honest way to ask
+   "is this ready" is to show the developer the thing their players will see
+   with the gaps still in it.
+
+   EVERY BLOCK IS A DOOR. Press the buy box and you land in Regions & Pricing;
+   press the ratings block and you land in the IARC questionnaire; press the
+   media strip and you land in the Media Carousel. That is what
+   `openStorePreviewSection(pid, target)` is for, and it is why this preview
+   costs no extra navigation — the page is its own table of contents.
+
+   WHAT IS EMPTY SAYS SO. `egs-spp-glow-empty` is the same treatment Steam's
+   prototype uses: a block with nothing in it glows rather than collapsing, so
+   a half-finished page reads as half-finished instead of as a shorter page. */
+function buildEgsStorePreviewSection() {
+  const fd   = state.formData || {};
+  const ws   = state.webSite || {};
+  const a    = state.egsSubmitAnswers;
+  const pool = (typeof smPool === 'function') ? smPool() : [];
+
+  const title      = (fd.title || '').trim();
+  const desc       = (fd.description || '').trim();
+  const developer  = (ws.developer || '').trim();
+  const publisher  = (ws.publisher || developer || '').trim();
+  const genres     = (ws.genres || '').trim();
+
+  const keyArt = pool.find(x => x.kind === 'art-land' && x.src)
+              || pool.find(x => x.kind === 'screenshot' && x.src) || null;
+  const shots  = (typeof platformStoreShots === 'function') ? platformStoreShots('egs') : [];
+
+  /* THE RATING SHOWN IS THE ONE THE QUESTIONNAIRE HAS EARNED, not a guess and
+     not a placeholder that looks like an answer. IARC issues per-territory
+     marks and Shipmate does not compute them, so while the tree is unfinished
+     this says how much of it is left — a number the developer can act on —
+     and once it is finished it says the questionnaire is complete and the
+     boards will issue. Inventing an ESRB letter here would be inventing the
+     one thing on this page nobody may invent. */
+  const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
+  const ratingDone = cq.total > 0 && cq.answered === cq.total;
+  const ratingHtml = `
+    <div class="egs-spp-block egs-spp-rating${ratingDone ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStorePreviewSection('egs','content')">
+      <div class="egs-spp-h2">Age Rating</div>
+      <div class="egs-spp-rating-row">
+        <div class="egs-spp-rating-badge${ratingDone ? ' is-done' : ''}">IARC</div>
+        <div class="egs-spp-rating-text">
+          ${ratingDone
+            ? `<b>Questionnaire complete.</b><span>Ratings boards issue their own marks from these answers.</span>`
+            : `<b>${cq.total - cq.answered} question${cq.total - cq.answered === 1 ? '' : 's'} left.</b><span>Epic uses the IARC questionnaire — the same one Google Play asks.</span>`}
+        </div>
+      </div>
+    </div>`;
+
+  /* The buy box. Epic's Base Product Offer decides all three things in it —
+     whether there is a price at all, which tier, and the date the offer
+     starts — so the whole box is one door into Regions & Pricing. */
+  const priceSet = a.priceModel === 'free' || (a.priceModel === 'paid' && a.priceTier.trim());
+  const priceLabel = a.priceModel === 'free' ? 'Free'
+                   : a.priceTier.trim() ? escHtml(a.priceTier)
+                   : '<span class="egs-spp-placeholder">Price not set</span>';
+  const dateLabel = a.releaseDate.trim() ? escHtml(a.releaseDate) : (ws.releaseDate || 'Coming soon');
+  const regionLabel = a.distribution === 'worldwide' ? 'Worldwide'
+                    : a.distribution === 'select'
+                      ? `${EGS_REGION_GROUPS.length - a.excludedRegions.length} of ${EGS_REGION_GROUPS.length} regions`
+                      : '<span class="egs-spp-placeholder">Regions not set</span>';
+
+  const buyHtml = `
+    <div class="egs-spp-buy${priceSet ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStorePreviewSection('egs','pricing')">
+      <div class="egs-spp-buy-price">${priceLabel}</div>
+      <button class="egs-spp-btn" type="button">Get</button>
+      <div class="egs-spp-buy-meta">
+        <div><span>Release</span><b>${dateLabel}</b></div>
+        <div><span>Availability</span><b>${regionLabel}</b></div>
+      </div>
+    </div>`;
+
+  /* The media strip, which on Epic's page is the largest thing above the fold.
+     It borrows the pool rather than a listing of its own so a developer who
+     has already chosen screenshots for another store does not choose them
+     twice — the same well every other preview reads. */
+  const heroSrc = keyArt ? keyArt.src : '';
+  const stripHtml = shots.length
+    ? shots.slice(0, 5).map(sh => `<div class="egs-spp-thumb"><img src="${escHtml(_screenshotSrc(sh) || sh.src || '')}" alt=""></div>`).join('')
+    : '';
+  const mediaHtml = `
+    <div class="egs-spp-media${(heroSrc || shots.length) ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStorePreviewSection('egs','screenshots')">
+      <div class="egs-spp-hero">
+        ${heroSrc
+          ? `<img src="${escHtml(heroSrc)}" alt="">`
+          : `<div class="egs-spp-hero-empty">Key art and screenshots appear here</div>`}
+      </div>
+      ${stripHtml ? `<div class="egs-spp-strip">${stripHtml}</div>` : ''}
+    </div>`;
+
+  const aboutHtml = `
+    <div class="egs-spp-block${desc ? '' : ' egs-spp-glow-empty'}">
+      <div class="egs-spp-h2">About</div>
+      <p class="egs-spp-p">${desc
+        ? escHtml(desc)
+        : '<span class="egs-spp-placeholder">Your description appears here once it is filled in under Game Details.</span>'}</p>
+    </div>`;
+
+  const techDone = a.crossPlatformMultiplayer !== null && a.achievements !== null
+                && a.patchNotes !== null && a.eosOverlay !== null;
+  const specRow = (label, value) => `<div class="egs-spp-spec-row"><span>${label}</span><b>${value}</b></div>`;
+  const yn = v => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '<span class="egs-spp-placeholder">—</span>';
+  const techHtml = `
+    <div class="egs-spp-block egs-spp-specs${techDone ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStorePreviewSection('egs','technical')">
+      <div class="egs-spp-h2">Technical</div>
+      ${specRow('Cross-platform multiplayer',
+          a.crossPlatformMultiplayer === 'yes' ? 'Supported'
+        : a.crossPlatformMultiplayer === 'no' ? 'Not yet'
+        : a.crossPlatformMultiplayer === 'noMultiplayer' ? 'Single-player'
+        : '<span class="egs-spp-placeholder">—</span>')}
+      ${specRow('Achievements', yn(a.achievements))}
+      ${specRow('Patch notes', yn(a.patchNotes))}
+      ${specRow('EOS overlay', yn(a.eosOverlay))}
+    </div>`;
+
+  /* The bar at the top, which is the Apple previews' idea and earns its place
+     here for the same reason: the page shows you what is missing only where
+     the missing thing would have been, and a required element with no block of
+     its own (a title, say) has nowhere to glow. */
+  const elements = [
+    { label: 'Title',        done: !!title },
+    { label: 'Description',  done: !!desc },
+    { label: 'Media',        done: shots.length > 0 },
+    { label: 'Age Rating',   done: ratingDone },
+    { label: 'Pricing',      done: isEgsSectionComplete('regionsPricing') },
+    { label: 'Technical',    done: techDone },
+  ];
+  const barHtml = `
+    <div class="egs-spp-bar">
+      ${elements.map(e => `<span class="egs-spp-pill${e.done ? ' is-done' : ''}">${e.done ? smCheckSVG(11) : ''}${e.label}</span>`).join('')}
+    </div>`;
+
+  /* NO SECTION HEADING. The step modal's own header already says "Store Page
+     Preview" two lines above, and a preview that repeats its own name is one
+     more row between the developer and the page they came to look at. */
+  return `
+    <p class="ios-section-desc" style="margin-top:0;">Your Epic Games Store product page as players will see it. Press any block to fill in what it needs.</p>
+    ${barHtml}
+    <div class="egs-spp">
+      ${mediaHtml}
+      <div class="egs-spp-head">
+        <div class="egs-spp-titlewrap">
+          <div class="egs-spp-title${title ? '' : ' egs-spp-glow-empty'}">${title || '<span class="egs-spp-placeholder">Untitled</span>'}</div>
+          <div class="egs-spp-byline">
+            ${developer ? `<span><span>Developer</span><b>${escHtml(developer)}</b></span>` : ''}
+            ${publisher ? `<span><span>Publisher</span><b>${escHtml(publisher)}</b></span>` : ''}
+            ${genres ? `<span><span>Genres</span><b>${escHtml(genres)}</b></span>` : ''}
+          </div>
+        </div>
+        ${buyHtml}
+      </div>
+      ${aboutHtml}
+      ${ratingHtml}
+      ${techHtml}
+    </div>`;
+}
+
 /* Android Store Listing — review metadata */
 function buildAndroidBusinessSection() {
   const fd      = state.formData;
@@ -18434,7 +18694,7 @@ function buildAndroidDataSafetySection() {
              value="${escHtml(privUrl)}"
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
-             onblur="_deferredRerenderStepModal()">
+             onblur="reRenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsOrSharesData === null ? androidYNRow('Collects or shares user data', 'collectsOrSharesData',
@@ -18542,6 +18802,62 @@ function buildAndroidDataMatrix(a) {
 /* ═══════════════════════════════════════════════════
    STEAM STEP SECTIONS
    ═══════════════════════════════════════════════════ */
+
+/* EPIC'S CARD IS GOOGLE PLAY'S CARD (v7.30), down to the inline Upload Build
+   row and the appended Submit step. It is a separate function rather than a
+   fourth `pid ===` arm inside buildAndroidActiveCard for the reason the other
+   three are separate: the only line that differs is which completeness
+   function it asks, and a shared builder taking that as an argument would be
+   one indirection standing in for one word. */
+function buildEgsActiveCard(pid, force) {
+  if (!force && showAccountFace(pid)) return buildAccountCard(pid);
+  if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
+  const p      = PLATFORMS[pid];
+  const steps  = _visiblePlatformSteps(pid);
+  const counts = platformStepCount(pid);
+  const locked = !counts.allRequired;
+  const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+  const checkSVG = smCheckSVG(20);
+  const binProc  = !!(state.platformBuildProcessing?.[pid]);
+
+  const stepCards = steps.map((step, i) => {
+    const done     = isEgsSectionComplete(step.id);
+    const numClass = 'ios-step-num' + (done ? ' is-done' : '');
+
+    if (step.id === 'uploadBuild') {
+      return `
+        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="egs-step-card-${step.id}">
+          <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+          <div class="ios-step-info">
+            <div class="ios-step-name">${stepLabel(pid, step)}</div>
+          </div>
+          ${buildBuildDropdown(pid)}
+        </div>`;
+    }
+
+    const trailingEl = (step.id === 'improveSubmission' && binProc)
+      ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
+      : SM_STEP_CHEVRON;
+    return `
+      <div class="ios-step-card ${done ? 'is-complete' : ''}" id="egs-step-card-${step.id}"
+           onclick="openStepModal('${pid}','${step.id}')">
+        <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+        <div class="ios-step-info">
+          <div class="ios-step-name">${stepLabel(pid, step)}</div>
+        </div>
+        ${trailingEl}
+      </div>`;
+  }).join('');
+
+  const submitStepCard = buildSubmitStepCard(pid, steps.length, locked, submitDone);
+
+  return `
+    <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
+      ${platformCardHead(pid, 'steps')}
+      ${buildReleasePills(pid)}
+      <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
+    </div>`;
+}
 
 function buildSteamActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
@@ -20209,37 +20525,13 @@ function buildBuildDropdown(pid, inModal) {
   const spinHTML   = `<span class="build-proc-spin" style="flex-shrink:0;"></span>`;
 
   if (processing) {
-    /* A UPF build in flight prints the agent's own line (upf.js) instead of
-       the fake "Analyzing…": the pill is the only place the progress shows. */
-    const upfJob = !!(typeof UPF !== 'undefined' && UPF.isMac(pid) && state.upf?.job);
-    const upfLine = (upfJob && state.upf.progress) ? state.upf.progress : '';
-    /* While a UPF run is up the pill is the way BACK into the status modal —
-       closing the modal must not strand the run (Mark, v7.45). */
-    const open = upfJob ? ` onclick="event.stopPropagation();openStepModal('${pid}','uploadBuild')" data-tip="Building from Steam — open the status"` : '';
     return `
-      <div class="build-pill is-processing${upfJob ? ' is-upf' : ''}"${open}${upfJob ? '' : ' title="Analyzing binary…"'}>
+      <div class="build-pill is-processing" title="Analyzing binary…">
         ${spinHTML}
-        <span class="build-pill-label">${escHtml(upfLine || 'Analyzing…')}</span>
+        <span class="build-pill-label">Analyzing…</span>
       </div>`;
   }
   const noBuild = !build;
-  /* BUILD FROM STEAM (v7.42, upf.js). When the local UPF agent is running and
-     this project's Steam title is installed in the Steam library, the Upload
-     Build pill IS "Build from Steam" — same pill, same slot, one control — and
-     pressing it opens the step's modal, where the transformations are listed,
-     the build is confirmed, and the run is watched (upfBuildPanelHTML). Mark:
-     "replace the Upload Build button on the step with Build from Steam.
-     Clicking that opens a modal with steps, a confirmation dialog, and then a
-     running status." Without the agent, or once a build is in, the pill is the
-     file pill it always was. */
-  if (noBuild && typeof UPF !== 'undefined' && UPF.ready(pid)) {
-    return `
-    <div class="build-pill no-build is-upf" onclick="event.stopPropagation();openStepModal('${pid}','uploadBuild')"
-         data-tip="${escHtml(UPF.summary() || 'Build the Mac App Store version from the Steam build on this Mac')}">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M4 17l6-6M14 4l6 6-8 8-6-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span class="build-pill-label">Build from Steam</span>
-    </div>`;
-  }
   /* THE TOOLTIP IS THE HINT, WHICH IS AN INSTRUCTION RATHER THAN A FORMAT LIST.
      It read "Upload build — accepts .pkg or .zip", i.e. what the control will
      swallow — and `hint`'s own note in state.js is explicit that this is the
@@ -20254,7 +20546,7 @@ function buildBuildDropdown(pid, inModal) {
      replacing it means exporting another. `accept` is unchanged and still
      filters the dialog — what we recommend and what we permit are two different
      things, which is that note's other half. */
-  const uploadPill = `
+  return `
     <div class="build-pill ${noBuild ? 'no-build' : 'has-build'}"
          onclick="event.stopPropagation();document.getElementById('${inputId}').click()" title="${escHtml(fmt.hint)}">
       <input type="file" id="${inputId}" accept="${accept}" hidden
@@ -20262,7 +20554,6 @@ function buildBuildDropdown(pid, inModal) {
       ${noBuild ? uploadSVG : checkSVG}
       <span class="build-pill-label">${noBuild ? 'Upload Build' : escHtml(build.name)}</span>
     </div>`;
-  return uploadPill;
 }
 
 /* ══════════════════════════════════════════════════════

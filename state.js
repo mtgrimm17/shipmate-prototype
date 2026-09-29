@@ -1015,16 +1015,41 @@ const PLATFORMS = {
   // existing Set rather than adding a parallel comingSoon field here, since
   // it's already the single source of truth two other call sites (auto-
   // activation from a title-search picklist match) filter against.
+  /* ── EPIC GAMES STORE, BUILT OUT (v7.30) ───────────────────────────────
+     What was here was the placeholder every not-yet-real platform gets:
+     "Review Store Listing", "Confirm Media & Key Art", "Ratings (IARC)",
+     "Release Settings" — four rows invented to look like a checklist, none of
+     which corresponds to anything in Epic's Developer Portal.
+
+     THESE ONES DO. Read off Epic's own published flow rather than guessed:
+     their Get Started is five steps (Onboarding, Publish Your Product Home
+     Page, Finalize and Test Configurations, Submit for Final Review, Release),
+     and steps 2 and 3 break down into the lettered sub-steps this list is
+     built from — "Store Settings: Product Configuration, Regions and Ratings",
+     "Base Product Offer", "Offer Dates", "Product Home Page", "Binaries and
+     Artifacts", "Optional: Localize". The Store Presence section names the
+     same surfaces again (Configure Store Settings, Manage Regions & Ratings,
+     Manage Offers, Manage Pages, Manage Artifacts, Localize Store Presence),
+     and Requirements & Guidelines adds the technical ones: patch notes,
+     cross-platform multiplayer for PC, Epic Games Store Achievements.
+
+     ORDERED THE WAY EPIC ORDERS THEM — binary, then what the store needs to
+     know about it, then the page, then review — rather than alphabetically or
+     by how much work each is. Onboarding is not a row for the same reason it
+     is not one on any other card: connecting the account lives on the gear
+     (see "THE UNNUMBERED STEP" below), and Submit is appended by
+     buildSubmitStepCard, not listed here — the same shape Google Play, the App
+     Store and Steam already have. */
   egs: {
     id: 'egs', label: 'Epic Games Store', color: '#313131',
     steps: [
-      { id: 'reviewStoreListing', label: 'Review Store Listing' },
-      { id: 'confirmMedia',       label: 'Confirm Media & Key Art' },
-      { id: 'ratings',            label: 'Ratings (IARC)' },
-      { id: 'releaseSettings',    label: 'Release Settings' },
-      { id: 'storePreview',       label: 'Store Page Preview' },
-      { id: 'reviewSubmission',   label: 'Review Submission',     isReview: true },
-      { id: 'submit',             label: 'Submit',                isSubmit: true },
+      { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
+      { id: 'regionsPricing',    label: 'Regions & Pricing'                            },
+      { id: 'technical',         label: 'Technical Requirements'                       },
+      { id: 'localizations',     label: 'Localizations'                                },
+      { id: 'storePreview',      label: 'Store Page Preview'                           },
+      { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
   psn: {
@@ -1305,6 +1330,7 @@ function _markStepVisited(pid, stepId) {
     else if (pid === 'macos_full') state.macFullStorePreviewSeen = true;
     else if (pid === 'ios')        state.iosStorePreviewSeen     = true;
     else if (pid === 'android')    state.androidSubmitAnswers.storePreviewSeen = true;
+    else if (pid === 'egs')        state.egsSubmitAnswers.storePreviewSeen     = true;
   }
   if (stepId === 'storePreviewPrototype' && pid === 'steam') {
     state.steamSubmitAnswers.storePreviewPrototypeSeen = true;
@@ -1314,6 +1340,7 @@ function _markStepVisited(pid, stepId) {
     else if (pid === 'macos_full') state.macFullLocalizationsSeen = true;
     else if (pid === 'android')    state.androidSubmitAnswers.localizationsSeen = true;
     else if (pid === 'steam')      state.steamSubmitAnswers.localizationsSeen   = true;
+    else if (pid === 'egs')        state.egsSubmitAnswers.localizationsSeen     = true;
     else                           state.iosLocalizationsSeen     = true;
   }
   if (stepId === 'dataSafety' && pid === 'steam') {
@@ -1460,6 +1487,7 @@ function stepVisitSatisfied(pid, stepId) {
 }
 
 function _platformAnswersComplete(pid, stepId) {
+  if (pid === 'egs')        return isEgsSectionComplete(stepId);
   if (pid === 'android')    return isAndroidSectionComplete(stepId);
   if (pid === 'steam')      return isSteamSectionComplete(stepId);
   if (pid === 'macos_full') return isMacFullSectionComplete(stepId);
@@ -1541,6 +1569,15 @@ function platformStepCount(platformId) {
     const complete = p.steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     return { total: p.steps.length, complete, submitDone: false,
              allRequired: complete === p.steps.length && platformAccountReady(platformId) };
+  }
+  // Epic Games Store: same shape as Google Play and Steam below — completion
+  // comes from its own answers (and, for Content Rating, from the shared IARC
+  // tree), never from platformStepStatus, which nothing sets for its steps.
+  if (platformId === 'egs') {
+    const steps = _visiblePlatformSteps(platformId);
+    const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
+    return { total: steps.length, complete, submitDone: false,
+             allRequired: complete === steps.length && platformAccountReady(platformId) };
   }
   // Steam: completion is computed from steamSubmitAnswers
   if (platformId === 'steam') {
@@ -2757,6 +2794,90 @@ function makeBlankAndroidAnswers() {
     // Improve Your Submission — marks complete on first view
     improveSubmissionSeen:    false,
   };
+}
+
+/* ── EPIC GAMES STORE ANSWERS (v7.30) ──────────────────────────────────────
+   Small on purpose. Epic's Content Rating is not here at all — it is IARC, the
+   same questionnaire Google Play asks, and `state.cqAnswers` already holds it
+   for the whole project rather than per platform. See isEgsSectionComplete's
+   contentRating arm for why that sharing is the correct model and not a
+   shortcut.
+
+   Regions & Pricing and Technical Requirements are Epic's own, so they live
+   here. The two `*Seen` flags are the visit-based stubs Google Play and Steam
+   already use for the same two steps. */
+function makeBlankEgsAnswers() {
+  return {
+    // Regions & Pricing — Store Settings: Regions, and the Base Product Offer
+    distribution:          null,   // 'worldwide' / 'select'
+    excludedRegions:       [],     // ISO-ish region ids when distribution === 'select'
+    korea:                 null,   // 'yes' / 'no' — Epic documents Korea separately (GRAC)
+    priceModel:            null,   // 'paid' / 'free'
+    priceTier:             '',     // the tier label, or a custom tier's name
+    releaseDate:           '',     // the offer's start date
+    // Technical Requirements — Epic's own distribution requirements
+    crossPlatformMultiplayer: null, // 'yes' / 'no' / 'noMultiplayer'
+    achievements:          null,   // 'yes' / 'no'
+    patchNotes:            null,   // 'yes' / 'no'
+    eosOverlay:            null,   // 'yes' / 'no'
+    // Store Preview
+    storePreviewSeen:      false,
+    // Stubs, complete on first view — the same treatment Google Play's and
+    // Steam's Localizations rows get, and for the same reason.
+    localizationsSeen:     false,
+    improveSubmissionSeen: false,
+  };
+}
+
+function isEgsSectionComplete(sectionId) {
+  if (sectionId === 'uploadBuild') return _uploadBuildComplete('egs');
+
+  /* ONE IARC QUESTIONNAIRE, TWO STOREFRONTS, and that is how IARC actually
+     works rather than a convenience. A developer fills in the International
+     Age Rating Coalition questionnaire ONCE and the coalition issues ratings
+     for each participating storefront's own board from those same answers —
+     which is why Epic's own docs point at IARC rather than defining a
+     questionnaire of their own. `state.cqAnswers` was already global (it was
+     never namespaced per platform), so this arm is literally Google Play's,
+     and answering either card completes both. */
+  if (sectionId === 'contentRating') {
+    const { total, answered } = androidCqProgress();
+    return total > 0 && answered === total;
+  }
+
+  const a = state.egsSubmitAnswers;
+  if (sectionId === 'regionsPricing') {
+    if (a.distribution === null) return false;
+    if (a.distribution === 'select' && !a.excludedRegions.length) return false;
+    if (a.korea === null) return false;
+    if (a.priceModel === null) return false;
+    if (a.priceModel === 'paid' && !a.priceTier.trim()) return false;
+    return !!a.releaseDate.trim();
+  }
+  if (sectionId === 'technical') {
+    return a.crossPlatformMultiplayer !== null
+        && a.achievements !== null
+        && a.patchNotes !== null
+        && a.eosOverlay !== null;
+  }
+  if (sectionId === 'localizations')     return !!a.localizationsSeen;
+  if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
+
+  if (sectionId === 'screenshots') {
+    if (typeof platformStoreShots === 'function') return platformStoreShots('egs').length > 0;
+    const ps = state.platformScreenshots?.egs;
+    return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
+  }
+
+  /* The page is done when everything it PRINTS is done — the same roll-up
+     Google Play's own storePreview arm makes, over Epic's fields instead. */
+  if (sectionId === 'storePreview') {
+    return isEgsSectionComplete('contentRating')
+        && isEgsSectionComplete('regionsPricing')
+        && isEgsSectionComplete('technical')
+        && isEgsSectionComplete('screenshots');
+  }
+  return false;
 }
 
 /* Progress for Android's Google Play Content Questions (IARC tree).
@@ -4480,6 +4601,11 @@ const state = {
 
   // Steam submission questionnaire answers
   steamSubmitAnswers: makeBlankSteamAnswers(),
+
+  // Epic Games Store submission answers. Content Rating is NOT here — it is
+  // IARC, shared with Google Play through state.cqAnswers (see
+  // isEgsSectionComplete).
+  egsSubmitAnswers: makeBlankEgsAnswers(),
 
   // Per-field AI inference metadata for Steam (mirrors iosAnswerMeta)
   steamAnswerMeta: {},
