@@ -258,20 +258,30 @@ async function upfBuildAndUpload(pid) {
        exempt default (false), which is also what the pre-fill says. */
     const enc = UPF.encryptionAnswer(pid);
     const target = { version: state.formData?.version || undefined, usesNonExemptEncryption: enc === null ? false : enc };
-    const p = await UPF._post('/prepare', { game: game.app, target, achievements: UPF.achievementsForBuild(pid) });
-    state.upf.job = { id: p.job, kind: 'prepare' };
-    const prep = await UPF.waitJob(p.job, onLine);
+    /* ONE JOB ON THE AGENT for prepare AND upload. The chain used to live here,
+       in the page — so closing or reloading it after prepare meant nothing ever
+       started the upload. The agent owns the whole run now; the page only
+       watches, and can re-attach after a reload (upfReattach). */
+    const b = await UPF._post('/build', { game: game.app, target, achievements: UPF.achievementsForBuild(pid) });
+    state.upf.job = { id: b.job, kind: 'build' };
+    try { localStorage.setItem('upf.job', JSON.stringify({ id: b.job, pid, started: Date.now() })); } catch (_) {}
+    const res = await UPF.waitJob(b.job, onLine);
+    _upfFinish(pid, res, game);
+  } catch (e) {
+    _upfFail(pid, e);
+  }
+}
+
+/* The end of a run, from a live wait or a re-attach. */
+function _upfFinish(pid, res, game) {
+  try {
+    const prep = res && res.prepare;
+    const up = res && res.upload;
     if (!prep || prep.status !== 'ready') {
       const why = (prep && prep.blockers || []).map(b => b.message).join(' · ') || 'build did not reach ready';
       throw new Error(why);
     }
-    state.upf.progress = 'Uploading to App Store Connect…';
-    _upfRepaint(pid, false);
-    const u = await UPF._post('/upload', { game: game.app });
-    state.upf.job = { id: u.job, kind: 'upload' };
-    const up = await UPF.waitJob(u.job, onLine);
     if (!up || !up.ok) throw new Error((up && up.problems || []).join(' · ') || 'upload did not complete');
-
     const pkgPath = (prep.artifacts && prep.artifacts.pkg) || '';
     state.platformBuilds[pid] = {
       name: pkgPath.split('/').pop() || `${game.name}.pkg`,
@@ -287,17 +297,83 @@ async function upfBuildAndUpload(pid) {
     if (last && !last.end) last.end = Date.now();
     state.upf.result = { buildVersion: up.buildVersion, buildId: up.buildId, appId: up.appId };
     if (typeof bcToast === 'function') bcToast(`Mac App Store build ${up.buildVersion} is in App Store Connect (build ${up.buildId}).`);
+    _upfDone(pid);
   } catch (e) {
-    console.warn('[UPF] build failed', e);
-    state.upf.error = String(e.message || e);
-    state.upf.progress = '';
-    if (typeof bcToast === 'function') bcToast('Build from Steam failed: ' + state.upf.error.slice(0, 160));
-  } finally {
-    state.upf.job = null;
-    state.platformBuildProcessing[pid] = false;
-    _upfRepaint(pid, true);
+    _upfFail(pid, e);
   }
 }
+
+function _upfFail(pid, e) {
+  console.warn('[UPF] build failed', e);
+  state.upf.error = String((e && e.message) || e);
+  state.upf.progress = '';
+  if (typeof bcToast === 'function') bcToast('Build from Steam failed: ' + state.upf.error.slice(0, 160));
+  _upfDone(pid);
+}
+
+function _upfDone(pid) {
+  state.upf.job = null;
+  state.platformBuildProcessing = state.platformBuildProcessing || {};
+  state.platformBuildProcessing[pid] = false;
+  try { localStorage.removeItem('upf.job'); } catch (_) {}
+  _upfRepaint(pid, true);
+}
+
+/* RE-ATTACH AFTER A RELOAD. The agent owns the run, so a page that comes back
+   asks whether the job it started is still going (or has ended since) and
+   picks up watching it — stages, timers and the result — where it left off.
+   The job id is remembered in localStorage by upfBuildAndUpload; the agent's
+   /jobs list is the fallback when that is gone. */
+async function upfReattach() {
+  let remembered = null;
+  try { remembered = JSON.parse(localStorage.getItem('upf.job') || 'null'); } catch (_) {}
+  const h = await UPF.health();
+  if (!h) return;
+  let id = remembered && remembered.id, pid = remembered && remembered.pid;
+  if (!id) {
+    const list = await UPF._get('/jobs').catch(() => ({ jobs: [] }));
+    const j = (list.jobs || []).find(x => x.kind === 'build' && x.state === 'running');
+    if (!j) return;
+    id = j.id;
+    pid = UPF_MAC_PIDS.find(p => state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(p)) || 'macos';
+  }
+  let job;
+  try { job = await UPF._get('/jobs/' + id); } catch (_) { try { localStorage.removeItem('upf.job'); } catch (__) {} return; }
+  if (!job || !job.id) return;
+  // rebuild the watched state from the lines the agent kept
+  state.upf.lines = [];
+  state.upf.stage = 0;
+  state.upf.stages = [{ start: (remembered && remembered.started) || (Date.now() - (job.elapsed || 0) * 1000) }];
+  state.upf.uploadPct = 0;
+  state.upf.error = '';
+  state.upf.result = null;
+  state.upf.job = { id: job.id, kind: job.kind };
+  state.platformBuildProcessing = state.platformBuildProcessing || {};
+  state.platformBuildProcessing[pid] = true;
+  for (const l of job.lines || []) { state.upf.lines.push(l); _upfTrackLine(l); }
+  if (!state.upf.game) UPF.ensureMatch();
+  _upfRepaint(pid, true);
+  if (job.state === 'done') return _upfFinish(pid, job.result, state.upf.game || { name: 'Game' });
+  if (job.state === 'failed') return _upfFail(pid, new Error(job.error || 'agent job failed'));
+  _upfStartTicker();
+  let seen = (job.lines || []).length, lastPaint = 0;
+  try {
+    for (;;) {
+      const j = await UPF._get('/jobs/' + id);
+      for (const line of (j.lines || []).slice(seen)) {
+        const before = state.upf.stage;
+        state.upf.lines.push(line); _upfTrackLine(line);
+        if (state.upf.stage !== before || Date.now() - lastPaint > 2000) { lastPaint = Date.now(); _upfRepaint(pid, true); }
+      }
+      seen = (j.lines || []).length;
+      if (j.state === 'done') return _upfFinish(pid, j.result, state.upf.game || { name: 'Game' });
+      if (j.state === 'failed') return _upfFail(pid, new Error(j.error || 'agent job failed'));
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  } catch (e) { _upfFail(pid, e); }
+}
+
+setTimeout(() => { try { upfReattach(); } catch (_) {} }, 1800);
 
 /* The same two repaints handleBuildUpload does, so the card and an open step
    modal both follow. Progress ticks repaint the modal too (throttled by the
@@ -425,7 +501,7 @@ function upfBuildPanelHTML(pid) {
     }).join('');
     const started = u.stages[0] ? u.stages[0].start : Date.now();
     const foot = running
-      ? `<div class="upf-muted">Started ${_upfFmt((Date.now() - started) / 1000)} ago · the whole run usually takes ~${_upfFmt(total)}. You can close this; it keeps going.</div>`
+      ? `<div class="upf-muted">Started ${_upfFmt((Date.now() - started) / 1000)} ago · the whole run usually takes ~${_upfFmt(total)}. You can close this — the run continues on the agent, and the Upload Build row opens it again.</div>`
       : '';
     const err = failed ? `<div class="upf-error">${esc(u.error)}</div>` : '';
     const retry = failed ? `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Try again</button></div>` : '';

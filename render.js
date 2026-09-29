@@ -20211,9 +20211,13 @@ function buildBuildDropdown(pid, inModal) {
   if (processing) {
     /* A UPF build in flight prints the agent's own line (upf.js) instead of
        the fake "Analyzing…": the pill is the only place the progress shows. */
-    const upfLine = (typeof UPF !== 'undefined' && UPF.isMac(pid) && state.upf?.job && state.upf.progress) ? state.upf.progress : '';
+    const upfJob = !!(typeof UPF !== 'undefined' && UPF.isMac(pid) && state.upf?.job);
+    const upfLine = (upfJob && state.upf.progress) ? state.upf.progress : '';
+    /* While a UPF run is up the pill is the way BACK into the status modal —
+       closing the modal must not strand the run (Mark, v7.45). */
+    const open = upfJob ? ` onclick="event.stopPropagation();openStepModal('${pid}','uploadBuild')" data-tip="Building from Steam — open the status"` : '';
     return `
-      <div class="build-pill is-processing" title="${escHtml(upfLine || 'Analyzing binary…')}">
+      <div class="build-pill is-processing${upfJob ? ' is-upf' : ''}"${open}${upfJob ? '' : ' title="Analyzing binary…"'}>
         ${spinHTML}
         <span class="build-pill-label">${escHtml(upfLine || 'Analyzing…')}</span>
       </div>`;

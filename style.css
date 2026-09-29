@@ -5876,6 +5876,10 @@ body.viewing-splash .app-subnav { display: none; }
    information — with the app's green for done and the magenta for a failure;
    the transformation ids take the pending disc's register. The log is a --bg
    well like every other well in the app. */
+/* A running UPF build's pill is a door, so it takes the pointer. */
+.build-pill.is-processing.is-upf { cursor: pointer; }
+.build-pill.is-processing.is-upf:hover { background: rgba(255, 255, 255, .08); }
+
 .upf-panel {
   font-family: 'IBM Plex Mono', monospace;
   margin-bottom: 22px;
