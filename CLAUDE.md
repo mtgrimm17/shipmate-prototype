@@ -17,6 +17,13 @@
 4. **Finish every batch with `.ship-message` plus a copiable `./ship.sh`
    one-liner.** Both, every time. See "The commit message comes from
    `.ship-message`".
+5. **Check the deployment before starting work, on every prompt.** Read the
+   local version off `index.html`, then fetch
+   https://mtgrimm17.github.io/shipmate-prototype/ and read its footer badge.
+   Deployed **higher** than local means this contributor is behind: say so and
+   stop — edit nothing until they have pulled. Equal, or deployed lower, is
+   fine. This stands in for the `git fetch` rule 1 forbids. See "Checking for
+   new deployments".
 
 ---
 
@@ -8878,6 +8885,46 @@ Typical workflow:
 3. Publish: `./ship.sh` (commits, pulls, pushes).
 
 GitHub Pages auto-deploys from `main` within ~30 seconds of a push.
+
+### Checking for new deployments (v7.52)
+
+Several people work on this repo, and the failure it keeps producing is one
+contributor's work landing on top of another's. Rule 1 forbids Claude from
+running `git fetch`, so Claude cannot ask the remote. It can ask the
+STOREFRONT instead: Pages deploys from `main` within ~30 seconds of a push and
+every publish bumps the version badge, so the deployed number *is* `main`'s
+number. No git, no `.git/index.lock`, nothing that can break `./ship.sh`.
+
+Before touching a file, on every prompt:
+
+1. **Local** — `grep -o 'id="app-footer-version">v[0-9.]*' index.html`
+2. **Deployed** — fetch https://mtgrimm17.github.io/shipmate-prototype/ and
+   read the footer version.
+3. **Compare:**
+   - deployed **>** local → **STOP.** Print both numbers, tell the contributor
+     to run `git pull` (or `./ship.sh`, which pulls), and change nothing until
+     they confirm. Answering a question about the code is still fine; editing
+     a file is not.
+   - deployed **==** local → proceed.
+   - deployed **<** local → proceed. Claude bumped the version for work that
+     has not shipped yet — the normal mid-session state, and stopping on it
+     would block the contributor on their own unfinished work.
+
+WHAT THIS DOES NOT CATCH: a teammate publishing the same version number Claude
+has already bumped to locally. The numbers match and the content does not.
+That collision really happened, at v7.24/v7.25. Comparing file contents
+instead does not help — they legitimately differ mid-session, which is the
+whole point of the third case above. This check is written for the failure
+that actually recurs; the same-number case is caught by `./ship.sh`'s own pull.
+
+IF THE FETCH FAILS (offline, Pages down, a deploy mid-flight): say so and ask
+the contributor whether to proceed. Do not silently skip it — a check that
+fails open is worse than no check, because it gets trusted.
+
+WHY NOT md5 THE FILES: Claude spent several versions comparing its own copies
+against the working tree, which only ever detects edits made locally. It
+cannot see commits nobody has pulled, and it did not: the tree sat **20
+versions behind** for days while that check reported clean every time.
 
 ### The commit message comes from `.ship-message` (v6.58)
 
