@@ -797,7 +797,14 @@ function upfBuildPanelHTML(pid) {
   if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return '';
   const u = state.upf;
   if (u.agent === false || u.agent === null) { UPF.health().then(h => { if (h) UPF.ensureMatch(); }); return ''; }
-  if (!u.game) return '';   // not installed here: the ordinary file row stays
+  /* Agent is up but this game isn't matched to the local Steam library yet.
+     Kick the (self-healing) match now — the one-shot load-time ensureMatch may
+     have fired before the agent was detected as up, and nothing else drives it
+     once the agent is up. ensureMatch's own guards make this cheap to call on
+     every render: it no-ops while a match is in flight or already attempted for
+     this app-id while up, and _upfRepaintAll re-renders this panel on success.
+     Still '' this pass — the ordinary upload row stands until the match lands. */
+  if (!u.game) { UPF.ensureMatch(); return ''; }
   const existing = (state.platformBuilds || {})[pid];
   // A UPF build that is built but not yet uploaded is a two-phase run in progress:
   // keep showing status. Any other existing build (dragged in, or already uploaded)
