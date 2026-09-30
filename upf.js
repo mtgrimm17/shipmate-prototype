@@ -1012,7 +1012,7 @@ function upfBuildPanelHTML(pid) {
                : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : ''));
     return `<li class="upf-step ${st}"><span class="upf-step-disc">${mark}</span><span class="upf-step-label">${esc(s.label)}</span></li>`;
   }).join('');
-  const postNote = !done ? `<div class="upf-note">Once you connect an Apple account in Settings, Shipmate uploads the build to App Store Connect, waits for processing, and sets up its achievements in Game Center — automatically.</div>` : '';
+  const postNote = !done ? `<div class="upf-note">Once you connect an Apple account in Settings, Shipmate uploads the build to App Store Connect and waits for it to finish processing — automatically.</div>` : '';
   const stepsBlock = `<div class="upf-label">What happens</div><ul class="upf-steps">${stepRows}</ul>${postNote}`;
 
   /* Order: intro + action explain what this is; then what carries over from
