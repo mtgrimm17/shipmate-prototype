@@ -14,11 +14,19 @@
        Steam-linked title is picked. Asks the agent whether that game is in
        the local Steam library and, if so, inspects it. Nothing is rendered.
 
-     upfBuildAndUpload(pid)       — the "Build from Steam" pill that
+     upfBuild(pid)                — the "Build from Steam" pill that
        buildBuildDropdown draws for the Mac App Store platform once a game is
-       matched. Runs prepare then upload on the agent, mirrors the progress
-       into the processing pill, and records the finished build in
-       state.platformBuilds exactly as a dragged-in file would be.
+       matched. Runs prepare ONLY (transform, sign, package) on the agent — no
+       Apple account needed — and records the finished local .pkg in
+       state.platformBuilds exactly as a dragged-in file would be, marked
+       uploaded:false. Build is deliberately split from upload: a dev can build
+       early, fill everything out, and connect their account only near the end.
+
+     upfPublish(pid) / _upfMaybePublish(pid) — the account-connected half. The
+       moment a local UPF build exists AND the platform's account is connected,
+       the build uploads to App Store Connect and its Game Center achievements
+       are created + released (op_publish). Upload is not submit: the build then
+       sits in ASC until the user's Submit press distributes it to a track.
 
    The confirmed achievement list goes to the agent with the build request:
    state.steamAchievementsBaseline (identifier, name, description, from
@@ -46,7 +54,9 @@ state.upf = state.upf || {
   stage:    -1,     // index into UPF_STAGES of the stage now running
   stages:   [],     // per stage: { start, end } timestamps
   uploadPct: 0,     // upload progress, from the agent's "NN%" lines
-  result:   null,   // { buildVersion, buildId } after a successful run
+  built:    false,  // a local .pkg exists for this run (prepare finished)
+  uploaded: false,  // that build has reached App Store Connect (publish finished)
+  result:   null,   // { buildVersion, buildId } after upload; { built:true } after build
   error:    '',
 };
 
@@ -233,6 +243,24 @@ const UPF = {
         await this.waitJob(r.job, () => {});
         if (typeof bcToast === 'function') bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
       }
+      // A build may be waiting on this now-connected account.
+      try { _upfMaybePublish(pid); } catch (_) {}
+      // Achievement text edited after the build → push it to Game Center (no rebuild).
+      // Only once the build is uploaded (the achievements exist in ASC) and only when
+      // the text actually changed, so an idle save doesn't re-walk every achievement.
+      try {
+        const b = (state.platformBuilds || {})[pid];
+        if (b && b.source === 'upf' && b.uploaded) {
+          const achs = this.achievementsForBuild(pid);
+          const h = JSON.stringify(achs.map(a => [a.identifier, a.name, a.description, a.hidden]));
+          this._gcHash = this._gcHash || {};
+          if (achs.length && this._gcHash[pid] !== h) {
+            this._gcHash[pid] = h;
+            const gr = await this._post('/gcsync', { game: state.upf.game.app, achievements: achs });
+            if (gr && gr.job) await this.waitJob(gr.job, () => {});
+          }
+        }
+      } catch (e) { console.warn('[UPF] achievement sync failed', e); }
     } catch (e) {
       console.warn('[UPF] ASC sync failed', e);
     }
@@ -374,6 +402,14 @@ const UPF = {
     if (!state.upf.game) this.ensureMatch();   // async; a later repaint picks it up
     return !!state.upf.game && !!state.upf.agent && !state.upf.job;
   },
+
+  /* The account was just connected for a Mac platform: push the entered data to
+     ASC and, if a local build is already waiting, upload it. Both are no-ops
+     unless their conditions hold, so this is safe to call on every connect. */
+  onConnected(pid) {
+    this.sync('account connected');
+    try { _upfMaybePublish(pid); } catch (_) {}
+  },
 };
 
 function _upfRepaintAll() {
@@ -382,6 +418,7 @@ function _upfRepaintAll() {
     if (state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(pid)) {
       if (UPF.prefillEncryption(pid)) prefilled = true;
       if (typeof _refreshBuildUI === 'function') _refreshBuildUI(pid);
+      _upfMaybePublish(pid);   // a build may be waiting on a now-connected account
     }
   }
   if (prefilled && typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
@@ -403,11 +440,27 @@ function upfOnSteamGame(steamAppId, name) {
     .catch(e => console.warn('[UPF] match failed', e));
 }
 
-/* Touchpoint 2 — the pill's press. The agent does prepare (transform, sign,
-   package) and then upload (App Store Connect, wait for processing); this
-   mirrors its progress into the processing pill and records the result the
-   way handleBuildUpload does, so every reader of platformBuilds is unchanged. */
-async function upfBuildAndUpload(pid) {
+/* Every agent line: append it, advance the stage clock, throttle repaints.
+   Shared by the build and publish watchers so both fill the same stage list. */
+function _upfLineHandler(pid) {
+  let lastPaint = 0;
+  return (line) => {
+    const s = String(line).trim();
+    if (!s) return;
+    state.upf.lines.push(s);
+    const before = state.upf.stage;
+    _upfTrackLine(s);
+    state.upf.progress = s.replace(/^stage [A-F][^:]*:\s*/i, '').slice(0, 60);
+    const now = Date.now();
+    if (state.upf.stage !== before || now - lastPaint > 2000) { lastPaint = now; _upfRepaint(pid, true); }
+  };
+}
+
+/* Touchpoint 2 — the pill's press. BUILD ONLY: the agent runs prepare (transform,
+   sign, package) and stops at a local .pkg. No Apple account is required, so this
+   can happen early. Upload to App Store Connect is a separate, later act that
+   fires on its own once the account is connected (_upfMaybePublish). */
+async function upfBuild(pid) {
   if (!UPF.ready(pid)) return;
   const game = state.upf.game;
   state.platformBuilds = state.platformBuilds || {};
@@ -415,6 +468,8 @@ async function upfBuildAndUpload(pid) {
   state.platformBuildProcessing[pid] = true;
   state.upf.error = '';
   state.upf.result = null;
+  state.upf.built = false;
+  state.upf.uploaded = false;
   state.upf.lines = [];
   state.upf.stage = 0;
   state.upf.stages = [{ start: Date.now() }];
@@ -424,70 +479,148 @@ async function upfBuildAndUpload(pid) {
   _upfRepaint(pid, true);
   _upfStartTicker();
 
-  let lastPaint = 0;
-  const onLine = (line) => {
-    const s = String(line).trim();
-    if (!s) return;
-    state.upf.lines.push(s);
-    const before = state.upf.stage;
-    _upfTrackLine(s);
-    state.upf.progress = s.replace(/^stage [A-F][^:]*:\s*/i, '').slice(0, 60);
-    const now = Date.now();
-    // repaint when a stage changes (the list must move), else at most every 2s
-    if (state.upf.stage !== before || now - lastPaint > 2000) { lastPaint = now; _upfRepaint(pid, true); }
-  };
-
+  const onLine = _upfLineHandler(pid);
   try {
-    /* The developer's answer is what goes into the plist; unanswered means the
-       exempt default (false), which is also what the pre-fill says. */
+    /* The developer's encryption answer is the plist value; unanswered means the
+       exempt default (false), which is what the pre-fill says. The build keeps the
+       STEAM build's own version (what App Store Connect should carry). */
     const enc = UPF.encryptionAnswer(pid);
-    /* The build keeps the STEAM build's own version (2.2.1, what App Store
-       Connect should carry). Shipmate's project version is cosmetic and is not
-       sent — v7.47 sent it, and it would have shipped every game as "1.0". */
     const target = { usesNonExemptEncryption: enc === null ? false : enc };
-    /* ONE JOB ON THE AGENT for prepare AND upload. The chain used to live here,
-       in the page — so closing or reloading it after prepare meant nothing ever
-       started the upload. The agent owns the whole run now; the page only
-       watches, and can re-attach after a reload (upfReattach). */
-    const b = await UPF._post('/build', { game: game.app, target, achievements: UPF.achievementsForBuild(pid) });
-    state.upf.job = { id: b.job, kind: 'build' };
-    try { localStorage.setItem('upf.job', JSON.stringify({ id: b.job, pid, started: Date.now() })); } catch (_) {}
+    const b = await UPF._post('/prepare', { game: game.app, target, achievements: UPF.achievementsForBuild(pid) });
+    state.upf.job = { id: b.job, kind: 'prepare' };
+    try { localStorage.setItem('upf.job', JSON.stringify({ id: b.job, pid, kind: 'prepare', started: Date.now() })); } catch (_) {}
     const res = await UPF.waitJob(b.job, onLine);
-    _upfFinish(pid, res, game);
+    _upfFinishBuild(pid, res, game);
   } catch (e) {
     _upfFail(pid, e);
   }
 }
 
-/* The end of a run, from a live wait or a re-attach. */
-function _upfFinish(pid, res, game) {
+/* The account-connected half: upload the prepared .pkg to App Store Connect and
+   create + release its Game Center achievements. Fires from _upfMaybePublish (on
+   build finish, on connect, on sync) and from the retry button. Not a submit —
+   the build then sits in ASC until the user's Submit press picks a track. */
+async function upfPublish(pid) {
+  if (typeof UPF === 'undefined' || !UPF.isMac(pid) || state.upf.job) return;
+  // Claim the job slot synchronously, before any await, so two near-simultaneous
+  // triggers (connect + sync, say) can't both start an upload.
+  state.upf.job = { id: null, kind: 'publish' };
+  if (!(await UPF.health())) { state.upf.job = null; return; }
+  if (!state.upf.game) { state.upf.job = null; UPF.ensureMatch(); return; }   // a later trigger retries
+  const game = state.upf.game;
+  state.platformBuildProcessing = state.platformBuildProcessing || {};
+  state.platformBuildProcessing[pid] = true;
+  state.upf.error = '';
+  state.upf.progress = 'Uploading to App Store Connect…';
+  // Continue the same 8-stage list at the upload stage; the build stages are done.
+  state.upf.stages = state.upf.stages || [];
+  const now = Date.now();
+  for (let i = 0; i < 5; i++) if (!state.upf.stages[i] || !state.upf.stages[i].end) state.upf.stages[i] = { start: (state.upf.stages[i] && state.upf.stages[i].start) || now, end: now };
+  state.upf.stage = 5;
+  state.upf.stages[5] = { start: now };
+  state.upf.uploadPct = 0;
+  state.upf.job = { id: null, kind: 'publish' };
+  _upfRepaint(pid, true);
+  _upfStartTicker();
+
+  const onLine = _upfLineHandler(pid);
   try {
-    const prep = res && res.prepare;
-    const up = res && res.upload;
-    if (!prep || prep.status !== 'ready') {
-      const why = (prep && prep.blockers || []).map(b => b.message).join(' · ') || 'build did not reach ready';
+    const b = await UPF._post('/publish', { game: game.app });
+    state.upf.job = { id: b.job, kind: 'publish' };
+    try { localStorage.setItem('upf.job', JSON.stringify({ id: b.job, pid, kind: 'publish', started: Date.now() })); } catch (_) {}
+    const res = await UPF.waitJob(b.job, onLine);
+    _upfFinishPublish(pid, res, game);
+  } catch (e) {
+    _upfFail(pid, e);
+  }
+}
+
+/* Upload iff there is a local UPF build not yet uploaded AND the account is
+   connected. Safe to call any number of times — a no-op unless all conditions
+   hold, so it can be fired from the build finish, the connect hook and the sync. */
+function _upfMaybePublish(pid) {
+  if (typeof UPF === 'undefined' || !UPF.isMac(pid) || state.upf.job) return;
+  const b = (state.platformBuilds || {})[pid];
+  if (!b || b.source !== 'upf' || b.uploaded) return;
+  if (!state.upf.agent) return;
+  if (typeof isPlatformConnected !== 'function' || !isPlatformConnected(pid)) return;
+  upfPublish(pid);
+}
+
+/* Prepare finished: record the local .pkg (uploaded:false) and, if the account
+   is already connected, start the upload. Build stages 0–4 are marked done so the
+   list reads "built, upload pending". */
+function _upfFinishBuild(pid, res, game) {
+  try {
+    if (!res || res.status !== 'ready') {
+      const why = (res && res.blockers || []).map(b => b.message || b).join(' · ') || 'build did not reach ready';
       throw new Error(why);
     }
-    if (!up || !up.ok) throw new Error((up && up.problems || []).join(' · ') || 'upload did not complete');
-    const pkgPath = (prep.artifacts && prep.artifacts.pkg) || '';
+    const pkgPath = (res.artifacts && res.artifacts.pkg) || '';
+    const tgt = (res.manifest && res.manifest.target) || {};
+    const label = String(tgt.build || tgt.version || '');
+    state.platformBuilds = state.platformBuilds || {};
     state.platformBuilds[pid] = {
       name: pkgPath.split('/').pop() || `${game.name}.pkg`,
       size: 0,
-      buildNumber: String(up.buildVersion),   // Steam's build id, possibly dotted (17325648.1) — a label, not a number
+      buildNumber: label,          // Steam's build id / version — a label, not a number
       uploadedAt: Date.now(),
       source: 'upf',
-      ascBuildId: up.buildId,
-      ascAppId: up.appId,
+      uploaded: false,             // built locally; not in App Store Connect yet
+      ascBuildId: null,
+      pkgPath,
     };
+    state.upf.built = true;
+    state.upf.uploaded = false;
+    state.upf.progress = '';
+    // mark the five build stages done and park the cursor at Upload (pending)
+    const now = Date.now();
+    for (let i = 0; i <= 4; i++) { state.upf.stages[i] = state.upf.stages[i] || { start: now }; if (!state.upf.stages[i].end) state.upf.stages[i].end = now; }
+    state.upf.stage = 5;
+    state.upf.result = { built: true, buildVersion: label };
+    const connected = (typeof isPlatformConnected === 'function' && isPlatformConnected(pid));
+    if (typeof bcToast === 'function') {
+      bcToast(connected
+        ? 'Mac App Store build ready — uploading to App Store Connect…'
+        : 'Mac App Store build ready. Connect your Apple account in Settings to upload it.');
+    }
+    _upfDone(pid);
+    _upfMaybePublish(pid);
+  } catch (e) {
+    _upfFail(pid, e);
+  }
+}
+
+/* Publish finished: the build is in App Store Connect (processed) and its Game
+   Center achievements are live. Marks the recorded build uploaded. */
+function _upfFinishPublish(pid, res, game) {
+  try {
+    const up = res && res.upload;
+    if (!up || !up.ok) throw new Error((up && up.problems || []).join(' · ') || 'upload did not complete');
+    const b = (state.platformBuilds && state.platformBuilds[pid]) || {};
+    b.uploaded = true;
+    b.ascBuildId = up.buildId;
+    b.ascAppId = up.appId;
+    b.buildNumber = String(up.buildVersion);
+    b.uploadedAt = Date.now();
+    b.source = 'upf';
+    state.platformBuilds = state.platformBuilds || {};
+    state.platformBuilds[pid] = b;
+    state.upf.uploaded = true;
     state.upf.progress = '';
     const last = state.upf.stages[state.upf.stage];
     if (last && !last.end) last.end = Date.now();
-    state.upf.result = { buildVersion: up.buildVersion, buildId: up.buildId, appId: up.appId };
+    state.upf.result = { buildVersion: up.buildVersion, buildId: up.buildId, appId: up.appId, uploaded: true };
     if (typeof bcToast === 'function') bcToast(`Mac App Store build ${up.buildVersion} is in App Store Connect (build ${up.buildId}).`);
     _upfDone(pid);
   } catch (e) {
     _upfFail(pid, e);
   }
+}
+
+/* Reattach and live-wait both end here: route the result to the right finisher. */
+function _upfDispatchFinish(pid, kind, res, game) {
+  return kind === 'publish' ? _upfFinishPublish(pid, res, game) : _upfFinishBuild(pid, res, game);
 }
 
 function _upfFail(pid, e) {
@@ -509,8 +642,9 @@ function _upfDone(pid) {
 /* RE-ATTACH AFTER A RELOAD. The agent owns the run, so a page that comes back
    asks whether the job it started is still going (or has ended since) and
    picks up watching it — stages, timers and the result — where it left off.
-   The job id is remembered in localStorage by upfBuildAndUpload; the agent's
-   /jobs list is the fallback when that is gone. */
+   The job id (and kind: prepare or publish) is remembered in localStorage by
+   upfBuild / upfPublish; the agent's /jobs list is the fallback when that is
+   gone. On reattach the kind routes to the right finisher. */
 async function upfReattach() {
   let remembered = null;
   try { remembered = JSON.parse(localStorage.getItem('upf.job') || 'null'); } catch (_) {}
@@ -519,7 +653,7 @@ async function upfReattach() {
   let id = remembered && remembered.id, pid = remembered && remembered.pid;
   if (!id) {
     const list = await UPF._get('/jobs').catch(() => ({ jobs: [] }));
-    const j = (list.jobs || []).find(x => x.kind === 'build' && x.state === 'running');
+    const j = (list.jobs || []).find(x => (x.kind === 'prepare' || x.kind === 'publish') && x.state === 'running');
     if (!j) return;
     id = j.id;
     pid = UPF_MAC_PIDS.find(p => state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(p)) || 'macos';
@@ -539,8 +673,9 @@ async function upfReattach() {
   state.platformBuildProcessing[pid] = true;
   for (const l of job.lines || []) { state.upf.lines.push(l); _upfTrackLine(l); }
   if (!state.upf.game) UPF.ensureMatch();
+  if (job.kind === 'publish') { state.upf.built = true; }
   _upfRepaint(pid, true);
-  if (job.state === 'done') return _upfFinish(pid, job.result, state.upf.game || { name: 'Game' });
+  if (job.state === 'done') return _upfDispatchFinish(pid, job.kind, job.result, state.upf.game || { name: 'Game' });
   if (job.state === 'failed') return _upfFail(pid, new Error(job.error || 'agent job failed'));
   _upfStartTicker();
   let seen = (job.lines || []).length, lastPaint = 0;
@@ -553,7 +688,7 @@ async function upfReattach() {
         if (state.upf.stage !== before || Date.now() - lastPaint > 2000) { lastPaint = Date.now(); _upfRepaint(pid, true); }
       }
       seen = (j.lines || []).length;
-      if (j.state === 'done') return _upfFinish(pid, j.result, state.upf.game || { name: 'Game' });
+      if (j.state === 'done') return _upfDispatchFinish(pid, job.kind, j.result, state.upf.game || { name: 'Game' });
       if (j.state === 'failed') return _upfFail(pid, new Error(j.error || 'agent job failed'));
       await new Promise(res => setTimeout(res, 1500));
     }
@@ -561,6 +696,13 @@ async function upfReattach() {
 }
 
 setTimeout(() => { try { upfReattach(); } catch (_) {} }, 1800);
+
+/* After the page has settled, a local build recorded earlier may be waiting on a
+   now-connected account — upload it. No-op unless a build is present, unuploaded,
+   and the account is connected. */
+setTimeout(() => {
+  for (const pid of UPF_MAC_PIDS) { try { _upfMaybePublish(pid); } catch (_) {} }
+}, 2600);
 
 /* The same two repaints handleBuildUpload does, so the card and an open step
    modal both follow. Progress ticks repaint the modal too (throttled by the
@@ -644,7 +786,12 @@ function upfBuildPanelHTML(pid) {
   const u = state.upf;
   if (u.agent === false || u.agent === null) { UPF.health().then(h => { if (h) UPF.ensureMatch(); }); return ''; }
   if (!u.game) return '';   // not installed here: the ordinary file row stays
-  if (state.platformBuilds && state.platformBuilds[pid] && !u.job && !u.result) return '';  // a build is in already
+  const existing = (state.platformBuilds || {})[pid];
+  // A UPF build that is built but not yet uploaded is a two-phase run in progress:
+  // keep showing status. Any other existing build (dragged in, or already uploaded)
+  // with nothing running lets the ordinary file row stand.
+  const upfPending = !!(existing && existing.source === 'upf' && !existing.uploaded);
+  if (existing && !upfPending && !u.job && !u.result) return '';
   const esc = (s) => (typeof escHtml === 'function') ? escHtml(String(s)) : String(s);
 
   const m = u.manifest || {};
@@ -652,22 +799,24 @@ function upfBuildPanelHTML(pid) {
   const degraded = ((m.steamApis && m.steamApis.degraded) || []).map(k => k.split('::')[0]).filter((v, i, a) => a.indexOf(v) === i);
   const blockers = m.blockers || [];
   const running = !!u.job;
-  const done = !!u.result;
+  const publishing = running && u.job.kind === 'publish';
+  const done = !!u.uploaded;                       // truly finished = in App Store Connect
+  const built = u.built || upfPending;             // local .pkg exists, upload pending
+  const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
   const head = `<div class="upf-head">Build from Steam <span class="upf-muted">— ${esc(u.game.name)}, from the Steam build on this Mac</span></div>`;
 
-  /* ── Phase 3: done ─────────────────────────────────────────────────── */
-  if (done) {
+  /* ── Phase 3: done (uploaded to App Store Connect) ─────────────────── */
+  if (done && u.result && u.result.buildId) {
     return `<div class="upf-panel">${head}
       <div class="upf-result">Build ${esc(u.result.buildVersion)} is in App Store Connect · build id ${esc(u.result.buildId)}</div>
-      <div class="upf-muted" style="margin-top:6px">Add it to a TestFlight group in App Store Connect to install it.</div>
+      <div class="upf-muted" style="margin-top:6px">It is uploaded and processed, not yet submitted. Choose a track and press Submit to distribute it.</div>
     </div>`;
   }
 
-  /* ── Phase 2: running status ───────────────────────────────────────── */
-  if (running || (u.error && u.lines.length)) {
+  /* ── Phase 2: running status, or built-and-waiting ─────────────────── */
+  if (running || built || (u.error && u.lines.length)) {
     const cur = u.stage;
     const failed = !running && !!u.error;
-    const total = UPF_STAGES.reduce((n, s) => n + s.usual, 0);
     const rows = UPF_STAGES.map((s, i) => {
       const st = failed && i === cur ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
       const mark = st === 'is-done' ? (typeof smCheckSVG === 'function' ? smCheckSVG() : '✓')
@@ -688,11 +837,19 @@ function upfBuildPanelHTML(pid) {
       </li>`;
     }).join('');
     const started = u.stages[0] ? u.stages[0].start : Date.now();
-    const foot = running
-      ? `<div class="upf-muted">Started ${_upfFmt((Date.now() - started) / 1000)} ago · the whole run usually takes ~${_upfFmt(total)}. You can close this — the run continues on the agent, and the Upload Build row opens it again.</div>`
-      : '';
+    const phaseStages = publishing ? UPF_STAGES.slice(5) : (running ? UPF_STAGES.slice(0, 5) : UPF_STAGES);
+    const phaseTotal = phaseStages.reduce((n, s) => n + s.usual, 0);
+    let foot = '';
+    if (running) {
+      foot = `<div class="upf-muted">Started ${_upfFmt((Date.now() - started) / 1000)} ago · this step usually takes ~${_upfFmt(phaseTotal)}. You can close this — it continues on the agent, and the Upload Build row opens it again.</div>`;
+    } else if (built && !failed) {
+      foot = connected
+        ? `<div class="upf-muted">Build ready — uploading to App Store Connect…</div>`
+        : `<div class="upf-muted">Build ready. Connect your Apple account in Settings and it uploads to App Store Connect on its own — no rebuild.</div>`;
+    }
     const err = failed ? `<div class="upf-error">${esc(u.error)}</div>` : '';
-    const retry = failed ? `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Try again</button></div>` : '';
+    const retryFn = upfPending ? 'upfPublish' : 'upfBuild';
+    const retry = failed ? `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();${retryFn}('${pid}')">Try again</button></div>` : '';
     return `<div class="upf-panel">${head}<ul class="upf-stages">${rows}</ul>${foot}${err}${retry}</div>`;
   }
 
@@ -722,8 +879,8 @@ function upfBuildPanelHTML(pid) {
   const confirm = blockers.length
     ? `<button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button>`
     : `<div class="upf-confirm">
-         <div class="upf-confirm-text">The Steam build is left untouched. A copy is transformed as listed, signed with your Mac App Store certificate, packaged and uploaded to App Store Connect. About ten minutes, plus Apple's processing.</div>
-         <button class="imp-cta" onclick="event.stopPropagation();upfBuildAndUpload('${pid}')">Build &amp; upload to App Store Connect</button>
+         <div class="upf-confirm-text">The Steam build is left untouched. A copy is transformed as listed, signed with your Mac App Store certificate and packaged — a few minutes. No Apple account needed yet: once you connect it, the build uploads to App Store Connect on its own.</div>
+         <button class="imp-cta" onclick="event.stopPropagation();upfBuild('${pid}')">Build from Steam</button>
        </div>`;
   const err = u.error ? `<div class="upf-error">${esc(u.error)}</div>` : '';
   return `<div class="upf-panel">${head}${verdict}${changes}${dark}${settings}${blocks}<div class="upf-actions">${confirm}</div>${err}</div>`;

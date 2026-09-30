@@ -7447,8 +7447,9 @@ function connectAdd(pid) {
   if (state.connectStage) delete state.connectStage[pid];
   _flipPlatformCard(pid, 'steps', 1); // connect face → steps (now connected)
   /* UPF: connecting a Mac account is what unlocks writing to App Store Connect.
-     Push everything collected so far now; subsequent saves re-sync (upf.js). */
-  if (typeof UPF !== 'undefined' && UPF.isMac(pid)) UPF.sync('account connected');
+     Push everything collected so far now, and upload a build if one is already
+     waiting locally; subsequent saves re-sync (upf.js). */
+  if (typeof UPF !== 'undefined' && UPF.isMac(pid)) UPF.onConnected(pid);
 }
 
 // Re-render a single active card in place (no flip animation).
