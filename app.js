@@ -28205,6 +28205,41 @@ function _smImproveGo(i) {
    this surface to travel to, and a row that scrolls an empty box would be a
    control lying about having worked. */
 function _smBuildItems(pid) {
+  /* THE STEAM → MAC APP STORE USER TRACK. Shippy lists only the steps the
+     DEVELOPER takes — Connect, Create the app, Build, Test — not the agent's
+     automatic work (that is the modal's own step list) and not the automatic
+     phases between them (upload / processing), which ride as status in the Build
+     row's label. Only for a Mac App Store platform with the agent up, where
+     Build from Steam is the flow; every other platform keeps the generic
+     upload/destination items below.
+
+     Clicks are safe no-ops for now (the `bld:` prefix is short-circuited in
+     chkGoStep); wiring Connect / Create / Test to real actions and links is the
+     next pass. `done` for the two manual steps is a best-effort proxy until
+     those clicks let the developer confirm them. */
+  const u = state.upf || {};
+  const isMacBuild = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid));
+  if (isMacBuild && u.agent) {
+    const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
+    const kind = u.job && u.job.kind;
+    let buildLabel = 'Build from Steam';
+    if (kind === 'prepare')                buildLabel = 'Building from Steam…';
+    else if (kind === 'publish')           buildLabel = 'Uploading to App Store Connect…';
+    else if (u.built && !u.uploaded)       buildLabel = connected ? 'Uploading to App Store Connect…'
+                                                                  : 'Built — connect your account to upload';
+    return [
+      { label: connected ? 'Apple Developer account connected' : 'Connect your Apple Developer account',
+        step: 'bld:connect', done: connected },
+      { label: 'Create your app in App Store Connect',
+        step: 'bld:apprecord', done: !!(u.job || u.built || u.uploaded) },   // assumed once a build is under way
+      { label: buildLabel,
+        step: 'bld:file', done: !!u.uploaded },                              // the build row carries the auto phases
+      { label: 'Test the internal TestFlight build',
+        step: 'bld:test', done: false },
+    ];
+  }
+
+  // ── Generic (non-Mac, or no agent): the original two items ──
   const b = (state.platformBuilds || {})[pid];
   const t = (state.selectedTracks || {})[pid];
   const opts = (typeof PLATFORM_TRACKS !== 'undefined' && PLATFORM_TRACKS[pid]) || [];
