@@ -461,10 +461,25 @@ const UPF = {
   },
 };
 
+/* state.activePlatforms is a Set (see state.js / app.js — every assignment is
+   `new Set(...)`), so it has .has, NOT .includes. This was THE bug behind the
+   whole Build-from-Steam repaint saga: _upfRepaintAll guarded on
+   `.includes && .includes(pid)`, which is undefined on a Set, so the guard was
+   always false and _refreshBuildUI never ran — every match succeeded and
+   silently failed to repaint. Tolerate an array too, in case it is ever
+   serialized back to one. */
+function _upfActive(pid) {
+  const a = state.activePlatforms;
+  if (!a) return false;
+  if (typeof a.has === 'function') return a.has(pid);
+  if (typeof a.includes === 'function') return a.includes(pid);
+  return false;
+}
+
 function _upfRepaintAll() {
   let prefilled = false;
   for (const pid of UPF_MAC_PIDS) {
-    if (state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(pid)) {
+    if (_upfActive(pid)) {
       if (UPF.prefillEncryption(pid)) prefilled = true;
       if (typeof _refreshBuildUI === 'function') _refreshBuildUI(pid);
       _upfMaybePublish(pid);   // a build may be waiting on a now-connected account
@@ -708,7 +723,7 @@ async function upfReattach() {
     const j = (list.jobs || []).find(x => (x.kind === 'prepare' || x.kind === 'publish') && x.state === 'running');
     if (!j) return;
     id = j.id;
-    pid = UPF_MAC_PIDS.find(p => state.activePlatforms && state.activePlatforms.includes && state.activePlatforms.includes(p)) || 'macos';
+    pid = UPF_MAC_PIDS.find(p => _upfActive(p)) || 'macos';   // .has, not .includes — activePlatforms is a Set
   }
   let job;
   try { job = await UPF._get('/jobs/' + id); } catch (_) { try { localStorage.removeItem('upf.job'); } catch (__) {} return; }
