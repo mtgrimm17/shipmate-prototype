@@ -7180,7 +7180,9 @@ function _stepCtaHtml(platformId, stepId, isSubPanel, returnAction, complete) {
 
   return blocked
     ? `<button class="imp-cta is-blocked" aria-disabled="true"
-               data-tip="Unrated apps cannot be published on the App Store." data-tip-tone="danger"
+               onclick="crGoFirstUnrated('${platformId}')"
+               data-tip="Unrated apps cannot be published on the App Store. Press to see why."
+               data-tip-tone="danger"
        >${label}</button>`
     : `<button class="imp-cta" onclick="${action}">${label}</button>`;
 }
@@ -7392,8 +7394,9 @@ function renderStepModal() {
      the header and footer read now. Nothing about the flip changes — the title
      still comes from `step?.label`, the body is still Game Center's own builder,
      and a flipped panel is untouched. */
-  const cameFromPreview = stepId === 'gameCenter'
-    && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full');
+  const cameFromPreview = state.stepModalFrom === 'storePreview'
+    || (stepId === 'gameCenter'
+        && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full'));
   const isSubPanel = isFlipped || cameFromPreview;
 
   const returnAction = flipTarget === 'iapLocalizations'
@@ -13793,7 +13796,7 @@ function buildPrivacySection(pid = 'ios') {
       <input class="form-input" type="url" id="${pid}-privacy-url" value="${a.privacyPolicyUrl}"
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
              oninput="setPrivacyUrl(this.value)"
-             onblur="reRenderStepModal()">
+             onblur="_deferredRerenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
     ${collectBlock}`;
@@ -14531,14 +14534,20 @@ function buildContentRatingSection(pid = 'ios') {
     }).length, 0);
 
   const crAllPillHtml = `<span class="cr-inferred-all-word">All</span>`;
+  /* THE STATUS AND THE INSTRUCTION ARE TWO ROWS, because the panel copies one
+     and leaves the other: "Click All to review" is about a toggle that stays in
+     the modal, and a copy of it 300px away would draw a second `All` you cannot
+     press. `.cr-inferred-status` is what the guide panel clones;
+     `.cr-inferred-howto` is what stays beside the control it is about. */
+  const _crStatus = html => `<div class="cr-inferred-row cr-inferred-status">${html}</div>`;
   const inferredText = crInferredCount > 0
     ? (showAll
-        ? (t('cr.showing_all', { total: crTotalQuestions })
+        ? _crStatus(t('cr.showing_all', { total: crTotalQuestions })
            || `All ${crTotalQuestions} questions from Apple's content questionnaire.`)
-        : `<div class="cr-inferred-row">${
+        : _crStatus(
              t('cr.inferred_compact', { count: crInferredCount, total: crTotalQuestions })
                || `Shipmate inferred ${crInferredCount} out of ${crTotalQuestions} responses.`
-           }</div><div class="cr-inferred-row">${
+           ) + `<div class="cr-inferred-row cr-inferred-howto">${
              t('cr.inferred_click_all', { allPill: crAllPillHtml })
                || `Click ${crAllPillHtml} to review before submitting.`
            }</div>`)
@@ -14623,7 +14632,7 @@ function buildContentRatingSection(pid = 'ios') {
       <input class="form-input" type="url" value="${a.ageSuitabilityUrl}"
              placeholder="${t('ios.age.suitability.placeholder') || 'https://yourgame.com/age-suitability'}"
              oninput="updateIOSTextField('ageSuitabilityUrl', this.value)"
-             onblur="reRenderStepModal()">
+             onblur="_deferredRerenderStepModal()">
     </div>`}`;
 
   /* THE FILTER AND ITS SENTENCE STAY ON SCREEN. Both are controls for the list
@@ -14687,7 +14696,7 @@ function buildExportComplianceSection(pid = 'ios') {
               <label class="form-label">${t('ios.export.ern.label') || 'ERN Number'}</label>
               <input class="form-input" type="text" value="${a.ernNumber}" placeholder="${t('ios.export.ern.placeholder') || 'ENC-XXXXXXXX'}"
                      oninput="updateIOSTextField('ernNumber', this.value)"
-                     onblur="reRenderStepModal()">
+                     onblur="_deferredRerenderStepModal()">
             </div>` : ''}
           ${a.hasERN === 'no' ? '<div class="ios-risk-note risk-HIGH">An ERN is required before submitting apps with non-exempt encryption. Apply at bis.doc.gov.</div>' : ''}
         </div>` : ''}
@@ -18916,7 +18925,7 @@ function buildAndroidDataSafetySection() {
              value="${escHtml(privUrl)}"
              placeholder="https://yourgame.com/privacy"
              oninput="setPrivacyUrl(this.value)"
-             onblur="reRenderStepModal()">
+             onblur="_deferredRerenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
     ${a.collectsOrSharesData === null ? androidYNRow('Collects or shares user data', 'collectsOrSharesData',
