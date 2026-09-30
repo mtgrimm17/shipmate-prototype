@@ -488,9 +488,23 @@ function _upfRepaintAll() {
   if (prefilled && typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
 }
 
-/* A project restored with its game already chosen: ask once the page has
-   settled, so the pill is there the first time the card is looked at. */
-setTimeout(() => { try { UPF.ensureMatch(); } catch (_) {} }, 1500);
+/* WARM UP EARLY so the Game Build step is already in its clickable state the
+   first time Submission is drawn — otherwise the row is seen to change from the
+   Upload pill to the clickable row once the async match lands. Probe health and
+   drive the match, retrying a few times while the agent (or the Steam app-id) is
+   still settling; stop as soon as the game is matched or the agent is confirmed
+   down. match() repaints on success, so a card already on screen also updates. */
+(function _upfWarmup() {
+  let tries = 0;
+  const tick = () => {
+    try {
+      if (state.upf.game || state.upf.agent === false || tries >= 8) return;
+      tries++;
+      UPF.health().then(h => { if (h) UPF.ensureMatch(); }).finally(() => setTimeout(tick, 1000));
+    } catch (_) {}
+  };
+  setTimeout(tick, 300);
+})();
 
 /* Touchpoint 1 — fire-and-forget from selectPicklistItem. Never renders: the
    matched game only changes what buildBuildDropdown draws NEXT time, and that
@@ -848,6 +862,15 @@ function _upfStartTicker() {
   }, 1000);
 }
 
+/* Steam feature tiers → does the feature carry over to the Mac App Store build?
+   routed (Game Center) and shim (safe defaults) DO — the chip lights up; degraded
+   goes dark — the chip stays grey. The tooltip copy is report.py's own wording. */
+const UPF_TIER = {
+  routed:   { on: true,  tip: 'Carries over — routed to Apple’s Game Center by the shim.' },
+  shim:     { on: true,  tip: 'Carries over — the shim answers with safe defaults, so the game runs as if Steam were present.' },
+  degraded: { on: false, tip: 'Goes dark on Mac — the shim disables it and the game must tolerate its absence.' },
+};
+
 function upfBuildPanelHTML(pid) {
   if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return '';
   const u = state.upf;
@@ -856,106 +879,88 @@ function upfBuildPanelHTML(pid) {
      Kick the (self-healing) match now — the one-shot load-time ensureMatch may
      have fired before the agent was detected as up, and nothing else drives it
      once the agent is up. ensureMatch's own guards make this cheap to call on
-     every render: it no-ops while a match is in flight or already attempted for
-     this app-id while up, and _upfRepaintAll re-renders this panel on success.
-     Still '' this pass — the ordinary upload row stands until the match lands. */
+     every render, and _upfRepaintAll re-renders this panel on success. */
   if (!u.game) { UPF.ensureMatch(); return ''; }
   const existing = (state.platformBuilds || {})[pid];
-  // A UPF build that is built but not yet uploaded is a two-phase run in progress:
-  // keep showing status. Any other existing build (dragged in, or already uploaded)
-  // with nothing running lets the ordinary file row stand.
   const upfPending = !!(existing && existing.source === 'upf' && !existing.uploaded);
   if (existing && !upfPending && !u.job && !u.result) return '';
   const esc = (s) => (typeof escHtml === 'function') ? escHtml(String(s)) : String(s);
 
   const m = u.manifest || {};
-  const planned = m.plannedTransformations || [];
-  const degraded = ((m.steamApis && m.steamApis.degraded) || []).map(k => k.split('::')[0]).filter((v, i, a) => a.indexOf(v) === i);
   const blockers = m.blockers || [];
   const running = !!u.job;
-  const publishing = running && u.job.kind === 'publish';
   const done = !!u.uploaded;                       // truly finished = in App Store Connect
   const built = u.built || upfPending;             // local .pkg exists, upload pending
+  const failed = !running && !!u.error && (u.lines || []).length > 0;
   const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
-  const head = `<div class="upf-head">Build from Steam <span class="upf-muted">— ${esc(u.game.name)}, from the Steam build on this Mac</span></div>`;
+  const name = esc(u.game.name);
 
-  /* ── Phase 3: done (uploaded to App Store Connect) ─────────────────── */
+  /* ── The intro line, game-specific, and the primary action beneath it.
+     One short paragraph that changes with state; the button sits right under. */
+  let intro, actions = '';
   if (done && u.result && u.result.buildId) {
-    return `<div class="upf-panel">${head}
-      <div class="upf-result">Build ${esc(u.result.buildVersion)} is in App Store Connect · build id ${esc(u.result.buildId)}</div>
-      <div class="upf-muted" style="margin-top:6px">It is uploaded and processed, not yet submitted. Choose a track and press Submit to distribute it.</div>
-    </div>`;
+    intro = `<strong>Done.</strong> ${name} — build ${esc(u.result.buildVersion)} is in App Store Connect (build id ${esc(u.result.buildId)}). It is uploaded and processed, not submitted yet — choose a destination and press Submit to distribute it.`;
+  } else if (running) {
+    intro = `Building ${name} from its Steam build. You can close this — it keeps going on your Mac, and reopening the step shows where it is.`;
+  } else if (built) {
+    intro = connected
+      ? `<strong>Build ready.</strong> Uploading ${name} to App Store Connect…`
+      : `<strong>Build ready.</strong> Connect your Apple account in Settings and ${name} uploads to App Store Connect on its own — no rebuild.`;
+  } else if (failed) {
+    intro = `The build stopped. ${name}’s Steam build is untouched — you can try again.`;
+    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();${upfPending ? 'upfPublish' : 'upfBuild'}('${pid}')">Try again</button></div>`;
+  } else {
+    /* Rest — the confirmation. Game-specific paragraph, then the button, then
+       an Upload alternative (the modal offers Build from Steam OR Upload). */
+    intro = `${name}’s Steam build on this Mac becomes a Mac App Store build — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched, and no Apple account is needed yet: connect it in Settings and the build uploads to App Store Connect on its own.`;
+    actions = blockers.length
+      ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
+      : `<div class="upf-actions">
+           <button class="imp-cta" onclick="event.stopPropagation();upfBuild('${pid}')">Build from Steam</button>
+           <button class="upf-alt" onclick="event.stopPropagation();document.getElementById('upf-alt-up-${pid}').click()">Upload a build instead</button>
+           <input type="file" id="upf-alt-up-${pid}" accept="${esc(smBuildAccept(pid).accept)}" hidden onchange="handleBuildUpload('${pid}', this.files)">
+         </div>`;
   }
-
-  /* ── Phase 2: running status, or built-and-waiting ─────────────────── */
-  if (running || built || (u.error && u.lines.length)) {
-    const cur = u.stage;
-    const failed = !running && !!u.error;
-    const rows = UPF_STAGES.map((s, i) => {
-      const st = failed && i === cur ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
-      const mark = st === 'is-done' ? (typeof smCheckSVG === 'function' ? smCheckSVG() : '✓')
-                 : (st === 'is-bad' ? '✕' : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : ''));
-      const t = u.stages[i];
-      let time;
-      if (st === 'is-done' && t && t.end)      time = _upfFmt((t.end - t.start) / 1000);
-      else if (st === 'is-current' && t)       time = `<span data-upf-elapsed="${i}">${_upfFmt((Date.now() - t.start) / 1000)} · usually ~${_upfFmt(s.usual)}</span>`;
-      else if (st === 'is-bad' && t)           time = _upfFmt(((t.end || Date.now()) - t.start) / 1000);
-      else                                      time = `~${_upfFmt(s.usual)}`;
-      const bar = (i === 5 && (st === 'is-current' || st === 'is-done')) ? `
-        <div class="upf-bar"><div class="upf-bar-fill" data-upf-bar style="width:${st === 'is-done' ? 100 : (u.uploadPct || 0)}%"></div></div>
-        <span class="upf-bar-pct" data-upf-pct>${st === 'is-done' ? 100 : (u.uploadPct || 0)}%</span>` : '';
-      return `<li class="upf-stage ${st}">
-        <span class="upf-stage-mark">${mark}</span>
-        <span class="upf-stage-label">${esc(s.label)}${bar}</span>
-        <span class="upf-stage-time">${time}</span>
-      </li>`;
-    }).join('');
-    const started = u.stages[0] ? u.stages[0].start : Date.now();
-    const phaseStages = publishing ? UPF_STAGES.slice(5) : (running ? UPF_STAGES.slice(0, 5) : UPF_STAGES);
-    const phaseTotal = phaseStages.reduce((n, s) => n + s.usual, 0);
-    let foot = '';
-    if (running) {
-      foot = `<div class="upf-muted">Started ${_upfFmt((Date.now() - started) / 1000)} ago · this step usually takes ~${_upfFmt(phaseTotal)}. You can close this — it continues on the agent, and the Upload Build row opens it again.</div>`;
-    } else if (built && !failed) {
-      foot = connected
-        ? `<div class="upf-muted">Build ready — uploading to App Store Connect…</div>`
-        : `<div class="upf-muted">Build ready. Connect your Apple account in Settings and it uploads to App Store Connect on its own — no rebuild.</div>`;
-    }
-    const err = failed ? `<div class="upf-error">${esc(u.error)}</div>` : '';
-    const retryFn = upfPending ? 'upfPublish' : 'upfBuild';
-    const retry = failed ? `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();${retryFn}('${pid}')">Try again</button></div>` : '';
-    return `<div class="upf-panel">${head}<ul class="upf-stages">${rows}</ul>${foot}${err}${retry}</div>`;
-  }
-
-  /* ── Phase 1: the steps, and the confirmation ──────────────────────── */
-  const verdict = `<div class="upf-verdict ${blockers.length ? 'is-blocked' : ''}">
-      <span class="upf-verdict-word">${esc(m.classification || 'Inspected')}</span>
-      <span class="upf-muted">· ${planned.length} changes · ${(m.warnings || []).length} warnings · ${blockers.length} blockers</span>
-    </div>`;
-  const changes = planned.length ? `
-    <div class="upf-label">What changes in the build</div>
-    <ul class="upf-list">${planned.map(t => `<li><span class="upf-id">${esc(t.id)}</span>${esc(t.name)}</li>`).join('')}</ul>` : '';
-  const dark = degraded.length ? `
-    <div class="upf-label">Steam features that go dark on Mac</div>
-    <div class="upf-chips">${degraded.map(d => `<span class="upf-chip">${esc(d.replace(/^Steam/, ''))}</span>`).join('')}</div>` : '';
+  const introBlock = `<div class="upf-intro">${intro}</div>${actions}`;
+  const err = (u.error && !running && !failed) ? `<div class="upf-error">${esc(u.error)}</div>` : '';
   const blocks = blockers.length ? `
     <div class="upf-label">Blocked</div>
     <ul class="upf-list is-bad">${blockers.map(b => `<li>${esc(b.message || b)}</li>`).join('')}</ul>` : '';
-  /* The plist values the build will carry, and where each comes from. */
-  const enc = UPF.encryptionAnswer(pid);
-  const tgt = m.target || {};
-  const settings = `
-    <div class="upf-label">Set in the app</div>
-    <ul class="upf-list">
-      <li><span class="upf-id">plist</span>Version ${esc(tgt.version || '—')} <span class="upf-muted">(the Steam build's)</span> · build ${esc(tgt.build || '—')} · minimum macOS ${esc(tgt.minMacOS || '—')} · category ${esc((tgt.category || '').replace('public.app-category.', '') || '—')}</li>
-      <li><span class="upf-id">plist</span>Export compliance: ${enc === true ? 'uses non-exempt encryption' : 'no non-exempt encryption'} <span class="upf-muted">${enc === null ? '(default — confirm it under Business)' : '(from your Business answer)'}</span></li>
-    </ul>`;
-  const confirm = blockers.length
-    ? `<button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button>`
-    : `<div class="upf-confirm">
-         <div class="upf-confirm-text">The Steam build is left untouched. A copy is transformed as listed, signed with your Mac App Store certificate and packaged — a few minutes. No Apple account needed yet: once you connect it, the build uploads to App Store Connect on its own.</div>
-         <button class="imp-cta" onclick="event.stopPropagation();upfBuild('${pid}')">Build from Steam</button>
-       </div>`;
-  const err = u.error ? `<div class="upf-error">${esc(u.error)}</div>` : '';
-  return `<div class="upf-panel">${head}${verdict}${changes}${dark}${settings}${blocks}<div class="upf-actions">${confirm}</div>${err}</div>`;
+
+  /* ── The bulk: high-level steps as circles. Empty at rest; the running step
+     shows a spinner and finished ones a green check — the same discs, spinner
+     and tick used elsewhere in the app. The stage clock (state.upf.stage) drives
+     it, and _upfRepaint re-renders this modal on every agent line. */
+  const cur = u.stage;
+  const active = running || built || done || failed;
+  const stepRows = UPF_STAGES.map((s, i) => {
+    let st = '';
+    if (done) st = 'is-done';
+    else if (active) st = (failed && i === cur) ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
+    const mark = st === 'is-done' ? (typeof smCheckSVG === 'function' ? smCheckSVG(18) : '✓')
+               : (st === 'is-bad' ? '✕'
+               : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : ''));
+    return `<li class="upf-step ${st}"><span class="upf-step-disc">${mark}</span><span class="upf-step-label">${esc(s.label)}</span></li>`;
+  }).join('');
+  const stepsBlock = `<div class="upf-label">What happens</div><ul class="upf-steps">${stepRows}</ul>`;
+
+  /* ── Steam features detected, coloured by whether they carry over to Mac.
+     A "?" tooltip (the app's own tooltip-anchor) explains each. */
+  const sa = m.steamApis || {};
+  const rank = { routed: 3, shim: 2, degraded: 1 };
+  const tierOf = {};
+  const add = (arr, tier) => (arr || []).forEach(k => {
+    const f = k.split('::')[0].replace(/^Steam/, '');
+    if (!tierOf[f] || rank[tier] > rank[tierOf[f]]) tierOf[f] = tier;
+  });
+  add(sa.routed, 'routed'); add(sa.shim, 'shim'); add(sa.degraded, 'degraded');
+  const feats = Object.keys(tierOf).sort();
+  const chips = feats.length ? `
+    <div class="upf-label">Steam features in your build</div>
+    <div class="upf-chips">${feats.map(f => {
+      const t = UPF_TIER[tierOf[f]] || UPF_TIER.degraded;
+      return `<span class="upf-chip ${t.on ? 'is-on' : ''} tooltip-anchor" data-tip="${esc(t.tip)}">${esc(f)}<span class="tooltip-icon">?</span></span>`;
+    }).join('')}</div>` : '';
+
+  return `<div class="upf-panel">${introBlock}${err}${blocks}${stepsBlock}${chips}</div>`;
 }

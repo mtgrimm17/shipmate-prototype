@@ -6744,15 +6744,17 @@ function buildIOSActiveCard(pid, force) {
     // Upload Build step — inline, no modal
     if (step.id === 'uploadBuild') {
       /* Drive the lazy Steam match every render (agent probe + ensureMatch),
-         without building any HTML — so the row flips to "Build from Steam" on
-         its own once MT2 is matched, nothing opened. */
+         without building any HTML — so the row becomes clickable on its own once
+         the Steam build is matched, nothing opened. */
       if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
+      const isMacBuild = (typeof UPF !== 'undefined' && typeof UPF.isMac === 'function' && UPF.isMac(pid));
+      const buildLabel = isMacBuild ? 'Game Build' : stepLabel(pid, step);   // "Game Build" on the Mac App Store
       const steamReady = (typeof UPF !== 'undefined' && typeof UPF.buildReady === 'function') && UPF.buildReady(pid);
       if (steamReady) {
-        /* A Steam build is detected and the agent is up: the step becomes a
-           normal clickable row like every other step — "Build from Steam", a
-           chevron (a spinner while a build runs), opening the step modal whose
-           body is the inspection panel. No inline detail on the card. */
+        /* Agent up and a Steam build matched: the whole row is clickable like
+           every other step — "Game Build", a chevron (a spinner while a build
+           runs) — and opens the modal, which offers Build from Steam or Upload.
+           No file picker on the row. */
         const running = !!(state.upf && state.upf.job);
         const trailing = running ? `<span class="build-proc-spin" style="flex-shrink:0;"></span>` : SM_STEP_CHEVRON;
         return `
@@ -6760,19 +6762,20 @@ function buildIOSActiveCard(pid, force) {
                onclick="openStepModal('${pid}','${step.id}')">
             <div class="${numClass}">${done ? checkSVG : i + 1}</div>
             <div class="ios-step-info">
-              <div class="ios-step-name">Build from Steam</div>
+              <div class="ios-step-name">${buildLabel}</div>
             </div>
             ${trailing}
           </div>`;
       }
-      /* Default: the ordinary inline pill that opens a file picker. */
+      /* No agent / no Steam build: the inline pill opens a file picker. On the
+         Mac App Store it reads "Upload" (the step itself is "Game Build"). */
       return `
         <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="${pid}-step-card-${step.id}">
           <div class="${numClass}">${done ? checkSVG : i + 1}</div>
           <div class="ios-step-info">
-            <div class="ios-step-name">${stepLabel(pid, step)}</div>
+            <div class="ios-step-name">${buildLabel}</div>
           </div>
-          ${buildBuildDropdown(pid)}
+          ${buildBuildDropdown(pid, false, isMacBuild ? 'Upload' : null)}
         </div>`;
     }
 
@@ -7088,11 +7091,21 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     ];
     body = _infLoadingScreen('Generating Report Card…', iaMsgs);
   } else if (stepId === 'uploadBuild') {
-    /* The Build-from-Steam modal. _subStepBodyInner already builds the upload
-       area (the inspection panel when a Steam build is matched, else the
-       file-drop row) plus the release block, so the modal and the inline pane
-       show the same body. */
-    body = _subStepBodyInner(platformId, stepId);
+    /* The Game Build modal — the Build-from-Steam panel (intro + action, the
+       high-level step circles, and the feature chips). The modal footer already
+       carries the "Saved locally" note, so the panel does not repeat it. Falls
+       back to a plain file-drop row if the panel is unavailable (no Steam
+       build), so the Upload option is always present. */
+    const panel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(platformId) : '';
+    if (panel) body = panel;
+    else {
+      const fmt = smBuildAccept(platformId);
+      body = `<div class="ios-step-body-content"><div class="sub-upload-body">
+        <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
+          ${buildBuildDropdown(platformId)}
+          <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
+        </div></div></div>`;
+    }
   } else if (platformId === 'android') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -7385,10 +7398,10 @@ function renderStepModal() {
   const APPLE_FLIP_LABELS = { screenshots: 'Media Carousel' };
   const applePreview = platformId === 'ios' || platformId === 'macos';
   const upfBuildStep = stepId === 'uploadBuild' && typeof UPF !== 'undefined'
-    && typeof UPF.buildReady === 'function' && UPF.buildReady(platformId);
+    && typeof UPF.isMac === 'function' && UPF.isMac(platformId);
   const displayStepLabel = isFlipped
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
-    : (upfBuildStep ? 'Build from Steam'
+    : (upfBuildStep ? 'Game Build'
        : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : '')));
 
   // Step body — one dispatcher, shared with the inline Submission pane.
@@ -20778,7 +20791,7 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
 /* ══════════════════════════════════════════════════════
    BUILD DROPDOWN  (platform card header)
    ══════════════════════════════════════════════════════ */
-function buildBuildDropdown(pid, inModal) {
+function buildBuildDropdown(pid, inModal, noBuildLabel) {
   const build      = state.platformBuilds?.[pid] || null;
   const processing = !!(state.platformBuildProcessing?.[pid]);
   const fmt        = smBuildAccept(pid);          // SM_BUILD_ACCEPT, state.js
@@ -20819,7 +20832,7 @@ function buildBuildDropdown(pid, inModal) {
       <input type="file" id="${inputId}" accept="${accept}" hidden
              onchange="handleBuildUpload('${pid}', this.files)">
       ${noBuild ? uploadSVG : checkSVG}
-      <span class="build-pill-label">${noBuild ? 'Upload Build' : escHtml(build.name)}</span>
+      <span class="build-pill-label">${noBuild ? escHtml(noBuildLabel || 'Upload Build') : escHtml(build.name)}</span>
     </div>`;
 }
 
