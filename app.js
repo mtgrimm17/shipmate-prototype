@@ -25346,9 +25346,19 @@ function _smModeClasses() {
      So `on` stays the solve's (it knows whether the guide really is beside the
      modal, which below 1100px it is not), and `mid` / `panel` are this
      function's. Neither touches the other's arm. */
+  /* AND THE INLINE ARMS ARE A THIRD OWNER THIS USED TO TRAMPLE — the same bug
+     as the paragraph above, one arm further on. `steps` writes the class from
+     its own `renderDashboard` wrapper, and `_smGuideBesideOn` is false in an
+     inline arm, so the `|| !_smGuideBesideOn` escape hatch fired here and
+     CLEARED it. Invisible until something re-rendered without going through
+     that wrapper: pressing a field in the Product Page Preview mounts an
+     editor and repaints the pane, so the preview's own pinned bar came back
+     mid-edit — the one bar the panel exists to replace. This function does not
+     own that class in `steps` or `rail`, so it does not touch it there. */
   const smNow = _smOpenStep();
+  const smInline  = _smMode === 'steps' || _smMode === 'rail';
   const smStepArm = open && (_smMode === 'mid' || _smMode === 'panel');
-  if (smStepArm || !_smGuideBesideOn) {
+  if (!smInline && (smStepArm || !_smGuideBesideOn)) {
     document.body.classList.toggle('sm-step-preview',
       smStepArm && !!smNow && smNow.stepId === 'storePreview');
   }
@@ -26378,10 +26388,89 @@ function _smContentItems(pid) {
    the eye across the scroll instead of a second event happening to you after
    it — hence the call BEFORE the scroll in each of the three doors.
    ══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   WHERE THE STEP'S BODY IS, ASKED RATHER THAN ASSUMED.
+
+   Jaco: "al clicar en los warnings en modo step debería funcionar el mismo dim
+   que en modo modal, y no tenemos la stripe de color a la izquierda de la
+   pregunta."
+
+   Both are one cause. Every one of these passes was written against
+   `#submit-overlay` — the travel, the spotlight, the flagged stripe — because
+   when they were written a step WAS a modal. In the inline arms it is a row in
+   the pane, so every query returned null and the whole vocabulary went quiet:
+   no dim, no stripe, no scroll. Measured with Content Rating open in `steps`:
+   0 `.ios-q-row` inside the overlay (which is `hidden`) and 25 on the page.
+
+   THE SCOPE IS AN ELEMENT, NOT A SELECTOR PREFIX, so every caller stops
+   spelling the container and there is one place that knows where a step lives.
+   It cannot be `document`: Game Details renders its own copy of Content
+   Rating in the Content Questions pane, and a bare `.ios-q-row` would reach it.
+
+   The modal wins whenever one is really open — `hidden` is the overlay's own
+   signal, the same one `_smGuideBesideWatch` watches — because the inline pane
+   is still in the document underneath it. */
+function _smStepScope() {
+  const ov = document.getElementById('submit-overlay');
+  if (ov && !ov.classList.contains('hidden')) return ov;
+  if (_smMode === 'steps' || _smMode === 'rail') {
+    return document.querySelector('.sm-steps-card') || document.querySelector('.sub-pane');
+  }
+  return ov || null;
+}
+function _smStepQ(sel)  { const r = _smStepScope(); return r ? r.querySelector(sel) : null; }
+function _smStepQA(sel) { const r = _smStepScope(); return r ? [...r.querySelectorAll(sel)] : []; }
+
+/* THE STRIPE BESIDE THE QUESTION, LIFTED OUT SO BOTH ARMS DRAW IT. It lived
+   inside the modal arm's `renderGuide` wrapper, which is why the inline arms
+   had none — not a missing rule, a pass that never ran. It is a function of
+   the DOM alone (see the two notes below), so it needs no pid and no step and
+   both callers hand it nothing.
+
+   THE FLAGGED ROW IS FOUND AS THE NOTE'S PREVIOUS SIBLING, the same lookup the
+   warning's own press uses — the builder renders the note immediately after the
+   question it is about, so there is one definition of "which row is this".
+
+   AND THE UNPUBLISHABLE ROWS ARE READ OFF THE PAINT, not off the state: the red
+   pill is `.is-sel-unrated`, so the stripe cannot disagree with the pill about
+   which answer is the problem. Same discipline as `_sppCelebrate`. */
+/* AND IT IS RUN AGAIN RATHER THAN TIMED, BECAUSE THE PASS IS IDEMPOTENT.
+   `toggleStepSection` is async and the step body arrives some frames after the
+   call returns — measured, one `requestAnimationFrame` was too early every
+   time: the function painted correctly when called by hand a second later and
+   found nothing when armed off the render. Guessing which frame is the last
+   one is exactly the per-engine reasoning this file prefers to avoid, and it
+   does not have to be guessed: `_smPaintQFlags` CLEARS and recomputes, so
+   running it four times over 300ms is the same work as running it once, and it
+   cannot be early. The same shape as `_smCrScrollWhenSettled` one function
+   over, which waits for the list rather than for a duration. */
+function _smPaintQFlagsSoon() {
+  const go = () => { try { _smPaintQFlags(); } catch (_) {} };
+  requestAnimationFrame(go);
+  setTimeout(go, 60);
+  setTimeout(go, 160);
+  setTimeout(go, 320);
+}
+
+function _smPaintQFlags() {
+  if (typeof SM_CR_RISK_SEL === 'undefined') return;
+  _smStepQA('.ios-q-row.sm-q-flagged').forEach(n => n.classList.remove('sm-q-flagged'));
+  for (const id of Object.keys(SM_CR_RISK_SEL)) {
+    const note = _smStepQ(SM_CR_RISK_SEL[id]);
+    const row = note && note.previousElementSibling;
+    if (row && row.classList.contains('ios-q-row')) row.classList.add('sm-q-flagged');
+  }
+  _smStepQA('.ios-q-row.sm-q-danger').forEach(n => n.classList.remove('sm-q-danger'));
+  _smStepQA('.intensity-btn.is-sel-unrated').forEach(b => {
+    const row = b.closest('.ios-q-row');
+    if (row) { row.classList.add('sm-q-danger'); row.classList.remove('sm-q-flagged'); }
+  });
+}
+
 function _smCrSpot(targets) {
   if (!_smShippyStep) return;
-  const host = document.querySelector('#submit-overlay .ios-step-body-content')
-            || document.querySelector('#submit-overlay .submit-modal-scroll');
+  const host = _smStepQ('.ios-step-body-content')
+            || _smStepQ('.submit-modal-scroll');
   if (!host) return;
   host.classList.add('sm-cr-spot');
   _smSpotlight(host, targets.filter(Boolean), 900);
@@ -26401,7 +26490,7 @@ function _smCrSectionEls(head) {
 }
 
 function _smCrGo(label) {
-  const heads = [...document.querySelectorAll('#submit-overlay .ios-content-step-label')];
+  const heads = _smStepQA('.ios-content-step-label');
   const el = heads.find(h => h.textContent.trim() === label);
   if (!el) return false;
   _smCrSpot(_smCrSectionEls(el));
@@ -26575,7 +26664,7 @@ function _smCrRiskRows(pid) {
    classes are the step's own machine-readable statement of severity. */
 function _smCrRiskGo(id, retried) {
   const sel = SM_CR_RISK_SEL[id];
-  const note = sel && document.querySelector('#submit-overlay ' + sel);
+  const note = sel && _smStepQ(sel);
   /* THE TARGET IS THE QUESTION, NOT THE NOTE — and it has to be, now that the
      inline note is hidden: a `display: none` element has no box, so scrolling
      to it would aim at 0,0. The note is rendered immediately after the row that
@@ -26773,21 +26862,7 @@ function _smCrRiskGo(id, retried) {
        The row is found as the note's PREVIOUS SIBLING, the same lookup the
        warning's own press uses — the builder renders the note immediately after
        the question, so there is one definition of "which row is this about". */
-    document.querySelectorAll('#submit-overlay .ios-q-row.sm-q-flagged')
-      .forEach(n => n.classList.remove('sm-q-flagged'));
-    for (const id of Object.keys(SM_CR_RISK_SEL)) {
-      const note = document.querySelector('#submit-overlay ' + SM_CR_RISK_SEL[id]);
-      const row = note && note.previousElementSibling;
-      if (row && row.classList.contains('ios-q-row')) row.classList.add('sm-q-flagged');
-    }
-    /* The unpublishable rows are read off the PAINT, not off the state: the red
-       pill is `.is-sel-unrated`, so the stripe cannot disagree with the pill
-       about which answer is the problem. Same discipline as `_sppCelebrate`. */
-    document.querySelectorAll('#submit-overlay .ios-q-row.sm-q-danger')
-      .forEach(n => n.classList.remove('sm-q-danger'));
-    document.querySelectorAll('#submit-overlay .intensity-btn.is-sel-unrated')
-      .forEach(b => { const row = b.closest('.ios-q-row');
-                      if (row) { row.classList.add('sm-q-danger'); row.classList.remove('sm-q-flagged'); } });
+    _smPaintQFlags();
 
     /* The risks, under the list. Rebuilt on every paint rather than patched,
        so an answer you take back removes its warning in the same render.
@@ -26911,7 +26986,7 @@ function _smDocSource(step) {
 function _smRiskBox(card, risks) {
   if (!card) return;
   card.querySelectorAll('.sm-guide-risks').forEach(n => n.remove());
-  if (!risks || !risks.length) return;
+  if (!risks || !risks.length) { _smGuideTabs(card, []); return; }
   const list = card.querySelector('.guide-tasks') || card.querySelector('.gd-task')?.parentElement;
   if (!list) return;
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -26958,7 +27033,131 @@ function _smRiskBox(card, risks) {
   head.lastElementChild.textContent = String(risks.length);
   [...box.querySelectorAll('.sm-risk-text')].forEach((n, i) => { n.textContent = risks[i].label; });
   list.insertAdjacentElement('afterend', box);
+  _smGuideTabs(card, risks);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE WARNINGS GET THEIR OWN FACE, AND A RED ONE TAKES IT.
+
+   Adam: "I almost want a different tab for these alerts… Should alerts pull
+   focus? Red alerts mean the game can't be submitted, so we could make them
+   pull focus until the user resolves the issue." Jaco: "vamos a probar con
+   tabs arriba a la derecha del shippy panel, y que quizás si hay red flag se
+   marque automáticamente en focus."
+
+   THE PROBLEM IS WEIGHT, NOT MIXING, AND THAT IS WHAT THE TAB IS FOR. The
+   warnings were never inside the checklist — `.sm-guide-risks` has always been
+   its own block. Measured on Content Rating with three of them: the checklist
+   is 256px and the block is 362, so the advice outweighs the list it hangs
+   under by 1.4×, and in the `steps` arm the panel came to 734 in 734 of column
+   — one more warning and it scrolls. A face each is what stops a column whose
+   whole argument is that it fits.
+
+   IT IS `.guide-faces`, NOT A SECOND SEGMENTED CONTROL. The card already has
+   one at this exact corner — the checklist/month pair — with its groove, its
+   26px halves, its violet-at-half-strength resting state and its "pressed is
+   the one state that earns a fill". This wears that class and adds its own, so
+   every one of those values is inherited rather than restated; the only thing
+   the extra class does is win past `.sm-step-guide`, which hides the month
+   toggle inside a step and would otherwise hide this too.
+
+   THE HALVES SET, THEY DO NOT TOGGLE — `setGuideFace`'s own rule. Pressing the
+   lit half must be a no-op: a toggle there turns the face OFF, so asking for
+   the checklist while on the checklist would land you on the alerts, which
+   reads as the control breaking.
+
+   IT TOUCHES THE DOM, IT DOES NOT RENDER. `renderGuide` rebuilds this column
+   with innerHTML, so a render on a tab press would throw the panel away and
+   rebuild it from a state this tab is not part of. Two class names, the
+   `gcalWaitHover` rule.
+
+   AND THE TAB CARRIES NO COUNT, DELIBERATELY. The block's own head already
+   prints it ("What this commits you to · 3"), and a badge on a 26px half is a
+   number at ~9px — the size at which this app has twice found a mark stops
+   reading. What the half carries instead is the STATE's colour, in both of its
+   own states: magenta when any warning is red, amber otherwise, from the
+   colour table's own two meanings (red WRONG, amber THIS NEEDS YOU). So the
+   list face still says there is something waiting and what kind of something,
+   which is the whole reason for a tab rather than a drawer.
+
+   THE KEY IS THE SET OF WARNINGS ITSELF. A red pulls focus ONCE per situation,
+   not on every render — the `_sppCelebrate` shape: derived-and-applied every
+   pass would drag you back to the alerts each time you pressed a checklist row,
+   which is a control that refuses to be left. Answering a question changes the
+   signature, so a NEW red is a new situation and pulls focus again, and fixing
+   the last one drops the tabs entirely. */
+let _smTabKey = null, _smTab = 'list';
+
+function _smGuideTabs(card, risks) {
+  if (!card) return;
+  const has = risks && risks.length;
+  card.querySelectorAll('.sm-guide-tabs').forEach(n => n.remove());
+  if (!has) { card.classList.remove('sm-tab-alerts'); _smTabKey = null; return; }
+
+  const danger = risks.some(r => r.danger);
+  /* The signature is what the panel is warning ABOUT, so it changes when an
+     answer changes and not when the column repaints. */
+  const key = risks.map(r => (r.danger ? '!' : '.') + r.step).join('|');
+  if (key !== _smTabKey) { _smTabKey = key; _smTab = danger ? 'alerts' : 'list'; }
+
+  const box = document.createElement('div');
+  box.className = 'guide-faces sm-guide-tabs' + (danger ? ' is-danger' : '');
+  box.setAttribute('role', 'tablist');
+  const half = (id, label, glyph) =>
+    '<button type="button" role="tab" class="guide-face sm-guide-tab sm-guide-tab--' + id +
+    '" aria-label="' + label + '" title="' + label + '" onclick="smGuideTab(\'' + id + '\')">' +
+    glyph + '</button>';
+  box.innerHTML =
+    half('list', 'Checklist', typeof GUIDE_LIST_SVG !== 'undefined' ? GUIDE_LIST_SVG : '') +
+    half('alerts', danger ? 'Blocking alerts' : 'Alerts', SM_ALERT_SVG);
+  card.insertBefore(box, card.firstChild);
+  _smGuideTabsApply(card);
+}
+
+function _smGuideTabsApply(card) {
+  const c = card || document.querySelector('#app-guide .guide-card');
+  if (!c) return;
+  const on = _smTab === 'alerts';
+  c.classList.toggle('sm-tab-alerts', on);
+  /* THE EYEBROW NAMES THE FACE — this card's own rule, written when the month
+     arrived and the line still said "Shippy Guide" on both. A third face has to
+     answer to it or the one line with room to spare goes back to naming the
+     CARD while the control beside it picks between three things.
+
+     The list's own wording is stashed off the rendered text rather than read
+     from the locale, so whatever `renderGuide` put there is what comes back —
+     one less place that has to know this panel's strings. Read at mount, when
+     it is guaranteed to be the render's. */
+  const eb = c.querySelector('.guide-eyebrow');
+  if (eb) {
+    if (eb.dataset.smBase == null) eb.dataset.smBase = eb.textContent;
+    const danger = c.querySelector('.sm-guide-tabs.is-danger');
+    eb.textContent = on ? (danger ? 'Shippy Blockers' : 'Shippy Alerts') : eb.dataset.smBase;
+  }
+  c.querySelectorAll('.sm-guide-tab').forEach(b => {
+    const mine = b.classList.contains('sm-guide-tab--alerts') ? 'alerts' : 'list';
+    b.classList.toggle('is-on', mine === _smTab);
+    b.setAttribute('aria-selected', mine === _smTab ? 'true' : 'false');
+  });
+}
+
+window.smGuideTab = function (tab) {
+  if (tab !== 'list' && tab !== 'alerts') return;
+  if (_smTab === tab) return;
+  _smTab = tab;
+  _smGuideTabsApply();
+};
+
+/* The app's own stroke idiom — 24 viewBox, 2.2, round caps and joins, the same
+   as `smCrossSVG` — so the two halves are one family. The bang is a line and a
+   dot rather than a glyph, because a font's "!" at 15px inside a triangle is a
+   third weight in a control that has exactly two. */
+const SM_ALERT_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M12 4.2 2.6 20.2h18.8L12 4.2Z" stroke="currentColor" stroke-width="2.2"' +
+  ' stroke-linejoin="round"/>' +
+  '<path d="M12 10.4v3.9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' +
+  '<circle cx="12" cy="17.2" r="1.25" fill="currentColor"/></svg>';
 
 /* ══════════════════════════════════════════════════════════════════════════
    THE STEP GROWS OUT OF THE CARD IT BELONGS TO.
@@ -27300,8 +27499,7 @@ function _smCrScrollWhenSettled(el, tries) {
 }
 
 function _smCrFieldGo(fieldId, retried) {
-  const btn = document.querySelector(
-    '#submit-overlay [onclick^="answerIOSField(\'' + fieldId + '\'"]');
+  const btn = _smStepQ('[onclick^="answerIOSField(\'' + fieldId + '\'"]');
   const row = btn && btn.closest('.ios-q-row');
   if (row) {
     _smCrSpot([row]);
@@ -28944,8 +29142,34 @@ function _smStepsPillsHTML(pid) {
 window.smStepsGo = function (pid, stepId) {
   if (state.submission?.openStep?.[pid] === stepId) return false;
   if (typeof toggleStepSection === 'function') toggleStepSection(pid, stepId);
+  _smStepsPreviewClass(pid);
   return true;
 };
+
+/* ══ THE PREVIEW'S OWN BAR IS HIDDEN BY THE OPEN STEP, NOT BY A RENDER ══════
+   `sm-step-preview` is what switches off the Product Page Preview's pinned
+   element bar — the panel beside it is already those eight sections. This arm
+   wrote it from its `renderDashboard` wrapper, and that is the wrong hook for
+   two reasons measured a day apart:
+
+   PRESSING A STEP PILL NEVER REACHES THAT RENDER. `toggleStepSection` is async
+   and repaints through `_renderSubPane`, so the class landed only on the next
+   unrelated `renderDashboard` — the bar drawn, then hidden a beat later, which
+   is the "flashazo… como un remanente" exactly.
+
+   AND PRESSING A FIELD INSIDE THE PREVIEW REPAINTS WITHOUT EITHER. So the
+   class has to be a function of WHICH STEP IS OPEN and nothing else, written
+   by one owner and called from every door. `toggleStepSection` writes
+   `openStep` before its first await, so calling this straight after the press
+   applies the class in the same task the pane is rebuilt in — the bar is never
+   painted at all rather than painted and hidden. */
+function _smStepsPreviewClass(pid) {
+  if (_smMode !== 'steps') return;
+  const id = pid || (typeof submissionTab === 'function' ? submissionTab() : null);
+  const open = id && state.submission?.openStep?.[id];
+  document.body.classList.toggle('sm-step-preview',
+    open === 'storePreview' || open === 'storePreviewPrototype');
+}
 
 /* ══ WIRING THE ARM ════════════════════════════════════════════════════════
    `steps` shares `rail`'s two foundations and differs in the third. Same
@@ -29027,11 +29251,93 @@ window.smStepsGo = function (pid, stepId) {
     const pid = typeof submissionTab === 'function' ? submissionTab() : null;
     const stepId = pid && state.submission?.openStep?.[pid];
     if (!stepId) return out;
+    /* THE SAME TEST `_chkGroups` USES, AND IT HAS TO BE. `openStep` survives
+       turning the card over, so on the settings or the submitted face the
+       panel falls back to the GENERIC submission checklist while this state
+       still names a step — measured, the head was being renamed to that step
+       and the hero introducing the generic list was being hidden under it.
+       Everything below belongs to a panel that really is a step's parts. */
+    if (state.submission?.settings === pid || state.platformFlipped?.[pid]) return out;
     const steps = typeof _paneSteps === 'function' ? _paneSteps(pid) : [];
     const step  = steps.find(s => s.id === stepId);
     const name  = step && typeof stepLabel === 'function' ? stepLabel(pid, step) : null;
     const head  = document.querySelector('#app-guide .guide-tasks-head');
     if (head && head.firstElementChild && name) head.firstElementChild.textContent = name;
+
+    /* ══ THE PANEL IS A STEP'S PANEL, SO IT WEARS THE STEP'S CLASS ═════════
+       Jaco: "quita el párrafo de 'Submit to every platform…' y hazlo igual
+       que el Shippy panel de los modales."
+
+       `sm-step-guide` is that class and it already exists — the modal arms
+       toggle it from their own wrapper, and every rule that makes the panel a
+       step's checklist hangs off it. So this is a THIRD caller of one class
+       rather than a set of new rules, which is the same move the status line
+       and the warnings above made: the panel in `steps` is literally the panel
+       in `panel`, not a copy of it.
+
+       The hero was written for the OTHER face. On the dashboard it introduces
+       a surface you arrive at cold; with a step open the panel is a list ABOUT
+       the thing filling the card beside it, whose name is in the lit pill two
+       rows up — so the two lines describe something you are already looking at
+       and cost ~70px of a column whose whole argument is that its list fits
+       without scrolling.
+
+       WHAT ELSE THE CLASS TAKES, because it is more than the paragraph and
+       both are right here: the checklist/month toggle (a step's parts are not
+       a month, and this arm has no `openStepModal` to force the face back) and
+       the tasks head (the step's name is on the lit pill, so the head was the
+       one thing on this panel saying it twice). It also gives the status line
+       the margins the modal's own copy has — `.guide-card.sm-step-guide
+       .sm-cr-line-moved` — which is the tell that this is the class those
+       panels are built from.
+
+       Gated on a step being open: with none, the generic submission checklist
+       is the right thing to see and the hero still introduces it. */
+    const gcard = document.querySelector('#app-guide .guide-card');
+    if (gcard) gcard.classList.add('sm-step-guide');
+
+    /* ══ THE STATUS LINE AND THE WARNINGS COME ACROSS ══════════════════════
+       Jaco: "quiero que portes el último Shippy panel idea a la versión steps,
+       con los warnings etc."
+
+       They were already built and already generic — `_smRiskBox`,
+       `_smCrDangerRows`, `_smCrRiskRows`, `_smPrivacyRisks` all take a pid and
+       nothing else. What kept them out of this arm is that the passes calling
+       them are gated on `_smOpenStep()`, which is the open step MODAL, and
+       here there is none: the step is a row in the pane. So the port is a
+       second CALLER, not a second implementation — the panels in `steps` are
+       literally the panels in `panel`.
+
+       THE STATUS LINE IS COMPUTED HERE AND CLONED THERE, and that difference
+       is forced rather than chosen. The modal arm clones Content Rating's own
+       `.cr-pinned .sw-tip-text` precisely so the number has one definition —
+       and measured, this arm draws no `.cr-pinned` at all (0 in the document
+       with the CR body plainly rendered, 25 question rows of it). There is
+       nothing to clone, so the sentence is built from `_stepUnansweredCount`,
+       which is the pane's OWN counter — the same one `_subStepRow` prints on
+       the open row. Same number from the same source; only the sentence is
+       written twice, and it is written once here for every step.
+
+       It reuses `.sm-cr-line-moved`, so it inherits that line's type, margins
+       and the height the checklist is spaced against. */
+    const card = document.querySelector('#app-guide .guide-card');
+    if (card) {
+      card.querySelectorAll(':scope > .sm-cr-line-moved').forEach(n => n.remove());
+      const status = _smStepsStatus(pid, stepId);
+      if (status) {
+        const line = document.createElement('div');
+        line.className = 'sw-tip-text sm-cr-line-moved';
+        line.textContent = status;
+        const eb = card.querySelector(':scope > .guide-eyebrow');
+        card.insertBefore(line, eb ? eb.nextSibling : card.firstChild);
+      }
+      _smRiskBox(card, _smStepsStatusRisks(pid, stepId));
+    }
+    /* The stripe beside the flagged question — the same pass the modal arm
+       runs, now that `_smStepScope` can find an inline step body. Outside the
+       `card` guard: it paints the FORM, not the panel, so a panel that failed
+       to build is no reason to leave the questions unmarked. */
+    _smPaintQFlagsSoon();
     return out;
   };
 
@@ -29064,11 +29370,33 @@ window.smStepsGo = function (pid, stepId) {
     }
   };
 
+  /* THE STRIPE IS RE-ARMED AFTER THE PANE, NOT AFTER THE PANEL. Measured, the
+     flags were being painted and then thrown away: `smStepsGo` goes through
+     `toggleStepSection`, which repaints the step body with `_renderSubPane` and
+     does NOT call `renderGuide` — so the pass ran against the OLD body (or none
+     at all) and the new one arrived unmarked. Everything was in place and
+     nothing was on screen: the note was in scope, the unrated pill was in
+     scope, and the classes had been written onto rows that no longer existed.
+
+     `_renderSubPane` is the function that rebuilds that body, so it is the one
+     that has to re-arm — the `_smModalFades` contract, which this file states
+     as "anything appended is destroyed by the render that owns that box".
+     Deferred a frame because the builders it calls finish after it returns. */
+  const origSubPane = window._renderSubPane;
+  if (typeof origSubPane === 'function') {
+    window._renderSubPane = function () {
+      const r = origSubPane.apply(this, arguments);
+      if (armOn()) _smPaintQFlagsSoon();
+      return r;
+    };
+  }
+
   const origRender = window.renderDashboard;
   window.renderDashboard = function () {
     const out = origRender.apply(this, arguments);
     if (!isSteps()) return out;
     requestAnimationFrame(_smRailSubnav);
+    _smPaintQFlagsSoon();
     /* THE PREVIEW'S OWN ELEMENT BAR GOES WHEN THE PANEL CARRIES IT. Jaco's
        own rule from the panel arms: "en Product Page Preview, si tengo el
        Shippy panel NO NECESITO el tab superior de elementos." Here it lands
@@ -29079,12 +29407,13 @@ window.smStepsGo = function (pid, stepId) {
        `sm-step-preview` is the class that already does this; it is written by
        `_smModeClasses` for the modal arms and by `_smGuideBesideSolve` for the
        page one, and neither runs for an inline arm. One owner per arm is that
-       class's own standing rule, so this is a third owner rather than a change
-       to either of theirs. */
+       class's own standing rule, so this arm has a third owner rather than a
+       change to either of theirs — `_smStepsPreviewClass`, declared below and
+       called from the pill press as well, because a render is not the only
+       thing that happens to this pane. This call covers ARRIVING with a step
+       already open, which no press does. */
     const pid = typeof submissionTab === 'function' ? submissionTab() : null;
-    const open = pid && state.submission?.openStep?.[pid];
-    document.body.classList.toggle('sm-step-preview',
-      open === 'storePreview' || open === 'storePreviewPrototype');
+    _smStepsPreviewClass(pid);
     _smStepsMountBar(pid);
     return out;
   };
@@ -29383,6 +29712,110 @@ function _smStepsMountBar(pid) {
       _smPrivacySync(pid, prev);
       if (_getLiveAnswer(pid, 'collectsData') !== before) reRenderStepModal();
       return out;
+    };
+  }
+})();
+
+
+/* ══ WHAT THE PANEL SAYS ABOUT THE OPEN STEP, IN THE `steps` ARM ═══════════
+   Two small routers beside `_smStepsPanelItems`, which already routes the
+   ROWS. Same shape, same reason: the per-step builders exist and take a pid,
+   so what was missing was somebody to ask them once there is no modal to ask
+   on behalf of.
+
+   DANGER BEFORE RISK, because severity is the order — the same concat the
+   Content Rating pass uses, and the one thing a single amber hue cannot say
+   on its own. */
+function _smStepsStatusRisks(pid, stepId) {
+  if (!pid || !stepId) return [];
+  if (stepId === 'contentRating') {
+    const d = typeof _smCrDangerRows === 'function' ? _smCrDangerRows(pid) : [];
+    const r = typeof _smCrRiskRows   === 'function' ? _smCrRiskRows(pid)   : [];
+    return d.concat(r);
+  }
+  if (stepId === 'privacy' || stepId === 'dataSafety') {
+    return typeof _smPrivacyRisks === 'function' ? _smPrivacyRisks(pid) : [];
+  }
+  return [];
+}
+
+/* The sentence over the checklist. Privacy already has one written for it;
+   Content Rating's is built from the pane's own unanswered count, for the
+   reason at the caller. Everything else says nothing rather than something
+   generic — a status line that is true of any step is not a status. */
+function _smStepsStatus(pid, stepId) {
+  if (!pid || !stepId) return '';
+  if (stepId === 'privacy' || stepId === 'dataSafety') {
+    return typeof _smPrivacyStatus === 'function' ? _smPrivacyStatus(pid) : '';
+  }
+  if (stepId === 'contentRating') {
+    if (typeof _stepUnansweredCount !== 'function') return '';
+    const left  = _stepUnansweredCount(pid, stepId) || 0;
+    const total = (typeof IOS_INTENSITY_QUESTIONS !== 'undefined' ? IOS_INTENSITY_QUESTIONS.length : 0)
+                + (typeof IOS_CONTENT_YN_QUESTIONS !== 'undefined' ? IOS_CONTENT_YN_QUESTIONS.length : 0);
+    if (!total) return '';
+    return left === 0 ? `All ${total} answered.` : `${left} of ${total} still to answer.`;
+  }
+  return '';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AN UNPUBLISHABLE STEP IS NOT A FINISHED STEP.
+
+   Adam: "red alerts mean the game can't be submitted, so we could make them
+   pull focus until the user resolves the issue." Jaco: "vamos a hacer lo que
+   dices" — and this is the first of the three, because it is the only one that
+   changes a FACT rather than a presentation.
+
+   MEASURED, THE PREMISE DID NOT HOLD. With Graphic Sexual Content at a
+   frequency that makes the app Unrated, `appleAgeRating` returns "Unrated" and
+   `_appStoreSectionComplete('macos','contentRating')` returns TRUE. The step's
+   own Done button refuses — it is `aria-disabled` and routes to the offending
+   question — but leaving by the ×, by another step pill or by the back arrow
+   gets you to a Submit that counts COMPLETENESS and never asks. So "you cannot
+   publish this" was a sentence in a panel with nothing behind it, and the red
+   disc on the card sat on a step the card also counted as done.
+
+   IT WRAPS THE THREE `is*SectionComplete` FUNCTIONS, NOT THE DISPATCHER.
+   `_appStoreSectionComplete` looks like the one place and is not: gate 2 reads
+   `platformStepCount`, which branches per platform and calls these three
+   DIRECTLY. Wrapping the dispatcher would have fixed the card's disc and left
+   the gate exactly as it was — the kind of half-fix this file keeps recording,
+   where the thing you measured agrees with you and the thing that matters does
+   not.
+
+   THE TEST IS `_smCrDangerRows`, THE PANEL'S OWN. Re-deriving "is this
+   unrated" here would be a second definition of the same question, and the two
+   would eventually disagree about which answers count — so the red rows in
+   Shippy, the red disc on the card and the refusal at Submit are one predicate
+   read three times. It is per platform because these three functions each
+   imply one; Content Rating's answers are shared across the App Store family,
+   so all three reach the same verdict from the same bucket.
+
+   IT ONLY EVER TAKES COMPLETENESS AWAY. A step that was already incomplete for
+   its own reasons stays incomplete and keeps saying so — this adds a reason,
+   it does not replace the predicate.
+
+   WHAT IT DELIBERATELY DOES NOT DO IS TRAP YOU. Adam's "force the user to
+   immediately resolve" is answered by the alerts face taking focus once and by
+   this refusal at the end; there is no pointer lock and no modal over the
+   step, because you may legitimately need to go and look at something before
+   you decide, and this app has refused that shape before. You can wander. You
+   cannot ship.
+   ══════════════════════════════════════════════════════════════════════════ */
+(() => {
+  const arms = [['isIOSSectionComplete', 'ios'],
+                ['isMacSectionComplete', 'macos'],
+                ['isMacFullSectionComplete', 'macos_full']];
+  for (const [name, pid] of arms) {
+    const orig = window[name];
+    if (typeof orig !== 'function') continue;
+    window[name] = function (sectionId) {
+      const out = orig.apply(this, arguments);
+      if (!out || sectionId !== 'contentRating') return out;
+      try {
+        return (typeof _smCrDangerRows === 'function' && _smCrDangerRows(pid).length) ? false : out;
+      } catch (_) { return out; }
     };
   }
 })();

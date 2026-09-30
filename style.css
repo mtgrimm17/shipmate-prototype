@@ -25338,17 +25338,30 @@ body.sm-arm-steps.sm-step-preview .spp-pinned:not(.sm-steps-pinned) { display: n
 .gd-task.sm-task-bad .gd-task-box   { background: var(--magenta); }
 .gd-task.sm-task-bad .gd-task-label { color: var(--text); }
 
-/* ── THE CROSS IS SMALLER THAN THE CHECK, IN BOTH PLACES ───────────────────
-   The check is sized to the FULL width of its disc — that is the app's rule and
-   the reason the ink lands at the same 38.3% everywhere. A cross at the same
-   size does not read the same: it carries more ink per unit and its corners
-   reach further from the centre than the check's furthest point does, so at
-   100% it fills the disc where the check sits inside it.
+/* ── THE CROSS IS THE CHECK'S SIZE, AND THE 76% WAS MEASURED WRONG ─────────
+   Jaco: "la X de content rating, cógela para que sea igual que la de la
+   platform card, porque parece descentrada."
 
-   One number for both surfaces, so the panel and the pinned bar cannot drift
-   into two sizes for one glyph — which is the whole argument for the panel
-   borrowing the bar's state in the first place. */
-:root { --sm-cross-scale: 76%; }
+   It is not off-centre — measured, the ink sits on the disc's centre to 0.00 on
+   both axes here and on the card. It is SMALL, and an undersized mark floating
+   in a circle is what "descentrada" looks like from the chair.
+
+   THE OLD NUMBER RESTED ON A CLAIM THE GLYPH ITSELF DISPROVES. It read "its
+   corners reach further from the centre than the check's furthest point does",
+   and `smCrossSVG` was solved against exactly that: the check's furthest point
+   (16.6, 8.7) is 5.661 units from (12,12), so the cross runs 8 → 16 because a
+   corner at (16,16) is √(4²+4²) = 5.657 away. The two reach the SAME radius by
+   construction — that is the whole reason the path is not 7.5 → 16.5 — and the
+   76% was the one thing undoing it. Measured against the platform card's, which
+   never had the override: card 22px disc / 7.33 ink, pill 15px disc / 3.80 ink,
+   i.e. 33.3% against 25.3%, so a bad disc's mark was a quarter shorter than the
+   done disc beside it.
+
+   So the scale goes to 100%, which is `.ios-step-num svg`'s own rule and needs
+   no override at all — the token stays only because `.gd-task-box` has no such
+   rule of its own, and one number still serves both surfaces so the panel and
+   the pinned bar cannot drift into two sizes for one glyph. */
+:root { --sm-cross-scale: 100%; }
 .gd-task.sm-task-bad .gd-task-box svg,
 .spp-pin-tick.is-bad svg { width: var(--sm-cross-scale); height: var(--sm-cross-scale); }
 
@@ -25995,6 +26008,8 @@ body.sm-step-closing .sm-hd-right {
    is by definition answered. */
 body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-flagged,
 body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-flagged,
+body.sm-arm-steps .sm-steps-card .ios-q-row.sm-q-flagged,
+body.sm-arm-rail .sm-steps-card .ios-q-row.sm-q-flagged,
 body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged {
   /* A STRIPE, NOT A RAIL, AND NO WASH. Jaco: "no me gusta ese tipo de rail;
      prefiero una stripe con rounded corners y sin el highlight naranja, al
@@ -26017,6 +26032,8 @@ body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged {
 }
 body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-flagged::before,
 body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-flagged::before,
+body.sm-arm-steps .sm-steps-card .ios-q-row.sm-q-flagged::before,
+body.sm-arm-rail .sm-steps-card .ios-q-row.sm-q-flagged::before,
 body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged::before {
   content: ''; position: absolute;
   /* ON THE SECTION TITLES' COLUMN. Jaco: "que en el caso de content card, esté
@@ -26061,9 +26078,13 @@ body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-flagged::before {
 /* And the question that cannot ship wears the same red stripe in the form. */
 body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-danger,
 body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-danger,
+body.sm-arm-steps .sm-steps-card .ios-q-row.sm-q-danger,
+body.sm-arm-rail .sm-steps-card .ios-q-row.sm-q-danger,
 body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-danger { position: relative; background: none; }
 body.sm-guide-beside #submit-overlay .ios-q-row.sm-q-danger::before,
 body.sm-guide-mid #submit-overlay .ios-q-row.sm-q-danger::before,
+body.sm-arm-steps .sm-steps-card .ios-q-row.sm-q-danger::before,
+body.sm-arm-rail .sm-steps-card .ios-q-row.sm-q-danger::before,
 body.sm-guide-panel #submit-overlay .ios-q-row.sm-q-danger::before {
   content: ''; position: absolute;
   left: 8px; top: 3px; bottom: 3px; width: 3px;
@@ -27995,3 +28016,52 @@ body.sm-arm-steps #sm-steps-bar .spp-pin {
      ring follows for free: that `::after` is `border-radius: inherit`. */
   border-radius: var(--pill-radius);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE WARNINGS' OWN FACE — see the long note at `_smGuideTabs` (app.js) for
+   why this exists and why it is the card's existing segmented control rather
+   than a second one. Everything visual is inherited from `.guide-faces` and
+   `.guide-face`; what is here is only what differs.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* `.sm-step-guide` hides the checklist/month toggle inside a step — right, and
+   it would hide this with it, since this IS a `.guide-faces`. The exception is
+   written on that rule's own selector rather than as a louder rule of ours, so
+   there is one statement of "which toggle a step panel shows". */
+.guide-card.sm-step-guide .guide-faces.sm-guide-tabs { display: flex; }
+
+/* TWO SIZES FOR TWO GLYPHS, the pair's own rule: the list mark is strokes with
+   air between them and the triangle is a closed outline that reads heavier, so
+   15 against 16 puts the same ink on each half. */
+.sm-guide-tab--list svg  { width: 16px; height: 16px; }
+.sm-guide-tab--alerts svg { width: 15px; height: 15px; }
+
+/* THE ALERTS HALF WEARS THE STATE'S COLOUR IN BOTH OF ITS OWN STATES, which is
+   what lets the checklist face still say there is something waiting and what
+   kind. The two hues are the colour table's, unchanged: `--magenta` is WRONG
+   (the app cannot ship) and #FFB86B is THIS NEEDS YOU (an obligation outside
+   the app). Resting is the same half-strength the unpicked list half wears,
+   stated as one alpha of the hue rather than a colour plus an opacity. */
+.sm-guide-tab--alerts            { color: rgba(255, 184, 107, .62); }
+.sm-guide-tab--alerts:hover      { color: rgba(255, 184, 107, .92); }
+.sm-guide-tabs.is-danger .sm-guide-tab--alerts       { color: rgba(255, 59, 118, .68); }
+.sm-guide-tabs.is-danger .sm-guide-tab--alerts:hover { color: rgba(255, 59, 118, .95); }
+/* Pressed still earns the fill — the control's own sentence — and the glyph
+   goes to full strength rather than to the white the other half takes, because
+   here the colour IS the message. Three classes, so it outranks `.guide-face.
+   is-on`'s own `color: #fff`. */
+.guide-face.sm-guide-tab--alerts.is-on               { background: rgba(255, 184, 107, .18);
+                                                       color: #FFB86B; }
+.sm-guide-tabs.is-danger .guide-face.sm-guide-tab--alerts.is-on
+                                                     { background: rgba(255, 59, 118, .18);
+                                                       color: #ff3b78; }
+
+/* ONE FACE AT A TIME, AND THE STATUS LINE BELONGS TO NEITHER. The eyebrow and
+   the moved line name the STEP, so they sit above the control and stay on both
+   faces; what swaps is the list and the block. */
+.guide-card.sm-tab-alerts .guide-tasks,
+.guide-card.sm-tab-alerts .guide-tasks-head { display: none; }
+.guide-card:not(.sm-tab-alerts) .sm-guide-risks { display: none; }
+/* With a face of its own the block is no longer a postscript under a list, so
+   it gives up the separation it needed there. */
+.guide-card.sm-tab-alerts .sm-guide-risks { margin-top: 0; border-top: none; padding-top: 0; }
