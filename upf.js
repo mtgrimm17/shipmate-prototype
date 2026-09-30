@@ -485,7 +485,21 @@ const UPF = {
      unless their conditions hold, so this is safe to call on every connect. */
   onConnected(pid) {
     this.sync('account connected');
-    try { _upfMaybePublish(pid); } catch (_) {}
+    // The developer just cleared the Connect step — take over and continue:
+    // build now if nothing is built, or upload if a build is waiting.
+    try { upfAdvance(pid); } catch (_) {}
+  },
+
+  /* Open the account sign-in over the modal (the browser-framed connect flow).
+     Used by the Connect step's alert; completing it lands in connectAdd →
+     onConnected, which resumes the build. */
+  startConnect(pid) {
+    try {
+      state.extensionInstalled = true;
+      if (typeof _setConnectStage === 'function') _setConnectStage(pid, 'signin');
+      if (typeof openAscLogin === 'function') { openAscLogin(pid); return; }
+      if (typeof connectInstall === 'function') connectInstall(pid);
+    } catch (_) {}
   },
 };
 
@@ -653,6 +667,10 @@ function _upfMaybePublish(pid) {
   if (!b || b.source !== 'upf' || b.uploaded) return;
   if (!state.upf.agent) return;
   if (typeof isPlatformConnected !== 'function' || !isPlatformConnected(pid)) return;
+  // Uploading needs the app record on App Store Connect, which only the developer
+  // can create (Apple's API forbids it). Wait until they mark it done — the
+  // "Create your app in App Store Connect" step in the build flow.
+  if (!state.upf.appRecord) return;
   upfPublish(pid);
 }
 
@@ -916,6 +934,123 @@ const UPF_FEATURES = {
   Screenshots:       { name: 'Steam screenshots',    carries: false, tip: 'Doesn’t carry over — Steam’s screenshot capture isn’t available; macOS screenshots still work.' },
 };
 
+/* ── THE ONE BUILD FLOW: agent steps and the developer's steps, interleaved ──
+   A single ordered list the modal shows as "Build steps". Pressing Build from
+   Steam runs the agent as far down as it can; when the next thing is a mandatory
+   USER step it stops there and that step alerts (amber, the app's "this needs
+   you" colour). The developer does it, and the agent takes over again.
+
+   Real dependency order: signing needs certificates the account provisions, so
+   Connect comes first; the local build (copy → package) then runs; the app
+   record must exist on the ASC website before the upload can land; upload,
+   processing and the internal-TestFlight submit are automatic; then the human
+   installs and tests it. `stage` maps an agent row to the agent's own stage
+   clock (UPF_STAGES / state.upf.stage). */
+const UPF_FLOW = [
+  { id: 'connect',    kind: 'user'  },
+  { id: 'copy',       kind: 'agent', stage: 0 },
+  { id: 'shim',       kind: 'agent', stage: 1 },
+  { id: 'sandbox',    kind: 'agent', stage: 2 },
+  { id: 'sign',       kind: 'agent', stage: 3 },
+  { id: 'package',    kind: 'agent', stage: 4 },
+  { id: 'apprecord',  kind: 'user'  },
+  { id: 'upload',     kind: 'agent', stage: 5 },
+  { id: 'process',    kind: 'agent', stage: 6 },
+  { id: 'testflight', kind: 'agent' },
+  { id: 'test',       kind: 'user'  },
+];
+const UPF_FLOW_LABEL = {
+  connect:    'Connect your Apple Developer account',
+  copy:       'Copy and inspect the Steam build',
+  shim:       'Replace Steam with the shim',
+  sandbox:    'Sandbox and entitlements',
+  sign:       'Code-sign for the Mac App Store',
+  package:    'Package for the Mac App Store',
+  apprecord:  'Create your app in App Store Connect',
+  upload:     'Upload to App Store Connect',
+  process:    'Wait for Apple to process the build',
+  testflight: 'Submit to internal TestFlight',
+  test:       'Test the internal TestFlight build',
+};
+/* The developer steps' alert content: what to do, and how to clear it. `href`
+   opens the place to do it; `confirm` is the state.upf flag the "mark done"
+   button sets (connect clears itself when the account state flips). */
+const UPF_USER_STEP = {
+  connect:   { cta: 'Connect account', onclick: "UPF.startConnect('%PID%')",
+               help: 'Sign in with your Apple Developer account so Shipmate can sign the build and, later, upload it.' },
+  apprecord: { cta: 'Open App Store Connect', href: 'https://appstoreconnect.apple.com/apps',
+               confirm: 'appRecord', confirmCta: 'I’ve created it',
+               help: 'Create the app on the App Store Connect website — Apple doesn’t allow this over the API — then mark it done.' },
+  test:      { cta: 'Open TestFlight', href: 'https://appstoreconnect.apple.com/apps',
+               confirm: 'tested', confirmCta: 'It runs',
+               help: 'Install the build from TestFlight on this Mac and check that it launches and plays.' },
+};
+
+function _upfFlowDone(pid, id) {
+  const u = state.upf || {};
+  const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
+  const built = !!(u.built || u.uploaded);
+  const uploaded = !!u.uploaded;
+  const prep = u.job && u.job.kind === 'prepare';
+  const pub  = u.job && u.job.kind === 'publish';
+  switch (id) {
+    case 'connect':   return connected;
+    case 'copy': case 'shim': case 'sandbox': case 'sign': case 'package': {
+      const s = UPF_FLOW.find(f => f.id === id).stage;
+      return built || uploaded || (prep && s < u.stage);
+    }
+    case 'apprecord': return !!u.appRecord || uploaded;
+    case 'upload':    return uploaded || (pub && u.stage > 5);
+    case 'process':   return uploaded;
+    case 'testflight':return uploaded;
+    case 'test':      return !!u.tested;
+  }
+  return false;
+}
+
+/* Each row with its status: done | active (agent working it now) | current
+   (the agent's next, idle until Build is pressed) | blocker (a user step that is
+   next and unmet — the amber alert) | todo. */
+function _upfFlowRows(pid) {
+  const u = state.upf || {};
+  const prep = u.job && u.job.kind === 'prepare';
+  const pub  = u.job && u.job.kind === 'publish';
+  const rows = UPF_FLOW.map(f => ({ id: f.id, kind: f.kind, stage: f.stage,
+                                    label: UPF_FLOW_LABEL[f.id], done: _upfFlowDone(pid, f.id) }));
+  const curIdx = rows.findIndex(r => !r.done);
+  rows.forEach((r, i) => {
+    if (r.done)        { r.status = 'done'; return; }
+    if (i !== curIdx)  { r.status = 'todo'; return; }
+    if (r.kind === 'user') { r.status = 'blocker'; return; }
+    const running = (prep || pub) && r.stage === u.stage;
+    r.status = running ? 'active' : 'current';
+  });
+  return rows;
+}
+
+/* Press Build from Steam / take over after a user step: run the agent as far as
+   it can, or surface the next user step. Safe to call repeatedly. */
+function upfAdvance(pid) {
+  if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return;
+  const u = state.upf || {};
+  const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
+  if (u.job) { _upfRepaint(pid, true); return; }        // already working
+  if (!connected) { UPF.startConnect(pid); return; }     // blocked at Connect
+  if (!u.built && !u.uploaded) { upfBuild(pid); return; }// run the local build
+  if (u.built && !u.uploaded) {                          // built, waiting to upload
+    if (!u.appRecord) { _upfRepaint(pid, true); return; }// blocked at Create app
+    _upfMaybePublish(pid); return;                       // upload (gated inside)
+  }
+  _upfRepaint(pid, true);                                 // uploaded → Test is the blocker
+}
+
+/* A developer step's "mark done" — sets the flag and lets the agent continue. */
+function upfMarkStep(pid, flag) {
+  state.upf[flag] = true;
+  _upfRepaint(pid, true);
+  upfAdvance(pid);
+}
+
 function upfBuildPanelHTML(pid) {
   if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return '';
   const u = state.upf;
@@ -940,31 +1075,30 @@ function upfBuildPanelHTML(pid) {
   const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
   const name = esc(u.game.name);
 
-  /* ── The intro line, game-specific, and the primary action beneath it.
-     One short paragraph that changes with state; the button sits right under. */
+  /* ── The intro line, game-specific, and the primary action beneath it. The
+     step list below carries the detailed state; the intro just sets the scene,
+     and the button is the single "start the agent" trigger (upfAdvance runs it
+     as far as it can, surfacing the next user step). */
   let intro, actions = '';
   if (done && u.result && u.result.buildId) {
-    intro = `<strong>Done.</strong> ${name} — build ${esc(u.result.buildVersion)} is in App Store Connect (build id ${esc(u.result.buildId)}). It is uploaded and processed, not submitted yet — choose a destination and press Submit to distribute it.`;
-  } else if (running) {
-    intro = `Building ${name} from its Steam build. You can close this — it keeps going on your Mac, and reopening the step shows where it is.`;
-  } else if (built) {
-    intro = connected
-      ? `<strong>Build ready.</strong> Uploading ${name} to App Store Connect…`
-      : `<strong>Build ready.</strong> Connect your Apple account in Settings and ${name} uploads to App Store Connect on its own — no rebuild.`;
+    intro = `<strong>Done.</strong> ${name} — build ${esc(u.result.buildVersion)} is in App Store Connect (build id ${esc(u.result.buildId)}). It is uploaded and processed; choose a destination and press Submit to distribute it.`;
   } else if (failed) {
     intro = `The build stopped. ${name}’s Steam build is untouched — you can try again.`;
-    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();${upfPending ? 'upfPublish' : 'upfBuild'}('${pid}')">Try again</button></div>`;
+    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Try again</button></div>`;
   } else {
-    /* Rest — the confirmation. Game-specific paragraph, then the button, then
-       an Upload alternative (the modal offers Build from Steam OR Upload). */
     intro = `Shipmate generates a new Mac App Store build from ${name}’s Steam build on this Mac — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched.`;
-    actions = blockers.length
-      ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
-      : `<div class="upf-actions">
-           <button class="imp-cta" onclick="event.stopPropagation();upfBuild('${pid}')">Build from Steam</button>
-           <button class="upf-alt" onclick="event.stopPropagation();document.getElementById('upf-alt-up-${pid}').click()">Upload a build instead</button>
-           <input type="file" id="upf-alt-up-${pid}" accept="${esc(smBuildAccept(pid).accept)}" hidden onchange="handleBuildUpload('${pid}', this.files)">
-         </div>`;
+    /* The button shows only when nothing is running and no build exists yet — the
+       one moment "Build from Steam" is the next move. Once it is under way (or a
+       build is waiting on a user step) the list's own rows carry the state. */
+    if (!running && !built && !done) {
+      actions = blockers.length
+        ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
+        : `<div class="upf-actions">
+             <button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Build from Steam</button>
+             <button class="upf-alt" onclick="event.stopPropagation();document.getElementById('upf-alt-up-${pid}').click()">Upload a build instead</button>
+             <input type="file" id="upf-alt-up-${pid}" accept="${esc(smBuildAccept(pid).accept)}" hidden onchange="handleBuildUpload('${pid}', this.files)">
+           </div>`;
+    }
   }
   const introBlock = `<div class="upf-intro">${intro}</div>${actions}`;
   const err = (u.error && !running && !failed) ? `<div class="upf-error">${esc(u.error)}</div>` : '';
@@ -992,30 +1126,33 @@ function upfBuildPanelHTML(pid) {
       return `<span class="upf-chip ${f.carries ? 'is-on' : ''} tooltip-anchor" data-tip="${esc(f.tip)}">${esc(nm)}<span class="tooltip-icon">?</span></span>`;
     }).join('')}</div>` : '';
 
-  /* ── The build itself, as high-level step circles: empty at rest, a spinner on
-     the running step, a green check when done — the app's own discs/spinner/tick.
-     ONLY the local build stages (0–4) belong here; uploading to App Store
-     Connect, waiting for processing, and Game Center setup (stages 5–7) need a
-     connected Apple account, so they are not part of build generation — a note
-     below says when they happen. state.upf.stage drives it, and _upfRepaint
-     re-renders this modal on every agent line. */
-  const cur = u.stage;
-  const active = running || built || done || failed;
-  const buildDone = done || (built && !running);      // local .pkg finished
-  const BUILD_STAGES = UPF_STAGES.slice(0, 5);
-  const stepRows = BUILD_STAGES.map((s, i) => {
-    let st = '';
-    if (buildDone) st = 'is-done';
-    else if (active) st = (failed && i === cur) ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
-    const mark = st === 'is-done' ? (typeof smCheckSVG === 'function' ? smCheckSVG(18) : '✓')
-               : (st === 'is-bad' ? '✕'
-               : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : ''));
-    return `<li class="upf-step ${st}"><span class="upf-step-disc">${mark}</span><span class="upf-step-label">${esc(s.label)}</span></li>`;
+  /* ── Build steps: ONE list of the agent's work and the developer's, in order.
+     Each row is done (green tick) / active (the agent working it, spinner) /
+     blocker (a user step that is next and unmet — amber, "this needs you", with
+     its own action) / current (the agent's next, idle) / todo. The agent runs to
+     the next blocker; the developer clears it and the agent takes over again. */
+  const CHECK = (typeof smCheckSVG === 'function') ? smCheckSVG(18) : '✓';
+  const flowRows = _upfFlowRows(pid).map(r => {
+    const disc =
+        r.status === 'done'    ? `<span class="upf-step-disc is-done">${CHECK}</span>`
+      : r.status === 'active'  ? `<span class="upf-step-disc is-active"><span class="build-proc-spin"></span></span>`
+      : r.status === 'blocker' ? `<span class="upf-step-disc is-alert">!</span>`
+      :                          `<span class="upf-step-disc"></span>`;
+    let main = `<span class="upf-step-label">${esc(r.label)}</span>`;
+    if (r.status === 'blocker') {
+      const meta = UPF_USER_STEP[r.id] || {};
+      const cta = meta.href
+        ? `<a class="imp-cta imp-cta--sm" href="${meta.href}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(meta.cta || 'Open')}</a>`
+        : (meta.onclick ? `<button class="imp-cta imp-cta--sm" onclick="event.stopPropagation();${meta.onclick.replace('%PID%', pid)}">${esc(meta.cta || 'Do it')}</button>` : '');
+      const confirm = meta.confirm
+        ? `<button class="upf-alt" onclick="event.stopPropagation();upfMarkStep('${pid}','${meta.confirm}')">${esc(meta.confirmCta || 'Done')}</button>`
+        : '';
+      main += `<div class="upf-step-alert">${meta.help ? `<span class="upf-step-help">${esc(meta.help)}</span>` : ''}<div class="upf-step-cta">${cta}${confirm}</div></div>`;
+    }
+    return `<li class="upf-step is-${r.status} kind-${r.kind}">${disc}<div class="upf-step-main">${main}</div></li>`;
   }).join('');
-  const postNote = !done ? `<div class="upf-note">Once you connect an Apple account in Settings, Shipmate uploads the build to App Store Connect and waits for it to finish processing — automatically.</div>` : '';
-  const stepsBlock = `<div class="upf-label">What happens</div><ul class="upf-steps">${stepRows}</ul>${postNote}`;
+  const stepsBlock = `<div class="upf-label">Build steps</div><ul class="upf-steps">${flowRows}</ul>`;
 
-  /* Order: intro + action explain what this is; then what carries over from
-     Steam; then the build's own steps. */
+  /* Order: intro + action; then what carries over from Steam; then the steps. */
   return `<div class="upf-panel">${introBlock}${err}${blocks}${chips}${stepsBlock}</div>`;
 }

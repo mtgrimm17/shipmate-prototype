@@ -7656,23 +7656,38 @@ body.viewing-splash .app-subnav { display: none; }
 .upf-list li { font-size: 12.5px; color: var(--text); line-height: 1.5; }
 .upf-list.is-bad li { color: #f87171; }
 
-/* High-level steps as circles. Empty disc at rest; spinner on the running one;
-   green filled disc with a check when done; red when failed. */
-.upf-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.upf-step { display: flex; align-items: center; gap: 11px; font-size: 13px; color: var(--text-dim); }
+/* The one build-steps list: agent work and the developer's, interleaved. Empty
+   disc at rest; spinner while the agent works a step; green tick when done; and
+   an amber "!" alert on the user step the agent is waiting on. */
+.upf-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.upf-step { display: flex; align-items: flex-start; gap: 11px; font-size: 13px; color: var(--text-dim); }
 .upf-step.is-done,
-.upf-step.is-current { color: var(--text); }
-.upf-step.is-bad { color: #f87171; }
+.upf-step.is-active,
+.upf-step.is-blocker { color: var(--text); }
+.upf-step-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.upf-step-label { line-height: 20px; }
 .upf-step-disc {
   flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
   border: 1.5px solid var(--border); background: transparent;
   display: inline-flex; align-items: center; justify-content: center;
-  color: #0a1410; transition: background .2s, border-color .2s;
+  font-size: 12px; font-weight: 700; color: #0a1410;
+  transition: background .2s, border-color .2s;
 }
-.upf-step.is-current .upf-step-disc { border-color: var(--green); }
-.upf-step.is-done .upf-step-disc { background: var(--green); border-color: var(--green); }
-.upf-step.is-bad .upf-step-disc { border-color: #f87171; color: #f87171; }
-.upf-step-label { flex: 1; }
+.upf-step-disc.is-active { border-color: var(--green); }
+.upf-step-disc.is-done { background: var(--green); border-color: var(--green); }
+.upf-step-disc.is-alert { background: #FFB86B; border-color: #FFB86B; color: #241403; }
+
+/* The blocking user step: amber label, and an alert box with what to do. */
+.upf-step.is-blocker .upf-step-label { color: #FFB86B; font-weight: 600; }
+.upf-step-alert {
+  border: 1px solid rgba(255, 184, 107, .35);
+  background: rgba(255, 184, 107, .08);
+  border-radius: 10px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.upf-step-help { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.upf-step-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.imp-cta.imp-cta--sm { width: auto; padding: 6px 14px; font-size: 12.5px; text-decoration: none; display: inline-flex; }
 
 /* Steam feature chips — lit when the feature carries over, grey when it goes
    dark. The "?" is the app's own tooltip-anchor. */
