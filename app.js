@@ -3266,6 +3266,9 @@ function closeStepModal() {
     if (!state.stepSaveAttempted) state.stepSaveAttempted = new Set();
     state.stepSaveAttempted.add(`${sm.platformId}-${sm.stepId}`);
   }
+  /* UPF: once an account is connected, closing a step (Save & Close / × / Esc)
+     re-syncs the collected fields to App Store Connect. No-op otherwise (upf.js). */
+  if (typeof UPF !== 'undefined') UPF.sync('saved');
 
   // Tear down doc pane group wrapper if present
   const overlay = document.getElementById('submit-overlay');
@@ -6708,6 +6711,16 @@ function _doFinalSubmit(platformId, trackId) {
   }
   state.platformStepStatus[platformId]['submit'] = 'complete';
 
+  /* UPF: the user pressed Submit. For a connected Mac App Store platform this
+     is the moment to put the processed build into internal TestFlight — the
+     real distribution the build prep deliberately stopped short of. Guarded to
+     a connected Mac platform, so every other platform and the disconnected
+     case are untouched (upf.js). */
+  if (typeof UPF !== 'undefined' && UPF.isMac(platformId)
+      && typeof isPlatformConnected === 'function' && isPlatformConnected(platformId)) {
+    UPF.submitTestFlight(platformId, trackId);
+  }
+
   /* SUBMITTING DOES NOT FLIP THE CARD — IT CLOSES IT. Read this before
      reaching for `rotateY` here again.
 
@@ -7347,6 +7360,9 @@ function connectAdd(pid) {
   state.platformAuth[pid] = { loggedIn: true, username: email };
   if (state.connectStage) delete state.connectStage[pid];
   _flipPlatformCard(pid, 'steps', 1); // connect face → steps (now connected)
+  /* UPF: connecting a Mac account is what unlocks writing to App Store Connect.
+     Push everything collected so far now; subsequent saves re-sync (upf.js). */
+  if (typeof UPF !== 'undefined' && UPF.isMac(pid)) UPF.sync('account connected');
 }
 
 // Re-render a single active card in place (no flip animation).

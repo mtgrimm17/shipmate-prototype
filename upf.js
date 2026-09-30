@@ -1,5 +1,5 @@
 /* ============================================================
-   UPF — the local build agent (v7.39)
+   UPF — the local build agent (v7.49)
    ============================================================
    UPF turns an installed Steam Mac build into a Mac App Store build: it
    swaps the Steam runtime for a shim that talks to Game Center, signs and
@@ -88,6 +88,181 @@ const UPF = {
     const ins = await this._post('/inspect', { game: g.app });
     state.upf.manifest = ins.manifest || null;
     return state.upf.game;
+  },
+
+  /* ── ASC SYNC, GATED ON A CONNECTED ACCOUNT ──────────────────────────────
+     Nothing is written to App Store Connect until the user completes the
+     account-connect flow in Settings (the stubbed portal sign-in), which sets
+     state.platformAuth[pid].loggedIn — the same flag isPlatformConnected reads.
+     After that, the collected fields are pushed to ASC through the agent's
+     /populate, on connect and after each step is saved/closed. */
+
+  connectedMac() {
+    return UPF_MAC_PIDS.find(pid =>
+      state.activePlatforms && state.activePlatforms.has && state.activePlatforms.has(pid)
+      && typeof isPlatformConnected === 'function' && isPlatformConnected(pid)) || null;
+  },
+
+  /* Read a Content Rating / Data Privacy answer through the app's own router. */
+  _answer(pid, field) {
+    if (typeof _appStoreAnswers !== 'function') return undefined;
+    const a = _appStoreAnswers(pid, field);
+    return a ? a[field] : undefined;
+  },
+
+  /* Shipmate's content-rating answers → Apple's ageRatingDeclaration vocabulary.
+     Intensity none/infrequent/frequent → NONE/INFREQUENT_OR_MILD/FREQUENT_OR_INTENSE;
+     yes/no → true/false. Only the keys with an answer are sent; the agent fills
+     the rest of the required declaration with safe defaults. */
+  _ageRating(pid) {
+    const I = { none: 'NONE', infrequent: 'INFREQUENT_OR_MILD', frequent: 'FREQUENT_OR_INTENSE' };
+    const intensity = {
+      profanity: 'profanityOrCrudeHumor', horrorFear: 'horrorOrFearThemes',
+      substancesAlcohol: 'alcoholTobaccoOrDrugUseOrReferences', medicalTreatment: 'medicalOrTreatmentInformation',
+      matureSuggestive: 'matureOrSuggestiveThemes', sexualContent: 'sexualContentOrNudity',
+      graphicSexual: 'sexualContentGraphicAndNudity', cartoonViolence: 'violenceCartoonOrFantasy',
+      realisticViolence: 'violenceRealistic', extendedViolence: 'violenceRealisticProlongedGraphicOrSadistic',
+      gunsWeapons: 'gunsOrOtherWeapons', simulatedGambling: 'gamblingSimulated', contests: 'contests',
+    };
+    const bool = {
+      parentalControls: 'parentalControls', ageAssurance: 'ageAssurance', unrestrictedInternet: 'unrestrictedWebAccess',
+      userGenContent: 'userGeneratedContent', socialMedia: 'socialMedia', socialMediaU13Off: 'socialMediaAgeRestricted',
+      messagingChat: 'messagingAndChat', advertising: 'advertising', healthWellness: 'healthOrWellnessTopics',
+      realMoneyGambling: 'gambling', lootBoxes: 'lootBox',
+    };
+    const out = {};
+    for (const [ship, asc] of Object.entries(intensity)) {
+      const v = this._answer(pid, ship);
+      if (v != null && I[v]) out[asc] = I[v];
+    }
+    for (const [ship, asc] of Object.entries(bool)) {
+      const v = this._answer(pid, ship);
+      if (v === 'yes' || v === 'no') out[asc] = (v === 'yes');
+    }
+    return Object.keys(out).length ? out : null;
+  },
+
+  /* Shipmate's Data Privacy answers → Apple's App Privacy (nutrition labels)
+     vocabulary. Shipmate stores `collectsData` ('yes'|'no'|null) and, per
+     collected type, `dataPerType[typeId] = { purposes:[], identity, tracking }`.
+     Apple's appDataUsages take the enum-like ids below; the agent validates them
+     against Apple's own reference lists and skips any it doesn't recognise, so
+     hardcoding the map is safe. Returns null when unanswered — a null declaration
+     leaves whatever is already in ASC untouched rather than wiping it. Never asks
+     to publish: labels are staged for the user to review (publishing is public). */
+  _privacy(pid) {
+    const collects = this._answer(pid, 'collectsData');
+    if (collects == null) return null;                       // unanswered → don't touch ASC
+    if (collects === 'no') return { collected: false, publish: false, items: [] };
+
+    const CAT = {
+      name: 'NAME', email: 'EMAIL_ADDRESS', phone: 'PHONE_NUMBER', address: 'PHYSICAL_ADDRESS',
+      other_contact: 'OTHER_CONTACT_INFO', health: 'HEALTH', fitness: 'FITNESS',
+      payment_info: 'PAYMENT_INFO', credit_info: 'CREDIT_INFO', other_financial: 'OTHER_FINANCIAL_INFO',
+      precise_loc: 'PRECISE_LOCATION', coarse_loc: 'COARSE_LOCATION', sensitive: 'SENSITIVE_INFO',
+      contacts: 'CONTACTS', messages: 'EMAILS_OR_TEXT_MESSAGES', photos_videos: 'PHOTOS_OR_VIDEOS',
+      audio: 'AUDIO_DATA', gameplay: 'GAMEPLAY_CONTENT', customer_support: 'CUSTOMER_SUPPORT',
+      other_uc: 'OTHER_USER_CONTENT', browsing: 'BROWSING_HISTORY', search: 'SEARCH_HISTORY',
+      user_id: 'USER_ID', device_id: 'DEVICE_ID', purchases: 'PURCHASE_HISTORY',
+      product_use: 'PRODUCT_INTERACTION', ad_data: 'ADVERTISING_DATA', other_usage: 'OTHER_USAGE_DATA',
+      crash: 'CRASH_DATA', performance: 'PERFORMANCE_DATA', other_diag: 'OTHER_DIAGNOSTIC_DATA',
+      env_scan: 'ENVIRONMENT_SCANNING', hands: 'HANDS', head: 'HEAD', other: 'OTHER_DATA_TYPES',
+    };
+    const PUR = {
+      first_party_ads: 'DEVELOPERS_ADVERTISING', third_party_ads: 'THIRD_PARTY_ADVERTISING',
+      analytics: 'ANALYTICS', personalization: 'PRODUCT_PERSONALIZATION',
+      app_function: 'APP_FUNCTIONALITY', other_purpose: 'OTHER_PURPOSES',
+    };
+    const perType = this._answer(pid, 'dataPerType') || {};
+    const items = [];
+    for (const [tid, sel] of Object.entries(perType)) {
+      const category = CAT[tid];
+      if (!category || !sel) continue;
+      items.push({
+        category,
+        linked: sel.identity === 'yes',
+        tracked: sel.tracking === 'yes',
+        purposes: (sel.purposes || []).map(p => PUR[p]).filter(Boolean),
+      });
+    }
+    // Said "yes" but nothing itemised yet → skip rather than stage a contradictory
+    // empty (which the agent would read as "no data collected").
+    if (!items.length) return null;
+    return { collected: true, publish: false, items };
+  },
+
+  /* Everything Shipmate has collected, as the manifest-v2 listing block the
+     agent's /populate consumes. Screenshots are omitted: the agent needs files
+     on disk and Shipmate's live in the browser as data URLs / CDN links. */
+  buildListing(pid) {
+    const f = state.formData || {};
+    const listing = {
+      locale: 'en-US',
+      name: f.title || undefined,
+      subtitle: f.subtitle || undefined,
+      description: f.description || undefined,
+      supportUrl: f.supportUrl || undefined,
+      marketingUrl: undefined,
+      privacyPolicyUrl: f.privacyUrl || this._answer(pid, 'privacyPolicyUrl') || undefined,
+      whatsNew: f.releaseNotes || undefined,
+      primaryCategory: 'GAMES',   // Shipmate does not collect a category; a game is GAMES
+    };
+    const ar = this._ageRating(pid);
+    if (ar) listing.ageRating = ar;
+    const pr = this._privacy(pid);
+    if (pr) listing.privacy = pr;
+    return listing;
+  },
+
+  /* Push to ASC for every connected Mac platform. Debounced, non-blocking, and
+     a no-op unless the agent is up, the game is matched, and an account is
+     connected. `reason` is for the toast/log only. */
+  _syncTimer: null,
+  sync(reason) {
+    if (this._syncTimer) clearTimeout(this._syncTimer);
+    this._syncTimer = setTimeout(() => this._syncNow(reason), 800);
+  },
+  async _syncNow(reason) {
+    try {
+      if (!(await this.health())) return;
+      const pid = this.connectedMac();
+      if (!pid || !state.upf.game) return;
+      const listing = this.buildListing(pid);
+      const r = await this._post('/populate', { game: state.upf.game.app, listing });
+      if (r && r.job) {
+        await this.waitJob(r.job, () => {});
+        if (typeof bcToast === 'function') bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
+      }
+    } catch (e) {
+      console.warn('[UPF] ASC sync failed', e);
+    }
+  },
+
+  /* The user pressed Submit on a connected Mac platform → send the processed
+     build to the destination they chose in the release block's track picker.
+     The track drives it: testflight_internal is wired end to end; external
+     TestFlight and the Mac App Store are real, different review paths and the
+     agent reports them as staged rather than pretending to submit. Non-blocking;
+     a toast reports the outcome. */
+  async submitTestFlight(pid, track) {
+    try {
+      if (!(await this.health()) || !state.upf.game) return;
+      const r = await this._post('/submit', { game: state.upf.game.app, track: track || 'testflight_internal' });
+      if (r && r.job) {
+        const res = await this.waitJob(r.job, () => {});
+        if (typeof bcToast === 'function') {
+          if (res && res.ok) {
+            bcToast(res.group
+              ? `Submitted build ${res.buildVersion} to internal TestFlight group '${res.group}'.`
+              : `Build ${res.buildVersion} ${res.staged || 'ready to submit'}.`);
+          } else {
+            bcToast(`TestFlight submit: ${(res && res.error) || 'failed'}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[UPF] TestFlight submit failed', e);
+    }
   },
 
   /* Poll a job until it ends, handing each new line to `onLine`. */
@@ -413,6 +588,7 @@ const UPF_STAGES = [
   { label: 'Package for the Mac App Store',      test: /stage e|stage f/i,                          usual: 60 },
   { label: 'Upload to App Store Connect',        test: /uploading|chunk|^\d+%$/i,                   usual: 300 },
   { label: 'Process the build (Apple’s side)', test: /waiting for apple|build \d+:/i,           usual: 600 },
+  { label: 'Set up Game Center achievements',    test: /\[build\] game center|game center|achievements released/i, usual: 30 },
 ];
 
 function _upfStageOf(line) {
