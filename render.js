@@ -5753,7 +5753,11 @@ function _subStepBodyInner(pid, stepId) {
        The Xcode sentence survives as the row's title, where it is available to
        anyone who stalls on it without being printed at everyone. */
     const fmt = smBuildAccept(pid);
-    const uploadRow = `
+    /* BUILD FROM STEAM replaces the upload row when the agent is up and this
+       game is matched to the local Steam library (upfBuildPanelHTML returns ''
+       otherwise, and the ordinary file-drop row stands). */
+    const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
+    const uploadRow = upfPanel || `
       <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
         ${buildBuildDropdown(pid)}
         <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>

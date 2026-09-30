@@ -76,7 +76,8 @@ const UPF = {
   /* One probe per page load. A failed probe is remembered as `false` so a
      machine without the agent never pays for a second connection attempt. */
   async health() {
-    if (state.upf.agent !== null) return state.upf.agent;
+    if (state.upf.agent) return state.upf.agent;   // cache only a SUCCESSFUL probe;
+    // null or false both re-probe, so an agent that starts after the page loaded is noticed.
     try {
       const h = await this._get('/health');
       state.upf.agent = h && h.ok ? h : false;
@@ -314,17 +315,25 @@ const UPF = {
         || null;
   },
 
-  /* Match lazily, once, for a project whose game was chosen before this page
-     loaded (selectPicklistItem never ran, so upfOnSteamGame never did). */
-  _matchAttempted: false,
+  /* Match lazily for a project whose game was chosen before this page loaded
+     (selectPicklistItem never ran, so upfOnSteamGame never did). Self-healing:
+     it only counts an attempt made while the agent is UP, so an agent that
+     starts after the page did — or a Steam app-id that arrives later — is still
+     matched on a later render, rather than being blocked forever by a one-shot
+     flag. `_matching` stops concurrent renders double-firing. */
+  _matching: false,
+  _matchedAppId: null,
   ensureMatch() {
-    if (this._matchAttempted || state.upf.game || state.upf.agent === false) return;
+    if (state.upf.game || state.upf.job || this._matching) return;
+    if (!state.upf.agent) return;                 // wait until the agent is confirmed up
     const appId = this.currentSteamAppId();
-    if (!appId) return;
-    this._matchAttempted = true;
+    if (!appId || String(appId) === String(this._matchedAppId)) return;
+    this._matching = true;
+    this._matchedAppId = String(appId);           // one attempt per id while up (no spam on a game not in the library)
     this.match(appId, state.formData?.title || '')
       .then(g => { if (g) _upfRepaintAll(); })
-      .catch(e => console.warn('[UPF] match failed', e));
+      .catch(e => console.warn('[UPF] match failed', e))
+      .finally(() => { this._matching = false; });
   },
 
   isMac(pid) { return UPF_MAC_PIDS.includes(pid); },
@@ -434,10 +443,13 @@ setTimeout(() => { try { UPF.ensureMatch(); } catch (_) {} }, 1500);
 function upfOnSteamGame(steamAppId, name) {
   state.upf.game = null;
   state.upf.manifest = null;
-  UPF._matchAttempted = true;
+  if (UPF._matching) return;                  // a match is already in flight
+  UPF._matching = true;
+  UPF._matchedAppId = String(steamAppId);
   UPF.match(steamAppId, name)
-    .then(g => { if (g) _upfRepaintAll(); })
-    .catch(e => console.warn('[UPF] match failed', e));
+    .then(g => { if (g) _upfRepaintAll(); else UPF._matchedAppId = null; })  // agent may be down; let ensureMatch retry
+    .catch(e => { console.warn('[UPF] match failed', e); UPF._matchedAppId = null; })
+    .finally(() => { UPF._matching = false; });
 }
 
 /* Every agent line: append it, advance the stage clock, throttle repaints.
