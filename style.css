@@ -7685,6 +7685,10 @@ body.viewing-splash .app-subnav { display: none; }
 .upf-chip.is-on { color: var(--green); background: var(--green-soft); }
 .upf-chip .tooltip-icon { font-size: 9px; opacity: .8; }
 
+/* Post-connect note under the build steps — what happens once an account is
+   connected (upload / processing / Game Center), which is not part of the build. */
+.upf-note { margin-top: 12px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
 /* Done result, and the shared error line. */
 .upf-result { font-size: 13px; color: var(--green); font-weight: 500; }
 .upf-error { font-size: 12.5px; color: #f87171; margin-top: 8px; }

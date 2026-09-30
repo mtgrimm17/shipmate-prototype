@@ -835,7 +835,7 @@ const UPF_STAGES = [
   { label: 'Copy and inspect the Steam build',   test: /inspecting|preflight|copying|provisioning/i, usual: 60 },
   { label: 'Replace Steam with the shim',        test: /stage a\/b|compiling shim/i,                usual: 30 },
   { label: 'Sandbox and entitlements',           test: /stage c/i,                                  usual: 5 },
-  { label: 'Sign every binary',                  test: /stage d/i,                                  usual: 40 },
+  { label: 'Code-sign for the Mac App Store',    test: /stage d/i,                                  usual: 40 },
   { label: 'Package for the Mac App Store',      test: /stage e|stage f/i,                          usual: 60 },
   { label: 'Upload to App Store Connect',        test: /uploading|chunk|^\d+%$/i,                   usual: 300 },
   { label: 'Process the build (Apple’s side)', test: /waiting for apple|build \d+:/i,           usual: 600 },
@@ -890,13 +890,30 @@ function _upfStartTicker() {
   }, 1000);
 }
 
-/* Steam feature tiers → does the feature carry over to the Mac App Store build?
-   routed (Game Center) and shim (safe defaults) DO — the chip lights up; degraded
-   goes dark — the chip stays grey. The tooltip copy is report.py's own wording. */
-const UPF_TIER = {
-  routed:   { on: true,  tip: 'Carries over — routed to Apple’s Game Center by the shim.' },
-  shim:     { on: true,  tip: 'Carries over — the shim answers with safe defaults, so the game runs as if Steam were present.' },
-  degraded: { on: false, tip: 'Goes dark on Mac — the shim disables it and the game must tolerate its absence.' },
+/* Steam API interfaces the manifest reports usage of → the player-facing game
+   feature they belong to, and whether that feature carries over to the Mac App
+   Store build. This is a curated map, not the raw interface list: the agent
+   detects interfaces like ISteamApps / ISteamClient / ISteamUtils / ISteamUser,
+   which are plumbing, not features a player sees — those are deliberately absent
+   here so they never show as chips. Only achievements/stats genuinely carry
+   (Shipmate wires them to Game Center); the rest have no Mac App Store
+   equivalent. Keyed by the interface with the leading I/Steam and any "Data."
+   stripped. (A backend that emitted feature names directly would be more exact;
+   until then this table is the single place to adjust what shows and how.) */
+const UPF_FEATURES = {
+  UserStats:         { name: 'Achievements & stats', carries: true,  tip: 'Carries over — Shipmate wires achievements and stats to Apple’s Game Center.' },
+  Achievement:       { name: 'Achievements & stats', carries: true,  tip: 'Carries over — Shipmate wires achievements to Apple’s Game Center.' },
+  Friends:           { name: 'Friends & presence',   carries: false, tip: 'Doesn’t carry over — there’s no Mac App Store equivalent, so the game runs without a Steam friends list or rich presence.' },
+  RemoteStorage:     { name: 'Steam Cloud saves',    carries: false, tip: 'Doesn’t carry over — Steam Cloud isn’t available; the game uses its local saves instead.' },
+  Matchmaking:       { name: 'Multiplayer',          carries: false, tip: 'Doesn’t carry over — Steam matchmaking and networking aren’t available in the Mac App Store build.' },
+  Networking:        { name: 'Multiplayer',          carries: false, tip: 'Doesn’t carry over — Steam matchmaking and networking aren’t available in the Mac App Store build.' },
+  NetworkingSockets: { name: 'Multiplayer',          carries: false, tip: 'Doesn’t carry over — Steam matchmaking and networking aren’t available in the Mac App Store build.' },
+  GameServer:        { name: 'Multiplayer',          carries: false, tip: 'Doesn’t carry over — Steam game servers aren’t available in the Mac App Store build.' },
+  UGC:               { name: 'Workshop & mods',      carries: false, tip: 'Doesn’t carry over — Steam Workshop isn’t available on the Mac App Store.' },
+  Input:             { name: 'Steam Input',          carries: false, tip: 'Doesn’t carry over — the Steam Input layer is gone; the game falls back to the OS’s native controller support.' },
+  Controller:        { name: 'Steam Input',          carries: false, tip: 'Doesn’t carry over — the Steam Input layer is gone; the game falls back to the OS’s native controller support.' },
+  Music:             { name: 'Steam Music',          carries: false, tip: 'Doesn’t carry over — the Steam Music remote isn’t available.' },
+  Screenshots:       { name: 'Steam screenshots',    carries: false, tip: 'Doesn’t carry over — Steam’s screenshot capture isn’t available; macOS screenshots still work.' },
 };
 
 function upfBuildPanelHTML(pid) {
@@ -955,43 +972,50 @@ function upfBuildPanelHTML(pid) {
     <div class="upf-label">Blocked</div>
     <ul class="upf-list is-bad">${blockers.map(b => `<li>${esc(b.message || b)}</li>`).join('')}</ul>` : '';
 
-  /* ── The bulk: high-level steps as circles. Empty at rest; the running step
-     shows a spinner and finished ones a green check — the same discs, spinner
-     and tick used elsewhere in the app. The stage clock (state.upf.stage) drives
-     it, and _upfRepaint re-renders this modal on every agent line. */
+  /* ── What carries over from Steam. Player-facing game features (mapped from
+     the interfaces the manifest reports — see UPF_FEATURES), lit when they carry
+     over to the Mac build and grey when they don't; infrastructure interfaces
+     are dropped so only real features show. A "?" tooltip explains each. */
+  const sa = m.steamApis || {};
+  const seen = {};
+  [].concat(sa.routed || [], sa.shim || [], sa.degraded || []).forEach(k => {
+    const iface = k.split('::')[0].replace(/^I?Steam/, '').replace(/^Data\./, '');
+    const f = UPF_FEATURES[iface];
+    if (!f) return;                                   // plumbing, not a feature — drop it
+    if (!seen[f.name] || f.carries) seen[f.name] = f; // if any variant carries, the feature carries
+  });
+  const featNames = Object.keys(seen).sort((a, b) => (seen[b].carries - seen[a].carries) || a.localeCompare(b));
+  const chips = featNames.length ? `
+    <div class="upf-label">What carries over from Steam</div>
+    <div class="upf-chips">${featNames.map(nm => {
+      const f = seen[nm];
+      return `<span class="upf-chip ${f.carries ? 'is-on' : ''} tooltip-anchor" data-tip="${esc(f.tip)}">${esc(nm)}<span class="tooltip-icon">?</span></span>`;
+    }).join('')}</div>` : '';
+
+  /* ── The build itself, as high-level step circles: empty at rest, a spinner on
+     the running step, a green check when done — the app's own discs/spinner/tick.
+     ONLY the local build stages (0–4) belong here; uploading to App Store
+     Connect, waiting for processing, and Game Center setup (stages 5–7) need a
+     connected Apple account, so they are not part of build generation — a note
+     below says when they happen. state.upf.stage drives it, and _upfRepaint
+     re-renders this modal on every agent line. */
   const cur = u.stage;
   const active = running || built || done || failed;
-  const stepRows = UPF_STAGES.map((s, i) => {
+  const buildDone = done || (built && !running);      // local .pkg finished
+  const BUILD_STAGES = UPF_STAGES.slice(0, 5);
+  const stepRows = BUILD_STAGES.map((s, i) => {
     let st = '';
-    if (done) st = 'is-done';
+    if (buildDone) st = 'is-done';
     else if (active) st = (failed && i === cur) ? 'is-bad' : (i < cur ? 'is-done' : (i === cur && running ? 'is-current' : ''));
     const mark = st === 'is-done' ? (typeof smCheckSVG === 'function' ? smCheckSVG(18) : '✓')
                : (st === 'is-bad' ? '✕'
                : (st === 'is-current' ? '<span class="build-proc-spin"></span>' : ''));
     return `<li class="upf-step ${st}"><span class="upf-step-disc">${mark}</span><span class="upf-step-label">${esc(s.label)}</span></li>`;
   }).join('');
-  const stepsBlock = `<div class="upf-label">What happens</div><ul class="upf-steps">${stepRows}</ul>`;
+  const postNote = !done ? `<div class="upf-note">Once you connect an Apple account in Settings, Shipmate uploads the build to App Store Connect, waits for processing, and sets up its achievements in Game Center — automatically.</div>` : '';
+  const stepsBlock = `<div class="upf-label">What happens</div><ul class="upf-steps">${stepRows}</ul>${postNote}`;
 
-  /* ── Steam features detected, coloured by whether they carry over to Mac.
-     A "?" tooltip (the app's own tooltip-anchor) explains each. */
-  const sa = m.steamApis || {};
-  const rank = { routed: 3, shim: 2, degraded: 1 };
-  const tierOf = {};
-  const add = (arr, tier) => (arr || []).forEach(k => {
-    const f = k.split('::')[0].replace(/^Steam/, '');
-    if (!tierOf[f] || rank[tier] > rank[tierOf[f]]) tierOf[f] = tier;
-  });
-  add(sa.routed, 'routed'); add(sa.shim, 'shim'); add(sa.degraded, 'degraded');
-  const feats = Object.keys(tierOf).sort();
-  const chips = feats.length ? `
-    <div class="upf-label">How your Steam features carry over</div>
-    <div class="upf-chips">${feats.map(f => {
-      const t = UPF_TIER[tierOf[f]] || UPF_TIER.degraded;
-      return `<span class="upf-chip ${t.on ? 'is-on' : ''} tooltip-anchor" data-tip="${esc(t.tip)}">${esc(f)}<span class="tooltip-icon">?</span></span>`;
-    }).join('')}</div>` : '';
-
-  /* Order: intro + action explain what this is; then the feature chips (what
-     will and won't work on Mac); then the step list, which is the progress of
-     the build itself. */
+  /* Order: intro + action explain what this is; then what carries over from
+     Steam; then the build's own steps. */
   return `<div class="upf-panel">${introBlock}${err}${blocks}${chips}${stepsBlock}</div>`;
 }
