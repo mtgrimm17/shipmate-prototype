@@ -6743,6 +6743,25 @@ function buildIOSActiveCard(pid, force) {
 
     // Upload Build step — inline, no modal
     if (step.id === 'uploadBuild') {
+      /* BUILD FROM STEAM: when the agent is up and this game is matched to the
+         local Steam library, the whole upload area becomes the Build-from-Steam
+         panel — a full block, so it takes the step card's body rather than the
+         compact pill slot on the right. upfBuildPanelHTML returns '' otherwise
+         (no agent, not installed here, or a build already present) and the
+         ordinary inline pill row below stands. It also drives the lazy match:
+         on a render with the agent not yet known-up it probes and calls
+         ensureMatch, so the panel appears on a later repaint once MT2 matches. */
+      const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
+      if (upfPanel) {
+        return `
+          <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--upf" id="${pid}-step-card-${step.id}">
+            <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+            <div class="ios-step-info">
+              <div class="ios-step-name">${stepLabel(pid, step)}</div>
+              ${upfPanel}
+            </div>
+          </div>`;
+      }
       return `
         <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="${pid}-step-card-${step.id}">
           <div class="${numClass}">${done ? checkSVG : i + 1}</div>

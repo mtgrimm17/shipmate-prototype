@@ -7611,6 +7611,15 @@ body.viewing-splash .app-subnav { display: none; }
    on source order and the row still showed an arrow. */
 .ios-step-card.submit-step-card { cursor: pointer; }
 
+/* The Build-from-Steam step card holds a full block panel, not a one-line row:
+   the num disc sits at the top beside the label, the panel flows below it, and
+   the row itself is passive (no pointer, no hover fill — the panel owns its own
+   controls). .ios-step-info is flex:1 already, so the panel takes the width. */
+.ios-step-card--upf { align-items: flex-start; cursor: default; padding-top: 12px; }
+.ios-step-card--upf:hover { background: transparent; }
+.ios-step-card--upf .ios-step-info { display: flex; flex-direction: column; gap: 10px; }
+.ios-step-card--upf .upf-panel { margin-top: 2px; }
+
 /* IT LIGHTS ON HOVER EVEN WHILE IT CANNOT SUBMIT, and the divider rule is the
    argument. `.ios-step-card:hover::before` hides the line above a lit row —
    that rule is generic and fires here whatever the row's state — so pointing at
