@@ -6743,25 +6743,29 @@ function buildIOSActiveCard(pid, force) {
 
     // Upload Build step — inline, no modal
     if (step.id === 'uploadBuild') {
-      /* BUILD FROM STEAM: when the agent is up and this game is matched to the
-         local Steam library, the whole upload area becomes the Build-from-Steam
-         panel — a full block, so it takes the step card's body rather than the
-         compact pill slot on the right. upfBuildPanelHTML returns '' otherwise
-         (no agent, not installed here, or a build already present) and the
-         ordinary inline pill row below stands. It also drives the lazy match:
-         on a render with the agent not yet known-up it probes and calls
-         ensureMatch, so the panel appears on a later repaint once MT2 matches. */
-      const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
-      if (upfPanel) {
+      /* Drive the lazy Steam match every render (agent probe + ensureMatch),
+         without building any HTML — so the row flips to "Build from Steam" on
+         its own once MT2 is matched, nothing opened. */
+      if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
+      const steamReady = (typeof UPF !== 'undefined' && typeof UPF.buildReady === 'function') && UPF.buildReady(pid);
+      if (steamReady) {
+        /* A Steam build is detected and the agent is up: the step becomes a
+           normal clickable row like every other step — "Build from Steam", a
+           chevron (a spinner while a build runs), opening the step modal whose
+           body is the inspection panel. No inline detail on the card. */
+        const running = !!(state.upf && state.upf.job);
+        const trailing = running ? `<span class="build-proc-spin" style="flex-shrink:0;"></span>` : SM_STEP_CHEVRON;
         return `
-          <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--upf" id="${pid}-step-card-${step.id}">
+          <div class="ios-step-card ${done ? 'is-complete' : ''}" id="${pid}-step-card-${step.id}"
+               onclick="openStepModal('${pid}','${step.id}')">
             <div class="${numClass}">${done ? checkSVG : i + 1}</div>
             <div class="ios-step-info">
-              <div class="ios-step-name">${stepLabel(pid, step)}</div>
-              ${upfPanel}
+              <div class="ios-step-name">Build from Steam</div>
             </div>
+            ${trailing}
           </div>`;
       }
+      /* Default: the ordinary inline pill that opens a file picker. */
       return `
         <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="${pid}-step-card-${step.id}">
           <div class="${numClass}">${done ? checkSVG : i + 1}</div>
@@ -7083,6 +7087,12 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
       'Preparing your personalized report…',
     ];
     body = _infLoadingScreen('Generating Report Card…', iaMsgs);
+  } else if (stepId === 'uploadBuild') {
+    /* The Build-from-Steam modal. _subStepBodyInner already builds the upload
+       area (the inspection panel when a Steam build is matched, else the
+       file-drop row) plus the release block, so the modal and the inline pane
+       show the same body. */
+    body = _subStepBodyInner(platformId, stepId);
   } else if (platformId === 'android') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -7374,9 +7384,12 @@ function renderStepModal() {
      entry, keyed by target, consulted before the shared table. */
   const APPLE_FLIP_LABELS = { screenshots: 'Media Carousel' };
   const applePreview = platformId === 'ios' || platformId === 'macos';
+  const upfBuildStep = stepId === 'uploadBuild' && typeof UPF !== 'undefined'
+    && typeof UPF.buildReady === 'function' && UPF.buildReady(platformId);
   const displayStepLabel = isFlipped
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
-    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
+    : (upfBuildStep ? 'Build from Steam'
+       : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : '')));
 
   // Step body — one dispatcher, shared with the inline Submission pane.
   const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);

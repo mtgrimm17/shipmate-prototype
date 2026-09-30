@@ -7615,10 +7615,82 @@ body.viewing-splash .app-subnav { display: none; }
    the num disc sits at the top beside the label, the panel flows below it, and
    the row itself is passive (no pointer, no hover fill — the panel owns its own
    controls). .ios-step-info is flex:1 already, so the panel takes the width. */
-.ios-step-card--upf { align-items: flex-start; cursor: default; padding-top: 12px; }
-.ios-step-card--upf:hover { background: transparent; }
-.ios-step-card--upf .ios-step-info { display: flex; flex-direction: column; gap: 10px; }
-.ios-step-card--upf .upf-panel { margin-top: 2px; }
+/* ── BUILD FROM STEAM PANEL ───────────────────────────────────────────────
+   upfBuildPanelHTML (upf.js) emits this; it had no styling and rendered as a
+   flat text dump inside the step card. Built from the app's own tokens so it
+   reads as an inspection panel: a small heading, an uppercase label before each
+   group, tight lists with a mono tag per row, chips for the dark-feature set,
+   and the reused .imp-cta for the button. Phases 2 (running) and 3 (done) share
+   the head and reuse the stage list / result styling below. */
+.upf-panel {
+  width: 100%;              /* fill the modal body, whose .sub-upload-body is align-items:flex-start */
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.upf-head { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.upf-muted { color: var(--text-dim); font-weight: 400; }
+
+/* Verdict row: the classification word in green, the counts muted beside it. */
+.upf-verdict { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.upf-verdict-word { color: var(--green); font-weight: 600; font-size: 13px; }
+.upf-verdict.is-blocked .upf-verdict-word { color: #f87171; }
+
+/* Section labels: small, uppercase, dim — the separator between groups. */
+.upf-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--text-dim); margin: 14px 0 6px;
+}
+
+/* Change / settings lists: one tight row each, a mono tag then the text. */
+.upf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+/* Not display:flex on the li — the rows carry inline muted spans, and as flex
+   items those spread apart into columns. Normal inline flow with an
+   inline-block tag lets the text (and its spans) wrap naturally; a long item
+   wraps under the tag, which reads fine. */
+.upf-list li { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+.upf-list.is-bad li { color: #f87171; }
+.upf-id {
+  display: inline-block; vertical-align: baseline; margin-right: 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px; color: var(--text-dim);
+  background: var(--panel-3); border-radius: 4px; padding: 1px 6px;
+}
+
+/* Dark-feature chips. */
+.upf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.upf-chip {
+  font-size: 11.5px; color: var(--text-dim);
+  background: var(--panel-3); border-radius: 20px; padding: 3px 10px;
+}
+
+/* Confirm block + actions. */
+.upf-actions { margin-top: 14px; }
+.upf-confirm { display: flex; flex-direction: column; gap: 10px; }
+.upf-confirm-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+
+/* Phase 2 — stage list. */
+.upf-stages { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.upf-stage { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-dim); }
+.upf-stage.is-done { color: var(--text); }
+.upf-stage.is-current { color: var(--text); }
+.upf-stage.is-bad { color: #f87171; }
+.upf-stage-mark { flex-shrink: 0; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); }
+.upf-stage.is-bad .upf-stage-mark { color: #f87171; }
+.upf-stage-label { flex: 1; display: flex; align-items: center; gap: 8px; }
+.upf-stage-time { color: var(--text-faint); font-size: 11px; flex-shrink: 0; }
+.upf-bar { flex: 1; height: 4px; background: var(--panel-3); border-radius: 2px; overflow: hidden; max-width: 160px; }
+.upf-bar-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width .3s; }
+.upf-bar-pct { font-size: 11px; color: var(--text-dim); }
+
+/* Phase 3 — result, and the shared error line. */
+.upf-result { font-size: 13px; color: var(--green); font-weight: 500; }
+.upf-error { font-size: 12.5px; color: #f87171; margin-top: 8px; }
 
 /* IT LIGHTS ON HOVER EVEN WHILE IT CANNOT SUBMIT, and the divider rule is the
    argument. `.ios-step-card:hover::before` hides the line above a lit row —

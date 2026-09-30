@@ -98,6 +98,11 @@ const UPF = {
     state.upf.game = { name: g.name, slug: g.slug, steamAppId: g.steamAppId, app: g.app };
     const ins = await this._post('/inspect', { game: g.app });
     state.upf.manifest = ins.manifest || null;
+    /* Repaint here, not only from ensureMatch's caller: a match that lands any
+       other way (a manual call, or upfOnSteamGame) must also swap the pill for
+       the panel. Cheap, and the render is already finished by the time this
+       async resolves. */
+    if (typeof _upfRepaintAll === 'function') _upfRepaintAll();
     return state.upf.game;
   },
 
@@ -316,27 +321,62 @@ const UPF = {
   },
 
   /* Match lazily for a project whose game was chosen before this page loaded
-     (selectPicklistItem never ran, so upfOnSteamGame never did). Self-healing:
-     it only counts an attempt made while the agent is UP, so an agent that
-     starts after the page did — or a Steam app-id that arrives later — is still
-     matched on a later render, rather than being blocked forever by a one-shot
-     flag. `_matching` stops concurrent renders double-firing. */
+     (selectPicklistItem never ran, so upfOnSteamGame never did). Self-healing
+     with a THROTTLE, not a one-shot: an earlier attempt that set the game to
+     null (agent not ready yet, a transient /library error) must not block every
+     later try — that is exactly the stuck state seen in the field
+     (_matchedAppId pinned to the id, game still null, nothing retrying). So a
+     repeat of the same id is allowed again after _matchRetryMs; a game that is
+     genuinely matched stops on its own (the first guard returns once game is
+     set). `_matching` stops concurrent renders double-firing. */
   _matching: false,
   _matchedAppId: null,
+  _lastMatchTry: 0,
+  _matchRetryMs: 4000,
   ensureMatch() {
     if (state.upf.game || state.upf.job || this._matching) return;
     if (!state.upf.agent) return;                 // wait until the agent is confirmed up
     const appId = this.currentSteamAppId();
-    if (!appId || String(appId) === String(this._matchedAppId)) return;
+    if (!appId) return;
+    if (String(appId) === String(this._matchedAppId) && (Date.now() - this._lastMatchTry) < this._matchRetryMs) return;
     this._matching = true;
-    this._matchedAppId = String(appId);           // one attempt per id while up (no spam on a game not in the library)
+    this._matchedAppId = String(appId);
+    this._lastMatchTry = Date.now();
     this.match(appId, state.formData?.title || '')
-      .then(g => { if (g) _upfRepaintAll(); })
+      .then(g => { if (g) _upfRepaintAll(); })     // match() also repaints; harmless twice
       .catch(e => console.warn('[UPF] match failed', e))
       .finally(() => { this._matching = false; });
   },
 
   isMac(pid) { return UPF_MAC_PIDS.includes(pid); },
+
+  /* Drive the lazy match from a render without building any HTML. Called by the
+     compact step row so a Steam build is noticed (and the row flips to "Build
+     from Steam") without anything being opened. Probes health when the agent
+     isn't known-up yet, then asks ensureMatch — which is throttled, so this is
+     cheap to call every render. */
+  driveMatch(pid) {
+    if (!this.isMac(pid)) return;
+    const u = state.upf;
+    if (u.agent === false || u.agent === null) { this.health().then(h => { if (h) this.ensureMatch(); }); return; }
+    if (!u.game) this.ensureMatch();
+  },
+
+  /* True when the Upload Build step should present as "Build from Steam": the
+     agent is up, this game is matched to the local Steam library, and no
+     ordinary (non-UPF, finished) build is already standing in. Mirrors
+     upfBuildPanelHTML's own guards so the row and the panel never disagree — a
+     UPF build that is running, built-and-waiting, or done keeps the row (the
+     modal shows its status). */
+  buildReady(pid) {
+    if (!this.isMac(pid)) return false;
+    const u = state.upf;
+    if (!u.agent || !u.game) return false;
+    const existing = (state.platformBuilds || {})[pid];
+    const upfPending = !!(existing && existing.source === 'upf' && !existing.uploaded);
+    if (existing && !upfPending && !u.job && !u.result) return false;
+    return true;
+  },
 
   /* The project's active version number, the way buildReleaseBlock reads it,
      without a leading "v". Null when the project has none. */
