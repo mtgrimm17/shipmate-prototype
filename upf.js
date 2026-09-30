@@ -358,7 +358,16 @@ const UPF = {
   driveMatch(pid) {
     if (!this.isMac(pid)) return;
     const u = state.upf;
-    if (u.agent === false || u.agent === null) { this.health().then(h => { if (h) this.ensureMatch(); }); return; }
+    if (u.agent === false || u.agent === null) {
+      const wasUnknown = (u.agent === null);
+      this.health().then(h => {
+        if (h) this.ensureMatch();
+        // Agent just confirmed DOWN (was unknown): repaint so a "checking" row
+        // falls to the Upload pill instead of spinning forever.
+        else if (wasUnknown && typeof _upfRepaintAll === 'function') _upfRepaintAll();
+      });
+      return;
+    }
     if (!u.game) this.ensureMatch();
   },
 
@@ -376,6 +385,25 @@ const UPF = {
     const upfPending = !!(existing && existing.source === 'upf' && !existing.uploaded);
     if (existing && !upfPending && !u.job && !u.result) return false;
     return true;
+  },
+
+  /* Are we still deciding whether a Steam build exists for this game? True while
+     the answer is genuinely unknown: a mac platform with a Steam app-id, the
+     agent not confirmed down, no game matched yet, and the match either in
+     flight or not yet attempted for this id. In that window the row shows a
+     quiet spinner instead of the Upload pill, so an agent user never sees the
+     pill flash to the clickable row once the match lands. Once the match has
+     been attempted and produced no game (agent up, not in the library), this
+     goes false and the Upload pill stands. */
+  buildChecking(pid) {
+    if (!this.isMac(pid)) return false;
+    const u = state.upf;
+    if (u.game) return false;                 // matched → buildReady owns it
+    if (u.agent === false) return false;      // no agent → straight to the pill
+    const appId = this.currentSteamAppId();
+    if (!appId) return false;                 // no Steam id → nothing to match
+    if (this._matching) return true;          // a match is running
+    return String(this._matchedAppId) !== String(appId);  // not yet attempted for this id
   },
 
   /* The project's active version number, the way buildReleaseBlock reads it,
@@ -912,7 +940,7 @@ function upfBuildPanelHTML(pid) {
   } else {
     /* Rest — the confirmation. Game-specific paragraph, then the button, then
        an Upload alternative (the modal offers Build from Steam OR Upload). */
-    intro = `${name}’s Steam build on this Mac becomes a Mac App Store build — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched, and no Apple account is needed yet: connect it in Settings and the build uploads to App Store Connect on its own.`;
+    intro = `Shipmate generates a new Mac App Store build from ${name}’s Steam build on this Mac — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched.`;
     actions = blockers.length
       ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
       : `<div class="upf-actions">
@@ -956,11 +984,14 @@ function upfBuildPanelHTML(pid) {
   add(sa.routed, 'routed'); add(sa.shim, 'shim'); add(sa.degraded, 'degraded');
   const feats = Object.keys(tierOf).sort();
   const chips = feats.length ? `
-    <div class="upf-label">Steam features in your build</div>
+    <div class="upf-label">How your Steam features carry over</div>
     <div class="upf-chips">${feats.map(f => {
       const t = UPF_TIER[tierOf[f]] || UPF_TIER.degraded;
       return `<span class="upf-chip ${t.on ? 'is-on' : ''} tooltip-anchor" data-tip="${esc(t.tip)}">${esc(f)}<span class="tooltip-icon">?</span></span>`;
     }).join('')}</div>` : '';
 
-  return `<div class="upf-panel">${introBlock}${err}${blocks}${stepsBlock}${chips}</div>`;
+  /* Order: intro + action explain what this is; then the feature chips (what
+     will and won't work on Mac); then the step list, which is the progress of
+     the build itself. */
+  return `<div class="upf-panel">${introBlock}${err}${blocks}${chips}${stepsBlock}</div>`;
 }

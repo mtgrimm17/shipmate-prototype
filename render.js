@@ -6767,6 +6767,20 @@ function buildIOSActiveCard(pid, force) {
             ${trailing}
           </div>`;
       }
+      /* Still deciding whether a Steam build exists (agent probe / match in
+         flight): show a quiet spinner, not the Upload pill — so an agent user
+         never sees the pill flash to the clickable row once the match lands. */
+      const checking = (typeof UPF !== 'undefined' && typeof UPF.buildChecking === 'function') && UPF.buildChecking(pid);
+      if (checking) {
+        return `
+          <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="${pid}-step-card-${step.id}">
+            <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+            <div class="ios-step-info">
+              <div class="ios-step-name">${buildLabel}</div>
+            </div>
+            <span class="build-proc-spin" style="flex-shrink:0;"></span>
+          </div>`;
+      }
       /* No agent / no Steam build: the inline pill opens a file picker. On the
          Mac App Store it reads "Upload" (the step itself is "Game Build"). */
       return `
