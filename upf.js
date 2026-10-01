@@ -382,7 +382,7 @@ const UPF = {
         const b = (state.platformBuilds || {})[pid];
         if (b && b.source === 'upf' && b.uploaded) {
           const achs = this.achievementsForBuild(pid);
-          const h = JSON.stringify(achs.map(a => [a.identifier, a.name, a.description, a.hidden, a.image ? a.image.data.length : 0]));
+          const h = JSON.stringify(achs.map(a => [a.identifier, a.name, a.description, a.hidden, a.image ? (a.image.data ? a.image.data.length : a.image.url) : 0]));
           this._gcHash = this._gcHash || {};
           if (achs.length && this._gcHash[pid] !== h) {
             this._gcHash[pid] = h;
@@ -584,11 +584,18 @@ const UPF = {
       .map(a => {
         const own = gc.find(x => x.refName === a.name) || null;
         const out = { identifier: a.identifier, name: a.name, description: a.description || '', hidden: !!(own && own.hidden) };
-        const durl = own && own.image && own.image.dataUrl;
-        if (durl && durl.slice(0, 5) === 'data:') {
-          const comma = durl.indexOf(',');
-          const data = comma >= 0 ? durl.slice(comma + 1) : '';
-          if (data) out.image = { fileName: (own.image.name || (a.identifier + '.png')), data };
+        // Achievement art is stored on the GC record as image.dataUrl — which is
+        // EITHER an inline data: URL (user-uploaded) or a remote Steam CDN URL
+        // (scraped: `image: {dataUrl: iconUrl}`). Send base64 for the former, a
+        // URL for the latter (the agent downloads it, like screenshots).
+        const src = own && own.image && own.image.dataUrl;
+        const fileName = a.identifier + '.png';
+        if (src && src.slice(0, 5) === 'data:') {
+          const comma = src.indexOf(',');
+          const data = comma >= 0 ? src.slice(comma + 1) : '';
+          if (data) out.image = { fileName, data };
+        } else if (src && /^https?:/i.test(src)) {
+          out.image = { fileName, url: src };
         }
         return out;
       });
