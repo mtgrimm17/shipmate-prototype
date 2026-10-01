@@ -373,6 +373,18 @@ const UPF = {
       }
       if (sentShots && shotHash) this._shotHash[pid] = shotHash;
       if (pushed && typeof bcToast === 'function') bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
+      // In-app purchases → ASC (needs no build; rides with the metadata sync).
+      // Change-guarded so an idle save doesn't re-walk every product.
+      try {
+        const iaps = this.iapForBuild(pid);
+        const ih = JSON.stringify(iaps.map(p => [p.key, p.name, p.description, p.type]));
+        this._iapHash = this._iapHash || {};
+        if (iaps.length && this._iapHash[pid] !== ih) {
+          this._iapHash[pid] = ih;
+          const ir = await this._post('/iap', { game: state.upf.game.app, products: iaps });
+          if (ir && ir.job) await this.waitJob(ir.job, () => {});
+        }
+      } catch (e) { console.warn('[UPF] IAP sync failed', e); }
       // A build may be waiting on this now-connected account.
       try { _upfMaybePublish(pid); } catch (_) {}
       // Achievement text edited after the build → push it to Game Center (no rebuild).
@@ -599,6 +611,19 @@ const UPF = {
         }
         return out;
       });
+  },
+
+  /* Shipmate's in-app products → the agent's /iap payload. Consumable /
+     non-consumable / non-renewing only; auto-renewable is a subscription (its
+     own ASC resource, handled in the subscriptions pass). The agent derives the
+     ASC product id from the bundle id + a slug of the name. */
+  iapForBuild(pid) {
+    const ans = (typeof _appStoreAnswers === 'function') ? _appStoreAnswers(pid) : null;
+    const products = (ans && ans.iapProducts) || [];
+    const TYPE = { consumable: 'CONSUMABLE', 'non-consumable': 'NON_CONSUMABLE', 'non-renewing': 'NON_RENEWING_SUBSCRIPTION' };
+    return products
+      .filter(p => TYPE[p.type] && (p.name || '').trim())
+      .map(p => ({ key: p.id, name: p.name, description: p.desc || '', type: TYPE[p.type], price: p.price || '' }));
   },
 
   /* What the pill's tooltip says: the inspect verdict in one line. */
