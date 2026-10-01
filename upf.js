@@ -396,6 +396,19 @@ const UPF = {
           if (lr && lr.job) await this.waitJob(lr.job, () => {});
         }
       } catch (e) { console.warn('[UPF] leaderboard sync failed', e); }
+      // Pricing + App Review info → ASC. Mandatory before a submission is
+      // accepted; app/version-level, so once per sync (not per locale), and
+      // change-guarded so an idle save doesn't re-POST the price schedule.
+      try {
+        const prep = this.submitPrepData(pid);
+        const ph = JSON.stringify(prep);
+        this._prepHash = this._prepHash || {};
+        if (this._prepHash[pid] !== ph) {
+          this._prepHash[pid] = ph;
+          const pr = await this._post('/submitprep', { game: state.upf.game.app, data: prep });
+          if (pr && pr.job) await this.waitJob(pr.job, () => {});
+        }
+      } catch (e) { console.warn('[UPF] submit-prep sync failed', e); }
       // A build may be waiting on this now-connected account.
       try { _upfMaybePublish(pid); } catch (_) {}
       // Achievement text edited after the build → push it to Game Center (no rebuild).
@@ -647,6 +660,27 @@ const UPF = {
     return lbs
       .filter(l => (l.name || '').trim())
       .map(l => ({ key: l.id, name: l.name, gcId: l.gcId || '', scoreFormat: l.scoreFormat || 'Integer' }));
+  },
+
+  /* Shipmate's pricing + App Review info → the agent's /submitprep payload. Both
+     are app/version-level (not per-locale) and mandatory before ASC will accept a
+     submission. Price is game-wide (state.formData.price); the review contact and
+     demo account come off the Mac App Store Full step. */
+  submitPrepData(pid) {
+    const f = state.formData || {};
+    const a = state.macFullSubmitAnswers || {};
+    const rc = a.reviewContact || {};
+    const da = a.demoAccount || {};
+    return {
+      priceModel: a.priceModel || (f.price === '' || f.price === 0 ? 'free' : (f.price ? 'paid' : null)),
+      price: (f.price === '' || f.price == null) ? '0' : String(f.price),
+      availability: a.availability || { mode: 'all', countries: [] },
+      review: {
+        contact: { firstName: rc.firstName || '', lastName: rc.lastName || '', phone: rc.phone || '', email: rc.email || '' },
+        demo: { required: da.required === 'yes', username: da.username || '', password: da.password || '' },
+        notes: a.reviewNotes || '',
+      },
+    };
   },
 
   /* What the pill's tooltip says: the inspect verdict in one line. */
