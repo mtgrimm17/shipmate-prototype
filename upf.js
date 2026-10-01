@@ -977,7 +977,7 @@ const UPF_FLOW_LABEL = {
    button sets (connect clears itself when the account state flips). */
 const UPF_USER_STEP = {
   connect:   { cta: 'Connect account', onclick: "UPF.startConnect('%PID%')",
-               help: 'Sign in with your Apple Developer account so Shipmate can sign the build and, later, upload it.' },
+               help: 'Sign in with your Apple Developer account so Shipmate can sign and upload the build.' },
   apprecord: { cta: 'Open App Store Connect', href: 'https://appstoreconnect.apple.com/apps',
                confirm: 'appRecord', confirmCta: 'I’ve created it',
                help: 'Create the app on the App Store Connect website — Apple doesn’t allow this over the API — then mark it done.' },
@@ -1033,6 +1033,7 @@ function _upfFlowRows(pid) {
 function upfAdvance(pid) {
   if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return;
   const u = state.upf || {};
+  u.started = true;                 // the flow is engaged — the panel now shows Build steps
   const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
   if (u.job) { _upfRepaint(pid, true); return; }        // already working
   if (!connected) { UPF.startConnect(pid); return; }     // blocked at Connect
@@ -1075,32 +1076,38 @@ function upfBuildPanelHTML(pid) {
   const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
   const name = esc(u.game.name);
 
-  /* ── The intro line, game-specific, and the primary action beneath it. The
-     step list below carries the detailed state; the intro just sets the scene,
-     and the button is the single "start the agent" trigger (upfAdvance runs it
-     as far as it can, surfacing the next user step). */
-  let intro, actions = '';
+  /* The flow is "engaged" once the developer presses Build from Steam (upfAdvance
+     sets u.started), or any time a build already exists or is running. BEFORE
+     that, the panel is just the pitch: the paragraph, what carries over, and the
+     Build from Steam button as the one obvious move — no step list, no alerts. */
+  const started = !!(u.started || running || built || done || failed);
+
+  /* ── The intro paragraph. The step list (once started) carries the detail. */
+  let intro;
   if (done && u.result && u.result.buildId) {
     intro = `<strong>Done.</strong> ${name} — build ${esc(u.result.buildVersion)} is in App Store Connect (build id ${esc(u.result.buildId)}). It is uploaded and processed; choose a destination and press Submit to distribute it.`;
   } else if (failed) {
     intro = `The build stopped. ${name}’s Steam build is untouched — you can try again.`;
-    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Try again</button></div>`;
   } else {
     intro = `Shipmate generates a new Mac App Store build from ${name}’s Steam build on this Mac — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched.`;
-    /* The button shows only when nothing is running and no build exists yet — the
-       one moment "Build from Steam" is the next move. Once it is under way (or a
-       build is waiting on a user step) the list's own rows carry the state. */
-    if (!running && !built && !done) {
-      actions = blockers.length
-        ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
-        : `<div class="upf-actions">
-             <button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Build from Steam</button>
-             <button class="upf-alt" onclick="event.stopPropagation();document.getElementById('upf-alt-up-${pid}').click()">Upload a build instead</button>
-             <input type="file" id="upf-alt-up-${pid}" accept="${esc(smBuildAccept(pid).accept)}" hidden onchange="handleBuildUpload('${pid}', this.files)">
-           </div>`;
-    }
   }
-  const introBlock = `<div class="upf-intro">${intro}</div>${actions}`;
+  const introPara = `<div class="upf-intro">${intro}</div>`;
+
+  /* ── The primary action. At rest, Build from Steam is THE move (plus an Upload
+     alternative). Once the flow is engaged the list's own rows drive it, so the
+     only button left is Try again on a failure. */
+  let actions = '';
+  if (failed) {
+    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Try again</button></div>`;
+  } else if (!started) {
+    actions = blockers.length
+      ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
+      : `<div class="upf-actions">
+           <button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Build from Steam</button>
+           <button class="upf-alt" onclick="event.stopPropagation();document.getElementById('upf-alt-up-${pid}').click()">Upload a build instead</button>
+           <input type="file" id="upf-alt-up-${pid}" accept="${esc(smBuildAccept(pid).accept)}" hidden onchange="handleBuildUpload('${pid}', this.files)">
+         </div>`;
+  }
   const err = (u.error && !running && !failed) ? `<div class="upf-error">${esc(u.error)}</div>` : '';
   const blocks = blockers.length ? `
     <div class="upf-label">Blocked</div>
@@ -1151,8 +1158,11 @@ function upfBuildPanelHTML(pid) {
     }
     return `<li class="upf-step is-${r.status} kind-${r.kind}">${disc}<div class="upf-step-main">${main}</div></li>`;
   }).join('');
-  const stepsBlock = `<div class="upf-label">Build steps</div><ul class="upf-steps">${flowRows}</ul>`;
+  /* The step list appears only once the flow is engaged — at rest the button is
+     the focus and the obvious move. */
+  const stepsBlock = started ? `<div class="upf-label">Build steps</div><ul class="upf-steps">${flowRows}</ul>` : '';
 
-  /* Order: intro + action; then what carries over from Steam; then the steps. */
-  return `<div class="upf-panel">${introBlock}${err}${blocks}${chips}${stepsBlock}</div>`;
+  /* Order: the paragraph; then what carries over from Steam; then — at rest —
+     the Build from Steam button, or — once engaged — the build steps. */
+  return `<div class="upf-panel">${introPara}${chips}${err}${blocks}${actions}${stepsBlock}</div>`;
 }
