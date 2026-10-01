@@ -207,26 +207,129 @@ const UPF = {
     return { collected: true, publish: false, items };
   },
 
-  /* Everything Shipmate has collected, as the manifest-v2 listing block the
-     agent's /populate consumes. Screenshots are omitted: the agent needs files
-     on disk and Shipmate's live in the browser as data URLs / CDN links. */
-  buildListing(pid) {
-    const f = state.formData || {};
-    const listing = {
-      locale: 'en-US',
-      name: f.title || undefined,
-      subtitle: f.subtitle || undefined,
-      description: f.description || undefined,
-      supportUrl: f.supportUrl || undefined,
-      marketingUrl: undefined,
-      privacyPolicyUrl: f.privacyUrl || this._answer(pid, 'privacyPolicyUrl') || undefined,
-      whatsNew: f.releaseNotes || undefined,
-      primaryCategory: 'GAMES',   // Shipmate does not collect a category; a game is GAMES
+  /* Shipmate language code → App Store Connect locale. Shipmate stores short
+     codes (en, fr, pt-BR, zh-TW, es-419…); ASC wants its own locale strings. A
+     code with no mapping is skipped rather than sent as an invalid locale. */
+  _ascLocale(lang) {
+    const M = {
+      en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES', 'es-419': 'es-MX',
+      pt: 'pt-PT', 'pt-BR': 'pt-BR', zh: 'zh-Hans', 'zh-TW': 'zh-Hant',
+      ja: 'ja', ko: 'ko', ru: 'ru', it: 'it', nl: 'nl-NL', pl: 'pl',
+      sv: 'sv', nb: 'no', da: 'da', fi: 'fi', cs: 'cs', hu: 'hu', ro: 'ro',
+      uk: 'uk', vi: 'vi', ms: 'ms', he: 'he', el: 'el', ar: 'ar-SA',
+      tr: 'tr', id: 'id', th: 'th',
     };
-    const ar = this._ageRating(pid);
-    if (ar) listing.ageRating = ar;
-    const pr = this._privacy(pid);
-    if (pr) listing.privacy = pr;
+    return M[lang] || null;
+  },
+
+  /* The per-store listing object that owns the text for a Mac platform:
+     macos_full keeps its own, macos/ios share title/subtitle through formData
+     and keep the rest on macAppStoreListing. */
+  _listingText(pid, lang, isPrimary) {
+    const f = state.formData || {};
+    const full = (pid === 'macos_full');
+    const store = full ? state.macFullAppStoreListing : state.macAppStoreListing;
+    if (!isPrimary) {
+      const o = store && store.localizedStoreText && store.localizedStoreText[lang];
+      if (!o) return null;
+      const t = { title: o.title, subtitle: o.subtitle, description: o.description, releaseNotes: o.releaseNotes };
+      return (t.title || t.subtitle || t.description || t.releaseNotes) ? t : null;
+    }
+    // Primary language — top-level fields (title/subtitle shared from formData for
+    // macos; self-owned for macos_full).
+    if (full) {
+      const L = store || {};
+      return { title: L.title || f.title, subtitle: L.subtitle || f.subtitle,
+               description: L.description || f.description, releaseNotes: L.releaseNotes || f.releaseNotes };
+    }
+    const L = store || {};
+    return { title: f.title, subtitle: f.subtitle,
+             description: (state.appStoreListing && state.appStoreListing.description) || f.description,
+             releaseNotes: L.releaseNotes || f.releaseNotes };
+  },
+
+  /* macos_full's own extra listing fields (keywords/promo/marketing/copyright).
+     Only macos_full collects these; macos/ios return nothing for them. */
+  _fullListing(pid) {
+    return (pid === 'macos_full') ? (state.macFullAppStoreListing || {}) : {};
+  },
+
+  /* Secondary category (macos_full only) → an ASC appCategory id. Shipmate stores
+     a display label ("Entertainment", "Photo & Video"); ASC ids are the label
+     upper-cased with " & " → "_AND_" and spaces → "_". The agent validates the id
+     against Apple's live list and skips an unknown one, so this is safe. */
+  _secondaryCategory(pid) {
+    if (pid !== 'macos_full') return null;
+    const sec = state.macFullSubmitAnswers && state.macFullSubmitAnswers.category
+      && state.macFullSubmitAnswers.category.secondary;
+    if (!sec) return null;
+    return String(sec).trim().toUpperCase().replace(/\s*&\s*/g, '_AND_').replace(/\s+/g, '_');
+  },
+
+  /* The platform's ordered, selected screenshots as the agent can consume them:
+     data: URLs become base64 bytes, remote URLs are passed for the agent to
+     fetch. Mac screenshots are one display type (APP_DESKTOP). Capped at 10. */
+  _screenshots(pid) {
+    if (typeof platformStoreShots !== 'function' || typeof _screenshotSrc !== 'function') return null;
+    let entries;
+    try { entries = platformStoreShots(pid) || []; } catch (_) { return null; }
+    const out = [];
+    entries.slice(0, 10).forEach((e, i) => {
+      let src = '';
+      try { src = _screenshotSrc(e) || ''; } catch (_) { src = ''; }
+      if (!src) return;
+      const fileName = (e && e.name) || ('screenshot-' + (i + 1) + '.png');
+      if (src.slice(0, 5) === 'data:') {
+        const comma = src.indexOf(',');
+        const data = comma >= 0 ? src.slice(comma + 1) : '';
+        if (data) out.push({ fileName, data, displayType: 'APP_DESKTOP' });
+      } else if (/^https?:/i.test(src)) {
+        out.push({ fileName, url: src, displayType: 'APP_DESKTOP' });
+      }
+    });
+    return out.length ? out : null;
+  },
+
+  /* The /populate listing block for ONE locale. `appLevel` (true only for the
+     primary locale) carries the app-wide fields — category, copyright, age
+     rating, privacy, screenshots — that are not per-locale, plus the macos_full
+     keywords/promo/marketing (Shipmate has no per-locale copies of those).
+     Returns null for a locale it can't map or has no text for, so it is skipped. */
+  buildListing(pid, lang, appLevel) {
+    const f = state.formData || {};
+    const primaryLang = f.primaryLanguage || 'en';
+    if (lang == null) { lang = primaryLang; appLevel = true; }
+    const isPrimary = (lang === primaryLang);
+    const locale = this._ascLocale(lang);
+    if (!locale) return null;
+    const t = this._listingText(pid, lang, isPrimary);
+    if (!t) return null;
+    const full = this._fullListing(pid);
+
+    const listing = {
+      locale,
+      name: t.title || undefined,
+      subtitle: t.subtitle || undefined,
+      description: t.description || undefined,
+      whatsNew: t.releaseNotes || undefined,
+      supportUrl: (full.supportUrl || f.supportUrl) || undefined,
+      privacyPolicyUrl: f.privacyUrl || this._answer(pid, 'privacyPolicyUrl') || undefined,
+    };
+    // Keywords / promo / marketing are single-valued in Shipmate (no per-locale
+    // copies), so only attach them to the primary locale.
+    if (isPrimary) {
+      if (full.keywords)        listing.keywords = full.keywords;
+      if (full.promotionalText) listing.promotionalText = full.promotionalText;
+      if (full.marketingUrl)    listing.marketingUrl = full.marketingUrl;
+    }
+    if (appLevel) {
+      listing.primaryCategory = 'GAMES';   // Shipmate only submits games
+      const sec = this._secondaryCategory(pid); if (sec) listing.secondaryCategory = sec;
+      if (full.copyright) listing.copyright = full.copyright;
+      const ar = this._ageRating(pid); if (ar) listing.ageRating = ar;
+      const pr = this._privacy(pid); if (pr) listing.privacy = pr;
+      const shots = this._screenshots(pid); if (shots) listing.screenshots = shots;
+    }
     return listing;
   },
 
@@ -243,12 +346,33 @@ const UPF = {
       if (!(await this.health())) return;
       const pid = this.connectedMac();
       if (!pid || !state.upf.game) return;
-      const listing = this.buildListing(pid);
-      const r = await this._post('/populate', { game: state.upf.game.app, listing });
-      if (r && r.job) {
-        await this.waitJob(r.job, () => {});
-        if (typeof bcToast === 'function') bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
+      /* Push the primary locale (which carries the app-wide fields — category,
+         copyright, age rating, privacy, screenshots) then each additional
+         localization the developer added, text-only. The agent writes one locale
+         per /populate call. */
+      const f = state.formData || {};
+      const primaryLang = f.primaryLanguage || 'en';
+      const langs = [primaryLang].concat((f.localizations || []).filter(l => l && l !== primaryLang));
+      this._shotHash = this._shotHash || {};
+      let pushed = 0, shotHash = null, sentShots = false;
+      for (const lang of langs) {
+        const isPrimary = lang === primaryLang;
+        const listing = this.buildListing(pid, lang, isPrimary);
+        if (!listing) continue;                    // unmapped locale, or no text for it
+        /* Screenshots are additive on the agent (it reserves up to 10 without
+           content dedup), and sync() runs on every save — so only send them when
+           they have actually changed since the last successful upload. */
+        if (isPrimary && listing.screenshots) {
+          shotHash = JSON.stringify(listing.screenshots.map(s => (s.fileName || '') + ':' + (s.data ? s.data.length : (s.url || ''))));
+          if (this._shotHash[pid] === shotHash) delete listing.screenshots;
+          else sentShots = true;
+        }
+        const r = await this._post('/populate', { game: state.upf.game.app, listing });
+        if (r && r.job) await this.waitJob(r.job, () => {});
+        pushed++;
       }
+      if (sentShots && shotHash) this._shotHash[pid] = shotHash;
+      if (pushed && typeof bcToast === 'function') bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
       // A build may be waiting on this now-connected account.
       try { _upfMaybePublish(pid); } catch (_) {}
       // Achievement text edited after the build → push it to Game Center (no rebuild).
