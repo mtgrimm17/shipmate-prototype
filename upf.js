@@ -382,7 +382,7 @@ const UPF = {
         const b = (state.platformBuilds || {})[pid];
         if (b && b.source === 'upf' && b.uploaded) {
           const achs = this.achievementsForBuild(pid);
-          const h = JSON.stringify(achs.map(a => [a.identifier, a.name, a.description, a.hidden]));
+          const h = JSON.stringify(achs.map(a => [a.identifier, a.name, a.description, a.hidden, a.image ? a.image.data.length : 0]));
           this._gcHash = this._gcHash || {};
           if (achs.length && this._gcHash[pid] !== h) {
             this._gcHash[pid] = h;
@@ -583,7 +583,14 @@ const UPF = {
       .filter(a => a.identifier)
       .map(a => {
         const own = gc.find(x => x.refName === a.name) || null;
-        return { identifier: a.identifier, name: a.name, description: a.description || '', hidden: !!(own && own.hidden) };
+        const out = { identifier: a.identifier, name: a.name, description: a.description || '', hidden: !!(own && own.hidden) };
+        const durl = own && own.image && own.image.dataUrl;
+        if (durl && durl.slice(0, 5) === 'data:') {
+          const comma = durl.indexOf(',');
+          const data = comma >= 0 ? durl.slice(comma + 1) : '';
+          if (data) out.image = { fileName: (own.image.name || (a.identifier + '.png')), data };
+        }
+        return out;
       });
   },
 
