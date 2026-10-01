@@ -385,6 +385,17 @@ const UPF = {
           if (ir && ir.job) await this.waitJob(ir.job, () => {});
         }
       } catch (e) { console.warn('[UPF] IAP sync failed', e); }
+      // Game Center leaderboards → ASC (needs no build). Change-guarded.
+      try {
+        const lbs = this.leaderboardsForBuild();
+        const lh = JSON.stringify(lbs.map(l => [l.key, l.name, l.gcId, l.scoreFormat]));
+        this._lbHash = this._lbHash || {};
+        if (lbs.length && this._lbHash[pid] !== lh) {
+          this._lbHash[pid] = lh;
+          const lr = await this._post('/leaderboards', { game: state.upf.game.app, leaderboards: lbs });
+          if (lr && lr.job) await this.waitJob(lr.job, () => {});
+        }
+      } catch (e) { console.warn('[UPF] leaderboard sync failed', e); }
       // A build may be waiting on this now-connected account.
       try { _upfMaybePublish(pid); } catch (_) {}
       // Achievement text edited after the build → push it to Game Center (no rebuild).
@@ -624,6 +635,18 @@ const UPF = {
     return products
       .filter(p => TYPE[p.type] && (p.name || '').trim())
       .map(p => ({ key: p.id, name: p.name, description: p.desc || '', type: TYPE[p.type], price: p.price || '' }));
+  },
+
+  /* Shipmate's Game Center leaderboards → the agent's /leaderboards payload.
+     Collected only on the Mac App Store Full step (state.macFullSubmitAnswers.
+     gameCenter.leaderboards); Game Center is per-app, so these apply to the one
+     app the bundle id resolves to. */
+  leaderboardsForBuild() {
+    const gc = state.macFullSubmitAnswers && state.macFullSubmitAnswers.gameCenter;
+    const lbs = (gc && gc.leaderboards) || [];
+    return lbs
+      .filter(l => (l.name || '').trim())
+      .map(l => ({ key: l.id, name: l.name, gcId: l.gcId || '', scoreFormat: l.scoreFormat || 'Integer' }));
   },
 
   /* What the pill's tooltip says: the inspect verdict in one line. */
