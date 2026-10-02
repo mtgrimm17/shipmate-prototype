@@ -3320,13 +3320,13 @@ const PLATFORM_TRACKS = {
       invented-and-forgotten. */
 const STORE_REVIEW = {
   ios: {
-    in_review: { label: 'IN REVIEW',                  note: '' },
+    in_review: { label: 'WAITING FOR REVIEW',         note: '' },
     accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the App Store when you release it.', action: 'Release This Version' },
     live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the App Store.' },
     rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
   },
   macos: {
-    in_review: { label: 'IN REVIEW',                  note: '' },
+    in_review: { label: 'WAITING FOR REVIEW',         note: '' },
     accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the Mac App Store when you release it.', action: 'Release This Version' },
     live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the Mac App Store.' },
     rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
