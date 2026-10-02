@@ -348,23 +348,33 @@ const UPF = {
   },
   async _syncNow(reason) {
     try {
+      /* A save on a Mac platform should always ATTEMPT to sync and, when it
+         can't, say why — a matched game is NOT required to explain. This
+         replaces the old persistent "Saved locally" note. onMac keys off the
+         saved platform (passed to sync()); with no context it falls back to
+         "any Mac platform active". */
+      const ctx = this._lastSaveCtx;
+      const onMac = ctx ? UPF_MAC_PIDS.includes(ctx)
+                        : UPF_MAC_PIDS.some(p => state.activePlatforms && state.activePlatforms.has && state.activePlatforms.has(p));
+      const toast = (m) => { if (onMac && typeof bcToast === 'function') bcToast(m); };
+
       const pid = this.connectedMac();
       if (!pid) {
-        /* A save happened on a Mac platform that's active with a matched game,
-           but no App Store account is connected — so a sync WOULD have run and
-           can't. Tell the user why (this replaces the old persistent "Saved
-           locally" note on every step). The stubbed Settings sign-in is the
-           signal that the agent should push using the credentials it holds. */
-        const ctx = this._lastSaveCtx;
-        const onMac = ctx ? UPF_MAC_PIDS.includes(ctx)
-                          : UPF_MAC_PIDS.some(p => state.activePlatforms && state.activePlatforms.has && state.activePlatforms.has(p));
-        if (onMac && state.upf.game && typeof bcToast === 'function') {
-          bcToast('Connect your App Store account in Settings to sync to App Store Connect.');
-        }
+        // No App Store account connected (the stubbed Settings sign-in is the
+        // signal that the agent should push with the credentials it holds).
+        toast('Connect your App Store account in Settings to sync to App Store Connect.');
         return;
       }
-      if (!state.upf.game) return;
-      if (!(await this.health())) return;
+      if (!state.upf.game) {
+        // Connected, but Shipmate hasn't matched this title to a local build yet
+        // — nothing to attach the metadata to until it does.
+        toast('No game detected yet — your entries will sync to App Store Connect once Shipmate matches your game.');
+        return;
+      }
+      if (!(await this.health())) {
+        toast('Start the Shipmate agent to sync your entries to App Store Connect.');
+        return;
+      }
       /* Push the primary locale (which carries the app-wide fields — category,
          copyright, age rating, privacy, screenshots) then each additional
          localization the developer added, text-only. The agent writes one locale
@@ -1348,8 +1358,6 @@ function upfBuildPanelHTML(pid) {
       ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
       : `<div class="upf-actions">
            <button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Build from Steam</button>
-           <button class="upf-alt" onclick="event.stopPropagation();document.getElementById('upf-alt-up-${pid}').click()">Upload a build instead</button>
-           <input type="file" id="upf-alt-up-${pid}" accept="${esc(smBuildAccept(pid).accept)}" hidden onchange="handleBuildUpload('${pid}', this.files)">
          </div>`;
   }
   const err = (u.error && !running && !failed) ? `<div class="upf-error">${esc(u.error)}</div>` : '';

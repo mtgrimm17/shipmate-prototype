@@ -5752,18 +5752,10 @@ function _subStepBodyInner(pid, stepId) {
        press, so they sit where your eye already is: on the button's own row.
        The Xcode sentence survives as the row's title, where it is available to
        anyone who stalls on it without being printed at everyone. */
-    const fmt = smBuildAccept(pid);
-    /* BUILD FROM STEAM replaces the upload row when the agent is up and this
-       game is matched to the local Steam library (upfBuildPanelHTML returns ''
-       otherwise, and the ordinary file-drop row stands). */
-    const upfPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
-    const uploadRow = upfPanel || `
-      <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
-        ${buildBuildDropdown(pid)}
-        <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
-      </div>`;
+    /* Two sub-tabs: Build from Steam (agent-driven, default) and Upload Build
+       (drag/drop). buildGameBuildTabs owns both; the release block sits below. */
     return banner
-      + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
+      + `<div class="ios-step-body-content"><div class="sub-upload-body">${buildGameBuildTabs(pid)}${buildReleaseBlock(pid)}</div></div>`
       + SM_SCROLL_CUE;
   }
 
@@ -7101,21 +7093,9 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     ];
     body = _infLoadingScreen('Generating Report Card…', iaMsgs);
   } else if (stepId === 'uploadBuild') {
-    /* The Game Build modal — the Build-from-Steam panel (intro + action, the
-       high-level step circles, and the feature chips). The modal footer already
-       carries the "Saved locally" note, so the panel does not repeat it. Falls
-       back to a plain file-drop row if the panel is unavailable (no Steam
-       build), so the Upload option is always present. */
-    const panel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(platformId) : '';
-    if (panel) body = panel;
-    else {
-      const fmt = smBuildAccept(platformId);
-      body = `<div class="ios-step-body-content"><div class="sub-upload-body">
-        <div class="sub-upload-row"${fmt.note ? ` title="${escHtml(fmt.note)}"` : ''}>
-          ${buildBuildDropdown(platformId)}
-          <span class="sub-upload-hint-types">${escHtml(fmt.hint)}</span>
-        </div></div></div>`;
-    }
+    /* The Game Build modal — two sub-tabs: Build from Steam (agent-driven,
+       default) and Upload Build (drag/drop file picker). See buildGameBuildTabs. */
+    body = `<div class="ios-step-body-content"><div class="sub-upload-body">${buildGameBuildTabs(platformId)}</div></div>`;
   } else if (platformId === 'android') {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildAndroidStorePreviewSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -20785,6 +20765,41 @@ function _steamKeyArtUploadHTML(kind, hint, upload) {
 /* ══════════════════════════════════════════════════════
    BUILD DROPDOWN  (platform card header)
    ══════════════════════════════════════════════════════ */
+/* The Game Build step body: two sub-tabs. "Build from Steam" (default) is the
+   agent-driven panel that walks the substeps and stops only for human tasks
+   (upfBuildPanelHTML). "Upload Build" is a drag/drop box that opens a file
+   picker on click. The selected tab lives in state.buildTab[pid] (default
+   'steam'); setBuildTab (app.js) flips it and repaints the step. */
+function buildGameBuildTabs(pid) {
+  const tab = (state.buildTab && state.buildTab[pid]) || 'steam';
+  const fmt = smBuildAccept(pid);
+
+  const steamPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
+  const steamBody = steamPanel || `
+    <div class="upf-panel"><div class="upf-intro">Start the Shipmate agent and let it detect this game in your Steam library to build from Steam. Until then, use Upload Build to add a signed build yourself.</div></div>`;
+
+  const uploadBody = `
+    <div class="build-drop" tabindex="0" role="button" aria-label="Upload a build"
+         onclick="document.getElementById('build-drop-input-${pid}').click()"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+         ondragover="event.preventDefault(); this.classList.add('is-over')"
+         ondragleave="this.classList.remove('is-over')"
+         ondrop="event.preventDefault(); this.classList.remove('is-over'); handleBuildUpload('${pid}', event.dataTransfer.files)">
+      <div class="build-drop-icon">↑</div>
+      <div class="build-drop-title">Drag a build here, or click to choose</div>
+      <div class="build-drop-types">${escHtml(fmt.hint)}</div>
+      <input type="file" id="build-drop-input-${pid}" accept="${escHtml(fmt.accept)}" hidden
+             onchange="handleBuildUpload('${pid}', this.files)">
+    </div>`;
+
+  return `
+    <div class="build-tabs" role="tablist">
+      <button class="build-tab ${tab === 'steam' ? 'is-active' : ''}" role="tab" aria-selected="${tab === 'steam'}" onclick="setBuildTab('${pid}','steam')">Build from Steam</button>
+      <button class="build-tab ${tab === 'upload' ? 'is-active' : ''}" role="tab" aria-selected="${tab === 'upload'}" onclick="setBuildTab('${pid}','upload')">Upload Build</button>
+    </div>
+    <div class="build-tab-body">${tab === 'steam' ? steamBody : uploadBody}</div>`;
+}
+
 function buildBuildDropdown(pid, inModal, noBuildLabel) {
   const build      = state.platformBuilds?.[pid] || null;
   const processing = !!(state.platformBuildProcessing?.[pid]);

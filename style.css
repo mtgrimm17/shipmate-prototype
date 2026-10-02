@@ -7622,6 +7622,62 @@ body.viewing-splash .app-subnav { display: none; }
    the running one, a green check when done — the app's own discs/spinner/tick);
    then the Steam features as chips, lit when they carry over to the Mac build
    and grey when they go dark, each with a "?" tooltip. Built from app tokens. */
+/* Game Build step — the two sub-tabs (Build from Steam / Upload Build) and the
+   Upload Build drag/drop box. */
+.build-tabs {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+}
+.build-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .02);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.build-tab:hover { color: var(--text); }
+.build-tab.is-active {
+  background: rgba(255, 255, 255, .06);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, .22);
+}
+.build-tab-body { width: 100%; box-sizing: border-box; }
+
+.build-drop {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 32px 20px;
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .02);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.build-drop:hover,
+.build-drop:focus-visible,
+.build-drop.is-over {
+  border-color: rgba(255, 255, 255, .34);
+  background: rgba(255, 255, 255, .05);
+  outline: none;
+}
+.build-drop-icon { font-size: 20px; color: var(--text-dim); line-height: 1; }
+.build-drop-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.build-drop-types { font-size: 12px; color: var(--text-dim); }
+
 .upf-panel {
   width: 100%;              /* fill the modal body, whose .sub-upload-body is align-items:flex-start */
   box-sizing: border-box;

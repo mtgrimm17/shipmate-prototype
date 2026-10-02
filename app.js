@@ -2966,6 +2966,14 @@ function setMacTextField(path, value) {
   obj[key] = value;
 }
 
+/* Game Build step — switch between the "Build from Steam" and "Upload Build"
+   sub-tabs (buildGameBuildTabs, render.js). Default is 'steam'. */
+function setBuildTab(pid, tab) {
+  if (!state.buildTab) state.buildTab = {};
+  state.buildTab[pid] = tab;
+  reRenderStepModal();
+}
+
 /* ── Mac App Store Full — App Information (new) ──────────────────────── */
 // Writes straight into state.macFullAppStoreListing — the extended,
 // FULLY INDEPENDENT superset of macAppStoreListing (see its own comment,
