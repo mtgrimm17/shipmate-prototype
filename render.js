@@ -6228,6 +6228,10 @@ function connectPortalUrl(pid) {
 function buildAscLoginModal() {
   const pid = state.ascLogin;
   if (!pid) return '';
+  // Apple platforms use the native Connect-to-App-Store-Connect wizard (consent
+  // when a key is already set up on this Mac, otherwise a one-time key setup) —
+  // not the simulated browser sign-in, which stays for Steam / Google Play.
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') return buildAscWizard(pid);
   const cfg = platformLoginConfig(pid);
   return `
     <div class="webview">
@@ -6238,6 +6242,79 @@ function buildAscLoginModal() {
       </div>
       ${_signinPageHTML(pid, cfg)}
     </div>`;
+}
+
+/* The Connect-to-App-Store-Connect wizard. state.ascWizard.step drives it:
+   'checking' (probing the Mac) → 'consent' (access already set up, just confirm)
+   or 'setup-open' → 'setup-key' (one-time key entry) → 'validating' → done
+   (connectAdd) / 'error'. 'down' = the helper isn't reachable. No "agent" or
+   credential language. */
+function buildAscWizard(pid) {
+  const w = state.ascWizard || { step: 'checking' };
+  const gameName = (state.upf && state.upf.game && state.upf.game.name) ? state.upf.game.name : 'this game';
+  const mark = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" fill="#0A84FF"/><path d="M8 15.5l2.6-7h2.8l2.6 7h-2.2l-.5-1.5h-2.6l-.5 1.5H8zm3.2-3.1h1.6L12 9.9l-.8 2.5z" fill="#fff"/></svg>`;
+  const head = (title, sub) => `
+    <div class="ascw-head">
+      <div class="ascw-logo">${mark}</div>
+      <div class="ascw-titles"><div class="ascw-title">${escHtml(title)}</div>${sub ? `<div class="ascw-sub">${escHtml(sub)}</div>` : ''}</div>
+      <button class="ascw-x" onclick="closeAscLogin()" aria-label="Close">&times;</button>
+    </div>`;
+
+  let bodyFoot = '';
+  if (w.step === 'checking') {
+    bodyFoot = `<div class="ascw-body ascw-center"><span class="build-proc-spin"></span><div class="ascw-muted">Checking your Mac…</div></div>`;
+  } else if (w.step === 'down') {
+    bodyFoot = `
+      <div class="ascw-body"><p>Shipmate can't reach App Store Connect on this Mac right now. Make sure Shipmate is open, then try again.</p></div>
+      <div class="ascw-foot"><button class="ascw-btn-ghost" onclick="closeAscLogin()">Close</button><button class="ascw-btn" onclick="openAscLogin('${pid}')">Try again</button></div>`;
+  } else if (w.step === 'consent') {
+    bodyFoot = `
+      <div class="ascw-body">
+        <p>Shipmate can publish to App Store Connect from this Mac using the secure key already set up on your computer — no sign-in needed.</p>
+        <p>Connect <b>${escHtml(gameName)}</b> to start syncing your store listing, pricing, and App Review details. Shipmate only writes what you enter here, and you can disconnect anytime.</p>
+      </div>
+      <div class="ascw-foot"><button class="ascw-btn-ghost" onclick="closeAscLogin()">Not now</button><button class="ascw-btn" onclick="ascConsentConnect('${pid}')">Connect and sync</button></div>`;
+  } else if (w.step === 'setup-open') {
+    bodyFoot = `
+      <div class="ascw-body">
+        <p>To publish for you, Shipmate needs a one-time key from App Store Connect. It takes about a minute, and you only do this once.</p>
+        <ol class="ascw-list">
+          <li>Open App Store Connect and go to <b>Users and Access → Integrations</b>.</li>
+          <li>Select <b>Team Keys</b>, click <b>Generate API Key</b>, name it <b>Shipmate</b>, set Access to <b>App Manager</b>, and Generate.</li>
+          <li>Download the key file — it can only be downloaded once.</li>
+        </ol>
+        <button class="ascw-btn-wide" onclick="window.open('https://appstoreconnect.apple.com/access/integrations/api','_blank','noopener')">Open App Store Connect</button>
+      </div>
+      <div class="ascw-foot"><button class="ascw-btn-ghost" onclick="closeAscLogin()">Cancel</button><button class="ascw-btn" onclick="ascWizardGo('${pid}','setup-key')">I've downloaded it &rarr;</button></div>`;
+  } else if (w.step === 'setup-key') {
+    const have = !!w.keyId;
+    bodyFoot = `
+      <div class="ascw-body">
+        <label class="ascw-label">Key file</label>
+        <div class="ascw-drop ${have ? 'is-filled' : ''}" tabindex="0" role="button"
+             onclick="document.getElementById('ascw-key-input').click()"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+             ondragover="event.preventDefault(); this.classList.add('is-over')"
+             ondragleave="this.classList.remove('is-over')"
+             ondrop="event.preventDefault(); this.classList.remove('is-over'); ascWizardKeyDrop(event)">
+          ${have
+            ? `<div class="ascw-drop-ok">✓ ${escHtml(w.keyName || 'Key added')} <span class="ascw-muted">(Key ID ${escHtml(w.keyId)})</span></div>`
+            : `<div class="ascw-drop-icon">↑</div><div>Drop your key file here, or click to choose</div><div class="ascw-muted">The file is named AuthKey_XXXXXXXX.p8</div>`}
+          <input type="file" id="ascw-key-input" accept=".p8" hidden onchange="ascWizardKeyFile(event)">
+        </div>
+        <label class="ascw-label">Issuer ID</label>
+        <input class="ascw-input" id="ascw-issuer" placeholder="e.g. 69a6de70-03db-47e3-8f4b-…" value="${escHtml(w.issuerId || '')}" oninput="ascWizardIssuer(this.value)" spellcheck="false" autocomplete="off">
+        <div class="ascw-muted">It's at the top of that same Integrations page, above the list of keys.</div>
+        ${w.error ? `<div class="ascw-error">${escHtml(w.error)}</div>` : ''}
+      </div>
+      <div class="ascw-foot"><button class="ascw-btn-ghost" onclick="ascWizardGo('${pid}','setup-open')">Back</button><button class="ascw-btn" onclick="ascWizardSubmit('${pid}')">Connect</button></div>`;
+  } else if (w.step === 'validating') {
+    bodyFoot = `<div class="ascw-body ascw-center"><span class="build-proc-spin"></span><div class="ascw-muted">Checking your connection to App Store Connect…</div></div>`;
+  }
+
+  const title = (w.step === 'setup-open' || w.step === 'setup-key') ? 'Set up App Store Connect' : 'Connect to App Store Connect';
+  const sub = w.step === 'setup-open' ? 'Step 1 of 2' : w.step === 'setup-key' ? 'Step 2 of 2' : '';
+  return `<div class="ascw">${head(title, sub)}${bodyFoot}</div>`;
 }
 
 /* Platform-themed sign-in page rendered inside the browser frame.

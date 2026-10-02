@@ -5761,6 +5761,40 @@ body.viewing-splash .app-subnav { display: none; }
 .sp-btn{width:100%;padding:11px;font-size:14px;font-weight:600;border:none;border-radius:10px;cursor:pointer}
 .sp-foot{font-size:11px;max-width:330px;line-height:1.4;margin-top:4px}
 
+/* Connect-to-App-Store-Connect wizard (native; replaces the simulated sign-in
+   for Apple platforms). Renders inside #connect-modal. */
+.ascw{display:flex;flex-direction:column;color:var(--text)}
+.ascw-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border)}
+.ascw-logo{flex:none;display:flex}
+.ascw-titles{flex:1;min-width:0}
+.ascw-title{font-size:16px;font-weight:650}
+.ascw-sub{font-size:12px;color:var(--text-dim);margin-top:1px}
+.ascw-x{background:transparent;border:none;color:var(--text-dim);font-size:22px;line-height:1;cursor:pointer;padding:0 2px}
+.ascw-x:hover{color:var(--text)}
+.ascw-body{padding:18px;display:flex;flex-direction:column;gap:12px;font-size:13.5px;line-height:1.5}
+.ascw-body p{margin:0;color:var(--text-dim)}
+.ascw-body b{color:var(--text);font-weight:600}
+.ascw-center{align-items:center;text-align:center;gap:14px;padding:44px 18px}
+.ascw-muted{font-size:12px;color:var(--text-dim);line-height:1.4}
+.ascw-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;color:var(--text-dim)}
+.ascw-list li{line-height:1.45}
+.ascw-label{font-size:12px;font-weight:600;color:var(--text);margin-bottom:-4px}
+.ascw-input{width:100%;box-sizing:border-box;padding:10px 12px;font-size:14px;font-family:inherit;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+.ascw-input:focus{outline:none;border-color:rgba(255,255,255,.34)}
+.ascw-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center;padding:22px 16px;border:1.5px dashed var(--border);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;color:var(--text-dim);transition:border-color .12s,background .12s}
+.ascw-drop:hover,.ascw-drop:focus-visible,.ascw-drop.is-over{border-color:rgba(255,255,255,.34);background:rgba(255,255,255,.05);outline:none}
+.ascw-drop.is-filled{border-style:solid;border-color:rgba(79,227,154,.5)}
+.ascw-drop-icon{font-size:18px}
+.ascw-drop-ok{color:var(--text);font-weight:600}
+.ascw-error{font-size:12.5px;color:#ff7a7a;line-height:1.4}
+.ascw-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 18px;border-top:1px solid var(--border)}
+.ascw-btn{padding:9px 16px;font-size:13.5px;font-weight:600;border:none;border-radius:9px;background:#0A84FF;color:#fff;cursor:pointer}
+.ascw-btn:hover{filter:brightness(1.08)}
+.ascw-btn-ghost{padding:9px 14px;font-size:13.5px;font-weight:600;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--text-dim);cursor:pointer}
+.ascw-btn-ghost:hover{color:var(--text)}
+.ascw-btn-wide{width:100%;padding:11px;font-size:13.5px;font-weight:600;border:1px solid var(--border);border-radius:9px;background:rgba(255,255,255,.04);color:var(--text);cursor:pointer}
+.ascw-btn-wide:hover{background:rgba(255,255,255,.08)}
+
 /* Apple / App Store Connect — white */
 .sp-apple{background:#fff;color:#1d1d1f}
 .sp-apple .sp-input{color:#1d1d1f;background:#fff;border-color:#d2d2d7}

@@ -73,6 +73,17 @@ const UPF = {
     return data;
   },
 
+  /* Connect wizard: hand the entered App Store Connect key to the local helper,
+     which stores it and verifies it with a live call. Returns {ok, verified,
+     teamId} or {ok:false, error}. Never throws. */
+  async saveAccount(payload) {
+    try {
+      return await this._post('/account', payload);
+    } catch (e) {
+      return { ok: false, error: (e && e.message) || 'Could not reach App Store Connect.' };
+    }
+  },
+
   /* One probe per page load. A failed probe is remembered as `false` so a
      machine without the agent never pays for a second connection attempt. */
   async health() {
@@ -1410,9 +1421,10 @@ function upfBuildPanelHTML(pid) {
     }
     return `<li class="upf-step is-${r.status} kind-${r.kind}">${disc}<div class="upf-step-main">${main}</div></li>`;
   }).join('');
-  /* The step list appears only once the flow is engaged — at rest the button is
-     the focus and the obvious move. */
-  const stepsBlock = started ? `<div class="upf-label">Build steps</div><ul class="upf-steps">${flowRows}</ul>` : '';
+  /* The step list is always shown under the button now — so the developer can
+     see the whole path, and where they'll need to step in (the amber human-step
+     rows), before they press Build from Steam. */
+  const stepsBlock = `<div class="upf-label">Build steps</div><ul class="upf-steps">${flowRows}</ul>`;
 
   /* Order: the paragraph; then what carries over from Steam; then — at rest —
      the Build from Steam button, or — once engaged — the build steps. */

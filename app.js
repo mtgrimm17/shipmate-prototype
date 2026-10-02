@@ -7413,10 +7413,79 @@ function connectInstall(pid) {
 function openAscLogin(pid) {
   state.ascLogin = pid;
   if (pid === 'android') { state.googleView = 'choose'; state.googleAccount = null; } // reset OAuth chooser
+  const apple = (pid === 'ios' || pid === 'macos' || pid === 'macos_full');
+  if (apple) state.ascWizard = { step: 'checking', keyId: '', keyName: '', keyPem: '', issuerId: '', error: '' };
   renderAscLogin();
   const overlay = document.getElementById('connect-overlay');
   if (overlay) { overlay.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
-  requestAnimationFrame(() => { const u = document.getElementById('asc-user'); if (u) u.focus(); });
+  if (apple) {
+    // Probe the Mac: access already set up → consent; otherwise the one-time setup.
+    (async () => {
+      let h = null;
+      try { h = (typeof UPF !== 'undefined') ? await UPF.health() : null; } catch (_) {}
+      if (state.ascLogin !== pid || !state.ascWizard) return;   // modal changed meanwhile
+      state.ascWizard.step = !h ? 'down' : ((h.account && h.account.hasApiKey) ? 'consent' : 'setup-open');
+      renderAscLogin();
+    })();
+  } else {
+    requestAnimationFrame(() => { const u = document.getElementById('asc-user'); if (u) u.focus(); });
+  }
+}
+
+/* ── Connect wizard handlers (Apple platforms) ──────────────────────────── */
+// Consent path: access already set up on this Mac → just connect + sync.
+function ascConsentConnect(pid) { closeAscLogin(); connectAdd(pid); }
+
+function ascWizardGo(pid, step) {
+  if (!state.ascWizard) state.ascWizard = {};
+  const issuerEl = document.getElementById('ascw-issuer');
+  if (issuerEl) state.ascWizard.issuerId = issuerEl.value.trim();
+  state.ascWizard.step = step;
+  state.ascWizard.error = '';
+  renderAscLogin();
+}
+
+function ascWizardIssuer(val) { if (state.ascWizard) state.ascWizard.issuerId = (val || '').trim(); }
+
+function _ascWizardReadKey(file) {
+  if (!file) return;
+  const m = /AuthKey_([A-Za-z0-9]+)\.p8$/i.exec(file.name || '');
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.ascWizard = state.ascWizard || {};
+    const issuerEl = document.getElementById('ascw-issuer');
+    if (issuerEl) state.ascWizard.issuerId = issuerEl.value.trim();   // preserve what's typed
+    state.ascWizard.keyPem  = String(reader.result || '');
+    state.ascWizard.keyName = file.name;
+    state.ascWizard.keyId   = m ? m[1] : (state.ascWizard.keyId || '');
+    state.ascWizard.error   = m ? '' : "That file isn't named AuthKey_XXXX.p8 — choose the key file you downloaded from App Store Connect.";
+    renderAscLogin();
+  };
+  reader.readAsText(file);
+}
+function ascWizardKeyFile(event) { _ascWizardReadKey(event.target.files && event.target.files[0]); }
+function ascWizardKeyDrop(event) { _ascWizardReadKey(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]); }
+
+async function ascWizardSubmit(pid) {
+  const w = state.ascWizard || {};
+  const issuerEl = document.getElementById('ascw-issuer');
+  if (issuerEl) w.issuerId = issuerEl.value.trim();
+  if (!w.keyPem || !w.keyId) { w.error = 'Add your key file first.'; renderAscLogin(); return; }
+  if (!w.issuerId)           { w.error = 'Enter your Issuer ID.';   renderAscLogin(); return; }
+  w.step = 'validating'; w.error = ''; renderAscLogin();
+  const res = (typeof UPF !== 'undefined')
+    ? await UPF.saveAccount({ key: w.keyPem, keyId: w.keyId, issuerId: w.issuerId })
+    : { ok: false, error: 'Shipmate could not reach App Store Connect.' };
+  if (state.ascLogin !== pid || !state.ascWizard) return;
+  if (res && res.ok) {
+    state.upf.agent = null;          // force a fresh /health so hasApiKey reads true next time
+    closeAscLogin();
+    connectAdd(pid);
+  } else {
+    state.ascWizard.step = 'setup-key';
+    state.ascWizard.error = (res && res.error) || "That key didn't work. Check the Key ID and Issuer ID and try again.";
+    renderAscLogin();
+  }
 }
 
 /* Google OAuth sub-flow: account chooser → consent. */
@@ -7447,6 +7516,7 @@ function googleAllow(pid) {
 
 function closeAscLogin() {
   state.ascLogin = null;
+  state.ascWizard = null;
   const overlay = document.getElementById('connect-overlay');
   if (overlay) { overlay.classList.add('hidden'); document.body.style.overflow = ''; }
 }
