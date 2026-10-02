@@ -2943,6 +2943,29 @@ function setMacFullTextField(path, value) {
   obj[key] = value;
 }
 
+/* Mac App Store (not Full) nested-field setters — same pattern as the macos_full
+   pair above, but writing to state.macSubmitAnswers. Used by the Business
+   sub-section's consolidated fields (3rd-party content rights, App Review
+   contact/demo/notes) now that those live on the regular Mac App Store card.
+   setMacField re-renders (yn buttons/followups react); setMacTextField does not
+   (text inputs keep focus), matching the macos_full convention. */
+function _macNestedContainer(path) {
+  const parts = path.split('.');
+  let obj = state.macSubmitAnswers;
+  for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+  return { obj, key: parts[parts.length - 1] };
+}
+function setMacField(path, value) {
+  const { obj, key } = _macNestedContainer(path);
+  obj[key] = value;
+  reRenderStepModal();
+  updateIOSCard('macos');
+}
+function setMacTextField(path, value) {
+  const { obj, key } = _macNestedContainer(path);
+  obj[key] = value;
+}
+
 /* ── Mac App Store Full — App Information (new) ──────────────────────── */
 // Writes straight into state.macFullAppStoreListing — the extended,
 // FULLY INDEPENDENT superset of macAppStoreListing (see its own comment,

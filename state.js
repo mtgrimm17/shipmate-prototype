@@ -961,11 +961,8 @@ const PLATFORMS = {
     id: 'macos_full', label: 'Mac App Store Full', color: '#007AFF',
     steps: [
       { id: 'uploadBuild',     label: 'Upload Build'                                  },
-      { id: 'appInfo',         label: 'App Information Full'                         },
-      { id: 'versionInfo',     label: 'App Review'                                    },
       { id: 'contentRating',   label: 'Age Rating',                hasInference: true },
       { id: 'privacy',         label: 'App Privacy'                                   },
-      { id: 'versionRelease',  label: 'Version Release'                               },
       { id: 'storePreview',    label: 'Product Page Preview'                          },
       { id: 'localizations',   label: 'Localizations'                                 },
       { id: 'improveSubmission', label: 'Improve Your Submission'                     },
@@ -2119,6 +2116,26 @@ function makeBlankIOSAnswers() {
   };
 }
 
+/* Mac App Store's blank-answers shape. Starts from the iOS question set (shared
+   Content Rating / Privacy / Export Compliance / IAP) and adds the ASC-mandatory
+   fields that are NOT shared with iOS and used to live only on the now-hidden
+   Mac App Store Full platform: 3rd-party content rights and the App Review
+   contact / demo account / notes. Content Rating and Privacy still route to the
+   shared iOS answers (IOS_MAC_SHARED_ANSWER_FIELDS / _appStoreAnswers), so those
+   are deliberately NOT re-declared here. The App Store Connect sync
+   (submitPrepData, upf.js) reads these via _appStoreAnswers('macos'). */
+function makeBlankMacAnswers() {
+  return {
+    ...makeBlankIOSAnswers(),
+    contentRights:    null,                                             // 'yes' / 'no'
+    reviewContact:    { firstName: '', lastName: '', phone: '', email: '' },
+    demoAccount:      { required: null, username: '', password: '' },   // required: 'yes' / 'no'
+    reviewNotes:      '',
+    reviewAttachment: null,
+    availability:     { mode: 'all', countries: [] },                   // mode: 'all' | 'select'
+  };
+}
+
 /* Mac App Store Full's blank-answers shape — starts from the exact same
    Content Rating/Privacy/Export Compliance/IAP Products question set as
    makeBlankIOSAnswers() above (spread in first), then adds every field
@@ -2494,6 +2511,15 @@ function isMacSectionComplete(sectionId) {
 
   if (sectionId === 'business') {
     if (a.hasIAP === null) return false;
+    // 3rd-party content rights + App Review contact/demo (mandatory for an ASC
+    // submission; consolidated onto Mac App Store from the former Mac App Store
+    // Full platform).
+    if (a.contentRights === null) return false;
+    if (!a.reviewContact.firstName.trim() || !a.reviewContact.lastName.trim()) return false;
+    if (!a.reviewContact.email.trim()) return false;
+    if (a.demoAccount.required === null) return false;
+    if (a.demoAccount.required === 'yes' &&
+        (!a.demoAccount.username.trim() || !a.demoAccount.password.trim())) return false;
     if (a.usesEncryption === null) return false;
     if (a.usesEncryption === 'yes') {
       if (a.encryptionExempt === null) return false;
@@ -2558,8 +2584,13 @@ function computeMacFullSectionRisk(sectionId) {
     return evalFields(fields);
   }
 
-  if (sectionId === 'appInfo') {
+  // Business now also carries the 3rd-party-content question and the App Review
+  // contact/demo account (moved here from the former App Information Full and
+  // App Review steps). Any of them unanswered is a blocking gap.
+  if (sectionId === 'business') {
     if (a.contentRights === null) return 'HIGH';
+    if (!a.reviewContact.firstName.trim() || !a.reviewContact.lastName.trim() || !a.reviewContact.email.trim()) return 'HIGH';
+    if (a.demoAccount.required === null) return 'HIGH';
     return 'LOW';
   }
 
@@ -2572,11 +2603,6 @@ function isMacFullSectionComplete(sectionId) {
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('macos_full');
 
   if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
-
-  if (sectionId === 'appInfo') {
-    if (a.contentRights === null) return false;
-    return true;
-  }
 
   if (sectionId === 'contentRating') {
     if (!IOS_INTENSITY_QUESTIONS.every(q => a[q.id] !== null)) return false;
@@ -2601,24 +2627,15 @@ function isMacFullSectionComplete(sectionId) {
     return true;
   }
 
-  if (sectionId === 'versionInfo') {
-    const listing = state.macFullAppStoreListing;
-    if (!listing || !(listing.description || '').trim()) return false;
-    const ps = state.platformScreenshots?.macos_full;
-    const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
-                     (state.uploads?.screenshots || []).length > 0;
-    if (!hasShots) return false;
-    // App Review fields (merged in from the former standalone App Review
-    // Information step — now the "App Review" section here).
+  if (sectionId === 'business') {
+    // 3rd-party content (moved from App Information Full) + App Review contact
+    // and demo account (moved from the App Review step) now live in Business.
+    if (a.contentRights === null) return false;
     if (!a.reviewContact.firstName.trim() || !a.reviewContact.lastName.trim()) return false;
     if (!a.reviewContact.email.trim()) return false;
     if (a.demoAccount.required === null) return false;
     if (a.demoAccount.required === 'yes' &&
         (!a.demoAccount.username.trim() || !a.demoAccount.password.trim())) return false;
-    return true;
-  }
-
-  if (sectionId === 'business') {
     return a.hasIAP !== null;
   }
 
@@ -2661,11 +2678,6 @@ function isMacFullSectionComplete(sectionId) {
   // glow gate (mirroring Business's) therefore reduces to "seen" alone —
   // the glow simply stops once the user has visited it.
   if (sectionId === 'appInformation') return true;
-
-  if (sectionId === 'versionRelease') {
-    if (a.releaseOption === 'scheduled' && !a.scheduledReleaseDate.trim()) return false;
-    return true;
-  }
 
   if (sectionId === 'storePreview') {
     return !!state.macFullStorePreviewSeen;
@@ -4528,7 +4540,7 @@ const state = {
   // versa. See answerMacField/updateMacTextField/addMacIapProduct etc.
   // (app.js) and buildMacContentRatingSection/buildMacPrivacySection/
   // buildMacBusinessSection/buildMacIapSection (render.js).
-  macSubmitAnswers: makeBlankIOSAnswers(),
+  macSubmitAnswers: makeBlankMacAnswers(),
 
   // Mac App Store's own Game Center Achievements — the "Game Center" step
   // (PLATFORMS.macos.steps, right after Content Rating) mimics App Store

@@ -665,16 +665,21 @@ const UPF = {
   /* Shipmate's pricing + App Review info → the agent's /submitprep payload. Both
      are app/version-level (not per-locale) and mandatory before ASC will accept a
      submission. Price is game-wide (state.formData.price); the review contact and
-     demo account come off the Mac App Store Full step. */
+     demo account come off whichever Mac platform is connected — read through
+     _appStoreAnswers(pid) so this works for the regular Mac App Store card
+     (macSubmitAnswers) now that Mac App Store Full is hidden, and still for
+     macos_full if it is ever used. */
   submitPrepData(pid) {
     const f = state.formData || {};
-    const a = state.macFullSubmitAnswers || {};
+    const a = ((typeof _appStoreAnswers === 'function') ? _appStoreAnswers(pid) : null)
+              || state.macSubmitAnswers || {};
     const rc = a.reviewContact || {};
     const da = a.demoAccount || {};
     return {
       priceModel: a.priceModel || (f.price === '' || f.price === 0 ? 'free' : (f.price ? 'paid' : null)),
       price: (f.price === '' || f.price == null) ? '0' : String(f.price),
       availability: a.availability || { mode: 'all', countries: [] },
+      contentRights: a.contentRights || null,   // 'yes' / 'no' → ASC contentRightsDeclaration
       review: {
         contact: { firstName: rc.firstName || '', lastName: rc.lastName || '', phone: rc.phone || '', email: rc.email || '' },
         demo: { required: da.required === 'yes', username: da.username || '', password: da.password || '' },

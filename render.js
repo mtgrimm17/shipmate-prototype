@@ -2409,7 +2409,7 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // history around "hide"/"un-hide Mac App Store Full platform" for the
 // precedent this mechanism follows. Hiding Mac App Store Full for the demo —
 // it stays fully built (state/steps/answers intact), just not newly selectable.
-const HIDDEN_PLATFORMS = new Set([]);
+const HIDDEN_PLATFORMS = new Set(['macos_full']);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -7165,12 +7165,9 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     // buildPrivacySection/buildImproveSubmissionSection all resolve via pid
     // already); every other step gets its own dedicated builder below,
     // since none of them have a real ios/macos equivalent to reuse.
-    if (stepId === 'appInfo')                 body = buildMacFullAppInfoSection();
-    else if (stepId === 'contentRating')      body = buildContentRatingSection(platformId);
+    if (stepId === 'contentRating')           body = buildContentRatingSection(platformId);
     else if (stepId === 'privacy')            body = buildPrivacySection(platformId);
-    else if (stepId === 'versionInfo')        body = buildMacFullVersionInfoSection();
     else if (stepId === 'gameCenter')         body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullGameCenterSection();
-    else if (stepId === 'versionRelease')     body = buildMacFullVersionReleaseSection();
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -7680,7 +7677,10 @@ function buildStorePreviewFlipSection(platformId, target) {
     // Mac App Store Full has no Export Compliance question of its own — its
     // entire Build & Compliance step (which is where Export Compliance
     // lived) was removed outright, unlike ios/macos which still ask it here.
-    if (platformId === 'macos_full') return buildBusinessSection(platformId) + buildIapSection(platformId) + buildMacFullSubscriptionsSection();
+    if (platformId === 'macos_full') return buildBusinessSection(platformId) + buildMacFullBusinessExtras() + buildIapSection(platformId) + buildMacFullSubscriptionsSection();
+    // Mac App Store (regular) now carries the 3rd-party content + App Review
+    // fields too (consolidated from the hidden Mac App Store Full platform).
+    if (platformId === 'macos') return buildBusinessSection(platformId) + buildMacBusinessExtras() + buildExportComplianceSection(platformId) + buildIapSection(platformId);
     return buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
   }
   if (target === 'data') {
@@ -10293,7 +10293,7 @@ function buildStorePreviewSection() {
     if (a.collectsData !== 'yes' || typeEntries.length === 0) {
       return `
         <div class="ias-privacy-card ias-privacy-pending">
-          <div class="ias-privacy-pending-msg">Complete the Data Privacy step to populate this section.</div>
+          <div class="ias-privacy-pending-msg">Complete the App Privacy step to populate this section.</div>
         </div>`;
     }
 
@@ -11190,7 +11190,7 @@ function buildMacStorePreviewSection() {
     if (sh.collectsData !== 'yes' || typeEntries.length === 0) {
       return `
         <div class="ias-privacy-card ias-privacy-pending">
-          <div class="ias-privacy-pending-msg">Complete the Data Privacy step to populate this section.</div>
+          <div class="ias-privacy-pending-msg">Complete the App Privacy step to populate this section.</div>
         </div>`;
     }
 
@@ -16027,12 +16027,12 @@ const MAC_FULL_SCORE_FORMATS = ['Integer', 'Decimal (Money)', 'Time (mm:ss)', 'T
 // none of these fields drive other UI that needs to react live, unlike the
 // YES/NO/select/checkbox fields elsewhere in this section, which call
 // setMacFullField instead.
-function _mfTextField(label, path, value, placeholder = '', type = 'text') {
+function _mfTextField(label, path, value, placeholder = '', type = 'text', setter = 'setMacFullTextField') {
   const input = type === 'textarea'
     ? `<textarea class="form-input" rows="3" placeholder="${escHtml(placeholder)}"
-                 oninput="setMacFullTextField('${path}', this.value)">${escHtml(value)}</textarea>`
+                 oninput="${setter}('${path}', this.value)">${escHtml(value)}</textarea>`
     : `<input class="form-input" type="text" value="${escHtml(value)}" placeholder="${escHtml(placeholder)}"
-              oninput="setMacFullTextField('${path}', this.value)">`;
+              oninput="${setter}('${path}', this.value)">`;
   return `
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">${label}</label>
@@ -16071,26 +16071,26 @@ function _mfFileRowHTML(file, removeOnclick) {
     </div>`;
 }
 
-/* ── Mac App Store Full — App Information Full ───────────────────────────
-   Renamed from "App Information" (label only — step id stays 'appInfo') so
-   the label space is free for the NEW "App Information" section just below
-   (buildMacFullAppInformationSection), reached by clicking the Information
-   card on Product Page Preview. Primary Category/Games Subcategory (#1/#2)/
-   Secondary Category used to live here — moved to that new section (see its
-   own header comment for why) and removed from here entirely; nothing in
-   this function reads/writes state.macFullSubmitAnswers.category anymore.
-   Bundle ID is locked: it shows fixed instructional text instead of
-   accepting player-typed input, since the real value has to come from the
-   Xcode project rather than App Store Connect. */
-function buildMacFullAppInfoSection() {
-  const a = state.macFullSubmitAnswers;
+/* ── Mac App Store Full — Business extras (3rd-party content + App Review) ──
+   The 3rd-party content question (formerly its own App Information Full step)
+   and the App Review contact / demo account / notes / attachment (formerly the
+   App Review step) were folded into the Business sub-section of Product Page
+   Preview so those two steps could be removed. The fields are unchanged — same
+   state.macFullSubmitAnswers paths and the same setMacFullField /
+   setMacFullTextField setters — only their rendering home moved. (Bundle ID and
+   SKU are no longer asked here: the agent resolves the bundle id from the
+   project and ASC assigns the SKU.) A later pass may move App Review into the
+   build-submission flow; the submitprep sync (upf.js) reads these same paths,
+   so it keeps working regardless of where they're rendered. Appended after
+   buildBusinessSection in the macos_full 'business' flip (see _stepBodyFor). */
+function buildMacFullBusinessExtras() {
+  const a   = state.macFullSubmitAnswers;
+  const rc  = a.reviewContact;
+  const da  = a.demoAccount;
+  const att = a.reviewAttachment;
   return `
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Bundle ID</label>
-      <input class="form-input" type="text" value="${escHtml(a.bundleId)}" disabled>
-    </div>
-    ${_mfTextField('SKU', 'sku', a.sku, 'A unique ID for your app not visible to users.')}
-
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Content Rights</div>
     <div class="form-group" style="margin-bottom:6px;">
       <label class="form-label">Does your app contain, show, or access third-party content?</label>
       <div class="question-yn">
@@ -16099,9 +16099,86 @@ function buildMacFullAppInfoSection() {
       </div>
     </div>
 
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">App Review</div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <div class="form-hint">Contact details and, if needed, a demo account App Review can use to test the build.</div>
+    </div>
+    ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
+    ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
+    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone)}
+    ${_mfTextField('Email', 'reviewContact.email', rc.email)}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Sign-in required to review all features?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${da.required === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','yes')">YES</button>
+        <button class="yn-btn yn-no ${da.required === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','no')">NO</button>
+      </div>
+    </div>
+    ${da.required === 'yes' ? `
+    <div class="ios-followup">
+      ${_mfTextField('Username', 'demoAccount.username', da.username)}
+      ${_mfTextField('Password', 'demoAccount.password', da.password)}
+    </div>` : ''}
+
+    ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea')}
+
     <div class="form-group" style="margin-top:14px;">
-      <div class="form-hint">Privacy Policy URL is entered once, in the App Privacy step below — App Store Connect's own App Information tab reads the same URL from there.</div>
+      <label class="form-label">Attachment <span class="form-hint-inline">(optional)</span></label>
+      ${att
+        ? _mfFileRowHTML(att, 'removeMacFullReviewAttachment()')
+        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullReviewAttachment(event)"></label>`}
     </div>`;
+}
+
+/* ── Mac App Store — Business extras (3rd-party content + App Review) ────────
+   The macos equivalent of buildMacFullBusinessExtras above. Mac App Store Full
+   is hidden now, so these ASC-mandatory fields are collected on the regular Mac
+   App Store card instead: it writes to state.macSubmitAnswers (via setMacField /
+   setMacTextField) and the App Store Connect sync reads the same object through
+   _appStoreAnswers('macos'). Appended into the macos 'business' flip in
+   _stepBodyFor. (A later pass may move App Review into the build-submission
+   flow.) */
+function buildMacBusinessExtras() {
+  const a   = state.macSubmitAnswers;
+  const rc  = a.reviewContact;
+  const da  = a.demoAccount;
+  return `
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Content Rights</div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Does your app contain, show, or access third-party content?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${a.contentRights === 'yes' ? 'is-selected' : ''}" onclick="setMacField('contentRights','yes')">Yes, and I have the necessary rights</button>
+        <button class="yn-btn yn-no ${a.contentRights === 'no' ? 'is-selected' : ''}" onclick="setMacField('contentRights','no')">No</button>
+      </div>
+    </div>
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">App Review</div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <div class="form-hint">Contact details and, if needed, a demo account App Review can use to test the build.</div>
+    </div>
+    ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName, '', 'text', 'setMacTextField')}
+    ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName, '', 'text', 'setMacTextField')}
+    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone, '', 'text', 'setMacTextField')}
+    ${_mfTextField('Email', 'reviewContact.email', rc.email, '', 'text', 'setMacTextField')}
+
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="form-label">Sign-in required to review all features?</label>
+      <div class="question-yn">
+        <button class="yn-btn yn-yes ${da.required === 'yes' ? 'is-selected' : ''}" onclick="setMacField('demoAccount.required','yes')">YES</button>
+        <button class="yn-btn yn-no ${da.required === 'no' ? 'is-selected' : ''}" onclick="setMacField('demoAccount.required','no')">NO</button>
+      </div>
+    </div>
+    ${da.required === 'yes' ? `
+    <div class="ios-followup">
+      ${_mfTextField('Username', 'demoAccount.username', da.username, '', 'text', 'setMacTextField')}
+      ${_mfTextField('Password', 'demoAccount.password', da.password, '', 'text', 'setMacTextField')}
+    </div>` : ''}
+
+    ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea', 'setMacTextField')}`;
 }
 
 /* ── Mac App Store Full — App Information (new) ───────────────────────────
@@ -16168,72 +16245,6 @@ function buildMacFullAppInformationSection() {
     ${_mfListingField('Support URL', 'supportUrl', l.supportUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com/support')}
     ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl, 'Auto-filled from Steam when available, e.g. https://yourstudio.com')}
     ${_mfListingField('Copyright', 'copyright', l.copyright, 'e.g. 2027 Your Studio')}`;
-}
-
-
-/* ── Mac App Store Full — App Review (step id stays 'versionInfo': its
-   content used to cover ASC's whole Version Information page, before
-   Screenshots/Title/Subtitle/Description/What's New moved out to the
-   Product Page Preview step and Promotional Text/Keywords/Support URL/
-   Marketing URL/Copyright moved out to the new App Information section
-   (buildMacFullAppInformationSection, above) — what's left, and all this
-   step covers now, is entirely Review Contact/Demo Account/Notes/
-   Attachment, i.e. the former standalone App Review Information step
-   folded in here when it was removed — so the step itself is labeled "App
-   Review" (PLATFORMS.macos_full.steps, state.js) rather than keep a name
-   describing content that's no longer here. No inner section-label divider
-   for that content (unlike buildIapSection's own sub-sections) since the
-   whole step IS that section now — the modal's own title already says
-   "App Review". This step no longer touches state.macFullAppStoreListing
-   at all. */
-function buildMacFullVersionInfoSection() {
-  const ps = state.platformScreenshots?.macos_full;
-  const hasShots = !!(ps && (ps.selected.length > 0 || ps.custom.length > 0)) ||
-                   (state.uploads?.screenshots || []).length > 0;
-
-  const a   = state.macFullSubmitAnswers;
-  const rc  = a.reviewContact;
-  const da  = a.demoAccount;
-  const att = a.reviewAttachment;
-
-  // Description and What's New are edited in the Product Page Preview step
-  // below now (click-to-edit, with per-language translation/Localization
-  // Review), same as Screenshots/Title/Subtitle already were — this step no
-  // longer has a text field for either. Description still auto-populates
-  // and stays forced in sync with Game Details' own Description field
-  // (_macFullPropagateDescription, app.js) even without a box here to show
-  // it in.
-  return `
-    <div class="form-group" style="margin-bottom:14px;">
-      <div class="form-hint">Screenshots, Title, Subtitle, Description, and What's New are managed in the Product Page Preview step below${hasShots ? '' : ' — no screenshots are available yet'}.</div>
-    </div>
-
-    ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName)}
-    ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName)}
-    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone)}
-    ${_mfTextField('Email', 'reviewContact.email', rc.email)}
-
-    <div class="form-group" style="margin-bottom:6px;">
-      <label class="form-label">Sign-in required to review all features?</label>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${da.required === 'yes' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','yes')">YES</button>
-        <button class="yn-btn yn-no ${da.required === 'no' ? 'is-selected' : ''}" onclick="setMacFullField('demoAccount.required','no')">NO</button>
-      </div>
-    </div>
-    ${da.required === 'yes' ? `
-    <div class="ios-followup">
-      ${_mfTextField('Username', 'demoAccount.username', da.username)}
-      ${_mfTextField('Password', 'demoAccount.password', da.password)}
-    </div>` : ''}
-
-    ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea')}
-
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Attachment <span class="form-hint-inline">(optional)</span></label>
-      ${att
-        ? _mfFileRowHTML(att, 'removeMacFullReviewAttachment()')
-        : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block;">Upload File<input type="file" hidden onchange="handleMacFullReviewAttachment(event)"></label>`}
-    </div>`;
 }
 
 
@@ -16414,36 +16425,10 @@ function buildMacFullGameCenterSection() {
 }
 
 /* ── Mac App Store Full — Version Release ─────────────────────────────── */
-function buildMacFullVersionReleaseSection() {
-  const a = state.macFullSubmitAnswers;
-  const opts = [
-    { value: 'automatic', label: 'Automatically release this version' },
-    { value: 'manual',    label: 'Manually release this version' },
-    { value: 'scheduled', label: 'Automatically release on a scheduled date' },
-  ];
-  return `
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Release Option</label>
-      ${opts.map(o => `
-        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
-          <input type="radio" name="mf-release-option" ${a.releaseOption === o.value ? 'checked' : ''} onchange="setMacFullField('releaseOption','${o.value}')">
-          ${o.label}
-        </label>`).join('')}
-    </div>
-    ${a.releaseOption === 'scheduled' ? `
-    <div class="ios-followup">
-      ${_mfTextField('Scheduled Release Date', 'scheduledReleaseDate', a.scheduledReleaseDate, 'e.g. 2027-03-01')}
-    </div>` : ''}
-
-    <div class="form-group" style="margin-top:14px;margin-bottom:6px;">
-      <label class="form-label">Phased Release <span class="form-hint-inline">(optional)</span></label>
-      <div class="form-hint">Gradually rolls the update out to existing users over 7 days instead of all at once.</div>
-      <div class="question-yn">
-        <button class="yn-btn yn-yes ${a.phasedRelease ? 'is-selected' : ''}" onclick="setMacFullField('phasedRelease', true)">ON</button>
-        <button class="yn-btn yn-no ${!a.phasedRelease ? 'is-selected' : ''}" onclick="setMacFullField('phasedRelease', false)">OFF</button>
-      </div>
-    </div>`;
-}
+/* Version Release was removed as a step — every build that comes through the
+   pipeline is set to "Manually release this version" by the agent (releaseType
+   MANUAL on the appStoreVersion), so nothing auto-releases. A UI control to
+   choose otherwise may come back later, likely in the build-submission flow. */
 
 /* ── Mac App Store Full — Product Page Preview ───────────────────────────
    Deliberately a SIMPLIFIED READ-ONLY summary of what's been entered across
@@ -16570,7 +16555,7 @@ function buildMacFullStorePreviewSection() {
     if (a.collectsData !== 'yes' || typeEntries.length === 0) {
       return `
         <div class="ias-privacy-card ias-privacy-pending">
-          <div class="ias-privacy-pending-msg">Complete the Data Privacy step to populate this section.</div>
+          <div class="ias-privacy-pending-msg">Complete the App Privacy step to populate this section.</div>
         </div>`;
     }
 
@@ -16760,7 +16745,7 @@ function buildMacFullStorePreviewSection() {
     { target: 'content',     done: contentDone,     label: 'Answer Content Questions'       },
     { target: 'screenshots', done: screenshotsDone, label: 'Adjust Screenshots'             },
     { target: 'business',    done: businessDone,    label: 'Answer Business Questions'      },
-    { target: 'data',        done: dataDone,        label: 'Answer Data Collection Questions'},
+    { target: 'data',        done: dataDone,        label: 'Answer App Privacy Questions'    },
   ];
   const nextSection = SPP_SECTIONS.find(s => !s.done);
   const navBar = nextSection ? `
@@ -16817,7 +16802,7 @@ function buildMacFullStorePreviewSection() {
        <div class="ias-privacy-desc">The developer indicated that the app's privacy practices may include handling of data as described below.</div>
        ${privacyHtml}
        <div class="ias-privacy-footer">Privacy practices may vary based on features you use. <span class="ias-privacy-link">Learn More</span></div>`
-    : _sppBtn('data', 'Answer Data Collection Questions', 'Complete your App Privacy disclosure', false);
+    : _sppBtn('data', 'Answer App Privacy Questions', 'Complete your App Privacy disclosure', false);
 
   // Achievements — feature-complete copy of buildMacStorePreviewSection's own
   // achievementsHtml (see that twin's comment for the full rationale: static
