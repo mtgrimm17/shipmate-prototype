@@ -372,7 +372,7 @@ const UPF = {
         return;
       }
       if (!(await this.health())) {
-        toast('Start the Shipmate agent to sync your entries to App Store Connect.');
+        toast('Shipmate couldn’t reach App Store Connect just now — your changes are saved and will sync when the connection is back.');
         return;
       }
       /* Push the primary locale (which carries the app-wide fields — category,
@@ -496,7 +496,7 @@ const UPF = {
       for (const line of (j.lines || []).slice(seen)) onLine(line);
       seen = (j.lines || []).length;
       if (j.state === 'done') return j.result;
-      if (j.state === 'failed') throw new Error(j.error || 'agent job failed');
+      if (j.state === 'failed') throw new Error(j.error || 'The build could not be completed.');
       await new Promise(res => setTimeout(res, 1500));
     }
   },
@@ -1057,7 +1057,7 @@ async function upfReattach() {
   if (job.kind === 'publish') { state.upf.built = true; }
   _upfRepaint(pid, true);
   if (job.state === 'done') return _upfDispatchFinish(pid, job.kind, job.result, state.upf.game || { name: 'Game' });
-  if (job.state === 'failed') return _upfFail(pid, new Error(job.error || 'agent job failed'));
+  if (job.state === 'failed') return _upfFail(pid, new Error(job.error || 'The build could not be completed.'));
   _upfStartTicker();
   let seen = (job.lines || []).length, lastPaint = 0;
   try {
@@ -1070,7 +1070,7 @@ async function upfReattach() {
       }
       seen = (j.lines || []).length;
       if (j.state === 'done') return _upfDispatchFinish(pid, job.kind, j.result, state.upf.game || { name: 'Game' });
-      if (j.state === 'failed') return _upfFail(pid, new Error(j.error || 'agent job failed'));
+      if (j.state === 'failed') return _upfFail(pid, new Error(j.error || 'The build could not be completed.'));
       await new Promise(res => setTimeout(res, 1500));
     }
   } catch (e) { _upfFail(pid, e); }

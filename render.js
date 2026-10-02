@@ -20776,7 +20776,7 @@ function buildGameBuildTabs(pid) {
 
   const steamPanel = (typeof upfBuildPanelHTML === 'function') ? upfBuildPanelHTML(pid) : '';
   const steamBody = steamPanel || `
-    <div class="upf-panel"><div class="upf-intro">Start the Shipmate agent and let it detect this game in your Steam library to build from Steam. Until then, use Upload Build to add a signed build yourself.</div></div>`;
+    <div class="upf-panel"><div class="upf-intro">Shipmate builds a Mac App Store version from your Steam build once it detects this game in your Steam library. In the meantime, you can add a signed build yourself with Upload Build.</div></div>`;
 
   const uploadBody = `
     <div class="build-drop" tabindex="0" role="button" aria-label="Upload a build"
