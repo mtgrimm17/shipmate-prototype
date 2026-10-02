@@ -5764,7 +5764,6 @@ function _subStepBodyInner(pid, stepId) {
       </div>`;
     return banner
       + `<div class="ios-step-body-content"><div class="sub-upload-body">${uploadRow}${buildReleaseBlock(pid)}</div></div>`
-      + _localSaveNote(pid)
       + SM_SCROLL_CUE;
   }
 
@@ -5797,7 +5796,6 @@ function _subStepBodyInner(pid, stepId) {
 
   return banner + backBar
     + `<div class="ios-step-body-content">${_stepBodyFor(pid, stepId, flipTarget, inf.status)}</div>`
-    + _localSaveNote(pid)
     + SM_SCROLL_CUE;
 }
 
@@ -6663,12 +6661,10 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
     </div>`;
 }
 
-// Footer note shown on every step modal while the platform isn't connected —
-// signals that edits are saved locally only and can't be published yet.
-function _localSaveNote(pid) {
-  if (!pid || pid === 'web' || isPlatformConnected(pid)) return '';
-  return `<span class="local-save-note"><span class="lsn-dot"></span>Saved locally — connect ${escHtml(platLabel(pid))} in settings to publish</span>`;
-}
+// The old "Saved locally — connect … to publish" footer note was removed: the
+// sync now toasts "Connect your App Store account …" at the moment a save would
+// have synced but can't (UPF._syncNow, upf.js), which is more actionable than a
+// persistent note on every step.
 
 /* RETIRED. This poked a hidden native <select> to make the OS draw the
    picker, which is why the track control never looked or behaved like the
@@ -7528,7 +7524,6 @@ function renderStepModal() {
       <div class="submit-modal-fade-bottom"></div>
     </div>
     <div class="submit-modal-footer">
-      ${_localSaveNote(platformId)}
       ${inferenceFooterNote}
       ${_stepCtaHtml(platformId, stepId, isSubPanel, returnAction, complete)}
     </div>`;

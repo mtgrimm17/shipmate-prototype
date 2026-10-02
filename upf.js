@@ -337,15 +337,34 @@ const UPF = {
      a no-op unless the agent is up, the game is matched, and an account is
      connected. `reason` is for the toast/log only. */
   _syncTimer: null,
-  sync(reason) {
+  _lastSaveCtx: null,
+  sync(reason, ctxPid) {
+    // ctxPid: the platform whose step/sub-step was just saved, so the
+    // not-connected toast only fires for Mac saves (not when an unrelated Steam
+    // or iOS step is saved while a Mac platform happens to be active).
+    if (ctxPid !== undefined) this._lastSaveCtx = ctxPid;
     if (this._syncTimer) clearTimeout(this._syncTimer);
     this._syncTimer = setTimeout(() => this._syncNow(reason), 800);
   },
   async _syncNow(reason) {
     try {
-      if (!(await this.health())) return;
       const pid = this.connectedMac();
-      if (!pid || !state.upf.game) return;
+      if (!pid) {
+        /* A save happened on a Mac platform that's active with a matched game,
+           but no App Store account is connected — so a sync WOULD have run and
+           can't. Tell the user why (this replaces the old persistent "Saved
+           locally" note on every step). The stubbed Settings sign-in is the
+           signal that the agent should push using the credentials it holds. */
+        const ctx = this._lastSaveCtx;
+        const onMac = ctx ? UPF_MAC_PIDS.includes(ctx)
+                          : UPF_MAC_PIDS.some(p => state.activePlatforms && state.activePlatforms.has && state.activePlatforms.has(p));
+        if (onMac && state.upf.game && typeof bcToast === 'function') {
+          bcToast('Connect your App Store account in Settings to sync to App Store Connect.');
+        }
+        return;
+      }
+      if (!state.upf.game) return;
+      if (!(await this.health())) return;
       /* Push the primary locale (which carries the app-wide fields — category,
          copyright, age rating, privacy, screenshots) then each additional
          localization the developer added, text-only. The agent writes one locale

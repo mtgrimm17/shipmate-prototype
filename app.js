@@ -3377,7 +3377,7 @@ function closeStepModal() {
   }
   /* UPF: once an account is connected, closing a step (Save & Close / × / Esc)
      re-syncs the collected fields to App Store Connect. No-op otherwise (upf.js). */
-  if (typeof UPF !== 'undefined') UPF.sync('saved');
+  if (typeof UPF !== 'undefined') UPF.sync('saved', sm && sm.platformId);
 
   // Tear down doc pane group wrapper if present
   const overlay = document.getElementById('submit-overlay');
@@ -23636,7 +23636,7 @@ function closeStorePreviewSection(pid) {
      Data privacy, listing fields) is the end of a sub-step — sync what it
      collected to ASC now, not only when the whole step modal later closes.
      Debounced + no-op unless an account is connected (upf.js). */
-  if (typeof UPF !== 'undefined') UPF.sync('sub-step');
+  if (typeof UPF !== 'undefined') UPF.sync('sub-step', pid);
 
   /* GOING BACK TURNS THE SAME RECTANGLE THE OTHER WAY. The reverse of the
      press, by the same numbers, which is what makes the flip legible as "one
