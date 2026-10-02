@@ -1211,14 +1211,20 @@ const UPF_FEATURES = {
    processing and the internal-TestFlight submit are automatic; then the human
    installs and tests it. `stage` maps an agent row to the agent's own stage
    clock (UPF_STAGES / state.upf.stage). */
+/* Order: both human steps up front (connect, then create the app record), then
+   the whole uninterrupted agent build+upload+process run, then the one human
+   step that can only happen at the end (test). This keeps the ~10-minute build
+   free of any "needs you" stop — the developer does their two things first and
+   walks away. apprecord only has to be done before `upload`, so moving it ahead
+   of the agent rows is safe. */
 const UPF_FLOW = [
   { id: 'connect',    kind: 'user'  },
+  { id: 'apprecord',  kind: 'user'  },
   { id: 'copy',       kind: 'agent', stage: 0 },
   { id: 'shim',       kind: 'agent', stage: 1 },
   { id: 'sandbox',    kind: 'agent', stage: 2 },
   { id: 'sign',       kind: 'agent', stage: 3 },
   { id: 'package',    kind: 'agent', stage: 4 },
-  { id: 'apprecord',  kind: 'user'  },
   { id: 'upload',     kind: 'agent', stage: 5 },
   { id: 'process',    kind: 'agent', stage: 6 },
   { id: 'testflight', kind: 'agent' },
@@ -1302,11 +1308,11 @@ function upfAdvance(pid) {
   const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
   if (u.job) { _upfRepaint(pid, true); return; }        // already working
   if (!connected) { UPF.startConnect(pid); return; }     // blocked at Connect
-  if (!u.built && !u.uploaded) { upfBuild(pid); return; }// run the local build
-  if (u.built && !u.uploaded) {                          // built, waiting to upload
-    if (!u.appRecord) { _upfRepaint(pid, true); return; }// blocked at Create app
-    _upfMaybePublish(pid); return;                       // upload (gated inside)
-  }
+  // Create the app record UP FRONT — before the build — so the ~10-min build
+  // run has no human stop in the middle. It only has to exist before upload.
+  if (!u.appRecord && !u.uploaded) { _upfRepaint(pid, true); return; } // blocked at Create app
+  if (!u.built && !u.uploaded) { upfBuild(pid); return; }// run the local build, uninterrupted
+  if (u.built && !u.uploaded) { _upfMaybePublish(pid); return; } // upload (gated inside)
   _upfRepaint(pid, true);                                 // uploaded → Test is the blocker
 }
 

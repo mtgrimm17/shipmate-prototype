@@ -3138,6 +3138,11 @@ async function openStepModal(pid, stepId) {
   // Gates the steps in STEP_REQUIRES_VISIT; a no-op for every other step.
   markStepSectionSeen(pid, stepId);
 
+  /* The Game Build modal carries its own Build-steps list, so the Shippy guide
+     beside it is redundant and competes with it — hide Shippy for this step only
+     (restored on close, and left alone for every other step and view). */
+  document.body.classList.toggle('sm-hide-shippy', stepId === 'uploadBuild');
+
   /* OPENING A STEP PUTS THE PANEL ON THE CHECKLIST. Jaco: "if on dashboard I
      select the calendar view and then click a platform card step, the Shippy
      panel shows the toggle. It should take me to the checklist and not show
@@ -3375,6 +3380,7 @@ function closeStepModal() {
      every exit, so nothing can leave a "back to the store page" behind it for
      a step opened later from the dashboard. */
   state.stepModalFrom = null;
+  document.body.classList.remove('sm-hide-shippy');   // restore the Shippy guide
   // Record that this step has been closed at least once. Read by nothing as of
   // v7.29 — it drove the row risk dots (gone in v7.28) and the required-field
   // alerts (gone in v7.29). Kept deliberately; see toggleStepSection's comment.
