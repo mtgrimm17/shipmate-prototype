@@ -23609,6 +23609,11 @@ async function openSteamHeaderCapsuleSection() {
 function closeStorePreviewSection(pid) {
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
   if (typeof scrollContentToTop === 'function') scrollContentToTop();
+  /* UPF: returning from a sub-section (Screenshots, Content Rating, Business,
+     Data privacy, listing fields) is the end of a sub-step — sync what it
+     collected to ASC now, not only when the whole step modal later closes.
+     Debounced + no-op unless an account is connected (upf.js). */
+  if (typeof UPF !== 'undefined') UPF.sync('sub-step');
 
   /* GOING BACK TURNS THE SAME RECTANGLE THE OTHER WAY. The reverse of the
      press, by the same numbers, which is what makes the flip legible as "one

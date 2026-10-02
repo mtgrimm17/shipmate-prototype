@@ -2409,7 +2409,7 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // history around "hide"/"un-hide Mac App Store Full platform" for the
 // precedent this mechanism follows. Hiding Mac App Store Full for the demo —
 // it stays fully built (state/steps/answers intact), just not newly selectable.
-const HIDDEN_PLATFORMS = new Set(['macos_full']);
+const HIDDEN_PLATFORMS = new Set([]);
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
