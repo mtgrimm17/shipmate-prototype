@@ -7732,7 +7732,7 @@ function buildStorePreviewFlipSection(platformId, target) {
     if (platformId === 'macos_full') return buildBusinessSection(platformId) + buildMacFullBusinessExtras() + buildIapSection(platformId) + buildMacFullSubscriptionsSection();
     // Mac App Store (regular) now carries the 3rd-party content + App Review
     // fields too (consolidated from the hidden Mac App Store Full platform).
-    if (platformId === 'macos') return buildBusinessSection(platformId) + buildMacBusinessExtras() + buildExportComplianceSection(platformId) + buildIapSection(platformId);
+    if (platformId === 'macos') return buildBusinessSection(platformId) + buildMacBusinessExtras() + buildMacAppInfoExtras() + buildExportComplianceSection(platformId) + buildIapSection(platformId);
     return buildBusinessSection(platformId) + buildExportComplianceSection(platformId) + buildIapSection(platformId);
   }
   if (target === 'data') {
@@ -16095,12 +16095,12 @@ function _mfTextField(label, path, value, placeholder = '', type = 'text', sette
 // Same as _mfTextField above, but writes into state.macFullAppStoreListing
 // via setMacFullListingField (app.js) instead of macFullSubmitAnswers —
 // used only by buildMacFullVersionInfoSection below.
-function _mfListingField(label, field, value, placeholder = '', type = 'text') {
+function _mfListingField(label, field, value, placeholder = '', type = 'text', setter = 'setMacFullListingField') {
   const input = type === 'textarea'
     ? `<textarea class="form-input" rows="3" placeholder="${escHtml(placeholder)}"
-                 oninput="setMacFullListingField('${field}', this.value)">${escHtml(value)}</textarea>`
+                 oninput="${setter}('${field}', this.value)">${escHtml(value)}</textarea>`
     : `<input class="form-input" type="text" value="${escHtml(value)}" placeholder="${escHtml(placeholder)}"
-              oninput="setMacFullListingField('${field}', this.value)">`;
+              oninput="${setter}('${field}', this.value)">`;
   return `
     <div class="form-group" style="margin-bottom:14px;">
       <label class="form-label">${label}</label>
@@ -16231,6 +16231,37 @@ function buildMacBusinessExtras() {
     </div>` : ''}
 
     ${_mfTextField('Notes', 'reviewNotes', a.reviewNotes, 'Anything else the reviewer should know', 'textarea', 'setMacTextField')}`;
+}
+
+/* ── Mac App Store — App Information (listing metadata) ──────────────────────
+   Keywords / Promotional Text / Support URL / Marketing URL / Copyright /
+   Secondary Category — the App Store listing fields the consolidation left on
+   the hidden Mac App Store Full platform. They now live on the Mac App Store
+   card too, stored on state.macAppStoreListing (setMacListingField) and synced
+   via _fullListing('macos') in upf.js. Optional for TestFlight; used on an App
+   Store submission. Primary category is always Games. */
+function buildMacAppInfoExtras() {
+  seedMacAppStoreListing();
+  const l = state.macAppStoreListing || {};
+  const cats = (typeof MAC_FULL_CATEGORIES !== 'undefined') ? MAC_FULL_CATEGORIES : [];
+  return `
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">App Information</div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <div class="form-hint">Primary category is Games. These App Store listing fields are optional for TestFlight and used when you submit to the Mac App Store.</div>
+    </div>
+    ${_mfListingField('Keywords', 'keywords', l.keywords || '', 'Comma-separated, up to 100 characters total', 'text', 'setMacListingField')}
+    ${_mfListingField('Promotional Text', 'promotionalText', l.promotionalText || '', 'Can be updated anytime without submitting a new build', 'textarea', 'setMacListingField')}
+    ${_mfListingField('Support URL', 'supportUrl', l.supportUrl || '', 'e.g. https://yourstudio.com/support', 'text', 'setMacListingField')}
+    ${_mfListingField('Marketing URL', 'marketingUrl', l.marketingUrl || '', 'e.g. https://yourstudio.com', 'text', 'setMacListingField')}
+    ${_mfListingField('Copyright', 'copyright', l.copyright || '', 'e.g. 2027 Your Studio', 'text', 'setMacListingField')}
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Secondary Category <span class="form-hint-inline">(optional)</span></label>
+      <select class="form-input" onchange="setMacListingField('secondaryCategory', this.value)">
+        <option value="">None</option>
+        ${cats.map(c => `<option value="${escHtml(c)}" ${l.secondaryCategory === c ? 'selected' : ''}>${escHtml(c)}</option>`).join('')}
+      </select>
+    </div>`;
 }
 
 /* ── Mac App Store Full — App Information (new) ───────────────────────────

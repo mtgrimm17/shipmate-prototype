@@ -2385,6 +2385,16 @@ function seedMacAppStoreListing() {
     subtitle:     fd.subtitle     || '',
     description:  fd.description  || '',
     releaseNotes: fd.releaseNotes || '',
+    // Listing metadata — consolidated onto the Mac App Store card (these used to
+    // live only on the hidden Mac App Store Full platform, so they were never
+    // collected or synced for Mac). Seeded from the scraped Game Details where
+    // available. The App Store Connect sync reads these via _fullListing('macos').
+    keywords:         fd.keywords        || '',
+    promotionalText:  fd.promotionalText || '',
+    marketingUrl:     fd.marketingUrl    || '',
+    supportUrl:       fd.supportUrl      || '',
+    copyright:        fd.copyright       || '',
+    secondaryCategory: '',
     // Deep-copied so editing a supporting language's Mac App Store text can
     // never mutate the App Store's own localizedStoreText entry (or vice
     // versa) — they only share a starting point, never live storage.
@@ -2996,6 +3006,15 @@ function setBuildTab(pid, tab) {
 function setMacFullListingField(field, value) {
   seedMacFullAppStoreListing();
   state.macFullAppStoreListing[field] = value;
+}
+
+/* Mac App Store (not Full) listing-metadata setter — writes the consolidated
+   keywords/promo/marketing/support URL/copyright/secondary-category onto
+   state.macAppStoreListing, which the ASC sync reads via _fullListing('macos').
+   No re-render (fires on every keystroke; the preview reads on its next paint). */
+function setMacListingField(field, value) {
+  seedMacAppStoreListing();
+  state.macAppStoreListing[field] = value;
 }
 
 /* ── Mac App Store Full — Subscriptions ──────────────────────────────── */

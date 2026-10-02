@@ -262,7 +262,9 @@ const UPF = {
   /* macos_full's own extra listing fields (keywords/promo/marketing/copyright).
      Only macos_full collects these; macos/ios return nothing for them. */
   _fullListing(pid) {
-    return (pid === 'macos_full') ? (state.macFullAppStoreListing || {}) : {};
+    if (pid === 'macos_full') return state.macFullAppStoreListing || {};
+    if (pid === 'macos')      return state.macAppStoreListing || {};   // consolidated listing metadata
+    return {};
   },
 
   /* Secondary category (macos_full only) → an ASC appCategory id. Shipmate stores
@@ -270,9 +272,13 @@ const UPF = {
      upper-cased with " & " → "_AND_" and spaces → "_". The agent validates the id
      against Apple's live list and skips an unknown one, so this is safe. */
   _secondaryCategory(pid) {
-    if (pid !== 'macos_full') return null;
-    const sec = state.macFullSubmitAnswers && state.macFullSubmitAnswers.category
-      && state.macFullSubmitAnswers.category.secondary;
+    let sec = null;
+    if (pid === 'macos_full') {
+      sec = state.macFullSubmitAnswers && state.macFullSubmitAnswers.category
+        && state.macFullSubmitAnswers.category.secondary;
+    } else if (pid === 'macos') {
+      sec = state.macAppStoreListing && state.macAppStoreListing.secondaryCategory;
+    }
     if (!sec) return null;
     return String(sec).trim().toUpperCase().replace(/\s*&\s*/g, '_AND_').replace(/\s+/g, '_');
   },
