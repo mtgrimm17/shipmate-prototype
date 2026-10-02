@@ -2385,16 +2385,15 @@ function seedMacAppStoreListing() {
     subtitle:     fd.subtitle     || '',
     description:  fd.description  || '',
     releaseNotes: fd.releaseNotes || '',
-    // Listing metadata — consolidated onto the Mac App Store card (these used to
-    // live only on the hidden Mac App Store Full platform, so they were never
-    // collected or synced for Mac). Seeded from the scraped Game Details where
-    // available. The App Store Connect sync reads these via _fullListing('macos').
-    keywords:         fd.keywords        || '',
-    promotionalText:  fd.promotionalText || '',
-    marketingUrl:     fd.marketingUrl    || '',
-    supportUrl:       fd.supportUrl      || '',
-    copyright:        fd.copyright       || '',
-    secondaryCategory: '',
+    // Listing metadata required for a Mac App Store submission, consolidated onto
+    // the Mac App Store card (these used to live only on the hidden Mac App Store
+    // Full platform). Seeded from the scraped Game Details where available. The
+    // App Store Connect sync reads these via _fullListing('macos'). Optional
+    // listing fields (promo text, marketing URL, secondary category) are left out
+    // for now — bare-minimum-for-submission only.
+    keywords:    fd.keywords   || '',
+    supportUrl:  fd.supportUrl || '',
+    copyright:   fd.copyright  || '',
     // Deep-copied so editing a supporting language's Mac App Store text can
     // never mutate the App Store's own localizedStoreText entry (or vice
     // versa) — they only share a starting point, never live storage.
