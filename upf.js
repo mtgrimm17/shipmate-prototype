@@ -1227,8 +1227,11 @@ const UPF_FLOW = [
   { id: 'package',    kind: 'agent', stage: 4 },
   { id: 'upload',     kind: 'agent', stage: 5 },
   { id: 'process',    kind: 'agent', stage: 6 },
-  { id: 'testflight', kind: 'agent' },
-  { id: 'test',       kind: 'user'  },
+  // 'testflight' (submit to internal TestFlight) and 'test' (install + check it)
+  // were removed from this list: submitting is what the main platform Submit
+  // button does, and choosing the internal-TF destination there needs only a
+  // processed build (submitStepClick). The build flow now ends once the build is
+  // uploaded and processed in App Store Connect.
 ];
 const UPF_FLOW_LABEL = {
   connect:    'Connect your Apple Developer account',

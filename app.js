@@ -6595,6 +6595,21 @@ function submitStepClick(pid) {
     return false;
   }
 
+  /* Internal TestFlight needs only a compatible, processed build — not the full
+     store metadata (screenshots, pricing, App Review, age rating, …). So when
+     that destination is chosen, the single gate is the build itself; the
+     per-step and destination gates below are for App Store / external-review
+     builds, which Apple does review against the full listing. */
+  const _track = (state.selectedTracks || {})[pid] || null;
+  if (_track === 'testflight_internal') {
+    if (!(typeof _uploadBuildComplete === 'function' && _uploadBuildComplete(pid))) {
+      const buildRow = card?.querySelector('.ios-step-card:not(.submit-step-card)');
+      _smSpotlight(card, buildRow ? [buildRow] : (card ? [card] : []));
+      return false;
+    }
+    return true;   // build ready and the internal-TF destination is already chosen
+  }
+
   /* 2 — steps outstanding. Shake the ones that are actually outstanding, which
      is read off the DOM rather than recomputed: `is-complete` on the row is
      what _paintStepRow() maintains, so this cannot disagree with what the user
