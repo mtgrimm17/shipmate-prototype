@@ -715,9 +715,17 @@ const UPF = {
               || state.macSubmitAnswers || {};
     const rc = a.reviewContact || {};
     const da = a.demoAccount || {};
+    // The Mac price is stored per-platform (macSubmitAnswers.price via
+    // setAppStorePrice) — NOT in formData.price, which stays empty for Mac. Read
+    // it through _appStorePrice so an entered price (e.g. 6.99) isn't lost and
+    // the app isn't silently set Free.
+    const priceRaw = (typeof _appStorePrice === 'function') ? _appStorePrice(pid)
+                     : (a.price != null && a.price !== '' ? a.price : f.price);
+    const priceStr = (priceRaw === '' || priceRaw == null) ? '0' : String(priceRaw);
+    const isFree = priceStr === '0' || parseFloat(priceStr) === 0;
     return {
-      priceModel: a.priceModel || (f.price === '' || f.price === 0 ? 'free' : (f.price ? 'paid' : null)),
-      price: (f.price === '' || f.price == null) ? '0' : String(f.price),
+      priceModel: a.priceModel || (isFree ? 'free' : 'paid'),
+      price: priceStr,
       availability: a.availability || { mode: 'all', countries: [] },
       contentRights: a.contentRights || null,   // 'yes' / 'no' → ASC contentRightsDeclaration
       review: {
