@@ -769,6 +769,11 @@ function _syncSubRowAndDashes(pid, stepId) {
    Shipmate appearing to host appstoreconnect.apple.com. */
 function platformGearFromTab(pid) {
   if (!state.activePlatforms.has(pid)) return;
+  // Apple platforms: Settings goes straight to the Connect-to-App-Store-Connect
+  // dialog when not connected — no on-card extension/sign-in steps first.
+  if ((pid === 'ios' || pid === 'macos' || pid === 'macos_full')
+      && typeof isPlatformConnected === 'function' && !isPlatformConnected(pid)
+      && typeof openAscLogin === 'function') { openAscLogin(pid); return; }
   state.submission.tab      = pid;
   state.submission.settings = pid;
   state.stepModal = null;
@@ -7376,6 +7381,9 @@ function submitPlatformLogin(pid) {
 
 // Linked (steps) gear → flip to the signed-in settings face (STATE 3 → STATE 2).
 function platformGearFromSteps(pid) {
+  if ((pid === 'ios' || pid === 'macos' || pid === 'macos_full')
+      && typeof isPlatformConnected === 'function' && !isPlatformConnected(pid)
+      && typeof openAscLogin === 'function') { openAscLogin(pid); return; }
   _flipPlatformCard(pid, 'account', -1);
 }
 
