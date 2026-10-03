@@ -187,6 +187,15 @@ const UPF = {
       // may not carry it), so the extension selects the right one. Stays in-flight
       // until _onAscTaskResult reports back.
       this.requestAscTask('createApp', { submit: true, bundleId: r.bundleId });
+      // Don't wait forever: if the extension never reports back (not installed/
+      // loaded, or it failed silently), surface it so the step isn't stuck.
+      setTimeout(() => {
+        if (_appInFlight) {
+          _appInFlight = false; _appFailed = true;
+          toast('Couldn’t create the app automatically — is the Shipmate browser extension installed and loaded? Create it in App Store Connect and press “I’ve created it”.');
+          _upfRepaint(pid, true);
+        }
+      }, 30000);
     } catch (e) {
       _appInFlight = false; _appFailed = true;
       toast('Create app: ' + ((e && e.message) || e) + ' — open App Store Connect to finish.');
@@ -1462,6 +1471,9 @@ function upfAdvance(pid) {
 /* A developer step's "mark done" — sets the flag and lets the agent continue. */
 function upfMarkStep(pid, flag) {
   state.upf[flag] = true;
+  // Manually confirming "I've created it" counts as verifying the app this
+  // session, so the create/verify gate doesn't re-fire the automation.
+  if (flag === 'appRecord') { _appVerifiedSession = true; _appInFlight = false; _appFailed = false; }
   _upfRepaint(pid, true);
   upfAdvance(pid);
 }
