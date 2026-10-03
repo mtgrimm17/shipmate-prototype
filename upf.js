@@ -44,6 +44,14 @@ const UPF_AGENT = 'http://127.0.0.1:7343';
 /* Both Mac App Store platforms take the pill; the Steam build is the same. */
 const UPF_MAC_PIDS = ['macos', 'macos_full'];
 
+/* App-record creation is verified against App Store Connect ONCE PER SESSION
+   (module-scoped, so a persisted/stale state.upf.appRecord can't make us skip a
+   missing app). appRecord is only set true when the app is actually confirmed to
+   exist or freshly created — never on a sticky flag alone. */
+let _appVerifiedSession = false;   // the app is confirmed to exist this session
+let _appInFlight = false;          // a register/create call is running
+let _appFailed = false;            // terminal failure this session (blocks auto-retry)
+
 state.upf = state.upf || {
   agent:    null,   // /health payload, or false once a probe has failed
   game:     null,   // { name, slug, steamAppId, app } from the agent's library
@@ -154,7 +162,7 @@ const UPF = {
       if (!r || !r.ok) {
         const why = (r && r.problems && r.problems.length) ? r.problems.join('; ') : ((r && r.error) || 'could not register the bundle ID');
         toast('Create app: ' + why + ' — open App Store Connect to finish.');
-        state.upf._creatingApp = false;
+        _appInFlight = false; _appFailed = true;
         return;
       }
       if (r.ascAppId) state.upf.ascAppId = r.ascAppId;   // remember for App Privacy
@@ -162,16 +170,18 @@ const UPF = {
       // the existing entry) — the record's already there, so skip createApp.
       if (r.appExists) {
         toast('App already exists in App Store Connect — using it.');
-        state.upf._creatingApp = false;
-        if (typeof upfMarkStep === 'function') upfMarkStep(pid, 'appRecord');
+        _appInFlight = false; _appVerifiedSession = true;
+        state.upf.appRecord = true;
+        _upfRepaint(pid, true); upfAdvance(pid);
         return;
       }
       toast('Bundle ID ready — creating the app record…');
       // Pass the agent-registered bundle ID through (Shipmate's cached manifest
-      // may not carry it), so the extension selects the right one.
+      // may not carry it), so the extension selects the right one. Stays in-flight
+      // until _onAscTaskResult reports back.
       this.requestAscTask('createApp', { submit: true, bundleId: r.bundleId });
     } catch (e) {
-      state.upf._creatingApp = false;
+      _appInFlight = false; _appFailed = true;
       toast('Create app: ' + ((e && e.message) || e) + ' — open App Store Connect to finish.');
     }
   },
@@ -199,11 +209,15 @@ const UPF = {
     const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
     if (task === 'createApp') {
       const pid = u._creatingAppPid || this.connectedMac();
-      u._creatingApp = false;
+      _appInFlight = false;
       if (result && result.created) {
         toast('App record created in App Store Connect.');
-        if (typeof upfMarkStep === 'function' && pid) upfMarkStep(pid, 'appRecord');
+        _appVerifiedSession = true;
+        u.appRecord = true;
+        _upfRepaint(pid, true);
+        upfAdvance(pid);
       } else {
+        _appFailed = true;
         toast('Create app: ' + ((result && result.error) || 'couldn’t create it automatically') + ' — open App Store Connect to finish.');
       }
     } else if (task === 'autoPrivacy') {
@@ -1411,11 +1425,14 @@ function upfAdvance(pid) {
   // run has no human stop in the middle. It only has to exist before upload.
   // Automated via the browser extension (background ASC tab); fires once per
   // flow, and _onAscTaskResult marks appRecord + re-advances on success.
-  if (!u.appRecord && !u.uploaded) {
-    if (!u._creatingApp) {
-      u._creatingApp = true;
+  if (!u.uploaded && !_appVerifiedSession) {
+    // Verify the app exists in ASC (don't trust a possibly-stale appRecord). Runs
+    // _createAppStep once; it registers the bundle, then creates the app or, if it
+    // already exists, confirms it. In-flight and terminal-failure both wait here.
+    if (!_appInFlight && !_appFailed) {
+      _appInFlight = true;
       u._creatingAppPid = pid;
-      UPF._createAppStep(pid);   // register bundle ID, then run createApp
+      UPF._createAppStep(pid);
     }
     _upfRepaint(pid, true);
     return;
