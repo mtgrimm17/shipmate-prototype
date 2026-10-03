@@ -139,7 +139,55 @@ const UPF = {
      installed (the message just goes unheard). */
   requestAscTask(task, opts) {
     opts = opts || {};
-    try { window.postMessage({ __shipmate: 'ascTask', task: task, submit: !!opts.submit, appId: opts.appId }, '*'); } catch (_) {}
+    try { window.postMessage({ __shipmate: 'ascTask', task: task, submit: !!opts.submit, appId: opts.appId, bundleId: opts.bundleId }, '*'); } catch (_) {}
+  },
+
+  /* The "Create your app" build step: register the bundle ID in the Developer
+     Portal FIRST (so it shows up in App Store Connect's New App dropdown), then
+     run the createApp extension script. Without the register, the brand-new
+     bundle wouldn't be selectable and createApp couldn't finish. */
+  async _createAppStep(pid) {
+    const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
+    try {
+      toast('Registering your bundle ID…');
+      const r = await this._post('/registerbundle', { game: state.upf.game && state.upf.game.app });
+      if (!r || !r.ok) {
+        const why = (r && r.problems && r.problems.length) ? r.problems.join('; ') : ((r && r.error) || 'could not register the bundle ID');
+        toast('Create app: ' + why + ' — open App Store Connect to finish.');
+        state.upf._creatingApp = false;
+        return;
+      }
+      if (r.ascAppId) state.upf.ascAppId = r.ascAppId;   // remember for App Privacy
+      // If an app already exists for this bundle, this is an UPDATE (new build to
+      // the existing entry) — the record's already there, so skip createApp.
+      if (r.appExists) {
+        toast('App already exists in App Store Connect — using it.');
+        state.upf._creatingApp = false;
+        if (typeof upfMarkStep === 'function') upfMarkStep(pid, 'appRecord');
+        return;
+      }
+      toast('Bundle ID ready — creating the app record…');
+      // Pass the agent-registered bundle ID through (Shipmate's cached manifest
+      // may not carry it), so the extension selects the right one.
+      this.requestAscTask('createApp', { submit: true, bundleId: r.bundleId });
+    } catch (e) {
+      state.upf._creatingApp = false;
+      toast('Create app: ' + ((e && e.message) || e) + ' — open App Store Connect to finish.');
+    }
+  },
+
+  /* Fill the ASC App Privacy questionnaire via the extension. Resolve the app's
+     ASC id first (needed to build the privacy deep link) — from what we already
+     know, else a quick read-only /appstatus — then hand off. */
+  async fillPrivacyInAsc(pid) {
+    let appId = state.upf && state.upf.ascAppId;
+    if (!appId) {
+      try {
+        const s = await this._post('/appstatus', { game: state.upf.game && state.upf.game.app });
+        if (s && s.ascAppId) { appId = s.ascAppId; state.upf.ascAppId = appId; }
+      } catch (_) {}
+    }
+    this.requestAscTask('autoPrivacy', { appId: appId });   // appId may be undefined → extension falls back
   },
 
   /* The extension reports back here (relayed by content-shipmate → window). For
@@ -1367,7 +1415,7 @@ function upfAdvance(pid) {
     if (!u._creatingApp) {
       u._creatingApp = true;
       u._creatingAppPid = pid;
-      UPF.requestAscTask('createApp', { submit: true });
+      UPF._createAppStep(pid);   // register bundle ID, then run createApp
     }
     _upfRepaint(pid, true);
     return;

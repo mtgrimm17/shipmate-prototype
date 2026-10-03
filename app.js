@@ -3422,8 +3422,8 @@ function closeStepModal() {
      extension, which does it in a background tab. No-op if the extension isn't
      installed. Gated to the Apple privacy step on a Mac platform (Android's
      'dataSafety' is Google Play, not ASC). */
-  if (typeof UPF !== 'undefined' && sm && sm.stepId === 'privacy' && UPF.isMacPid(sm.platformId)) {
-    UPF.requestAscTask('autoPrivacy', { pid: sm.platformId });
+  if (typeof UPF !== 'undefined' && sm && (sm.stepId === 'privacy' || sm.stepId === 'data') && UPF.isMacPid(sm.platformId)) {
+    UPF.fillPrivacyInAsc(sm.platformId);
   }
 
   // Tear down doc pane group wrapper if present
