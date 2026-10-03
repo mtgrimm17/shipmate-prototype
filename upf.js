@@ -52,6 +52,13 @@ let _appVerifiedSession = false;   // the app is confirmed to exist this session
 let _appInFlight = false;          // a register/create call is running
 let _appFailed = false;            // terminal failure this session (blocks auto-retry)
 
+/* The build flow (app creation included) runs only when the developer explicitly
+   starts it — pressing "Build from Steam". Connecting the account must NOT kick
+   it off (some developers will choose Upload Build instead). Set by buildFromSteam
+   and read by onConnected so a connect completed as part of that press still
+   continues in one go. Module-scoped, so it never persists into a later session. */
+let _buildIntent = false;
+
 state.upf = state.upf || {
   agent:    null,   // /health payload, or false once a probe has failed
   game:     null,   // { name, slug, steamAppId, app } from the agent's library
@@ -860,8 +867,18 @@ const UPF = {
      unless their conditions hold, so this is safe to call on every connect. */
   onConnected(pid) {
     this.sync('account connected');
-    // The developer just cleared the Connect step — take over and continue:
-    // build now if nothing is built, or upload if a build is waiting.
+    _upfRepaint(pid, true);
+    // Only continue the build flow if the developer actually started one (pressed
+    // Build from Steam). Connecting the account on its own must NOT create the app
+    // or build — they may intend Upload Build, or just be connecting to sync.
+    if (_buildIntent) { try { upfAdvance(pid); } catch (_) {} }
+  },
+
+  /* The developer pressed "Build from Steam": this is the explicit start of the
+     whole flow. If the account isn't connected yet, upfAdvance opens Connect and
+     _buildIntent makes onConnected resume automatically after. */
+  buildFromSteam(pid) {
+    _buildIntent = true;
     try { upfAdvance(pid); } catch (_) {}
   },
 
@@ -1495,12 +1512,12 @@ function upfBuildPanelHTML(pid) {
      only button left is Try again on a failure. */
   let actions = '';
   if (failed) {
-    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Try again</button></div>`;
+    actions = `<div class="upf-actions"><button class="imp-cta" onclick="event.stopPropagation();UPF.buildFromSteam('${pid}')">Try again</button></div>`;
   } else if (!started) {
     actions = blockers.length
       ? `<div class="upf-actions"><button class="imp-cta is-blocked" aria-disabled="true">Fix the blockers first</button></div>`
       : `<div class="upf-actions">
-           <button class="imp-cta" onclick="event.stopPropagation();upfAdvance('${pid}')">Build from Steam</button>
+           <button class="imp-cta" onclick="event.stopPropagation();UPF.buildFromSteam('${pid}')">Build from Steam</button>
          </div>`;
   }
   const err = (u.error && !running && !failed) ? `<div class="upf-error">${esc(u.error)}</div>` : '';
