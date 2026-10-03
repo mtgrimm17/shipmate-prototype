@@ -3416,6 +3416,16 @@ function closeStepModal() {
      re-syncs the collected fields to App Store Connect. No-op otherwise (upf.js). */
   if (typeof UPF !== 'undefined') UPF.sync('saved', sm && sm.platformId);
 
+  /* UPF: App Privacy has no API, so closing the Apple App Privacy step (however
+     it was entered — Save & Close, ×, Esc, click-outside, or from the Product
+     Page Preview) also fills the ASC App Privacy questionnaire via the browser
+     extension, which does it in a background tab. No-op if the extension isn't
+     installed. Gated to the Apple privacy step on a Mac platform (Android's
+     'dataSafety' is Google Play, not ASC). */
+  if (typeof UPF !== 'undefined' && sm && sm.stepId === 'privacy' && UPF.isMacPid(sm.platformId)) {
+    UPF.requestAscTask('autoPrivacy', { pid: sm.platformId });
+  }
+
   // Tear down doc pane group wrapper if present
   const overlay = document.getElementById('submit-overlay');
   const group   = document.getElementById('step-modal-group');

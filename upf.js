@@ -130,6 +130,40 @@ const UPF = {
       && typeof isPlatformConnected === 'function' && isPlatformConnected(pid)) || null;
   },
 
+  isMacPid(pid) { return UPF_MAC_PIDS.includes(pid); },
+
+  /* Ask the Shipmate browser extension to run one of the two App Store Connect
+     web tasks Apple gives no API for — 'createApp' (the apprecord build step) or
+     'autoPrivacy' (when the App Privacy step closes). The extension opens a
+     background ASC tab, fills it and closes it. A no-op if the extension isn't
+     installed (the message just goes unheard). */
+  requestAscTask(task, opts) {
+    opts = opts || {};
+    try { window.postMessage({ __shipmate: 'ascTask', task: task, submit: !!opts.submit, appId: opts.appId }, '*'); } catch (_) {}
+  },
+
+  /* The extension reports back here (relayed by content-shipmate → window). For
+     createApp, a real creation (result.created) marks the apprecord step done
+     and lets the build continue; anything else is surfaced so the developer can
+     finish it by hand. */
+  _onAscTaskResult(task, result) {
+    const u = state.upf || {};
+    const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
+    if (task === 'createApp') {
+      const pid = u._creatingAppPid || this.connectedMac();
+      u._creatingApp = false;
+      if (result && result.created) {
+        toast('App record created in App Store Connect.');
+        if (typeof upfMarkStep === 'function' && pid) upfMarkStep(pid, 'appRecord');
+      } else {
+        toast('Create app: ' + ((result && result.error) || 'couldn’t create it automatically') + ' — open App Store Connect to finish.');
+      }
+    } else if (task === 'autoPrivacy') {
+      if (result && result.ok) toast('App Privacy filled in App Store Connect.');
+      else toast('App Privacy: ' + ((result && result.error) || 'could not fill') + ' — check App Store Connect.');
+    }
+  },
+
   /* Read a Content Rating / Data Privacy answer through the app's own router. */
   _answer(pid, field) {
     if (typeof _appStoreAnswers !== 'function') return undefined;
@@ -1327,7 +1361,17 @@ function upfAdvance(pid) {
   if (!connected) { UPF.startConnect(pid); return; }     // blocked at Connect
   // Create the app record UP FRONT — before the build — so the ~10-min build
   // run has no human stop in the middle. It only has to exist before upload.
-  if (!u.appRecord && !u.uploaded) { _upfRepaint(pid, true); return; } // blocked at Create app
+  // Automated via the browser extension (background ASC tab); fires once per
+  // flow, and _onAscTaskResult marks appRecord + re-advances on success.
+  if (!u.appRecord && !u.uploaded) {
+    if (!u._creatingApp) {
+      u._creatingApp = true;
+      u._creatingAppPid = pid;
+      UPF.requestAscTask('createApp', { submit: true });
+    }
+    _upfRepaint(pid, true);
+    return;
+  } // blocked at Create app
   if (!u.built && !u.uploaded) { upfBuild(pid); return; }// run the local build, uninterrupted
   if (u.built && !u.uploaded) { _upfMaybePublish(pid); return; } // upload (gated inside)
   _upfRepaint(pid, true);                                 // uploaded → Test is the blocker
@@ -1453,3 +1497,13 @@ function upfBuildPanelHTML(pid) {
      the Build from Steam button, or — once engaged — the build steps. */
   return `<div class="upf-panel">${introPara}${chips}${err}${blocks}${actions}${stepsBlock}</div>`;
 }
+
+/* The browser extension reports ASC task results back through content-shipmate,
+   which posts them onto the Shipmate window. Route them into UPF so the build
+   flow can react (e.g. mark the app record created and continue). */
+window.addEventListener('message', function (ev) {
+  if (ev.source !== window || !ev.data || ev.data.__shipmate !== 'ascTaskResult') return;
+  if (typeof UPF !== 'undefined' && typeof UPF._onAscTaskResult === 'function') {
+    UPF._onAscTaskResult(ev.data.task, ev.data.result);
+  }
+});
