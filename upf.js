@@ -888,6 +888,10 @@ const UPF = {
      _buildIntent makes onConnected resume automatically after. */
   buildFromSteam(pid) {
     _buildIntent = true;
+    // An explicit press is a fresh attempt — clear any app-create state left by a
+    // previous try this session, so a retry actually re-runs (a stuck _appFailed
+    // was silently blocking it, and nothing even opened).
+    _appFailed = false; _appInFlight = false; _appVerifiedSession = false;
     try { upfAdvance(pid); } catch (_) {}
   },
 
