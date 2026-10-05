@@ -7624,6 +7624,12 @@ function connectAdd(pid) {
    the state the flow has just written, which is what the card face used to get. */
 function _rerenderPlatformCard(pid) {
   renderDashboard();
+  // Re-pin the connect/account face to the CURRENT steps-face height after the
+  // DOM is rebuilt. The step list (and thus that height) can change — e.g. the
+  // five-step Mac flow — and a stale/absent pin is what let the wizard render
+  // at a different height than the steps. Measuring here keeps them identical
+  // across sign-out → wizard → connect (v7.88).
+  if (pid && typeof _cacheStepsFaceHeight === 'function') _cacheStepsFaceHeight(pid);
 }
 
 // Flip a card to the target face. dir = 1 / -1 sets the rotation direction.

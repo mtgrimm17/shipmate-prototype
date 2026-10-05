@@ -5472,6 +5472,8 @@ body.viewing-splash .app-subnav { display: none; }
    bottom. The card is pinned to the linked/steps height (see platformCardHeight). */
 .platform-account-body {
   flex: 1 1 auto;
+  min-height: 0;         /* let it shrink inside the pinned card so overflow can scroll */
+  overflow-y: auto;      /* longer wizard copy scrolls within the pinned steps height, never grows the card (v7.88) */
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -5724,6 +5726,14 @@ body.viewing-splash .app-subnav { display: none; }
 .cf-bot-email{font-size:12.5px;font-weight:650;color:var(--text);word-break:break-all}
 .cf-bot-role{font-size:11px;color:var(--text-muted,#8f98a0)}
 .connect-face .platform-login-btn{margin-top:2px}
+/* The App Store Connect intro's two-reason list (v7.88): why Shipmate needs a
+   browser sign-in — the extension (the no-API web steps) and the generated API
+   key. Kept tight so the connect face still fits the pinned steps height. */
+.cf-why{display:flex;flex-direction:column;gap:9px;margin:2px 0}
+.cf-why-row{display:flex;align-items:flex-start;gap:9px;text-align:left}
+.cf-why-ico{flex:none;width:16px;height:16px;color:var(--accent);margin-top:1px}
+.cf-why-txt{font-size:11.5px;line-height:1.45;color:var(--text-dim,#b7b7bc)}
+.cf-why-txt b{color:var(--text);font-weight:600}
 
 /* NOTHING LEFT TO SAY. Everything this used to declare — width, height,
    padding, radius, type size and weight, the fill and the hover — now comes

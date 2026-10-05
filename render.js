@@ -6179,11 +6179,29 @@ function _connectFaceHTML(pid, cfg) {
   const bot   = shipmateBotEmail();
 
   if (stage === 'intro') {
+    const extIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2H7a1 1 0 0 0-1 1v3H4a2 2 0 0 0 0 4h2v3a1 1 0 0 0 1 1h3v-2a2 2 0 0 1 4 0v2h3a1 1 0 0 0 1-1v-3h2a2 2 0 0 0 0-4h-2V8a1 1 0 0 0-1-1z"/></svg>`;
+    // Apple (App Store Connect): the real flow is a browser session Shipmate
+    // uses two ways — the extension for the no-API web steps, and a generated
+    // API key for everything the API covers. The intro states both, and why,
+    // before asking for anything. See feedback: explain login + key up front.
+    if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+      const keyIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
+      return `
+      <div class="connect-face">
+        <div class="connect-face-lead">Sign in to <b>App Store Connect</b> once, in your browser. Shipmate never sees or stores your password — it uses that signed-in session two ways:</div>
+        <div class="cf-why">
+          <div class="cf-why-row"><span class="cf-why-ico">${extIco}</span><span class="cf-why-txt"><b>Browser extension</b> — does the steps Apple gives no API for: creating your app and filling out App Privacy.</span></div>
+          <div class="cf-why-row"><span class="cf-why-ico">${keyIco}</span><span class="cf-why-txt"><b>API key</b> — a secure key Shipmate generates so it can create, edit and submit your game for you.</span></div>
+        </div>
+        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension to begin</button>
+        <div class="platform-login-hint">One-time setup, about a minute.</div>
+      </div>`;
+    }
     return `
       <div class="connect-face">
         <div class="connect-face-lead">Link a Shipmate bot to publish to <b>${escHtml(cfg.portal)}</b> for you. You sign in once on the real site — we never see your password.</div>
         <div class="cf-extrow">
-          <div class="cf-ext-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2H7a1 1 0 0 0-1 1v3H4a2 2 0 0 0 0 4h2v3a1 1 0 0 0 1 1h3v-2a2 2 0 0 1 4 0v2h3a1 1 0 0 0 1-1v-3h2a2 2 0 0 0 0-4h-2V8a1 1 0 0 0-1-1z"/></svg></div>
+          <div class="cf-ext-ico">${extIco}</div>
           <div class="cf-ext-txt"><b>Shipmate extension</b><span>Links your account, in your browser</span></div>
         </div>
         <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension</button>
