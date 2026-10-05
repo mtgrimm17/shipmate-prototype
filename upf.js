@@ -282,10 +282,14 @@ const UPF = {
         });
       };
       if (result && result.ok && result.keyId && result.issuerId) {
-        // The extension downloaded the one-time .p8 into the agent's drop dir
-        // (/tmp/shipmate-keys — outside macOS TCC, unlike ~/Downloads). Import it:
-        // the agent reads it from there, verifies it live, then deletes it.
-        this._post('/importkey', { keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' })
+        // The extension captured the .p8 TEXT by hooking ASC's client-side Blob —
+        // store it via /account (writes it into the agent's own folder; no
+        // ~/Downloads read, so no macOS TCC block). If no PEM came through, fall
+        // back to /importkey (reads the agent's TCC-free drop dir).
+        const [path, payload] = result.key
+          ? ['/account',   { key: result.key, keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' }]
+          : ['/importkey', {                  keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' }];
+        this._post(path, payload)
           .then((r) => { if (r && r.ok) toast('App Store Connect API key saved.'); else toast('API key: ' + ((r && r.error) || 'could not save it') + '.'); done(); })
           .catch((e) => { toast('API key: ' + ((e && e.message) || 'could not save it') + '.'); done(); });
       } else {
