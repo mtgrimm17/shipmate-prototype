@@ -5741,6 +5741,25 @@ body.viewing-splash .app-subnav { display: none; }
 .cf-steps code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--panel,#1c1c1e);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--text)}
 .cf-copy{font-size:10px;padding:1px 7px;margin-left:3px;border-radius:5px;border:1px solid var(--border);background:var(--panel,#1c1c1e);color:var(--accent);cursor:pointer;vertical-align:middle}
 .cf-copy:hover{background:var(--panel-3,#2c2c2e)}
+/* Connect Account step modal — task checklist: green (done), amber (needs
+   attention / current), grey (ahead); the current task expands (v7.94). */
+.connect-modal{padding:2px}
+.cm-tasks{display:flex;flex-direction:column;gap:8px}
+.cm-task{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--panel,#1c1c1e)}
+.cm-task.is-current{border-color:rgba(255,180,60,0.5);background:rgba(255,180,60,0.06)}
+.cm-task.is-todo{opacity:.5}
+.cm-task-head{display:flex;align-items:center;gap:10px}
+.cm-task-title{font-weight:600;font-size:13.5px}
+.cm-disc{flex:none;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--panel-3,#2c2c2e);color:var(--text-muted,#8f98a0)}
+.cm-disc.is-current{background:rgba(255,180,60,0.18);color:#ffb43c;border:1px solid rgba(255,180,60,0.5)}
+.cm-disc.is-done{background:rgba(47,220,128,0.15);color:#2fdc80}
+.cm-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.cm-detail-text{font-size:12px;color:var(--text-dim,#b7b7bc);line-height:1.5}
+.cm-done{margin-top:14px;font-size:12.5px;color:var(--text-dim,#b7b7bc);line-height:1.5}
+.cm-disconnect{margin-top:10px;align-self:flex-start;background:none;border:none;color:var(--accent,#5b9dff);font-size:12.5px;cursor:pointer;padding:0}
+/* Steps locked behind the Connect Account gate (v7.94). */
+.ios-step-card.is-locked{opacity:.45;cursor:default;pointer-events:none}
+.ios-step-num.is-locked{background:var(--panel-3,#2c2c2e);color:var(--text-muted,#8f98a0);display:inline-flex;align-items:center;justify-content:center}
 
 /* NOTHING LEFT TO SAY. Everything this used to declare — width, height,
    padding, radius, type size and weight, the fill and the hover — now comes

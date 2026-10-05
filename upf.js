@@ -220,6 +220,25 @@ const UPF = {
      createApp, a real creation (result.created) marks the apprecord step done
      and lets the build continue; anything else is surfaced so the developer can
      finish it by hand. */
+  /* #37: the extension detected the App Store Connect tab is signed in. Finish
+     Connect Account automatically — no manual "I'm signed in" click — for the
+     Mac platform currently mid-connect (its step modal open on 'connect', or its
+     connectStage at sign-in/confirm) and not yet connected. The manual button
+     stays as a fallback, so a missed detection never blocks the flow. */
+  _onAscSignedIn() {
+    if (!state.extensionInstalled) return;
+    for (const pid of UPF_MAC_PIDS) {
+      if (typeof isPlatformConnected === 'function' && isPlatformConnected(pid)) continue;
+      const stage     = state.connectStage && state.connectStage[pid];
+      const modalOpen = state.stepModal && state.stepModal.stepId === 'connect' && state.stepModal.platformId === pid;
+      if (modalOpen || stage === 'confirm' || stage === 'signin') {
+        if (typeof bcToast === 'function') bcToast('Signed in to App Store Connect.');
+        if (typeof connectAdd === 'function') connectAdd(pid);
+        return;
+      }
+    }
+  },
+
   _onAscTaskResult(task, result) {
     const u = state.upf || {};
     const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
@@ -1600,8 +1619,17 @@ function upfBuildPanelHTML(pid) {
    which posts them onto the Shipmate window. Route them into UPF so the build
    flow can react (e.g. mark the app record created and continue). */
 window.addEventListener('message', function (ev) {
-  if (ev.source !== window || !ev.data || ev.data.__shipmate !== 'ascTaskResult') return;
-  if (typeof UPF !== 'undefined' && typeof UPF._onAscTaskResult === 'function') {
-    UPF._onAscTaskResult(ev.data.task, ev.data.result);
+  if (ev.source !== window || !ev.data) return;
+  if (ev.data.__shipmate === 'ascTaskResult') {
+    if (typeof UPF !== 'undefined' && typeof UPF._onAscTaskResult === 'function') {
+      UPF._onAscTaskResult(ev.data.task, ev.data.result);
+    }
+    return;
+  }
+  // #37: the extension reports that the App Store Connect tab is signed in, so
+  // Connect Account can finish without the manual "I'm signed in" click.
+  if (ev.data.__shipmate === 'ascSignedIn') {
+    if (typeof UPF !== 'undefined' && typeof UPF._onAscSignedIn === 'function') UPF._onAscSignedIn();
+    return;
   }
 });

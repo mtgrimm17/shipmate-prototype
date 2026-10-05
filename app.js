@@ -7459,6 +7459,16 @@ function _setConnectStage(pid, stage) {
   state.connectStage[pid] = stage;
 }
 
+// The Mac connect flow runs inside the Connect Account step modal, so its stage
+// changes re-render the modal body; other platforms still use the card face.
+function _connectRerender(pid) {
+  if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') {
+    reRenderStepModal();
+  } else {
+    _rerenderPlatformCard(pid);
+  }
+}
+
 // Stage 1 → 2: "Install extension".
 // Apple (App Store Connect): download the packaged extension and show the
 // one-time "Load unpacked" steps. We can't detect that Chrome actually loaded
@@ -7473,7 +7483,7 @@ function connectInstall(pid) {
       document.body.appendChild(a); a.click(); a.remove();
     } catch (_) {}
     _setConnectStage(pid, 'installing');
-    _rerenderPlatformCard(pid);
+    _connectRerender(pid);
     return;
   }
   state.extensionInstalled = true;
@@ -7485,7 +7495,7 @@ function connectInstall(pid) {
 function connectInstalled(pid) {
   state.extensionInstalled = true;
   _setConnectStage(pid, 'signin');
-  _rerenderPlatformCard(pid);
+  _connectRerender(pid);
 }
 
 // Apple sign-in (interim, v7.92): open the REAL App Store Connect login in a
@@ -7503,7 +7513,7 @@ function ascBrowserSignIn(pid) {
   // null the handle, so it's intentionally omitted — we only ever call close().)
   try { _ascSignInWin = window.open('https://appstoreconnect.apple.com/login', '_blank'); } catch (_) { _ascSignInWin = null; }
   _setConnectStage(pid, 'confirm');
-  _rerenderPlatformCard(pid);
+  _connectRerender(pid);
 }
 
 // Open the browser-framed sign-in modal (simulates the real portal via extension).
@@ -7652,7 +7662,11 @@ function connectAdd(pid) {
      shows — it reads as a glitch. The flip only announced "you're connected",
      which the swap to steps already says, so just render the steps cleanly. */
   _setPlatformFace(pid, 'steps');
-  if (state.submission?.settings === pid && state.submission?.layout !== 'modal') {
+  if (state.stepModal && state.stepModal.stepId === 'connect' && typeof closeStepModal === 'function') {
+    // Connect ran in the Connect Account step modal (Mac): close it, revealing
+    // the now-complete Step 1 on the card. closeStepModal re-renders the card.
+    closeStepModal();
+  } else if (state.submission?.settings === pid && state.submission?.layout !== 'modal') {
     // Inline layout: the account face is the settings pane — close it back to steps.
     closePlatformSettings();
   } else {

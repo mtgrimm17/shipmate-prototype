@@ -6011,6 +6011,10 @@ function isPlatformConnected(pid) { return !!state.platformAuth?.[pid]?.loggedIn
 function showAccountFace(pid) {
   if (pid === 'web') return false;
   if (!state.activePlatforms.has(pid)) return false;
+  // Mac App Store: connecting is Step 1 (Connect Account), done inside its own
+  // step modal (buildConnectStepSection) — never an account face. So the card
+  // always shows the five steps, connected or not, and there is no flip.
+  if (pid === 'macos' || pid === 'macos_full') return false;
   return state.platformFace?.[pid] === 'account';
 }
 
@@ -6859,9 +6863,24 @@ function buildIOSActiveCard(pid, force) {
   const checkSVG = smCheckSVG(20);
 
   const binProc = !!(state.platformBuildProcessing?.[pid]);
+  // HARD GATE: Connect Account (Step 1) must be complete before any step below
+  // it is actionable. Once the gate closes (an incomplete 'connect' step), every
+  // later row renders locked — greyed, no onclick — so a build/preview can't be
+  // opened before connecting. Connect itself is never locked.
+  const lockSVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+  let gateOpen = true;
   const stepCards = steps.map((step, i) => {
     const done      = _appStoreSectionComplete(pid, step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
+    const locked    = !gateOpen;
+    if (step.id === 'connect' && !done) gateOpen = false;   // lock everything after
+    if (locked) {
+      return `
+        <div class="ios-step-card is-locked" id="${pid}-step-card-${step.id}" title="Connect your account first">
+          <div class="ios-step-num is-locked">${lockSVG}</div>
+          <div class="ios-step-info"><div class="ios-step-name">${stepLabel(pid, step)}</div></div>
+        </div>`;
+    }
 
     // Upload Build step — inline, no modal
     if (step.id === 'uploadBuild') {
@@ -6870,7 +6889,7 @@ function buildIOSActiveCard(pid, force) {
          the Steam build is matched, nothing opened. */
       if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
       const isMacBuild = (typeof UPF !== 'undefined' && typeof UPF.isMac === 'function' && UPF.isMac(pid));
-      const buildLabel = isMacBuild ? 'Generate Build' : stepLabel(pid, step);   // "Generate Build" — Step 2 on the Mac App Store (v7.87)
+      const buildLabel = stepLabel(pid, step);   // single source: PLATFORMS[pid].steps label ("Generate Build" on Mac, "Upload Build" on iOS) — same label the modal title reads
       const steamReady = (typeof UPF !== 'undefined' && typeof UPF.buildReady === 'function') && UPF.buildReady(pid);
       if (steamReady) {
         /* Agent up and a Steam build matched: the whole row is clickable like
@@ -7219,22 +7238,98 @@ const SM_FLIP_LABELS = {
    is a confirmation surface, not the login itself: it states that App Store
    Connect is connected and that it gates everything below, with a link to the
    account settings where the connection actually lives. Reads state only. */
+/* CONNECT ACCOUNT — Step 1's modal, built as a task checklist like the Generate
+   Build modal: each task is green when done, amber/numbered when it's the one
+   needing attention, grey when still ahead; the current task expands with what
+   to do. Reuses the connect handlers (connectInstall / connectInstalled /
+   ascBrowserSignIn / connectAdd) and connectStage — the on-card wizard's logic,
+   now in the modal — which is why Mac shows no account face and there's no flip.
+   Reads state only. */
+const _CM_EXT_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2H7a1 1 0 0 0-1 1v3H4a2 2 0 0 0 0 4h2v3a1 1 0 0 0 1 1h3v-2a2 2 0 0 1 4 0v2h3a1 1 0 0 0 1-1v-3h2a2 2 0 0 0 0-4h-2V8a1 1 0 0 0-1-1z"/></svg>`;
+const _CM_KEY_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
+
 function buildConnectStepSection(pid) {
-  const auth = state.platformAuth?.[pid] || {};
-  const who  = (auth.username || '').replace(/[<>&]/g, '').trim();
+  const extDone  = !!state.extensionInstalled;
+  const signedIn = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
+  const stage    = (typeof _connectStage === 'function') ? _connectStage(pid) : (extDone ? 'signin' : 'intro');
+  const tasks = [
+    { id: 'ext',    title: 'Install the Shipmate extension', done: extDone  },
+    { id: 'signin', title: 'Sign in to App Store Connect',   done: signedIn },
+  ];
+  const currentIdx = tasks.findIndex(t => !t.done);
+  const allDone    = currentIdx === -1;
+
+  const rows = tasks.map((t, i) => {
+    const isCurrent = i === currentIdx;
+    const stateCls  = t.done ? 'is-done' : (isCurrent ? 'is-current' : 'is-todo');
+    const disc = t.done
+      ? `<span class="cm-disc is-done">${smCheckSVG(16)}</span>`
+      : `<span class="cm-disc ${isCurrent ? 'is-current' : ''}">${i + 1}</span>`;
+    return `
+      <div class="cm-task ${stateCls}">
+        <div class="cm-task-head">${disc}<span class="cm-task-title">${t.title}</span></div>
+        ${isCurrent ? _connectTaskDetail(pid, t.id, stage) : ''}
+      </div>`;
+  }).join('');
+
+  if (allDone) {
+    const who = (state.platformAuth?.[pid]?.username || '').replace(/[<>&]/g, '').trim();
+    return `
+      <div class="connect-modal">
+        <div class="cm-tasks">${rows}</div>
+        <div class="cm-done">You're connected to App Store Connect${who ? ` as <strong>${who}</strong>` : ''}. Shipmate can now create your app, fill App Privacy, and submit for you.</div>
+        <button type="button" class="cm-disconnect" onclick="platformSignOut('${pid}')">Disconnect</button>
+      </div>`;
+  }
   return `
-    <div style="padding:4px 2px;">
-      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Connect Account</div>
-      <div style="color:var(--muted,#9aa);font-size:13px;line-height:1.5;margin-bottom:18px;">
-        App Store Connect is connected${who ? ` as <strong>${who}</strong>` : ''}. This is the first step and the gate for everything below — generating the build, the product page and submission all run against this account.
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;background:rgba(47,220,128,0.08);border:1px solid rgba(47,220,128,0.25);">
-        <span style="display:inline-flex;width:18px;height:18px;flex-shrink:0;">${smCheckSVG(18)}</span>
-        <span style="font-weight:600;">Connected to App Store Connect</span>
-      </div>
-      <button type="button" style="margin-top:16px;background:none;border:none;color:var(--accent,#5b9dff);font-size:13px;cursor:pointer;padding:0;"
-              onclick="if(typeof openSettings==='function')openSettings('account')">Manage account connection</button>
+    <div class="connect-modal">
+      <div class="connect-face-lead" style="margin-bottom:14px;">Two one-time steps connect Shipmate to App Store Connect. You sign in once in your browser — Shipmate never sees your password.</div>
+      <div class="cm-tasks">${rows}</div>
     </div>`;
+}
+
+// The expanded body for the connect task that currently needs attention.
+function _connectTaskDetail(pid, taskId, stage) {
+  if (taskId === 'ext') {
+    if (stage === 'installing') {
+      return `
+      <div class="cm-detail">
+        <ol class="cf-steps">
+          <li>Double-click <b>shipmate-extension.zip</b> in your Downloads to unzip it.</li>
+          <li>Open <code>chrome://extensions</code> <button type="button" class="cf-copy" onclick="navigator.clipboard&amp;&amp;navigator.clipboard.writeText('chrome://extensions');this.textContent='Copied';" title="Copy — paste into the address bar">Copy</button> and turn on <b>Developer mode</b> (top-right).</li>
+          <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
+        </ol>
+        <button class="platform-login-btn" type="button" onclick="connectInstalled('${pid}')">I've installed it</button>
+        <div class="platform-login-hint">Requires Google Chrome. Didn't download? <a href="shipmate-extension.zip" download>Get it again</a></div>
+      </div>`;
+    }
+    return `
+      <div class="cm-detail">
+        <div class="cf-why">
+          <div class="cf-why-row"><span class="cf-why-ico">${_CM_EXT_ICO}</span><span class="cf-why-txt"><b>Creates your app</b> in App Store Connect and populates App Privacy from your selections.</span></div>
+          <div class="cf-why-row"><span class="cf-why-ico">${_CM_KEY_ICO}</span><span class="cf-why-txt"><b>Generates an API key</b> so Shipmate can fill in the rest of your submission.</span></div>
+        </div>
+        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Download extension</button>
+        <div class="platform-login-hint">Requires Google Chrome. One-time setup, about a minute.</div>
+      </div>`;
+  }
+  if (taskId === 'signin') {
+    if (stage === 'confirm') {
+      return `
+      <div class="cm-detail">
+        <div class="cm-detail-text">Finish signing in to App Store Connect in the tab we opened. Once you're in, connect here.</div>
+        <button class="platform-login-btn" type="button" onclick="connectAdd('${pid}')">I'm signed in — connect</button>
+        <div class="platform-login-hint">Didn't open? <a href="https://appstoreconnect.apple.com/login" target="_blank" rel="noopener">Open App Store Connect</a></div>
+      </div>`;
+    }
+    return `
+      <div class="cm-detail">
+        <div class="cm-detail-text">Sign in to App Store Connect in your browser so the extension can work in your session.</div>
+        <button class="platform-login-btn" type="button" onclick="ascBrowserSignIn('${pid}')">Open App Store Connect</button>
+        <div class="platform-login-hint">Opens appstoreconnect.apple.com in a new tab.</div>
+      </div>`;
+  }
+  return '';
 }
 
 function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
@@ -7543,12 +7638,13 @@ function renderStepModal() {
      entry, keyed by target, consulted before the shared table. */
   const APPLE_FLIP_LABELS = { screenshots: 'Media Carousel' };
   const applePreview = platformId === 'ios' || platformId === 'macos';
-  const upfBuildStep = stepId === 'uploadBuild' && typeof UPF !== 'undefined'
-    && typeof UPF.isMac === 'function' && UPF.isMac(platformId);
+  // The modal title reads the step's own label (PLATFORMS[pid].steps), the same
+  // single source the card row uses via stepLabel — so renaming a step in one
+  // place renames it everywhere. (uploadBuild used to hardcode 'Game Build'
+  // here, which is exactly how it drifted from the card's 'Generate Build'.)
   const displayStepLabel = isFlipped
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
-    : (upfBuildStep ? 'Game Build'
-       : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : '')));
+    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
   // Step body — one dispatcher, shared with the inline Submission pane.
   const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
