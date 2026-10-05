@@ -7512,6 +7512,10 @@ function ascBrowserSignIn(pid) {
   // Hold the opened tab's handle so we can close it on connect. (noopener would
   // null the handle, so it's intentionally omitted — we only ever call close().)
   try { _ascSignInWin = window.open('https://appstoreconnect.apple.com/login', '_blank'); } catch (_) { _ascSignInWin = null; }
+  // Tell the extension a connect sign-in is in progress, so when it detects the
+  // ASC tab is signed in it closes THAT tab and refocuses Shipmate (the page's
+  // own window.close is a fallback; the extension owns the tab and is reliable).
+  try { window.postMessage({ __shipmate: 'connectSigninStarted' }, '*'); } catch (_) {}
   _setConnectStage(pid, 'confirm');
   _connectRerender(pid);
 }

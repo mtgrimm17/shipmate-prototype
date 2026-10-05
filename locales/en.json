@@ -125,6 +125,8 @@
   "plat.xbox": "Microsoft Store | XBOX",
   "plat.nintendo": "Nintendo eShop",
   "step.uploadBuild": "Upload Build",
+  "step.macos.uploadBuild": "Generate Build",
+  "step.macos_full.uploadBuild": "Generate Build",
   "step.improveSubmission": "Improve Your Submission",
   "step.storePreviewPrototype": "Store Page Preview",
   "step.web.submit": "Deploy",

@@ -1377,8 +1377,20 @@ const UPF_FEATURES = {
    walks away. apprecord only has to be done before `upload`, so moving it ahead
    of the agent rows is safe. */
 const UPF_FLOW = [
-  { id: 'connect',    kind: 'user'  },
-  { id: 'apprecord',  kind: 'user'  },
+  // 'connect' was the first build step; it's gone — connecting is now the card's
+  // Step 1 (Connect Account), done before the build steps are even reachable, so
+  // listing it here only repeated a step already complete. (upfAdvance still
+  // guards on `connected` as a safety.)
+  // NOTE: the ASC API key is NOT generated here. It's mandatory for metadata
+  // population too — App Privacy, pricing, content rating — which happens
+  // OUTSIDE the build entirely (a user may only fill in App Privacy and never
+  // build). So key generation (#38) belongs in Connect Account, the gate every
+  // path already passes through, as one of its tasks — not in the build steps.
+  // 'apprecord' is an AGENT (automated) step now, not a user one: the browser
+  // extension creates the app record via CDP (upfAdvance → _createAppStep), so
+  // it auto-runs rather than showing an "Open App Store Connect / I've created
+  // it" CTA. (UPF_USER_STEP.apprecord is left as a dormant manual fallback.)
+  { id: 'apprecord',  kind: 'agent' },
   { id: 'copy',       kind: 'agent', stage: 0 },
   { id: 'shim',       kind: 'agent', stage: 1 },
   { id: 'sandbox',    kind: 'agent', stage: 2 },
@@ -1455,7 +1467,10 @@ function _upfFlowRows(pid) {
     if (r.done)        { r.status = 'done'; return; }
     if (i !== curIdx)  { r.status = 'todo'; return; }
     if (r.kind === 'user') { r.status = 'blocker'; return; }
-    const running = (prep || pub) && r.stage === u.stage;
+    // Only steps with a numeric build stage can be "active" (the agent rows).
+    // apprecord is an agent step with no stage, so it stays 'current' until done
+    // rather than matching `undefined === u.stage` when idle.
+    const running = (prep || pub) && typeof r.stage === 'number' && r.stage === u.stage;
     r.status = running ? 'active' : 'current';
   });
   return rows;

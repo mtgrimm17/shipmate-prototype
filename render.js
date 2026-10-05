@@ -6638,6 +6638,10 @@ function buildActiveCard(pid, force) {
    • locked=true  → grayed-out row, no track controls
    • locked=false → row is active with inline track dropdown + Submit button
    ─────────────────────────────────────────────────────────────────────────── */
+// The locked-step padlock, one definition shared by every locked row (the
+// gated steps and the Submit step), so they always match.
+const SM_LOCK_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+
 function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
   /* Two ticks at two sizes, both from smCheckSVG (state.js). The disc one had
      been left at 12px on a 20px disc while every other row draws it at the
@@ -6783,7 +6787,7 @@ function buildSubmitStepCard(pid, stepCount, locked, submitDone) {
          onpointercancel="submitHoldEnd()"
          title="${submitDone || !canHold ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}"
          aria-label="${submitDone || !canHold ? '' : (isWeb ? 'Hold to Deploy' : 'Hold to Submit')}">
-      <div class="${numClass}">${submitDone ? checkSVG : num}</div>
+      <div class="${numClass}${stepLocked && !submitDone ? ' is-locked' : ''}">${submitDone ? checkSVG : (stepLocked ? SM_LOCK_SVG : num)}</div>
       <div class="ios-step-info">
         <div class="ios-step-name">${submitLabel}</div>
       </div>
@@ -6867,7 +6871,7 @@ function buildIOSActiveCard(pid, force) {
   // it is actionable. Once the gate closes (an incomplete 'connect' step), every
   // later row renders locked — greyed, no onclick — so a build/preview can't be
   // opened before connecting. Connect itself is never locked.
-  const lockSVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+  const lockSVG = SM_LOCK_SVG;   // same padlock the Submit step uses
   let gateOpen = true;
   const stepCards = steps.map((step, i) => {
     const done      = _appStoreSectionComplete(pid, step.id);
@@ -7665,9 +7669,10 @@ function renderStepModal() {
   // single source the card row uses via stepLabel — so renaming a step in one
   // place renames it everywhere. (uploadBuild used to hardcode 'Game Build'
   // here, which is exactly how it drifted from the card's 'Generate Build'.)
+  const stepTitle = step ? stepLabel(platformId, step) : '';   // same single source as the card row (locale → array fallback)
   const displayStepLabel = isFlipped
-    ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || step?.label)
-    : (step?.label || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
+    ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || stepTitle)
+    : (stepTitle || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
 
   // Step body — one dispatcher, shared with the inline Submission pane.
   const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
