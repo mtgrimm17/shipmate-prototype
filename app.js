@@ -7497,8 +7497,11 @@ function connectInstalled(pid) {
 // those land this assumes the agent already has a key on this Mac (Mark's case);
 // the old modal (openAscLogin / buildAscWizard) stays in the code, just unused
 // here, to be removed in #39.
+let _ascSignInWin = null;
 function ascBrowserSignIn(pid) {
-  try { window.open('https://appstoreconnect.apple.com/login', '_blank', 'noopener'); } catch (_) {}
+  // Hold the opened tab's handle so we can close it on connect. (noopener would
+  // null the handle, so it's intentionally omitted — we only ever call close().)
+  try { _ascSignInWin = window.open('https://appstoreconnect.apple.com/login', '_blank'); } catch (_) { _ascSignInWin = null; }
   _setConnectStage(pid, 'confirm');
   _rerenderPlatformCard(pid);
 }
@@ -7640,7 +7643,21 @@ function connectAdd(pid) {
   const email = state.connectAccountEmail?.[pid] || shipmateBotEmail();
   state.platformAuth[pid] = { loggedIn: true, username: email };
   if (state.connectStage) delete state.connectStage[pid];
-  _flipPlatformCard(pid, 'steps', 1); // connect face → steps (now connected)
+  // Close the App Store Connect sign-in tab we opened, if any (Apple path).
+  if (_ascSignInWin && !_ascSignInWin.closed) { try { _ascSignInWin.close(); } catch (_) {} }
+  _ascSignInWin = null;
+  /* Connect face → steps. Was _flipPlatformCard(pid,'steps',1), but in the
+     card-grid layout that plays a rotateY flip whose first frames are missed
+     (the steps face is already rendered), so only the tail of the rotation
+     shows — it reads as a glitch. The flip only announced "you're connected",
+     which the swap to steps already says, so just render the steps cleanly. */
+  _setPlatformFace(pid, 'steps');
+  if (state.submission?.settings === pid && state.submission?.layout !== 'modal') {
+    // Inline layout: the account face is the settings pane — close it back to steps.
+    closePlatformSettings();
+  } else {
+    renderDashboard();
+  }
   /* UPF: connecting a Mac account is what unlocks writing to App Store Connect.
      Push everything collected so far now, and upload a build if one is already
      waiting locally; subsequent saves re-sync (upf.js). */

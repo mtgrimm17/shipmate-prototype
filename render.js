@@ -6193,7 +6193,7 @@ function _connectFaceHTML(pid, cfg) {
           <div class="cf-why-row"><span class="cf-why-ico">${extIco}</span><span class="cf-why-txt"><b>Creates your app</b> in App Store Connect and populates App Privacy from your selections.</span></div>
           <div class="cf-why-row"><span class="cf-why-ico">${keyIco}</span><span class="cf-why-txt"><b>Generates an API key</b> so Shipmate can fill in the rest of your submission.</span></div>
         </div>
-        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension to begin</button>
+        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Download extension</button>
         <div class="platform-login-hint">One-time setup, about a minute.</div>
       </div>`;
     }
