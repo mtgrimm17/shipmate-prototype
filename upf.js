@@ -1686,3 +1686,8 @@ window.addEventListener('message', function (ev) {
     return;
   }
 });
+
+// Expose UPF on window so it's reachable from the DevTools console in any
+// context (a top-level `const` lives in the global lexical scope, not on
+// window, so `UPF.generateApiKey(...)` can read as undefined otherwise).
+try { window.UPF = UPF; } catch (_) {}
