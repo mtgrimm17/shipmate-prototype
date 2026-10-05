@@ -7459,8 +7459,30 @@ function _setConnectStage(pid, stage) {
   state.connectStage[pid] = stage;
 }
 
-// Stage 1 → 2: "Install extension" (sticky global; re-render the connect face).
+// Stage 1 → 2: "Install extension".
+// Apple (App Store Connect): download the packaged extension and show the
+// one-time "Load unpacked" steps. We can't detect that Chrome actually loaded
+// it, so advancing to sign-in waits for the user's "I've installed it"
+// (connectInstalled). Other platforms keep the faked one-step flow.
 function connectInstall(pid) {
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+    try {
+      const a = document.createElement('a');
+      a.href = 'shipmate-extension.zip';      // served from the Pages origin
+      a.download = 'shipmate-extension.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (_) {}
+    _setConnectStage(pid, 'installing');
+    _rerenderPlatformCard(pid);
+    return;
+  }
+  state.extensionInstalled = true;
+  _setConnectStage(pid, 'signin');
+  _rerenderPlatformCard(pid);
+}
+
+// Apple install stage → sign-in, once the user confirms they loaded it unpacked.
+function connectInstalled(pid) {
   state.extensionInstalled = true;
   _setConnectStage(pid, 'signin');
   _rerenderPlatformCard(pid);

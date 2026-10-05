@@ -6207,6 +6207,22 @@ function _connectFaceHTML(pid, cfg) {
         <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension</button>
       </div>`;
   }
+  if (stage === 'installing') {
+    // Apple: the zip is downloading; show the one-time Load-unpacked steps.
+    // chrome://extensions can't be a link (browsers block navigating to it from
+    // a page), so it's shown as copyable text.
+    return `
+      <div class="connect-face">
+        <div class="connect-face-lead">Downloading the Shipmate extension. Load it into Chrome once — it stays installed after that:</div>
+        <ol class="cf-steps">
+          <li>Unzip <b>shipmate-extension.zip</b>.</li>
+          <li>Open <code>chrome://extensions</code> and turn on <b>Developer mode</b> (top-right).</li>
+          <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
+        </ol>
+        <button class="platform-login-btn" type="button" onclick="connectInstalled('${pid}')">I've installed it</button>
+        <div class="platform-login-hint">Didn't download? <a href="shipmate-extension.zip" download>Get it again</a></div>
+      </div>`;
+  }
   if (stage === 'signin') {
     return `
       <div class="connect-face">
