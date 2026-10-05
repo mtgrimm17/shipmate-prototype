@@ -115,6 +115,16 @@ const UPF = {
     return { ok: true, started: true };
   },
 
+  /* Download an EXISTING, not-yet-downloaded "Shipmate" key instead of generating
+     a new one (testing / avoiding key pile-up). Result arrives via
+     _onAscTaskResult('generateApiKey'), which imports the .p8 the same way. */
+  async downloadApiKey() {
+    const h = await this.health().catch(() => null);
+    this._genKeyTeamId = (h && h.account && h.account.teamId) || '';
+    this.requestAscTask('downloadApiKey', {});
+    return { ok: true, started: true };
+  },
+
   /* One probe per page load. A failed probe is remembered as `false` so a
      machine without the agent never pays for a second connection attempt. */
   async health() {
