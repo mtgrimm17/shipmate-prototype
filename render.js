@@ -6185,11 +6185,13 @@ function _connectFaceHTML(pid, cfg) {
     // the app, fills App Privacy) AND generates the API key that covers the rest
     // of the submission. So the intro is one clear sentence, not "two ways".
     if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+      const keyIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
       return `
       <div class="connect-face">
-        <div class="connect-face-lead">Sign in to <b>App Store Connect</b> once, in your browser — Shipmate never sees or stores your password.</div>
+        <div class="connect-face-lead">Sign in to <b>App Store Connect</b> once, in your browser — Shipmate never sees or stores your password. In that session, the Shipmate extension:</div>
         <div class="cf-why">
-          <div class="cf-why-row"><span class="cf-why-ico">${extIco}</span><span class="cf-why-txt">The <b>Shipmate extension</b> uses that signed-in session to create your app in App Store Connect, populate App Privacy from your selections, and generate an API key so Shipmate can fill in the rest of your submission.</span></div>
+          <div class="cf-why-row"><span class="cf-why-ico">${extIco}</span><span class="cf-why-txt"><b>Creates your app</b> in App Store Connect and populates App Privacy from your selections.</span></div>
+          <div class="cf-why-row"><span class="cf-why-ico">${keyIco}</span><span class="cf-why-txt"><b>Generates an API key</b> so Shipmate can fill in the rest of your submission.</span></div>
         </div>
         <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension to begin</button>
         <div class="platform-login-hint">One-time setup, about a minute.</div>
