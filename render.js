@@ -7273,14 +7273,21 @@ function buildConnectStepSection(pid) {
   const extDone    = !!state.extensionInstalled;
   const downloaded = extDone || !!state.extensionDownloaded;
   const signedIn   = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
-  /* Separate tasks, each its own row (like the Generate Build list). Download and
-     Install are distinct, and the list is built to hold tasks Shipmate completes
-     on its own too — e.g. generating the API key (#38) will slot in here as a
-     task that turns green without the user, the same way the build stages do. */
+  const hasApiKey  = !!(state.upf && state.upf.agent && state.upf.agent.account && state.upf.agent.account.hasApiKey);
+  // Keep hasApiKey fresh: if the agent hasn't been probed this load, probe and
+  // re-render (otherwise the API-key task reads stale/false).
+  if (typeof UPF !== 'undefined' && state.upf && state.upf.agent == null && typeof UPF.health === 'function') {
+    UPF.health().then(() => { if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal(); }).catch(() => {});
+  }
+  /* Each task is its own row (like the Generate Build list). Download, Install and
+     Sign in are user tasks; the API key is one SHIPMATE completes on its own —
+     when it's the current task it generates/reuses the key and imports it into the
+     agent, turning green without the user (the way the build stages do). */
   const tasks = [
-    { id: 'download', title: 'Download the Shipmate extension', done: downloaded },
-    { id: 'install',  title: 'Install it in Chrome',            done: extDone    },
-    { id: 'signin',   title: 'Sign in to App Store Connect',    done: signedIn   },
+    { id: 'download', title: 'Download the Shipmate extension',   done: downloaded },
+    { id: 'install',  title: 'Install it in Chrome',              done: extDone    },
+    { id: 'signin',   title: 'Sign in to App Store Connect',      done: signedIn   },
+    { id: 'apikey',   title: 'Set up your App Store Connect key', done: hasApiKey  },
   ];
   const currentIdx = tasks.findIndex(t => !t.done);
   const allDone    = currentIdx === -1;

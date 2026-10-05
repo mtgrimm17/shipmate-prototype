@@ -105,12 +105,13 @@ const UPF = {
   async generateApiKey(pid, opts) {
     opts = opts || {};
     pid = pid || this.connectedMac() || 'macos';
+    if (this._apiKeyInFlight) return { ok: true, inFlight: true };   // don't double-fire (the task auto-calls this)
     const h = await this.health().catch(() => null);
     if (!opts.force && h && h.account && h.account.hasApiKey) {
-      if (typeof bcToast === 'function') bcToast('App Store Connect API key already set up.');
       return { ok: true, already: true };
     }
     this._genKeyTeamId = (h && h.account && h.account.teamId) || '';
+    this._apiKeyInFlight = true;
     this.requestAscTask('generateApiKey', {});
     return { ok: true, started: true };
   },
@@ -269,24 +270,26 @@ const UPF = {
     const u = state.upf || {};
     const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
     if (task === 'generateApiKey') {
-      if (result && result.ok && result.keyId && result.issuerId) {
-        // The .p8 was just downloaded; have the agent import it from ~/Downloads.
-        this._post('/importkey', { keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' })
-          .then((r) => {
-            if (r && r.ok) {
-              state.upf.agent = null;               // force a fresh /health so hasApiKey reads true
-              toast('App Store Connect API key generated and saved.');
-              this.health().then(() => {
-                if (typeof renderDashboard === 'function') renderDashboard();
-                if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
-              });
-            } else {
-              toast('API key: ' + ((r && r.error) || 'could not save it') + '.');
-            }
-          })
-          .catch((e) => toast('API key: ' + ((e && e.message) || 'could not save it') + '.'));
+      // Clear the in-flight flag and refresh health + the Connect UI on EVERY
+      // outcome, so the API-key task turns green on success or returns to its
+      // actionable state on failure (not stuck "setting up…").
+      const done = () => {
+        this._apiKeyInFlight = false;
+        state.upf.agent = null;                       // force a fresh /health so hasApiKey re-reads
+        this.health().then(() => {
+          if (typeof renderDashboard === 'function') renderDashboard();
+          if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+        });
+      };
+      if (result && result.ok && result.key && result.keyId && result.issuerId) {
+        // The extension captured the .p8 TEXT; store it via /account (writes it
+        // into the agent's own folder — no ~/Downloads read, so no macOS TCC block).
+        this._post('/account', { key: result.key, keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' })
+          .then((r) => { if (r && r.ok) toast('App Store Connect API key saved.'); else toast('API key: ' + ((r && r.error) || 'could not save it') + '.'); done(); })
+          .catch((e) => { toast('API key: ' + ((e && e.message) || 'could not save it') + '.'); done(); });
       } else {
-        toast('Generate API key: ' + ((result && result.error) || 'could not generate it') + ' — see the [Shipmate CDP key] logs.');
+        toast('API key: ' + ((result && result.error) || 'could not set it up') + '.');
+        done();
       }
       return;
     }
