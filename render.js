@@ -6890,6 +6890,23 @@ function buildIOSActiveCard(pid, force) {
       if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
       const isMacBuild = (typeof UPF !== 'undefined' && typeof UPF.isMac === 'function' && UPF.isMac(pid));
       const buildLabel = stepLabel(pid, step);   // single source: PLATFORMS[pid].steps label ("Generate Build" on Mac, "Upload Build" on iOS) — same label the modal title reads
+      if (isMacBuild) {
+        /* Mac: ALWAYS "Generate Build", always a clickable row that opens the
+           modal. The modal handles Build from Steam, a manual upload, and the
+           no-agent case inside it — the row never flips to a conditional
+           "Upload" pill. (A running build shows a spinner instead of a chevron.) */
+        const running = !!(state.upf && state.upf.job);
+        const trailing = running ? `<span class="build-proc-spin" style="flex-shrink:0;"></span>` : SM_STEP_CHEVRON;
+        return `
+          <div class="ios-step-card ${done ? 'is-complete' : ''}" id="${pid}-step-card-${step.id}"
+               onclick="openStepModal('${pid}','${step.id}')">
+            <div class="${numClass}">${done ? checkSVG : i + 1}</div>
+            <div class="ios-step-info">
+              <div class="ios-step-name">${buildLabel}</div>
+            </div>
+            ${trailing}
+          </div>`;
+      }
       const steamReady = (typeof UPF !== 'undefined' && typeof UPF.buildReady === 'function') && UPF.buildReady(pid);
       if (steamReady) {
         /* Agent up and a Steam build matched: the whole row is clickable like
@@ -7249,12 +7266,17 @@ const _CM_EXT_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 const _CM_KEY_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
 
 function buildConnectStepSection(pid) {
-  const extDone  = !!state.extensionInstalled;
-  const signedIn = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
-  const stage    = (typeof _connectStage === 'function') ? _connectStage(pid) : (extDone ? 'signin' : 'intro');
+  const extDone    = !!state.extensionInstalled;
+  const downloaded = extDone || !!state.extensionDownloaded;
+  const signedIn   = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
+  /* Separate tasks, each its own row (like the Generate Build list). Download and
+     Install are distinct, and the list is built to hold tasks Shipmate completes
+     on its own too — e.g. generating the API key (#38) will slot in here as a
+     task that turns green without the user, the same way the build stages do. */
   const tasks = [
-    { id: 'ext',    title: 'Install the Shipmate extension', done: extDone  },
-    { id: 'signin', title: 'Sign in to App Store Connect',   done: signedIn },
+    { id: 'download', title: 'Download the Shipmate extension', done: downloaded },
+    { id: 'install',  title: 'Install it in Chrome',            done: extDone    },
+    { id: 'signin',   title: 'Sign in to App Store Connect',    done: signedIn   },
   ];
   const currentIdx = tasks.findIndex(t => !t.done);
   const allDone    = currentIdx === -1;
@@ -7268,7 +7290,7 @@ function buildConnectStepSection(pid) {
     return `
       <div class="cm-task ${stateCls}">
         <div class="cm-task-head">${disc}<span class="cm-task-title">${t.title}</span></div>
-        ${isCurrent ? _connectTaskDetail(pid, t.id, stage) : ''}
+        ${isCurrent ? _connectTaskDetail(pid, t.id) : ''}
       </div>`;
   }).join('');
 
@@ -7289,10 +7311,20 @@ function buildConnectStepSection(pid) {
 }
 
 // The expanded body for the connect task that currently needs attention.
-function _connectTaskDetail(pid, taskId, stage) {
-  if (taskId === 'ext') {
-    if (stage === 'installing') {
-      return `
+function _connectTaskDetail(pid, taskId) {
+  if (taskId === 'download') {
+    return `
+      <div class="cm-detail">
+        <div class="cf-why">
+          <div class="cf-why-row"><span class="cf-why-ico">${_CM_EXT_ICO}</span><span class="cf-why-txt"><b>Creates your app</b> in App Store Connect and populates App Privacy from your selections.</span></div>
+          <div class="cf-why-row"><span class="cf-why-ico">${_CM_KEY_ICO}</span><span class="cf-why-txt"><b>Generates an API key</b> so Shipmate can fill in the rest of your submission.</span></div>
+        </div>
+        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Download extension</button>
+        <div class="platform-login-hint">Requires Google Chrome. About a minute, one time.</div>
+      </div>`;
+  }
+  if (taskId === 'install') {
+    return `
       <div class="cm-detail">
         <ol class="cf-steps">
           <li>Double-click <b>shipmate-extension.zip</b> in your Downloads to unzip it.</li>
@@ -7302,19 +7334,10 @@ function _connectTaskDetail(pid, taskId, stage) {
         <button class="platform-login-btn" type="button" onclick="connectInstalled('${pid}')">I've installed it</button>
         <div class="platform-login-hint">Requires Google Chrome. Didn't download? <a href="shipmate-extension.zip" download>Get it again</a></div>
       </div>`;
-    }
-    return `
-      <div class="cm-detail">
-        <div class="cf-why">
-          <div class="cf-why-row"><span class="cf-why-ico">${_CM_EXT_ICO}</span><span class="cf-why-txt"><b>Creates your app</b> in App Store Connect and populates App Privacy from your selections.</span></div>
-          <div class="cf-why-row"><span class="cf-why-ico">${_CM_KEY_ICO}</span><span class="cf-why-txt"><b>Generates an API key</b> so Shipmate can fill in the rest of your submission.</span></div>
-        </div>
-        <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Download extension</button>
-        <div class="platform-login-hint">Requires Google Chrome. One-time setup, about a minute.</div>
-      </div>`;
   }
   if (taskId === 'signin') {
-    if (stage === 'confirm') {
+    const confirming = state.connectStage && state.connectStage[pid] === 'confirm';
+    if (confirming) {
       return `
       <div class="cm-detail">
         <div class="cm-detail-text">Finish signing in to App Store Connect in the tab we opened. Once you're in, connect here.</div>

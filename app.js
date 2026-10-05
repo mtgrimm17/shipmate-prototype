@@ -7482,7 +7482,7 @@ function connectInstall(pid) {
       a.download = 'shipmate-extension.zip';
       document.body.appendChild(a); a.click(); a.remove();
     } catch (_) {}
-    _setConnectStage(pid, 'installing');
+    state.extensionDownloaded = true;   // completes the Download task; Install is next
     _connectRerender(pid);
     return;
   }
