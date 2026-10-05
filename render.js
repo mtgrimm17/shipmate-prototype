@@ -6226,6 +6226,16 @@ function _connectFaceHTML(pid, cfg) {
       </div>`;
   }
   if (stage === 'signin') {
+    // Apple: open the REAL App Store Connect login in a browser tab (no simulated
+    // modal). ascBrowserSignIn opens the tab and advances to the confirm stage.
+    if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+      return `
+      <div class="connect-face">
+        <div class="connect-face-lead">Sign in to <b>App Store Connect</b> in your browser. Your session stays in your browser — Shipmate never sees your password.</div>
+        <button class="platform-login-btn" type="button" onclick="ascBrowserSignIn('${pid}')">Open App Store Connect</button>
+        <div class="platform-login-hint">Opens appstoreconnect.apple.com in a new tab.</div>
+      </div>`;
+    }
     return `
       <div class="connect-face">
         <div class="connect-face-lead">Extension ready. Sign in on ${escHtml(cfg.portal)} to link your account.</div>
@@ -6234,6 +6244,17 @@ function _connectFaceHTML(pid, cfg) {
       </div>`;
   }
   // confirm
+  // Apple: finish once the user has signed in on the opened tab. connectAdd marks
+  // the account connected and kicks the ASC sync (which uses the key the agent
+  // already holds; #38 generates it for first-time users).
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+    return `
+    <div class="connect-face">
+      <div class="connect-face-lead">Finish signing in to <b>App Store Connect</b> in the tab we opened. Once you're in, connect here.</div>
+      <button class="platform-login-btn" type="button" onclick="connectAdd('${pid}')">I'm signed in — connect</button>
+      <div class="platform-login-hint">Didn't open? <a href="https://appstoreconnect.apple.com/login" target="_blank" rel="noopener">Open App Store Connect</a></div>
+    </div>`;
+  }
   return `
     <div class="connect-face">
       <div class="connect-face-lead">Add Shipmate's bot to your ${escHtml(cfg.portal)} team with <b>${escHtml(f.role)}</b> access:</div>

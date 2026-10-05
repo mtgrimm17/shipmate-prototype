@@ -7488,6 +7488,21 @@ function connectInstalled(pid) {
   _rerenderPlatformCard(pid);
 }
 
+// Apple sign-in (interim, v7.92): open the REAL App Store Connect login in a
+// browser tab so the user establishes the session the extension will use, then
+// advance the card to "finish connecting". This replaces the simulated
+// "Connect to App Store Connect" modal on the Apple sign-in path. The extension
+// opening the tab itself and detecting the session (so no manual "I'm signed in"
+// is needed) is task #37; the extension generating the API key is #38. Until
+// those land this assumes the agent already has a key on this Mac (Mark's case);
+// the old modal (openAscLogin / buildAscWizard) stays in the code, just unused
+// here, to be removed in #39.
+function ascBrowserSignIn(pid) {
+  try { window.open('https://appstoreconnect.apple.com/login', '_blank', 'noopener'); } catch (_) {}
+  _setConnectStage(pid, 'confirm');
+  _rerenderPlatformCard(pid);
+}
+
 // Open the browser-framed sign-in modal (simulates the real portal via extension).
 function openAscLogin(pid) {
   state.ascLogin = pid;
