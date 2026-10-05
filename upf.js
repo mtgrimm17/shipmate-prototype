@@ -99,6 +99,22 @@ const UPF = {
     }
   },
 
+  /* #38: generate an App Store Connect API key through the extension, then import
+     the downloaded .p8 into the agent. Skips when the agent already holds a key
+     (per machine; nothing to do). The result arrives via _onAscTaskResult. */
+  async generateApiKey(pid, opts) {
+    opts = opts || {};
+    pid = pid || this.connectedMac() || 'macos';
+    const h = await this.health().catch(() => null);
+    if (!opts.force && h && h.account && h.account.hasApiKey) {
+      if (typeof bcToast === 'function') bcToast('App Store Connect API key already set up.');
+      return { ok: true, already: true };
+    }
+    this._genKeyTeamId = (h && h.account && h.account.teamId) || '';
+    this.requestAscTask('generateApiKey', {});
+    return { ok: true, started: true };
+  },
+
   /* One probe per page load. A failed probe is remembered as `false` so a
      machine without the agent never pays for a second connection attempt. */
   async health() {
@@ -242,6 +258,28 @@ const UPF = {
   _onAscTaskResult(task, result) {
     const u = state.upf || {};
     const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
+    if (task === 'generateApiKey') {
+      if (result && result.ok && result.keyId && result.issuerId) {
+        // The .p8 was just downloaded; have the agent import it from ~/Downloads.
+        this._post('/importkey', { keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' })
+          .then((r) => {
+            if (r && r.ok) {
+              state.upf.agent = null;               // force a fresh /health so hasApiKey reads true
+              toast('App Store Connect API key generated and saved.');
+              this.health().then(() => {
+                if (typeof renderDashboard === 'function') renderDashboard();
+                if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+              });
+            } else {
+              toast('API key: ' + ((r && r.error) || 'could not save it') + '.');
+            }
+          })
+          .catch((e) => toast('API key: ' + ((e && e.message) || 'could not save it') + '.'));
+      } else {
+        toast('Generate API key: ' + ((result && result.error) || 'could not generate it') + ' — see the [Shipmate CDP key] logs.');
+      }
+      return;
+    }
     if (task === 'createApp') {
       const pid = u._creatingAppPid || this.connectedMac();
       _appInFlight = false;

@@ -3589,23 +3589,44 @@ function updateIOSCard(pid) {
   // _visiblePlatformSteps (state.js), not the raw steps array — keeps this
   // in sync with buildIOSActiveCard's own numbering (render.js) when a
   // conditional step like 'localizations' is currently hidden.
-  _visiblePlatformSteps(pid).forEach((step, i) => {
+  // Respect the SAME hard gate buildIOSActiveCard draws (render.js): once the
+  // Connect Account step is incomplete, every later row is LOCKED — padlock, not
+  // a number. Without this, this lightweight patch overwrote the locks with step
+  // numbers right after first paint (the lock→number flicker). SM_LOCK_SVG is the
+  // shared padlock defined in render.js.
+  const lockSVG = (typeof SM_LOCK_SVG === 'string') ? SM_LOCK_SVG : '';
+  let gateOpen = true;
+  const steps = _visiblePlatformSteps(pid);
+  steps.forEach((step, i) => {
+    const done   = _appStoreSectionComplete(pid, step.id);
+    const locked = !gateOpen;
+    if (step.id === 'connect' && !done) gateOpen = false;   // lock everything after
     const card = document.getElementById(`${pid}-step-card-${step.id}`);
     if (!card) return;
-    const done = _appStoreSectionComplete(pid, step.id);
-    card.classList.toggle('is-complete', done);
+    card.classList.toggle('is-complete', done && !locked);
+    card.classList.toggle('is-locked', locked);
     const numEl = card.querySelector('.ios-step-num');
     if (numEl) {
-      numEl.classList.toggle('is-done', done);
+      numEl.classList.toggle('is-done', done && !locked);
+      numEl.classList.toggle('is-locked', locked);
       numEl.classList.remove('is-risk-warn', 'is-risk-high');
-      numEl.innerHTML = done ? checkSVG : String(i + 1);
+      numEl.innerHTML = locked ? lockSVG : (done ? checkSVG : String(i + 1));
     }
   });
 
-  // Update submit step card lock state
+  // Submit step: locked (padlock) until ALL previous steps are complete.
   const counts = platformStepCount(pid);
+  const submitLocked = !counts.allRequired;
   const submitCard = document.getElementById(`${pid}-step-card-submit`);
-  if (submitCard) submitCard.classList.toggle('submit-step-locked', !counts.allRequired);
+  if (submitCard) {
+    submitCard.classList.toggle('submit-step-locked', submitLocked);
+    const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
+    const numEl = submitCard.querySelector('.ios-step-num');
+    if (numEl && !submitDone) {
+      numEl.classList.toggle('is-locked', submitLocked);
+      numEl.innerHTML = submitLocked ? lockSVG : String(steps.length + 1);
+    }
+  }
 }
 
 /* ── Legacy submit modal (non-iOS platforms) ─────────── */
