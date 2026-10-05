@@ -5739,6 +5739,8 @@ body.viewing-splash .app-subnav { display: none; }
 .cf-steps li{font-size:11.5px;line-height:1.45;color:var(--text-dim,#b7b7bc)}
 .cf-steps li b{color:var(--text);font-weight:600}
 .cf-steps code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--panel,#1c1c1e);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--text)}
+.cf-copy{font-size:10px;padding:1px 7px;margin-left:3px;border-radius:5px;border:1px solid var(--border);background:var(--panel,#1c1c1e);color:var(--accent);cursor:pointer;vertical-align:middle}
+.cf-copy:hover{background:var(--panel-3,#2c2c2e)}
 
 /* NOTHING LEFT TO SAY. Everything this used to declare — width, height,
    padding, radius, type size and weight, the fill and the hover — now comes

@@ -6180,18 +6180,16 @@ function _connectFaceHTML(pid, cfg) {
 
   if (stage === 'intro') {
     const extIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2H7a1 1 0 0 0-1 1v3H4a2 2 0 0 0 0 4h2v3a1 1 0 0 0 1 1h3v-2a2 2 0 0 1 4 0v2h3a1 1 0 0 0 1-1v-3h2a2 2 0 0 0 0-4h-2V8a1 1 0 0 0-1-1z"/></svg>`;
-    // Apple (App Store Connect): the real flow is a browser session Shipmate
-    // uses two ways — the extension for the no-API web steps, and a generated
-    // API key for everything the API covers. The intro states both, and why,
-    // before asking for anything. See feedback: explain login + key up front.
+    // Apple (App Store Connect): one actor now — the extension. You sign in
+    // once; the extension, in that session, does everything with no API (creates
+    // the app, fills App Privacy) AND generates the API key that covers the rest
+    // of the submission. So the intro is one clear sentence, not "two ways".
     if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
-      const keyIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
       return `
       <div class="connect-face">
-        <div class="connect-face-lead">Sign in to <b>App Store Connect</b> once, in your browser. Shipmate never sees or stores your password — it uses that signed-in session two ways:</div>
+        <div class="connect-face-lead">Sign in to <b>App Store Connect</b> once, in your browser — Shipmate never sees or stores your password.</div>
         <div class="cf-why">
-          <div class="cf-why-row"><span class="cf-why-ico">${extIco}</span><span class="cf-why-txt"><b>Browser extension</b> — does the steps Apple gives no API for: creating your app and filling out App Privacy.</span></div>
-          <div class="cf-why-row"><span class="cf-why-ico">${keyIco}</span><span class="cf-why-txt"><b>API key</b> — a secure key Shipmate generates so it can create, edit and submit your game for you.</span></div>
+          <div class="cf-why-row"><span class="cf-why-ico">${extIco}</span><span class="cf-why-txt">The <b>Shipmate extension</b> uses that signed-in session to create your app in App Store Connect, populate App Privacy from your selections, and generate an API key so Shipmate can fill in the rest of your submission.</span></div>
         </div>
         <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Install extension to begin</button>
         <div class="platform-login-hint">One-time setup, about a minute.</div>
@@ -6209,14 +6207,16 @@ function _connectFaceHTML(pid, cfg) {
   }
   if (stage === 'installing') {
     // Apple: the zip is downloading; show the one-time Load-unpacked steps.
-    // chrome://extensions can't be a link (browsers block navigating to it from
-    // a page), so it's shown as copyable text.
+    // A web page CANNOT open or link to chrome://extensions — Chrome blocks
+    // navigating to chrome:// URLs from web content — so the best we can do is a
+    // Copy button that puts the URL on the clipboard to paste in the address bar.
+    // (A true one-click install needs the Chrome Web Store, deferred.)
     return `
       <div class="connect-face">
-        <div class="connect-face-lead">Downloading the Shipmate extension. Load it into Chrome once — it stays installed after that:</div>
+        <div class="connect-face-lead">The Shipmate extension requires <b>Google Chrome</b>. Load it once — it stays installed after that:</div>
         <ol class="cf-steps">
-          <li>Unzip <b>shipmate-extension.zip</b>.</li>
-          <li>Open <code>chrome://extensions</code> and turn on <b>Developer mode</b> (top-right).</li>
+          <li>Double-click <b>shipmate-extension.zip</b> in your Downloads to unzip it.</li>
+          <li>Open <code>chrome://extensions</code> <button type="button" class="cf-copy" onclick="navigator.clipboard&amp;&amp;navigator.clipboard.writeText('chrome://extensions');this.textContent='Copied';" title="Copy — paste into the address bar">Copy</button> and turn on <b>Developer mode</b> (top-right).</li>
           <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
         </ol>
         <button class="platform-login-btn" type="button" onclick="connectInstalled('${pid}')">I've installed it</button>
