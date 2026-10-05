@@ -909,27 +909,39 @@ const PLATFORMS = {
     // reasoning changes, it's just no longer counted as one of this
     // platform's own steps (platformStepCount, and every step-card list
     // that maps over PLATFORMS.macos.steps).
-    steps: [
-      { id: 'uploadBuild',       label: 'Upload Build'                                 },
-      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      /* DATA SAFETY IS A STEP NOW, not only a face of the Product Page Preview.
-         The questions were always here — isIOSSectionComplete('privacy'), the
-         same ones Mac App Store Full has carried as its own 'App Privacy' row
-         all along — but the only door was flipping the preview over, which is
-         why the Shippy Checklist's own row had to ask each preview directly
-         (see CHK_DATA_DONE, render.js) instead of asking a card step like every
-         other row does.
+    /* FIVE-STEP MAC FLOW (v7.87): Connect · Generate Build · Product Page
+       Preview · Improve Your Submission · Submit. Rationale:
 
-         Immediately after Content Rating, which is what "after Content Rating
-         and before Product Page Preview" resolves to once you notice
-         Localizations sits between those two: this is the order the checklist
-         already walks (ratings -> data safety -> localizations -> store pages)
-         and the order Mac App Store Full already lists. The preview keeps its
-         own "Answer Data Collection Questions" element — a second door, exactly
-         as Content Rating has had both a step and a preview cell for as long as
-         both have existed. */
-      { id: 'privacy',           label: 'App Privacy'                                  },
-      { id: 'localizations',    label: 'Localizations'                                },
+       1. CONNECT is step 1 and a HARD GATE. The card already shows the
+          account/connect wizard (showAccountFace → buildAccountCard, render.js)
+          until the account is connected, so every step below is unreachable
+          before it — that flip IS the gate, left untouched. Once connected,
+          Connect rides along as a checked Step 1
+          (isMacSectionComplete('connect') = platformAccountReady('macos')). The
+          deeper "is the ASC *browser* session live" check is a separate piece
+          (task #35); this is the structural gate.
+
+       2. CONTENT RATING and APP PRIVACY are no longer their own rows. They live
+          INSIDE Product Page Preview, reached through the preview's own doors
+          that were always there — the 'content' cell and the 'data' /
+          "Answer Data Collection Questions" block (buildMacStorePreviewSection,
+          render.js) — alongside Business, which was already preview-only. They
+          stay MANDATORY: isMacSectionComplete('storePreview') is not complete
+          until Content Rating, App Privacy, Business AND the listing content
+          all are, so Submit can't bypass them. The Content Rating visit gate
+          (STEP_REQUIRES_VISIT) still applies — opening the preview's 'content'
+          door stamps it.
+
+       3. 'submit' is still appended separately by buildSubmitStepCard (render.js)
+          and is NOT in this array. Localizations stays conditionally hidden
+          (_visiblePlatformSteps drops it with no languages), so the common case
+          shows exactly five rows.
+
+       This reworks macos only (the live Mac card); macos_full is left as-is. */
+    steps: [
+      { id: 'connect',           label: 'Connect Account'                              },
+      { id: 'uploadBuild',       label: 'Generate Build'                               },
+      { id: 'localizations',     label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Product Page Preview'                         },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
@@ -2452,6 +2464,13 @@ function computeMacSectionRisk(sectionId) {
 }
 
 function isMacSectionComplete(sectionId) {
+  // Connect is Step 1 (v7.87) and complete exactly when the account is
+  // connected. The steps face only renders once connected (showAccountFace),
+  // so in practice this is always true where it shows — it rides along as a
+  // checked Step 1. platformStepCount's allRequired already multiplies in
+  // platformAccountReady, so this never relaxes the Submit gate.
+  if (sectionId === 'connect') return platformAccountReady('macos');
+
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('macos');
 
   if (sectionId === 'screenshots') {
@@ -2496,10 +2515,20 @@ function isMacSectionComplete(sectionId) {
     return isIOSSectionComplete(sectionId);
   }
 
-  // Same eight-element bar as the App Store's own, asked of this page — see
-  // _sppStepComplete. Title/Subtitle resolve to the App Store's shared storage
-  // and Description to Mac's own, exactly as this preview reads them.
-  if (sectionId === 'storePreview') return _sppStepComplete('macos');
+  // Product Page Preview is the umbrella step (v7.87): it is not complete until
+  // its listing content (the eight-element bar — _sppStepComplete; Title/Subtitle
+  // from the App Store's shared storage, Description from Mac's own) AND every
+  // sub-step reached through its own doors is complete — Content Rating, App
+  // Privacy and Business, which stopped being their own rows and now live inside
+  // this preview. platformSectionComplete (not isMacSectionComplete) so the
+  // Content Rating visit gate is honoured; opening the preview's 'content' door
+  // stamps that visit.
+  if (sectionId === 'storePreview') {
+    return _sppStepComplete('macos')
+        && platformSectionComplete('macos', 'contentRating')
+        && platformSectionComplete('macos', 'privacy')
+        && platformSectionComplete('macos', 'business');
+  }
 
   if (sectionId === 'questionnaire') {
     return isMacSectionComplete('contentRating') &&

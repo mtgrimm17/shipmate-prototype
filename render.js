@@ -6813,7 +6813,7 @@ function buildIOSActiveCard(pid, force) {
          the Steam build is matched, nothing opened. */
       if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
       const isMacBuild = (typeof UPF !== 'undefined' && typeof UPF.isMac === 'function' && UPF.isMac(pid));
-      const buildLabel = isMacBuild ? 'Game Build' : stepLabel(pid, step);   // "Game Build" on the Mac App Store
+      const buildLabel = isMacBuild ? 'Generate Build' : stepLabel(pid, step);   // "Generate Build" — Step 2 on the Mac App Store (v7.87)
       const steamReady = (typeof UPF !== 'undefined' && typeof UPF.buildReady === 'function') && UPF.buildReady(pid);
       if (steamReady) {
         /* Agent up and a Steam build matched: the whole row is clickable like
@@ -7156,6 +7156,30 @@ const SM_FLIP_LABELS = {
    The two loading screens stay INSIDE it. They are what the body IS while a
    call is in flight, not chrome around it — the inline pane wants the same
    "Shipmate is working…" in the same place the modal put it. */
+/* CONNECT — Step 1's body (v7.87). The card only ever shows the steps face
+   (and therefore this step) once the account is connected, because
+   showAccountFace gates the whole card to buildAccountCard until then. So this
+   is a confirmation surface, not the login itself: it states that App Store
+   Connect is connected and that it gates everything below, with a link to the
+   account settings where the connection actually lives. Reads state only. */
+function buildConnectStepSection(pid) {
+  const auth = state.platformAuth?.[pid] || {};
+  const who  = (auth.username || '').replace(/[<>&]/g, '').trim();
+  return `
+    <div style="padding:4px 2px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Connect Account</div>
+      <div style="color:var(--muted,#9aa);font-size:13px;line-height:1.5;margin-bottom:18px;">
+        App Store Connect is connected${who ? ` as <strong>${who}</strong>` : ''}. This is the first step and the gate for everything below — generating the build, the product page and submission all run against this account.
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;background:rgba(47,220,128,0.08);border:1px solid rgba(47,220,128,0.25);">
+        <span style="display:inline-flex;width:18px;height:18px;flex-shrink:0;">${smCheckSVG(18)}</span>
+        <span style="font-weight:600;">Connected to App Store Connect</span>
+      </div>
+      <button type="button" style="margin-top:16px;background:none;border:none;color:var(--accent,#5b9dff);font-size:13px;cursor:pointer;padding:0;"
+              onclick="if(typeof openSettings==='function')openSettings('account')">Manage account connection</button>
+    </div>`;
+}
+
 function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
   let body = '';
   if (inferenceStatus === 'loading') {
@@ -7224,7 +7248,8 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     else if (stepId === 'storePreview')       body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacFullStorePreviewSection();
     else if (stepId === 'localizations')      body = buildMacFullLocalizationsSection();
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
-  } else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
+  } else if (stepId === 'connect') body = buildConnectStepSection(platformId);
+  else if (stepId === 'gameCenter' && platformId === 'macos') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildMacGameCenterSection();
   else if (stepId === 'gameCenter' && platformId === 'ios') body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildIosGameCenterSection();
   else if (stepId === 'localizations' && platformId === 'macos') body = buildMacLocalizationsSection();
   else if (stepId === 'localizations' && platformId === 'ios') body = buildIosLocalizationsSection();
