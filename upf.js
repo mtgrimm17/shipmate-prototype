@@ -281,10 +281,11 @@ const UPF = {
           if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
         });
       };
-      if (result && result.ok && result.key && result.keyId && result.issuerId) {
-        // The extension captured the .p8 TEXT; store it via /account (writes it
-        // into the agent's own folder — no ~/Downloads read, so no macOS TCC block).
-        this._post('/account', { key: result.key, keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' })
+      if (result && result.ok && result.keyId && result.issuerId) {
+        // The extension downloaded the one-time .p8 into the agent's drop dir
+        // (/tmp/shipmate-keys — outside macOS TCC, unlike ~/Downloads). Import it:
+        // the agent reads it from there, verifies it live, then deletes it.
+        this._post('/importkey', { keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' })
           .then((r) => { if (r && r.ok) toast('App Store Connect API key saved.'); else toast('API key: ' + ((r && r.error) || 'could not save it') + '.'); done(); })
           .catch((e) => { toast('API key: ' + ((e && e.message) || 'could not save it') + '.'); done(); });
       } else {
