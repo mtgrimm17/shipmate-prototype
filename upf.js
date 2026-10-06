@@ -273,12 +273,20 @@ const UPF = {
       // Clear the in-flight flag and refresh health + the Connect UI on EVERY
       // outcome, so the API-key task turns green on success or returns to its
       // actionable state on failure (not stuck "setting up…").
-      const done = () => {
+      // `ok` tells the Connect modal's API-key task which way to settle: on
+      // failure it shows a "Try again" button (state._apiKeyFailed), on success
+      // it turns green. done() clears the in-flight flag, re-probes /health so
+      // hasApiKey re-reads, and repaints the card + modal.
+      const done = (ok) => {
         this._apiKeyInFlight = false;
+        state._apiKeyFailed = !ok;
         state.upf.agent = null;                       // force a fresh /health so hasApiKey re-reads
         this.health().then(() => {
           if (typeof renderDashboard === 'function') renderDashboard();
           if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+          // Key is in: connecting a Mac account is what unlocks the ASC sync, so
+          // finish the connect now (the modal stayed open through the key task).
+          if (ok) { const mac = this.connectedMac(); if (mac) this.onConnected(mac); }
         });
       };
       if (result && result.ok && result.keyId && result.issuerId) {
@@ -290,11 +298,11 @@ const UPF = {
           ? ['/account',   { key: result.key, keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' }]
           : ['/importkey', {                  keyId: result.keyId, issuerId: result.issuerId, teamId: this._genKeyTeamId || '' }];
         this._post(path, payload)
-          .then((r) => { if (r && r.ok) toast('App Store Connect API key saved.'); else toast('API key: ' + ((r && r.error) || 'could not save it') + '.'); done(); })
-          .catch((e) => { toast('API key: ' + ((e && e.message) || 'could not save it') + '.'); done(); });
+          .then((r) => { if (r && r.ok) { toast('App Store Connect API key saved.'); done(true); } else { toast('API key: ' + ((r && r.error) || 'could not save it') + '.'); done(false); } })
+          .catch((e) => { toast('API key: ' + ((e && e.message) || 'could not save it') + '.'); done(false); });
       } else {
         toast('API key: ' + ((result && result.error) || 'could not set it up') + '.');
-        done();
+        done(false);
       }
       return;
     }

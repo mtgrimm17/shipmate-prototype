@@ -2464,12 +2464,22 @@ function computeMacSectionRisk(sectionId) {
 }
 
 function isMacSectionComplete(sectionId) {
-  // Connect is Step 1 (v7.87) and complete exactly when the account is
-  // connected. The steps face only renders once connected (showAccountFace),
-  // so in practice this is always true where it shows — it rides along as a
-  // checked Step 1. platformStepCount's allRequired already multiplies in
-  // platformAccountReady, so this never relaxes the Submit gate.
-  if (sectionId === 'connect') return platformAccountReady('macos');
+  // Connect is Step 1 (v7.87). It is complete when the account is connected AND
+  // the agent holds an App Store Connect API key (the key is the last task in
+  // the Connect modal — buildConnectStepSection — and is mandatory for the
+  // metadata sync). The key requirement applies only when an agent is actually
+  // reachable: with no local agent (a plain demo) there is nothing to generate a
+  // key, so gating on it would lock the whole card — connect then rides along on
+  // the account alone, as before. The agent==null case (not yet probed) also
+  // returns true; buildIOSActiveCard/buildConnectStepSection probe health and
+  // re-render, so it settles to the real answer. platformStepCount's allRequired
+  // multiplies in platformAccountReady, so this never relaxes the Submit gate.
+  if (sectionId === 'connect') {
+    if (!platformAccountReady('macos')) return false;
+    const agent = state.upf && state.upf.agent;
+    if (agent && agent.ok) return !!(agent.account && agent.account.hasApiKey);
+    return true;
+  }
 
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('macos');
 

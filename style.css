@@ -5755,6 +5755,7 @@ body.viewing-splash .app-subnav { display: none; }
 .cm-disc.is-done{background:rgba(47,220,128,0.15);color:#2fdc80}
 .cm-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
 .cm-detail-text{font-size:12px;color:var(--text-dim,#b7b7bc);line-height:1.5}
+.cm-detail-text.cm-working{display:flex;align-items:center;gap:8px}
 .cm-done{margin-top:14px;font-size:12.5px;color:var(--text-dim,#b7b7bc);line-height:1.5}
 .cm-disconnect{margin-top:10px;align-self:flex-start;background:none;border:none;color:var(--accent,#5b9dff);font-size:12.5px;cursor:pointer;padding:0}
 /* Steps locked behind the Connect Account gate (v7.94). */

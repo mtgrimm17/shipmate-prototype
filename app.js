@@ -7457,6 +7457,9 @@ function highlightLoginFields(pid) {
 // Sign out → return to the signed-out form (STATE 2 → STATE 1), in place.
 function platformSignOut(pid) {
   if (state.platformAuth?.[pid]) state.platformAuth[pid].loggedIn = false;
+  // A fresh connect should re-run the API-key task from scratch.
+  state._apiKeyAutoStarted = false;
+  state._apiKeyFailed = false;
   _setPlatformFace(pid, 'account');
   _rerenderPlatformCard(pid);
   const u = document.getElementById('login-user-' + pid); if (u) u.focus();
@@ -7687,6 +7690,28 @@ function connectAdd(pid) {
      shows — it reads as a glitch. The flip only announced "you're connected",
      which the swap to steps already says, so just render the steps cleanly. */
   _setPlatformFace(pid, 'steps');
+
+  const inConnectModal = state.stepModal && state.stepModal.stepId === 'connect' && state.stepModal.platformId === pid;
+  const isMac = typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid);
+
+  // Mac in the Connect modal: signing in is NOT the last task — the API key is,
+  // and Shipmate generates it. So keep the modal open and let the API-key task
+  // run (buildConnectStepSection shows it as current, its detail auto-starts the
+  // generation). The modal finishes when the key lands (_onAscTaskResult). Only
+  // when the agent already holds a key is connect complete right now — close then.
+  if (inConnectModal && isMac) {
+    const hasKey = !!(state.upf?.agent?.account?.hasApiKey);
+    if (!hasKey) {
+      state._apiKeyAutoStarted = false;   // fresh attempt for this connect
+      state._apiKeyFailed = false;
+      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+      return;   // the key task takes over; onConnected fires when it succeeds
+    }
+    if (typeof closeStepModal === 'function') closeStepModal();
+    UPF.onConnected(pid);
+    return;
+  }
+
   if (state.stepModal && state.stepModal.stepId === 'connect' && typeof closeStepModal === 'function') {
     // Connect ran in the Connect Account step modal (Mac): close it, revealing
     // the now-complete Step 1 on the card. closeStepModal re-renders the card.
@@ -7701,6 +7726,18 @@ function connectAdd(pid) {
      Push everything collected so far now, and upload a build if one is already
      waiting locally; subsequent saves re-sync (upf.js). */
   if (typeof UPF !== 'undefined' && UPF.isMac(pid)) UPF.onConnected(pid);
+}
+
+// Retry the App Store Connect API-key setup after a failure (the "Try again"
+// button in the Connect modal's key task). Clear the failure/guard flags and
+// force a fresh generation.
+function retryApiKey(pid) {
+  state._apiKeyFailed = false;
+  state._apiKeyAutoStarted = true;   // this call IS the (re)start
+  if (typeof UPF !== 'undefined' && typeof UPF.generateApiKey === 'function') {
+    UPF.generateApiKey(pid, { force: true }).catch(() => {});
+  }
+  if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
 // Re-render a single active card in place (no flip animation).

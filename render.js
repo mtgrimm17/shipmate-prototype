@@ -6856,6 +6856,16 @@ function _paneRisk(pid, stepId) {
 function buildIOSActiveCard(pid, force) {
   if (!force && showAccountFace(pid)) return buildAccountCard(pid);
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
+  // The connect gate now reads hasApiKey (isMacSectionComplete('connect')), which
+  // needs a fresh agent probe — otherwise the card can't tell whether Step 1 is
+  // really done. Probe once (agent==null) and repaint; mirrors the modal's probe.
+  if (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid)
+      && state.upf && state.upf.agent == null && typeof UPF.health === 'function') {
+    UPF.health().then(() => {
+      if (typeof updateIOSCard === 'function') updateIOSCard(pid);
+      else if (typeof renderDashboard === 'function') renderDashboard();
+    }).catch(() => {});
+  }
   const p      = PLATFORMS[pid];
   const steps  = _visiblePlatformSteps(pid);
   const counts = platformStepCount(pid);
@@ -7361,6 +7371,36 @@ function _connectTaskDetail(pid, taskId) {
         <div class="cm-detail-text">Sign in to App Store Connect in your browser so the extension can work in your session.</div>
         <button class="platform-login-btn" type="button" onclick="ascBrowserSignIn('${pid}')">Open App Store Connect</button>
         <div class="platform-login-hint">Opens appstoreconnect.apple.com in a new tab.</div>
+      </div>`;
+  }
+  if (taskId === 'apikey') {
+    // Shipmate does this one itself: generate (or reuse) the API key through the
+    // extension and import it into the agent. Kick it off ONCE when this becomes
+    // the current task (sync guard, since renders repeat), then just reflect the
+    // state — a spinner while it runs, a retry if it failed. generateApiKey's own
+    // health re-check covers the already-keyed case (refresh → task turns green).
+    const inFlight = !!(typeof UPF !== 'undefined' && UPF._apiKeyInFlight);
+    const failed   = !!state._apiKeyFailed;
+    if (!inFlight && !failed && !state._apiKeyAutoStarted
+        && typeof UPF !== 'undefined' && typeof UPF.generateApiKey === 'function') {
+      state._apiKeyAutoStarted = true;
+      Promise.resolve().then(() => UPF.generateApiKey(pid)).then((r) => {
+        if (r && r.already) {   // agent already had a key — refresh so the task shows done
+          state.upf.agent = null;
+          UPF.health().then(() => { if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal(); });
+        }
+      }).catch(() => {});
+    }
+    if (failed) {
+      return `
+        <div class="cm-detail">
+          <div class="cm-detail-text">Couldn't set up your App Store Connect key. Make sure the Shipmate agent is running and you're signed in to App Store Connect, then try again.</div>
+          <button class="platform-login-btn" type="button" onclick="retryApiKey('${pid}')">Try again</button>
+        </div>`;
+    }
+    return `
+      <div class="cm-detail">
+        <div class="cm-detail-text cm-working"><span class="build-proc-spin"></span>Setting up your App Store Connect key — this takes a few seconds.</div>
       </div>`;
   }
   return '';
