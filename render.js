@@ -7316,11 +7316,13 @@ function buildConnectStepSection(pid) {
   }).join('');
 
   if (allDone) {
-    const who = (state.platformAuth?.[pid]?.username || '').replace(/[<>&]/g, '').trim();
+    // No "as <user>" — we don't add a Shipmate user to the developer's account.
+    // They signed in with their own Apple ID and generated their own API key, so
+    // the connection is simply to App Store Connect.
     return `
       <div class="connect-modal">
         <div class="cm-tasks">${rows}</div>
-        <div class="cm-done">You're connected to App Store Connect${who ? ` as <strong>${who}</strong>` : ''}. Shipmate can now create your app, fill App Privacy, and submit for you.</div>
+        <div class="cm-done">You're connected to App Store Connect. Shipmate can now create your app record, fill in App Privacy, and submit for you.</div>
         <button type="button" class="cm-disconnect" onclick="platformSignOut('${pid}')">Disconnect</button>
       </div>`;
   }

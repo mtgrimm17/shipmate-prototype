@@ -1343,8 +1343,11 @@ const UPF_STAGES = [
   { label: 'Sandbox and entitlements',           test: /stage c/i,                                  usual: 5 },
   { label: 'Code-sign for the Mac App Store',    test: /stage d/i,                                  usual: 40 },
   { label: 'Package for the Mac App Store',      test: /stage e|stage f/i,                          usual: 60 },
-  { label: 'Upload to App Store Connect',        test: /uploading|chunk|^\d+%$/i,                   usual: 300 },
-  { label: 'Process the build (Apple’s side)', test: /waiting for apple|build \d+:/i,           usual: 600 },
+  { label: 'Upload to App Store Connect',        test: /uploading|chunk|^\d+%$/i,                   usual: 420 },
+  // Apple-side processing is highly variable — a FIRST build for a new app often
+  // runs 20-40 min. The old 10-min estimate made every run look "overdue" within
+  // minutes (the main "is it stuck?" complaint from the first coworker test).
+  { label: 'Process the build (Apple’s side)', test: /waiting for apple|build \d+:/i,           usual: 1500 },
   { label: 'Set up Game Center achievements',    test: /\[build\] game center|game center|achievements released/i, usual: 30 },
 ];
 
@@ -1616,6 +1619,10 @@ function upfBuildPanelHTML(pid) {
     intro = `<strong>Done.</strong> ${name} — build ${esc(u.result.buildVersion)} is in App Store Connect (build id ${esc(u.result.buildId)}). It is uploaded and processed; choose a destination and press Submit to distribute it.`;
   } else if (failed) {
     intro = `The build stopped. ${name}’s Steam build is untouched — you can try again.`;
+  } else if (running) {
+    // Reassure that it runs in the background — the agent owns the job, so leaving
+    // this step (or closing Shipmate) doesn't stop it; reopening resumes tracking.
+    intro = `Shipmate is building ${name} for the Mac App Store on this Mac. This takes a few minutes — <strong>you can leave this step or close Shipmate and it keeps running</strong>. Come back any time; the finished build will be here.`;
   } else {
     intro = `Shipmate generates a new Mac App Store build from ${name}’s Steam build on this Mac — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched.`;
   }
