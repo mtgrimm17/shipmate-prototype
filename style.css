@@ -21850,6 +21850,22 @@ body.is-splash .ai-disclaimer { display: none; }
    segment the review stopped on. */
 .sub-seg.is-bad     { background: var(--magenta, #ff3b78); }
 
+/* The submit progress bar (#42): variable-width phase segments (widths from an
+   inline flex-grow set by expected time) each holding a fill span the ticker
+   advances. Done segment = green and full; current = the waiting yellow, filled
+   to the live progress; future = empty track. */
+.sub-phasebar { align-items: center; }
+.sub-phaseseg {
+  flex: 0 1 0; height: 6px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08); overflow: hidden;
+}
+.sub-phasefill {
+  display: block; height: 100%; width: 0; border-radius: 3px;
+  background: #FFD84D; transition: width .4s ease;
+}
+.sub-phaseseg.is-done .sub-phasefill    { background: #2fdc80; }
+.sub-phaseseg.is-current .sub-phasefill { background: #FFD84D; }
+
 /* Date row */
 .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
 .sub-est { color: var(--text-dim); }

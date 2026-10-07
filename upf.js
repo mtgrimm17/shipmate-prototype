@@ -683,7 +683,14 @@ const UPF = {
     state.upf.submitPhase = state.upf.submitPhase || {};
     state.upf.submitTrack = state.upf.submitTrack || {};
     state.upf.submitTrack[pid] = track;
-    const setPhase = (ph) => { state.upf.submitPhase[pid] = ph; this._repaintSubmitted(pid); };
+    state.upf.submitPhaseStart = state.upf.submitPhaseStart || {};
+    const setPhase = (ph) => {
+      const changed = state.upf.submitPhase[pid] !== ph;
+      state.upf.submitPhase[pid] = ph;
+      if (changed) state.upf.submitPhaseStart[pid] = Date.now();   // restart the clock each phase
+      _startSubmitTicker();                                        // advances the current segment's fill live
+      this._repaintSubmitted(pid);
+    };
     // Terminal success: hand the phase to the flip record and clear the live
     // submit phase, so the card reads flipData.phase from here — which lets the
     // App Store review progression (smAdvancePhase: in_review → accepted → live)
@@ -691,6 +698,7 @@ const UPF = {
     const finishPhase = (ph) => {
       if (state.platformFlipped && state.platformFlipped[pid]) state.platformFlipped[pid].phase = ph;
       if (state.upf.submitPhase) delete state.upf.submitPhase[pid];
+      _stopSubmitTicker();
       this._repaintSubmitted(pid);
     };
 
@@ -709,11 +717,14 @@ const UPF = {
       //    The agent's progress lines drive the uploading → processing status.
       if (needUpload) {
         state.upf.stage = 5; state.upf.stages = state.upf.stages || []; state.upf.uploadPct = 0;
-        if (typeof _upfStartTicker === 'function') _upfStartTicker();
         const onLine = (line) => {
           if (typeof _upfTrackLine === 'function') _upfTrackLine(line);
+          // Read the upload % directly too (don't depend on the build ticker's
+          // stage gate) so the Uploading segment fills reliably.
+          const pm = /^\s*(\d{1,3})%\s*$/.exec(line || '');
+          if (pm) state.upf.uploadPct = Math.min(100, +pm[1]);
           const ph = /waiting for apple|build \d+:/i.test(line) ? 'processing'
-                   : /uploading|chunk|^\d+%$/i.test(line) ? 'uploading' : null;
+                   : /uploading|chunk|^\s*\d+%\s*$/i.test(line) ? 'uploading' : null;
           if (ph && state.upf.submitPhase[pid] !== ph) setPhase(ph);
         };
         state.upf.job = { id: null, kind: 'publish' };
@@ -1385,6 +1396,33 @@ setTimeout(() => { try { upfReattach(); } catch (_) {} }, 1800);
 function _upfRepaint(pid, full) {
   if (typeof _refreshBuildUI === 'function') _refreshBuildUI(pid);
   if (full && typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* The submit progress ticker (#42). Advances the CURRENT submit segment's fill
+   live, mirroring _smSubmitBar's fillFor: the upload % while uploading, elapsed
+   vs ~25 min while processing, elapsed vs ~3 days while in review. It writes the
+   [data-sub-fill] width directly (no full re-render — the card only re-renders on
+   a phase change). Stops when the submit reaches a terminal/error phase. */
+let _submitTickerIv = null;
+function _startSubmitTicker() {
+  if (_submitTickerIv) return;
+  _submitTickerIv = setInterval(() => {
+    const sp = (state.upf && state.upf.submitPhase) || {};
+    const pid = Object.keys(sp)[0];
+    const phase = pid && sp[pid];
+    if (!phase || phase === 'error') { _stopSubmitTicker(); return; }
+    const el = document.querySelector('[data-sub-fill]');
+    if (!el) return;
+    const start = (state.upf.submitPhaseStart && state.upf.submitPhaseStart[pid]) || Date.now();
+    let f = 1;
+    if (phase === 'uploading')       f = Math.min(1, ((state.upf.uploadPct) || 0) / 100);
+    else if (phase === 'processing') f = Math.min(0.98, (Date.now() - start) / 1000 / 1500);
+    else if (phase === 'in_review')  f = Math.min(0.9, (Date.now() - start) / 1000 / (3 * 24 * 3600));
+    el.style.width = Math.round(f * 100) + '%';
+  }, 1000);
+}
+function _stopSubmitTicker() {
+  if (_submitTickerIv) { clearInterval(_submitTickerIv); _submitTickerIv = null; }
 }
 
 /* ── THE UPLOAD BUILD PANEL ──────────────────────────────────────────────────

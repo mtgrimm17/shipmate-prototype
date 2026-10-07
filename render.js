@@ -21790,6 +21790,35 @@ function _submittedSteps(pid) {
         live), with the store's own wait claim beside the status line
      2  no segments; the two dates instead — submitted, and estimated
    Both print the state in the store's own words (`STORE_REVIEW`). */
+/* The submit progress bar (#42). Segments for the REAL phases a Mac submit moves
+   through — Upload, Process, then Review (external TF / App Store) or Ready
+   (internal TF) — their WIDTHS sized by relative expected time, so the quick
+   automatic steps are thin and "Waiting for Review" (days) is wide. The current
+   segment fills by real progress: the upload %, processing elapsed vs ~25 min,
+   review elapsed vs ~3 days. A 1s ticker (upf.js _submitTicker) advances the
+   current fill live by writing the [data-sub-fill] width. */
+function _smSubmitBar(pid, phase, track) {
+  const internal = track === 'testflight_internal';
+  const phases = internal
+    ? [ { k: 'uploading', w: 1 }, { k: 'processing', w: 3 }, { k: 'internal_testing', w: 1 } ]
+    : [ { k: 'uploading', w: 1 }, { k: 'processing', w: 3 }, { k: 'in_review', w: 8 } ];
+  let cur = phases.findIndex(p => p.k === phase);
+  if (cur < 0) cur = (phase === 'error') ? 0 : phases.length;   // error: stall on first; unknown: all behind
+  const start = (state.upf && state.upf.submitPhaseStart && state.upf.submitPhaseStart[pid]) || Date.now();
+  const fillFor = (k) => {
+    if (k === 'uploading')  return Math.min(1, ((state.upf && state.upf.uploadPct) || 0) / 100);
+    if (k === 'processing') return Math.min(0.98, (Date.now() - start) / 1000 / 1500);          // ~25 min
+    if (k === 'in_review')  return Math.min(0.9, (Date.now() - start) / 1000 / (3 * 24 * 3600)); // ~3 days
+    return 1;                                                                                     // internal_testing/terminal
+  };
+  const segs = phases.map((p, i) => {
+    const w   = (i < cur) ? 1 : (i === cur) ? fillFor(p.k) : 0;
+    const cls = (i < cur) ? 'is-done' : (i === cur) ? 'is-current' : '';
+    return `<span class="sub-phaseseg ${cls}" style="flex-grow:${p.w}"><span class="sub-phasefill"${i === cur ? ' data-sub-fill' : ''} style="width:${Math.round(w * 100)}%"></span></span>`;
+  }).join('');
+  return `<div class="sub-segbar sub-phasebar">${segs}</div>`;
+}
+
 function buildSubmittedCard(pid, flipData) {
   const isWeb  = pid === 'web';
   // Live submit status (#42): while a Mac submit runs, the phase comes from the
@@ -21807,6 +21836,11 @@ function buildSubmittedCard(pid, flipData) {
   const isBad   = phase === 'rejected' || isErr;
   // In-progress phases trail an ellipsis on the status line.
   const dots = (phase === 'in_review' || phase === 'uploading' || phase === 'processing') ? '…' : '';
+  // The submit progress bar replaces the generic 4-seg bar for the real submit
+  // phases on a Mac (Upload / Process / Review | Ready), sized by expected time.
+  const _subTrack = (state.upf && state.upf.submitTrack && state.upf.submitTrack[pid]) || (flipData && flipData.track) || '';
+  const isSubmitProgress = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid))
+    && ['uploading', 'processing', 'in_review', 'internal_testing'].includes(phase);
 
   const _timing    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
   const reviewDays = isWeb ? 0 : _timing.days;
@@ -21891,7 +21925,7 @@ function buildSubmittedCard(pid, flipData) {
         ${_platformHeadActions(pid, 'submitted')}
       </div>`}
       ${buildReleaseBlock(pid)}
-      ${variant === 1 ? `<div class="sub-segbar">${segs}</div>` : ''}
+      ${variant === 1 ? (isSubmitProgress ? _smSubmitBar(pid, phase, _subTrack) : `<div class="sub-segbar">${segs}</div>`) : ''}
       ${/* The state line comes back HERE in the grid — its original row, where
             `.sub-state`'s `space-between` pairs it with the wait note on one
             baseline. `.sub-state:empty` already hides this row in the pane, so
@@ -21911,9 +21945,7 @@ function buildSubmittedCard(pid, flipData) {
         <span class="rel-pair"><span class="rel-label">Submitted</span><span class="rel-build">${fmt(sent)}</span></span>
         ${phase === 'in_review' ? `<span class="rel-pair"><span class="rel-label">Estimated</span><span class="rel-build">${fmt(est)}</span></span>` : ''}
       </div>` : ''}
-      ${phase === 'uploading'
-          ? `<div class="sub-note">${escHtml(vocab.note || 'Sending your build to App Store Connect')} — <span data-upf-pct>${(state.upf && state.upf.uploadPct) || 0}</span>% uploaded.</div>`
-          : (vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : '')}
+      ${vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : ''}
       ${/* THE NUDGE LEFT THIS CARD IN v6.56, AND IT IS THE GUIDE'S NOW.
             "Quiet time. Go plan your launch →" lived here from the day the wait
             got a face, on the argument that the one phase with nothing to do in
