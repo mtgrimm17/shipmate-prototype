@@ -712,6 +712,15 @@ const UPF = {
       if (!(await this.health()) || !state.upf.game) { setPhase('error'); return; }
       const game = state.upf.game;
 
+      // AUTHORITATIVE PUSH ON SUBMIT (#49): re-sync this user's data to App Store
+      // Connect first, so the submission reflects exactly what THEY entered —
+      // their App Review contact/notes, pricing and listing overwrite whatever is
+      // there, including clearing fields they left blank (the agent's submitprep
+      // now writes every field). Clear the per-session change-guards so nothing is
+      // skipped as "unchanged". Best-effort: a sync hiccup must not block submit.
+      this._prepHash = {}; this._populateHash = {}; this._iapHash = {}; this._lbHash = {}; this._shotHash = {};
+      try { await this.sync('submit', pid); } catch (_) {}
+
       // 1) Upload + Apple-side processing, if the build isn't already in ASC.
       //    This used to run during Generate Build; it happens at Submit now (#42).
       //    The agent's progress lines drive the uploading → processing status.
