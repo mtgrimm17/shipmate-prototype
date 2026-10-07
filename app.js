@@ -28525,23 +28525,14 @@ function _smBuildItems(pid) {
   const u = state.upf || {};
   const isMacBuild = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid));
   if (isMacBuild && u.agent) {
-    const connected = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
-    const kind = u.job && u.job.kind;
-    let buildLabel = 'Build from Steam';
-    if (kind === 'prepare')                buildLabel = 'Building from Steam…';
-    else if (kind === 'publish')           buildLabel = 'Uploading to App Store Connect…';
-    else if (u.built && !u.uploaded)       buildLabel = connected ? 'Uploading to App Store Connect…'
-                                                                  : 'Built — connect your account to upload';
-    return [
-      { label: connected ? 'Apple Developer account connected' : 'Connect your Apple Developer account',
-        step: 'bld:connect', done: connected },
-      { label: 'Create your app in App Store Connect',
-        step: 'bld:apprecord', done: !!(u.job || u.built || u.uploaded) },   // assumed once a build is under way
-      { label: buildLabel,
-        step: 'bld:file', done: !!u.uploaded },                              // the build row carries the auto phases
-      { label: 'Test the internal TestFlight build',
-        step: 'bld:test', done: false },
-    ];
+    /* NO SHIPPY GUIDE FOR GENERATE BUILD. The Game Build modal carries its own
+       step list (apprecord → copy → shim → sandbox → sign → package), so a second
+       list in the guide is redundant — and it had gone stale: "Connect" is now
+       Step 1 (a separate step), "Upload" and processing moved to Submit (#42),
+       and "Test the internal TestFlight build" is a post-submit concern, not a
+       build step. Returning null hides the guide's step list here (the modal also
+       sets sm-hide-shippy); the generic non-Mac branch below is unchanged. */
+    return null;
   }
 
   // ── Generic (non-Mac, or no agent): the original two items ──
