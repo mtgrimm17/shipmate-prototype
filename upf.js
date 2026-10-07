@@ -1022,6 +1022,76 @@ const UPF = {
     };
   },
 
+  /* Offer, once per session, to import an APPROVED version's metadata from App
+     Store Connect so a compliant app isn't re-interviewed. Fired when a Mac
+     account finishes connecting (the key is set by then, which the ASC read
+     needs). Only prompts when an approved version actually exists. */
+  async _maybeOfferImport(pid) {
+    if (this._importOffered) return;
+    try {
+      if (!(await this.health()) || !state.upf.game) return;
+      const s = await this._post('/appstatus', { game: state.upf.game.app });
+      if (!s || !s.approvedVersion) return;
+      this._importOffered = true;
+      const ver = s.approvedVersionString ? ` (v${s.approvedVersionString})` : '';
+      const ok = (typeof window !== 'undefined' && window.confirm) && window.confirm(
+        `Shipmate found an approved version${ver} of this app in App Store Connect.\n\n` +
+        `Import its details — description, keywords, App Review info — so you don't re-enter them?\n\n` +
+        `You'll still review each step and press Save / Done before it's marked complete.`);
+      if (ok) this.importFromAsc(pid);
+    } catch (_) {}
+  },
+
+  /* Pull the approved version's metadata and PREFILL Shipmate's fields. It does
+     NOT set any completion or "seen" flag, and it deliberately leaves the gating
+     answers untouched (hasIAP, the Content Rating questionnaire, App Privacy), so
+     every step still requires the user's review + Save to count as complete —
+     imported data is a starting point, not a finished submission. App Privacy and
+     the Content Rating questionnaire are not imported (App Privacy is web-only and
+     we're minimizing extension use). */
+  async importFromAsc(pid) {
+    try {
+      if (!(await this.health()) || !state.upf.game) return;
+      const d = await this._post('/importdata', { game: state.upf.game.app });
+      if (!d || !d.ok || !d.approved) { if (typeof bcToast === 'function') bcToast('Nothing to import from App Store Connect yet.'); return; }
+      const L = d.listing || {};
+      const f  = state.formData = state.formData || {};
+      const ml = state.macAppStoreListing = state.macAppStoreListing || {};
+      const set = (obj, k, v) => { if (v != null && v !== '') obj[k] = v; };
+      // Listing text + URLs — the sources buildListing reads for macos.
+      set(f, 'title', L.name);
+      set(f, 'subtitle', L.subtitle);
+      if (L.description != null && L.description !== '') {
+        f.description = L.description;
+        if (state.appStoreListing) state.appStoreListing.description = L.description;
+      }
+      set(f, 'releaseNotes', L.whatsNew);
+      set(f, 'supportUrl', L.supportUrl);
+      set(f, 'privacyUrl', L.privacyPolicyUrl);
+      set(ml, 'keywords', L.keywords);
+      set(ml, 'promotionalText', L.promotionalText);
+      set(ml, 'marketingUrl', L.marketingUrl);
+      // App Review + content rights (Business step). Writes the raw macos bucket
+      // that isMacSectionComplete('business') reads; hasIAP is intentionally NOT
+      // set, so Business stays incomplete until the user reviews and Saves.
+      const a = state.macSubmitAnswers = state.macSubmitAnswers || {};
+      const r = d.review || {};
+      if (r.contact) a.reviewContact = {
+        firstName: r.contact.firstName || '', lastName: r.contact.lastName || '',
+        phone: r.contact.phone || '', email: r.contact.email || '' };
+      if (r.demo) a.demoAccount = {
+        required: r.demo.required ? 'yes' : 'no',
+        username: r.demo.username || '', password: r.demo.password || '' };
+      if (r.notes != null && r.notes !== '') a.reviewNotes = r.notes;
+      if (d.contentRights) a.contentRights = d.contentRights;
+      if (typeof bcToast === 'function') bcToast('Imported your App Store Connect details — review each step and press Save / Done to finish.');
+      if (typeof _upfRepaintAll === 'function') _upfRepaintAll();
+      else if (typeof renderDashboard === 'function') renderDashboard();
+    } catch (e) {
+      if (typeof bcToast === 'function') bcToast('Couldn’t import from App Store Connect: ' + ((e && e.message) || e));
+    }
+  },
+
   /* What the pill's tooltip says: the inspect verdict in one line. */
   summary() {
     const m = state.upf.manifest;
@@ -1049,6 +1119,9 @@ const UPF = {
     // Build from Steam). Connecting the account on its own must NOT create the app
     // or build — they may intend Upload Build, or just be connecting to sync.
     if (_buildIntent) { try { upfAdvance(pid); } catch (_) {} }
+    // Offer, once, to import an approved version's metadata so a compliant app
+    // isn't re-interviewed (prefills only — never auto-completes a step).
+    try { this._maybeOfferImport(pid); } catch (_) {}
   },
 
   /* The developer pressed "Build from Steam": this is the explicit start of the
