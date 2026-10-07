@@ -1053,18 +1053,38 @@ function _shipmateFormatPrice(game) {
 function _steamHtmlToParagraphLines(html) {
   if (!html) return '';
   const rawLines = html
+    // Drop graphics/media entirely — Steam about_the_game is full of <img>
+    // section banners, and some fields/localizations come through as BBCode with
+    // [img] / [previewyoutube]. These are what made the imported description look
+    // broken (stray markup and gaps); a store description is plain text.
+    .replace(/<img[^>]*>/gi, '')
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/\[img\][\s\S]*?\[\/img\]/gi, '')
+    .replace(/\[previewyoutube[^\]]*\][\s\S]*?\[\/previewyoutube\]/gi, '')
+    // Steam BBCode → text: keep link/url text, headers become breaks, [*] a
+    // bullet, and every other BBCode tag ([b][i][list][quote][hr]…) is removed.
+    .replace(/\[url=[^\]]*\]([\s\S]*?)\[\/url\]/gi, '$1')
+    .replace(/\[\/?h[1-6]\]/gi, '\n\n')
+    .replace(/\[\*\]/gi, '• ')
+    .replace(/\[hr\]\[\/hr\]|\[hr\]/gi, '\n\n')
+    .replace(/\[\/?(?:b|i|u|strike|spoiler|list|olist|quote|code|table|tr|td|th|p|noparse)[^\]]*\]/gi, '')
+    // HTML (Steam's about_the_game is HTML):
     .replace(/<\/?h[1-6][^>]*>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<li[^>]*>/gi, '• ')
     .replace(/<\/li>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
+    // Entities: numeric, then the common named ones (incl. smart quotes/dashes
+    // Steam uses heavily, which otherwise show as &rsquo; / &mdash; literals).
+    .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(+n); } catch (e) { return ' '; } })
+    .replace(/&(amp|quot|apos|lt|gt|nbsp|rsquo|lsquo|rdquo|ldquo|hellip|mdash|ndash|copy|reg|trade);/gi, (m, e) => ({
+      amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ',
+      rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
+      hellip: '…', mdash: '—', ndash: '–',
+      copy: '©', reg: '®', trade: '™',
+    }[e.toLowerCase()] || m))
     .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
     .replace(/ {2,}/g, ' ')
     .split('\n')
     .map(line => line.trim());

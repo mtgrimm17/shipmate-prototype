@@ -28335,7 +28335,13 @@ function _smPrivacyItems(pid) {
     { label: 'Data collection',    step: 'prv:collect', done: collects !== null && collects !== undefined },
     { label: 'Privacy policy URL', step: 'prv:url',     done: !!(url || '').trim() },
   ];
-  if (!noData) rows.push({ label: 'Quick setup', step: 'prv:presets', done: presets > 0 });
+  // When data IS collected, the remaining task is declaring the data types. That
+  // is done by declaring ANY type — which matches the real completion gate
+  // (dataPerType >= 1) — whether the developer used the Quick-setup presets or
+  // filled the matrix directly. This row used to be labelled "Quick setup" and
+  // gated on `presets > 0` (a preset chip), so declaring types by hand left it
+  // stuck undone and the whole privacy step looked blocked.
+  if (!noData) rows.push({ label: 'Data types', step: 'prv:presets', done: types > 0 || presets > 0 });
   return rows;
 }
 

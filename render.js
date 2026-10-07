@@ -21792,11 +21792,21 @@ function _submittedSteps(pid) {
    Both print the state in the store's own words (`STORE_REVIEW`). */
 function buildSubmittedCard(pid, flipData) {
   const isWeb  = pid === 'web';
-  const phase  = isWeb ? 'live' : ((flipData && flipData.phase) || 'in_review');
-  const vocab  = storeReviewPhase(pid, phase);
+  // Live submit status (#42): while a Mac submit runs, the phase comes from the
+  // submit progress (uploading → processing → in_review | internal_testing),
+  // not the static flip phase. Falls back to the flip phase for other platforms
+  // and after the submit resolves.
+  const livePhase = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid))
+    ? (state.upf && state.upf.submitPhase && state.upf.submitPhase[pid]) : null;
+  const phase  = isWeb ? 'live' : (livePhase || (flipData && flipData.phase) || 'in_review');
+  const isErr  = phase === 'error';
+  let   vocab  = storeReviewPhase(pid, phase);
+  if (isErr) vocab = { label: 'SUBMIT DIDN’T COMPLETE', note: 'Something went wrong while submitting. Open the step and press Submit again.' };
   const isLive = phase === 'live';
   const isYours = phase === 'accepted';
-  const isBad   = phase === 'rejected';
+  const isBad   = phase === 'rejected' || isErr;
+  // In-progress phases trail an ellipsis on the status line.
+  const dots = (phase === 'in_review' || phase === 'uploading' || phase === 'processing') ? '…' : '';
 
   const _timing    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
   const reviewDays = isWeb ? 0 : _timing.days;
@@ -21815,7 +21825,11 @@ function buildSubmittedCard(pid, flipData) {
      so it is index 1 with only `prepare` filled behind it. It was 2, which lit
      the third segment and quietly claimed the release stage had been reached
      while the store was still reading the build. */
-  const stage = isLive ? 4 : isYours ? 2 : 1;      // prepare is always behind you
+  const stage = isLive ? 4
+              : phase === 'internal_testing' ? 3                        // available to testers
+              : isYours ? 2
+              : (phase === 'uploading' || phase === 'processing') ? 0   // still being prepared/sent
+              : 1;                                                      // in_review (prepare behind you)
   const segs = [0,1,2,3].map(i => {
     if (isBad) return `<span class="sub-seg ${i === 0 ? 'is-done' : i === 1 ? 'is-bad' : ''}"></span>`;
     return `<span class="sub-seg ${i < stage ? 'is-done' : i === stage ? 'is-current' : ''}"></span>`;
@@ -21873,7 +21887,7 @@ function buildSubmittedCard(pid, flipData) {
             `inline` renders byte-for-byte what it rendered before. */''}
       ${modalGrid ? platformCardHead(pid, 'submitted') : `
       <div class="sub-head">
-        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>
+        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${dots}</span>
         ${_platformHeadActions(pid, 'submitted')}
       </div>`}
       ${buildReleaseBlock(pid)}
@@ -21883,7 +21897,7 @@ function buildSubmittedCard(pid, flipData) {
             baseline. `.sub-state:empty` already hides this row in the pane, so
             the arm that does not use it costs nothing. */''}
       <div class="sub-state">
-        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${phase === 'in_review' ? '...' : ''}</span>` : ''}
+        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${dots}</span>` : ''}
         ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
               `!isYours && !isBad`, which let it survive into `live` — so a
               build that was finished, distributed and on sale still said
@@ -21897,7 +21911,9 @@ function buildSubmittedCard(pid, flipData) {
         <span class="rel-pair"><span class="rel-label">Submitted</span><span class="rel-build">${fmt(sent)}</span></span>
         ${phase === 'in_review' ? `<span class="rel-pair"><span class="rel-label">Estimated</span><span class="rel-build">${fmt(est)}</span></span>` : ''}
       </div>` : ''}
-      ${vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : ''}
+      ${phase === 'uploading'
+          ? `<div class="sub-note">${escHtml(vocab.note || 'Sending your build to App Store Connect')} — <span data-upf-pct>${(state.upf && state.upf.uploadPct) || 0}</span>% uploaded.</div>`
+          : (vocab.note ? `<div class="sub-note">${escHtml(vocab.note)}</div>` : '')}
       ${/* THE NUDGE LEFT THIS CARD IN v6.56, AND IT IS THE GUIDE'S NOW.
             "Quiet time. Go plan your launch →" lived here from the day the wait
             got a face, on the argument that the one phase with nothing to do in

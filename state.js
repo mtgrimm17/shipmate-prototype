@@ -3359,12 +3359,19 @@ const PLATFORM_TRACKS = {
       invented-and-forgotten. */
 const STORE_REVIEW = {
   ios: {
+    // Submit-time progress (#42): the build uploads + Apple-processes AT submit.
+    uploading:        { label: 'UPLOADING BUILD',         note: 'Sending your build to App Store Connect.' },
+    processing:       { label: 'APPLE PROCESSING BUILD',  note: 'Apple is processing your upload. This can take 20–40 minutes.' },
+    internal_testing: { label: 'AVAILABLE FOR INTERNAL TESTING', note: 'Your build is in TestFlight for your internal testers — no review needed.' },
     in_review: { label: 'WAITING FOR REVIEW',         note: '' },
     accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the App Store when you release it.', action: 'Release This Version' },
     live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the App Store.' },
     rejected:  { label: 'REJECTED',                   note: 'App Review sent notes. Reply in Resolution Center, or upload a new build.', action: 'Read the notes' },
   },
   macos: {
+    uploading:        { label: 'UPLOADING BUILD',         note: 'Sending your build to App Store Connect.' },
+    processing:       { label: 'APPLE PROCESSING BUILD',  note: 'Apple is processing your upload. This can take 20–40 minutes.' },
+    internal_testing: { label: 'AVAILABLE FOR INTERNAL TESTING', note: 'Your build is in TestFlight for your internal testers — no review needed.' },
     in_review: { label: 'WAITING FOR REVIEW',         note: '' },
     accepted:  { label: 'PENDING DEVELOPER RELEASE',  note: 'Accepted. It reaches the Mac App Store when you release it.', action: 'Release This Version' },
     live:      { label: 'READY FOR DISTRIBUTION',     note: 'Live on the Mac App Store.' },

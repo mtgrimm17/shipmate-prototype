@@ -650,8 +650,7 @@ const UPF = {
           if (pr && pr.job) await this.waitJob(pr.job, () => {});
         }
       } catch (e) { console.warn('[UPF] submit-prep sync failed', e); }
-      // A build may be waiting on this now-connected account.
-      try { _upfMaybePublish(pid); } catch (_) {}
+      // (Upload no longer fires on sync — it runs at Submit now. #42)
       // Achievement text edited after the build → push it to Game Center (no rebuild).
       // Only once the build is uploaded (the achievements exist in ASC) and only when
       // the text actually changed, so an idle save doesn't re-walk every achievement.
@@ -680,24 +679,90 @@ const UPF = {
      agent reports them as staged rather than pretending to submit. Non-blocking;
      a toast reports the outcome. */
   async submitTestFlight(pid, track) {
+    track = track || 'testflight_internal';
+    state.upf.submitPhase = state.upf.submitPhase || {};
+    state.upf.submitTrack = state.upf.submitTrack || {};
+    state.upf.submitTrack[pid] = track;
+    const setPhase = (ph) => { state.upf.submitPhase[pid] = ph; this._repaintSubmitted(pid); };
+    // Terminal success: hand the phase to the flip record and clear the live
+    // submit phase, so the card reads flipData.phase from here — which lets the
+    // App Store review progression (smAdvancePhase: in_review → accepted → live)
+    // continue, while internal_testing stays terminal.
+    const finishPhase = (ph) => {
+      if (state.platformFlipped && state.platformFlipped[pid]) state.platformFlipped[pid].phase = ph;
+      if (state.upf.submitPhase) delete state.upf.submitPhase[pid];
+      this._repaintSubmitted(pid);
+    };
+
+    // The card has just flipped to the submitted state; show the first real
+    // status synchronously so it never reads the default "WAITING FOR REVIEW".
+    const b0 = (state.platformBuilds || {})[pid];
+    const needUpload = !!(b0 && b0.source === 'upf' && !b0.uploaded);
+    setPhase(needUpload ? 'uploading' : 'processing');
+
     try {
-      if (!(await this.health()) || !state.upf.game) return;
-      const r = await this._post('/submit', { game: state.upf.game.app, track: track || 'testflight_internal' });
-      if (r && r.job) {
-        const res = await this.waitJob(r.job, () => {});
+      if (!(await this.health()) || !state.upf.game) { setPhase('error'); return; }
+      const game = state.upf.game;
+
+      // 1) Upload + Apple-side processing, if the build isn't already in ASC.
+      //    This used to run during Generate Build; it happens at Submit now (#42).
+      //    The agent's progress lines drive the uploading → processing status.
+      if (needUpload) {
+        state.upf.stage = 5; state.upf.stages = state.upf.stages || []; state.upf.uploadPct = 0;
+        if (typeof _upfStartTicker === 'function') _upfStartTicker();
+        const onLine = (line) => {
+          if (typeof _upfTrackLine === 'function') _upfTrackLine(line);
+          const ph = /waiting for apple|build \d+:/i.test(line) ? 'processing'
+                   : /uploading|chunk|^\d+%$/i.test(line) ? 'uploading' : null;
+          if (ph && state.upf.submitPhase[pid] !== ph) setPhase(ph);
+        };
+        state.upf.job = { id: null, kind: 'publish' };
+        let pres;
+        try {
+          const pub = await this._post('/publish', { game: game.app });
+          state.upf.job = { id: pub.job, kind: 'publish' };
+          try { localStorage.setItem('upf.job', JSON.stringify({ id: pub.job, pid, kind: 'publish', started: Date.now() })); } catch (_) {}
+          pres = await this.waitJob(pub.job, onLine);
+        } finally { state.upf.job = null; try { localStorage.removeItem('upf.job'); } catch (_) {} }
+        const up = pres && pres.upload;
+        if (!up || !up.ok) { setPhase('error'); if (typeof bcToast === 'function') bcToast(`Upload: ${(up && up.problems || []).join(' · ') || 'did not complete'}`); return; }
+        // Record the build as uploaded (mirrors _upfFinishPublish).
+        const b = (state.platformBuilds || {})[pid] || {};
+        b.uploaded = true; b.ascBuildId = up.buildId; b.ascAppId = up.appId; if (up.buildVersion) b.buildNumber = String(up.buildVersion);
+        state.upf.uploaded = true;
+      }
+
+      // 2) Submit to the chosen track (the build is now processed in ASC).
+      setPhase('processing');
+      const r = await this._post('/submit', { game: game.app, track });
+      let res = null;
+      if (r && r.job) res = await this.waitJob(r.job, () => {});
+      if (res && res.ok) {
+        // Internal TestFlight needs no review — it's available to testers as soon
+        // as the build is processed. External TF and the App Store go to review.
+        finishPhase(track === 'testflight_internal' ? 'internal_testing' : 'in_review');
         if (typeof bcToast === 'function') {
-          if (res && res.ok) {
-            bcToast(res.group
-              ? `Submitted build ${res.buildVersion} to internal TestFlight group '${res.group}'.`
-              : `Build ${res.buildVersion} ${res.staged || 'ready to submit'}.`);
-          } else {
-            bcToast(`TestFlight submit: ${(res && res.error) || 'failed'}`);
-          }
+          bcToast(track === 'testflight_internal'
+            ? (res.group ? `Build ${res.buildVersion} is in internal TestFlight group '${res.group}'.`
+                         : `Build ${res.buildVersion} is available for internal testing.`)
+            : `Build ${res.buildVersion} submitted for review.`);
         }
+      } else {
+        setPhase('error');
+        if (typeof bcToast === 'function') bcToast(`Submit: ${(res && res.error) || 'failed'}`);
       }
     } catch (e) {
-      console.warn('[UPF] TestFlight submit failed', e);
+      console.warn('[UPF] submit failed', e);
+      setPhase('error');
     }
+  },
+
+  /* Re-render the submitted card so its live submit status (uploading →
+     processing → in review / internal testing) updates as submitTestFlight
+     advances. renderDashboard rebuilds the card from state; the per-second
+     upload % is written straight to the DOM by _upfStartTicker's ticker. */
+  _repaintSubmitted(pid) {
+    try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (_) {}
   },
 
   /* Poll a job until it ends, handing each new line to `onLine`. */
@@ -1012,7 +1077,7 @@ function _upfRepaintAll() {
     if (_upfActive(pid)) {
       if (UPF.prefillEncryption(pid)) prefilled = true;
       if (typeof _refreshBuildUI === 'function') _refreshBuildUI(pid);
-      _upfMaybePublish(pid);   // a build may be waiting on a now-connected account
+      // (Upload no longer auto-fires on connect — it runs at Submit now. #42)
     }
   }
   if (prefilled && typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
@@ -1193,14 +1258,12 @@ function _upfFinishBuild(pid, res, game) {
     for (let i = 0; i <= 4; i++) { state.upf.stages[i] = state.upf.stages[i] || { start: now }; if (!state.upf.stages[i].end) state.upf.stages[i].end = now; }
     state.upf.stage = 5;
     state.upf.result = { built: true, buildVersion: label };
-    const connected = (typeof isPlatformConnected === 'function' && isPlatformConnected(pid));
     if (typeof bcToast === 'function') {
-      bcToast(connected
-        ? 'Mac App Store build ready — uploading to App Store Connect…'
-        : 'Mac App Store build ready. Connect your Apple account in Settings to upload it.');
+      bcToast('Mac App Store build ready. It uploads to App Store Connect when you submit.');
     }
     _upfDone(pid);
-    _upfMaybePublish(pid);
+    // Upload no longer auto-fires here (#42) — it runs at Submit, against the
+    // chosen track. The build sits as a local signed .pkg until then.
   } catch (e) {
     _upfFail(pid, e);
   }
@@ -1312,12 +1375,9 @@ async function upfReattach() {
 
 setTimeout(() => { try { upfReattach(); } catch (_) {} }, 1800);
 
-/* After the page has settled, a local build recorded earlier may be waiting on a
-   now-connected account — upload it. No-op unless a build is present, unuploaded,
-   and the account is connected. */
-setTimeout(() => {
-  for (const pid of UPF_MAC_PIDS) { try { _upfMaybePublish(pid); } catch (_) {} }
-}, 2600);
+/* A local build no longer auto-uploads on page load (#42) — the upload runs at
+   Submit, against the chosen track. (_upfMaybePublish is kept for the manual
+   retry path and as a fallback, but nothing auto-fires it now.) */
 
 /* The same two repaints handleBuildUpload does, so the card and an open step
    modal both follow. Progress ticks repaint the modal too (throttled by the
@@ -1463,8 +1523,12 @@ const UPF_FLOW = [
   { id: 'sandbox',    kind: 'agent', stage: 2 },
   { id: 'sign',       kind: 'agent', stage: 3 },
   { id: 'package',    kind: 'agent', stage: 4 },
-  { id: 'upload',     kind: 'agent', stage: 5 },
-  { id: 'process',    kind: 'agent', stage: 6 },
+  // 'upload' (stage 5) and 'process' (stage 6) are NO LONGER build steps (#42):
+  // Generate Build ends at a local signed .pkg. The upload to App Store Connect
+  // and Apple-side processing happen at Submit, against the chosen track, and
+  // are shown as live status on the submitted card (buildSubmittedCard). The
+  // UPF_STAGES entries for them remain — they track the same progress, now
+  // during Submit instead of here.
   // 'testflight' (submit to internal TestFlight) and 'test' (install + check it)
   // were removed from this list: submitting is what the main platform Submit
   // button does, and choosing the internal-TF destination there needs only a
@@ -1569,8 +1633,10 @@ function upfAdvance(pid) {
     return;
   } // blocked at Create app
   if (!u.built && !u.uploaded) { upfBuild(pid); return; }// run the local build, uninterrupted
-  if (u.built && !u.uploaded) { _upfMaybePublish(pid); return; } // upload (gated inside)
-  _upfRepaint(pid, true);                                 // uploaded → Test is the blocker
+  // Build ENDS here, at a local signed .pkg. Upload to App Store Connect and
+  // Apple-side processing no longer auto-fire — they run at Submit
+  // (submitTestFlight), against the track the developer chooses. (#42)
+  _upfRepaint(pid, true);
 }
 
 /* A developer step's "mark done" — sets the flag and lets the agent continue. */
@@ -1623,6 +1689,9 @@ function upfBuildPanelHTML(pid) {
     // Reassure that it runs in the background — the agent owns the job, so leaving
     // this step (or closing Shipmate) doesn't stop it; reopening resumes tracking.
     intro = `Shipmate is building ${name} for the Mac App Store on this Mac. This takes a few minutes — <strong>you can leave this step or close Shipmate and it keeps running</strong>. Come back any time; the finished build will be here.`;
+  } else if (built) {
+    // Build is done as a local signed .pkg; upload happens at Submit now (#42).
+    intro = `<strong>Build ready.</strong> ${name}’s Mac App Store build is signed and packaged on this Mac. It uploads to App Store Connect when you press <strong>Submit</strong> and pick a destination — that’s when the build is sent and Apple processes it.`;
   } else {
     intro = `Shipmate generates a new Mac App Store build from ${name}’s Steam build on this Mac — signed with your Mac App Store certificate and packaged, in a few minutes. Your Steam build is left untouched.`;
   }
