@@ -7808,6 +7808,10 @@ body.sm-hide-shippy .fabslot{display:none !important}
 .upf-step-disc.is-active { border-color: var(--green); }
 .upf-step-disc.is-done { background: var(--green); border-color: var(--green); }
 .upf-step-disc.is-alert { background: #FFB86B; border-color: #FFB86B; color: #241403; }
+/* The step a run stopped on (v8.13): red, so an unexpected failure is visible on
+   the card instead of a dead idle disc. The reason prints in .upf-error above. */
+.upf-step-disc.is-fail { background: var(--magenta, #ff3b78); border-color: var(--magenta, #ff3b78); color: #fff; }
+.upf-step.is-failed .upf-step-label { color: var(--magenta, #ff3b78); font-weight: 600; }
 
 /* The blocking user step: amber label, and an alert box with what to do. */
 .upf-step.is-blocker .upf-step-label { color: #FFB86B; font-weight: 600; }

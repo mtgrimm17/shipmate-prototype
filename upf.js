@@ -1725,12 +1725,19 @@ function _upfFlowRows(pid) {
   const u = state.upf || {};
   const prep = u.job && u.job.kind === 'prepare';
   const pub  = u.job && u.job.kind === 'publish';
+  // A run that stopped with an error (no job in flight, but an error recorded):
+  // the step it stopped on is FAILED, not a dead idle spinner. This is what makes
+  // an unexpected agent failure visible on the card instead of looking frozen.
+  const failed = !u.job && !!u.error;
   const rows = UPF_FLOW.map(f => ({ id: f.id, kind: f.kind, stage: f.stage,
                                     label: UPF_FLOW_LABEL[f.id], done: _upfFlowDone(pid, f.id) }));
   const curIdx = rows.findIndex(r => !r.done);
   rows.forEach((r, i) => {
     if (r.done)        { r.status = 'done'; return; }
     if (i !== curIdx)  { r.status = 'todo'; return; }
+    // The step the run stopped on wears the failure (an agent step; a user step
+    // that's merely outstanding stays a blocker, since the user hasn't acted yet).
+    if (failed && r.kind !== 'user') { r.status = 'failed'; return; }
     if (r.kind === 'user') { r.status = 'blocker'; return; }
     // Only steps with a numeric build stage can be "active" (the agent rows).
     // apprecord is an agent step with no stage, so it stays 'current' until done
@@ -1844,7 +1851,10 @@ function upfBuildPanelHTML(pid) {
            <button class="imp-cta" onclick="event.stopPropagation();UPF.buildFromSteam('${pid}')">Build from Steam</button>
          </div>`;
   }
-  const err = (u.error && !running && !failed) ? `<div class="upf-error">${esc(u.error)}</div>` : '';
+  // Show the actual reason whenever a run stopped with an error — including the
+  // `failed` state, which used to suppress it and leave only a generic "build
+  // stopped" line (that was the frozen-looking, unexplained failure).
+  const err = (u.error && !running) ? `<div class="upf-error">${esc(u.error)}</div>` : '';
   const blocks = blockers.length ? `
     <div class="upf-label">Blocked</div>
     <ul class="upf-list is-bad">${blockers.map(b => `<li>${esc(b.message || b)}</li>`).join('')}</ul>` : '';
@@ -1880,6 +1890,7 @@ function upfBuildPanelHTML(pid) {
         r.status === 'done'    ? `<span class="upf-step-disc is-done">${CHECK}</span>`
       : r.status === 'active'  ? `<span class="upf-step-disc is-active"><span class="build-proc-spin"></span></span>`
       : r.status === 'blocker' ? `<span class="upf-step-disc is-alert">!</span>`
+      : r.status === 'failed'  ? `<span class="upf-step-disc is-fail">!</span>`
       :                          `<span class="upf-step-disc"></span>`;
     let main = `<span class="upf-step-label">${esc(r.label)}</span>`;
     if (r.status === 'blocker') {
