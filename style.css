@@ -21642,13 +21642,26 @@ body.is-splash .ai-disclaimer { display: none; }
    the one link that sends you somewhere else (the Marketing nudge). This one
    opens something in place, so it takes the card's own quiet text and brightens
    on approach — a secondary control, not a destination. */
+/* A DISCLOSURE ROW, not a bare text button (v8.11). A full-bleed divider above
+   it (pulled to the card edges with the -20px side margins that cancel the
+   card's 20px padding) sets it apart as "there is more below", and the chevron
+   on the right says it opens — rotating 180° when the list is showing. */
 .sub-steps-toggle {
-  align-self: flex-start; margin-top: 2px; padding: 0;
-  background: none; border: none; cursor: pointer;
+  align-self: stretch;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 -20px; padding: 16px 20px 0; text-align: left;
+  background: none; border: none; border-top: 1px solid rgba(255, 255, 255, .08);
+  cursor: pointer;
   font-family: var(--mono); font-size: 12px; color: var(--text-dim);
   transition: color .12s;
 }
 .sub-steps-toggle:hover { color: var(--text); }
+.sub-steps-toggle .sm-chevron {
+  width: 18px; height: 18px; flex: none;
+  color: var(--text-dim); transition: transform .2s ease, color .12s;
+}
+.sub-steps-toggle:hover .sm-chevron { color: var(--text); }
+.sub-steps-toggle.is-open .sm-chevron { transform: rotate(180deg); }
 
 /* The read-only lock on a step modal. A pointer lock, not a permissions
    model — see the note at its markup. */

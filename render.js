@@ -22020,8 +22020,9 @@ function buildSubmittedCard(pid, flipData) {
             hunt, and for a disclosure the second press is the likeliest next
             thing you do. Above it, the list unrolls downwards into space the
             button never occupied and the hit area does not move at all. */''}
-      <button class="sub-steps-toggle" onclick="toggleSubReview('${pid}')">
-        ${reviewing ? 'Hide what you sent' : 'See what you sent'}
+      <button class="sub-steps-toggle${reviewing ? ' is-open' : ''}" onclick="toggleSubReview('${pid}')">
+        <span>${reviewing ? 'Hide what you sent' : 'See what you sent'}</span>
+        ${SM_CHEVRON_DOWN}
       </button>
       ${reviewing ? `<div class="sub-steps">${_submittedSteps(pid)}</div>` : ''}
       ${/* THE ACT IS THE LAST THING IN THE CARD, because on the other face it
