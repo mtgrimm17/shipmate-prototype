@@ -21278,6 +21278,12 @@ body.is-splash .ai-disclaimer { display: none; }
 .submitted-card.is-yours   .sub-state-line { color: #FFB86B; }
 .submitted-card.is-live    .sub-state-line { color: #2fdc80; }
 .submitted-card.is-bad     .sub-state-line { color: var(--magenta, #ff3b78); }
+/* The Mac card's three states (v8.11): in progress (amber — the app's own
+   waiting colour, #FFD84D), failed (alert red) and, for a terminal step,
+   complete (green). */
+.submitted-card.sub-progress .sub-state-line { color: #FFD84D; }
+.submitted-card.sub-failed   .sub-state-line { color: var(--magenta, #ff3b78); }
+.submitted-card.sub-complete .sub-state-line { color: #2fdc80; }
 
 /* The two dates of variant 2. `.rel-pair` is the release block's own named-fact
    shape, so SUBMITTED / ESTIMATED read as the same kind of thing as BUILD. */
@@ -21719,6 +21725,9 @@ body.is-splash .ai-disclaimer { display: none; }
 .submitted-card.is-yours   { background-image: linear-gradient(rgba(255,184,107,.05), rgba(255,184,107,.05)); }
 .submitted-card.is-live    { background-image: linear-gradient(rgba(47,220,128,.05), rgba(47,220,128,.05)); }
 .submitted-card.is-bad     { background-image: linear-gradient(rgba(255,59,120,.05), rgba(255,59,120,.05)); }
+.submitted-card.sub-progress { background-image: linear-gradient(rgba(255,216,77,.05), rgba(255,216,77,.05)); }
+.submitted-card.sub-failed   { background-image: linear-gradient(rgba(255,59,120,.05), rgba(255,59,120,.05)); }
+.submitted-card.sub-complete { background-image: linear-gradient(rgba(47,220,128,.05), rgba(47,220,128,.05)); }
 
 .sub-review-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -21854,17 +21863,19 @@ body.is-splash .ai-disclaimer { display: none; }
    inline flex-grow set by expected time) each holding a fill span the ticker
    advances. Done segment = green and full; current = the waiting yellow, filled
    to the live progress; future = empty track. */
+/* The track-specific status bar (v8.11): variable-width segments (widths from an
+   inline flex-grow set by each status's expected time) coloured solid. Every
+   segment up to AND INCLUDING the current status takes the state's colour — blue
+   in progress, red failed, green complete — and the rest stay a neutral track.
+   One signal with the status line and the card's 5% wash. */
 .sub-phasebar { align-items: center; }
 .sub-phaseseg {
   flex: 0 1 0; height: 6px; border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08); overflow: hidden;
+  background: rgba(255, 255, 255, 0.08); transition: background .3s ease;
 }
-.sub-phasefill {
-  display: block; height: 100%; width: 0; border-radius: 3px;
-  background: #FFD84D; transition: width .4s ease;
-}
-.sub-phaseseg.is-done .sub-phasefill    { background: #2fdc80; }
-.sub-phaseseg.is-current .sub-phasefill { background: #FFD84D; }
+.sub-phaseseg.is-prog { background: #FFD84D; }
+.sub-phaseseg.is-fail { background: var(--magenta, #ff3b78); }
+.sub-phaseseg.is-ok   { background: #2fdc80; }
 
 /* Date row */
 .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }

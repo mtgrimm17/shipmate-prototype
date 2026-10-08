@@ -5889,10 +5889,12 @@ function buildReleaseBlock(pid) {
   const _sentTrack = (state.platformStepStatus?.[pid]?.submit === 'complete')
     ? platformTrackLabel(pid, (state.selectedTracks || {})[pid]) : '';
 
+  /* NO VERSION (v8.11). Version was a Shipmate-side construct; Build is the real
+     thing — it is what was uploaded, what the analysis ran on, what a channel
+     points at — and it is the one identifier Steam and the Mac build share. So
+     the row is Build-first on every platform; `version` is still computed above
+     in case a future shape wants it, but nothing prints it here. */
   const parts = [];
-  if (shape.versionLabel && version) {
-    parts.push(`<b class="rel-version" title="${escHtml(shape.versionLabel)}">v${escHtml(version)}</b>`);
-  }
   if (shape.buildLabel && build.buildNumber) {
     const n = build.buildNumber;
     /* No buildPrefix. Steam's shape carried one ("Build 42") from when the
@@ -5921,10 +5923,8 @@ function buildReleaseBlock(pid) {
      nothing rather than claim a fact it doesn't have. */
   if (!parts.length) return '';
 
-  /* The row's own label is the first fact it holds — VERSION normally, BUILD on
-     a store with no version. */
-  const rowLabel = (shape.versionLabel && version) ? 'Version' : 'Build';
-  const rows = [[rowLabel, parts.join('')]];
+  /* The row's own label is Build everywhere now — see the no-version note above. */
+  const rows = [['Build', parts.join('')]];
 
   /* THE TRACK PICKER IS BACK, ON THIS ROW — not on a row of its own. Shape 4,
      and the first one where the destination costs no vertical space at all: the
@@ -21790,57 +21790,84 @@ function _submittedSteps(pid) {
         live), with the store's own wait claim beside the status line
      2  no segments; the two dates instead — submitted, and estimated
    Both print the state in the store's own words (`STORE_REVIEW`). */
-/* The submit progress bar (#42). Segments for the REAL phases a Mac submit moves
-   through — Upload, Process, then Review (external TF / App Store) or Ready
-   (internal TF) — their WIDTHS sized by relative expected time, so the quick
-   automatic steps are thin and "Waiting for Review" (days) is wide. The current
-   segment fills by real progress: the upload %, processing elapsed vs ~25 min,
-   review elapsed vs ~3 days. A 1s ticker (upf.js _submitTicker) advances the
-   current fill live by writing the [data-sub-fill] width. */
-function _smSubmitBar(pid, phase, track) {
-  const internal = track === 'testflight_internal';
-  const phases = internal
-    ? [ { k: 'uploading', w: 1 }, { k: 'processing', w: 3 }, { k: 'internal_testing', w: 1 } ]
-    : [ { k: 'uploading', w: 1 }, { k: 'processing', w: 3 }, { k: 'in_review', w: 8 } ];
-  let cur = phases.findIndex(p => p.k === phase);
-  if (cur < 0) cur = (phase === 'error') ? 0 : phases.length;   // error: stall on first; unknown: all behind
-  const start = (state.upf && state.upf.submitPhaseStart && state.upf.submitPhaseStart[pid]) || Date.now();
-  const fillFor = (k) => {
-    if (k === 'uploading')  return Math.min(1, ((state.upf && state.upf.uploadPct) || 0) / 100);
-    if (k === 'processing') return Math.min(0.98, (Date.now() - start) / 1000 / 1500);          // ~25 min
-    if (k === 'in_review')  return Math.min(0.9, (Date.now() - start) / 1000 / (3 * 24 * 3600)); // ~3 days
-    return 1;                                                                                     // internal_testing/terminal
+/* THE MAC SUBMISSION'S STATE, resolved from the track-specific series
+   (SUBMIT_TRACK_SERIES / SUBMIT_PHASE_COPY, state.js). One current status, one of
+   three states — in progress (blue), failed (red) or, for a terminal step,
+   complete (green) — plus the exact description for that status × state. Read by
+   buildSubmittedCard and _smSubmitBar so the status line, the bar and the note
+   are one signal. (v8.11) */
+function _macSubmitState(pid, flipData) {
+  const track  = (state.upf && state.upf.submitTrack && state.upf.submitTrack[pid])
+              || (flipData && flipData.track)
+              || (state.selectedTracks || {})[pid]
+              || 'testflight_internal';
+  const series = submitTrackSeries(track);
+  const live   = state.upf && state.upf.submitPhase && state.upf.submitPhase[pid];
+  let phase    = live || (flipData && flipData.phase) || series[0];
+  let failed   = !!(state.upf && state.upf.submitFailed && state.upf.submitFailed[pid]);
+  // 'rejected' (demo) is a failure sitting on the In Review step; 'error' is a
+  // legacy generic failure — treat it as stalled on the first step.
+  if (phase === 'rejected') { phase = 'in_review'; failed = true; }
+  if (phase === 'error')    { phase = series[0];   failed = true; }
+  const released = phase === 'released';
+  let curIdx = series.indexOf(phase);
+  if (curIdx < 0) curIdx = series.length - 1;        // released / unknown → terminal
+  const isTerminal = curIdx === series.length - 1;
+  const stateKind  = failed ? 'failed' : (isTerminal ? 'complete' : 'progress');
+  const copy = SUBMIT_PHASE_COPY[released ? 'released' : series[curIdx]] || {};
+  const note = (failed ? copy.failed
+              : stateKind === 'complete' ? (copy.complete || copy.progress)
+              : copy.progress) || '';
+  return {
+    track, series, phase, curIdx, stateKind, released, copy,
+    label: (copy.label || '').toUpperCase(),
+    note,
+    // Only a terminal, non-failed step offers the developer's own next move.
+    action: (!failed && isTerminal && copy.action) ? copy.action : '',
   };
-  const segs = phases.map((p, i) => {
-    const w   = (i < cur) ? 1 : (i === cur) ? fillFor(p.k) : 0;
-    const cls = (i < cur) ? 'is-done' : (i === cur) ? 'is-current' : '';
-    return `<span class="sub-phaseseg ${cls}" style="flex-grow:${p.w}"><span class="sub-phasefill"${i === cur ? ' data-sub-fill' : ''} style="width:${Math.round(w * 100)}%"></span></span>`;
+}
+
+/* The submit status bar (v8.11): one segment per status in the track's series,
+   widths sized by relative expected time (SUBMIT_PHASE_COPY.weight), so the
+   quick automatic steps are thin and the long review waits are wide. Every
+   segment up to AND INCLUDING the current one takes the state's colour (blue in
+   progress / red failed / green complete); the rest stay neutral. */
+function _smSubmitBar(series, curIdx, stateKind) {
+  const on = stateKind === 'failed' ? 'is-fail' : stateKind === 'complete' ? 'is-ok' : 'is-prog';
+  const segs = series.map((k, i) => {
+    const w   = (SUBMIT_PHASE_COPY[k] && SUBMIT_PHASE_COPY[k].weight) || 1;
+    const lit = i <= curIdx ? on : '';
+    return `<span class="sub-phaseseg ${lit}" style="flex-grow:${w}"></span>`;
   }).join('');
   return `<div class="sub-segbar sub-phasebar">${segs}</div>`;
 }
 
 function buildSubmittedCard(pid, flipData) {
   const isWeb  = pid === 'web';
-  // Live submit status (#42): while a Mac submit runs, the phase comes from the
-  // submit progress (uploading → processing → in_review | internal_testing),
-  // not the static flip phase. Falls back to the flip phase for other platforms
-  // and after the submit resolves.
-  const livePhase = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid))
-    ? (state.upf && state.upf.submitPhase && state.upf.submitPhase[pid]) : null;
-  const phase  = isWeb ? 'live' : (livePhase || (flipData && flipData.phase) || 'in_review');
-  const isErr  = phase === 'error';
-  let   vocab  = storeReviewPhase(pid, phase);
+  const isMacPid = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid));
+  /* MAC USES THE TRACK-SPECIFIC STATUS SERIES (v8.11). _macSubmitState resolves
+     the whole thing from the track and the live/flip phase: the current status,
+     which of the three states it is in (in progress / failed / complete), the
+     exact description beneath, and the bar's filled extent. Every other platform
+     keeps the four-stage journey bar and STORE_REVIEW vocabulary below. */
+  const macSt = (isMacPid && !isWeb) ? _macSubmitState(pid, flipData) : null;
+
+  // Live submit status: while a Mac submit runs, the phase comes from the submit
+  // progress, not the static flip phase. (Captured inside macSt for Mac.)
+  const livePhase = isMacPid ? (state.upf && state.upf.submitPhase && state.upf.submitPhase[pid]) : null;
+  const phase  = isWeb ? 'live' : (macSt ? macSt.phase : (livePhase || (flipData && flipData.phase) || 'in_review'));
+  const isErr  = !macSt && phase === 'error';
+  let   vocab  = macSt ? { label: macSt.label, note: macSt.note, action: macSt.action }
+                       : storeReviewPhase(pid, phase);
   if (isErr) vocab = { label: 'SUBMIT DIDN’T COMPLETE', note: 'Something went wrong while submitting. Open the step and press Submit again.' };
-  const isLive = phase === 'live';
-  const isYours = phase === 'accepted';
-  const isBad   = phase === 'rejected' || isErr;
+  const isLive = !macSt && phase === 'live';
+  const isYours = !macSt && phase === 'accepted';
+  const isBad   = macSt ? (macSt.stateKind === 'failed') : (phase === 'rejected' || isErr);
   // In-progress phases trail an ellipsis on the status line.
-  const dots = (phase === 'in_review' || phase === 'uploading' || phase === 'processing') ? '…' : '';
-  // The submit progress bar replaces the generic 4-seg bar for the real submit
-  // phases on a Mac (Upload / Process / Review | Ready), sized by expected time.
-  const _subTrack = (state.upf && state.upf.submitTrack && state.upf.submitTrack[pid]) || (flipData && flipData.track) || '';
-  const isSubmitProgress = (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid))
-    && ['uploading', 'processing', 'in_review', 'internal_testing'].includes(phase);
+  const dots = macSt ? (macSt.stateKind === 'progress' ? '…' : '')
+             : (phase === 'in_review' || phase === 'uploading' || phase === 'processing') ? '…' : '';
+  const _subTrack = macSt ? macSt.track
+                  : ((state.upf && state.upf.submitTrack && state.upf.submitTrack[pid]) || (flipData && flipData.track) || '');
 
   const _timing    = OB_PLATFORM_TIMING[pid] || OB_PLATFORM_TIMING.ios;
   const reviewDays = isWeb ? 0 : _timing.days;
@@ -21869,7 +21896,9 @@ function buildSubmittedCard(pid, flipData) {
     return `<span class="sub-seg ${i < stage ? 'is-done' : i === stage ? 'is-current' : ''}"></span>`;
   }).join('');
 
-  const phaseCls = isLive ? 'is-live' : isYours ? 'is-yours' : isBad ? 'is-bad' : 'is-waiting';
+  const phaseCls = macSt
+    ? ('sub-' + macSt.stateKind)   // sub-progress (blue) / sub-failed (red) / sub-complete (green)
+    : (isLive ? 'is-live' : isYours ? 'is-yours' : isBad ? 'is-bad' : 'is-waiting');
   const variant  = state.subVariant === 2 ? 2 : 1;
 
   /* The store's own wait claim. Apple publishes a percentage rather than a
@@ -21925,7 +21954,7 @@ function buildSubmittedCard(pid, flipData) {
         ${_platformHeadActions(pid, 'submitted')}
       </div>`}
       ${buildReleaseBlock(pid)}
-      ${variant === 1 ? (isSubmitProgress ? _smSubmitBar(pid, phase, _subTrack) : `<div class="sub-segbar">${segs}</div>`) : ''}
+      ${variant === 1 ? (macSt ? _smSubmitBar(macSt.series, macSt.curIdx, macSt.stateKind) : `<div class="sub-segbar">${segs}</div>`) : ''}
       ${/* The state line comes back HERE in the grid — its original row, where
             `.sub-state`'s `space-between` pairs it with the wait note on one
             baseline. `.sub-state:empty` already hides this row in the pane, so
@@ -21938,7 +21967,7 @@ function buildSubmittedCard(pid, flipData) {
               "Usually 3 days" beside READY FOR DISTRIBUTION. It answers "how
               long will this take", and past the decision that question has no
               referent: there is nothing left to be usually-anything. */''}
-        ${variant === 1 && phase === 'in_review' ? `<span class="sub-state-note">${escHtml(waitNote)}</span>` : ''}
+        ${variant === 1 && !macSt && phase === 'in_review' ? `<span class="sub-state-note">${escHtml(waitNote)}</span>` : ''}
       </div>
       ${variant === 2 && !isWeb ? `
       <div class="sub-facts">
@@ -22059,7 +22088,7 @@ function buildSubmittedCard(pid, flipData) {
             rather than one sentence printed three times — the multiplication
             v6.56 removed this button for. The table is where the reasoning
             and the length limit live; this line only prints it. */''}
-      ${phase === 'in_review'
+      ${(macSt ? (macSt.stateKind === 'progress' && (macSt.phase === 'waiting_for_review' || macSt.phase === 'in_review')) : phase === 'in_review')
         ? `<button class="sub-nudge" onclick="setView('broadcast')">${escHtml(subNudgeCopy(pid))} &rarr;</button>`
         : ''}
       ${action}

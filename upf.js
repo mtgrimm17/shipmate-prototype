@@ -684,11 +684,21 @@ const UPF = {
     state.upf.submitTrack = state.upf.submitTrack || {};
     state.upf.submitTrack[pid] = track;
     state.upf.submitPhaseStart = state.upf.submitPhaseStart || {};
+    // A fresh attempt clears any prior failure so the card leaves the red state.
+    state.upf.submitFailed = state.upf.submitFailed || {};
+    delete state.upf.submitFailed[pid];
     const setPhase = (ph) => {
       const changed = state.upf.submitPhase[pid] !== ph;
       state.upf.submitPhase[pid] = ph;
       if (changed) state.upf.submitPhaseStart[pid] = Date.now();   // restart the clock each phase
-      _startSubmitTicker();                                        // advances the current segment's fill live
+      this._repaintSubmitted(pid);
+    };
+    // FAILED AT A SPECIFIC STEP (v8.11): the card paints that status red — text
+    // and every segment up to and including it — and shows the step's own failure
+    // description, rather than a single generic "didn't complete".
+    const setFail = (ph) => {
+      if (ph) state.upf.submitPhase[pid] = ph;
+      state.upf.submitFailed[pid] = true;
       this._repaintSubmitted(pid);
     };
     // Terminal success: hand the phase to the flip record and clear the live
@@ -709,7 +719,7 @@ const UPF = {
     setPhase(needUpload ? 'uploading' : 'processing');
 
     try {
-      if (!(await this.health()) || !state.upf.game) { setPhase('error'); return; }
+      if (!(await this.health()) || !state.upf.game) { setFail(needUpload ? 'uploading' : 'processing'); return; }
       const game = state.upf.game;
 
       // AUTHORITATIVE PUSH ON SUBMIT (#49): re-sync this user's data to App Store
@@ -745,7 +755,7 @@ const UPF = {
           pres = await this.waitJob(pub.job, onLine);
         } finally { state.upf.job = null; try { localStorage.removeItem('upf.job'); } catch (_) {} }
         const up = pres && pres.upload;
-        if (!up || !up.ok) { setPhase('error'); if (typeof bcToast === 'function') bcToast(`Upload: ${(up && up.problems || []).join(' · ') || 'did not complete'}`); return; }
+        if (!up || !up.ok) { setFail(state.upf.submitPhase[pid] || 'uploading'); if (typeof bcToast === 'function') bcToast(`Upload: ${(up && up.problems || []).join(' · ') || 'did not complete'}`); return; }
         // Record the build as uploaded (mirrors _upfFinishPublish).
         const b = (state.platformBuilds || {})[pid] || {};
         b.uploaded = true; b.ascBuildId = up.buildId; b.ascAppId = up.appId; if (up.buildVersion) b.buildNumber = String(up.buildVersion);
@@ -759,8 +769,10 @@ const UPF = {
       if (r && r.job) res = await this.waitJob(r.job, () => {});
       if (res && res.ok) {
         // Internal TestFlight needs no review — it's available to testers as soon
-        // as the build is processed. External TF and the App Store go to review.
-        finishPhase(track === 'testflight_internal' ? 'internal_testing' : 'in_review');
+        // as the build is processed, so it lands on its terminal step (Ready for
+        // Testing). External TF and the App Store go to the review queue, so they
+        // land on Waiting for Review and advance from there. (v8.11)
+        finishPhase(track === 'testflight_internal' ? 'ready_for_testing' : 'waiting_for_review');
         if (typeof bcToast === 'function') {
           bcToast(track === 'testflight_internal'
             ? (res.group ? `Build ${res.buildVersion} is in internal TestFlight group '${res.group}'.`
@@ -768,12 +780,14 @@ const UPF = {
             : `Build ${res.buildVersion} submitted for review.`);
         }
       } else {
-        setPhase('error');
+        // The build processed but couldn't be submitted to the track — fail at the
+        // step it was trying to reach.
+        setFail(track === 'testflight_internal' ? 'ready_for_testing' : 'waiting_for_review');
         if (typeof bcToast === 'function') bcToast(`Submit: ${(res && res.error) || 'failed'}`);
       }
     } catch (e) {
       console.warn('[UPF] submit failed', e);
-      setPhase('error');
+      setFail(state.upf.submitPhase[pid] || 'processing');
     }
   },
 

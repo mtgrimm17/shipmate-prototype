@@ -3290,8 +3290,8 @@ function generateId(prefix) {
 // the data shape (platformReleases) already supports them.
 const PLATFORM_TRACKS = {
   ios: [
-    { id: 'testflight_internal', label: 'TF (internal)' },
-    { id: 'testflight_external', label: 'TF (external)' },
+    { id: 'testflight_internal', label: 'TestFlight (internal)' },
+    { id: 'testflight_external', label: 'TestFlight (external)' },
     { id: 'production',          label: 'App Store' },
   ],
   /* THE TWO MAC ENTRIES WERE MISSING, and that is why the Mac App Store card
@@ -3302,13 +3302,13 @@ const PLATFORM_TRACKS = {
      as iOS — only the last label differs, because the destination is the Mac
      App Store and calling it "App Store" on a Mac card would be wrong. */
   macos: [
-    { id: 'testflight_internal', label: 'TF (internal)' },
-    { id: 'testflight_external', label: 'TF (external)' },
+    { id: 'testflight_internal', label: 'TestFlight (internal)' },
+    { id: 'testflight_external', label: 'TestFlight (external)' },
     { id: 'production',          label: 'Mac App Store' },
   ],
   macos_full: [
-    { id: 'testflight_internal', label: 'TF (internal)' },
-    { id: 'testflight_external', label: 'TF (external)' },
+    { id: 'testflight_internal', label: 'TestFlight (internal)' },
+    { id: 'testflight_external', label: 'TestFlight (external)' },
     { id: 'production',          label: 'Mac App Store' },
   ],
   android: [
@@ -3398,6 +3398,81 @@ const STORE_REVIEW = {
    `rejected` is off that line — it can arrive from `in_review` and it goes
    backwards, to work you have to redo. */
 const STORE_REVIEW_PHASES = ['in_review', 'accepted', 'live', 'rejected'];
+
+/* ── THE POST-SUBMISSION CARD'S TRACK-SPECIFIC STATUS SERIES (v8.11) ──────────
+   A Mac submission moves through a DIFFERENT ordered series of statuses
+   depending on the track it was sent to, and the card's segment bar draws
+   exactly these — one segment per status, in order. The LAST entry is the
+   track's terminal step, the only one that can turn green (complete):
+
+     Internal TestFlight  needs no App Review —
+       Uploading Build → Processing Build → Ready for Testing
+     External TestFlight  goes through review, then to testers —
+       Uploading Build → Processing Build → Waiting for Review → In Review
+       → Ready for Testing
+     App Store (production) goes through review, then waits on the developer —
+       Uploading Build → Processing Build → Waiting for Review → In Review
+       → Pending Developer Release
+
+   Keyed by the track id (PLATFORM_TRACKS): testflight_internal /
+   testflight_external / production. */
+const SUBMIT_TRACK_SERIES = {
+  testflight_internal: ['uploading', 'processing', 'ready_for_testing'],
+  testflight_external: ['uploading', 'processing', 'waiting_for_review', 'in_review', 'ready_for_testing'],
+  production:          ['uploading', 'processing', 'waiting_for_review', 'in_review', 'pending_developer_release'],
+};
+
+function submitTrackSeries(track) {
+  return SUBMIT_TRACK_SERIES[track] || SUBMIT_TRACK_SERIES.testflight_internal;
+}
+
+/* Status label + the description beneath it, written PER STATE so the line says
+   exactly where the submission is: `progress` while it is happening, `failed`
+   if it stopped here, `complete` for a terminal step that finished. `weight`
+   sizes that status's segment — the quick automatic steps are thin and the long
+   waits are wide (relative expected time, not a count). A terminal step's
+   `action`, if any, is the developer's own next move (Release). */
+const SUBMIT_PHASE_COPY = {
+  uploading: {
+    label: 'Uploading Build', weight: 1,
+    progress: 'Sending your build to App Store Connect.',
+    failed:   'The upload to App Store Connect didn’t finish. Open the step and press Submit again.',
+  },
+  processing: {
+    label: 'Processing Build', weight: 2,
+    progress: 'Apple is processing the uploaded build, this usually takes between 5 and 15 minutes.',
+    failed:   'Apple couldn’t finish processing the uploaded build. Open the step and press Submit again.',
+  },
+  waiting_for_review: {
+    label: 'Waiting for Review', weight: 4,
+    progress: 'Your build is in the queue for App Review. This usually takes a day or two.',
+    failed:   'App Review couldn’t be started for this build. Check App Store Connect for details.',
+  },
+  in_review: {
+    label: 'In Review', weight: 3,
+    progress: 'App Review is looking at your build right now.',
+    failed:   'App Review rejected your build. Read their notes in App Store Connect, fix what they flagged, and submit a new build.',
+  },
+  ready_for_testing: {
+    label: 'Ready for Testing', weight: 1,
+    progress: 'Almost there — your build is on its way to your testers.',
+    complete: 'Your build is available to your testers in TestFlight.',
+    failed:   'Your build didn’t reach TestFlight. Check App Store Connect for details.',
+  },
+  pending_developer_release: {
+    label: 'Pending Developer Release', weight: 1,
+    progress: 'Almost there — App Review has approved your build.',
+    complete: 'Approved. It reaches the Mac App Store as soon as you release it.',
+    failed:   'Your build wasn’t approved. Read App Review’s notes in App Store Connect.',
+    action:   'Release This Version',
+  },
+  /* Not in any series — the demo state after the developer presses Release on a
+     Pending Developer Release card. Keeps the bar fully green. */
+  released: {
+    label: 'Released', weight: 1,
+    complete: 'Live on the Mac App Store.',
+  },
+};
 
 /* THE APP'S CALENDAR MARK — the same art the topbar's Calendar tab wears, so
    the guide's month toggle and the nav tab are one icon rather than two

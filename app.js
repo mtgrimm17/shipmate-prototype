@@ -5988,9 +5988,27 @@ function smReviewVariant(n) {
 /* The button each phase's own store puts in front of you. It only moves the
    prototype forward one phase; there is no real store on the other end. */
 function smAdvancePhase(pid) {
-  const cur  = state.platformFlipped?.[pid]?.phase || 'in_review';
+  const flip = state.platformFlipped?.[pid] || {};
+  /* Mac walks the track-specific series (v8.11). In normal use this is only
+     reached from the Release button on a Pending Developer Release card, which
+     goes to the released state; the series walk is for console/demo stepping. */
+  if (typeof UPF !== 'undefined' && UPF.isMac && UPF.isMac(pid)) {
+    const track  = flip.track || (state.selectedTracks || {})[pid] || 'testflight_internal';
+    const series = (typeof submitTrackSeries === 'function') ? submitTrackSeries(track) : [];
+    const cur    = flip.phase;
+    let next;
+    if (cur === 'pending_developer_release') next = 'released';
+    else {
+      const i = series.indexOf(cur);
+      next = series[Math.min((i < 0 ? 0 : i) + 1, series.length - 1)];
+    }
+    state.platformFlipped[pid] = { ...flip, phase: next };
+    renderDashboard();
+    return;
+  }
+  const cur  = flip.phase || 'in_review';
   const next = cur === 'accepted' ? 'live' : cur === 'rejected' ? 'in_review' : 'accepted';
-  state.platformFlipped[pid] = { ...state.platformFlipped[pid], phase: next };
+  state.platformFlipped[pid] = { ...flip, phase: next };
   renderDashboard();
 }
 
