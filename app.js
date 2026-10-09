@@ -2980,6 +2980,17 @@ function setMacTextField(path, value) {
   obj[key] = value;
 }
 
+/* Live validation for the App Review phone/email fields (_mfValidatedField,
+   render.js). Fires on every keystroke beside setMacTextField and updates the
+   error line in place — no re-render, so the caret doesn't jump. smContactFieldError
+   (state.js) is the single verdict, shared with the first-paint check. */
+function smValidateContactInput(path, inputEl, errId) {
+  const msg = (typeof smContactFieldError === 'function') ? smContactFieldError(path, inputEl.value) : '';
+  if (inputEl && inputEl.classList) inputEl.classList.toggle('is-invalid', !!msg);
+  const el = document.getElementById(errId);
+  if (el) { el.textContent = msg; el.hidden = !msg; }
+}
+
 /* Game Build step — switch between the "Build from Steam" and "Upload Build"
    sub-tabs (buildGameBuildTabs, render.js). Default is 'steam'. */
 function setBuildTab(pid, tab) {

@@ -758,6 +758,30 @@ function smCrossSVG(px, sw) {
        + ` stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+/* App Review contact validation. App Store Connect rejects a malformed phone or
+   email outright, and the agent's submit-prep then drops just that field so the
+   rest of the record still lands (submitprep._review_block). That drop was
+   SILENT — the user typed 's' into Phone, it never reached ASC, and nothing
+   said so. This catches the same bad values at entry, in Shipmate, so the user
+   is warned before they submit. Empty is allowed (an empty field clears the ASC
+   value by design, #49). Returns '' when the value is fine, else a short
+   message. Kept here (loads first) so render.js and app.js can both call it. */
+function smContactFieldError(path, value) {
+  const v = (value || '').trim();
+  if (!v) return '';                       // empty is allowed — clears the field
+  if (path === 'reviewContact.email' || /\bemail$/i.test(path)) {
+    // Deliberately loose — matches Apple's own acceptance, not RFC 5322.
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'Enter a valid email address (name@example.com).';
+  }
+  if (path === 'reviewContact.phone' || /\bphone$/i.test(path)) {
+    const digits = v.replace(/[^0-9]/g, '');
+    if (digits.length < 7) return 'Enter a valid phone number, with country or area code.';
+    if (!/^[+()\-.\s0-9]+$/.test(v)) return 'A phone number can only contain digits, spaces and + ( ) - .';
+    return '';
+  }
+  return '';
+}
+
 /* THE STEP ROW'S CHEVRON, one definition, for the same reason as the check
    above: it was pasted into three card builders and left out of the fourth,
    which is how the Web card ended up with a text '›' while every other card

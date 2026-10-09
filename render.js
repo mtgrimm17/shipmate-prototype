@@ -16388,6 +16388,25 @@ function _mfTextField(label, path, value, placeholder = '', type = 'text', sette
     </div>`;
 }
 
+// Like _mfTextField, but for a field App Store Connect validates (the App Review
+// phone and email). It renders an error line under the input and marks the input
+// when the current value is one ASC would reject — smContactFieldError (state.js)
+// is the single source of that verdict, shared with the live oninput check
+// (smValidateContactInput, app.js). The error shows on the first paint too, so a
+// value imported or left from a prior session is flagged without a keystroke.
+function _mfValidatedField(label, path, value, placeholder = '', setter = 'setMacTextField') {
+  const errId = 'mferr-' + path.replace(/[^a-z0-9]/gi, '-');
+  const msg = (typeof smContactFieldError === 'function') ? smContactFieldError(path, value) : '';
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">${label}</label>
+      <input class="form-input${msg ? ' is-invalid' : ''}" type="text" value="${escHtml(value)}"
+             placeholder="${escHtml(placeholder)}" aria-describedby="${errId}"
+             oninput="${setter}('${path}', this.value); smValidateContactInput('${path}', this, '${errId}')">
+      <div class="mf-field-err" id="${errId}" role="alert"${msg ? '' : ' hidden'}>${escHtml(msg)}</div>
+    </div>`;
+}
+
 // Same as _mfTextField above, but writes into state.macFullAppStoreListing
 // via setMacFullListingField (app.js) instead of macFullSubmitAnswers —
 // used only by buildMacFullVersionInfoSection below.
@@ -16510,8 +16529,8 @@ function buildMacBusinessExtras() {
     </div>
     ${_mfTextField('First Name', 'reviewContact.firstName', rc.firstName, '', 'text', 'setMacTextField')}
     ${_mfTextField('Last Name', 'reviewContact.lastName', rc.lastName, '', 'text', 'setMacTextField')}
-    ${_mfTextField('Phone', 'reviewContact.phone', rc.phone, '', 'text', 'setMacTextField')}
-    ${_mfTextField('Email', 'reviewContact.email', rc.email, '', 'text', 'setMacTextField')}
+    ${_mfValidatedField('Phone', 'reviewContact.phone', rc.phone, '', 'setMacTextField')}
+    ${_mfValidatedField('Email', 'reviewContact.email', rc.email, '', 'setMacTextField')}
 
     <div class="form-group" style="margin-bottom:6px;">
       <label class="form-label">Sign-in required to review all features?</label>
@@ -21919,9 +21938,14 @@ function buildSubmittedCard(pid, flipData) {
   // and keep it updating live (_paintUploadPct writes [data-sub-uploadpct]). It is
   // true byte progress, so it is the one phase worth a number — a clear "uploading
   // is working" signal rather than a silent spinner.
-  const uploadPctHtml = (macSt && macSt.phase === 'uploading' && macSt.stateKind === 'progress')
+  const _uploading = macSt && macSt.phase === 'uploading' && macSt.stateKind === 'progress';
+  const uploadPctHtml = _uploading
     ? ` <span class="sub-uploadpct" data-sub-uploadpct>${Math.max(0, Math.min(100, Math.round((state.upf && state.upf.uploadPct) || 0)))}%</span>`
     : '';
+  // The first upload chunk can sit at 0% for a minute or two (progress is only
+  // known per chunk). An ANIMATED ellipsis keeps the line visibly alive so 0%
+  // doesn't read as a freeze. For every other in-progress phase it's a static "…".
+  const dotsHtml = _uploading ? '<span class="sub-dots" aria-hidden="true"></span>' : dots;
   const _subTrack = macSt ? macSt.track
                   : ((state.upf && state.upf.submitTrack && state.upf.submitTrack[pid]) || (flipData && flipData.track) || '');
 
@@ -22006,7 +22030,7 @@ function buildSubmittedCard(pid, flipData) {
             `inline` renders byte-for-byte what it rendered before. */''}
       ${modalGrid ? platformCardHead(pid, 'submitted') : `
       <div class="sub-head">
-        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${dots}${uploadPctHtml}</span>
+        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${dotsHtml}${uploadPctHtml}</span>
         ${_platformHeadActions(pid, 'submitted')}
       </div>`}
       ${buildReleaseBlock(pid)}
@@ -22016,7 +22040,7 @@ function buildSubmittedCard(pid, flipData) {
             baseline. `.sub-state:empty` already hides this row in the pane, so
             the arm that does not use it costs nothing. */''}
       <div class="sub-state">
-        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${dots}${uploadPctHtml}</span>` : ''}
+        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${dotsHtml}${uploadPctHtml}</span>` : ''}
         ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
               `!isYours && !isBad`, which let it survive into `live` — so a
               build that was finished, distributed and on sale still said

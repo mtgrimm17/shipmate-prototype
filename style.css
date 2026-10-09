@@ -16213,6 +16213,19 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .form-input.is-over-limit { border-color: var(--magenta); background: var(--magenta-soft); }
 .iap-product-field .ias-char-counter-row { margin-top: 4px; margin-left: 0; margin-right: 0; width: auto; }
 
+/* App Review phone/email validation (_mfValidatedField, render.js). Same red
+   tint vocabulary as .is-over-limit above — a field App Store Connect would
+   reject reads the same as a field over its limit — with a one-line message
+   under it. Hidden (the [hidden] attribute) until there is something to say. */
+.form-input.is-invalid { border-color: var(--magenta); background: var(--magenta-soft); }
+.mf-field-err {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--magenta);
+}
+.mf-field-err[hidden] { display: none; }
+
 .iap-product-trial {
   display: flex;
   align-items: center;
@@ -21758,8 +21771,25 @@ body.is-splash .ai-disclaimer { display: none; }
 .sub-steps-toggle.is-open .sm-chevron { transform: rotate(180deg); }
 
 /* The read-only lock on a step modal. A pointer lock, not a permissions
-   model — see the note at its markup. */
+   model — see the note at its markup.
+   BUT reading requires scrolling, and a blanket pointer-events:none kills the
+   wheel and the scrollbar-drag on "see what you sent" (the privacy sub-step and
+   the Mac store preview could not be scrolled). So the scroll containers keep
+   pointer input, and only the actual editing controls are locked back off — the
+   lane scrolls, the fields don't take edits. */
 .submit-modal-body-wrap.is-readonly { pointer-events: none; }
+.submit-modal-body-wrap.is-readonly .submit-modal-scroll,
+.submit-modal-body-wrap.is-readonly .mac-spp-main,
+.submit-modal-body-wrap.is-readonly .pvt-scroll { pointer-events: auto; }
+/* …but nothing that CHANGES the submitted data takes input. Section-navigation
+   buttons (.spp-section-btn) and the accordion disclosure stay live so the user
+   can walk the sections they sent; the text fields and the answer toggles that
+   would mutate it do not. */
+.submit-modal-body-wrap.is-readonly input,
+.submit-modal-body-wrap.is-readonly textarea,
+.submit-modal-body-wrap.is-readonly select,
+.submit-modal-body-wrap.is-readonly [contenteditable],
+.submit-modal-body-wrap.is-readonly .prv-hit { pointer-events: none; }
 /* THE SAME OBJECT AS THE CONTENT RATING BAR, because it is the same KIND of
    object: a strip pinned above the step's body that says something about the
    whole of it. They can appear in one modal at once (open Content Rating from a
@@ -21991,6 +22021,13 @@ body.is-splash .ai-disclaimer { display: none; }
 /* The live upload percentage on the status line. tabular-nums keeps the width
    steady as the digits tick up, so the label doesn't jitter. */
 .sub-uploadpct { font-size: 0.72em; opacity: .85; margin-left: 4px; font-variant-numeric: tabular-nums; }
+/* Animated ellipsis for the Uploading phase, so the line stays visibly alive while
+   the first chunk sits at 0% (upload progress is only known per chunk). Inherits
+   the status-line colour. The fixed-width inline-block stops the label jittering as
+   the dot count changes. */
+.sub-dots { display: inline-block; width: 1.1em; text-align: left; }
+.sub-dots::after { content: '…'; animation: sub-dots-cycle 1.2s steps(1, end) infinite; }
+@keyframes sub-dots-cycle { 0% { content: '.'; } 33% { content: '..'; } 66%, 100% { content: '…'; } }
 
 /* Date row */
 .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }

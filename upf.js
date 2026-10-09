@@ -648,7 +648,21 @@ const UPF = {
         if (this._prepHash[pid] !== ph) {
           this._prepHash[pid] = ph;
           const pr = await this._post('/submitprep', { game: state.upf.game.app, data: prep });
-          if (pr && pr.job) await this.waitJob(pr.job, () => {});
+          let res = null;
+          if (pr && pr.job) res = await this.waitJob(pr.job, () => {});
+          // App Store Connect rejected one or more App Review fields (e.g. a
+          // malformed phone/email). The agent wrote the rest and told us which it
+          // dropped — say so, rather than letting those values vanish silently.
+          // The Business step's inline validation should catch these first; this
+          // is the backstop for anything Apple refuses that the heuristic missed.
+          const dropped = (res && res.dropped) || [];
+          if (dropped.length && typeof bcToast === 'function') {
+            const list = dropped.join(', ');
+            bcToast(`App Store Connect wouldn’t accept: ${list}. Those weren’t saved — check the value in Business and sync again.`);
+            // Reset the hash so the next edit re-attempts the dropped fields
+            // (otherwise the change-guard would skip an unchanged payload).
+            this._prepHash[pid] = null;
+          }
         }
       } catch (e) { console.warn('[UPF] submit-prep sync failed', e); }
       // (Upload no longer fires on sync — it runs at Submit now. #42)
