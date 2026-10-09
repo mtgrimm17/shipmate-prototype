@@ -299,7 +299,18 @@ const smGet = id => smPool().find(a => a.id === id) || null;
 function smAppIcon() {
   return (typeof state !== 'undefined' && state.uploads?.appIcon)
       || smPool().find(a => a.kind === 'icon')
+      || _agentAppIcon()
       || null;
+}
+
+/* The app's own icon, extracted from its .icns by the agent and carried on the
+   inspect manifest as a PNG data URL (state.upf.manifest.icon). It is the
+   authentic macOS app icon and needs no network, so it fills the gap when there
+   is no uploaded icon and no usable Steam-CDN candidate — the case that showed
+   the red "icon" placeholder. A real upload or pool candidate still wins. */
+function _agentAppIcon() {
+  const url = (typeof state !== 'undefined') && state.upf && state.upf.manifest && state.upf.manifest.icon;
+  return url ? { kind: 'icon', id: 'agent-icns', src: url } : null;
 }
 
 /* …and the src, because the two doors hand back two SHAPES and every caller was
