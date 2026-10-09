@@ -6128,8 +6128,33 @@ function _platformHeadActions(pid, face) {
        `_cacheStepsFaceHeight` and `buildAccountCard` are still built around.
        One branch, the same shape `buildSubmittedCard` and `renderSubmission`
        already use for this flag, and it goes when the flag does. */
+    /* ── THE APP STORE FAMILY HAS NO BACK, SO IT HAS NO GEAR ────────────────
+       Jaco: "el settings gear de Mac App Store ahora está obsoleto, flippea la
+       carta para nada."
+
+       Measured, and it is exactly that: the press writes
+       `state.platformFace[pid] = 'account'`, and `showAccountFace` — which is
+       what `buildActiveCard` asks — returns false for these two BY DESIGN, with
+       its own comment saying so ("connecting is Step 1 … there is no flip"). So
+       the flip animation runs and the card rebuilds identical. A control that
+       looks pressable and does nothing is worse than a picture of one.
+
+       REMOVED RATHER THAN RE-POINTED, and the alternative is worth saying out
+       loud: the gear could open the connect step modal instead. It should not,
+       because that modal is what the FIRST ROW of this very card opens — a gear
+       three inches above a row that goes to the same place is a second door to
+       one room, which is the "two marks on one object" this app keeps refusing.
+
+       The alert dot goes with it and is not lost: an unconnected account is
+       already said twice on this card, by Step 1's own disc and by the padlocks
+       the connect gate puts on every row beneath it.
+
+       Scoped to the two pids `showAccountFace` names, so every other platform —
+       which really does have an account face to turn to — is untouched. When
+       `showAccountFace` stops special-casing them, this goes with it. */
+    const noBack = (pid === 'macos' || pid === 'macos_full');
     const cardGrid = state.submission?.layout === 'modal';
-    gear = _gearBtn(cardGrid ? `platformGearFromSteps('${pid}')` : `platformGearFromTab('${pid}')`,
+    gear = noBack ? '' : _gearBtn(cardGrid ? `platformGearFromSteps('${pid}')` : `platformGearFromTab('${pid}')`,
       connected ? 'Account settings' : 'Connect account to publish',
       false, !connected && face === 'steps');
   } else {

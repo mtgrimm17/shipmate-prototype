@@ -25702,7 +25702,11 @@ function _smModeClasses() {
       smStepArm && !!smNow && smNow.stepId === 'storePreview');
   }
   document.body.classList.toggle('sm-guide-mid',   open && _smMode === 'mid');
-  document.body.classList.toggle('sm-guide-panel', open && _smMode === 'panel');
+  /* The grid — and so the modal's second column — only for steps that want the
+     panel at all. See `_smStepWantsPanel`. */
+  document.body.classList.toggle('sm-guide-panel',
+    open && _smMode === 'panel' &&
+    (!smNow || _smStepWantsPanel(smNow.platformId, smNow.stepId)));
   /* DISMISSING THE PANEL LASTS FOR THAT VISIT, NOT FOR THE SESSION. Jaco: "ahora
      cuando cierro a Shippy, no vuelve a renderizarse donde está normalmente."
 
@@ -25799,10 +25803,51 @@ let _smRailHome = null;
    read as one octopus who moved. That is still what the re-parenting buys on
    every open and close. */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   A STEP WHOSE BODY IS ALREADY A CHECKLIST HAS NOTHING FOR THE PANEL.
+
+   Jaco: "maybe we don't need the Shippy checklist in both the Connect Account
+   and Generate Build on Mac App Store."
+
+   Right, and the reason generalises rather than naming two steps. The panel is
+   an ADVISER: everywhere else it lists parts of a step that the body states as
+   a form, so the two say different things about one thing. These two are the
+   only steps whose body IS a list of its own parts — Connect Account is four
+   tasks with the current one expanded, and Generate Build is the live build
+   stages. A panel beside either repeats it, and repeats it WORSE: the body's
+   copy ticks itself off as the agent works, where the panel's is a snapshot.
+
+   That is the "two marks on one object" this app has now refused on the Submit
+   row's border, the metadata strip's rule, the calendar's rings and the
+   preview's own pinned bar — the last of which is this same trade in the other
+   direction (there the panel keeps the list and the BODY's bar goes).
+
+   AND IT IS WHAT MAKES THE MODAL NARROW AGAIN, which is the second half of the
+   same ask. `body.sm-guide-panel` turns the modal into a two-column grid
+   (`var(--sm-body-w)` plus `--guide-w + 12`); measured, that is what made
+   Connect Account 1114px wide for 560 of content. Not applying the class is not
+   a width tweak — it is the modal going back to one column because there is no
+   longer a second thing in it.
+
+   Scoped to `panel`, the default and the arm this was asked about; `mid` moves
+   the guide a different way and is left alone until someone looks at it. */
+function _smStepWantsPanel(pid, stepId) {
+  if (!stepId) return true;
+  const mac = (pid === 'macos' || pid === 'macos_full');
+  return !(mac && (stepId === 'connect' || stepId === 'uploadBuild'));
+}
+
 function _smRailMount() {
   if (_smMode !== 'panel') return;
   const ov = document.getElementById('submit-overlay');
   if (!ov || ov.classList.contains('hidden')) return _smRailRelease();
+  /* RELEASED, NOT MERELY SKIPPED. This function MOVES the real `#app-guide`
+     into the modal rather than copying it, so declining to mount is not enough:
+     left alone the node would stay wherever it was last put, and the dashboard
+     would come back without its column. `_smRailRelease` is the one that knows
+     its way home. */
+  const smStep = (typeof _smOpenStep === 'function') ? _smOpenStep() : null;
+  if (smStep && !_smStepWantsPanel(smStep.platformId, smStep.stepId)) return _smRailRelease();
   const modal = ov.querySelector('.submit-modal');
   const guide = document.getElementById('app-guide');
   if (!modal || !guide) return;

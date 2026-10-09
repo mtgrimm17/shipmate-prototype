@@ -28436,3 +28436,36 @@ body.sm-arm-steps #sm-steps-bar .spp-pin {
 /* With a face of its own the block is no longer a postscript under a list, so
    it gives up the separation it needed there. */
 .guide-card.sm-tab-alerts .sm-guide-risks { margin-top: 0; border-top: none; padding-top: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   `.connect-modal` IS TWO OBJECTS, AND INSIDE A STEP IT IS THE QUIET ONE.
+
+   Jaco: "¿puedes en Connect Account al menos expandir el ancho del contenido
+   para que ocupe el ancho oportuno del modal?"
+
+   Measured: the step body is 619 wide and the content sat at **560** — 59px of
+   it unused. The cause is that this class is declared THREE times, because it
+   serves two different objects: it began as the free-standing connect dialog
+   (`#connect-modal`, the ASC wizard's own overlay) and carries that dialog's
+   clothes — `width: 420px`, then `width: 560px !important`, plus its own
+   `--panel` background, border and radius.
+
+   As the BODY of a step modal none of that is true. A fixed width inside a box
+   that already has one is a second opinion about the same question, and the
+   background-plus-border is a panel inside a panel — the exact thing the Mac
+   preview's page lost its card for ("that card was a Shipmate invention, and it
+   also made this a panel inside a panel, since the modal already is one").
+
+   So in a step it gives all of it up and becomes a plain block: the step body
+   decides the width, as it does for every other step. `!important` only because
+   the rule it has to beat uses it; the dialog keeps its 560 by construction,
+   since this selector needs an `.ios-step-body-content` parent and the overlay
+   has none. */
+.ios-step-body-content > .connect-modal {
+  width: auto !important;
+  max-width: none !important;
+  background: none;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
