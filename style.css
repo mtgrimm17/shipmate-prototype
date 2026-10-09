@@ -6195,7 +6195,28 @@ body.sm-hide-shippy .fabslot{display:none !important}
    wraps under it when the card cannot seat both; `margin-left: auto` on the
    picker keeps it on the same right edge either way. The ellipsis stays as the
    last resort for a version string long enough to beat even the floor. */
-.rel-value--pick .rel-line { flex: 1 1 auto; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-wrap: nowrap; }
+/* THE FLOOR IS THE TEXT, NOT 120. Jaco, on the pill widening above: "está
+   descabalgado el build… pero si hay espacio de sobra."
+
+   He was right and the number says why. `120px` was reserving room for content
+   that is usually `42` — **14.4px of text**. With the pill sized to its label
+   (199.2 for "TestFlight (external)") the sum was 120 + 199.2 = 319.2 against
+   the value cell's 303, so the row broke and the build number was left stranded
+   above its own BUILD label with the pill under it.
+
+   `min-content` is the same promise kept honestly: the line never shrinks below
+   the text it holds, which is exactly what the 120 was for — this row's note
+   says a clipped build number is worse than a second line, because it is the one
+   fact nobody can reconstruct. A fixed floor only honours that for strings
+   shorter than 120 and over-reserves for every string shorter than that;
+   `min-content` honours it at any length.
+
+   MEASURED, THE DEGRADATION IS UNCHANGED and is still the documented one — it
+   breaks, it does not clip. `42` and `4210`: one row, block 30. `v1.0.4 · 4210`
+   and a 22-character build string: the picker wraps under, block 50 — and the
+   text is NOT ellipsised in any of the four. The block is 30 now where v8.15
+   measured 33.5, so the ordinary card got slightly tighter rather than taller. */
+.rel-value--pick .rel-line { flex: 1 1 auto; min-width: min-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-wrap: nowrap; }
 /* The version's own column exists to line "BUILD" up card-to-card on a row of
    pure text. On this row the picker's right edge is the alignment that matters
    and the 25px of slack that column reserves is 25px the picker could be
@@ -6265,7 +6286,29 @@ body.sm-hide-shippy .fabslot{display:none !important}
 .rel-line--triple { flex-wrap: nowrap; min-width: 0; }
 .rel-line--triple .rel-version { min-width: 0; }
 .rel-line--triple .rel-pair { min-width: 0; }
-.rel-line--triple .rel-pair .rel-build { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* THE ELLIPSIS NEEDS `overflow: hidden`, AND `overflow: hidden` CLIPS THE
+   DESCENDERS. Jaco: "asegúrate de que no se corta el TestFlight (internal) en
+   su baseline."
+
+   Measured on a real card: the box is **12** tall (`.rel-line`'s own
+   `line-height: 12px` at `font-size: 12px`) and IBM Plex Mono's ink for
+   "TestFlight (internal)" is **16** — so it overflowed 2px at each end and the
+   parentheses and the `g` lost their tails. It is the exact failure the import
+   note hit on the `g` of "Google Play", one surface over: a `line-height` under
+   `overflow: hidden` is a CLIPPING decision, not a rhythm one.
+
+   IT IS PAID IN PADDING AND TAKEN BACK IN MARGIN, so it costs no layout —
+   `.ias-editable`'s own pair. `overflow` clips to the PADDING box, so 2px of
+   padding is exactly the clearance the ink was missing, and the negative margin
+   keeps the margin box at the 12 the row is built on. Raising the line-height
+   instead would have grown the release block by 4px on every card.
+
+   The row is `align-items: baseline`, which is untouched by this: the baseline
+   does not move when a box grows symmetrically around it. */
+.rel-line--triple .rel-pair .rel-build {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding-block: 2px; margin-block: -2px;
+}
 
 /* A NAMED FACT INSIDE THE ROW — "BUILD 42". The 14px row gap plus this 16px
    margin puts 30px before the name, against the 14px binding the name to its
@@ -7632,7 +7675,31 @@ body.sm-hide-shippy .fabslot{display:none !important}
    in the markup. Matched to .build-pill: 160px wide, 30px tall, 8px radius,
    12.5px — so the Submit row and the Upload Build row end on the same edge
    with the same object. */
-.submit-track-pick .loc-primary-wrap { width: 160px !important; max-width: 160px !important; }
+/* 160 IS THE FLOOR NOW, NOT THE WIDTH. Jaco: "cuando selecciono el tipo de
+   TestFlight, que el container se amplíe hacia la izquierda para que quepa sin
+   hacer doble línea."
+
+   Measured, the hard 160 was overriding the builder: `swSelect` is already
+   called with `'auto'` for this picker (render.js, `trackPick`), and this rule's
+   `!important` won. At 160 the pill leaves 112 for the label while "TestFlight
+   (external)" needs **151.2** — so it wrapped, and the box went 30 → 32 with the
+   text on two lines.
+
+   IT GROWS LEFTWARDS FOR FREE, which is why nothing else has to change:
+   `.submit-track-pick` is `margin-left: auto`, so its right edge is pinned to
+   the row's and every extra pixel comes off the left. The floor keeps the
+   resting "Select track" chip at the 160 it shares with `.build-pill`, so the
+   two rows still end on the same edge and the empty state is unchanged.
+
+   `nowrap` on the label is the guarantee rather than the hope: `max-content`
+   already sizes to one line, and a later `max-width` from anywhere would
+   silently bring the second one back. */
+.submit-track-pick .loc-primary-wrap {
+  width: max-content !important;
+  max-width: none !important;
+  min-width: 160px;
+}
+.submit-track-pick .loc-primary-name { white-space: nowrap; }
 .submit-track-pick .loc-primary-pill {
   width: 100%;
   height: 30px;
@@ -21650,14 +21717,37 @@ body.is-splash .ai-disclaimer { display: none; }
    it (pulled to the card edges with the -20px side margins that cancel the
    card's 20px padding) sets it apart as "there is more below", and the chevron
    on the right says it opens — rotating 180° when the list is showing. */
+/* THE LINE IS INSET, THE PRESS AREA IS NOT. Jaco: "el See what you sent tiene
+   una divisoria horizontal que no hemos usado nunca, porque llega hasta los
+   bordes. Haz que, como en los steps de la platform card, no llegue a los
+   bordes laterales."
+
+   Measured on a 392px card: a step row's divider is **350** wide and runs 21 →
+   371 — the card's one real text column (its 1px border plus 20px of padding).
+   This one was a `border-top` on a box bled to `margin: 0 -20px`, so it ran the
+   full 390 and was the only rule in the card reaching its edges.
+
+   SO THE BLEED STAYS AND ONLY THE LINE MOVES. The -20 is what makes the whole
+   strip the press target and gives the hover box the overhang a row has; taking
+   it off to inset the line would have paid for a 1px change with the control's
+   own size. The line becomes a `::before` held 20px off each end of that bled
+   box — which lands on 21 and 371, the steps' own column, measured.
+
+   `position: relative` is safe here and is checked rather than assumed: this
+   element computes `static`, so nothing is being replaced (the trap the privacy
+   table's sticky `<th>` paid for). */
 .sub-steps-toggle {
-  align-self: stretch;
+  align-self: stretch; position: relative;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   margin: 0 -20px; padding: 16px 20px 0; text-align: left;
-  background: none; border: none; border-top: 1px solid rgba(255, 255, 255, .08);
+  background: none; border: none;
   cursor: pointer;
   font-family: var(--mono); font-size: 12px; color: var(--text-dim);
   transition: color .12s;
+}
+.sub-steps-toggle::before {
+  content: ''; position: absolute; top: 0; left: 20px; right: 20px;
+  height: 1px; background: rgba(255, 255, 255, .08);
 }
 .sub-steps-toggle:hover { color: var(--text); }
 .sub-steps-toggle .sm-chevron {
