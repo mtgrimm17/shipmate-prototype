@@ -2991,6 +2991,16 @@ function smValidateContactInput(path, inputEl, errId) {
   if (el) { el.textContent = msg; el.hidden = !msg; }
 }
 
+/* Live validation for a listing field App Store Connect enforces (Copyright's
+   2-char minimum) — same in-place update as smValidateContactInput, verdict from
+   smListingFieldError (state.js). */
+function smValidateListingInput(field, inputEl, errId) {
+  const msg = (typeof smListingFieldError === 'function') ? smListingFieldError(field, inputEl.value) : '';
+  if (inputEl && inputEl.classList) inputEl.classList.toggle('is-invalid', !!msg);
+  const el = document.getElementById(errId);
+  if (el) { el.textContent = msg; el.hidden = !msg; }
+}
+
 /* Game Build step — switch between the "Build from Steam" and "Upload Build"
    sub-tabs (buildGameBuildTabs, render.js). Default is 'steam'. */
 function setBuildTab(pid, tab) {

@@ -16423,6 +16423,23 @@ function _mfListingField(label, field, value, placeholder = '', type = 'text', s
     </div>`;
 }
 
+// Like _mfListingField, but for a listing field App Store Connect validates at
+// write time (Copyright's 2-character minimum). Shows the error inline so the
+// user fixes it before it's silently dropped by ASC. smListingFieldError (state.js)
+// is the shared verdict; smValidateListingInput (app.js) is the live check.
+function _mfValidatedListingField(label, field, value, placeholder = '', setter = 'setMacListingField') {
+  const errId = 'mflerr-' + String(field).replace(/[^a-z0-9]/gi, '-');
+  const msg = (typeof smListingFieldError === 'function') ? smListingFieldError(field, value) : '';
+  return `
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">${label}</label>
+      <input class="form-input${msg ? ' is-invalid' : ''}" type="text" value="${escHtml(value)}"
+             placeholder="${escHtml(placeholder)}" aria-describedby="${errId}"
+             oninput="${setter}('${field}', this.value); smValidateListingInput('${field}', this, '${errId}')">
+      <div class="mf-field-err" id="${errId}" role="alert"${msg ? '' : ' hidden'}>${escHtml(msg)}</div>
+    </div>`;
+}
+
 // Small file-row display shared by App Information's Routing App Coverage
 // File and App Review Information's attachment — mirrors trailerFileRowHTML's
 // convention (name + size + Remove button) with a generic file icon instead
@@ -16567,7 +16584,7 @@ function buildMacAppInfoExtras() {
     </div>
     ${_mfListingField('Keywords', 'keywords', l.keywords || '', 'Comma-separated, up to 100 characters total', 'text', 'setMacListingField')}
     ${_mfListingField('Support URL', 'supportUrl', l.supportUrl || '', 'e.g. https://yourstudio.com/support', 'text', 'setMacListingField')}
-    ${_mfListingField('Copyright', 'copyright', l.copyright || '', 'e.g. 2027 Your Studio', 'text', 'setMacListingField')}`;
+    ${_mfValidatedListingField('Copyright', 'copyright', l.copyright || '', 'e.g. 2027 Your Studio', 'setMacListingField')}`;
 }
 
 /* ── Mac App Store Full — App Information (new) ───────────────────────────

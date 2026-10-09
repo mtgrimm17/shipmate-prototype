@@ -782,6 +782,21 @@ function smContactFieldError(path, value) {
   return '';
 }
 
+/* Listing-field validation, the same idea as smContactFieldError but for the App
+   Information fields that go through the /populate path. Copyright is the one with
+   a format rule App Store Connect enforces at write time: it must be at least 2
+   characters (ENTITY_ERROR.ATTRIBUTE.INVALID.TOO_SHORT) — a single 's' was
+   rejected and dropped silently. Empty is allowed (clears the field). Returns ''
+   when fine, else a short message. */
+function smListingFieldError(field, value) {
+  const v = (value || '').trim();
+  if (!v) return '';                       // empty is allowed — clears the field
+  if (field === 'copyright' && v.length < 2) {
+    return 'Copyright must be at least 2 characters, e.g. 2027 Your Studio.';
+  }
+  return '';
+}
+
 /* THE STEP ROW'S CHEVRON, one definition, for the same reason as the check
    above: it was pasted into three card builders and left out of the fourth,
    which is how the Web card ended up with a text '›' while every other card

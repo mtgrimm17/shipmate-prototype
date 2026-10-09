@@ -597,6 +597,7 @@ const UPF = {
       const langs = [primaryLang].concat((f.localizations || []).filter(l => l && l !== primaryLang));
       this._shotHash = this._shotHash || {};
       let pushed = 0, shotHash = null, sentShots = false;
+      const rejected = new Set();   // listing fields App Store Connect refused
       for (const lang of langs) {
         const isPrimary = lang === primaryLang;
         const listing = this.buildListing(pid, lang, isPrimary);
@@ -610,11 +611,24 @@ const UPF = {
           else sentShots = true;
         }
         const r = await this._post('/populate', { game: state.upf.game.app, listing });
-        if (r && r.job) await this.waitJob(r.job, () => {});
+        let res = null;
+        if (r && r.job) res = await this.waitJob(r.job, () => {});
+        ((res && res.rejected) || []).forEach(x => rejected.add(x));
         pushed++;
       }
       if (sentShots && shotHash) this._shotHash[pid] = shotHash;
-      if (pushed && typeof bcToast === 'function') bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
+      // A field App Store Connect refused (e.g. a copyright under 2 chars) was
+      // written to the log before and vanished from the user's view. Say so — the
+      // same backstop as submit-prep, for the listing path. The Product Page's
+      // inline validation should catch these first; this covers what Apple refuses
+      // that the heuristic missed. Takes priority over the plain "Synced" toast.
+      if (pushed && typeof bcToast === 'function') {
+        if (rejected.size) {
+          bcToast(`App Store Connect wouldn’t accept: ${[...rejected].join(', ')}. Those weren’t saved — fix and sync again.`);
+        } else {
+          bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
+        }
+      }
       // In-app purchases → ASC (needs no build; rides with the metadata sync).
       // Change-guarded so an idle save doesn't re-walk every product.
       try {
