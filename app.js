@@ -3422,7 +3422,14 @@ function closeStepModal() {
      extension, which does it in a background tab. No-op if the extension isn't
      installed. Gated to the Apple privacy step on a Mac platform (Android's
      'dataSafety' is Google Play, not ASC). */
-  if (typeof UPF !== 'undefined' && sm && (sm.stepId === 'privacy' || sm.stepId === 'data') && UPF.isMacPid(sm.platformId)) {
+  /* App Privacy is reached two ways on a Mac: as its own 'privacy' step, OR as
+     the 'data' sub-section inside Product Page Preview (openStorePreviewSection
+     (pid,'data')), where the modal's stepId stays 'storePreview'. Fire on BOTH,
+     or closing the preview with the privacy sub-section showing silently skips
+     the write — which is exactly the "doesn't trigger on save/close" bug. */
+  if (typeof UPF !== 'undefined' && sm && UPF.isMacPid(sm.platformId)
+      && (sm.stepId === 'privacy' || sm.stepId === 'data'
+          || (sm.stepId === 'storePreview' && state.storePreviewFlipTarget?.[sm.platformId] === 'data'))) {
     UPF.fillPrivacyInAsc(sm.platformId);
   }
 
@@ -7478,6 +7485,7 @@ function platformSignOut(pid) {
   // A fresh connect should re-run the API-key task from scratch.
   state._apiKeyAutoStarted = false;
   state._apiKeyFailed = false;
+  state._apiKeyStepDone = undefined;   // next connect re-performs the key step (#3)
   _setPlatformFace(pid, 'account');
   _rerenderPlatformCard(pid);
   const u = document.getElementById('login-user-' + pid); if (u) u.focus();
@@ -7718,15 +7726,18 @@ function connectAdd(pid) {
   // generation). The modal finishes when the key lands (_onAscTaskResult). Only
   // when the agent already holds a key is connect complete right now — close then.
   if (inConnectModal && isMac) {
-    const hasKey = !!(state.upf?.agent?.account?.hasApiKey);
-    if (!hasKey) {
-      state._apiKeyAutoStarted = false;   // fresh attempt for this connect
-      state._apiKeyFailed = false;
-      if (typeof reRenderStepModal === 'function') reRenderStepModal();
-      return;   // the key task takes over; onConnected fires when it succeeds
-    }
-    if (typeof closeStepModal === 'function') closeStepModal();
-    UPF.onConnected(pid);
+    /* The API key is the 4th Connect task and Shipmate performs it HERE — even
+       when the agent already holds a key, so the step is visibly completed by the
+       agent instead of showing a pre-green check the flow skips over (#3). Before,
+       an existing key made this close the modal straight after sign-in, which read
+       as bouncing back to the dashboard with step 4 never visited. Now the apikey
+       task always runs: it generates a new key or confirms the existing one, and
+       onConnected fires when it completes (_onAscTaskResult, or the already-keyed
+       branch of the task's auto-start). */
+    state._apiKeyStepDone = false;      // the agent will perform/confirm the key as a visible step
+    state._apiKeyAutoStarted = false;   // fresh attempt for this connect
+    state._apiKeyFailed = false;
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
     return;
   }
 
@@ -23778,6 +23789,16 @@ async function openStorePreviewSection(pid, target) {
   if (pid === 'steam' && target === 'languages') _steamSeedLanguagesIfNeeded();
 
   if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = { ios: null, android: null, steam: null };
+  /* Leaving the App Privacy sub-section (flipping back to the preview or to
+     another sub-section) commits its answers, so fire the ASC App Privacy write
+     here too — closing the modal is handled in closeStepModal, but a flip-away
+     never reaches it. Mac only; App Privacy has no API, so it goes via the
+     extension (no-op if not installed). */
+  const _prevSppTarget = state.storePreviewFlipTarget[pid];
+  if (_prevSppTarget === 'data' && target !== 'data'
+      && typeof UPF !== 'undefined' && UPF.isMacPid && UPF.isMacPid(pid)) {
+    try { UPF.fillPrivacyInAsc(pid); } catch (_) {}
+  }
   state.storePreviewFlipTarget[pid] = target;
   /* Product Page Preview is a SECOND DOOR onto the same questionnaires, and a
      visit through it counts. Flipping to Content lands on exactly the content

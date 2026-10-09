@@ -7293,11 +7293,20 @@ function buildConnectStepSection(pid) {
      Sign in are user tasks; the API key is one SHIPMATE completes on its own —
      when it's the current task it generates/reuses the key and imports it into the
      agent, turning green without the user (the way the build stages do). */
+    /* The key step GATES ON STEPS 1–3 (#3): it must never show complete until the
+       extension is installed and you're signed in, even when the agent already
+       holds a key — otherwise step 4 shows a green check while 1–3 are still blank
+       and the flow appears to skip it. Once 1–3 are done the step becomes current
+       and the agent performs it (generates a new key or confirms the existing one),
+       turning it green. The done value itself is a session flag (not raw hasApiKey)
+       so the completion is driven by the agent having run; undefined (re-viewing an
+       already-connected account) falls back to hasApiKey. */
+  const _priorDone = downloaded && extDone && signedIn;
   const tasks = [
     { id: 'download', title: 'Download the Shipmate extension',   done: downloaded },
     { id: 'install',  title: 'Install it in Chrome',              done: extDone    },
     { id: 'signin',   title: 'Sign in to App Store Connect',      done: signedIn   },
-    { id: 'apikey',   title: 'Set up your App Store Connect key', done: hasApiKey  },
+    { id: 'apikey',   title: 'Set up your App Store Connect key', done: _priorDone && (state._apiKeyStepDone === undefined ? hasApiKey : !!state._apiKeyStepDone) },
   ];
   const currentIdx = tasks.findIndex(t => !t.done);
   const allDone    = currentIdx === -1;
@@ -7387,9 +7396,16 @@ function _connectTaskDetail(pid, taskId) {
         && typeof UPF !== 'undefined' && typeof UPF.generateApiKey === 'function') {
       state._apiKeyAutoStarted = true;
       Promise.resolve().then(() => UPF.generateApiKey(pid)).then((r) => {
-        if (r && r.already) {   // agent already had a key — refresh so the task shows done
+        if (r && r.already) {
+          // Agent already had a key — the step is still performed (confirmed) by the
+          // agent: mark it done so the disc turns green, refresh health, then finish
+          // the connect (the generate path does this via _onAscTaskResult).
+          state._apiKeyStepDone = true;
           state.upf.agent = null;
-          UPF.health().then(() => { if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal(); });
+          UPF.health().then(() => {
+            if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+            try { UPF.onConnected(pid); } catch (_) {}
+          });
         }
       }).catch(() => {});
     }
@@ -21834,9 +21850,17 @@ function _macSubmitState(pid, flipData) {
    progress / red failed / green complete); the rest stay neutral. */
 function _smSubmitBar(series, curIdx, stateKind) {
   const on = stateKind === 'failed' ? 'is-fail' : stateKind === 'complete' ? 'is-ok' : 'is-prog';
+  const upPct = Math.max(0, Math.min(100, Math.round((state.upf && state.upf.uploadPct) || 0)));
   const segs = series.map((k, i) => {
     const w   = (SUBMIT_PHASE_COPY[k] && SUBMIT_PHASE_COPY[k].weight) || 1;
     const lit = i <= curIdx ? on : '';
+    // The uploading segment, while current and in progress, shows the REAL upload
+    // percentage as a live fill (byte-level progress from the agent) — the one
+    // phase with true progress rather than a time estimate. _paintUploadPct writes
+    // the width live via [data-sub-upfill]; everything else is a solid segment.
+    if (k === 'uploading' && i === curIdx && stateKind === 'progress') {
+      return `<span class="sub-phaseseg" style="flex-grow:${w}"><span class="sub-phasefill ${on}" data-sub-upfill style="width:${upPct}%"></span></span>`;
+    }
     return `<span class="sub-phaseseg ${lit}" style="flex-grow:${w}"></span>`;
   }).join('');
   return `<div class="sub-segbar sub-phasebar">${segs}</div>`;
@@ -21866,6 +21890,13 @@ function buildSubmittedCard(pid, flipData) {
   // In-progress phases trail an ellipsis on the status line.
   const dots = macSt ? (macSt.stateKind === 'progress' ? '…' : '')
              : (phase === 'in_review' || phase === 'uploading' || phase === 'processing') ? '…' : '';
+  // During the uploading phase, show the REAL upload percentage on the status line
+  // and keep it updating live (_paintUploadPct writes [data-sub-uploadpct]). It is
+  // true byte progress, so it is the one phase worth a number — a clear "uploading
+  // is working" signal rather than a silent spinner.
+  const uploadPctHtml = (macSt && macSt.phase === 'uploading' && macSt.stateKind === 'progress')
+    ? ` <span class="sub-uploadpct" data-sub-uploadpct>${Math.max(0, Math.min(100, Math.round((state.upf && state.upf.uploadPct) || 0)))}%</span>`
+    : '';
   const _subTrack = macSt ? macSt.track
                   : ((state.upf && state.upf.submitTrack && state.upf.submitTrack[pid]) || (flipData && flipData.track) || '');
 
@@ -21950,7 +21981,7 @@ function buildSubmittedCard(pid, flipData) {
             `inline` renders byte-for-byte what it rendered before. */''}
       ${modalGrid ? platformCardHead(pid, 'submitted') : `
       <div class="sub-head">
-        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${dots}</span>
+        <span class="sub-state-line sub-head-state">${escHtml(vocab.label)}${dots}${uploadPctHtml}</span>
         ${_platformHeadActions(pid, 'submitted')}
       </div>`}
       ${buildReleaseBlock(pid)}
@@ -21960,7 +21991,7 @@ function buildSubmittedCard(pid, flipData) {
             baseline. `.sub-state:empty` already hides this row in the pane, so
             the arm that does not use it costs nothing. */''}
       <div class="sub-state">
-        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${dots}</span>` : ''}
+        ${modalGrid ? `<span class="sub-state-line">${escHtml(vocab.label)}${dots}${uploadPctHtml}</span>` : ''}
         ${/* THE WAIT NOTE ONLY EXISTS DURING THE WAIT. It was gated on
               `!isYours && !isBad`, which let it survive into `live` — so a
               build that was finished, distributed and on sale still said

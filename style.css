@@ -21887,12 +21887,20 @@ body.is-splash .ai-disclaimer { display: none; }
    One signal with the status line and the card's 5% wash. */
 .sub-phasebar { align-items: center; }
 .sub-phaseseg {
-  flex: 0 1 0; height: 6px; border-radius: 3px;
+  flex: 0 1 0; height: 6px; border-radius: 3px; overflow: hidden;
   background: rgba(255, 255, 255, 0.08); transition: background .3s ease;
 }
 .sub-phaseseg.is-prog { background: #FFD84D; }
 .sub-phaseseg.is-fail { background: var(--magenta, #ff3b78); }
 .sub-phaseseg.is-ok   { background: #2fdc80; }
+/* The uploading segment's live fill (v8.14): real byte progress of the upload. */
+.sub-phasefill { display: block; height: 100%; width: 0; border-radius: 3px; transition: width .3s ease; }
+.sub-phasefill.is-prog { background: #FFD84D; }
+.sub-phasefill.is-fail { background: var(--magenta, #ff3b78); }
+.sub-phasefill.is-ok   { background: #2fdc80; }
+/* The live upload percentage on the status line. tabular-nums keeps the width
+   steady as the digits tick up, so the label doesn't jitter. */
+.sub-uploadpct { font-size: 0.72em; opacity: .85; margin-left: 4px; font-variant-numeric: tabular-nums; }
 
 /* Date row */
 .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }

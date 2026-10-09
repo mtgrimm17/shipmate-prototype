@@ -280,6 +280,7 @@ const UPF = {
       const done = (ok) => {
         this._apiKeyInFlight = false;
         state._apiKeyFailed = !ok;
+        if (ok) state._apiKeyStepDone = true;         // the agent finished the key step (#3): turn its disc green
         state.upf.agent = null;                       // force a fresh /health so hasApiKey re-reads
         this.health().then(() => {
           if (typeof renderDashboard === 'function') renderDashboard();
@@ -741,7 +742,7 @@ const UPF = {
           // Read the upload % directly too (don't depend on the build ticker's
           // stage gate) so the Uploading segment fills reliably.
           const pm = /^\s*(\d{1,3})%\s*$/.exec(line || '');
-          if (pm) state.upf.uploadPct = Math.min(100, +pm[1]);
+          if (pm) { state.upf.uploadPct = Math.min(100, +pm[1]); _paintUploadPct(); }
           const ph = /waiting for apple|build \d+:/i.test(line) ? 'processing'
                    : /uploading|chunk|^\s*\d+%\s*$/i.test(line) ? 'uploading' : null;
           if (ph && state.upf.submitPhase[pid] !== ph) setPhase(ph);
@@ -1519,6 +1520,19 @@ function _startSubmitTicker() {
 }
 function _stopSubmitTicker() {
   if (_submitTickerIv) { clearInterval(_submitTickerIv); _submitTickerIv = null; }
+}
+
+/* Live DOM update of the submit upload percentage — the status-line number
+   ([data-sub-uploadpct]) and the uploading segment's fill ([data-sub-upfill]) —
+   without a full re-render, so the percentage ticks up smoothly as the agent
+   streams byte-level upload progress. Called from the submit onLine handler on
+   every parsed "NN%" line. */
+function _paintUploadPct() {
+  try {
+    const pct = Math.max(0, Math.min(100, Math.round((state.upf && state.upf.uploadPct) || 0)));
+    document.querySelectorAll('[data-sub-uploadpct]').forEach(el => { el.textContent = pct + '%'; });
+    document.querySelectorAll('[data-sub-upfill]').forEach(el => { el.style.width = pct + '%'; });
+  } catch (_) {}
 }
 
 /* ── THE UPLOAD BUILD PANEL ──────────────────────────────────────────────────
