@@ -3483,7 +3483,10 @@ const SUBMIT_PHASE_COPY = {
   processing: {
     label: 'Processing Build', weight: 2,
     progress: 'Apple is processing the uploaded build, this usually takes between 5 and 15 minutes.',
-    failed:   'Apple couldn’t finish processing the uploaded build. Open the step and press Submit again.',
+    // A processing failure is Apple rejecting the binary during validation — Submit
+    // again with the same build won't help. Apple emails the reason (an ITMS-… code);
+    // the fix is to correct it and upload a NEW build.
+    failed:   'Apple rejected this build during processing. Check your email for the reason from Apple, fix it, then generate and upload a new build.',
   },
   waiting_for_review: {
     label: 'Waiting for Review', weight: 4,
