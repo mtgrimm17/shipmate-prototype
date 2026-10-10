@@ -632,17 +632,13 @@ const UPF = {
         pushed++;
       }
       if (sentShots && shotHash) this._shotHash[pid] = shotHash;
-      // A field App Store Connect refused (e.g. a copyright under 2 chars) was
-      // written to the log before and vanished from the user's view. Say so — the
-      // same backstop as submit-prep, for the listing path. The Product Page's
-      // inline validation should catch these first; this covers what Apple refuses
-      // that the heuristic missed. Takes priority over the plain "Synced" toast.
-      if (pushed && typeof bcToast === 'function') {
-        if (rejected.size) {
-          bcToast(`App Store Connect wouldn’t accept: ${[...rejected].join(', ')}. Those weren’t saved — fix and sync again.`);
-        } else {
-          bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
-        }
+      // Fields App Store Connect refused (e.g. a copyright under 2 chars) are
+      // recorded as a PERSISTENT error on the step — a red dot on the step + the
+      // field highlighted when you enter it — not a toast (toasts vanish; an error
+      // needs to stay until it's fixed). Toasts stay for SUCCESS only.
+      this._recordAscRejected(pid, [...rejected], true);   // replace: fresh sync's listing rejects
+      if (pushed && !rejected.size && typeof bcToast === 'function') {
+        bcToast(`Synced to App Store Connect${reason ? ' (' + reason + ')' : ''}.`);
       }
       // In-app purchases → ASC (needs no build; rides with the metadata sync).
       // Change-guarded so an idle save doesn't re-walk every product.
@@ -680,14 +676,13 @@ const UPF = {
           let res = null;
           if (pr && pr.job) res = await this.waitJob(pr.job, () => {});
           // App Store Connect rejected one or more App Review fields (e.g. a
-          // malformed phone/email). The agent wrote the rest and told us which it
-          // dropped — say so, rather than letting those values vanish silently.
-          // The Business step's inline validation should catch these first; this
-          // is the backstop for anything Apple refuses that the heuristic missed.
+          // malformed phone/email). Record them as a persistent step error (red
+          // dot + field highlight), not a toast. The Business step's inline
+          // validation should catch these first; this is the backstop for
+          // anything Apple refuses that the heuristic missed.
           const dropped = (res && res.dropped) || [];
-          if (dropped.length && typeof bcToast === 'function') {
-            const list = dropped.join(', ');
-            bcToast(`App Store Connect wouldn’t accept: ${list}. Those weren’t saved — check the value in Business and sync again.`);
+          if (dropped.length) {
+            this._recordAscRejected(pid, dropped);
             // Reset the hash so the next edit re-attempts the dropped fields
             // (otherwise the change-guard would skip an unchanged payload).
             this._prepHash[pid] = null;
@@ -862,6 +857,20 @@ const UPF = {
     return (state.liveSearch && state.liveSearch.steamAppId)
         || (state.steamAchievementsBaseline && state.steamAchievementsBaseline.appId)
         || null;
+  },
+
+  /* Record which fields App Store Connect refused on the last sync, as a PERSISTENT
+     per-platform error (not a toast): the step rendering turns a non-empty list into
+     a red dot on the step, and the field is highlighted when the user enters it.
+     `replace` starts a fresh list (listing path, which runs first each sync);
+     otherwise the labels are merged in (the review path runs after). The known
+     fields (phone/email/copyright) also drive the dot live via the inline
+     validators, so this clears itself once a value is fixed and re-synced. */
+  _recordAscRejected(pid, labels, replace) {
+    state.ascRejected = state.ascRejected || {};
+    const cur = replace ? [] : (state.ascRejected[pid] || []);
+    state.ascRejected[pid] = Array.from(new Set([...cur, ...(labels || [])]));
+    if (typeof _upfRepaintAll === 'function') _upfRepaintAll();
   },
 
   /* Match lazily for a project whose game was chosen before this page loaded

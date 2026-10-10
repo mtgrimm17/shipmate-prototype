@@ -775,7 +775,10 @@ function smContactFieldError(path, value) {
   }
   if (path === 'reviewContact.phone' || /\bphone$/i.test(path)) {
     const digits = v.replace(/[^0-9]/g, '');
-    if (digits.length < 7) return 'Enter a valid phone number, with country or area code.';
+    // App Store Connect requires a full number — 10 digits (area/country code
+    // included). The inline check must match that, or it clears at a length ASC
+    // still rejects (9 digits looked fine inline but the sync dropped it).
+    if (digits.length < 10) return 'Enter a full phone number including area code (at least 10 digits).';
     if (!/^[+()\-.\s0-9]+$/.test(v)) return 'A phone number can only contain digits, spaces and + ( ) - .';
     return '';
   }

@@ -10277,13 +10277,31 @@ function sppRequiredElements(pid, lang) {
   return [
     { id: 'title',        label: 'Title',                            required: true,  done: !!val('title'),        bad: over('title') },
     { id: 'subtitle',     label: 'Subtitle',                          required: true,  done: !!val('subtitle'),     bad: over('subtitle') },
-    { id: 'business',     label: 'Business',                          required: true,  done: !!(seen.business && complete('business')) },
+    { id: 'business',     label: 'Business',                          required: true,  done: !!(seen.business && complete('business')), err: _macBusinessHasError(pid) },
     { id: 'content',      label: 'Content',                           required: true,  done: complete('contentRating') },
     { id: 'screenshots',  label: 'Media Carousel',                    required: true,  done: complete('screenshots'),  short: 'Media Carousel' },
     { id: 'description',  label: 'Description',                       required: true,  done: !!val('description'),  bad: over('description') },
     { id: 'achievements', label: 'Achievements',                      required: false, done: true },
     { id: 'data',         label: 'Answer Data Collection Questions',  required: true,  done: complete('privacy'),      short: 'App Privacy' },
   ];
+}
+
+/* A persistent error marker for the Business step: true when a field App Store
+   Connect would reject is currently present — App Review phone/email, or the
+   listing copyright. Drives the red dot on the step (and the field is highlighted
+   inline when the user enters it). Driven by the same validators as the inline
+   check (smContactFieldError / smListingFieldError), so it is always accurate to
+   the current values, matches what ASC accepts (thresholds aligned), and clears
+   itself once the value is fixed — replacing the error TOAST that used to fire on
+   a rejected sync. macos only (where these fields live). */
+function _macBusinessHasError(pid) {
+  if (pid !== 'macos' || typeof smContactFieldError !== 'function') return false;
+  const a = state.macSubmitAnswers || {};
+  const rc = a.reviewContact || {};
+  const l = state.macAppStoreListing || {};
+  return !!(smContactFieldError('reviewContact.phone', rc.phone)
+         || smContactFieldError('reviewContact.email', rc.email)
+         || (typeof smListingFieldError === 'function' && smListingFieldError('copyright', l.copyright)));
 }
 
 /* "Is every required element on this page satisfied" — the same expression
@@ -10294,7 +10312,7 @@ function sppRequiredElements(pid, lang) {
 function sppAllRequiredDone(pid, lang) {
   const primary = (state.formData && state.formData.primaryLanguage) || 'en';
   return sppRequiredElements(pid, lang || primary)
-    .every(e => (!e.required || e.done) && !e.bad);
+    .every(e => (!e.required || e.done) && !e.bad && !e.err);
 }
 
 function _sppPinnedNav(pid, elements, sticks) {
@@ -10405,10 +10423,10 @@ function _sppPinnedNav(pid, elements, sticks) {
   const disc = (on, bad) => `<span class="spp-pin-tick ios-step-num${
     bad ? ' is-bad' : on ? ' is-done' : ''}" aria-hidden="true">${
     bad ? smCrossSVG() : on ? smCheckSVG() : ''}</span>`;
-  const pills = elements.map((e, i) => `${i ? sep(e.id === cur || elements[i - 1].id === cur) : ''}
+  const pills = elements.map((e, i) => { const isBad = e.bad || e.err; return `${i ? sep(e.id === cur || elements[i - 1].id === cur) : ''}
     <button type="button" class="spp-pin${e.id === cur ? ' is-on' : ''}" data-spp-pin="${e.id}"
             onclick="setStorePreviewFocus('${pid}','${e.id}')"
-            title="${escHtml(e.label)}${e.bad ? ' — over the character limit' : ''}">${disc(e.done, e.bad)}${escHtml(e.short || e.label)}</button>`).join('');
+            title="${escHtml(e.label)}${e.bad ? ' — over the character limit' : e.err ? ' — a field App Store Connect won’t accept; fix it inside' : ''}">${disc(e.done, isBad)}${escHtml(e.short || e.label)}</button>`; }).join('');
   /* `data-spp-pin` is what lets `_sppFocusHere` (app.js) light a pill without a
      render when you click straight into a field on the page. The id is already
      in the `onclick` string a character later; putting it in an attribute is
@@ -10431,7 +10449,7 @@ function _sppPinnedNav(pid, elements, sticks) {
      holding invalid text is still invalid, where an optional section merely
      left empty is fine, which is exactly the distinction `required` makes and
      `bad` does not. */
-  const allRequiredDone = elements.every(e => (!e.required || e.done) && !e.bad);
+  const allRequiredDone = elements.every(e => (!e.required || e.done) && !e.bad && !e.err);
   /* TWO BOXES ON MAC, AND `.cr-pinned`'S THIRD ONE BACK AGAIN ON iOS. That bar
      has an outer sticky opaque strip so the page cannot show through the gap
      between a floating container's rounded edge and the scrollport. Mac needs
