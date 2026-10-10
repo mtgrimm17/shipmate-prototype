@@ -146,7 +146,22 @@ const UPF = {
     const h = await this.health();
     if (!h) return null;
     const lib = await this._get('/library');
-    const g = (lib.games || []).find(x => String(x.steamAppId) === String(steamAppId));
+    const games = lib.games || [];
+    let g = steamAppId != null ? games.find(x => String(x.steamAppId) === String(steamAppId)) : null;
+    // Fallback: pair by NORMALIZED name when the app id doesn't line up. The Steam
+    // STORE title and the installed folder can differ — "Slay the Spire II" in the
+    // store vs "Slay the Spire 2" in the library — and a store picklist entry can
+    // carry a different app id than the install (a demo/edition). Normalising roman
+    // numerals to arabic and stripping punctuation pairs them anyway.
+    if (!g && name) {
+      const norm = s => String(s || '').toLowerCase()
+        .replace(/\b(viii|vii|vi|iv|ix|iii|ii|x|v|i)\b/g, m =>
+          ({ i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9', x: '10' }[m] || m))
+        .replace(/[^a-z0-9]+/g, '');
+      const want = norm(name);
+      g = games.find(x => norm(x.name) === want);
+      if (g) console.info('[UPF] matched by name (app id did not line up):', name, '->', g.name, g.steamAppId);
+    }
     if (!g) { state.upf.game = null; state.upf.manifest = null; return null; }
     state.upf.game = { name: g.name, slug: g.slug, steamAppId: g.steamAppId, app: g.app };
     const ins = await this._post('/inspect', { game: g.app });
@@ -866,12 +881,17 @@ const UPF = {
     if (state.upf.game || state.upf.job || this._matching) return;
     if (!state.upf.agent) return;                 // wait until the agent is confirmed up
     const appId = this.currentSteamAppId();
-    if (!appId) return;
-    if (String(appId) === String(this._matchedAppId) && (Date.now() - this._lastMatchTry) < this._matchRetryMs) return;
+    const title = state.formData?.title || '';
+    // Match by app id when we have one; otherwise fall back to the game title so a
+    // card that never captured a Steam app id (or whose store app id differs from
+    // the install) still pairs with the installed game by name (see match()).
+    if (!appId && !title) return;
+    const key = appId ? String(appId) : ('name:' + title.toLowerCase());
+    if (key === this._matchedAppId && (Date.now() - this._lastMatchTry) < this._matchRetryMs) return;
     this._matching = true;
-    this._matchedAppId = String(appId);
+    this._matchedAppId = key;
     this._lastMatchTry = Date.now();
-    this.match(appId, state.formData?.title || '')
+    this.match(appId, title)
       .then(g => { if (g) _upfRepaintAll(); })     // match() also repaints; harmless twice
       .catch(e => console.warn('[UPF] match failed', e))
       .finally(() => { this._matching = false; });
