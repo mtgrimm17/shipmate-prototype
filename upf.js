@@ -196,7 +196,7 @@ const UPF = {
      installed (the message just goes unheard). */
   requestAscTask(task, opts) {
     opts = opts || {};
-    try { window.postMessage({ __shipmate: 'ascTask', task: task, submit: !!opts.submit, appId: opts.appId, bundleId: opts.bundleId }, '*'); } catch (_) {}
+    try { window.postMessage({ __shipmate: 'ascTask', task: task, submit: !!opts.submit, appId: opts.appId, bundleId: opts.bundleId, name: opts.name }, '*'); } catch (_) {}
   },
 
   /* The "Create your app" build step: register the bundle ID in the Developer
@@ -228,7 +228,12 @@ const UPF = {
       // Pass the agent-registered bundle ID through (Shipmate's cached manifest
       // may not carry it), so the extension selects the right one. Stays in-flight
       // until _onAscTaskResult reports back.
-      this.requestAscTask('createApp', { submit: true, bundleId: r.bundleId });
+      // Pass the real display NAME too (e.g. "Slay the Spire 2 - Mark Demo"), so
+      // the extension types that instead of deriving one from the bundle id's
+      // game segment (which drops the spaces -> "SlayTheSpire2"). The extension
+      // must read msg.name; until it does, the name self-corrects on the first
+      // metadata sync (populate writes ascAppName).
+      this.requestAscTask('createApp', { submit: true, bundleId: r.bundleId, name: r.appName });
       // Don't wait forever: if the extension never reports back (not installed/
       // loaded, or it failed silently), surface it so the step isn't stuck.
       setTimeout(() => {
