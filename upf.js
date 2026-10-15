@@ -273,7 +273,7 @@ const UPF = {
      connectStage at sign-in/confirm) and not yet connected. The manual button
      stays as a fallback, so a missed detection never blocks the flow. */
   _onAscSignedIn() {
-    if (!state.extensionInstalled) return;
+    if (!shipmateExtReady()) return;
     for (const pid of UPF_MAC_PIDS) {
       if (typeof isPlatformConnected === 'function' && isPlatformConnected(pid)) continue;
       const stage     = state.connectStage && state.connectStage[pid];
@@ -1994,8 +1994,59 @@ function upfBuildPanelHTML(pid) {
 /* The browser extension reports ASC task results back through content-shipmate,
    which posts them onto the Shipmate window. Route them into UPF so the build
    flow can react (e.g. mark the app record created and continue). */
+/* ── "IS THE EXTENSION THERE?" (v8.22) ────────────────────────────────────
+   content-shipmate.js posts `{__shipmate:'present', version}` when it loads and
+   again whenever we ping it. Both directions exist because the content script
+   runs at `document_idle`: a page that only pings can ping too early, and a page
+   that only listens can register too late.
+
+   A POSITIVE IS TRUSTWORTHY; A NEGATIVE IS NOT. Silence means installed-but-
+   disabled, installed-but-this-origin-not-granted-yet, a different browser
+   profile, or simply not installed — four states that look identical from here.
+   So this only ever turns things ON. The "I've installed it" button stays
+   exactly where it was, as the escape hatch for anyone the probe misses.
+
+   It is also not a security boundary: a content script posts as the page's own
+   window, so `ev.source === window` cannot tell it from page script. On
+   Shipmate's own origin the only page script is Shipmate's, which is why that
+   is fine here — but nothing privileged should ever be gated on it. */
+var SHIPMATE_EXT_PROBE_MS = 1500;   // re-ask at most this often
+
+function shipmateExtProbe(force) {
+  var d = state.extDetect || (state.extDetect = { seen: false, version: '', at: 0, probed: false });
+  var now = Date.now();
+  if (!force && d.at && (now - d.at) < SHIPMATE_EXT_PROBE_MS) return;
+  d.at = now;
+  d.probed = true;
+  try { window.postMessage({ __shipmate: 'ping' }, '*'); } catch (_) {}
+}
+
+function _shipmateExtPresent(version) {
+  var d = state.extDetect || (state.extDetect = { seen: false, version: '', at: 0, probed: false });
+  var changed = !d.seen || d.version !== (version || '');
+  d.seen = true;
+  d.version = version || '';
+  d.probed = true;
+  if (!changed) return;
+  /* Only repaint what can be looking at this. The Connect Account modal is the
+     surface whose task list changes; the platform card behind it shows the same
+     connect stage. Repainting on every announcement instead of on a change
+     would redraw the modal under the user's pointer for nothing. */
+  try {
+    if (state.stepModal && state.stepModal.stepId === 'connect'
+        && typeof reRenderStepModal === 'function') reRenderStepModal();
+    else if (typeof renderDashboard === 'function') renderDashboard();
+  } catch (_) {}
+}
+
+try { window.shipmateExtProbe = shipmateExtProbe; } catch (_) {}
+
 window.addEventListener('message', function (ev) {
   if (ev.source !== window || !ev.data) return;
+  if (ev.data.__shipmate === 'present') {
+    _shipmateExtPresent(ev.data.version);
+    return;
+  }
   if (ev.data.__shipmate === 'ascTaskResult') {
     if (typeof UPF !== 'undefined' && typeof UPF._onAscTaskResult === 'function') {
       UPF._onAscTaskResult(ev.data.task, ev.data.result);

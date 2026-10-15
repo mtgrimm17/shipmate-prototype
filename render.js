@@ -6200,7 +6200,7 @@ function platformCardHead(pid, face) {
      confirm → confirm the bot's access + Add
    Credentials never touch Shipmate; the extension hands off to the real site. */
 function _connectStage(pid) {
-  return state.connectStage?.[pid] || (state.extensionInstalled ? 'signin' : 'intro');
+  return state.connectStage?.[pid] || (shipmateExtReady() ? 'signin' : 'intro');
 }
 function _connectFaceHTML(pid, cfg) {
   const f     = connectFlowConfig(pid);
@@ -7305,7 +7305,18 @@ const _CM_EXT_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 const _CM_KEY_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
 
 function buildConnectStepSection(pid) {
-  const extDone    = !!state.extensionInstalled;
+  /* ASK THE EXTENSION BEFORE DRAWING THE LIST (v8.22). The first two tasks here
+     are Download and Install, and making someone do both again because the page
+     never asked is the whole complaint. `shipmateExtProbe` posts one message and
+     re-renders if the extension answers, so an installed extension turns both
+     rows green on its own and Sign in becomes the current task.
+
+     The probe is cheap and idempotent — it re-renders only on a change — so
+     calling it from the builder is safe even though builders are meant to read
+     state. It is the same shape as the UPF.health() probe five lines below,
+     which this surface has done since it was written. */
+  if (typeof shipmateExtProbe === 'function') shipmateExtProbe();
+  const extDone    = shipmateExtReady();
   const downloaded = extDone || !!state.extensionDownloaded;
   const signedIn   = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
   const hasApiKey  = !!(state.upf && state.upf.agent && state.upf.agent.account && state.upf.agent.account.hasApiKey);

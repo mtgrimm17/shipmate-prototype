@@ -1216,13 +1216,24 @@ const CONNECT_FLOWS = {
 };
 function connectFlowConfig(pid) { return CONNECT_FLOWS[pid] || CONNECT_FLOWS.steam; }
 
+/* IS THE EXTENSION AVAILABLE? ONE QUESTION, FOUR ASKERS (v8.22).
+   Two different facts answer it — the user pressed "I've installed it"
+   (extensionInstalled), or the extension announced itself (extDetect.seen) —
+   and four places need the answer: this file's connectStepList, the connect
+   face's stage, the Connect Account modal's task list, and UPF's signed-in
+   handler. Four copies of `a || b` is how the fifth one gets written as just
+   `a`, which is exactly the bug this fixes. */
+function shipmateExtReady() {
+  return !!(state.extensionInstalled || (state.extDetect && state.extDetect.seen));
+}
+
 // Ordered step ids for a platform's connect wizard. The extension step drops
 // out once the extension is installed; Google Play uses a single OAuth step.
 function connectStepList(pid) {
   const f = connectFlowConfig(pid);
   if (f.oauth) return ['intro', 'google', 'done'];
   const s = ['intro'];
-  if (f.needsExtension && !state.extensionInstalled) s.push('extension');
+  if (f.needsExtension && !shipmateExtReady()) s.push('extension');
   s.push('login', 'approve');
   if (f.mintsKey) s.push('mint');
   s.push('done');
@@ -5428,9 +5439,26 @@ const state = {
   googleAccount: null,
   // Captured (faked) sign-in email per pid, used to label the connected account.
   connectAccountEmail: {},
-  // Simulated "is the Shipmate browser extension installed?" — global, sticky
-  // for the session so only the first connect prompts to install it.
+  // "Has this user told us the extension is installed?" — global, sticky for
+  // the session so only the first connect prompts to install it. This is the
+  // user's own claim (the "I've installed it" button); what the extension says
+  // about itself lives in extDetect below. Ask shipmateExtReady(), not this.
   extensionInstalled: false,
+
+  /* WHAT THE EXTENSION SAYS ABOUT ITSELF (v8.22).
+     Connect Account used to make everyone download and install the extension
+     even when they already had it, because the page had no way to tell. It can
+     tell now: content-shipmate.js posts `{__shipmate:'present', version}` onto
+     this window when it loads and whenever we ping it.
+
+     DELIBERATELY NOT STICKY, unlike extensionInstalled above. An extension can
+     be uninstalled, disabled, or left behind in another browser profile, so a
+     detection remembered forever would eventually be a lie. This is re-probed
+     every time the Connect surface is drawn and starts false on every load.
+
+     `probed` exists so the UI can tell "we have not asked yet" from "we asked
+     and heard nothing" — the second is a real answer, the first is not. */
+  extDetect: { seen: false, version: '', at: 0, probed: false },
 
   // Which face each active card is showing: 'steps' | 'account'.
   // Default when absent: 'steps' if signed in, else 'account'.
