@@ -6251,7 +6251,7 @@ function _connectFaceHTML(pid, cfg) {
           <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
         </ol>
         <button class="platform-login-btn" type="button" onclick="connectInstalled('${pid}')">I've installed it</button>
-        <div class="platform-login-hint">Didn't download? <a href="shipmate-extension.zip" download>Get it again</a></div>
+        <div class="platform-login-hint">Didn't download? <a href="${SM_EXT_URL}" download>Get it again</a></div>
       </div>`;
   }
   if (stage === 'signin') {
@@ -7389,6 +7389,12 @@ function _connectTaskDetail(pid, taskId) {
         </div>
         <button class="platform-login-btn" type="button" onclick="connectInstall('${pid}')">Download extension</button>
         <div class="platform-login-hint">Requires Google Chrome. About a minute, one time.</div>
+        <!-- THE CASE DETECTION CANNOT REPORT (v8.23). Announcing presence is a
+             0.2.0 feature, so a 0.1.0 install says nothing and looks exactly
+             like no install at all — this step appears and the page cannot
+             explain why. Rather than leave someone certain they already
+             installed it staring at a Download button, the copy says it. -->
+        <div class="platform-login-hint">Already installed it? This build is newer &mdash; install it over the old one so Shipmate can recognise it.</div>
       </div>`;
   }
   if (taskId === 'install') {
@@ -7400,7 +7406,7 @@ function _connectTaskDetail(pid, taskId) {
           <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
         </ol>
         <button class="platform-login-btn" type="button" onclick="connectInstalled('${pid}')">I've installed it</button>
-        <div class="platform-login-hint">Requires Google Chrome. Didn't download? <a href="shipmate-extension.zip" download>Get it again</a></div>
+        <div class="platform-login-hint">Requires Google Chrome. Didn't download? <a href="${SM_EXT_URL}" download>Get it again</a></div>
       </div>`;
   }
   if (taskId === 'signin') {

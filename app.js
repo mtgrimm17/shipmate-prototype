@@ -7549,8 +7549,8 @@ function connectInstall(pid) {
   if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
     try {
       const a = document.createElement('a');
-      a.href = 'shipmate-extension.zip';      // served from the Pages origin
-      a.download = 'shipmate-extension.zip';
+      a.href = SM_EXT_URL;                    // version-stamped; see SM_EXT_VERSION
+      a.download = 'shipmate-extension.zip';  // the saved file keeps the plain name
       document.body.appendChild(a); a.click(); a.remove();
     } catch (_) {}
     state.extensionDownloaded = true;   // completes the Download task; Install is next

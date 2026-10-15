@@ -1216,6 +1216,50 @@ const CONNECT_FLOWS = {
 };
 function connectFlowConfig(pid) { return CONNECT_FLOWS[pid] || CONNECT_FLOWS.steam; }
 
+/* ── WHICH EXTENSION BUILD THIS APP NEEDS (v8.23) ─────────────────────────
+   `SM_EXT_VERSION` is the version in the shipped zip's manifest. Bump BOTH
+   together or the page will ask for a build it does not serve.
+
+   THE URL CARRIES IT, AND THAT IS THE POINT. The download was a bare
+   `shipmate-extension.zip` while every script and style tag on the page
+   carried `?v=8.22`, so the one file a browser is most likely to have cached —
+   a download it already took — was the one file with nothing to bust it.
+   Deploying a new extension and handing the developer back the old one out of
+   cache is a bug you cannot see from either end.
+
+   KEYED ON THE EXTENSION, NOT THE APP. `?v=0.2.0`, not `?v=8.23`: the app
+   ships many times a week and the extension rarely, and busting a 30KB
+   download on every app version would cost every user a re-download to fix a
+   problem they do not have. */
+const SM_EXT_VERSION = '0.2.0';
+const SM_EXT_URL     = 'shipmate-extension.zip?v=' + SM_EXT_VERSION;
+
+/* Dotted numeric compare, enough for `0.2.0` vs `0.10.0` and nothing more —
+   this is a two-field version in a file we control, not semver with
+   pre-release tags. */
+function _smVerLt(a, b) {
+  const pa = String(a || '').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
+/* An extension that announced itself but is older than this app needs.
+
+   IT CANNOT SEE 0.1.0, AND THAT IS WORTH KNOWING RATHER THAN DISCOVERING.
+   Announcing is itself a 0.2.0 feature, so a 0.1.0 install is silent and
+   indistinguishable from nothing installed — the page shows the download step
+   and cannot say why. From 0.2.0 onward every build announces, so this does
+   work for the next bump; for the one happening now, the download step's own
+   copy has to carry the explanation instead. */
+function shipmateExtStale() {
+  const d = state.extDetect;
+  return !!(d && d.seen && d.version && _smVerLt(d.version, SM_EXT_VERSION));
+}
+
 /* IS THE EXTENSION AVAILABLE? ONE QUESTION, FOUR ASKERS (v8.22).
    Two different facts answer it — the user pressed "I've installed it"
    (extensionInstalled), or the extension announced itself (extDetect.seen) —
@@ -1224,6 +1268,12 @@ function connectFlowConfig(pid) { return CONNECT_FLOWS[pid] || CONNECT_FLOWS.ste
    handler. Four copies of `a || b` is how the fifth one gets written as just
    `a`, which is exactly the bug this fixes. */
 function shipmateExtReady() {
+  /* A STALE BUILD IS NOT A READY ONE (v8.23). If it announced a version older
+     than this app needs, the Download and Install steps come back — updating
+     is the thing to do, and showing them green would hide that. The user's own
+     "I've installed it" claim still wins, as it does over every other answer
+     here: they can see their own browser and we cannot. */
+  if (shipmateExtStale()) return !!state.extensionInstalled;
   return !!(state.extensionInstalled || (state.extDetect && state.extDetect.seen));
 }
 
