@@ -1231,7 +1231,7 @@ function connectFlowConfig(pid) { return CONNECT_FLOWS[pid] || CONNECT_FLOWS.ste
    ships many times a week and the extension rarely, and busting a 30KB
    download on every app version would cost every user a re-download to fix a
    problem they do not have. */
-const SM_EXT_VERSION = '0.2.0';
+const SM_EXT_VERSION = '0.2.1';
 const SM_EXT_URL     = 'shipmate-extension.zip?v=' + SM_EXT_VERSION;
 
 /* Dotted numeric compare, enough for `0.2.0` vs `0.10.0` and nothing more —

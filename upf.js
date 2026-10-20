@@ -286,6 +286,22 @@ const UPF = {
     }
   },
 
+  /* The extension answered checkAscSession. Alive → finish any Mac Connect
+     Account that is waiting at sign-in (no tab), and keep a restored connection.
+     Gone → drop a restored connection so the card asks to sign in again.
+     Inconclusive → leave things as they are. */
+  _onAscSessionState(signedIn) {
+    if (signedIn === true) { this._onAscSignedIn(); _persistPlatformAuth(); return; }
+    if (signedIn === false) {
+      var changed = false;
+      for (const pid of UPF_MAC_PIDS) {
+        const a = state.platformAuth && state.platformAuth[pid];
+        if (a && a.restored) { a.loggedIn = false; changed = true; }
+      }
+      if (changed) { _persistPlatformAuth(); if (typeof renderDashboard === 'function') renderDashboard(); }
+    }
+  },
+
   _onAscTaskResult(task, result) {
     const u = state.upf || {};
     const toast = (m) => { if (typeof bcToast === 'function') bcToast(m); };
@@ -2027,6 +2043,7 @@ function _shipmateExtPresent(version) {
   d.seen = true;
   d.version = version || '';
   d.probed = true;
+  if (changed) setTimeout(shipmateCheckAscSession, 0);   // is Apple's session still alive? (no tab)
   if (!changed) return;
   /* Only repaint what can be looking at this. The Connect Account modal is the
      surface whose task list changes; the platform card behind it shows the same
@@ -2059,7 +2076,50 @@ window.addEventListener('message', function (ev) {
     if (typeof UPF !== 'undefined' && typeof UPF._onAscSignedIn === 'function') UPF._onAscSignedIn();
     return;
   }
+  // Answer to checkAscSession: the browser's App Store Connect session is alive
+  // (true), gone (false), or the check was inconclusive (null).
+  if (ev.data.__shipmate === 'ascSessionState') {
+    if (typeof UPF !== 'undefined' && typeof UPF._onAscSessionState === 'function') UPF._onAscSessionState(ev.data.signedIn);
+    return;
+  }
 });
+
+/* ── Remember the App Store Connect connection across reloads ──────────────
+   state.platformAuth used to live only in memory, so every page load started
+   the Mac platform "not connected" and Connect Account asked for a fresh sign-in
+   even though the browser's App Store Connect session was still perfectly valid.
+   Now: the connected Mac platforms are kept in localStorage, restored on load,
+   and the extension is asked (silently, no tab) whether Apple's session is still
+   alive — if it is, nothing to do; if it has expired, the stored connection is
+   dropped and Connect Account asks again. */
+var SM_AUTH_KEY = 'sm.platformAuth';
+function _persistPlatformAuth() {
+  try {
+    var keep = {};
+    Object.keys(state.platformAuth || {}).forEach(function (pid) {
+      var a = state.platformAuth[pid];
+      if (a && a.loggedIn) keep[pid] = { loggedIn: true, username: a.username || '', at: Date.now() };
+    });
+    localStorage.setItem(SM_AUTH_KEY, JSON.stringify(keep));
+  } catch (_) {}
+}
+function _restorePlatformAuth() {
+  try {
+    var saved = JSON.parse(localStorage.getItem(SM_AUTH_KEY) || '{}');
+    var any = false;
+    Object.keys(saved).forEach(function (pid) {
+      if (!saved[pid] || !saved[pid].loggedIn) return;
+      if (!state.platformAuth) state.platformAuth = {};
+      if (!state.platformAuth[pid]) { state.platformAuth[pid] = { loggedIn: true, username: saved[pid].username || '', restored: true }; any = true; }
+    });
+    return any;
+  } catch (_) { return false; }
+}
+function shipmateCheckAscSession() {
+  if (!shipmateExtReady()) return;
+  try { window.postMessage({ __shipmate: 'checkAscSession' }, '*'); } catch (_) {}
+}
+try { if (_restorePlatformAuth()) setTimeout(function () { if (typeof renderDashboard === 'function') renderDashboard(); }, 0); } catch (_) {}
 
 // Expose UPF on window so it's reachable from the DevTools console in any
 // context (a top-level `const` lives in the global lexical scope, not on

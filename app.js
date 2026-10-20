@@ -3733,6 +3733,23 @@ function reRenderStepModal() {
      refreshGuideCompletion is a no-op unless the done-state actually moved. */
   if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
 
+  /* DON'T REPAINT UNDER A FIELD THE USER IS TYPING IN. The inline listing
+     editors (ias-inline-input: Title/Subtitle/Description in the previews) are
+     real inputs swapped into the markup and committed on blur. Any repaint
+     while one is focused — a translation finishing, a build job's progress
+     line, the extension announcing itself — replaces the element, which steals
+     focus mid-word and plays the "complete" treatment early. So: if an inline
+     editor is focused, defer; its blur commit calls back here and the deferred
+     repaint happens then, once. */
+  const _ae = document.activeElement;
+  if (_ae && _ae.classList && _ae.classList.contains('ias-inline-input') && _ae.isConnected) {
+    if (!_ae._smDeferredRepaint) {
+      _ae._smDeferredRepaint = true;
+      _ae.addEventListener('blur', () => setTimeout(() => { if (typeof reRenderStepModal === 'function') reRenderStepModal(); }, 0), { once: true });
+    }
+    return;
+  }
+
   // The Content rating questionnaire also lives inline in the Game Details pane
   // (not just the legacy step modal). When it's showing there, re-render just
   // that pane in place so every questionnaire interaction updates.
@@ -7503,6 +7520,7 @@ function highlightLoginFields(pid) {
 // Sign out → return to the signed-out form (STATE 2 → STATE 1), in place.
 function platformSignOut(pid) {
   if (state.platformAuth?.[pid]) state.platformAuth[pid].loggedIn = false;
+  if (typeof _persistPlatformAuth === 'function') _persistPlatformAuth();
   // A fresh connect should re-run the API-key task from scratch.
   state._apiKeyAutoStarted = false;
   state._apiKeyFailed = false;
@@ -7528,6 +7546,10 @@ function selectLinkedApp(pid, val) {
 function _setConnectStage(pid, stage) {
   if (!state.connectStage) state.connectStage = {};
   state.connectStage[pid] = stage;
+  // Reaching the sign-in stage: ask the extension whether the browser is already
+  // signed in to App Store Connect. If so, _onAscSessionState finishes this stage
+  // without opening a sign-in tab.
+  if (stage === 'signin' && typeof shipmateCheckAscSession === 'function') setTimeout(shipmateCheckAscSession, 0);
 }
 
 // The Mac connect flow runs inside the Connect Account step modal, so its stage
@@ -7728,6 +7750,7 @@ function connectAdd(pid) {
   const email = state.connectAccountEmail?.[pid] || shipmateBotEmail();
   state.platformAuth[pid] = { loggedIn: true, username: email };
   if (state.connectStage) delete state.connectStage[pid];
+  if (typeof _persistPlatformAuth === 'function') _persistPlatformAuth();   // survive a reload
   // Close the App Store Connect sign-in tab we opened, if any (Apple path).
   if (_ascSignInWin && !_ascSignInWin.closed) { try { _ascSignInWin.close(); } catch (_) {} }
   _ascSignInWin = null;

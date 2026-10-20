@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Shipmate \u2014 App Store Connect helper",
+  "version": "0.2.1",
+  "description": "Fills the two App Store Connect steps Apple gives no API for \u2014 creating the app record and the App Privacy questionnaire \u2014 using what you entered in Shipmate.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "tabs",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://appstoreconnect.apple.com/*",
+    "https://mtgrimm17.github.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Shipmate ASC helper"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mtgrimm17.github.io/shipmate-prototype/*"
+      ],
+      "js": [
+        "content-shipmate.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://appstoreconnect.apple.com/*"
+      ],
+      "js": [
+        "content-asc.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "inject-read-state.js"
+      ],
+      "matches": [
+        "https://mtgrimm17.github.io/*"
+      ]
+    }
+  ]
+}

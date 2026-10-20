@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px -apple-system, system-ui, sans-serif; width: 320px; margin: 0; padding: 12px; color: #111; }
+  h1 { font-size: 14px; margin: 0 0 8px; }
+  #status { color: #777; font-size: 12px; margin-bottom: 8px; line-height: 1.4; }
+  button { display: block; width: 100%; margin: 5px 0; padding: 8px; font: inherit; border: 1px solid #ccc; border-radius: 7px; background: #f6f6f6; cursor: pointer; }
+  button.primary { background: #0a84ff; color: #fff; border-color: #0a84ff; }
+  button:hover { filter: brightness(0.97); }
+  pre { background: #f2f2f2; padding: 8px; border-radius: 6px; max-height: 190px; overflow: auto; font-size: 11px; white-space: pre-wrap; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>Shipmate — App Store Connect helper</h1>
+  <div id="status">…</div>
+  <button id="refresh">Refresh from Shipmate</button>
+  <button id="inspect">Inspect this App Store Connect page</button>
+  <button id="privacy" class="primary">Fill App Privacy</button>
+  <button id="createApp" class="primary">Create app record</button>
+  <pre id="out"></pre>
+  <script src="popup.js"></script>
+</body>
+</html>
