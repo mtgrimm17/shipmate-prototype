@@ -1530,6 +1530,20 @@ async function upfReattach() {
   let job;
   try { job = await UPF._get('/jobs/' + id); } catch (_) { try { localStorage.removeItem('upf.job'); } catch (__) {} return; }
   if (!job || !job.id) return;
+  /* ONLY RE-ATTACH TO THIS GAME'S JOB. The agent runs one job at a time for any
+     game; a page that comes back looking at StS2 must not wear Broforce's
+     upload spinner. job.game is whatever string Shipmate handed the agent
+     (name, slug or .app path), so match on any of them. A job for another game
+     gets a one-line toast and stays the agent's business. */
+  const g = state.upf && state.upf.game;
+  if (g && job.game) {
+    const jg = String(job.game).toLowerCase();
+    const mine = [g.name, g.slug, g.app].filter(Boolean).map(x => String(x).toLowerCase());
+    if (!mine.includes(jg) && !mine.some(x => jg.endsWith('/' + x) || x.endsWith('/' + jg))) {
+      if (job.state === 'running' && typeof bcToast === 'function') bcToast(`${job.game}: ${job.kind === 'publish' ? 'upload' : 'build'} still running in the background.`);
+      return;
+    }
+  }
   // rebuild the watched state from the lines the agent kept
   state.upf.lines = [];
   state.upf.stage = 0;
