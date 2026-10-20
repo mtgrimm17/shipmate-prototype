@@ -7601,7 +7601,25 @@ function connectInstalled(pid) {
 // the old modal (openAscLogin / buildAscWizard) stays in the code, just unused
 // here, to be removed in #39.
 let _ascSignInWin = null;
+let _ascSignInPending = null;   // { pid, timer } while the silent session check is in flight
 function ascBrowserSignIn(pid) {
+  /* ASK BEFORE OPENING. The extension can answer "already signed in" from its
+     own background process (cookies, no tab). Only when it says no — or does not
+     answer within 1.5s (old extension, no extension) — does the tab open. A yes
+     arrives as ascSessionState → _onAscSessionState, which finishes the stage and
+     cancels the pending open. */
+  if (!_ascSignInPending && typeof shipmateExtReady === 'function' && shipmateExtReady() && typeof shipmateCheckAscSession === 'function') {
+    _ascSignInPending = { pid, timer: setTimeout(() => { _ascSignInPending = null; _ascOpenSignInTab(pid); }, 1500) };
+    shipmateCheckAscSession();
+    return;
+  }
+  _ascOpenSignInTab(pid);
+}
+function _ascCancelPendingSignIn() {
+  if (_ascSignInPending) { clearTimeout(_ascSignInPending.timer); _ascSignInPending = null; return true; }
+  return false;
+}
+function _ascOpenSignInTab(pid) {
   // Hold the opened tab's handle so we can close it on connect. (noopener would
   // null the handle, so it's intentionally omitted — we only ever call close().)
   try { _ascSignInWin = window.open('https://appstoreconnect.apple.com/login', '_blank'); } catch (_) { _ascSignInWin = null; }

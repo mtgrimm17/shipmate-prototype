@@ -291,7 +291,12 @@ const UPF = {
      Gone → drop a restored connection so the card asks to sign in again.
      Inconclusive → leave things as they are. */
   _onAscSessionState(signedIn) {
+    const pending = (typeof _ascCancelPendingSignIn === 'function') ? _ascCancelPendingSignIn() : false;
     if (signedIn === true) { this._onAscSignedIn(); _persistPlatformAuth(); return; }
+    // The user pressed "Open App Store Connect" and the answer is no / unknown: open it now.
+    if (pending && typeof _ascOpenSignInTab === 'function') {
+      for (const pid of UPF_MAC_PIDS) { const st = state.connectStage && state.connectStage[pid]; if (st === 'signin') { _ascOpenSignInTab(pid); break; } }
+    }
     if (signedIn === false) {
       var changed = false;
       for (const pid of UPF_MAC_PIDS) {
