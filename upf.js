@@ -166,6 +166,12 @@ const UPF = {
     state.upf.game = { name: g.name, slug: g.slug, steamAppId: g.steamAppId, app: g.app };
     const ins = await this._post('/inspect', { game: g.app });
     state.upf.manifest = ins.manifest || null;
+    // A title with history (built / uploaded / submitted before, or a job still
+    // running) comes back where it was — see restoreProgress.
+    try {
+      const pid = UPF_MAC_PIDS.find(p => _upfActive(p)) || 'macos';
+      if (!state.platformFlipped || !state.platformFlipped[pid]) setTimeout(() => { this.restoreProgress(pid).catch(() => {}); }, 0);
+    } catch (_) {}
     /* Repaint here, not only from ensureMatch's caller: a match that lands any
        other way (a manual call, or upfOnSteamGame) must also swap the pill for
        the panel. Cheap, and the render is already finished by the time this
@@ -743,7 +749,8 @@ const UPF = {
      TestFlight and the Mac App Store are real, different review paths and the
      agent reports them as staged rather than pretending to submit. Non-blocking;
      a toast reports the outcome. */
-  async submitTestFlight(pid, track) {
+  async submitTestFlight(pid, track, opts) {
+    opts = opts || {};
     track = track || 'testflight_internal';
     state.upf.submitPhase = state.upf.submitPhase || {};
     state.upf.submitTrack = state.upf.submitTrack || {};
@@ -793,8 +800,10 @@ const UPF = {
       // there, including clearing fields they left blank (the agent's submitprep
       // now writes every field). Clear the per-session change-guards so nothing is
       // skipped as "unchanged". Best-effort: a sync hiccup must not block submit.
-      this._prepHash = {}; this._populateHash = {}; this._iapHash = {}; this._lbHash = {}; this._shotHash = {};
-      try { await this.sync('submit', pid); } catch (_) {}
+      if (!opts.resumeJob) {   // a resumed upload already synced when it was started
+        this._prepHash = {}; this._populateHash = {}; this._iapHash = {}; this._lbHash = {}; this._shotHash = {};
+        try { await this.sync('submit', pid); } catch (_) {}
+      }
 
       // 1) Upload + Apple-side processing, if the build isn't already in ASC.
       //    This used to run during Generate Build; it happens at Submit now (#42).
@@ -814,10 +823,12 @@ const UPF = {
         state.upf.job = { id: null, kind: 'publish' };
         let pres;
         try {
-          const pub = await this._post('/publish', { game: game.app });
-          state.upf.job = { id: pub.job, kind: 'publish' };
-          try { localStorage.setItem('upf.job', JSON.stringify({ id: pub.job, pid, kind: 'publish', started: Date.now() })); } catch (_) {}
-          pres = await this.waitJob(pub.job, onLine);
+          // RESUME (v8.27): a reload mid-upload hands the still-running job in; the
+          // page watches it from here instead of starting a second upload.
+          const jobId = opts.resumeJob || (await this._post('/publish', { game: game.app })).job;
+          state.upf.job = { id: jobId, kind: 'publish' };
+          try { localStorage.setItem('upf.job', JSON.stringify({ id: jobId, pid, kind: 'publish', track, started: Date.now() })); } catch (_) {}
+          pres = await this.waitJob(jobId, onLine);
         } finally { state.upf.job = null; try { localStorage.removeItem('upf.job'); } catch (_) {} }
         const up = pres && pres.upload;
         if (!up || !up.ok) { setFail(state.upf.submitPhase[pid] || 'uploading'); if (typeof bcToast === 'function') bcToast(`Upload: ${(up && up.problems || []).join(' · ') || 'did not complete'}`); return; }
@@ -1508,43 +1519,83 @@ function _upfDone(pid) {
   _upfRepaint(pid, true);
 }
 
-/* RE-ATTACH AFTER A RELOAD. The agent owns the run, so a page that comes back
-   asks whether the job it started is still going (or has ended since) and
-   picks up watching it — stages, timers and the result — where it left off.
-   The job id (and kind: prepare or publish) is remembered in localStorage by
-   upfBuild / upfPublish; the agent's /jobs list is the fallback when that is
-   gone. On reattach the kind routes to the right finisher. */
-async function upfReattach() {
-  let remembered = null;
-  try { remembered = JSON.parse(localStorage.getItem('upf.job') || 'null'); } catch (_) {}
-  const h = await UPF.health();
-  if (!h) return;
-  let id = remembered && remembered.id, pid = remembered && remembered.pid;
-  if (!id) {
-    const list = await UPF._get('/jobs').catch(() => ({ jobs: [] }));
-    const j = (list.jobs || []).find(x => (x.kind === 'prepare' || x.kind === 'publish') && x.state === 'running');
-    if (!j) return;
-    id = j.id;
-    pid = UPF_MAC_PIDS.find(p => _upfActive(p)) || 'macos';   // .has, not .includes — activePlatforms is a Set
+/* ── RESUME FROM THE AGENT'S RECORD (v8.27) ───────────────────────────────────
+   The project folder on the Mac is the memory. GET /status returns what the
+   agent has done for this game (build ready / uploaded / submitted) and any job
+   still running for it. From that the card is put back where it was:
+     - a build job running      → Generate Build's sub-steps at the exact stage
+     - an upload job running    → the submitted face at "uploading", watched to the end
+     - submitted (record)       → the submitted face at its terminal phase,
+                                  with "Start a new submission"
+     - uploaded, not submitted  → steps face, build marked uploaded
+     - built only               → steps face, build present
+   Called after a game is matched (ensureMatch) and on reload (upfReattach). */
+function _upfFlipResumed(pid, track, phase, atMs) {
+  state.platformStepStatus = state.platformStepStatus || {};
+  state.platformStepStatus[pid] = state.platformStepStatus[pid] || {};
+  state.platformStepStatus[pid].submit = 'complete';
+  state.selectedTracks = state.selectedTracks || {};
+  if (track) state.selectedTracks[pid] = track;
+  state.platformFlipped = state.platformFlipped || {};
+  state.platformFlipped[pid] = { track: track || state.selectedTracks[pid], time: atMs || Date.now(), phase, resumed: true };
+}
+function _upfRestoreBuild(pid, build, upload, game) {
+  state.platformBuilds = state.platformBuilds || {};
+  const pkg = (build && build.pkg) || '';
+  state.platformBuilds[pid] = {
+    name: pkg.split('/').pop() || `${game.name}.pkg`, size: 0,
+    buildNumber: String((upload && upload.buildVersion) || (build && build.buildVersion) || ''),
+    uploadedAt: Date.parse((build && build.at) || '') || Date.now(), source: 'upf',
+    uploaded: !!(upload && upload.ok), ascBuildId: upload ? upload.buildId : null, ascAppId: upload ? upload.appId : null, pkgPath: pkg,
+  };
+  state.upf.built = true; state.upf.uploaded = !!(upload && upload.ok);
+  const now = Date.now();
+  state.upf.stages = state.upf.stages || [];
+  for (let i = 0; i <= 4; i++) { state.upf.stages[i] = state.upf.stages[i] || { start: now, end: now }; if (!state.upf.stages[i].end) state.upf.stages[i].end = now; }
+  state.upf.stage = 5;
+  state.upf.result = { built: true, buildVersion: state.platformBuilds[pid].buildNumber };
+}
+UPF.restoreProgress = async function (pid) {
+  const game = state.upf && state.upf.game;
+  if (!game || !pid) return false;
+  if (state.upfResumeSkip && state.upfResumeSkip[pid]) { delete state.upfResumeSkip[pid]; return false; }
+  let r = null;
+  try { r = await this._get('/status?game=' + encodeURIComponent(game.app)); } catch (_) { return false; }
+  if (!r) return false;
+  const st = r.status || {}, job = r.job;
+  // 1) something still running for this game → watch it, at its real stage
+  if (job && job.state === 'running') {
+    if (job.kind === 'prepare' || job.kind === 'build') { await _upfAttachJob(pid, job.id, job.kind, null); return true; }
+    if (job.kind === 'publish') {
+      let remembered = null; try { remembered = JSON.parse(localStorage.getItem('upf.job') || 'null'); } catch (_) {}
+      const track = (remembered && remembered.track) || (state.selectedTracks || {})[pid] || 'testflight_internal';
+      _upfRestoreBuild(pid, st.build, null, game);
+      _upfFlipResumed(pid, track, 'uploading', job.started ? job.started * 1000 : Date.now());
+      if (typeof renderDashboard === 'function') renderDashboard();
+      this.submitTestFlight(pid, track, { resumeJob: job.id });
+      return true;
+    }
   }
+  if (!st.build && !st.upload && !st.submission) return false;
+  // 2) a finished record
+  if (st.build || st.upload) _upfRestoreBuild(pid, st.build, st.upload, game);
+  if (st.submission) {
+    const sub = st.submission;
+    const phase = sub.staged ? 'waiting_for_review' : (sub.track === 'testflight_internal' ? 'ready_for_testing' : 'waiting_for_review');
+    _upfFlipResumed(pid, sub.track, phase, Date.parse(sub.at || '') || Date.now());
+  }
+  _upfRepaint(pid, true);
+  if (typeof renderDashboard === 'function') renderDashboard();
+  return true;
+};
+
+/* Watch a running build/upload job the page did not start in this tab: rebuild
+   the stage state from the lines the agent kept, then poll to the end and run
+   the kind's finisher. (The body of the old upfReattach, now reusable.) */
+async function _upfAttachJob(pid, id, kind, remembered) {
   let job;
   try { job = await UPF._get('/jobs/' + id); } catch (_) { try { localStorage.removeItem('upf.job'); } catch (__) {} return; }
   if (!job || !job.id) return;
-  /* ONLY RE-ATTACH TO THIS GAME'S JOB. The agent runs one job at a time for any
-     game; a page that comes back looking at StS2 must not wear Broforce's
-     upload spinner. job.game is whatever string Shipmate handed the agent
-     (name, slug or .app path), so match on any of them. A job for another game
-     gets a one-line toast and stays the agent's business. */
-  const g = state.upf && state.upf.game;
-  if (g && job.game) {
-    const jg = String(job.game).toLowerCase();
-    const mine = [g.name, g.slug, g.app].filter(Boolean).map(x => String(x).toLowerCase());
-    if (!mine.includes(jg) && !mine.some(x => jg.endsWith('/' + x) || x.endsWith('/' + jg))) {
-      if (job.state === 'running' && typeof bcToast === 'function') bcToast(`${job.game}: ${job.kind === 'publish' ? 'upload' : 'build'} still running in the background.`);
-      return;
-    }
-  }
-  // rebuild the watched state from the lines the agent kept
   state.upf.lines = [];
   state.upf.stage = 0;
   state.upf.stages = [{ start: (remembered && remembered.started) || (Date.now() - (job.elapsed || 0) * 1000) }];
@@ -1555,7 +1606,6 @@ async function upfReattach() {
   state.platformBuildProcessing = state.platformBuildProcessing || {};
   state.platformBuildProcessing[pid] = true;
   for (const l of job.lines || []) { state.upf.lines.push(l); _upfTrackLine(l); }
-  if (!state.upf.game) UPF.ensureMatch();
   if (job.kind === 'publish') { state.upf.built = true; }
   _upfRepaint(pid, true);
   if (job.state === 'done') return _upfDispatchFinish(pid, job.kind, job.result, state.upf.game || { name: 'Game' });
@@ -1576,6 +1626,23 @@ async function upfReattach() {
       await new Promise(res => setTimeout(res, 1500));
     }
   } catch (e) { _upfFail(pid, e); }
+}
+
+/* RE-ATTACH AFTER A RELOAD. The agent owns the run, so a page that comes back
+   asks whether the job it started is still going (or has ended since) and
+   picks up watching it — stages, timers and the result — where it left off.
+   The job id (and kind: prepare or publish) is remembered in localStorage by
+   upfBuild / upfPublish; the agent's /jobs list is the fallback when that is
+   gone. On reattach the kind routes to the right finisher. */
+async function upfReattach() {
+  const h = await UPF.health();
+  if (!h) return;
+  if (!state.upf.game) { try { await UPF.ensureMatch(); } catch (_) {} }
+  if (!state.upf.game) return;
+  const pid = UPF_MAC_PIDS.find(p => _upfActive(p)) || 'macos';   // .has, not .includes — activePlatforms is a Set
+  // The agent's record decides: running build → its stage; running upload → the
+  // submitted face watched to the end; finished work → the card where it ended.
+  await UPF.restoreProgress(pid);
 }
 
 setTimeout(() => { try { upfReattach(); } catch (_) {} }, 1800);

@@ -22157,6 +22157,15 @@ function buildSubmittedCard(pid, flipData) {
         ${SM_CHEVRON_DOWN}
       </button>
       ${reviewing ? `<div class="sub-steps">${_submittedSteps(pid)}</div>` : ''}
+      ${/* A CARD RESTORED FROM THE AGENT'S RECORD (a title entered again, or a
+            reload) lands on this face because that is where the work is — but
+            the next thing the developer may want is a NEW build of the same
+            game. One quiet link, same shape as the toggle above, takes the card
+            back to its steps with the previous submission set aside. Only on
+            Mac cards (the agent is the memory) and only once the submit has
+            settled — never while an upload is in flight. */''}
+      ${(isMacPid && flipData && flipData.resumed && !(macSt && macSt.stateKind === 'progress'))
+        ? `<button class="sub-steps-toggle" onclick="startNewSubmission('${pid}')"><span>Start a new submission</span></button>` : ''}
       ${/* THE ACT IS THE LAST THING IN THE CARD, because on the other face it
             already is: the steps list ends in the Submit row, and Release is
             that same object seen from this side. Putting it there makes one

@@ -7312,6 +7312,21 @@ function finalSubmit(platformId) {
 }
 
 // Cancels a submission — removes the flip state and release record, returns card to pre-submission.
+/* "Start a new submission" on a restored Mac card: back to the steps face with
+   the previous submission set aside. The agent's record (status.json) is left
+   as is — the next build supersedes it — so a reload before that build simply
+   restores this same card again. */
+function startNewSubmission(pid) {
+  if (state.platformFlipped) delete state.platformFlipped[pid];
+  if (state.platformStepStatus && state.platformStepStatus[pid]) state.platformStepStatus[pid].submit = 'not_started';
+  if (state.platformBuilds) delete state.platformBuilds[pid];
+  if (state.upf) { state.upf.built = false; state.upf.uploaded = false; state.upf.result = null; state.upf.stage = 0; state.upf.stages = []; state.upf.lines = []; if (state.upf.submitPhase) delete state.upf.submitPhase[pid]; }
+  state.upfResumeSkip = state.upfResumeSkip || {};
+  state.upfResumeSkip[pid] = true;   // don't immediately restore the card we just left
+  if (typeof bcToast === 'function') bcToast('Starting a new submission. Generate Build makes a fresh build.');
+  renderDashboard();
+}
+
 function cancelSubmission(pid) {
   const proj = state.projects.find(p => p.id === state.activeProjectId);
   const ver  = proj?.versions.find(v => v.id === state.activeVersionId);
