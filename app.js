@@ -515,6 +515,7 @@ async function toggleStepSection(pid, stepId) {
     state.storePreviewFocus[pid] = null;
   }
   if (pid === 'android') seedOnboardingToAndroid();
+  if (pid === 'android' || pid === 'egs') giarcSeedFromIos();
   if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
     seedOnboardingToIOS(pid);
     if (pid === 'macos')      seedMacAppStoreListing();
@@ -3181,6 +3182,9 @@ async function openStepModal(pid, stepId) {
   // have to be repeated in five places (and be forgotten in the sixth).
   // Gates the steps in STEP_REQUIRES_VISIT; a no-op for every other step.
   markStepSectionSeen(pid, stepId);
+  // Google Play and Epic share one IARC questionnaire; bring in whatever the
+  // App Store answers already settle before any of it is drawn or counted.
+  if (pid === 'android' || pid === 'egs') giarcSeedFromIos();
 
   /* The Game Build modal carries its own Build-steps list, so the Shippy guide
      beside it is redundant and competes with it — hide Shippy for this step only
@@ -22860,6 +22864,9 @@ function answerGIARCSingle(key, optIndex) {
     }
     state.cqAnswers[key] = optIndex;
   }
+  // A click is the developer's answer — including a click that clears it.
+  // Neither the App Store mapping nor inference may touch this branch again.
+  state.cqAnswerMeta[key] = { humanConfirmed: true };
   reRenderAndroidStepModal();
   updateAndroidCard();
 }
@@ -22877,8 +22884,92 @@ function answerGIARCMultiOpt(key, optIndex) {
     current.push(optIndex);
     state.cqAnswers[key] = current;
   }
+  state.cqAnswerMeta[key] = { humanConfirmed: true };
   reRenderAndroidStepModal();
   updateAndroidCard();
+}
+
+/* ── Who answered an IARC branch, and who may overwrite it ──────────────────
+
+   Three writers share these keys: the developer (a click), the App Store
+   mapping (GIARC_FROM_IOS, state.js) and inference (applyIarcResults,
+   claude.js). Precedence, highest first:
+
+     1. the developer, on the IARC question itself — never overwritten;
+     2. the App Store mapping, when the App Store answer it reads was the
+        developer's — they told us once, they should not be asked twice;
+     3. inference, which sees the description and screenshots and so can
+        answer follow-ups Apple's questionnaire never asks;
+     4. the App Store mapping from App Store answers that were themselves
+        inferred.
+
+   Ownership is decided per TOP-LEVEL BRANCH, not per key: a follow-up only
+   means something under its parent's answer, so a branch is written whole by
+   one source or left alone. An answer with no meta at all predates this code
+   and was a click, so it counts as the developer's. */
+const GIARC_PREFIX = 'google.content.';
+
+function _giarcBranchOwners(topKey) {
+  const owners = new Set();
+  giarcSubtreeKeys(topKey).forEach(k => {
+    const m = state.cqAnswerMeta[k];
+    if (m?.humanConfirmed) { owners.add('human'); return; }
+    if (giarcIsAnswered(k)) owners.add(m?.source || 'human');
+  });
+  return owners;
+}
+
+/* Replace a whole branch with `answers` (short keys → option index, or array
+   of indices). Walks from the top so a key is only written when its parent's
+   answer reveals it; anything invalid or unrevealed is dropped. */
+function _giarcWriteBranch(topKey, answers, source) {
+  giarcSubtreeKeys(topKey).forEach(k => {
+    delete state.cqAnswers[k];
+    if (!state.cqAnswerMeta[k]?.humanConfirmed) delete state.cqAnswerMeta[k];
+  });
+  let written = 0;
+  const walk = key => {
+    const q = GOOGLE_IARC_BY_KEY[key];
+    const v = answers[key.slice(GIARC_PREFIX.length)];
+    if (!q || v == null) return;
+    const valid = giarcOptionEntries(q).map(o => o.index);
+    let val;
+    if (q.data_type === 'picklist_multi') {
+      if (!Array.isArray(v)) return;
+      val = [...new Set(v.map(Number))].filter(i => valid.includes(i)).sort((x, y) => x - y);
+      if (!val.length) return;
+    } else {
+      val = Number(v);
+      if (!valid.includes(val)) return;
+    }
+    state.cqAnswers[key] = val;
+    state.cqAnswerMeta[key] = { source, humanConfirmed: false };
+    written++;
+    giarcActiveChildKeys(key).forEach(walk);
+  };
+  walk(topKey);
+  return written;
+}
+
+/* Fill Google Play's and Epic's IARC questionnaire from the App Store answers.
+   Idempotent and cheap, so it runs on every open of an Android or Epic step
+   and after inference — never from a render. Returns the branches written. */
+function giarcSeedFromIos() {
+  const a    = state.iosSubmitAnswers;
+  const meta = state.iosAnswerMeta || {};
+  if (!a || typeof GIARC_FROM_IOS === 'undefined') return 0;
+  let n = 0;
+  GIARC_FROM_IOS.forEach(m => {
+    const derived = m.derive(a);
+    if (!derived) return;
+    const top    = GIARC_PREFIX + m.top;
+    const owners = _giarcBranchOwners(top);
+    if (owners.has('human')) return;
+    const iosHuman = m.from.some(f => meta[f]?.humanConfirmed);
+    if (owners.has('ai') && !iosHuman) return;
+    if (_giarcWriteBranch(top, derived, 'ios')) n++;
+  });
+  return n;
 }
 
 /* expand=true reopens a collapsed branch for review; expand=false manually

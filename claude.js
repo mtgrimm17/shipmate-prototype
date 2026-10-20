@@ -1409,6 +1409,13 @@ function buildSharedContext() {
     .filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0));
   if (filledCQ.length) {
     const cqLines = filledCQ.slice(0, 40).map(([k, v]) => {
+      // IARC tree answers are stored as option indices — say them in words.
+      const gq = GOOGLE_IARC_BY_KEY[k];
+      if (gq) {
+        const opts = giarcOptionEntries(gq);
+        const txt  = (Array.isArray(v) ? v : [v]).map(i => (opts.find(o => o.index === i) || {}).text).filter(Boolean);
+        return `  ${gq.title}: ${txt.join('; ')}`;
+      }
       const q     = CQ_QUESTIONS.find(x => x.id === k);
       const label = q ? q.text.slice(0, 60) : k;
       return `  ${label}: ${Array.isArray(v) ? v.join(', ') : v}`;
@@ -1677,7 +1684,54 @@ Rules:
 function _inferencePids() {
   return [...new Set([...state.activePlatforms]
     .map(p => (p === 'macos' || p === 'macos_full') ? 'ios' : p)
-    .filter(p => ['ios','android','steam'].includes(p)))];
+    .filter(p => ['ios','android','steam','egs'].includes(p)))];
+}
+
+/* The IARC tree (Google Play and Epic share it) written out for the prompt:
+   one line per question, indented by depth, options numbered the way they are
+   stored, and "→ reveals" naming the follow-ups each option opens. Top-level
+   questions carry IARC's own wording, since that is where the scope is set. */
+function _iarcTreeForPrompt() {
+  const lines = [];
+  const walk = (key, depth) => {
+    const q = GOOGLE_IARC_BY_KEY[key];
+    if (!q) return;
+    const short = key.slice(GIARC_PREFIX.length);
+    const kind  = q.data_type === 'picklist_multi' ? 'multi' : 'single';
+    const opts  = giarcOptionEntries(q).map(o => {
+      const kids = giarcChildKeysForOption(o.child).map(k => k.slice(GIARC_PREFIX.length));
+      return `${o.index}=${o.text}${kids.length ? ` → reveals ${kids.join(', ')}` : ''}`;
+    });
+    const pad = '  '.repeat(depth);
+    lines.push(`${pad}${short} [${kind}] ${q.title}${depth === 0 && q.tooltip ? ` — ${q.tooltip}` : ''}`);
+    opts.forEach(o => lines.push(`${pad}    ${o}`));
+    giarcOptionEntries(q).forEach(o =>
+      giarcChildKeysForOption(o.child).forEach(k => walk(k, depth + 1)));
+  };
+  GOOGLE_IARC_TOP_LEVEL_KEYS.forEach(k => walk(k, 0));
+  return lines.join('\n');
+}
+
+/* Apply the "iarc" block of the unified response. A branch is written whole or
+   not at all, and never over the developer's own answers — see the precedence
+   note above _giarcBranchOwners (app.js). Below-threshold answers are dropped
+   key by key, which simply leaves that follow-up for the developer. */
+function applyIarcResults(iarc) {
+  const answers = (iarc && iarc.answers) || {};
+  const picked  = {};
+  for (const [k, entry] of Object.entries(answers)) {
+    if (!entry || typeof entry !== 'object') continue;
+    if (typeof entry.confidence !== 'number' || entry.confidence < 80) continue;
+    picked[k.replace(GIARC_PREFIX, '')] = entry.value;
+  }
+  let branches = 0;
+  GOOGLE_IARC_TOP_LEVEL_KEYS.forEach(top => {
+    if (picked[top.slice(GIARC_PREFIX.length)] == null) return;
+    if (_giarcBranchOwners(top).has('human')) return;
+    if (_giarcWriteBranch(top, picked, 'ai')) branches++;
+  });
+  console.log(`[IARC inference] Applied ${branches}/${GOOGLE_IARC_TOP_LEVEL_KEYS.length} branches`);
+  return branches;
 }
 
 /* ── Unified inference prompt (all active platforms in one call) ── */
@@ -1763,14 +1817,30 @@ ${matureIds.join(',\n')}
   }`;
   }
 
-  const schemaSections = [iosSchema, androidSchema, steamSchema].filter(Boolean).join(',\n');
+  // ── IARC schema (Google Play AND Epic Games Store — one questionnaire) ────────
+  // Asked whenever either store is active. The android block above is the older
+  // consolidated questionnaire and is kept for what still reads it; the tree
+  // below is the one both stores actually DRAW.
+  const iarcSchema = (activePids.includes('android') || activePids.includes('egs')) ? `
+  "iarc": {
+    "answers": {
+      "<question key>": { "value": <option number, or array of option numbers for [multi]>, "confidence": 0-100 }
+    }
+  }` : '';
+  const iarcTree = iarcSchema ? `
+
+IARC CONTENT QUESTIONNAIRE (used by Google Play and the Epic Games Store). Keys, option numbers and follow-ups:
+${_iarcTreeForPrompt()}
+` : '';
+
+  const schemaSections = [iosSchema, androidSchema, steamSchema, iarcSchema].filter(Boolean).join(',\n');
 
   return `You are an expert game content analyst pre-filling platform questionnaires for a game submission tool.
 
 ${ctx}
 
 Using ALL of the above information, fill out the content questionnaires for the active platforms: ${activePids.join(', ')}.
-
+${iarcTree}
 CROSS-PLATFORM INFERENCE RULES — when iOS answers are present, use them as direct evidence for equivalent Android/Steam fields:
 - iOS "Realistic Violence: none"       → Steam rv_blood=no, rv_killing=no, rv_minorities=no (confidence ≥90); Android violence questions: no
 - iOS "Realistic Violence: infrequent" → Steam rv_blood=yes (confidence ≥85)
@@ -1794,6 +1864,13 @@ iOS INFERENCE GUIDELINES:
 - "infrequent" = present but not central; "frequent" = a primary element
 - ageCategory "not_applicable" for most games; "made_for_kids" only if explicitly child-targeted
 - business.iapTypes: array from [consumable, non-consumable, auto-renewable, non-renewing]
+
+IARC GUIDELINES (the "iarc" block):
+- Answer every top-level question. Answer a follow-up ONLY when the option you chose for its parent reveals it; never answer a follow-up whose parent you did not reveal it from.
+- Values are option NUMBERS as listed: a number for [single], an array of numbers for [multi].
+- Keep it consistent with any iOS answers above: iOS "none" for a theme means the matching IARC top-level question is No; iOS Realistic or Extended Graphic Violence means violence against humans with a Realistic setting; iOS Horror/Fear "infrequent|frequent" means Scary elements at least; iOS hasIAP "yes" means Purchases of digital goods; iOS lootBoxes "yes" means chance-based purchases.
+- Nazi symbols, Korean national identity, terrorism advocacy and realistic crime techniques: "No" unless the game data clearly says otherwise.
+- Only include answers with confidence >= 80; leave the rest out.
 
 ANDROID/STEAM CONFIDENCE THRESHOLDS:
 - Answer Android questions when confidence >= 80
@@ -1830,7 +1907,10 @@ async function inferAllQuestionnaires() {
 
   // Clear stale AI-inferred meta (preserve human-confirmed answers)
   state.iosAnswerMeta   = Object.fromEntries(Object.entries(state.iosAnswerMeta).filter(([,v])   => v.humanConfirmed));
-  state.cqAnswerMeta    = Object.fromEntries(Object.entries(state.cqAnswerMeta).filter(([,v])    => v.humanConfirmed));
+  /* IARC tree keys KEEP their meta: it records which writer owns each answer
+     (developer / App Store mapping / inference — see _giarcBranchOwners), and an
+     answer stripped of it would read as the developer's and be frozen. */
+  state.cqAnswerMeta    = Object.fromEntries(Object.entries(state.cqAnswerMeta).filter(([k,v]) => v.humanConfirmed || k.startsWith(GIARC_PREFIX)));
   state.steamAnswerMeta = Object.fromEntries(Object.entries(state.steamAnswerMeta).filter(([,v]) => v.humanConfirmed));
 
   const prompt     = buildUnifiedInferencePrompt();
@@ -1859,7 +1939,7 @@ async function inferAllQuestionnaires() {
     },
     body: JSON.stringify({
       model:      CLAUDE_MODEL,
-      max_tokens: 8000,
+      max_tokens: 12000,   // the IARC block can run to ~95 answers on top of the rest
       messages:   [{ role: 'user', content }],
     }),
   });
@@ -1889,6 +1969,13 @@ async function inferAllQuestionnaires() {
   // Apply Steam results
   if (activePids.includes('steam') && parsed.steam) {
     applySteamResults(parsed.steam);
+  }
+
+  // Apply IARC (Google Play + Epic), then let the App Store answers — now
+  // including the ones just inferred — fill or outrank per the precedence note.
+  if (activePids.includes('android') || activePids.includes('egs')) {
+    if (parsed.iarc) applyIarcResults(parsed.iarc);
+    giarcSeedFromIos();
   }
 
   /* The one path that really called Claude and applied an answer. Every exit

@@ -669,6 +669,129 @@ function giarcAnswerSummaryText(key) {
   return giarcTruncateText(text, 60);
 }
 
+/* Every key under a top-level question, reachable through ANY option — the
+   static shape of the branch, not what the current answers happen to reveal.
+   Used to treat a top-level question and its follow-ups as one unit when
+   deciding who owns it (see giarcSeedFromIos, app.js). */
+function giarcSubtreeKeys(key, out = []) {
+  const q = GOOGLE_IARC_BY_KEY[key];
+  if (!q) return out;
+  out.push(key);
+  giarcOptionEntries(q).forEach(o =>
+    giarcChildKeysForOption(o.child).forEach(k => { if (!out.includes(k)) giarcSubtreeKeys(k, out); }));
+  return out;
+}
+
+/* ── App Store answers → IARC (Google Play + Epic Games Store) ──────────────
+
+   Apple's questionnaire is coarser than IARC's: thirteen intensity levels and
+   a handful of yes/no capabilities against a 95-question tree. So this maps
+   only what an App Store answer actually SAYS, and leaves a follow-up blank
+   rather than guessing it. A blank IARC row is a question the developer
+   answers; a wrong one is a rating they ship.
+
+   One entry per IARC top-level question. `from` names the App Store fields
+   that drive it — if any of those was answered by the developer, the mapping
+   outranks an AI guess on the IARC side (giarcSeedFromIos). `derive` returns
+   the answers for the WHOLE branch (short keys, option indices exactly as
+   GOOGLE_IARC_QUESTIONS numbers them), or null when the App Store answers do
+   not settle it. Keys are only written if their parent's answer reveals them;
+   giarcSeedFromIos prunes anything else. */
+const _giarcSev = v => v === 'frequent' ? 2 : v === 'infrequent' ? 1 : v === 'none' ? 0 : null;
+
+const GIARC_FROM_IOS = [
+  { top: 'bloodviolencegore', from: ['cartoonViolence', 'realisticViolence', 'extendedViolence'],
+    derive(a) {
+      const c = _giarcSev(a.cartoonViolence), r = _giarcSev(a.realisticViolence), e = _giarcSev(a.extendedViolence);
+      if (c === 0 && r === 0 && e === 0) return { bloodviolencegore: 2 };                  // No
+      if (!(c > 0 || r > 0 || e > 0)) return null;
+      const out = { bloodviolencegore: 1 };                                                 // Yes
+      // Apple's Realistic and Extended Graphic Violence are both, by their own
+      // definitions, violence against HUMANS in lifelike situations. Cartoon /
+      // Fantasy alone does not say who the target is, so Types is left open.
+      if (r > 0 || e > 0) {
+        out.bloodviolencegoretypes = [1];                                                   // against humans
+        out.humansetting   = 2;                                                             // Realistic
+        out.humanreactions = 2;                                                             // Realistic
+        if (e > 0) out.humanbloodlevel = e === 2 ? 4 : 3;                                   // High / Moderate
+      }
+      return out;
+    } },
+
+  { top: 'fear', from: ['horrorFear'],
+    derive(a) {
+      const h = _giarcSev(a.horrorFear);
+      if (h === null) return null;
+      if (h === 0) return { fear: 2 };
+      // "Horrifying" is a step past what Apple's Horror/Fear Themes measures,
+      // so the mapping stops at Scary and leaves Horrifying to the developer.
+      return { fear: 1, feartypes: [1], scaryfreq: h === 2 ? 2 : 1 };
+    } },
+
+  { top: 'sexsuggestdate', from: ['matureSuggestive', 'sexualContent', 'graphicSexual'],
+    derive(a) {
+      const m = _giarcSev(a.matureSuggestive), s = _giarcSev(a.sexualContent), g = _giarcSev(a.graphicSexual);
+      if (m === 0 && s === 0 && g === 0) return { sexsuggestdate: 2 };
+      // Mature/Suggestive alone covers trauma and political strife too, so it
+      // cannot by itself answer a question about sexuality.
+      if (!(s > 0 || g > 0)) return null;
+      const types = [1];                                                                    // sexual activity
+      if (m > 0) types.push(2);                                                             // suggestive themes
+      return { sexsuggestdate: 1, sexsuggestdatetypes: types, sexfreq: Math.max(s || 0, g || 0) === 2 ? 2 : 1 };
+    } },
+
+  { top: 'gambling', from: ['simulatedGambling', 'realMoneyGambling'],
+    derive(a) {
+      const sim = _giarcSev(a.simulatedGambling), real = a.realMoneyGambling;
+      if (sim === 0 && real === 'no') return { gambling: 2 };
+      if (!(sim > 0 || real === 'yes')) return null;
+      const out = { gambling: 1, gamblingtypes: [3] };                                      // casino-style
+      if (real === 'yes') out.casinorewards = 1;
+      else if (real === 'no') out.casinorewards = 2;
+      return out;
+    } },
+
+  { top: 'offlang', from: ['profanity'],
+    derive(a) {
+      const p = _giarcSev(a.profanity);
+      if (p === null) return null;
+      if (p === 0) return { offlang: 2 };
+      return p === 2 ? { offlang: 1, offlangtypes: [2], swearing: 2 }                       // moderate swearing, often
+                     : { offlang: 1, offlangtypes: [1], profanities: 1 };                   // minor profanities, rarely
+    } },
+
+  // Apple folds crude humour into Profanity, so only its "none" is an answer here.
+  { top: 'crude', from: ['profanity'],
+    derive(a) { return _giarcSev(a.profanity) === 0 ? { crude: 2 } : null; } },
+
+  { top: 'drugs', from: ['substancesAlcohol'],
+    derive(a) {
+      const d = _giarcSev(a.substancesAlcohol);
+      if (d === null) return null;
+      return { drugs: d === 0 ? 2 : 1 };                      // which substance is not something Apple asks
+    } },
+
+  { top: 'crypto', from: ['hasIAP', 'lootBoxes', 'realMoneyGambling'],
+    derive(a) {
+      if (a.hasIAP === 'yes') {
+        const out = { crypto: 1, cryptotypes: [1] };                                        // purchases of digital goods
+        if (a.lootBoxes === 'yes') out.digitalchance = 1;
+        else if (a.lootBoxes === 'no') out.digitalchance = 2;
+        return out;
+      }
+      if (a.hasIAP === 'no' && a.realMoneyGambling === 'no') return { crypto: 2 };
+      return null;
+    } },
+
+  { top: 'interact', from: ['messagingChat', 'userGenContent', 'socialMedia'],
+    derive(a) {
+      const v = [a.messagingChat, a.userGenContent, a.socialMedia];
+      if (v.includes('yes')) return { interact: 1 };
+      if (v.every(x => x === 'no')) return { interact: 2 };
+      return null;
+    } },
+];
+
 
 /* ── CQ helper functions ─────────────────────────────── */
 
