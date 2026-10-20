@@ -9625,11 +9625,24 @@ function buildImproveSubmissionSection(platformId) {
     ? _getCurrentMergedStoreItems() : [];
   const remaining = mergedItems.length; // after filtering dismissed/accepted items
 
-  // Total valid suggestions from this AI run (before dismiss/accept filtering)
-  // This drives the counter ("1 of 2", not "1 of 5" when 3 lacked fixedValue)
-  const allValidFromRun = (!spi?.loading && !spi?.error && spi?.issues)
-    ? spi.issues.filter(iss => !!iss.fixedValue).length
-    : remaining;
+  /* How many answerable suggestions this AI run produced (before dismiss/accept
+     filtering). It feeds `totalItems`, whose only live reader is the Store Page
+     GRADE below — 4+ suggestions start at D, 3 at C, 2 at B, 0–1 at A. (The
+     comment that used to sit here said it drove a "1 of 2" counter. It does
+     not, and has not for some time: the carousel is drawn from `spAll`, and
+     `currentNum` just below is computed and never read.)
+
+     ASKED OF `_mergedStoreItems()`, NOT OF `spi.issues` AGAIN (v8.28). This
+     used to re-derive the number with its own copy of the "is this answerable"
+     rule — a filter on `!!fixedValue` — which was the same rule
+     _mergedStoreItems applies, right up until it was not. v8.28 added a second
+     condition there: a fixedValue that cannot fit its field is not answerable
+     either. A grade computed from the old rule would count a suggestion the
+     developer can never act on, and hand them a D for three reachable fixes.
+     Called rather than reusing `spAll`, which is declared fifty lines below
+     this one — a `const` cannot be read before it exists. */
+  const allValidFromRun = ((typeof _mergedStoreItems === 'function')
+    ? _mergedStoreItems().length : 0) || remaining;
   const totalItems = allValidFromRun || remaining;
   const handledInRun = Math.max(0, totalItems - remaining);
   const currentNum = handledInRun + 1; // 1-indexed position

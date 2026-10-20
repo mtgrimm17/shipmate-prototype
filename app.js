@@ -6068,7 +6068,11 @@ function smFakeStoreInsights(on = true) {
     issues: [
       { field: 'subtitle', issue: 'Subtitle repeats the title',
         suggestion: 'Say what the player DOES, not what the game is called.',
-        fixedValue: 'Build a colony, survive the winter' },
+        /* 30 EXACTLY, and it used to be 34 (v8.28) — the canned demo was
+           demonstrating the bug this version fixes: "Build a colony, survive
+           the winter" is four characters past Apple's subtitle limit, and
+           pressing Fix it wrote it into the field anyway. */
+        fixedValue: 'Build a colony, survive winter' },
       { field: 'description', issue: 'Opening line buries the hook',
         suggestion: 'Lead with the fantasy, not the genre.',
         fixedValue: 'You are the last engineer on a dying station — keep it breathing until dawn.' },
@@ -11944,6 +11948,28 @@ async function runStorePageInsights() {
   const desc  = fd.description || '(no description)';
 
   const subtitle = state.formData.subtitle || '';
+
+  /* THE LIMITS ARE APPLE'S, AND THEY ALWAYS WERE (v8.28).
+     The prompt below used to carry one hard-coded number — "max 30 chars" for
+     subtitle — and that 30 is Apple's. Title's 30 and description's 4,000 were
+     simply never said, so a suggestion could come back over a limit nobody had
+     told the model about, and nothing downstream checked.
+
+     IAS_FIELD_CHAR_LIMITS (below in this file) is where those numbers already
+     live: the Product Page Preview counts against it, the language dropdown's
+     warning icon reads it, and now so does the thing that writes into those
+     same fields. One table, one answer.
+
+     THIS ANALYSIS IS NOT PER-PLATFORM, and that is a known shape rather than
+     an oversight here: `state.storePageInsights` is a single object shared by
+     every card that shows Improve Your Submission (see the note in
+     buildImproveSubmissionSection). So the non-Apple cards inherit Apple's
+     numbers — exactly as they already did when the only number was subtitle's
+     30, but now stated for all three fields and enforced. Steam and Google
+     Play have their own limits AND their own field names (Steam's 300 is its
+     SHORT description, not this one), so giving them their own table is a
+     change of its own, not a rename of this one. */
+  const LIM = IAS_FIELD_CHAR_LIMITS;
   /* THREE IS THE TARGET, NOT A QUOTA. The ask used to be "up to 5", which in
      practice came back with one or two — and one suggestion makes the card's
      carousel pointless, since there is nothing to page between.
@@ -11955,15 +11981,19 @@ async function runStorePageInsights() {
      three distinct things worth saying, so this should rarely bite. */
   const prompt = `You are a senior App Store listing consultant. Review this mobile game listing and identify 3 to 5 HIGH-IMPACT improvements that would meaningfully increase downloads.
 
-GAME: "${title}"
-SUBTITLE (current, max 30 chars): "${subtitle}"
-DESCRIPTION (current): "${desc.slice(0, 1200)}${desc.length > 1200 ? '…' : ''}"
+GAME TITLE (current — ${title.length} characters, limit ${LIM.title}): "${title}"
+SUBTITLE (current — ${subtitle.length} characters, limit ${LIM.subtitle}): "${subtitle}"
+DESCRIPTION (current — ${desc.length} characters, limit ${LIM.description}): "${desc.slice(0, 1200)}${desc.length > 1200 ? '…' : ''}"
 
 STRICT RULES — violations result in the suggestion being discarded:
 1. Every suggestion MUST include a concrete "fixedValue" — the exact replacement text ready to copy-paste. No "fixedValue" = omit the suggestion.
 2. Each suggestion must target a DISTINCT weakness. No overlapping or redundant issues.
 3. Changes must be SUBSTANTIAL, not cosmetic. Minor rephrasing ("one to eight" → "1–8") does not qualify.
-4. "fixedValue" for subtitle: max 30 characters. "fixedValue" for description: preserve the overall length, making targeted insertions or replacements that add the missing information.
+4. HARD CHARACTER LIMITS. These are the store's own caps, not style guidance. A "fixedValue" even one character over its field's limit is DISCARDED — count it before you answer:
+     • title: at most ${LIM.title} characters
+     • subtitle: at most ${LIM.subtitle} characters
+     • description: at most ${LIM.description} characters
+   Within that cap, "fixedValue" for description must preserve the overall length, making targeted insertions or replacements that add the missing information.
 5. Do NOT suggest removing content — only adding or replacing.
 6. Prioritize: missing gameplay specifics > weak hook > absent genre signal > unclear audience > missing key feature.
 
@@ -12002,12 +12032,53 @@ Aim for 3 wherever the listing supports it — a title, a subtitle and a descrip
     const data    = await res.json();
     const raw     = (data.content?.[0]?.text || '').trim();
     const cleaned = _extractJSONPayload(raw);
-    const issues  = _parseAnalysisArray(cleaned).slice(0, 5);
-    state.storePageInsights = { issues, index: 0 };
+    const offered = _parseAnalysisArray(cleaned).slice(0, 5);
+
+    /* A PROMPT IS A REQUEST, NOT A GUARANTEE (v8.28). Rule 4 states every
+       field's cap and says an over-limit answer is discarded; this is where
+       that sentence becomes true. Discarded, not truncated: cutting a subtitle
+       at 30 gives "Build a colony, survive the st", and a fix the user cannot
+       use is worse than one suggestion fewer — which is already how rule 1
+       treats a suggestion with no fixedValue at all.
+
+       Filtered HERE, at the source, so every reader downstream is right for
+       free: the carousel, the "1 of N" counter, the grade, and the apply
+       button all read `issues` and none of them has to know about limits. */
+    const issues  = offered.filter(iss => !_storeFixOverBy(iss.field, iss.fixedValue));
+    const dropped = offered.length - issues.length;
+
+    if (!issues.length && dropped) {
+      /* EMPTY IS NOT THE SAME AS CLEAN. With no issues the card draws
+         "Store page, assets & metadata all look strong", which here would be a
+         lie told on the model's behalf — it found problems, it just could not
+         fit the answers. The error state says so and offers Retry. */
+      state.storePageInsights = { error: dropped === 1
+        ? 'The one suggestion that came back was longer than the field allows.'
+        : `All ${dropped} suggestions came back longer than their fields allow.` };
+    } else {
+      state.storePageInsights = { issues, index: 0, dropped };
+    }
   } catch (err) {
     state.storePageInsights = { error: 'Analysis failed: ' + err.message };
   }
   reRenderStepModal();
+}
+
+/* HOW FAR OVER ITS FIELD'S LIMIT A SUGGESTED VALUE IS — 0 when it fits (v8.28).
+
+   An overage rather than a boolean because the one caller that reports to a
+   human wants the number, and `!_storeFixOverBy(...)` reads as "fits" anyway.
+
+   Unknown field, unknown limit, or a non-string value all answer 0: this
+   function's job is to catch a value that is definitely too long, not to
+   decide what counts as a valid suggestion. `!!fixedValue` below is still what
+   decides that, and a field with no entry in the table (there is none today)
+   should not be silently dropped by a check that has nothing to check it
+   against. */
+function _storeFixOverBy(field, value) {
+  const limit = IAS_FIELD_CHAR_LIMITS[field];
+  if (!limit || typeof value !== 'string') return 0;
+  return Math.max(0, value.length - limit);
 }
 
 /* Build the merged store-page suggestion list (max 5) from current analysis state.
@@ -12036,6 +12107,13 @@ function _mergedStoreItems() {
 
   return spi.issues
     .filter(iss => !!iss.fixedValue)      // must carry a concrete fix to be answerable
+    /* THE SECOND GATE, because this is the second door (v8.28).
+       runStorePageInsights already drops over-limit values, but it is not the
+       only thing that writes `storePageInsights` — smFakeStoreInsights does
+       too, and so does any project state saved before this version. Everything
+       that can reach the apply button comes through here, so a value that
+       cannot fit its field stops here whatever wrote it. */
+    .filter(iss => !_storeFixOverBy(iss.field, iss.fixedValue))
     .slice(0, 5)
     .map(iss => {
       const field = iss.field || null;
