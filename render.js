@@ -19146,14 +19146,30 @@ function buildEgsContentRatingSection() {
     return (_egsPrefix[key] = out);
   }
 
-  /* A title with its shared opening marked, so the stylesheet can quiet it.
-     Nothing is removed: the full title is still on screen and still what a
-     reader (or a test) gets from the element's text. */
-  function egsTitleHTML(key, title) {
+  /* A question's own half of its title, with the wording it shares with its
+     siblings removed — renderChildren prints that once, as a label above the
+     run (v8.36).
+
+     THIS REPLACES v8.35's DIM-IN-PLACE, which kept the whole title on every row
+     and greyed the repeated opening. Both answer the same 46% of repeated
+     characters; this one removes them rather than quieting them, which is the
+     shape that was asked for.
+
+     THE TRADE IT MAKES, stated rather than discovered: a question's own text no
+     longer names its subject. "Setting" on its own means nothing — the label
+     above it is what says "Violence Against Humans", and anything reading a
+     single row out of context (a screen reader jumping between rows, a future
+     search over question text) gets the short half only. That is the cost of
+     printing the shared words once, and it is why it has to be a LABEL in the
+     flow rather than, say, a tooltip: it has to be read on the way past.
+
+     NO PARAMETER IS THREADED FOR THIS. Whether a prefix was printed above is a
+     pure function of the key — egsSharedPrefix answers it the same way for the
+     stacked header, the inline row and the collapsed row — so all three strip
+     by asking rather than by being told. */
+  function egsOwnTitle(key, title) {
     const pre = egsSharedPrefix(key);
-    if (!pre || title.indexOf(pre) !== 0) return escHtml(title);
-    return `<span class="giarc-title-shared">${escHtml(pre.slice(0, -2))}:</span> `
-         + escHtml(title.slice(pre.length));
+    return (pre && title.indexOf(pre) === 0) ? title.slice(pre.length) : title;
   }
 
   function giarcTooltip(text) {
@@ -19193,7 +19209,7 @@ function buildEgsContentRatingSection() {
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${egsTitleHTML(key, title)}</span>${tooltipHTML}</div>
+          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${escHtml(egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
           <div class="giarc-seg${isMulti ? ' is-multi' : ''}">${segs}</div>
           ${collapseBtnHTML}
         </div>
@@ -19228,7 +19244,7 @@ function buildEgsContentRatingSection() {
            onclick="toggleGIARCExpand('${key}',true)" tabindex="0" role="button" aria-label="Expand to review this answer">
         <div class="giarc-header giarc-header-collapsed">
           ${indexBadge}
-          <span class="giarc-title giarc-title-collapsed">${egsTitleHTML(key, title)}</span>
+          <span class="giarc-title giarc-title-collapsed">${escHtml(egsOwnTitle(key, title))}</span>
           <span class="giarc-collapsed-summary${aiRow ? ' ai-confident' : ''}">${summary}</span>
           <span class="giarc-check is-visible">${CHECK_SVG}</span>
           <span class="giarc-collapse-chevron">
@@ -19274,7 +19290,7 @@ function buildEgsContentRatingSection() {
     const inner = `
         <div class="giarc-header">
           ${indexBadge}
-          <span class="giarc-title">${egsTitleHTML(key, title)}</span>
+          <span class="giarc-title">${escHtml(egsOwnTitle(key, title))}</span>
           ${tooltipHTML}
           ${checkHTML}
           ${collapseBtnHTML}
@@ -19290,13 +19306,34 @@ function buildEgsContentRatingSection() {
       ${renderChildren(key, depth + 1)}`;
   }
 
-  /* Every active child, one card each, in the order the answers revealed them
-     — giarcActiveChildKeys again, the same helper the original builder uses and
-     the same one the per-option buckets replaced in v8.31. */
+  /* Every active child, one question each, with the wording a run of siblings
+     shares printed once above it (v8.36).
+
+     A LABEL WHEN THE PREFIX CHANGES, which is all the grouping this needs.
+     giarcActiveChildKeys walks the selected options in order and concatenates
+     each one's children, so a run that shares a prefix is already contiguous —
+     tick both "against humans" and "against non-humans" and the sixteen
+     children arrive as eight then eight. Watching for the prefix to change
+     therefore prints "Violence Against Humans" once, then "Violence Against
+     Non-Humans" once, with no buckets to build and nothing wrapped in anything.
+
+     AND NOTHING IS WRAPPED. v8.31 printed the same words on a card that boxed
+     the siblings together; that card was removed in v8.34 and is not coming
+     back here. The label is a line in the flow, the way Mac App Store's own
+     category headers are, and each question underneath stays exactly as
+     independent as it was. */
   function renderChildren(key, depth) {
     const kids = giarcActiveChildKeys(key);
     if (!kids.length) return '';
-    return `<div class="giarc-children is-visible">${kids.map(ck => renderGIARCQuestion(ck, depth)).join('')}</div>`;
+    let printed = null;
+    const html = kids.map(ck => {
+      const pre = egsSharedPrefix(ck);
+      const head = (pre && pre !== printed)
+        ? `<div class="giarc-sec-label">${escHtml(pre.slice(0, -2))}</div>` : '';
+      printed = pre;
+      return head + renderGIARCQuestion(ck, depth);
+    }).join('');
+    return `<div class="giarc-children is-visible">${html}</div>`;
   }
 
   /* THE DENOMINATOR IS TOPICS, NOT QUESTIONS (v8.32).

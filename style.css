@@ -16576,12 +16576,25 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .giarc-flat .giarc-card.is-collapsed:hover { border-color: var(--border); }
 .giarc-flat .giarc-card.is-collapsed:hover .giarc-title-collapsed { color: var(--text-dim); }
 
-/* ── The wording a question shares with its siblings (v8.35) ────────────
-   Quieted, never removed: the full title is still on screen and still what the
-   element's text reads, so nothing is hidden from a reader or a screen reader.
-   46% of the sibling titles' characters are this repeated opening; dimming it
-   lets the eye land on the words that differ. */
-.giarc-flat .giarc-title-shared { color: var(--text-faint); font-weight: 500; }
+/* ── The wording a run of siblings shares (v8.36) ───────────────────────
+   Printed once above the run and removed from each question's own title.
+   Measured: 982 of the 2,135 title characters across the 46 questions that
+   have siblings are this repeated opening — 46%, and 68% in the "Sexual
+   Activity" branch.
+
+   IT IS A LINE, NOT A BOX. v8.31 printed the same words on a card that boxed
+   the siblings together and that card was removed in v8.34; this wears Mac App
+   Store's own category-header shape instead (.ios-content-step-label), so it
+   reads as a heading in the flow rather than as a container around the
+   questions under it. */
+.giarc-flat .giarc-sec-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-dim);
+  padding: 14px 0 2px;
+}
+/* The run's first question sits under its label, so it needs no rule above it
+   — the label is already the boundary. */
+.giarc-flat .giarc-sec-label + .giarc-card { border-top: none; }
 
 /* ── Web: "Preview Website" presskit-style page ──────────
    This is a preview of an external, self-hosted page — deliberately a
