@@ -16614,22 +16614,57 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    cr837.py asserts that, and will say so the day it stops being true rather
    than leaving two labels silently overlapping. */
 .giarc-flat { --cr-pin-h: 68px; }
+
+/* ── THE BAR'S DISSOLVE, RE-HUNG WHERE IT CAN BE ORDERED (v8.40) ────────
+   .cr-pinned::after is a 36px fade off the bar's bottom edge that dissolves
+   rows passing under it. It is a child of .cr-pinned, which has z-index 5 and
+   therefore its own stacking context — so anything outside that context is
+   either above the whole bar or below the whole fade, and the sticky section
+   label needs to be between them: clean while it is parked in that strip, and
+   behind the bar while it is being pushed up and out of its run.
+
+   So for THIS card the fade is turned off on the bar and drawn again here, on
+   the questionnaire's own root, where it can carry its own z-index. Identical
+   stops; only its owner changes. `.cr-pinned` is a child of .giarc-root, which
+   is what lets this be scoped by descent rather than by :has() — Google Play's
+   and Epic Games Store Full's cards have no .giarc-flat and keep the original.
+
+   A STICKY FIRST CHILD THAT COSTS NO LAYOUT: the negative margin gives back
+   the 36px it would otherwise push the questionnaire down by — the same trick
+   the Mac store-page nav's own fade uses, for the same reason. */
+.giarc-flat .cr-pinned::after { display: none; }
+.giarc-flat::before {
+  content: '';
+  display: block;
+  position: sticky;
+  top: var(--cr-pin-h);
+  height: 36px;
+  margin-bottom: -36px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(20,20,20,0.96) 0%,
+    rgba(20,20,20,0.72) 30%,
+    rgba(20,20,20,0.34) 55%,
+    rgba(20,20,20,0.10) 78%,
+    rgba(20,20,20,0) 100%);
+}
 .giarc-flat .giarc-sec-label {
-  /* z 6, ABOVE .cr-pinned's z 5, and the reason is its ::after (v8.39).
-     That bar hangs a 36px fade off its own bottom edge to dissolve rows
-     passing under it — `rgba(20,20,20,.96)` at the top, out to nothing by
-     36px. The sticky label parks in exactly that strip and is 39px tall, so
-     from v8.37 until now almost the whole of it was being painted through a
-     fade built for scrolling content. Measured through it: (27,27,27) at the
-     label's top rising to (46,46,46) at its bottom, against the (48,48,48)
-     it is actually painted — which is most of why this bar looked too close
-     to the ground.
-     Raising it above the fade costs the fade nothing: a pinned label is
-     opaque and does its own cutting, and where no label is pinned the fade
-     still has the rows to itself. The two never overlap — `top` is exactly
-     the bar's height — so being above it in paint order is not a licence to
-     cover it; cr837 asserts the geometry rather than the z-order for that. */
-  position: sticky; top: var(--cr-pin-h); z-index: 6;
+  /* UNDER THE BAR, OVER THE FADE (v8.40).
+
+     v8.39 put this at z 6 — above .cr-pinned — to get it out from under that
+     bar's 36px dissolve, which was veiling the parked label. That fixed the
+     veil and broke something worse: a label does not only park, it is pushed
+     up and out of its own run as the next one arrives, and on the way out it
+     travelled straight across the face of the bar.
+
+     It cannot be above the fade and below the bar while the fade lives inside
+     the bar's own stacking context, so the fade moved out — see
+     .giarc-flat::before below, which is the same gradient hung on this card's
+     root at z 2 instead of on .cr-pinned at z 5. The order is now fade 2,
+     label 3, bar 5: the label is clean while parked, and it disappears behind
+     the bar on its way out. */
+  position: sticky; top: var(--cr-pin-h); z-index: 3;
   font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--text);
   /* More above than below, so it reads as attached to what follows it. */
