@@ -19092,6 +19092,70 @@ function buildEgsContentRatingSection() {
     return match ? ' ai-confident' : '';
   }
 
+  /* THE WORDING THIS QUESTION SHARES WITH ITS SIBLINGS (v8.35), or '' when it
+     shares none. Measured across the 46 questions that have siblings: 982 of
+     their 2,135 title characters are the shared opening — 46%, and 68% in the
+     "Sexual Activity: Frequency / Duration / Depiction / Minors" branch. That
+     repetition is what the eye has to wade through to reach the one word per
+     row that differs.
+
+     SHARED WITH A SIBLING, NOT MERELY PRESENT. Half a title is dimmed only when
+     a question revealed alongside this one opens the same way. A topic like
+     "User Interaction: Voice Communication, Text, Shared Images/Audio" has a
+     colon too and no sibling behind it, so none of it is dimmed — dimming half
+     of a title that is unique would be hiding information rather than
+     de-duplicating it.
+
+     CUT AT A ': ' BOUNDARY, for the reason v8.31 recorded and this inherits:
+     Illegal or Recreational Drugs' two children are "...: Interactivity" and
+     "...: Incentives or Rewards", whose longest common prefix runs two letters
+     into the first word, and dimming "...: In" would put the grey boundary
+     mid-word.
+
+     A PROPERTY OF THE QUESTIONNAIRE, NOT OF THE RENDER — which is why this
+     looks up its own siblings instead of taking a parameter threaded down from
+     renderChildren the way v8.31's `strip` was. The data never changes inside a
+     session, so it is answered once per key and cached. */
+  const _egsPrefix = buildEgsContentRatingSection._prefixCache
+    || (buildEgsContentRatingSection._prefixCache = {});
+  function egsSharedPrefix(key) {
+    if (key in _egsPrefix) return _egsPrefix[key];
+    let out = '';
+    outer:
+    for (const q of GOOGLE_IARC_QUESTIONS) {
+      for (let n = 1; n <= 6; n++) {
+        const c = q['option' + n + '_child'];
+        if (!c) continue;
+        const ks = c.split('\n').filter(Boolean);
+        if (ks.length < 2 || ks.indexOf(key) < 0) continue;
+        const titles = ks.map(k => (GOOGLE_IARC_BY_KEY[k] || {}).title || '');
+        if (titles.some(t => !t)) continue;
+        let pre = titles[0];
+        for (let i = 1; i < titles.length; i++) {
+          while (pre && titles[i].indexOf(pre) !== 0) pre = pre.slice(0, -1);
+          if (!pre) break;
+        }
+        const cut = pre ? pre.lastIndexOf(': ') : -1;
+        if (cut < 0) continue;
+        pre = pre.slice(0, cut + 2);
+        if (titles.some(t => t.length <= pre.length)) continue;
+        out = pre;
+        break outer;
+      }
+    }
+    return (_egsPrefix[key] = out);
+  }
+
+  /* A title with its shared opening marked, so the stylesheet can quiet it.
+     Nothing is removed: the full title is still on screen and still what a
+     reader (or a test) gets from the element's text. */
+  function egsTitleHTML(key, title) {
+    const pre = egsSharedPrefix(key);
+    if (!pre || title.indexOf(pre) !== 0) return escHtml(title);
+    return `<span class="giarc-title-shared">${escHtml(pre.slice(0, -2))}:</span> `
+         + escHtml(title.slice(pre.length));
+  }
+
   function giarcTooltip(text) {
     return `<span class="tooltip-anchor" data-tip="${escHtml(text)}"><span class="tooltip-icon">?</span></span>`;
   }
@@ -19129,19 +19193,28 @@ function buildEgsContentRatingSection() {
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${escHtml(title)}</span>${tooltipHTML}</div>
+          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${egsTitleHTML(key, title)}</span>${tooltipHTML}</div>
           <div class="giarc-seg${isMulti ? ' is-multi' : ''}">${segs}</div>
           ${collapseBtnHTML}
         </div>
       </div>`;
   }
 
-  /* Compact single-row view of a fully-answered question. */
+  /* Compact single-row view of a fully-answered question.
+
+     IT CARRIES `giarc-inline` WHENEVER THE EXPANDED FORM WOULD (v8.35). Without
+     that, answering a question CHANGED ITS CHROME: "Setting" was a chromeless
+     45px row while unanswered (giarc-inline strips the fill, border and 18px of
+     padding) and became a bordered rgb(36,36,36) card the moment it collapsed,
+     because this builder never added the class the other one did. A shape that
+     changes under the pointer that just set it is the worst moment for the
+     layout to move. */
   function buildGIARCCollapsedRow(key, depth, index) {
-    const title = (GOOGLE_IARC_BY_KEY[key] || {}).title || '';
+    const q = GOOGLE_IARC_BY_KEY[key] || {};
+    const title = q.title || '';
     const indexBadge = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
     const summary = escHtml(giarcAnswerSummaryText(key));
-    const shell = `giarc-card giarc-depth-${depth}`;
+    const shell = `giarc-card giarc-depth-${depth}` + (q.data_type && egsInlineable(q) ? ' giarc-inline' : '');
     /* A COLLAPSED ROW IS WHERE PROVENANCE MATTERS MOST, which is easy to get
        backwards. It is the one view of an answer the developer may never have
        watched being made: the branch arrived pre-filled, the subtree was
@@ -19155,7 +19228,7 @@ function buildEgsContentRatingSection() {
            onclick="toggleGIARCExpand('${key}',true)" tabindex="0" role="button" aria-label="Expand to review this answer">
         <div class="giarc-header giarc-header-collapsed">
           ${indexBadge}
-          <span class="giarc-title giarc-title-collapsed">${escHtml(title)}</span>
+          <span class="giarc-title giarc-title-collapsed">${egsTitleHTML(key, title)}</span>
           <span class="giarc-collapsed-summary${aiRow ? ' ai-confident' : ''}">${summary}</span>
           <span class="giarc-check is-visible">${CHECK_SVG}</span>
           <span class="giarc-collapse-chevron">
@@ -19201,7 +19274,7 @@ function buildEgsContentRatingSection() {
     const inner = `
         <div class="giarc-header">
           ${indexBadge}
-          <span class="giarc-title">${escHtml(title)}</span>
+          <span class="giarc-title">${egsTitleHTML(key, title)}</span>
           ${tooltipHTML}
           ${checkHTML}
           ${collapseBtnHTML}
@@ -19260,7 +19333,13 @@ function buildEgsContentRatingSection() {
   const body = shown.map(key => renderGIARCQuestion(key, 1, topics.indexOf(key) + 1)).join('');
   const emptyNote = shown.length ? '' :
     `<div class="giarc-card giarc-depth-1"><div class="giarc-title">Every topic is answered. Press All to review them.</div></div>`;
-  return `<div class="giarc-root">${bar}${body}${emptyNote}</div>`;
+  /* `giarc-flat` is what scopes v8.35's chromeless rows to THIS card. Epic's
+     builder emits the same class names Google Play's does — .giarc-card,
+     .giarc-depth-N, .giarc-children — so a bare `.giarc-card { border: none }`
+     would have quietly restyled Google Play's and Epic Games Store Full's
+     questionnaires too, which read the same answers through the original
+     builder and were not asked to change. */
+  return `<div class="giarc-root giarc-flat">${bar}${body}${emptyNote}</div>`;
 }
 
 /* The Unanswered / All switch for Epic's Content Rating (v8.32). Epic's own,

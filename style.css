@@ -16544,6 +16544,45 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-radius: 7px; padding: 2px 8px; color: var(--text);
 }
 
+
+/* ── One shape for every question (Epic's Content Rating, v8.35) ────────
+   THE GREY PANEL WAS THE INCONSISTENCY, not the thing that fixed it. Three
+   shapes were on screen at once: a question whose answers fit beside it was a
+   chromeless 45px row, one whose options are sentences was a bordered
+   rgb(36,36,36) card at 219px, and either of them turned INTO a card the
+   moment it was answered. Mac App Store's Content Rating — the thing this card
+   is being measured against — has no cards at all: its rows are transparent,
+   borderless, unpadded, 34px, and answering one changes nothing about it.
+
+   So the card goes, at every depth. What is left says the same things by
+   cheaper means: .giarc-children's indent rail still shows nesting, a hairline
+   still separates one question from the next, and the options inside a stacked
+   question still carry their own fill. Scoped to .giarc-flat because Google
+   Play and Epic Games Store Full draw the same class names and were not asked
+   to change. */
+.giarc-flat .giarc-card {
+  background: none; border: none; box-shadow: none; padding: 0;
+  border-radius: 0;
+}
+.giarc-flat .giarc-children { gap: 0; }
+.giarc-flat .giarc-children > .giarc-card + .giarc-card,
+.giarc-flat .giarc-root > .giarc-card + .giarc-card { border-top: 1px solid var(--border); }
+/* The hairline needs the breathing room the padding used to give. */
+.giarc-flat .giarc-children > .giarc-card { padding: 12px 0; }
+.giarc-flat .giarc-card.is-collapsed { padding: 12px 0; cursor: pointer; }
+.giarc-flat .giarc-card.giarc-inline > .giarc-row { padding: 0; }
+.giarc-flat .giarc-card .giarc-header { margin-bottom: 10px; }
+.giarc-flat .giarc-card.is-collapsed .giarc-header { margin-bottom: 0; }
+.giarc-flat .giarc-card.is-collapsed:hover { border-color: var(--border); }
+.giarc-flat .giarc-card.is-collapsed:hover .giarc-title-collapsed { color: var(--text-dim); }
+
+/* ── The wording a question shares with its siblings (v8.35) ────────────
+   Quieted, never removed: the full title is still on screen and still what the
+   element's text reads, so nothing is hidden from a reader or a screen reader.
+   46% of the sibling titles' characters are this repeated opening; dimming it
+   lets the eye land on the words that differ. */
+.giarc-flat .giarc-title-shared { color: var(--text-faint); font-weight: 500; }
+
 /* ── Web: "Preview Website" presskit-style page ──────────
    This is a preview of an external, self-hosted page — deliberately a
    plain light theme (not Shipmate's dark app chrome), wrapped in a fake
