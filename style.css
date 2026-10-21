@@ -16503,33 +16503,6 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 
 
-/* ── Grouped sibling questions (Epic's Content Rating, v8.31) ──────────
-   One card holds every sibling at the same depth in the same branch. The
-   wording they all share is printed once in .giarc-group-head and removed
-   from each question's own title, so eight questions that each began
-   "Violence Against Humans: " now read "Setting", "Reactions", and so on
-   under one header.
-
-   .giarc-group-q is a question INSIDE such a card: no border, no background,
-   no shadow of its own — the group drew those once. A hairline between
-   siblings is what separates them, which is why the first one has none. */
-.giarc-group { display: flex; flex-direction: column; }
-.giarc-group-head {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--text-dim);
-  padding-bottom: 10px; margin-bottom: 2px;
-  border-bottom: 1px solid var(--border);
-}
-.giarc-group-q { padding: 14px 0 2px; }
-.giarc-group-q + .giarc-group-q { border-top: 1px solid var(--border); }
-.giarc-group-head + .giarc-group-q { padding-top: 12px; }
-.giarc-group-q.is-collapsed { padding: 12px 0; cursor: pointer; }
-.giarc-group-q.is-collapsed:focus-visible { outline: none; }
-.giarc-group-q.is-collapsed:hover .giarc-title-collapsed { color: var(--text-dim); }
-/* A group's own children indent inside the card, against its padding rather
-   than the card's left edge. */
-.giarc-group-q > .giarc-children { margin-right: 0; }
-
 
 /* ── One-line questions (Epic's Content Rating, v8.32) ─────────────────
    Label on the left, answers on the right, the way Mac App Store's Content
@@ -16539,7 +16512,6 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    questions whose options are whole sentences, and for the group wrappers;
    this only removes it where a row can carry the question on its own. */
 .giarc-inline { padding: 0; background: none; border: none; box-shadow: none; }
-.giarc-group-q.giarc-inline { padding: 0; }
 .giarc-row { display: flex; align-items: center; gap: 16px; min-height: 40px; padding: 4px 0; }
 .giarc-card.giarc-inline > .giarc-row { padding: 6px 2px; }
 .giarc-row-label {

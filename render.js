@@ -19027,26 +19027,27 @@ function buildAndroidContentRatingSection() {
    answers (state.cqAnswers), so this changes the LAYOUT for one card and
    nothing about what is asked or what is stored.
 
-   WHAT CHANGES. The original renders one bordered card per question, so
-   answering "Yes" to Blood, Violence, or Gory Images and then ticking
-   "against humans" produced eight stacked cards, each titled
-   "Violence Against Humans: <something>" - the same six words eight times, and
-   nothing on screen saying the eight were one group. Here the eight siblings
-   share a single card, the repeated words are hoisted to its header once, and
-   each question keeps only what is its own ("Setting", "Reactions",
-   "Presentation", ...).
+   WHAT THIS FORK CARRIES, all of it from v8.32 and v8.33: one-line questions
+   (egsInlineable), topics rather than questions as the denominator, the
+   Unanswered / All filter, and the violet mark on an answer Shipmate supplied.
+   One question per card, exactly as the original draws it.
 
-   GROUPING IS PER OPTION, WHICH IS WHY giarcActiveChildKeys IS NOT USED HERE.
-   That helper flattens every selected option's children into one list, which
-   is right for counting and wrong for grouping: with both "against humans" and
-   "against non-humans" ticked it returns sixteen keys and no way to tell which
-   eight belong with which. egsChildGroups keeps them in per-option buckets, so
-   two ticked options give two cards rather than one card of sixteen.
+   SHARED SIBLING CARDS WERE TRIED IN v8.31 AND REMOVED IN v8.34. Siblings at
+   the same depth in the same branch were drawn inside one card, with the
+   wording they all share hoisted to its header and cut from each title, so
+   eight questions that each began "Violence Against Humans: " read "Setting",
+   "Reactions", and so on. It was removed on request. Two notes for anyone
+   tempted to bring it back:
 
-   Fourteen groups in the questionnaire have more than one sibling; thirteen
-   share a label and the fourteenth (the two children of "Realistic
-   Descriptions of Crimes...") shares none, so it is grouped without a header -
-   the card itself is the grouping, the label is the bonus. */
+     - The two halves cannot be separated. Hoisting a shared label needs
+       something that holds the siblings together to print it on; without the
+       card, "Setting" and "Reactions" sit in a list with no idea what they are
+       about. So the card and the hoist come back together or not at all.
+
+     - Most of what it was for arrived by another route. v8.31 was fighting
+       eight 183px stacked cards; v8.32 made 71 of the 95 questions one-line
+       rows, so the siblings are now a short run of rows either way, and the
+       wrapper was buying much less than it did when it was written. */
 function buildEgsContentRatingSection() {
 
   /* CAN THIS QUESTION SIT ON ONE LINE WITH ITS ANSWERS? (v8.32)
@@ -19097,49 +19098,6 @@ function buildEgsContentRatingSection() {
 
   const CHECK_SVG = `<svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-  /* The active children of `key`, one bucket per selected option. */
-  function egsChildGroups(key) {
-    const q = GOOGLE_IARC_BY_KEY[key];
-    const a = state.cqAnswers[key];
-    if (!q || a === undefined || a === null) return [];
-    const opts = giarcOptionEntries(q);
-    const selected = Array.isArray(a) ? a : [a];
-    const groups = [];
-    selected.forEach(idx => {
-      const opt = opts.find(o => o.index === idx);
-      if (!opt) return;
-      const ks = giarcChildKeysForOption(opt.child);
-      if (ks.length) groups.push(ks);
-    });
-    return groups;
-  }
-
-  /* The wording a group of siblings shares, including its trailing ': ', or ''
-     when they share nothing worth hoisting.
-
-     CUT AT A ': ' BOUNDARY, NOT AT THE LONGEST COMMON CHARACTER. Illegal or
-     Recreational Drugs' two children are "...: Interactivity" and "...:
-     Incentives or Rewards", whose longest common prefix runs two letters into
-     the first word - hoisting that would leave "teractivity" and "centives or
-     Rewards" on screen. Cutting back to the last ': ' is also what makes the
-     result a NAME rather than a string of shared characters, which is the
-     thing a card header has to be. */
-  function egsGroupLabel(keys) {
-    const titles = keys.map(k => (GOOGLE_IARC_BY_KEY[k] || {}).title || '');
-    if (titles.length < 2 || titles.some(t => !t)) return '';
-    let p = titles[0];
-    for (let i = 1; i < titles.length; i++) {
-      while (p && titles[i].indexOf(p) !== 0) p = p.slice(0, -1);
-      if (!p) return '';
-    }
-    const cut = p.lastIndexOf(': ');
-    if (cut < 0) return '';
-    p = p.slice(0, cut + 2);
-    // Every sibling must have something left of its own after the hoist.
-    if (titles.some(t => t.length <= p.length)) return '';
-    return p;
-  }
-
   function buildGIARCOption(q, opt, key) {
     const isMulti = q.data_type === 'picklist_multi';
     const current = state.cqAnswers[key];
@@ -19157,7 +19115,7 @@ function buildEgsContentRatingSection() {
   }
 
   /* Label left, answers right, one line — see the note on egsInlineable. */
-  function buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index, inGroup) {
+  function buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index) {
     const isMulti = q.data_type === 'picklist_multi';
     const cur = state.cqAnswers[key];
     const segs = giarcOptionEntries(q).map(opt => {
@@ -19167,7 +19125,7 @@ function buildEgsContentRatingSection() {
       return `<button type="button" class="giarc-seg-btn${on ? ' is-on' : ''}${egsAiClass(key, opt.index)}"
                       onclick="${fn}">${escHtml(opt.text)}</button>`;
     }).join('');
-    const shell = inGroup ? 'giarc-group-q giarc-inline' : `giarc-card giarc-depth-${depth} giarc-inline`;
+    const shell = `giarc-card giarc-depth-${depth} giarc-inline`;
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
@@ -19178,13 +19136,12 @@ function buildEgsContentRatingSection() {
       </div>`;
   }
 
-  /* Compact single-row view of a fully-answered question. Inside a group it
-     drops the card chrome (`giarc-group-q`) so a collapsed row does not draw a
-     second bordered box inside the one its group already drew. */
-  function buildGIARCCollapsedRow(key, depth, index, title, inGroup) {
+  /* Compact single-row view of a fully-answered question. */
+  function buildGIARCCollapsedRow(key, depth, index) {
+    const title = (GOOGLE_IARC_BY_KEY[key] || {}).title || '';
     const indexBadge = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
     const summary = escHtml(giarcAnswerSummaryText(key));
-    const shell = inGroup ? 'giarc-group-q' : `giarc-card giarc-depth-${depth}`;
+    const shell = `giarc-card giarc-depth-${depth}`;
     /* A COLLAPSED ROW IS WHERE PROVENANCE MATTERS MOST, which is easy to get
        backwards. It is the one view of an answer the developer may never have
        watched being made: the branch arrived pre-filled, the subtree was
@@ -19208,21 +19165,17 @@ function buildEgsContentRatingSection() {
       </div>`;
   }
 
-  /* `strip` is the group label this question sits under, removed from its own
-     title because the card already says it once. `inGroup` swaps the card
-     shell for a plain block. Both are empty for a question standing alone, so
-     a lone child renders exactly as it does today. */
-  function renderGIARCQuestion(key, depth, index, strip, inGroup) {
+  function renderGIARCQuestion(key, depth, index) {
     const q = GOOGLE_IARC_BY_KEY[key];
     if (!q) return '';
     const isMulti  = q.data_type === 'picklist_multi';
     const complete = giarcIsSubtreeComplete(key);
-    const title    = (strip && q.title.indexOf(strip) === 0) ? q.title.slice(strip.length) : q.title;
+    const title    = q.title;
 
     const showCollapsedRow = isMulti
       ? (complete && state.giarcManuallyCollapsed.has(key))
       : (complete && !state.giarcManuallyExpanded.has(key));
-    if (showCollapsedRow) return buildGIARCCollapsedRow(key, depth, index, title, inGroup);
+    if (showCollapsedRow) return buildGIARCCollapsedRow(key, depth, index);
 
     const answered    = giarcIsAnswered(key);
     const indexBadge  = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
@@ -19238,8 +19191,8 @@ function buildEgsContentRatingSection() {
       : '';
 
     if (egsInlineable(q)) {
-      return buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index, inGroup)
-           + (inGroup ? '' : renderChildren(key, depth + 1));
+      return buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index)
+           + renderChildren(key, depth + 1);
     }
 
     const noteHTML = isMulti ? `<div class="giarc-data-type-note">Select all that apply</div>` : '';
@@ -19256,33 +19209,21 @@ function buildEgsContentRatingSection() {
         ${noteHTML}
         <div class="giarc-options">${optsHTML}</div>`;
 
-    /* A grouped question keeps its own follow-ups INSIDE its block, so they
-       stay under the question that revealed them rather than after the card.
-       A standalone question keeps the original's shape: children as siblings
-       of the card, which is what the indent rule is drawn against. */
-    if (inGroup) {
-      return `<div class="giarc-group-q${answered ? ' is-answered' : ''}" data-key="${key}">${inner}${renderChildren(key, depth + 1)}</div>`;
-    }
+    /* Children are siblings of the card, not contents of it — which is what
+       .giarc-children's indent rule is drawn against. */
     return `
       <div class="giarc-card giarc-depth-${depth}${answered ? ' is-answered' : ''}" data-key="${key}">${inner}
       </div>
       ${renderChildren(key, depth + 1)}`;
   }
 
-  /* One card per bucket: a bucket of two or more is a group, a bucket of one
-     is just the question it always was. */
+  /* Every active child, one card each, in the order the answers revealed them
+     — giarcActiveChildKeys again, the same helper the original builder uses and
+     the same one the per-option buckets replaced in v8.31. */
   function renderChildren(key, depth) {
-    const groups = egsChildGroups(key);
-    if (!groups.length) return '';
-    const html = groups.map(ks => {
-      if (ks.length === 1) return renderGIARCQuestion(ks[0], depth);
-      const strip = egsGroupLabel(ks);
-      const head  = strip
-        ? `<div class="giarc-group-head">${escHtml(strip.slice(0, -2))}</div>` : '';
-      const body  = ks.map(k => renderGIARCQuestion(k, depth, undefined, strip, true)).join('');
-      return `<div class="giarc-card giarc-group giarc-depth-${depth}">${head}${body}</div>`;
-    }).join('');
-    return `<div class="giarc-children is-visible">${html}</div>`;
+    const kids = giarcActiveChildKeys(key);
+    if (!kids.length) return '';
+    return `<div class="giarc-children is-visible">${kids.map(ck => renderGIARCQuestion(ck, depth)).join('')}</div>`;
   }
 
   /* THE DENOMINATOR IS TOPICS, NOT QUESTIONS (v8.32).
