@@ -1222,7 +1222,6 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      { id: 'technical',         label: 'Technical Requirements'                       },
       { id: 'localizations',     label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Store Page Preview'                           },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
@@ -3135,11 +3134,11 @@ function makeBlankEgsAnswers() {
        korea, priceModel, priceTier and releaseDate. Nothing reads them now,
        and a field nobody writes is the thing most likely to be revived by
        someone who does not know why it stopped being written. */
-    // Technical Requirements — Epic's own distribution requirements
-    crossPlatformMultiplayer: null, // 'yes' / 'no' / 'noMultiplayer'
-    achievements:          null,   // 'yes' / 'no'
-    patchNotes:            null,   // 'yes' / 'no'
-    eosOverlay:            null,   // 'yes' / 'no'
+    /* Gone with Technical Requirements (v8.42): crossPlatformMultiplayer,
+       achievements, patchNotes and eosOverlay. They were written by
+       answerEgsField and read by the section and by the preview's Technical
+       block, all three of which went together. Epic Games Store Full still
+       has all four. */
     // Store Preview
     storePreviewSeen:      false,
     // Stubs, complete on first view — the same treatment Google Play's and
@@ -3205,12 +3204,11 @@ function isEgsSectionComplete(sectionId) {
   }
 
   const a = state.egsSubmitAnswers;
-  if (sectionId === 'technical') {
-    return a.crossPlatformMultiplayer !== null
-        && a.achievements !== null
-        && a.patchNotes !== null
-        && a.eosOverlay !== null;
-  }
+  /* NO 'technical' ARM (v8.42). Technical Requirements was removed from this
+     card; Epic Games Store Full keeps the step, the section and this arm's
+     twin below. Nothing asks this function about 'technical' for 'egs' any
+     more, and an arm nobody reaches is how a removed step quietly comes
+     back. */
   /* LOCALIZATIONS IS NO LONGER A VISIT (v7.31). It was `localizationsSeen`
      while it was a stub, which is the only claim a placeholder can honestly
      make. Now that the step is a real review, ticking it for having glanced
@@ -3241,7 +3239,6 @@ function isEgsSectionComplete(sectionId) {
      Google Play's own storePreview arm makes, over Epic's fields instead. */
   if (sectionId === 'storePreview') {
     return isEgsSectionComplete('contentRating')
-        && isEgsSectionComplete('technical')
         && isEgsSectionComplete('screenshots');
   }
   return false;

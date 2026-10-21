@@ -7540,7 +7540,6 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
        each other, which is the bug this file has paid for more than once. */
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsStorePreviewSection();
     else if (stepId === 'contentRating')      body = buildEgsContentRatingSection();
-    else if (stepId === 'technical')          body = buildEgsTechnicalSection();
     else if (stepId === 'localizations')      body = buildEgsLocalizationsSection();
     else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -8129,7 +8128,13 @@ function buildStorePreviewFlipSection(platformId, target) {
   // (FLIP_LABELS.technical, above) already reads "Technical".
   if (target === 'technical') {
     if (platformId === 'egs_full') return `<div class="qs-section">${buildEgsFullTechnicalSection()}</div>`;
-    if (platformId === 'egs') return `<div class="qs-section">${buildEgsTechnicalSection()}</div>`;
+    /* EPIC GETS NOTHING HERE (v8.42). Its Technical Requirements step went,
+       and with it the preview block that was this face's only door. The line
+       below is Steam's, and without this guard Epic would fall through to it
+       — painting Steam's Input Support and Accessibility rows inside an Epic
+       modal the moment anyone re-added a link. An empty face is a bug you can
+       see; the wrong store's questions is one you cannot. */
+    if (platformId === 'egs') return '';
     return `<div class="qs-section">${buildSteamTechnicalSection()}</div>`;
   }
   /* Epic's own — Store Settings' regions plus the Base Product Offer. Its own
@@ -19630,45 +19635,10 @@ function buildEgsFullRegionsPricingSection() {
     ${dateHtml}`;
 }
 
-/* Epic's Store Requirements Overview, as questions. Four of them, each one a
-   requirement Epic states rather than a preference: patch notes are required
-   on update, cross-platform multiplayer for PC has its own guidelines page,
-   Achievements are a documented store feature, and the EOS overlay is what
-   their Testing Guide checks. */
-function buildEgsTechnicalSection() {
-  const a = state.egsSubmitAnswers;
-
-  const crossHtml = singleSelectRow(
-    'Cross-platform multiplayer (PC)',
-    a.crossPlatformMultiplayer,
-    [{ value: 'yes',           label: 'Supported',    onSelect: `answerEgsField('crossPlatformMultiplayer','yes')` },
-     { value: 'no',            label: 'Not yet',      onSelect: `answerEgsField('crossPlatformMultiplayer','no')` },
-     { value: 'noMultiplayer', label: 'No multiplayer', onSelect: `answerEgsField('crossPlatformMultiplayer','noMultiplayer')` }],
-    "Epic asks that PC multiplayer titles let Epic Games Store players play with players who bought the game on other PC stores. Their Cross-Platform Multiplayer Guidelines page sets out what qualifies.");
-
-  return `
-    <div class="ios-section-head">Technical Requirements</div>
-    <p class="ios-section-desc">Epic's distribution requirements for the build itself. The Epic Games Store team confirms these when you submit for review.</p>
-    ${crossHtml}
-    <div class="ios-q-divider"></div>
-    ${ynRow('Epic Games Store Achievements',
-        a.achievements,
-        `answerEgsField('achievements','yes')`,
-        `answerEgsField('achievements','no')`,
-        'Epic Games Store Achievements are configured through Epic Online Services. Declaring none is a valid answer; declaring some means they must be live at launch.')}
-    ${ynRow('Patch notes prepared',
-        a.patchNotes,
-        `answerEgsField('patchNotes','yes')`,
-        `answerEgsField('patchNotes','no')`,
-        'Epic requires patch notes with product updates, and documents what they must contain. A launch build still needs the first set written.')}
-    ${ynRow('Epic Online Services overlay integrated',
-        a.eosOverlay,
-        `answerEgsField('eosOverlay','yes')`,
-        `answerEgsField('eosOverlay','no')`,
-        "The EOS overlay is what Epic's own Testing Guide exercises. Integrating it is how features such as the in-game store and social panel reach your players.")}`;
-}
 /* ══ EPIC GAMES STORE FULL (buildEgsFullTechnicalSection) ══════════════════════════════════════
-   A duplicate of Epic Games Store (buildEgsTechnicalSection), kept as its own copy rather than
+   Was a duplicate of Epic Games Store's buildEgsTechnicalSection, which was
+   removed in v8.42 along with Epic's Technical Requirements step; this copy
+   is now the only one. It was kept as its own copy rather than
    folded into the original behind a `pid` parameter. That was the explicit
    choice: the two cards are meant to be able to diverge step by step, and a
    shared builder makes the first divergence a refactor instead of an edit.
@@ -19866,23 +19836,11 @@ function buildEgsStorePreviewSection() {
         : '<span class="egs-spp-placeholder">Your description appears here once it is filled in under Game Details.</span>'}</p>
     </div>`;
 
-  const techDone = a.crossPlatformMultiplayer !== null && a.achievements !== null
-                && a.patchNotes !== null && a.eosOverlay !== null;
-  const specRow = (label, value) => `<div class="egs-spp-spec-row"><span>${label}</span><b>${value}</b></div>`;
-  const yn = v => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '<span class="egs-spp-placeholder">—</span>';
-  const techHtml = `
-    <div class="egs-spp-block egs-spp-specs${techDone ? '' : ' egs-spp-glow-empty'}"
-         onclick="openStorePreviewSection('egs','technical')">
-      <div class="egs-spp-h2">Technical</div>
-      ${specRow('Cross-platform multiplayer',
-          a.crossPlatformMultiplayer === 'yes' ? 'Supported'
-        : a.crossPlatformMultiplayer === 'no' ? 'Not yet'
-        : a.crossPlatformMultiplayer === 'noMultiplayer' ? 'Single-player'
-        : '<span class="egs-spp-placeholder">—</span>')}
-      ${specRow('Achievements', yn(a.achievements))}
-      ${specRow('Patch notes', yn(a.patchNotes))}
-      ${specRow('EOS overlay', yn(a.eosOverlay))}
-    </div>`;
+  /* NO TECHNICAL BLOCK (v8.42). It printed the four Technical Requirements
+     answers and was the door into that section; both went. A block that can
+     only ever print four dashes, over a door that opens onto nothing, is
+     worse than no block — so specRow and yn went with it (Epic Games Store
+     Full keeps its own copies). */
 
   /* The bar at the top, which is the Apple previews' idea and earns its place
      here for the same reason: the page shows you what is missing only where
@@ -19897,7 +19855,8 @@ function buildEgsStorePreviewSection() {
        a section that no longer exists — so it would have sat permanently
        un-done over a price that is always set, and nagged about the one thing
        on this page a developer cannot get wrong. */
-    { label: 'Technical',    done: techDone },
+    /* No Technical pill (v8.42), for the reason the block above is gone:
+       nothing on this card answers those four questions any more. */
   ];
   const barHtml = `
     <div class="egs-spp-bar">
@@ -19925,7 +19884,6 @@ function buildEgsStorePreviewSection() {
       </div>
       ${aboutHtml}
       ${ratingHtml}
-      ${techHtml}
     </div>`;
 }
 /* ══ EPIC GAMES STORE FULL (buildEgsFullStorePreviewSection) ══════════════════════════════════════

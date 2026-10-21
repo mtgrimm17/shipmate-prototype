@@ -23162,21 +23162,15 @@ function _egsToggleReviewSettingsMenu(ev) {
 }
 
 /* ── EPIC GAMES STORE HANDLERS (v7.30) ────────────────────────────────────
-   Same shape as answerAndroidField below — press an answered pill again to
-   clear it, then repaint the open step and the card behind it. They repaint
-   through the generic `reRenderStepModal`/`renderDashboard` pair rather than a
-   bespoke `updateEgsCard`: the surgical per-platform updaters exist because
-   three cards were repainting on every keystroke of a long questionnaire, and
-   Epic has no field that fires that often. Correct first; a narrower repaint
-   is a measurement away if one is ever needed. */
-function answerEgsField(fieldId, value) {
-  const current = state.egsSubmitAnswers[fieldId];
-  state.egsSubmitAnswers[fieldId] = (current === value) ? null : value;
-  if (typeof reRenderStepModal === 'function') reRenderStepModal();
-  if (typeof renderDashboard === 'function') renderDashboard();
-}
-
-
+   ONE HANDLER LEFT, AND IT IS NOT A PILL (v8.42). answerEgsField went with
+   Technical Requirements, the only section that called it — four
+   toggle-to-clear pills, and this card has no others. What remains is
+   answerEgsPrice: a dropdown, not a pill, so there is nothing to press twice
+   and nothing to clear to. Epic Games Store Full keeps answerEgsFullField.
+   Both still repaint through the generic `reRenderStepModal`/`renderDashboard`
+   pair rather than a bespoke `updateEgsCard`: the surgical per-platform
+   updaters exist because three cards were repainting on every keystroke of a
+   long questionnaire, and Epic has no field that fires that often. */
 /* The price, set from the Store Page Preview's buy box (v8.41). It replaces
    answerEgsTier, answerEgsTextField and toggleEgsRegion, which were reachable
    only from the Regions & Pricing section and went with it. */
