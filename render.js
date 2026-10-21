@@ -7539,7 +7539,7 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
        rename them would have produced two questionnaires to keep in step with
        each other, which is the bug this file has paid for more than once. */
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsStorePreviewSection();
-    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
+    else if (stepId === 'contentRating')      body = buildEgsContentRatingSection();
     else if (stepId === 'regionsPricing')     body = buildEgsRegionsPricingSection();
     else if (stepId === 'technical')          body = buildEgsTechnicalSection();
     else if (stepId === 'localizations')      body = buildEgsLocalizationsSection();
@@ -8054,7 +8054,10 @@ function buildStorePreviewFlipSection(platformId, target) {
     /* Epic gets Google Play's builder for the same reason the step does: one
        IARC questionnaire, one set of answers. See the 'egs' arm in
        _stepBodyFor. */
-    if (platformId === 'egs' || platformId === 'egs_full') return buildAndroidContentRatingSection();
+    /* Epic only — Epic Games Store Full and Google Play keep the original
+       one-card-per-question layout (buildAndroidContentRatingSection). */
+    if (platformId === 'egs')      return buildEgsContentRatingSection();
+    if (platformId === 'egs_full') return buildAndroidContentRatingSection();
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
     return buildContentRatingSection(platformId);
@@ -19010,6 +19013,199 @@ function buildAndroidContentRatingSection() {
         <div class="giarc-options">${optsHTML}</div>
       </div>
       ${childrenHTML}`;
+  }
+
+  return `<div class="giarc-root">${GOOGLE_IARC_TOP_LEVEL_KEYS.map((key, i) => renderGIARCQuestion(key, 1, i + 1)).join('')}</div>`;
+}
+
+
+/* EPIC'S CONTENT RATING - ONE CARD PER GROUP OF SIBLINGS (v8.31)
+
+   A fork of buildAndroidContentRatingSection, used by Epic Games Store only.
+   Google Play and Epic Games Store Full still call the original: the fork was
+   the explicit scope, and the three share one questionnaire over one set of
+   answers (state.cqAnswers), so this changes the LAYOUT for one card and
+   nothing about what is asked or what is stored.
+
+   WHAT CHANGES. The original renders one bordered card per question, so
+   answering "Yes" to Blood, Violence, or Gory Images and then ticking
+   "against humans" produced eight stacked cards, each titled
+   "Violence Against Humans: <something>" - the same six words eight times, and
+   nothing on screen saying the eight were one group. Here the eight siblings
+   share a single card, the repeated words are hoisted to its header once, and
+   each question keeps only what is its own ("Setting", "Reactions",
+   "Presentation", ...).
+
+   GROUPING IS PER OPTION, WHICH IS WHY giarcActiveChildKeys IS NOT USED HERE.
+   That helper flattens every selected option's children into one list, which
+   is right for counting and wrong for grouping: with both "against humans" and
+   "against non-humans" ticked it returns sixteen keys and no way to tell which
+   eight belong with which. egsChildGroups keeps them in per-option buckets, so
+   two ticked options give two cards rather than one card of sixteen.
+
+   Fourteen groups in the questionnaire have more than one sibling; thirteen
+   share a label and the fourteenth (the two children of "Realistic
+   Descriptions of Crimes...") shares none, so it is grouped without a header -
+   the card itself is the grouping, the label is the bonus. */
+function buildEgsContentRatingSection() {
+
+  function giarcTooltip(text) {
+    return `<span class="tooltip-anchor" data-tip="${escHtml(text)}"><span class="tooltip-icon">?</span></span>`;
+  }
+
+  const CHECK_SVG = `<svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  /* The active children of `key`, one bucket per selected option. */
+  function egsChildGroups(key) {
+    const q = GOOGLE_IARC_BY_KEY[key];
+    const a = state.cqAnswers[key];
+    if (!q || a === undefined || a === null) return [];
+    const opts = giarcOptionEntries(q);
+    const selected = Array.isArray(a) ? a : [a];
+    const groups = [];
+    selected.forEach(idx => {
+      const opt = opts.find(o => o.index === idx);
+      if (!opt) return;
+      const ks = giarcChildKeysForOption(opt.child);
+      if (ks.length) groups.push(ks);
+    });
+    return groups;
+  }
+
+  /* The wording a group of siblings shares, including its trailing ': ', or ''
+     when they share nothing worth hoisting.
+
+     CUT AT A ': ' BOUNDARY, NOT AT THE LONGEST COMMON CHARACTER. Illegal or
+     Recreational Drugs' two children are "...: Interactivity" and "...:
+     Incentives or Rewards", whose longest common prefix runs two letters into
+     the first word - hoisting that would leave "teractivity" and "centives or
+     Rewards" on screen. Cutting back to the last ': ' is also what makes the
+     result a NAME rather than a string of shared characters, which is the
+     thing a card header has to be. */
+  function egsGroupLabel(keys) {
+    const titles = keys.map(k => (GOOGLE_IARC_BY_KEY[k] || {}).title || '');
+    if (titles.length < 2 || titles.some(t => !t)) return '';
+    let p = titles[0];
+    for (let i = 1; i < titles.length; i++) {
+      while (p && titles[i].indexOf(p) !== 0) p = p.slice(0, -1);
+      if (!p) return '';
+    }
+    const cut = p.lastIndexOf(': ');
+    if (cut < 0) return '';
+    p = p.slice(0, cut + 2);
+    // Every sibling must have something left of its own after the hoist.
+    if (titles.some(t => t.length <= p.length)) return '';
+    return p;
+  }
+
+  function buildGIARCOption(q, opt, key) {
+    const isMulti = q.data_type === 'picklist_multi';
+    const current = state.cqAnswers[key];
+    const checked = isMulti
+      ? Array.isArray(current) && current.includes(opt.index)
+      : current === opt.index;
+    const onclick = isMulti
+      ? `answerGIARCMultiOpt('${key}',${opt.index})`
+      : `answerGIARCSingle('${key}',${opt.index})`;
+    return `
+      <div class="giarc-option${checked ? ' is-checked' : ''}" onclick="${onclick}">
+        <span class="giarc-${isMulti ? 'checkbox' : 'radio'}"></span>
+        <span class="giarc-option-text">${escHtml(opt.text)}</span>
+      </div>`;
+  }
+
+  /* Compact single-row view of a fully-answered question. Inside a group it
+     drops the card chrome (`giarc-group-q`) so a collapsed row does not draw a
+     second bordered box inside the one its group already drew. */
+  function buildGIARCCollapsedRow(key, depth, index, title, inGroup) {
+    const indexBadge = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
+    const summary = escHtml(giarcAnswerSummaryText(key));
+    const shell = inGroup ? 'giarc-group-q' : `giarc-card giarc-depth-${depth}`;
+    return `
+      <div class="${shell} is-collapsed is-answered" data-key="${key}"
+           onclick="toggleGIARCExpand('${key}',true)" tabindex="0" role="button" aria-label="Expand to review this answer">
+        <div class="giarc-header giarc-header-collapsed">
+          ${indexBadge}
+          <span class="giarc-title giarc-title-collapsed">${escHtml(title)}</span>
+          <span class="giarc-collapsed-summary">${summary}</span>
+          <span class="giarc-check is-visible">${CHECK_SVG}</span>
+          <span class="giarc-collapse-chevron">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+        </div>
+      </div>`;
+  }
+
+  /* `strip` is the group label this question sits under, removed from its own
+     title because the card already says it once. `inGroup` swaps the card
+     shell for a plain block. Both are empty for a question standing alone, so
+     a lone child renders exactly as it does today. */
+  function renderGIARCQuestion(key, depth, index, strip, inGroup) {
+    const q = GOOGLE_IARC_BY_KEY[key];
+    if (!q) return '';
+    const isMulti  = q.data_type === 'picklist_multi';
+    const complete = giarcIsSubtreeComplete(key);
+    const title    = (strip && q.title.indexOf(strip) === 0) ? q.title.slice(strip.length) : q.title;
+
+    const showCollapsedRow = isMulti
+      ? (complete && state.giarcManuallyCollapsed.has(key))
+      : (complete && !state.giarcManuallyExpanded.has(key));
+    if (showCollapsedRow) return buildGIARCCollapsedRow(key, depth, index, title, inGroup);
+
+    const answered    = giarcIsAnswered(key);
+    const indexBadge  = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
+    const tooltipHTML = q.tooltip ? giarcTooltip(q.tooltip) : '';
+    const checkHTML   = `<span class="giarc-check${answered ? ' is-visible' : ''}">${CHECK_SVG}</span>`;
+
+    const showCollapseBtn = isMulti ? complete : (complete && state.giarcManuallyExpanded.has(key));
+    const collapseBtnHTML = showCollapseBtn
+      ? `<button type="button" class="giarc-collapse-btn" aria-label="Collapse this question"
+                 onclick="event.stopPropagation(); toggleGIARCExpand('${key}',false)">
+           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+         </button>`
+      : '';
+
+    const noteHTML = isMulti ? `<div class="giarc-data-type-note">Select all that apply</div>` : '';
+    const optsHTML = giarcOptionEntries(q).map(opt => buildGIARCOption(q, opt, key)).join('');
+
+    const inner = `
+        <div class="giarc-header">
+          ${indexBadge}
+          <span class="giarc-title">${escHtml(title)}</span>
+          ${tooltipHTML}
+          ${checkHTML}
+          ${collapseBtnHTML}
+        </div>
+        ${noteHTML}
+        <div class="giarc-options">${optsHTML}</div>`;
+
+    /* A grouped question keeps its own follow-ups INSIDE its block, so they
+       stay under the question that revealed them rather than after the card.
+       A standalone question keeps the original's shape: children as siblings
+       of the card, which is what the indent rule is drawn against. */
+    if (inGroup) {
+      return `<div class="giarc-group-q${answered ? ' is-answered' : ''}" data-key="${key}">${inner}${renderChildren(key, depth + 1)}</div>`;
+    }
+    return `
+      <div class="giarc-card giarc-depth-${depth}${answered ? ' is-answered' : ''}" data-key="${key}">${inner}
+      </div>
+      ${renderChildren(key, depth + 1)}`;
+  }
+
+  /* One card per bucket: a bucket of two or more is a group, a bucket of one
+     is just the question it always was. */
+  function renderChildren(key, depth) {
+    const groups = egsChildGroups(key);
+    if (!groups.length) return '';
+    const html = groups.map(ks => {
+      if (ks.length === 1) return renderGIARCQuestion(ks[0], depth);
+      const strip = egsGroupLabel(ks);
+      const head  = strip
+        ? `<div class="giarc-group-head">${escHtml(strip.slice(0, -2))}</div>` : '';
+      const body  = ks.map(k => renderGIARCQuestion(k, depth, undefined, strip, true)).join('');
+      return `<div class="giarc-card giarc-group giarc-depth-${depth}">${head}${body}</div>`;
+    }).join('');
+    return `<div class="giarc-children is-visible">${html}</div>`;
   }
 
   return `<div class="giarc-root">${GOOGLE_IARC_TOP_LEVEL_KEYS.map((key, i) => renderGIARCQuestion(key, 1, i + 1)).join('')}</div>`;
