@@ -1222,7 +1222,6 @@ const PLATFORMS = {
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      { id: 'regionsPricing',    label: 'Regions & Pricing'                            },
       { id: 'technical',         label: 'Technical Requirements'                       },
       { id: 'localizations',     label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Store Page Preview'                           },
@@ -3127,13 +3126,15 @@ function makeBlankAndroidAnswers() {
    already use for the same two steps. */
 function makeBlankEgsAnswers() {
   return {
-    // Regions & Pricing — Store Settings: Regions, and the Base Product Offer
-    distribution:          null,   // 'worldwide' / 'select'
-    excludedRegions:       [],     // ISO-ish region ids when distribution === 'select'
-    korea:                 null,   // 'yes' / 'no' — Epic documents Korea separately (GRAC)
-    priceModel:            null,   // 'paid' / 'free'
-    priceTier:             '',     // the tier label, or a custom tier's name
-    releaseDate:           '',     // the offer's start date
+    /* THE PRICE, AND IT IS NOT A TIER ANY MORE (v8.41). It is set on the Store
+       Page Preview's buy box, from EGS_PRICE_TIERS, and 'Free' is the default
+       rather than a blank — a game nobody has priced is free, which is a real
+       answer and the commonest one. */
+    price:                 'Free',
+    /* Gone with Regions & Pricing (v8.41): distribution, excludedRegions,
+       korea, priceModel, priceTier and releaseDate. Nothing reads them now,
+       and a field nobody writes is the thing most likely to be revived by
+       someone who does not know why it stopped being written. */
     // Technical Requirements — Epic's own distribution requirements
     crossPlatformMultiplayer: null, // 'yes' / 'no' / 'noMultiplayer'
     achievements:          null,   // 'yes' / 'no'
@@ -3204,14 +3205,6 @@ function isEgsSectionComplete(sectionId) {
   }
 
   const a = state.egsSubmitAnswers;
-  if (sectionId === 'regionsPricing') {
-    if (a.distribution === null) return false;
-    if (a.distribution === 'select' && !a.excludedRegions.length) return false;
-    if (a.korea === null) return false;
-    if (a.priceModel === null) return false;
-    if (a.priceModel === 'paid' && !a.priceTier.trim()) return false;
-    return !!a.releaseDate.trim();
-  }
   if (sectionId === 'technical') {
     return a.crossPlatformMultiplayer !== null
         && a.achievements !== null
@@ -3248,7 +3241,6 @@ function isEgsSectionComplete(sectionId) {
      Google Play's own storePreview arm makes, over Epic's fields instead. */
   if (sectionId === 'storePreview') {
     return isEgsSectionComplete('contentRating')
-        && isEgsSectionComplete('regionsPricing')
         && isEgsSectionComplete('technical')
         && isEgsSectionComplete('screenshots');
   }

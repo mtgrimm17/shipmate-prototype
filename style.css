@@ -8466,6 +8466,23 @@ body.sm-hide-shippy .fabslot{display:none !important}
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
 }
 .egs-spp-buy-price { font-size: 19px; font-weight: 700; color: var(--text); }
+/* THE PRICE IS A CONTROL NOW, AND STILL READS AS THE PRICE (v8.41). swSelect
+   brings a field's chrome with it — border, fill, 12px label — which inside
+   Epic's buy box made the headline number look like a form input bolted onto
+   a store page. The picker keeps its behaviour and borrows the price's type:
+   no box until you point at it, then the quietest possible hint that it opens. */
+.egs-spp-price-pick .loc-primary-pill {
+  background: none; border-color: transparent; padding: 2px 4px 2px 0; min-height: 0;
+}
+.egs-spp-price-pick .loc-primary-pill:hover { border-color: var(--border-hover); background: none; }
+.egs-spp-price-pick .loc-primary-name {
+  font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
+}
+.egs-spp-price-pick .loc-chevron { color: var(--text-faint); }
+/* The pill's own ring is a ::after gradient, not a border — overriding
+   border-color left it drawing a blue outline around the price while the
+   computed style insisted everything was transparent. */
+.egs-spp-price-pick .loc-primary-pill::after { display: none; }
 .egs-spp-btn {
   width: 100%; padding: 9px 0; border: none; border-radius: 7px;
   font-size: 13px; font-weight: 650; cursor: pointer;

@@ -7540,7 +7540,6 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
        each other, which is the bug this file has paid for more than once. */
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsStorePreviewSection();
     else if (stepId === 'contentRating')      body = buildEgsContentRatingSection();
-    else if (stepId === 'regionsPricing')     body = buildEgsRegionsPricingSection();
     else if (stepId === 'technical')          body = buildEgsTechnicalSection();
     else if (stepId === 'localizations')      body = buildEgsLocalizationsSection();
     else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
@@ -8137,11 +8136,9 @@ function buildStorePreviewFlipSection(platformId, target) {
      target rather than 'business' because Epic has no business questionnaire:
      what the buy box on its page is missing is a region, a tier and a date. */
   if (target === 'pricing') {
-    /* Epic was the only platform with a pricing face, so this arm had no
-       platform test at all and would have served Epic's own section to
-       Epic Games Store Full — its answers, not the card's. */
-    if (platformId === 'egs_full') return `<div class="qs-section">${buildEgsFullRegionsPricingSection()}</div>`;
-    return `<div class="qs-section">${buildEgsRegionsPricingSection()}</div>`;
+    /* Epic Games Store Full is the only card with a pricing face now — Epic's
+       own section was removed in v8.41 and its price lives in the buy box. */
+    return `<div class="qs-section">${buildEgsFullRegionsPricingSection()}</div>`;
   }
   // Steam-only: the Store Page Preview - Prototype's "Languages" block (see
   // languagesHtml, buildSteamStorePreviewPrototypeSection) — the editable
@@ -19502,91 +19499,42 @@ const EGS_REGION_GROUPS = [
   { id: 'mena', label: 'Middle East & North Africa' },
 ];
 
-/* Epic publishes tiers rather than free-form prices, so this is a picker and
-   not a number field. The set is deliberately short and round — the real
-   ladder is long, and a prototype that lists forty tiers is asking the
-   developer to scroll rather than to decide. Custom tiers exist on Epic's side
-   (Create Custom Price Tiers) and are reachable here as the last option. */
-const EGS_PRICE_TIERS = ['$4.99', '$9.99', '$14.99', '$19.99', '$24.99', '$29.99',
-                         '$39.99', '$49.99', '$59.99', '$69.99', 'Custom tier'];
+/* EPIC'S OWN PRICE POINTS (v8.41). Not tiers any more and not a sample: this
+   is the list the developer picks the game's price from, in the order Epic
+   publishes it. It has gaps on purpose — 14.99 is followed by 16.99, and
+   19.99 by 24.99 — so do not "tidy" the run; a missing point here is a price
+   the store does not offer. Free is first because it is the default. */
+/* EPIC GAMES STORE FULL KEEPS THE OLD TIERS (v8.41). Its Regions & Pricing
+   section was not asked to change, and it gates the picker behind a Free/Paid
+   radio — so handing it the new list would put a "Free" option inside a tier
+   picker whose parent question already asks that, and let a developer answer
+   Paid and then pick Free. The two cards have been free to diverge since v8.30
+   and this is the first table where they have to: one list is Epic's real
+   prices, the other is the short sample that section was built around. */
+const EGS_FULL_PRICE_TIERS = ['$4.99', '$9.99', '$14.99', '$19.99', '$24.99', '$29.99',
+                              '$39.99', '$49.99', '$59.99', '$69.99', 'Custom tier'];
 
-function buildEgsRegionsPricingSection() {
-  const a = state.egsSubmitAnswers;
+const EGS_PRICE_TIERS = [
+  'Free', 'USD 0.99', 'USD 1.99', 'USD 2.49', 'USD 2.99', 'USD 3.99',
+  'USD 4.99', 'USD 5.99', 'USD 6.99', 'USD 7.99', 'USD 8.99', 'USD 9.99',
+  'USD 10.99', 'USD 11.99', 'USD 12.99', 'USD 13.99', 'USD 14.99', 'USD 16.99',
+  'USD 17.99', 'USD 18.99', 'USD 19.99', 'USD 24.99', 'USD 26.99', 'USD 29.99',
+  'USD 34.99', 'USD 39.99', 'USD 44.99', 'USD 49.99', 'USD 54.99', 'USD 59.99',
+  'USD 64.99', 'USD 69.99', 'USD 74.99', 'USD 79.99', 'USD 84.99', 'USD 89.99',
+  'USD 94.99', 'USD 99.99', 'USD 109.99', 'USD 119.99', 'USD 124.99', 'USD 129.99',
+  'USD 139.99', 'USD 149.99', 'USD 159.99', 'USD 169.99', 'USD 179.99', 'USD 189.99',
+  'USD 199.99'
+];
 
-  const distHtml = singleSelectRow(
-    'Distribution',
-    a.distribution,
-    [{ value: 'worldwide', label: 'Worldwide', onSelect: `answerEgsField('distribution','worldwide')` },
-     { value: 'select',    label: 'Selected regions', onSelect: `answerEgsField('distribution','select')` }],
-    'Epic asks which regions your product is sold in when you configure Store Settings. Worldwide is every region Epic operates in; Selected regions lets you exclude individual ones.');
+/* EPIC'S REGIONS & PRICING SECTION WAS HERE AND IS GONE (v8.41). Removed on
+   request, with its three questions: Distribution, Distributing in South Korea,
+   and the price. The price was the one of them a developer still has to answer,
+   so it moved to where it is actually read — the buy box on the Store Page
+   Preview, which previously showed it and sent you here to change it.
 
-  /* The exclusion list only exists once "Selected regions" is the answer —
-     the same reveal-on-answer pattern Steam's multiplayer breakdown uses. A
-     region list shown under "Worldwide" would be a control with nothing to do. */
-  const regionsHtml = a.distribution === 'select' ? `
-    <div class="ios-content-step-label">Exclude from</div>
-    <div class="cq-check-list">
-      ${EGS_REGION_GROUPS.map(r => `
-        <label class="cq-check-row">
-          <input type="checkbox" ${a.excludedRegions.includes(r.id) ? 'checked' : ''}
-                 onchange="toggleEgsRegion('${r.id}', this.checked)">
-          <span>${escHtml(r.label)}</span>
-        </label>`).join('')}
-    </div>
-    ${a.excludedRegions.length === 0
-      ? `<div class="steam-spp-muted" style="margin-top:6px;">Select at least one region to exclude, or switch back to Worldwide.</div>` : ''}
-    <div class="ios-q-divider"></div>` : '';
-
-  /* KOREA IS ITS OWN QUESTION BECAUSE EPIC MAKES IT ONE. Their Ratings and
-     Content Guidelines carry a separate "Distribution in Korea" page: the GRAC
-     requires its own rating, which IARC does not issue, so shipping there is a
-     decision with paperwork attached rather than a tick on a region list. */
-  const koreaHtml = ynRow(
-    'Distributing in South Korea',
-    a.korea,
-    `answerEgsField('korea','yes')`,
-    `answerEgsField('korea','no')`,
-    'South Korea requires a Game Rating and Administration Committee (GRAC) rating, which IARC does not issue. Epic documents this separately from the rest of your regions.');
-
-  const priceHtml = singleSelectRow(
-    'Price model',
-    a.priceModel,
-    [{ value: 'paid', label: 'Paid',      onSelect: `answerEgsField('priceModel','paid')` },
-     { value: 'free', label: 'Free',      onSelect: `answerEgsField('priceModel','free')` }],
-    "Epic's Base Product Offer is either free or set to a price tier. Custom regional tiers can be created in the Developer Portal.");
-
-  const tierHtml = a.priceModel === 'paid' ? `
-    <div class="ios-q-row" data-answered="${a.priceTier.trim() ? '1' : '0'}">
-      <div class="ios-q-left"><div class="ios-q-label">Price tier</div></div>
-      ${swSelect('egs-tier', a.priceTier || null,
-        EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
-        'answerEgsTier', '180px', 'right', 'Select tier')}
-    </div>` : '';
-
-  /* Epic's "Offer Dates" sub-step, which is the offer's own start date and not
-     the same thing as the build going live — a product can be purchasable
-     before, at, or after the moment its artifact is released. */
-  const dateHtml = `
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Release date <span style="color:#e0555a;">*</span></label>
-      <input type="date" class="form-input${a.releaseDate.trim() ? ' is-complete' : ''}"
-             value="${escHtml(a.releaseDate)}"
-             onchange="answerEgsTextField('releaseDate', this.value)">
-      <div class="form-hint">The start date on your Base Product Offer. Epic calls this the offer's date rather than the build's.</div>
-    </div>`;
-
-  return `
-    <div class="ios-section-head">Regions &amp; Pricing</div>
-    <p class="ios-section-desc">Epic's Store Settings and Base Product Offer: where the product is sold, what it costs, and when the offer starts. Set in the Developer Portal under Store Presence.</p>
-    ${distHtml}
-    ${regionsHtml}
-    ${koreaHtml}
-    <div class="ios-q-divider"></div>
-    ${priceHtml}
-    ${tierHtml}
-    <div class="ios-q-divider"></div>
-    ${dateHtml}`;
-}
+   Epic Games Store Full keeps its own copy (buildEgsFullRegionsPricingSection,
+   below) — the two cards have been free to diverge since v8.30, and only Epic
+   was asked to change. */
 /* ══ EPIC GAMES STORE FULL (buildEgsFullRegionsPricingSection) ══════════════════════════════════════
    A duplicate of Epic Games Store (buildEgsRegionsPricingSection), kept as its own copy rather than
    folded into the original behind a `pid` parameter. That was the explicit
@@ -19653,7 +19601,7 @@ function buildEgsFullRegionsPricingSection() {
     <div class="ios-q-row" data-answered="${a.priceTier.trim() ? '1' : '0'}">
       <div class="ios-q-left"><div class="ios-q-label">Price tier</div></div>
       ${swSelect('egs_full-tier', a.priceTier || null,
-        EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
+        EGS_FULL_PRICE_TIERS.map(t => ({ value: t, label: t })),
         'answerEgsFullTier', '180px', 'right', 'Select tier')}
     </div>` : '';
 
@@ -19852,27 +19800,33 @@ function buildEgsStorePreviewSection() {
       </div>
     </div>`;
 
-  /* The buy box. Epic's Base Product Offer decides all three things in it —
-     whether there is a price at all, which tier, and the date the offer
-     starts — so the whole box is one door into Regions & Pricing. */
-  const priceSet = a.priceModel === 'free' || (a.priceModel === 'paid' && a.priceTier.trim());
-  const priceLabel = a.priceModel === 'free' ? 'Free'
-                   : a.priceTier.trim() ? escHtml(a.priceTier)
-                   : '<span class="egs-spp-placeholder">Price not set</span>';
-  const dateLabel = a.releaseDate.trim() ? escHtml(a.releaseDate) : (ws.releaseDate || 'Coming soon');
-  const regionLabel = a.distribution === 'worldwide' ? 'Worldwide'
-                    : a.distribution === 'select'
-                      ? `${EGS_REGION_GROUPS.length - a.excludedRegions.length} of ${EGS_REGION_GROUPS.length} regions`
-                      : '<span class="egs-spp-placeholder">Regions not set</span>';
+  /* THE BUY BOX IS WHERE THE PRICE IS SET NOW (v8.41), not a read-out of a
+     question asked three steps away. It used to print the price and send you
+     to Regions & Pricing to change it; that section is gone, so the price is
+     chosen here, on the thing that shows it.
+
+     FREE IS THE DEFAULT AND NOT A BLANK. The old box had a "Price not set"
+     placeholder and a glow around the whole thing, because nothing had been
+     answered yet. A price always has a value now — a game nobody has priced
+     is free, which is a real answer and the commonest one — so there is
+     nothing to nag about and the glow is gone with it.
+
+     AND THE BUTTON SAYS WHAT THE PRICE MEANS. Epic's own store writes Get on a
+     free product and Buy Now on a paid one; printing Get over a 59.99 game was
+     the kind of detail a developer checks this preview to catch. */
+  const price = (a.price || 'Free');
+  const isFree = price === 'Free';
+  const dateLabel = ws.releaseDate || 'Coming soon';
 
   const buyHtml = `
-    <div class="egs-spp-buy${priceSet ? '' : ' egs-spp-glow-empty'}"
-         onclick="openStorePreviewSection('egs','pricing')">
-      <div class="egs-spp-buy-price">${priceLabel}</div>
-      <button class="egs-spp-btn" type="button">Get</button>
+    <div class="egs-spp-buy">
+      <div class="egs-spp-buy-price egs-spp-price-pick" onclick="event.stopPropagation();">
+        ${swSelect('egs-spp-price', price, EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
+                   'answerEgsPrice', '100%', 'left', 'Free')}
+      </div>
+      <button class="egs-spp-btn" type="button">${isFree ? 'Get' : 'Buy Now'}</button>
       <div class="egs-spp-buy-meta">
-        <div><span>Release</span><b>${dateLabel}</b></div>
-        <div><span>Availability</span><b>${regionLabel}</b></div>
+        <div><span>Release</span><b>${escHtml(dateLabel)}</b></div>
       </div>
     </div>`;
 
@@ -19939,7 +19893,10 @@ function buildEgsStorePreviewSection() {
     { label: 'Description',  done: !!desc },
     { label: 'Media',        done: shots.length > 0 },
     { label: 'Age Rating',   done: ratingDone },
-    { label: 'Pricing',      done: isEgsSectionComplete('regionsPricing') },
+    /* No Pricing pill (v8.41). It reported isEgsSectionComplete('regionsPricing'),
+       a section that no longer exists — so it would have sat permanently
+       un-done over a price that is always set, and nagged about the one thing
+       on this page a developer cannot get wrong. */
     { label: 'Technical',    done: techDone },
   ];
   const barHtml = `

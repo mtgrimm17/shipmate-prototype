@@ -23172,39 +23172,16 @@ function _egsToggleReviewSettingsMenu(ev) {
 function answerEgsField(fieldId, value) {
   const current = state.egsSubmitAnswers[fieldId];
   state.egsSubmitAnswers[fieldId] = (current === value) ? null : value;
-  /* SWITCHING BACK TO WORLDWIDE DROPS THE EXCLUSIONS, because leaving them
-     would let a submission carry regions it is not excluding — invisible in
-     the UI (the list is not drawn) and still true in state, which is how a
-     developer ships to somewhere they thought they had turned off. */
-  if (fieldId === 'distribution' && state.egsSubmitAnswers.distribution !== 'select') {
-    state.egsSubmitAnswers.excludedRegions = [];
-  }
-  /* Same argument one field over: a cleared price model must not leave a tier
-     behind it, or Free would carry $29.99 in state. */
-  if (fieldId === 'priceModel' && state.egsSubmitAnswers.priceModel !== 'paid') {
-    state.egsSubmitAnswers.priceTier = '';
-  }
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
   if (typeof renderDashboard === 'function') renderDashboard();
 }
 
-function answerEgsTextField(fieldId, value) {
-  state.egsSubmitAnswers[fieldId] = value;
-  if (typeof renderDashboard === 'function') renderDashboard();
-}
 
-// swSelect's onChange contract: it calls <fn>(value).
-function answerEgsTier(value) {
-  state.egsSubmitAnswers.priceTier = value || '';
-  if (typeof reRenderStepModal === 'function') reRenderStepModal();
-  if (typeof renderDashboard === 'function') renderDashboard();
-}
-
-function toggleEgsRegion(regionId, on) {
-  const a = state.egsSubmitAnswers;
-  const i = a.excludedRegions.indexOf(regionId);
-  if (on && i === -1) a.excludedRegions.push(regionId);
-  if (!on && i !== -1) a.excludedRegions.splice(i, 1);
+/* The price, set from the Store Page Preview's buy box (v8.41). It replaces
+   answerEgsTier, answerEgsTextField and toggleEgsRegion, which were reachable
+   only from the Regions & Pricing section and went with it. */
+function answerEgsPrice(value) {
+  state.egsSubmitAnswers.price = value || 'Free';
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
   if (typeof renderDashboard === 'function') renderDashboard();
 }
