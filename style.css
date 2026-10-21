@@ -16615,7 +16615,21 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    than leaving two labels silently overlapping. */
 .giarc-flat { --cr-pin-h: 68px; }
 .giarc-flat .giarc-sec-label {
-  position: sticky; top: var(--cr-pin-h); z-index: 3;
+  /* z 6, ABOVE .cr-pinned's z 5, and the reason is its ::after (v8.39).
+     That bar hangs a 36px fade off its own bottom edge to dissolve rows
+     passing under it — `rgba(20,20,20,.96)` at the top, out to nothing by
+     36px. The sticky label parks in exactly that strip and is 39px tall, so
+     from v8.37 until now almost the whole of it was being painted through a
+     fade built for scrolling content. Measured through it: (27,27,27) at the
+     label's top rising to (46,46,46) at its bottom, against the (48,48,48)
+     it is actually painted — which is most of why this bar looked too close
+     to the ground.
+     Raising it above the fade costs the fade nothing: a pinned label is
+     opaque and does its own cutting, and where no label is pinned the fade
+     still has the rows to itself. The two never overlap — `top` is exactly
+     the bar's height — so being above it in paint order is not a licence to
+     cover it; cr837 asserts the geometry rather than the z-order for that. */
+  position: sticky; top: var(--cr-pin-h); z-index: 6;
   font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--text);
   /* More above than below, so it reads as attached to what follows it. */
@@ -16681,7 +16695,25 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    a QUESTION should not wear a panel, because three different question shapes
    were wearing three different ones. A section header is not a question. */
 .giarc-flat .giarc-run > .giarc-sec-label {
-  background: var(--panel-2);
+  /* OFF THE GREY RAMP, BECAUSE THE RAMP IS WHERE THE CONTENT LIVES (v8.39).
+     Measured off the painted pixels at v8.38: this bar came out (26,26,26),
+     the selectable responses (36,36,36) and the modal (20,20,20) — six above
+     one and ten below the other, which is three greys too close together to
+     say which is chrome, and the bar was the DARKER of the two surfaces.
+
+     The app already answers this fifty pixels higher in the same scroller.
+     .cr-pinned, the Unanswered/All bar, is not a step on the --panel ramp at
+     all: it is an opaque --panel base carrying a translucent white lift, and
+     it paints to (55,55,55) — clear of the responses by nineteen. This takes
+     the same construction at a lower alpha and lands at (48,48,48): twelve
+     clear of the responses, seven under the bar it parks beneath, so the two
+     pinned things keep their order instead of competing.
+
+     The lift is an image over an opaque colour rather than one rgba fill,
+     because a translucent background alone would let the rows scrolling under
+     a PINNED bar show through it. Base first, lift second. */
+  background-color: var(--panel);
+  background-image: linear-gradient(rgba(255,255,255,.12), rgba(255,255,255,.12));
   margin-left: -20px;
   padding-left: 18px;
   padding-right: 12px;
