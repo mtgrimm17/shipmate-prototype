@@ -26722,6 +26722,15 @@ body.sm-guide-panel #submit-overlay .intensity-btn.is-sel-unrated.ai-confident {
    put a faded control permanently at the top of the step. */
 .sm-cr-spot > * { transition: opacity .22s ease; }
 .sm-cr-spot.is-spotlight > *:not(.cr-pinned):not(.is-spotlit):not(:has(.is-spotlit)) { opacity: .35; }
+/* EPIC'S BODY IS ONE WRAPPER, SO THE RULE ABOVE HAD NOTHING TO DIM (v8.33).
+   Apple's Content Rating puts its headers and rows as DIRECT children of the
+   spotlight host, so "every child but the lit one" is exactly the set to dim.
+   Epic's puts a single .giarc-root between the two, and that root contains the
+   lit row — so `:has(.is-spotlit)` spared it, there were no siblings left, and
+   arriving from the rail lit nothing at all. Dimming one level further in is
+   the same rule against the same shape. */
+.sm-cr-spot.is-spotlight .giarc-root > *:not(.cr-pinned):not(.is-spotlit):not(:has(.is-spotlit)) { opacity: .35; }
+.sm-cr-spot .giarc-root > * { transition: opacity .22s ease; }
 
 /* The risk states have to beat `.is-done`, which is the same (0,2,0) and sits
    sixteen lines above them — source order alone would hand a finished step its

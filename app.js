@@ -27058,7 +27058,55 @@ function _smIsContentBody(sm) {
   return sm.stepId === 'storePreview' && _smFlipTarget(sm.platformId) === 'content';
 }
 
+/* WHAT A TOPIC IS CALLED IN THE RAIL (v8.33).
+
+   THE ONLY NEW COPY IN THIS VERSION, and it is navigation copy rather than
+   anything a developer declares — the questions themselves are untouched, and a
+   row still opens the question under its own full IARC title. A rail is an
+   index: Mac's works because its labels are "Features" and "Violence", two
+   words you can sweep your eye down. Epic's titles average 46 characters and
+   run to 84 ("Realistic Descriptions of Crimes or Techniques That Can Be Used
+   in Criminal Offenses"), so printing them here would make a wall rather than
+   an index, and truncating them would make fourteen rows that all start
+   "Content That Can…" and tell you nothing.
+
+   Every label below is built from its own title's words — nothing names a
+   concept the title does not. The one place that bit: `crude` keeps "Bodily
+   Functions" rather than becoming "Crude Humour", which would have been a
+   nicer label and a different claim. */
+const GIARC_RAIL_LABELS = {
+  'google.content.bloodviolencegore': 'Violence & Gore',
+  'google.content.fear':              'Scary or Disturbing',
+  'google.content.sexsuggestdate':    'Sexuality & Dating',
+  'google.content.gambling':          'Gambling',
+  'google.content.offlang':           'Offensive Language',
+  'google.content.drugs':             'Drugs & Alcohol',
+  'google.content.crude':             'Bodily Functions',
+  'google.content.crypto':            'Purchases & NFTs',
+  'google.content.interact':          'User Interaction',
+  'google.content.location':          'Location Sharing',
+  'google.content.nazi':              'Nazi Symbols',
+  'google.content.korea':             'Korea: National Identity',
+  'google.content.terrorism':         'Terrorism',
+  'google.content.crimes':            'Crime Techniques',
+};
+
+/* Epic's fourteen topics as rail rows. `done` is giarcIsSubtreeComplete — the
+   same predicate the card's "N of 14 topics answered" counts and the Unanswered
+   filter hides by, so the rail cannot disagree with either. */
+function _smEgsContentItems() {
+  if (typeof GOOGLE_IARC_TOP_LEVEL_KEYS === 'undefined'
+   || typeof giarcIsSubtreeComplete !== 'function') return null;
+  return GOOGLE_IARC_TOP_LEVEL_KEYS.map(key => ({
+    label: GIARC_RAIL_LABELS[key] || (GOOGLE_IARC_BY_KEY[key] || {}).title || key,
+    step:  'cr:' + key,
+    done:  giarcIsSubtreeComplete(key),
+    bad:   false,
+  }));
+}
+
 function _smContentItems(pid) {
+  if (pid === 'egs') return _smEgsContentItems();
   if (typeof IOS_CR_CATEGORIES === 'undefined' || typeof _getLiveAnswer !== 'function') return null;
   if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return null;
   const blank = v => v === undefined || v === null || v === '';
@@ -27205,7 +27253,37 @@ function _smCrSectionEls(head) {
   return out;
 }
 
+/* A TOPIC IS FOUND BY ITS KEY, NOT BY ITS TEXT (v8.33). Apple's rows match on
+   the header's string because that is all its flat body offers; Epic's topics
+   each carry a data-key, which is both exact and immune to the rail's short
+   labels differing from the title on screen.
+
+   AND A HIDDEN TOPIC IS SHOWN RATHER THAN MISSED. With the Unanswered filter
+   on, a finished topic is not in the DOM at all, so pressing its rail row would
+   have quietly done nothing — the one press most likely to be a developer going
+   back to re-read something they already answered. Switching to All first is
+   the answer to what they asked for; reRenderStepModal is synchronous, so the
+   element exists by the time the next line looks for it. */
+function _smEgsCrGo(key) {
+  let el = _smStepQA(`[data-key="${key}"]`)[0];
+  if (!el && state.egsCrShowAll === false && typeof toggleEgsCrExpanded === 'function') {
+    toggleEgsCrExpanded(true);
+    el = _smStepQA(`[data-key="${key}"]`)[0];
+  }
+  if (!el) return false;
+  /* The topic's own run: the row, plus everything its answer revealed, up to
+     the next topic. Same shape of answer as _smCrSectionEls gives Apple, read
+     off a different marker because this body nests and Apple's does not. */
+  const run = [el];
+  let n = el.nextElementSibling;
+  while (n && !n.hasAttribute('data-key')) { run.push(n); n = n.nextElementSibling; }
+  _smCrSpot(run);
+  _smCrScrollWhenSettled(el);
+  return true;
+}
+
 function _smCrGo(label) {
+  if (typeof GIARC_PREFIX === 'string' && label.indexOf(GIARC_PREFIX) === 0) return _smEgsCrGo(label);
   const heads = _smStepQA('.ios-content-step-label');
   const el = heads.find(h => h.textContent.trim() === label);
   if (!el) return false;
