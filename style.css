@@ -16530,6 +16530,48 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    than the card's left edge. */
 .giarc-group-q > .giarc-children { margin-right: 0; }
 
+
+/* ── One-line questions (Epic's Content Rating, v8.32) ─────────────────
+   Label on the left, answers on the right, the way Mac App Store's Content
+   Rating rows read. The card chrome — border, panel fill, shadow, 18px of
+   padding — drops away for a question whose answers fit beside it, taking it
+   from a measured 183px to about 40px. The card is still drawn for the
+   questions whose options are whole sentences, and for the group wrappers;
+   this only removes it where a row can carry the question on its own. */
+.giarc-inline { padding: 0; background: none; border: none; box-shadow: none; }
+.giarc-group-q.giarc-inline { padding: 0; }
+.giarc-row { display: flex; align-items: center; gap: 16px; min-height: 40px; padding: 4px 0; }
+.giarc-card.giarc-inline > .giarc-row { padding: 6px 2px; }
+.giarc-row-label {
+  flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.35;
+  color: var(--text); display: flex; align-items: center; gap: 6px;
+}
+.giarc-depth-1 > .giarc-row > .giarc-row-label { font-size: 15px; }
+/* The title is its own span in both shapes so anything reading a question's
+   text finds it the same way; inside a row it inherits the row's type rather
+   than carrying .giarc-title's own 15px/flex:1. */
+.giarc-row-label > .giarc-title { flex: 0 1 auto; font-size: inherit; font-weight: inherit; line-height: inherit; }
+.giarc-seg { display: flex; gap: 4px; flex: 0 0 auto; }
+.giarc-seg-btn {
+  appearance: none; cursor: pointer; white-space: nowrap;
+  font: inherit; font-size: 12px; font-weight: 600;
+  padding: 7px 12px; border-radius: 8px;
+  background: var(--panel-3); border: 1px solid var(--border); color: var(--text-dim);
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.giarc-seg-btn:hover { background: var(--sel-bg); border-color: var(--border-hover); color: var(--text); }
+.giarc-seg-btn.is-on {
+  background: var(--sel-bg); border-color: var(--sel-border); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--sel-border);
+}
+.giarc-seg.is-multi .giarc-seg-btn { border-radius: 999px; }
+/* A collapsed answer Shipmate supplied, still marked as such — the summary
+   wears the same selection fill an expanded option would. */
+.giarc-collapsed-summary.ai-confident {
+  background: var(--sel-bg); border: 1px solid var(--sel-border);
+  border-radius: 7px; padding: 2px 8px; color: var(--text);
+}
+
 /* ── Web: "Preview Website" presskit-style page ──────────
    This is a preview of an external, self-hosted page — deliberately a
    plain light theme (not Shipmate's dark app chrome), wrapped in a fake

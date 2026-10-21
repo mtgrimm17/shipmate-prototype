@@ -19049,6 +19049,48 @@ function buildAndroidContentRatingSection() {
    the card itself is the grouping, the label is the bonus. */
 function buildEgsContentRatingSection() {
 
+  /* CAN THIS QUESTION SIT ON ONE LINE WITH ITS ANSWERS? (v8.32)
+
+     WHY IT IS WORTH ASKING. Measured on the card before this change, with one
+     violence branch open: 23 questions on screen, 3,736px of scroll, 5.2
+     screens. Six of those questions were already collapsed and cost 284px
+     between them; the other seventeen were open and cost 3,116px — 83% of the
+     scroll, at 183px each. Mac App Store asks its questions on 34px rows,
+     label left and answers right. That shape is what this restores, and it is
+     the whole of the saving: 2,171px, 3.0 screens, same answers. */
+  function egsInlineable(q) {
+    const o = giarcOptionEntries(q).map(x => x.text || '');
+    if (!o.length) return false;
+    let longest = 0, total = 0;
+    o.forEach(t => { total += t.length; if (t.length > longest) longest = t.length; });
+    /* THE SUM MATTERS, NOT JUST THE LONGEST. Measured on screen: "No / Yes,
+       with penalties / Yes, without penalties" passes a per-option test at 22
+       characters, then eats 390px of the row and wraps "Innocent or Defenseless
+       Characters Can Be Seriously Injured or Killed" onto four lines — worse
+       than leaving it stacked. Capping the TOTAL at 30 keeps Yes/No (5),
+       Rarely/Often (11) and None/Mild/Moderate/High (26), and sends the rest
+       back to the stacked layout they need. 71 of 95 questions qualify. */
+    return o.length <= 4 && longest <= 22 && total <= 30;
+  }
+
+  /* WHOSE ANSWER IS THIS? (v8.32)
+
+     The violet fill every other platform's rows already use for an answer
+     Shipmate supplied rather than the developer. `_giarcWriteBranch` (app.js)
+     has been recording `{ source, humanConfirmed: false }` against these keys
+     since Epic's questionnaire was wired to the App Store's — nothing read it.
+     So this questionnaire, the one with the MOST answers arriving pre-filled
+     from somewhere else, was the only place where an answer Shipmate chose
+     looked exactly like one you chose. Apple's rows, Steam's rows and the
+     consolidated questionnaire have all shown it all along. */
+  function egsAiClass(key, idx) {
+    const m = state.cqAnswerMeta && state.cqAnswerMeta[key];
+    if (!m || m.humanConfirmed) return '';
+    const a = state.cqAnswers[key];
+    const match = Array.isArray(a) ? a.includes(idx) : a === idx;
+    return match ? ' ai-confident' : '';
+  }
+
   function giarcTooltip(text) {
     return `<span class="tooltip-anchor" data-tip="${escHtml(text)}"><span class="tooltip-icon">?</span></span>`;
   }
@@ -19108,9 +19150,31 @@ function buildEgsContentRatingSection() {
       ? `answerGIARCMultiOpt('${key}',${opt.index})`
       : `answerGIARCSingle('${key}',${opt.index})`;
     return `
-      <div class="giarc-option${checked ? ' is-checked' : ''}" onclick="${onclick}">
+      <div class="giarc-option${checked ? ' is-checked' : ''}${egsAiClass(key, opt.index)}" onclick="${onclick}">
         <span class="giarc-${isMulti ? 'checkbox' : 'radio'}"></span>
         <span class="giarc-option-text">${escHtml(opt.text)}</span>
+      </div>`;
+  }
+
+  /* Label left, answers right, one line — see the note on egsInlineable. */
+  function buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index, inGroup) {
+    const isMulti = q.data_type === 'picklist_multi';
+    const cur = state.cqAnswers[key];
+    const segs = giarcOptionEntries(q).map(opt => {
+      const on = isMulti ? (Array.isArray(cur) && cur.includes(opt.index)) : cur === opt.index;
+      const fn = isMulti ? `answerGIARCMultiOpt('${key}',${opt.index})`
+                         : `answerGIARCSingle('${key}',${opt.index})`;
+      return `<button type="button" class="giarc-seg-btn${on ? ' is-on' : ''}${egsAiClass(key, opt.index)}"
+                      onclick="${fn}">${escHtml(opt.text)}</button>`;
+    }).join('');
+    const shell = inGroup ? 'giarc-group-q giarc-inline' : `giarc-card giarc-depth-${depth} giarc-inline`;
+    return `
+      <div class="${shell}" data-key="${key}">
+        <div class="giarc-row">
+          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${escHtml(title)}</span>${tooltipHTML}</div>
+          <div class="giarc-seg${isMulti ? ' is-multi' : ''}">${segs}</div>
+          ${collapseBtnHTML}
+        </div>
       </div>`;
   }
 
@@ -19121,13 +19185,21 @@ function buildEgsContentRatingSection() {
     const indexBadge = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
     const summary = escHtml(giarcAnswerSummaryText(key));
     const shell = inGroup ? 'giarc-group-q' : `giarc-card giarc-depth-${depth}`;
+    /* A COLLAPSED ROW IS WHERE PROVENANCE MATTERS MOST, which is easy to get
+       backwards. It is the one view of an answer the developer may never have
+       watched being made: the branch arrived pre-filled, the subtree was
+       already complete, so it was a one-line summary the first time they saw
+       it. Marking only the expanded options would have left exactly the
+       answers nobody chose looking like answers somebody chose. */
+    const m = state.cqAnswerMeta && state.cqAnswerMeta[key];
+    const aiRow = (m && !m.humanConfirmed && giarcIsAnswered(key)) ? ' is-ai' : '';
     return `
-      <div class="${shell} is-collapsed is-answered" data-key="${key}"
+      <div class="${shell} is-collapsed is-answered${aiRow}" data-key="${key}"
            onclick="toggleGIARCExpand('${key}',true)" tabindex="0" role="button" aria-label="Expand to review this answer">
         <div class="giarc-header giarc-header-collapsed">
           ${indexBadge}
           <span class="giarc-title giarc-title-collapsed">${escHtml(title)}</span>
-          <span class="giarc-collapsed-summary">${summary}</span>
+          <span class="giarc-collapsed-summary${aiRow ? ' ai-confident' : ''}">${summary}</span>
           <span class="giarc-check is-visible">${CHECK_SVG}</span>
           <span class="giarc-collapse-chevron">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -19164,6 +19236,11 @@ function buildEgsContentRatingSection() {
            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
          </button>`
       : '';
+
+    if (egsInlineable(q)) {
+      return buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index, inGroup)
+           + (inGroup ? '' : renderChildren(key, depth + 1));
+    }
 
     const noteHTML = isMulti ? `<div class="giarc-data-type-note">Select all that apply</div>` : '';
     const optsHTML = giarcOptionEntries(q).map(opt => buildGIARCOption(q, opt, key)).join('');
@@ -19208,7 +19285,50 @@ function buildEgsContentRatingSection() {
     return `<div class="giarc-children is-visible">${html}</div>`;
   }
 
-  return `<div class="giarc-root">${GOOGLE_IARC_TOP_LEVEL_KEYS.map((key, i) => renderGIARCQuestion(key, 1, i + 1)).join('')}</div>`;
+  /* THE DENOMINATOR IS TOPICS, NOT QUESTIONS (v8.32).
+
+     Mac App Store's rail can say "22 of 24 still to answer" because its 24 are
+     fixed. Epic's are not: 95 questions exist and how many you are asked
+     depends on what you answer, so a question count would move under the
+     developer as they work — answer one thing and the total goes UP. The
+     fourteen top-level questions never move, and a topic is a thing a
+     developer can reason about: it is done when it and everything it revealed
+     is done, which is what giarcIsSubtreeComplete already answers.
+
+     The filter follows from the same unit. "Unanswered" hides whole finished
+     topics rather than individual questions, because hiding a question from
+     the middle of a branch leaves its follow-ups orphaned under a parent you
+     can no longer see. Topic numbers stay put when the list is filtered — the
+     row is still "5", so the one you were looking at is still the one you
+     find when you press All. */
+  const topics = GOOGLE_IARC_TOP_LEVEL_KEYS;
+  const doneTopics = topics.filter(k => giarcIsSubtreeComplete(k)).length;
+  const showAll = state.egsCrShowAll !== false;
+  const shown = showAll ? topics : topics.filter(k => !giarcIsSubtreeComplete(k));
+
+  const bar = `
+    <div class="cr-pinned">
+      <div class="sw-tip-box cr-pinned-bar">
+        ${buildCRTogglePill(true, showAll, 'toggleEgsCrExpanded(false)', 'toggleEgsCrExpanded(true)')}
+        <div class="sw-tip-text">${doneTopics === topics.length
+          ? `All ${topics.length} topics answered.`
+          : `${doneTopics} of ${topics.length} topics answered.`}</div>
+      </div>
+    </div>`;
+
+  const body = shown.map(key => renderGIARCQuestion(key, 1, topics.indexOf(key) + 1)).join('');
+  const emptyNote = shown.length ? '' :
+    `<div class="giarc-card giarc-depth-1"><div class="giarc-title">Every topic is answered. Press All to review them.</div></div>`;
+  return `<div class="giarc-root">${bar}${body}${emptyNote}</div>`;
+}
+
+/* The Unanswered / All switch for Epic's Content Rating (v8.32). Epic's own,
+   because the Apple one (toggleContentRatingExpanded) writes per-platform keys
+   on the App Store family's state and means something different by
+   "unanswered" — there, a question; here, a topic. */
+function toggleEgsCrExpanded(on) {
+  state.egsCrShowAll = !!on;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
 /* STUB SECTION FOR STEPS NOT YET IMPLEMENTED — ONE SHAPE, ANY PLATFORM.
