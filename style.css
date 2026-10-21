@@ -16565,10 +16565,16 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
   border-radius: 0;
 }
 .giarc-flat .giarc-children { gap: 0; }
+/* `.giarc-run >` is listed beside `.giarc-children >` because v8.37's wrapper
+   became the questions' parent for a labelled run — without it, exactly the
+   runs that have a heading lost their hairlines and their breathing room, and
+   Setting sat flush against Pixelated or Childlike Style. */
 .giarc-flat .giarc-children > .giarc-card + .giarc-card,
+.giarc-flat .giarc-run > .giarc-card + .giarc-card,
 .giarc-flat .giarc-root > .giarc-card + .giarc-card { border-top: 1px solid var(--border); }
 /* The hairline needs the breathing room the padding used to give. */
-.giarc-flat .giarc-children > .giarc-card { padding: 12px 0; }
+.giarc-flat .giarc-children > .giarc-card,
+.giarc-flat .giarc-run > .giarc-card { padding: 12px 0; }
 .giarc-flat .giarc-card.is-collapsed { padding: 12px 0; cursor: pointer; }
 .giarc-flat .giarc-card.giarc-inline > .giarc-row { padding: 0; }
 .giarc-flat .giarc-card .giarc-header { margin-bottom: 10px; }
@@ -16587,14 +16593,49 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    Store's own category-header shape instead (.ios-content-step-label), so it
    reads as a heading in the flow rather than as a container around the
    questions under it. */
+.giarc-flat .giarc-run {
+  /* Draws nothing. It is here so the sticky label below stops at the end of
+     its own run instead of hanging over the next one. */
+  display: block;
+}
+
+/* IT STAYS WHILE ITS QUESTIONS DO (v8.37). The run it names is 1,038px against
+   a 719px viewport, so a label that scrolls away leaves five or six questions
+   with nothing saying what they are about.
+
+   `--cr-pin-h` is the height of .cr-pinned, the Unanswered/All bar that is
+   already sticky at top 0 in this same scroller (position: sticky, z-index 5,
+   measured 68px). The label parks underneath it and keeps a lower z-index, so
+   the bar always wins. If that bar's height changes, this is the one number to
+   change with it.
+
+   NESTING IS NOT HANDLED, DELIBERATELY: no labelled run in the questionnaire
+   today contains another labelled run, so there is no second offset to stack.
+   cr837.py asserts that, and will say so the day it stops being true rather
+   than leaving two labels silently overlapping. */
+.giarc-flat { --cr-pin-h: 68px; }
 .giarc-flat .giarc-sec-label {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--text-dim);
-  padding: 14px 0 2px;
+  position: sticky; top: var(--cr-pin-h); z-index: 3;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text);
+  /* More above than below, so it reads as attached to what follows it. */
+  padding: 16px 0 6px;
+  /* Opaque, or the rows it passes over show through while it is pinned. The
+     modal's own background, not a panel colour — these rows sit directly on it. */
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--border);
 }
 /* The run's first question sits under its label, so it needs no rule above it
    — the label is already the boundary. */
 .giarc-flat .giarc-sec-label + .giarc-card { border-top: none; }
+
+/* THE SPINE THE LABEL SITS ON (v8.37). .giarc-children's rail is 2px of
+   rgb(42,42,42) at every depth — it says "nested" and not "nested under what".
+   A run of siblings is the one place that question is being asked, so the rail
+   holding a labelled run is brightened: the label is at the top of it and every
+   question it names is beside it, which keeps working when the label itself has
+   been scrolled past. */
+.giarc-flat .giarc-children:has(> .giarc-run) { border-left-color: var(--border-hover); }
 
 /* ── Web: "Preview Website" presskit-style page ──────────
    This is a preview of an external, self-hosted page — deliberately a

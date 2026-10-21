@@ -19325,13 +19325,39 @@ function buildEgsContentRatingSection() {
   function renderChildren(key, depth) {
     const kids = giarcActiveChildKeys(key);
     if (!kids.length) return '';
-    let printed = null;
-    const html = kids.map(ck => {
+
+    /* Consecutive children that share an opening are one run. The grouping is
+       still only "watch for the prefix to change" — giarcActiveChildKeys
+       already returns each selected option's children contiguously. */
+    const runs = [];
+    kids.forEach(ck => {
       const pre = egsSharedPrefix(ck);
-      const head = (pre && pre !== printed)
-        ? `<div class="giarc-sec-label">${escHtml(pre.slice(0, -2))}</div>` : '';
-      printed = pre;
-      return head + renderGIARCQuestion(ck, depth);
+      const last = runs[runs.length - 1];
+      if (last && last.pre === pre) last.keys.push(ck);
+      else runs.push({ pre, keys: [ck] });
+    });
+
+    /* A LABELLED RUN GETS A WRAPPER, AND IT DRAWS NOTHING (v8.37).
+
+       Measured on the Violence Against Humans run: 1,038px of questions against
+       a 719px viewport — 1.44 screens. So the label scrolled off while five or
+       six of the questions it names were still on screen, which is the moment
+       "Setting" reads as belonging to nothing. The label is `position: sticky`
+       now, and sticky stops at the edge of its OWN parent: without a wrapper
+       per run, both runs share one .giarc-children and the first label would
+       hang over the second run's questions, naming them wrongly — worse than
+       not sticking at all.
+
+       It is not v8.31's card. No border, no fill, no padding, nothing drawn;
+       it exists so the stickiness ends where the run ends. A run with no shared
+       wording has no label to stick, so it gets no wrapper either. */
+    const html = runs.map(r => {
+      const body = r.keys.map(ck => renderGIARCQuestion(ck, depth)).join('');
+      if (!r.pre) return body;
+      return `<div class="giarc-run">`
+           + `<div class="giarc-sec-label">${escHtml(r.pre.slice(0, -2))}</div>`
+           + body
+           + `</div>`;
     }).join('');
     return `<div class="giarc-children is-visible">${html}</div>`;
   }
