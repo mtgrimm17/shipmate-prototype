@@ -515,7 +515,7 @@ async function toggleStepSection(pid, stepId) {
     state.storePreviewFocus[pid] = null;
   }
   if (pid === 'android') seedOnboardingToAndroid();
-  if (pid === 'android' || pid === 'egs') giarcSeedFromIos();
+  if (pid === 'android' || pid === 'egs' || pid === 'egs_full') giarcSeedFromIos();
   if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
     seedOnboardingToIOS(pid);
     if (pid === 'macos')      seedMacAppStoreListing();
@@ -3184,7 +3184,7 @@ async function openStepModal(pid, stepId) {
   markStepSectionSeen(pid, stepId);
   // Google Play and Epic share one IARC questionnaire; bring in whatever the
   // App Store answers already settle before any of it is drawn or counted.
-  if (pid === 'android' || pid === 'egs') giarcSeedFromIos();
+  if (pid === 'android' || pid === 'egs' || pid === 'egs_full') giarcSeedFromIos();
 
   /* The Game Build modal carries its own Build-steps list, so the Shippy guide
      beside it is redundant and competes with it — hide Shippy for this step only
@@ -23202,6 +23202,92 @@ function answerEgsTier(value) {
 
 function toggleEgsRegion(regionId, on) {
   const a = state.egsSubmitAnswers;
+  const i = a.excludedRegions.indexOf(regionId);
+  if (on && i === -1) a.excludedRegions.push(regionId);
+  if (!on && i !== -1) a.excludedRegions.splice(i, 1);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+/* ══ EPIC GAMES STORE FULL (the seven handlers) ══════════════════════════════════════
+   A duplicate of Epic Games Store (setEgsLocReviewField … toggleEgsRegion), kept as its own copy rather than
+   folded into the original behind a `pid` parameter. That was the explicit
+   choice: the two cards are meant to be able to diverge step by step, and a
+   shared builder makes the first divergence a refactor instead of an edit.
+
+   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
+   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
+   its own completeness function. The shared tables (EGS_REGION_GROUPS,
+   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
+   are deliberately NOT duplicated — they are data and paint, and two copies of
+   either would drift without anyone noticing. Keep it that way until a real
+   difference needs one of them forked.
+
+   The IARC content rating stays shared too, as it already is between Google
+   Play and Epic: one questionnaire, one set of answers, by IARC's own design
+   (see isEgsFullSectionComplete's contentRating arm). */
+function setEgsFullLocReviewField(value) {
+  state.egsFullLocReviewField = value || 'title';
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function toggleEgsFullLocReviewMode() {
+  state.egsFullLocReviewMode = state.egsFullLocReviewMode === 'review' ? 'all' : 'review';
+  /* Entering review asks for a back-translation of everything on screen, the
+     same way Steam's own toggle does — otherwise the bottom halves open empty
+     and look broken rather than pending. */
+  if (state.egsFullLocReviewMode === 'review' && typeof _steamLocReviewSyncBackTranslations === 'function') {
+    _steamLocReviewSyncBackTranslations(state.egsFullLocReviewField || 'title');
+  }
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function _egsFullToggleReviewSettingsMenu(ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  state.egsFullReviewSettingsOpen = !state.egsFullReviewSettingsOpen;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* ── EPIC GAMES STORE HANDLERS (v7.30) ────────────────────────────────────
+   Same shape as answerAndroidField below — press an answered pill again to
+   clear it, then repaint the open step and the card behind it. They repaint
+   through the generic `reRenderStepModal`/`renderDashboard` pair rather than a
+   bespoke `updateEgsFullCard`: the surgical per-platform updaters exist because
+   three cards were repainting on every keystroke of a long questionnaire, and
+   Epic has no field that fires that often. Correct first; a narrower repaint
+   is a measurement away if one is ever needed. */
+function answerEgsFullField(fieldId, value) {
+  const current = state.egsFullSubmitAnswers[fieldId];
+  state.egsFullSubmitAnswers[fieldId] = (current === value) ? null : value;
+  /* SWITCHING BACK TO WORLDWIDE DROPS THE EXCLUSIONS, because leaving them
+     would let a submission carry regions it is not excluding — invisible in
+     the UI (the list is not drawn) and still true in state, which is how a
+     developer ships to somewhere they thought they had turned off. */
+  if (fieldId === 'distribution' && state.egsFullSubmitAnswers.distribution !== 'select') {
+    state.egsFullSubmitAnswers.excludedRegions = [];
+  }
+  /* Same argument one field over: a cleared price model must not leave a tier
+     behind it, or Free would carry $29.99 in state. */
+  if (fieldId === 'priceModel' && state.egsFullSubmitAnswers.priceModel !== 'paid') {
+    state.egsFullSubmitAnswers.priceTier = '';
+  }
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function answerEgsFullTextField(fieldId, value) {
+  state.egsFullSubmitAnswers[fieldId] = value;
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+// swSelect's onChange contract: it calls <fn>(value).
+function answerEgsFullTier(value) {
+  state.egsFullSubmitAnswers.priceTier = value || '';
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function toggleEgsFullRegion(regionId, on) {
+  const a = state.egsFullSubmitAnswers;
   const i = a.excludedRegions.indexOf(regionId);
   if (on && i === -1) a.excludedRegions.push(regionId);
   if (!on && i !== -1) a.excludedRegions.splice(i, 1);

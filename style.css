@@ -23070,6 +23070,8 @@ body.viewing-splash #app-guide { display: none; }
 .platform-grid.pg-7{grid-template-columns:repeat(7,1fr)}
 .platform-grid.pg-8{grid-template-columns:repeat(8,1fr)}
 .platform-grid.pg-9{grid-template-columns:repeat(9,1fr)}
+.platform-grid.pg-10{grid-template-columns:repeat(10,1fr)}
+.platform-grid.pg-11{grid-template-columns:repeat(11,1fr)}
 
 
 /* ── The Shippy panel ────────────────────────────────────────────────── */
@@ -23471,6 +23473,8 @@ body.viewing-splash #app-guide { display: none; }
 .ob-form .platform-grid.pg-7 { grid-template-columns: repeat(7, 1fr); }
 .ob-form .platform-grid.pg-8 { grid-template-columns: repeat(8, 1fr); }
 .ob-form .platform-grid.pg-9 { grid-template-columns: repeat(9, 1fr); }
+.ob-form .platform-grid.pg-10 { grid-template-columns: repeat(10, 1fr); }
+.ob-form .platform-grid.pg-11 { grid-template-columns: repeat(11, 1fr); }
 .ob-form .platform-tile {
   --ring-top: var(--pill-on-stroke-top); --ring-bottom: var(--pill-on-stroke-bottom);
   --pill-bw: 1px;   /* the ring below is placed against the border box */
