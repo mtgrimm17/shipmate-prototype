@@ -6927,6 +6927,9 @@ function buildIOSActiveCard(pid, force) {
      submitted face for a title with history) never fired until the account was
      reconnected. ensureMatch is throttled, so this is cheap. (v8.29) */
   if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
+  // And the App Store Connect session: a signed-in browser connects the card by
+  // itself (upf.js driveAscSession / _onAscSignedIn, v8.30). Throttled.
+  if (typeof UPF !== 'undefined' && typeof UPF.driveAscSession === 'function') UPF.driveAscSession(pid);
   const stepCards = steps.map((step, i) => {
     const done      = _appStoreSectionComplete(pid, step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');

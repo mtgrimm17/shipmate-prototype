@@ -290,6 +290,40 @@ const UPF = {
         return;
       }
     }
+    /* NOBODY ASKED, BUT THE ANSWER IS YES (v8.30). Mark: "If we can detect it that
+       quickly, can't we do it without user input?" Connect Account for a Mac
+       platform is three facts — the extension is loaded (it just answered), the
+       browser is signed in to App Store Connect (it just said so), and the agent
+       holds an API key (health says). When all three hold for an active Mac card
+       that is not connected, connect it: no click, no modal, one toast. The modal
+       path above is kept for the case where a key still has to be generated —
+       that is the one Connect task the extension performs with the user watching. */
+    const hasKey = !!(state.upf && state.upf.agent && state.upf.agent.account && state.upf.agent.account.hasApiKey);
+    if (!hasKey) return;
+    for (const pid of UPF_MAC_PIDS) {
+      if (typeof _upfActive === 'function' && !_upfActive(pid)) continue;
+      if (typeof isPlatformConnected === 'function' && isPlatformConnected(pid)) continue;
+      state.extensionInstalled = true;
+      if (typeof bcToast === 'function') bcToast('Connected to App Store Connect — your browser is already signed in.');
+      if (typeof connectAdd === 'function') connectAdd(pid);
+      return;
+    }
+  },
+
+  /* Ask the extension about the App Store Connect session from a card render
+     (same place driveMatch runs): an active Mac card that is not connected, the
+     extension present, the agent up with a key. Throttled, so a render costs
+     nothing; a "yes" lands in _onAscSignedIn and connects the card by itself. */
+  _lastAscProbe: 0,
+  driveAscSession(pid) {
+    if (!this.isMac(pid)) return;
+    if (typeof isPlatformConnected === 'function' && isPlatformConnected(pid)) return;
+    if (typeof shipmateExtReady !== 'function' || !shipmateExtReady()) return;
+    const u = state.upf || {};
+    if (!(u.agent && u.agent.account && u.agent.account.hasApiKey)) return;
+    if (Date.now() - this._lastAscProbe < 20000) return;
+    this._lastAscProbe = Date.now();
+    if (typeof shipmateCheckAscSession === 'function') setTimeout(shipmateCheckAscSession, 0);
   },
 
   /* The extension answered checkAscSession. Alive → finish any Mac Connect
@@ -298,18 +332,29 @@ const UPF = {
      Inconclusive → leave things as they are. */
   _onAscSessionState(signedIn) {
     const pending = (typeof _ascCancelPendingSignIn === 'function') ? _ascCancelPendingSignIn() : false;
-    if (signedIn === true) { this._onAscSignedIn(); _persistPlatformAuth(); return; }
+    if (signedIn === true) { this._ascNoRetried = false; this._onAscSignedIn(); _persistPlatformAuth(); return; }
     // The user pressed "Open App Store Connect" and the answer is no / unknown: open it now.
     if (pending && typeof _ascOpenSignInTab === 'function') {
       for (const pid of UPF_MAC_PIDS) { const st = state.connectStage && state.connectStage[pid]; if (st === 'signin') { _ascOpenSignInTab(pid); break; } }
     }
     if (signedIn === false) {
-      var changed = false;
-      for (const pid of UPF_MAC_PIDS) {
-        const a = state.platformAuth && state.platformAuth[pid];
-        if (a && a.restored) { a.loggedIn = false; changed = true; }
+      const restored = UPF_MAC_PIDS.filter(pid => { const a = state.platformAuth && state.platformAuth[pid]; return a && a.restored && a.loggedIn; });
+      if (!restored.length) { this._ascNoRetried = false; return; }
+      /* ONE "NO" IS NOT PROOF (v8.30). Apple's session endpoint answers 401 for a
+         moment after the Mac wakes or the cookie refreshes, and the load-time
+         check landed exactly there this morning: the restored connection was
+         dropped, and the very next check (the user's click) said yes. So a first
+         "no" against a restored connection schedules one re-check 4 s later;
+         only a second "no" drops it. */
+      if (!this._ascNoRetried) {
+        this._ascNoRetried = true;
+        setTimeout(() => { if (typeof shipmateCheckAscSession === 'function') shipmateCheckAscSession(); }, 4000);
+        return;
       }
-      if (changed) { _persistPlatformAuth(); if (typeof renderDashboard === 'function') renderDashboard(); }
+      this._ascNoRetried = false;
+      for (const pid of restored) state.platformAuth[pid].loggedIn = false;
+      _persistPlatformAuth();
+      if (typeof renderDashboard === 'function') renderDashboard();
     }
   },
 
@@ -1563,6 +1608,20 @@ UPF.restoreProgress = async function (pid) {
   try { r = await this._get('/status?game=' + encodeURIComponent(game.app)); } catch (_) { return false; }
   if (!r) return false;
   const st = r.status || {}, job = r.job;
+  /* THE STEPS ARE LINEAR, AND THE AGENT ONLY KNOWS THE BACK HALF. "Create your
+     app in App Store Connect" is the first Generate Build step and Shipmate's
+     extension performs it — the agent never does, so a build the agent made on
+     its own (a CLI prepare) has a "build ready" record and no app. Restoring
+     that as a finished build showed every build row ticked under an unticked
+     first row (v8.30 regression report). /status now looks the app record up
+     live; a known record ticks the step, a known absence means the build is
+     not resumable as "done" — the card stays at Generate Build and the normal
+     flow runs (record first, then a build). Unknown (no key, ASC down) is
+     treated as absent for the same reason. An upload or submission implies the
+     record (Apple would not have taken the build), so those still restore. */
+  const asc = r.ascApp;
+  const recordKnown = !!(asc && asc.exists);
+  if (recordKnown) { state.upf.appRecord = true; if (typeof _appVerifiedSession !== 'undefined') _appVerifiedSession = true; }
   // 1) something still running for this game → watch it, at its real stage
   if (job && job.state === 'running') {
     if (job.kind === 'prepare' || job.kind === 'build') { await _upfAttachJob(pid, job.id, job.kind, null); return true; }
@@ -1580,7 +1639,9 @@ UPF.restoreProgress = async function (pid) {
   // drop it — only a running publish reads it back (for the track, above).
   try { localStorage.removeItem('upf.job'); } catch (_) {}
   if (!st.build && !st.upload && !st.submission) return false;
-  // 2) a finished record
+  // 2) a finished record. A bare local build (no upload, no submission) only
+  //    counts when the app record exists — see above.
+  if (!st.upload && !st.submission && !recordKnown) return false;
   if (st.build || st.upload) _upfRestoreBuild(pid, st.build, st.upload, game);
   if (st.submission) {
     const sub = st.submission;
