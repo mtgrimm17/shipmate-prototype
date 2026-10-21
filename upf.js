@@ -1576,6 +1576,9 @@ UPF.restoreProgress = async function (pid) {
       return true;
     }
   }
+  // Nothing running: a job id remembered from before the reload is finished, so
+  // drop it — only a running publish reads it back (for the track, above).
+  try { localStorage.removeItem('upf.job'); } catch (_) {}
   if (!st.build && !st.upload && !st.submission) return false;
   // 2) a finished record
   if (st.build || st.upload) _upfRestoreBuild(pid, st.build, st.upload, game);

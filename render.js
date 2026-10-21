@@ -6908,6 +6908,12 @@ function buildIOSActiveCard(pid, force) {
   // opened before connecting. Connect itself is never locked.
   const lockSVG = SM_LOCK_SVG;   // same padlock the Submit step uses
   let gateOpen = true;
+  /* Drive the lazy Steam match from EVERY Mac card render, not only from the
+     unlocked Generate Build row below: with Connect Account incomplete that row
+     is the locked branch, so the match (and with it restoreProgress — the
+     submitted face for a title with history) never fired until the account was
+     reconnected. ensureMatch is throttled, so this is cheap. (v8.29) */
+  if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
   const stepCards = steps.map((step, i) => {
     const done      = _appStoreSectionComplete(pid, step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
@@ -6923,10 +6929,7 @@ function buildIOSActiveCard(pid, force) {
 
     // Upload Build step — inline, no modal
     if (step.id === 'uploadBuild') {
-      /* Drive the lazy Steam match every render (agent probe + ensureMatch),
-         without building any HTML — so the row becomes clickable on its own once
-         the Steam build is matched, nothing opened. */
-      if (typeof UPF !== 'undefined' && typeof UPF.driveMatch === 'function') UPF.driveMatch(pid);
+      /* (The lazy Steam match is driven above, before the gate.) */
       const isMacBuild = (typeof UPF !== 'undefined' && typeof UPF.isMac === 'function' && UPF.isMac(pid));
       const buildLabel = stepLabel(pid, step);   // single source: PLATFORMS[pid].steps label ("Generate Build" on Mac, "Upload Build" on iOS) — same label the modal title reads
       if (isMacBuild) {
