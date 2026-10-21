@@ -16637,6 +16637,58 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    been scrolled past. */
 .giarc-flat .giarc-children:has(> .giarc-run) { border-left-color: var(--border-hover); }
 
+
+/* ── A LABEL WINS ON BRIGHTNESS, NOT ON SIZE (v8.38) ────────────────────
+   The sticky section label was 12px against question titles at 13.5px and
+   15px, so the heading was the smallest text in the section it named. The fix
+   is not to enlarge it — Mac App Store's own category header is 12px against
+   14px questions and reads correctly, because ITS questions sit at
+   rgb(160,160,160) while the header sits at rgb(245,245,245). Epic had both at
+   full brightness, which left size as the only cue, and size ran the wrong
+   way. So the questions inside a labelled run are quieted and the label is
+   left alone.
+
+   SCOPED TO A LABELLED RUN. A topic row, or a question with no siblings, has
+   no heading competing with it and stays bright. */
+.giarc-flat .giarc-run .giarc-title { color: var(--text-dim); font-weight: 500; }
+
+/* THE ANSWERS STAY LOUD, which is the half that makes dimming safe. Mac does
+   the same: the question is quiet, what you chose is not. Without this the run
+   would read as disabled rather than as subordinate. */
+.giarc-flat .giarc-run .giarc-collapsed-summary,
+.giarc-flat .giarc-run .giarc-seg-btn,
+.giarc-flat .giarc-run .giarc-option-text { color: var(--text); }
+
+/* ONE SIZE FOR BOTH SIBLING SHAPES. "Setting" took the one-line row and came
+   out at 13.5px; "Pixelated or Childlike Style" kept the stacked layout and
+   came out at 15px — same run, same depth, two sizes, and the larger of them
+   was bigger than the label naming them both. The shape a question takes is a
+   layout decision and was never meant to be a typographic one. */
+.giarc-flat .giarc-run .giarc-title { font-size: 13.5px; }
+
+/* ── THE PINNED LABEL IS CHROME, NOT A LINE OF TEXT (v8.38) ─────────────
+   Distinct by KIND rather than by type size: a raised surface, bled out to the
+   rail on its left and the content edge on its right, with the brightened rail
+   carried through it as a left accent so the spine runs unbroken from the
+   label down past every question it names.
+
+   -20px/18px is .giarc-children's own 20px of left padding, given back so the
+   bar reaches the rail; the 2px border then sits exactly where the rail does
+   and continues it rather than doubling it.
+
+   This is the first raised surface to return to this card since v8.35 took the
+   panels off every question, and that is deliberate: v8.35's argument was that
+   a QUESTION should not wear a panel, because three different question shapes
+   were wearing three different ones. A section header is not a question. */
+.giarc-flat .giarc-run > .giarc-sec-label {
+  background: var(--panel-2);
+  margin-left: -20px;
+  padding-left: 18px;
+  padding-right: 12px;
+  border-left: 2px solid var(--border-hover);
+  box-shadow: 0 1px 0 var(--border), 0 6px 12px -8px rgba(0,0,0,.6);
+}
+
 /* ── Web: "Preview Website" presskit-style page ──────────
    This is a preview of an external, self-hosted page — deliberately a
    plain light theme (not Shipmate's dark app chrome), wrapped in a fake
