@@ -16540,20 +16540,13 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    text finds it the same way; inside a row it inherits the row's type rather
    than carrying .giarc-title's own 15px/flex:1. */
 .giarc-row-label > .giarc-title { flex: 0 1 auto; font-size: inherit; font-weight: inherit; line-height: inherit; }
-.giarc-seg { display: flex; gap: 4px; flex: 0 0 auto; }
-.giarc-seg-btn {
-  appearance: none; cursor: pointer; white-space: nowrap;
-  font: inherit; font-size: 12px; font-weight: 600;
-  padding: 7px 12px; border-radius: 8px;
-  background: var(--panel-3); border: 1px solid var(--border); color: var(--text-dim);
-  transition: background .12s ease, border-color .12s ease, color .12s ease;
-}
-.giarc-seg-btn:hover { background: var(--sel-bg); border-color: var(--border-hover); color: var(--text); }
-.giarc-seg-btn.is-on {
-  background: var(--sel-bg); border-color: var(--sel-border); color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--sel-border);
-}
-.giarc-seg.is-multi .giarc-seg-btn { border-radius: 999px; }
+/* Epic's one-line answers are the App Store's pills since v8.50 (see
+   buildGIARCInlineRow). `.intensity-btn` lowercases for "none / infrequent /
+   frequent"; IARC's options are already in sentence case ("Mild/Limited"),
+   so they keep their own. */
+.intensity-btn.giarc-pill { text-transform: none; }
+.giarc-row > .question-yn,
+.giarc-row > .intensity-group { flex: 0 0 auto; }
 /* A collapsed answer Shipmate supplied, still marked as such — the summary
    wears the same selection fill an expanded option would. */
 .giarc-collapsed-summary.ai-confident {
@@ -16722,7 +16715,6 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    the same: the question is quiet, what you chose is not. Without this the run
    would read as disabled rather than as subordinate. */
 .giarc-flat .giarc-run .giarc-collapsed-summary,
-.giarc-flat .giarc-run .giarc-seg-btn,
 .giarc-flat .giarc-run .giarc-option-text { color: var(--text); }
 
 /* ONE SIZE FOR BOTH SIBLING SHAPES. "Setting" took the one-line row and came
@@ -16731,6 +16723,15 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    was bigger than the label naming them both. The shape a question takes is a
    layout decision and was never meant to be a typographic one. */
 .giarc-flat .giarc-run .giarc-title { font-size: 13.5px; }
+
+/* A QUESTION IS NEVER WIDER THAN ~500px (v8.50). Jaco: "the maximum width of
+   the questions is around 500px, making them go in 2 lines." On a wide modal a
+   long question ran as one line most of the way to its pills, which is a long
+   way for the eye to travel back; capped, it wraps to two lines at a reading
+   measure and the pills keep their own column on the right. Collapsed
+   summaries are excluded — they are one ellipsed line by design. */
+.giarc-flat .giarc-title:not(.giarc-title-collapsed) { max-width: 500px; }
+.giarc-tseg { display: inline-block; }   /* break between comma phrases — egsTitleHTML */
 
 /* ── THE PINNED LABEL IS CHROME, NOT A LINE OF TEXT (v8.38) ─────────────
    Distinct by KIND rather than by type size: a raised surface, bled out to the

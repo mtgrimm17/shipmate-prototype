@@ -19175,6 +19175,19 @@ function buildEgsContentRatingSection() {
      pure function of the key — egsSharedPrefix answers it the same way for the
      stacked header, the inline row and the collapsed row — so all three strip
      by asking rather than by being told. */
+  /* WHEN A QUESTION WRAPS, IT WRAPS AT A COMMA (v8.50). Jaco: "if possible,
+     break the line if there's a comma." Each comma-separated phrase is an
+     inline-block, so the browser prefers to break BETWEEN phrases — "Fierce
+     Sounds, Sinister or Intimidating Characters, / or Dark Overtones…" rather
+     than mid-phrase. Nothing is forced: a question that fits on one line stays
+     on one, and a single phrase longer than the 500px measure still wraps
+     inside itself. */
+  function egsTitleHTML(text) {
+    const parts = String(text).split(/(?<=,)\s+/);
+    if (parts.length < 2) return escHtml(text);
+    return parts.map(p => `<span class="giarc-tseg">${escHtml(p)}</span>`).join(' ');
+  }
+
   function egsOwnTitle(key, title) {
     const pre = egsSharedPrefix(key);
     return (pre && title.indexOf(pre) === 0) ? title.slice(pre.length) : title;
@@ -19206,19 +19219,33 @@ function buildEgsContentRatingSection() {
   function buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index) {
     const isMulti = q.data_type === 'picklist_multi';
     const cur = state.cqAnswers[key];
-    const segs = giarcOptionEntries(q).map(opt => {
+    /* THE APP'S OWN PILLS, NOT A THIRD KIND (v8.50). Jaco: "las pills de yes y
+       no se deben estilizar como las de todo shipmate, como ios." These were
+       `.giarc-seg-btn` — a segmented button this card drew for itself, with
+       its own fill, border and selected ring — beside the App Store's rows
+       that answer the same kind of question with `.yn-btn`. So a bare Yes/No
+       is now exactly the App Store's yes/no pair, and every other one-line
+       answer set (Rarely/Often, None/Mild/Moderate/High…) is the App Store's
+       `.intensity-btn`. Both already carry `.ai-confident` for the violet, so
+       egsAiClass plugs straight in. */
+    const opts  = giarcOptionEntries(q);
+    const yesNo = !isMulti && opts.length === 2 && opts[0].text === 'Yes' && opts[1].text === 'No';
+    const segs = opts.map(opt => {
       const on = isMulti ? (Array.isArray(cur) && cur.includes(opt.index)) : cur === opt.index;
       const fn = isMulti ? `answerGIARCMultiOpt('${key}',${opt.index})`
                          : `answerGIARCSingle('${key}',${opt.index})`;
-      return `<button type="button" class="giarc-seg-btn${on ? ' is-on' : ''}${egsAiClass(key, opt.index)}"
-                      onclick="${fn}">${escHtml(opt.text)}</button>`;
+      const cls = yesNo
+        ? `yn-btn ${opt.index === 1 ? 'yn-yes' : 'yn-no'}${on ? ' is-selected' : ''}`
+        : `intensity-btn giarc-pill${on ? ' is-sel-none' : ''}`;
+      return `<button type="button" class="${cls}${egsAiClass(key, opt.index)}"
+                      onclick="${fn}">${escHtml(yesNo ? opt.text.toUpperCase() : opt.text)}</button>`;
     }).join('');
     const shell = `giarc-card giarc-depth-${depth} giarc-inline`;
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${escHtml(egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
-          <div class="giarc-seg${isMulti ? ' is-multi' : ''}">${segs}</div>
+          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${egsTitleHTML(egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
+          <div class="${yesNo ? 'question-yn' : 'intensity-group'}">${segs}</div>
           ${collapseBtnHTML}
         </div>
       </div>`;
@@ -19269,6 +19296,23 @@ function buildEgsContentRatingSection() {
     const complete = giarcIsSubtreeComplete(key);
     const title    = q.title;
 
+    /* A ONE-LINE QUESTION NEVER COLLAPSES AND NEVER GROWS A TICK (v8.50).
+       Jaco: "no me convence el checkmark a la derecha de la pregunta, que hace
+       moverse al yes/no." Answering one used to do two things to the row it
+       was answered in: the collapse arrow arrived after the pills and shoved
+       them left, and on the next render the pills were swapped for a summary
+       chip, a green tick and a chevron — the Yes you had just pressed moved
+       and changed shape under the pointer. On a row whose answers are already
+       on screen, the lit pill IS the record of the answer, which is how the
+       App Store's rows have always said it. So these rows are drawn the same
+       answered or not; only the stacked cards (options too long for a row)
+       still fold away. */
+    if (egsInlineable(q)) {
+      const tip = q.tooltip ? giarcTooltip(q.tooltip) : '';
+      return buildGIARCInlineRow(q, key, title, tip, '', '', depth, index)
+           + renderChildren(key, depth + 1);
+    }
+
     const showCollapsedRow = isMulti
       ? (complete && state.giarcManuallyCollapsed.has(key))
       : (complete && !state.giarcManuallyExpanded.has(key));
@@ -19287,18 +19331,13 @@ function buildEgsContentRatingSection() {
          </button>`
       : '';
 
-    if (egsInlineable(q)) {
-      return buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index)
-           + renderChildren(key, depth + 1);
-    }
-
     const noteHTML = isMulti ? `<div class="giarc-data-type-note">Select all that apply</div>` : '';
     const optsHTML = giarcOptionEntries(q).map(opt => buildGIARCOption(q, opt, key)).join('');
 
     const inner = `
         <div class="giarc-header">
           ${indexBadge}
-          <span class="giarc-title">${escHtml(egsOwnTitle(key, title))}</span>
+          <span class="giarc-title">${egsTitleHTML(egsOwnTitle(key, title))}</span>
           ${tooltipHTML}
           ${checkHTML}
           ${collapseBtnHTML}

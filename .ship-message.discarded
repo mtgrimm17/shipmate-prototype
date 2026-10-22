@@ -1,0 +1,36 @@
+v8.29 — IARC content rating in the App Store's grammar + multi picker
+
+Google Play and Epic share buildAndroidContentRatingSection, so both change.
+It was 14 numbered cards with vertical radio/checkbox lists, follow-ups as
+further cards, auto-collapsing into summary rows. Now it is drawn the way the
+App Store / Mac questionnaire is:
+
+- Seven theme bands (Violence and Fear, Sexuality, Language and Humor,
+  Drugs/Alcohol/Tobacco, Gambling and Purchases, Online Features, Sensitive
+  Content) instead of a 1-14 count; long top-level titles shortened, IARC's
+  wording kept in the hint.
+- One row per question: Yes/No as yn-btn, single-selects as intensity-btn
+  pills. Answers always stay in the right-hand column; a long question
+  wraps onto more lines instead of pushing its pills underneath.
+- Multi-selects are a picker (swSelect's pill + dropdown with tick boxes):
+  every row keeps the same one-line shape, so follow-ups line up under it in
+  option order. Stays open while ticking (state.giarcPickerOpen), closes via
+  closeAllDropdowns; violet when Shipmate's, grey "Select all that apply"
+  when empty.
+- Follow-ups on the .ios-followup rail under the row that reveals them. A
+  multi-select option that opens several questions names the group
+  ("Against humans") and the children drop the repeated prefix.
+- Short pill labels for long IARC options (GIARC_SHORT_OPT), full text in
+  the hint. Presentation only: answers stay IARC option indices.
+- Violet = written by Shipmate (inference or App Store mapping); pressing a
+  violet pill confirms it, pressing a blue one clears it (answerIOSField's
+  rule). Meta is spread on confirm so provenance survives.
+- Pinned Unanswered/All bar with "Shipmate answered X of 14". Snapshot is
+  per top-level branch (state.giarcAnsweredAtSnapshot), taken after
+  inference (egs now included in _postInferenceSetup) and the first time
+  the App Store mapping fills anything.
+
+(v8.28 was a local cache-bust only, never published.)
+
+Removed: the card/collapse renderer, toggleGIARCExpand, the
+giarcManuallyExpanded/Collapsed sets and the .giarc-card CSS.
