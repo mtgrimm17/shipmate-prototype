@@ -19948,11 +19948,20 @@ function egsPageField(o) {
               placeholder="${escHtml(o.placeholder)}" value="${escHtml(val)}"
               oninput="${o.onInput}"
               onchange="${o.onChange}">`;
+  /* THE COUNT SITS BESIDE THE BOX, NOT UNDER IT (v8.54). Under it, each of
+     the four fields spent a line of the page on a number — and the page is
+     meant to look like Epic's, where the vertical rhythm between the title,
+     the blurb, the tags and the body is the whole shape of it. Beside it, the
+     number costs nothing vertically and still sits where the field it counts
+     is. It stays the input's NEXT SIBLING, which is how updateIapCharCounter
+     finds it. */
   return `
-    ${body}
-    <div class="ias-char-counter-row">
-      <span class="ias-char-error">${over ? `Must be less than ${o.limit} characters.` : ''}</span>
-      <span class="ias-char-count${over ? ' is-over' : ''}">${o.limit - val.length}</span>
+    <div class="egs-sp-fieldrow">
+      ${body}
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${over ? `Must be less than ${o.limit} characters.` : ''}</span>
+        <span class="ias-char-count${over ? ' is-over' : ''}">${o.limit - val.length}</span>
+      </div>
     </div>`;
 }
 
@@ -19986,7 +19995,7 @@ function buildEgsStorePreviewSection() {
      by egsShortDesc so the page and the status bar cannot disagree. */
   const desc      = egsShortDesc();
   const headline  = (a.headline || '').trim();
-  const aboutText = (ws.aboutGame || '').trim();
+  const aboutText = egsBodyText();
   const developer = (ws.developer || '').trim();
   const publisher = (ws.publisher || developer || '').trim();
 
@@ -20004,7 +20013,7 @@ function buildEgsStorePreviewSection() {
   const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
   const ratingDone = cq.total > 0 && cq.answered === cq.total;
   const ratingHtml = `
-    <div class="egs-sp-rating${ratingDone ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-sp-rating"
          onclick="openStorePreviewSection('egs','content')">
       <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
       <!-- JUST THE NAME OF THE THING (v8.48). This card used to report how
@@ -20071,7 +20080,7 @@ function buildEgsStorePreviewSection() {
     ? shots.slice(0, 5).map(sh => `<div class="egs-spp-thumb"><img src="${escHtml(_screenshotSrc(sh) || sh.src || '')}" alt=""></div>`).join('')
     : '';
   const mediaHtml = `
-    <div class="egs-spp-media${(heroSrc || shots.length) ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-spp-media"
          onclick="openStorePreviewSection('egs','screenshots')">
       <div class="egs-spp-hero">
         ${heroSrc
@@ -20089,14 +20098,14 @@ function buildEgsStorePreviewSection() {
     id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 3,
     limit: EGS_PAGE_LIMITS.shortDesc, placeholder: 'Short Description',
     onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.shortDesc})`,
-    onChange: `setEgsProductShared('description', this.value)` });
+    onChange: `setEgsProductText('shortDesc', this.value)` });
 
   /* GENRES AND FEATURES SIT SIDE BY SIDE, because they do on Epic's own page
      — Rocket League's shows Genres in a narrow left column and Features in a
      wider right one with a rule between them. Stacked, the two rows read as
      one long list of tags whose headings happen to interrupt it. */
   const tagCol = (label, items, step) => `
-    <div class="egs-sp-tagcol${items.length ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-sp-tagcol"
          onclick="openStepModal('egs','${step}')">
       <span class="egs-sp-tagrow-label">${label}</span>
       <span class="egs-sp-tags">${items.length
@@ -20154,7 +20163,7 @@ function buildEgsStorePreviewSection() {
      is for instead — and says it in the heading rather than in a sentence
      underneath, which is what the glow is already for. */
   const followHtml = `
-    <div class="egs-sp-foot${socialLinks.length ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-sp-foot"
          onclick="openStepModal('egs','socialMedia')">
       <div class="egs-spp-h2">${socialLinks.length ? 'Follow Us' : 'Social Media Links'}</div>
       ${socialLinks.length
@@ -20185,7 +20194,7 @@ function buildEgsStorePreviewSection() {
   };
   const specTables = supported.map(specTable).filter(Boolean).join('');
   const sysHtml = `
-    <div class="egs-sp-foot${specTables ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-sp-foot"
          onclick="openStepModal('egs','specifications')">
       <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
       ${specTables}
@@ -20198,7 +20207,7 @@ function buildEgsStorePreviewSection() {
     </div>`;
   const detailsDone = a.loginTypes.length || a.textLanguages.length || a.audioLanguages.length;
   const loginHtml = `
-    <div class="egs-sp-foot${detailsDone ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-sp-foot"
          onclick="openStepModal('egs','productDetails')">
       <div class="egs-sp-foot-sub">Login Accounts Required</div>
       <div class="egs-sp-langline is-plain"><b>${a.loginTypes.length
@@ -20233,7 +20242,10 @@ function buildEgsStorePreviewSection() {
           onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
           onChange: `setEgsProductShared('title', this.value)` })}
       <div class="egs-sp-tabs">
-        <span class="is-current">Overview</span><span>Add-Ons</span><span>Achievements</span>
+        <!-- No Add-Ons tab (v8.54). Epic shows one only for a product that
+             HAS add-ons; this card has no notion of them, so it was a tab
+             that could never be pressed and never be right. -->
+        <span class="is-current">Overview</span><span>Achievements</span>
       </div>
       <div class="egs-sp-cols">
         <div class="egs-sp-main">

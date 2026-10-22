@@ -3286,16 +3286,28 @@ function egsBodyLimit(headlineLen) {
   return Math.max(0, EGS_PAGE_LIMITS.body - used);
 }
 
-/* STEAM'S BLURB IS THE SHORT DESCRIPTION UNTIL SOMEBODY TYPES ONE (v8.48).
-   Linking a Steam app caches its short_description, and a developer who has
-   already written that sentence should not write it again. Resolved in ONE
-   place because the preview prints it and the status bar judges it: two
-   copies of this `||` is how the page comes to show a description the bar
-   calls missing. */
+/* TWO FIELDS, TWO SOURCES, NO WIRE BETWEEN THEM (v8.54). The short
+   description and the body were sharing state.formData.description, so
+   typing in one moved the other: Short description WROTE that field, and
+   writing it propagated on to state.webSite.aboutGame, which is what the
+   body reads. One keystroke, two boxes.
+
+   They are different pieces of copy — Epic prints the short one under the
+   carousel and the long one below the tags — so each now has its own store
+   and its own default. The short one falls back to Steam's cached
+   short_description; the body falls back to Game Details' Description, which
+   is where Steam's about_the_game already lands. Neither default is a copy:
+   both are read at render time and overridden the moment anybody types. */
 function egsShortDesc() {
-  const own = ((state.formData || {}).description || '').trim();
+  const own = ((state.egsSubmitAnswers || {}).shortDesc || '').trim();
   if (own) return own;
   return ((state.steamLocInfo && state.steamLocInfo.shortDescription) || '').trim();
+}
+
+function egsBodyText() {
+  const own = ((state.webSite || {}).aboutGame || '').trim();
+  if (own) return own;
+  return ((state.formData || {}).description || '').trim();
 }
 
 function makeBlankEgsAnswers() {
@@ -3332,6 +3344,7 @@ function makeBlankEgsAnswers() {
        asked a developer to confirm an upload this prototype does not do, and
        offerName and offerShortDesc, which asked the base game offer to name
        itself a second time. Nothing reads them now. */
+    shortDesc:             '',     // the store page's own, seeded from Steam
     genres:                [],     // from EGS_GENRES, max EGS_GENRE_MAX
     features:              [],     // from EGS_FEATURES
     loginTypes:            [EGS_LOGIN_TYPE_DEFAULT],  // typed, max 3; Epic ID by default

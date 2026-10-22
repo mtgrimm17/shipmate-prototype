@@ -8531,11 +8531,11 @@ body.sm-hide-shippy .fabslot{display:none !important}
 /* Same "this one is waiting on you" language the Steam prototype uses, so a
    developer who has seen one preview can read the other without learning a
    second vocabulary. */
-.egs-spp-glow-empty {
-  box-shadow: inset 0 0 0 1px rgba(255, 184, 107, .5);
-  background: rgba(255, 184, 107, .05);
-}
-
+/* .egs-spp-glow-empty was removed in v8.54. It ringed every empty block on
+   Epic's preview in amber — six of them at once on a new project, which on a
+   page whose job is to look like the store read as damage rather than as a
+   to-do list. The blocks still say they are empty, in their own words and in
+   the placeholder colour. */
 /* The Store Page Preview's status bar (.egs-spp-bar / .egs-spp-pill) was
    removed in v8.52 along with the pills themselves: the page already says
    what it is missing by glowing where the missing thing would have been, and
@@ -29641,3 +29641,40 @@ textarea.egs-sp-body {
 /* The group header is the App Store's own band label; its first one sits
    right under the pinned bar, so the divider before it is not drawn. */
 .giarc-root.giarc-flat > .cr-pinned + .ios-q-divider { display: none; }
+
+/* The counter beside its box (v8.54), so a field costs one line rather than
+   two. The input keeps the width; the number takes what it needs and no
+   more, and sits on the field's first line. */
+.egs-sp .egs-sp-fieldrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+/* `flex: 1 1 0` and `width: auto`, NOT the `width: 100%` these fields carry
+   on their own. With a 100% basis the row is overfull by the counter's width
+   and the browser takes it back out of the box, which collapsed all four of
+   them to about one character wide. A zero basis makes the box exactly the
+   space the counter does not want. */
+.egs-sp .egs-sp-fieldrow > .egs-sp-edit { flex: 1 1 0%; width: auto; min-width: 0; }
+.egs-sp .egs-sp-fieldrow > .ias-char-counter-row {
+  /* The counter row is `width: 100%` where it normally lives, UNDER a field.
+     Beside one that is the whole row, and the box gets what is left of
+     nothing — all four collapsed to about a character wide. */
+  width: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 4px 0 0;
+  min-width: 42px;
+}
+/* The error line only has text while the field is over its limit, so the
+   column is 42px wide the rest of the time and widens to hold the sentence
+   exactly when there is something wrong to say. Wrapped and right-aligned so
+   it reads as a note on the field rather than a second column. */
+.egs-sp .egs-sp-fieldrow > .ias-char-counter-row .ias-char-error {
+  max-width: 160px;
+  text-align: right;
+  line-height: 1.35;
+}
