@@ -19758,10 +19758,11 @@ function egsPortalField(o) {
     </div>`;
 }
 
-/* A closed list, as checkboxes. `cols` turns on the two-column layout for the
-   long ones — Epic shows Genres in a scrolling dropdown, which a section with
-   no scroller of its own cannot copy; two columns is how 38 options fit
-   without pushing everything below them off the page. */
+/* A closed list, as checkboxes. Short ones only, now: the four long lists
+   became pickers in v8.46, and the two-column layout they needed went with
+   them. What is left is Specifications' five input devices, where a box you
+   have to click and a list you have to filter would be more ceremony than
+   five checkboxes are worth. */
 function egsPortalChecks(o) {
   const sel  = o.selected || [];
   const full = o.max && sel.length >= o.max;
@@ -19771,7 +19772,7 @@ function egsPortalChecks(o) {
       <label class="form-label">${escHtml(o.label)}${req}
         <span class="form-hint-inline">${sel.length} selected${o.max ? ' of ' + o.max : ''}</span>
       </label>
-      <div class="cq-check-list${o.cols ? ' egs-pc-cols' : ''}">
+      <div class="cq-check-list">
         <div class="cq-checkboxes">
           ${o.options.map(opt => {
             const value = typeof opt === 'string' ? opt : opt.value;
@@ -19790,6 +19791,100 @@ function egsPortalChecks(o) {
         </div>
       </div>
       ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
+    </div>`;
+}
+
+/* ── EPIC'S FOUR PICKERS (v8.46) ──────────────────────────────────────────
+   Genres, Features, Audio and Text were 38, 10, 41 and 41 checkboxes down
+   the page — the whole catalogue, always, whether or not you wanted any of
+   it. The portal gives each of them a box: chips for what you have chosen,
+   a caret you type into, and a menu that opens on click and narrows as you
+   type. This is that box.
+
+   THE MENU IS REBUILT WITHOUT REPAINTING THE MODAL. Typing calls
+   filterEgsPick, which replaces this menu's innerHTML and nothing else —
+   a full reRenderStepModal on every keystroke would throw the caret away
+   mid-word. Ticking an option DOES repaint (the chips change), which is why
+   the open picker and its filter text live in state and are read back here:
+   a menu that shut itself on every tick would make three genres three
+   journeys. */
+function egsPickMenuHtml(fieldId) {
+  const cfg  = EGS_PICK_FIELDS[fieldId];
+  const sel  = state.egsSubmitAnswers[fieldId] || [];
+  const full = cfg.max && sel.length >= cfg.max;
+  const q    = (state.egsPickFilter || '').trim().toLowerCase();
+  const hits = cfg.options.filter(o => !q || o.toLowerCase().indexOf(q) >= 0);
+
+  /* Epic simply closes the menu when nothing matches, which leaves a box
+     that has silently stopped answering. Saying so costs one row. */
+  if (!hits.length) {
+    return `<div class="egs-pick-empty">No ${escHtml(cfg.noun)} matches &ldquo;${escHtml(state.egsPickFilter)}&rdquo;</div>`;
+  }
+  return hits.map(o => {
+    const on  = sel.includes(o);
+    const dis = (!on && full) ? ' disabled' : '';
+    /* The portal marks the matched run inside each hit, which is what makes
+       a filtered list readable rather than just shorter. */
+    let label = escHtml(o);
+    if (q) {
+      const i = o.toLowerCase().indexOf(q);
+      label = escHtml(o.slice(0, i)) + '<mark class="egs-pick-hit">' +
+              escHtml(o.slice(i, i + q.length)) + '</mark>' + escHtml(o.slice(i + q.length));
+    }
+    return `
+      <label class="cq-check-row egs-pick-row${dis ? ' is-disabled' : ''}">
+        <input type="checkbox" ${on ? 'checked' : ''}${dis}
+               onchange="toggleEgsProductList('${fieldId}', '${egsJsStr(o)}', this.checked)">
+        <span>${label}</span>
+      </label>`;
+  }).join('');
+}
+
+function egsPickBox(fieldId) {
+  const cfg  = EGS_PICK_FIELDS[fieldId];
+  const sel  = state.egsSubmitAnswers[fieldId] || [];
+  const full = cfg.max && sel.length >= cfg.max;
+  const open = state.egsPickOpen === fieldId;
+  const req  = cfg.required ? ' <span style="color:#e0555a;">*</span>' : '';
+  const inId = 'egs-pick-input-' + fieldId;
+  const chips = sel.map(v => `
+    <span class="egs-tag">
+      <span class="egs-tag-label">${escHtml(v)}</span>
+      <button type="button" class="egs-tag-x" title="Remove ${escHtml(v)}"
+              aria-label="Remove ${escHtml(v)}"
+              onclick="event.stopPropagation(); toggleEgsProductList('${fieldId}', '${egsJsStr(v)}', false)">&times;</button>
+    </span>`).join('');
+  const chev = `<svg class="egs-pick-chev" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                     stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+  const count = `${sel.length}${cfg.max ? ' of ' + cfg.max : ' selected'}`;
+  return `
+    <div class="form-group" data-answered="${sel.length ? '1' : '0'}">
+      <label class="form-label" for="${inId}">${escHtml(cfg.label)}${req}
+        <span class="form-hint-inline">${count}</span>
+      </label>
+      <div class="egs-pick${open ? ' is-open' : ''}" id="egspick-${fieldId}">
+        <div class="egs-tagbox${full ? ' is-full' : ''}" onclick="openEgsPick(event, '${fieldId}')">
+          ${chips}
+          <input class="egs-tagbox-input" id="${inId}" type="text" autocomplete="off"
+                 placeholder="${escHtml(full ? '' : (sel.length ? 'Add another' + (cfg.noun === 'language' ? ' language' : ' ' + cfg.noun) : 'Click to choose, or type to narrow the list'))}"
+                 value="${escHtml(open ? (state.egsPickFilter || '') : '')}"
+                 ${full ? 'disabled' : ''}
+                 onfocus="openEgsPick(event, '${fieldId}')"
+                 oninput="filterEgsPick('${fieldId}', this.value)"
+                 onkeydown="egsPickKey(event, '${fieldId}')">
+          ${chev}
+        </div>
+        <!-- THE MENU HAS TO SWALLOW ITS OWN CLICKS. It is a sibling of the
+             box, not a child, so a click on a row bubbles all the way to the
+             document handler that closes every dropdown — which cleared
+             state.egsPickOpen a moment before the tick repainted the form,
+             and shut the menu on every single choice. -->
+        <div class="egs-pick-menu" id="egspick-menu-${fieldId}"
+             onclick="event.stopPropagation();">${open ? egsPickMenuHtml(fieldId) : ''}</div>
+      </div>
+      ${full ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">That is Epic's limit of ${cfg.max}. Remove one to choose another.</div>`
+             : (cfg.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${cfg.hint}</div>` : '')}
     </div>`;
 }
 
@@ -19847,11 +19942,8 @@ function buildEgsProductDetailsSection() {
         value: fd.description || '', max: 280,
         placeholder: 'One or two sentences, as they appear under the title on the store page.',
         onChange: `setEgsProductShared('description', this.value)` })}
-    ${egsPortalChecks({ label: 'Genres', required: true, cols: true, max: EGS_GENRE_MAX,
-        options: EGS_GENRES, selected: a.genres, onToggle: "toggleEgsProductList.bind(null, 'genres')",
-        hint: `Epic takes up to ${EGS_GENRE_MAX}. Once you have ${EGS_GENRE_MAX}, the rest stop being tickable rather than silently doing nothing.` })}
-    ${egsPortalChecks({ label: 'Features', required: true, cols: true,
-        options: EGS_FEATURES, selected: a.features, onToggle: "toggleEgsProductList.bind(null, 'features')" })}
+    ${egsPickBox('genres')}
+    ${egsPickBox('features')}
 
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Login requirements</div>
@@ -19863,11 +19955,8 @@ function buildEgsProductDetailsSection() {
 
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Supported languages</div>
-    ${egsPortalChecks({ label: 'Audio', cols: true, options: EGS_LANGUAGES, selected: a.audioLanguages,
-        onToggle: "toggleEgsProductList.bind(null, 'audioLanguages')",
-        hint: "Optional in the portal. Epic's own list, not the languages this game has been localized into &mdash; the two can legitimately differ." })}
-    ${egsPortalChecks({ label: 'Text', required: true, cols: true, options: EGS_LANGUAGES, selected: a.textLanguages,
-        onToggle: "toggleEgsProductList.bind(null, 'textLanguages')" })}
+    ${egsPickBox('audioLanguages')}
+    ${egsPickBox('textLanguages')}
 
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Legal info</div>

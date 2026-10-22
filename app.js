@@ -18943,6 +18943,14 @@ function closeAllDropdowns() {
   state.macFullReviewSettingsOpen = false;
   state.macFullIapLocSettingsOpen = false;
   state.macFullAchLocSettingsOpen = false;
+  /* And Epic's four Product Details pickers (v8.46) — one flag for whichever
+     is open plus the text typed into it, for exactly the reason given above:
+     they survive a reRenderStepModal on purpose, so closing one by clicking
+     away has to clear the state as well as the class or the next unrelated
+     repaint pops it open again. */
+  state.egsPickOpen = null;
+  state.egsPickFilter = '';
+  document.querySelectorAll('.egs-pick.is-open').forEach(el => el.classList.remove('is-open'));
   /* Submission's "Add platform" menu (toggleAddPlatform above). Same treatment
      as the five flags just above and for the same reason: the class is what is
      on screen and the flag is what survives a re-render, so closing has to
@@ -23247,6 +23255,80 @@ function toggleEgsProductList(listId, value, on) {
    list is an entry here instead of a second copy of the check above. */
 const EGS_PRODUCT_LIST_MAX = { genres: (typeof EGS_GENRE_MAX !== 'undefined' ? EGS_GENRE_MAX : 3) };
 
+/* ── THE FOUR PICKERS (v8.46) ─────────────────────────────────────────────
+   Genres, Features, Audio and Text. One picker is open at a time, because
+   the portal has it that way and because two open menus would overlap each
+   other on a form this narrow. */
+function openEgsPick(ev, fieldId) {
+  if (ev) ev.stopPropagation();          // or the global close handler shuts it again
+  if (state.egsPickOpen === fieldId) return;   // already open: do not repaint
+  closeAllDropdowns();
+  state.egsPickOpen = fieldId;
+  state.egsPickFilter = '';
+  _egsProductRepaint();
+  _egsFocusPickInput();
+}
+
+/* TYPING DOES NOT REPAINT THE MODAL. It swaps this one menu's innerHTML,
+   which is the whole reason the row-building lives in its own function. A
+   reRenderStepModal per keystroke would rebuild a form of forty fields and
+   drop the caret in the middle of a word. */
+function filterEgsPick(fieldId, value) {
+  state.egsPickFilter = value || '';
+  const menu = document.getElementById('egspick-menu-' + fieldId);
+  if (menu && typeof egsPickMenuHtml === 'function') menu.innerHTML = egsPickMenuHtml(fieldId);
+}
+
+function egsPickKey(ev, fieldId) {
+  if (!ev) return;
+  if (ev.key === 'Escape') {
+    ev.preventDefault();
+    closeEgsPick();
+    return;
+  }
+  if (ev.key === 'Enter') {
+    /* Enter takes the first thing still on the list. With the list narrowed
+       to one hit that is the only sensible meaning, and it is what a person
+       who has just typed "strat" is reaching for. */
+    ev.preventDefault();
+    const menu = document.getElementById('egspick-menu-' + fieldId);
+    const box  = menu && menu.querySelector('.egs-pick-row:not(.is-disabled) input:not(:checked)');
+    if (box) box.click();
+    return;
+  }
+  if (ev.key === 'Backspace' && !ev.target.value) {
+    /* Same as the Login type field: an empty caret backs out of the last
+       chip rather than doing nothing. */
+    const list = state.egsSubmitAnswers[fieldId] || [];
+    if (list.length) {
+      ev.preventDefault();
+      toggleEgsProductList(fieldId, list[list.length - 1], false);
+    }
+  }
+}
+
+function closeEgsPick() {
+  if (!state.egsPickOpen) return;
+  state.egsPickOpen = null;
+  state.egsPickFilter = '';
+  _egsProductRepaint();
+}
+
+/* The repaint rebuilds the modal, so the caret has to be put back — at the
+   END of the filter text, not at its start, or the next character typed
+   lands in front of what is already there. */
+function _egsFocusPickInput() {
+  const id = state.egsPickOpen;
+  if (!id) return;
+  const el = document.getElementById('egs-pick-input-' + id);
+  if (!el || el.disabled) return;
+  try {
+    el.focus();
+    const n = el.value.length;
+    el.setSelectionRange(n, n);
+  } catch (e) {}
+}
+
 /* ── EPIC'S LOGIN TYPE TAG FIELD (v8.45) ──────────────────────────────────
    Type a service, press Enter, it becomes a chip. The portal's own field
    behaves this way; what made it look like a closed list is that its
@@ -23333,6 +23415,10 @@ function setEgsSocialLink(linkId, value) {
 function _egsProductRepaint() {
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
   if (typeof renderDashboard === 'function') renderDashboard();
+  /* Ticking an option inside an open picker repaints the form under the
+     caret. Without this the menu stays open and the caret does not, so the
+     second genre has to be reached for with the mouse again. */
+  if (state.egsPickOpen) _egsFocusPickInput();
 }
 
 /* The price, set from the Store Page Preview's buy box (v8.41). It replaces

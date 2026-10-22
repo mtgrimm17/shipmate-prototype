@@ -3251,6 +3251,35 @@ const EGS_SOCIAL_LINKS = [
 ];
 const EGS_SOCIAL_MAX = 260;
 
+/* THE FOUR PICKERS, IN ONE TABLE (v8.46). Genres, Features, Audio and Text
+   are the same control in the portal — a box you click to get the whole list
+   and type into to narrow it — and they are now the same control here.
+   Keyed by the answer field they write, because that is the one thing each
+   of them really differs by; everything else is a column.
+
+   `options` is a getter rather than the array itself only so this table can
+   sit above EGS_GENRES and friends without caring which order the consts
+   happen to be declared in. */
+const EGS_PICK_FIELDS = {
+  genres: {
+    label: 'Genres', required: true, max: EGS_GENRE_MAX,
+    noun: 'genre', get options() { return EGS_GENRES; },
+  },
+  features: {
+    label: 'Features', required: true,
+    noun: 'feature', get options() { return EGS_FEATURES; },
+  },
+  audioLanguages: {
+    label: 'Audio',
+    noun: 'language', get options() { return EGS_LANGUAGES; },
+    hint: "Optional in the portal. Epic's own list, not the languages this game has been localized into &mdash; the two can legitimately differ.",
+  },
+  textLanguages: {
+    label: 'Text', required: true,
+    noun: 'language', get options() { return EGS_LANGUAGES; },
+  },
+};
+
 function makeBlankEgsAnswers() {
   return {
     /* THE PRICE, AND IT IS NOT A TIER ANY MORE (v8.41). It is set on the Store
@@ -5384,6 +5413,13 @@ const state = {
   // Epic Games Store submission answers. Content Rating is NOT here — it is
   // IARC, shared with Google Play through state.cqAnswers (see
   // isEgsSectionComplete).
+  /* WHICH PICKER IS OPEN, AND WHAT IS TYPED IN IT (v8.46). Surface state,
+     not an answer — but it has to be state rather than a DOM class, because
+     ticking an option repaints the whole step modal and a menu that closed
+     itself on every tick would make choosing three genres three journeys.
+     closeAllDropdowns resets both, for the reason its own comment gives. */
+  egsPickOpen: null,
+  egsPickFilter: '',
   egsSubmitAnswers: makeBlankEgsAnswers(),
   // Epic Games Store Full's own answers. Separate from egsSubmitAnswers on
   // purpose: answering a step on one card must not answer it on the other.
