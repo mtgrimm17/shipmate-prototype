@@ -29153,3 +29153,86 @@ body.sm-arm-steps #sm-steps-bar .spp-pin {
 /* Login Accounts Required has no "Audio:"-style gutter label of its own, so
    its value starts where the labels start rather than where theirs do. */
 .egs-sp-langline.is-plain > b { flex: 1 1 auto; }
+
+/* ══ THE STORE PAGE'S EDITABLE FIELDS (v8.48) ══════════════════════════════
+   Inputs that do not look like inputs until you go near them: no border, no
+   fill, the font of whatever they stand in. The point of editing on the page
+   is that the page still looks like the page while you do it. */
+.egs-sp-edit {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 3px 6px;
+  margin: -3px -6px 0;
+  resize: vertical;
+}
+.egs-sp-edit:hover { background: var(--panel-3, rgba(255,255,255,0.05)); }
+.egs-sp-edit:focus {
+  outline: none;
+  border-color: var(--border-hover, rgba(255,255,255,0.22));
+  background: var(--panel-3, rgba(255,255,255,0.05));
+}
+.egs-sp-edit::placeholder { color: var(--text-faint); font-style: italic; }
+/* The same magenta the Apple previews use for an over-length field. */
+.egs-sp-edit.is-over-limit {
+  border-color: var(--magenta);
+  background: var(--magenta-soft);
+}
+/* The counter sits under the field it belongs to, not under the block. */
+.egs-sp-edit + .ias-char-counter-row { margin: 2px 0 10px; }
+
+/* Each field keeps the type of the thing it replaced. */
+textarea.egs-sp-short {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-dim, #b7b7bc);
+}
+input.egs-sp-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+input.egs-sp-headline {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+textarea.egs-sp-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim, #b7b7bc);
+}
+
+/* Genres beside Features, as Rocket League's page has them: a narrow left
+   column, a wider right one, a rule between. One column under 560px, where
+   two would be two narrow ones. */
+.egs-sp-tagcols {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 0 18px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.egs-sp-tagcol {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 2px 18px;
+  cursor: pointer;
+  border-left: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.egs-sp-tagcol:first-child { padding-left: 0; border-left: none; }
+@media (max-width: 560px) {
+  .egs-sp-tagcols { grid-template-columns: minmax(0, 1fr); gap: 12px 0; }
+  .egs-sp-tagcol { padding-left: 0; border-left: none; }
+}
+/* The label was written for the old side-by-side ROW, where `flex: 0 0 68px`
+   set its width. In a column the main axis is vertical, so that same basis
+   was setting a 68px HEIGHT and opening a gap under every heading. */
+.egs-sp-tagcol > .egs-sp-tagrow-label { flex: 0 0 auto; }

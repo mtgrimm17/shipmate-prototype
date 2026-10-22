@@ -3280,6 +3280,32 @@ const EGS_PICK_FIELDS = {
   },
 };
 
+/* THE FOUR WRITABLE FIELDS ON THE STORE PAGE, AND WHAT EPIC ALLOWS THEM
+   (v8.48). Name and Short description are the portal's own counters; the
+   headline and the body share one 10,000-character field, which is why
+   egsBodyLimit() subtracts one from the other rather than giving the body a
+   limit of its own. Epic's Product Home Page stores them together — the
+   headline is the h2 at the top of the body, not a field beside it. */
+const EGS_PAGE_LIMITS = { name: 64, shortDesc: 280, headline: 140, body: 10000 };
+function egsBodyLimit(headlineLen) {
+  const used = headlineLen != null
+    ? headlineLen
+    : ((state.egsSubmitAnswers && state.egsSubmitAnswers.headline) || '').length;
+  return Math.max(0, EGS_PAGE_LIMITS.body - used);
+}
+
+/* STEAM'S BLURB IS THE SHORT DESCRIPTION UNTIL SOMEBODY TYPES ONE (v8.48).
+   Linking a Steam app caches its short_description, and a developer who has
+   already written that sentence should not write it again. Resolved in ONE
+   place because the preview prints it and the status bar judges it: two
+   copies of this `||` is how the page comes to show a description the bar
+   calls missing. */
+function egsShortDesc() {
+  const own = ((state.formData || {}).description || '').trim();
+  if (own) return own;
+  return ((state.steamLocInfo && state.steamLocInfo.shortDescription) || '').trim();
+}
+
 function makeBlankEgsAnswers() {
   return {
     /* THE PRICE, AND IT IS NOT A TIER ANY MORE (v8.41). It is set on the Store
@@ -3328,6 +3354,11 @@ function makeBlankEgsAnswers() {
     sellerName:            '',     // the legal entity that receives funds
     nftBlockchain:         null,   // 'yes' / 'no'
     promotionalContent:    null,   // 'yes' / 'no'
+    /* The h2 at the top of the store page's body (v8.48). Epic keeps it in
+       the same 10,000-character field as the body itself; this card keeps it
+       separate so the page can draw it as the heading it is, and takes its
+       length off the body's allowance. */
+    headline:              '',
     productDetailsSeen:    false,
     /* ── SPECIFICATIONS (v8.44) ────────────────────────────────────────────
        Epic asks these per operating system behind a Windows/Mac tab strip,
@@ -3438,13 +3469,15 @@ function isEgsSectionComplete(sectionId) {
   /* PRODUCT DETAILS IS DONE WHEN EPIC'S ASTERISKS ARE (v8.44). Every term
      below is a field the Developer Portal marks required, and nothing that
      it does not: Genres and Features but not Login type, Text languages but
-     not Audio, and the offer's seller. Short description, developer and
-     publisher are read from where they really live rather than from a copy
-     (see makeBlankEgsAnswers). */
+     not Audio, and the offer's seller. Developer and publisher are read from
+     where they really live rather than from a copy (see
+     makeBlankEgsAnswers). */
   if (sectionId === 'productDetails') {
-    const fd = state.formData || {}, ws = state.webSite || {};
-    return !!(fd.description || '').trim()
-        && a.genres.length > 0
+    const ws = state.webSite || {};
+    /* NO SHORT DESCRIPTION TERM (v8.48). The field moved to the Store Page
+       Preview, where it is edited in place on the thing that prints it. A
+       section cannot be incomplete over a question it no longer asks. */
+    return a.genres.length > 0
         && a.features.length > 0
         && a.textLanguages.length > 0
         /* USER SUPPORT IS AN OR, AND EPIC SAYS SO IN WORDS: "Provide at least

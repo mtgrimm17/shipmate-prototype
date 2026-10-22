@@ -19927,7 +19927,9 @@ function egsTagBox(o) {
 
 function buildEgsProductDetailsSection() {
   const a  = state.egsSubmitAnswers;
-  const fd = state.formData || {};
+  /* No `fd` here any more (v8.48). Short description was the one field this
+     section read out of state.formData, and it has moved to the Store Page
+     Preview — edited in place on the thing that prints it. */
   const ws = state.webSite  || {};
 
   const supportDone = !!(a.supportPageLink || '').trim() || !!(a.supportEmail || '').trim();
@@ -19938,10 +19940,6 @@ function buildEgsProductDetailsSection() {
      reasoning the Store Page Preview section has carried since v8.41. */
   return `
     <div class="ios-content-step-label">Product info</div>
-    ${egsPortalField({ id: 'desc', label: 'Short description', required: true, multiline: true, rows: 3,
-        value: fd.description || '', max: 280,
-        placeholder: 'One or two sentences, as they appear under the title on the store page.',
-        onChange: `setEgsProductShared('description', this.value)` })}
     ${egsPickBox('genres')}
     ${egsPickBox('features')}
 
@@ -20122,6 +20120,45 @@ function buildEgsFullLocalizationsSection() {
 }
 
 
+/* ── THE PAGE'S OWN WRITABLE FIELDS (v8.48) ───────────────────────────────
+   Name, Short description, Headline and Body are edited ON the page rather
+   than in a form somewhere else, because the page is the thing they are for:
+   a 64-character name reads differently as a heading than it does in a box
+   labelled "max 64".
+
+   ALWAYS EDITABLE, NOT CLICK-TO-EDIT. The Apple previews swap a div for an
+   input on click; these are inputs from the start, which is what "edit the
+   text in the box" means when the box already has text in it. What they DO
+   borrow from Apple is the whole warning apparatus: `is-over-limit` turns
+   the field magenta, the count goes negative in magenta, and the error line
+   appears to its left — updateIapCharCounter, the shared one, does all three.
+
+   TYPING IS NEVER HARD-BLOCKED. No maxlength, deliberately: Apple's previews
+   let the count go negative so a developer can paste a long draft and then
+   cut it down, which is a different job from being stopped mid-paste. */
+function egsPageField(o) {
+  const val   = o.value || '';
+  const over  = val.length > o.limit;
+  const empty = !val.trim();
+  const cls   = [o.cls, 'egs-sp-edit', empty ? 'egs-sp-edit-empty' : '',
+                 over ? 'is-over-limit' : ''].filter(Boolean).join(' ');
+  const body  = o.multiline
+    ? `<textarea class="${cls}" id="${o.id}" rows="${o.rows || 4}"
+                 placeholder="${escHtml(o.placeholder)}"
+                 oninput="${o.onInput}"
+                 onchange="${o.onChange}">${escHtml(val)}</textarea>`
+    : `<input class="${cls}" id="${o.id}" type="text"
+              placeholder="${escHtml(o.placeholder)}" value="${escHtml(val)}"
+              oninput="${o.onInput}"
+              onchange="${o.onChange}">`;
+  return `
+    ${body}
+    <div class="ias-char-counter-row">
+      <span class="ias-char-error">${over ? `Must be less than ${o.limit} characters.` : ''}</span>
+      <span class="ias-char-count${over ? ' is-over' : ''}">${o.limit - val.length}</span>
+    </div>`;
+}
+
 /* ══ EPIC'S PRODUCT PAGE, REBUILT TO MATCH IT (v8.47) ═════════════════════
    Read off store.epicgames.com rather than imagined: Go Ape Ship's own page,
    Alan Wake 2 and Rocket League. The shape is a two-column one — everything
@@ -20148,7 +20185,10 @@ function buildEgsStorePreviewSection() {
   const pool = (typeof smPool === 'function') ? smPool() : [];
 
   const title     = (fd.title || '').trim();
-  const desc      = (fd.description || '').trim();
+  /* Steam's cached blurb stands in until somebody types their own, resolved
+     by egsShortDesc so the page and the status bar cannot disagree. */
+  const desc      = egsShortDesc();
+  const headline  = (a.headline || '').trim();
   const aboutText = (ws.aboutGame || '').trim();
   const developer = (ws.developer || '').trim();
   const publisher = (ws.publisher || developer || '').trim();
@@ -20170,11 +20210,13 @@ function buildEgsStorePreviewSection() {
     <div class="egs-sp-rating${ratingDone ? '' : ' egs-spp-glow-empty'}"
          onclick="openStorePreviewSection('egs','content')">
       <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
-      <div class="egs-sp-rating-text">
-        ${ratingDone
-          ? `<b>Questionnaire complete</b><span>Ratings boards issue their own marks from these answers.</span>`
-          : `<b>${cq.total - cq.answered} question${cq.total - cq.answered === 1 ? '' : 's'} left</b><span>Epic uses the IARC questionnaire — the same one Google Play asks.</span>`}
-      </div>
+      <!-- JUST THE NAME OF THE THING (v8.48). This card used to report how
+           much of the IARC questionnaire was left and where the questionnaire
+           came from — a progress read-out in the one place on the page that
+           is meant to look like the finished store page. The glow already
+           says it is unfinished, and the Content Rating step says how much
+           by. -->
+      <div class="egs-sp-rating-text"><b>Content Rating</b></div>
     </div>`;
 
   /* THE BUY BOX IS WHERE THE PRICE IS SET (v8.41), not a read-out of a
@@ -20244,19 +20286,28 @@ function buildEgsStorePreviewSection() {
 
   /* Epic prints the short description straight under the carousel, then the
      tag rows, then the long body. Three different fields, in that order. */
-  const shortHtml = `
-    <p class="egs-sp-short${desc ? '' : ' egs-spp-glow-empty'}"
-       onclick="openStepModal('egs','productDetails')">${desc
-      ? escHtml(desc)
-      : '<span class="egs-spp-placeholder">Your short description appears here. Product Details asks for it.</span>'}</p>`;
+  const shortHtml = egsPageField({
+    id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 2,
+    limit: EGS_PAGE_LIMITS.shortDesc, placeholder: 'Short Description',
+    onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.shortDesc})`,
+    onChange: `setEgsProductShared('description', this.value)` });
 
-  const tagRow = (label, items, step) => `
-    <div class="egs-sp-tagrow${items.length ? '' : ' egs-spp-glow-empty'}"
+  /* GENRES AND FEATURES SIT SIDE BY SIDE, because they do on Epic's own page
+     — Rocket League's shows Genres in a narrow left column and Features in a
+     wider right one with a rule between them. Stacked, the two rows read as
+     one long list of tags whose headings happen to interrupt it. */
+  const tagCol = (label, items, step) => `
+    <div class="egs-sp-tagcol${items.length ? '' : ' egs-spp-glow-empty'}"
          onclick="openStepModal('egs','${step}')">
       <span class="egs-sp-tagrow-label">${label}</span>
       <span class="egs-sp-tags">${items.length
         ? items.map(t => `<span class="egs-sp-tag">${escHtml(t)}</span>`).join('')
         : `<span class="egs-spp-placeholder">Chosen in Product Details</span>`}</span>
+    </div>`;
+  const tagsHtml = `
+    <div class="egs-sp-tagcols">
+      ${tagCol('Genres', a.genres, 'productDetails')}
+      ${tagCol('Features', a.features, 'productDetails')}
     </div>`;
 
   /* The same door Steam's prototype and both Apple previews carry: the page
@@ -20268,12 +20319,22 @@ function buildEgsStorePreviewSection() {
       <button class="ias-all-locs-btn" onclick="event.stopPropagation(); openStorePreviewSection('egs','localization')"
               title="Review every localized field side by side">Localizations</button>` : '';
 
+  /* HEADLINE AND BODY, IN THAT ORDER AND IN ONE BLOCK. On Epic's page the
+     headline is an h2 at the top of the body — Go Ape Ship's reads "Co-op
+     monkey mayhem in space" — not a field beside it, which is also why they
+     share the 10,000 characters between them. */
+  const bodyLimit = egsBodyLimit(headline.length);
   const aboutHtml = `
-    <div class="egs-spp-block${aboutText ? '' : ' egs-spp-glow-empty'}">
-      <div class="egs-spp-h2">About${locBtnHtml}</div>
-      <p class="egs-spp-p">${aboutText
-        ? escHtml(aboutText)
-        : '<span class="egs-spp-placeholder">The long description appears here once it is filled in under Game Details.</span>'}</p>
+    <div class="egs-spp-block">
+      <div class="egs-spp-h2">Body${locBtnHtml}</div>
+      ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
+          limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
+          onInput: `updateEgsHeadlineCounter(this)`,
+          onChange: `setEgsPageField('headline', this.value)` })}
+      ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
+          limit: bodyLimit, placeholder: 'Long Description.',
+          onInput: `updateEgsBodyCounter(this)`,
+          onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}
     </div>`;
 
   /* ── THE FOOT OF THE PAGE, which on Epic is where everything the developer
@@ -20316,7 +20377,7 @@ function buildEgsStorePreviewSection() {
     <div class="egs-sp-foot${specTables ? '' : ' egs-spp-glow-empty'}"
          onclick="openStepModal('egs','specifications')">
       <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
-      ${specTables || `<p class="egs-spp-p"><span class="egs-spp-placeholder">Epic prints the minimum and recommended machine here, per operating system. The Specifications step collects them.</span></p>`}
+      ${specTables}
     </div>`;
 
   const langList = (label, items) => `
@@ -20370,7 +20431,10 @@ function buildEgsStorePreviewSection() {
     <p class="ios-section-desc" style="margin-top:0;">Your Epic Games Store product page as players will see it. Press any block to fill in what it needs.</p>
     ${barHtml}
     <div class="egs-spp egs-sp">
-      <div class="egs-sp-title${title ? '' : ' egs-spp-glow-empty'}">${title || '<span class="egs-spp-placeholder">Untitled</span>'}</div>
+      ${egsPageField({ id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
+          limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
+          onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
+          onChange: `setEgsProductShared('title', this.value)` })}
       <div class="egs-sp-tabs">
         <span class="is-current">Overview</span><span>Add-Ons</span><span>Achievements</span>
       </div>
@@ -20378,8 +20442,7 @@ function buildEgsStorePreviewSection() {
         <div class="egs-sp-main">
           ${mediaHtml}
           ${shortHtml}
-          ${tagRow('Genres', a.genres, 'productDetails')}
-          ${tagRow('Features', a.features, 'productDetails')}
+          ${tagsHtml}
           ${aboutHtml}
         </div>
         ${sideHtml}

@@ -23255,6 +23255,33 @@ function toggleEgsProductList(listId, value, on) {
    list is an entry here instead of a second copy of the check above. */
 const EGS_PRODUCT_LIST_MAX = { genres: (typeof EGS_GENRE_MAX !== 'undefined' ? EGS_GENRE_MAX : 3) };
 
+/* ── THE STORE PAGE'S OWN FIELDS (v8.48) ──────────────────────────────────
+   Name writes state.formData.title and Short description writes
+   state.formData.description through setEgsProductShared; Body writes
+   state.webSite.aboutGame through setWebSiteField. Only the headline has
+   nowhere else to live, so only the headline needs a setter here. */
+function setEgsPageField(field, value) {
+  state.egsSubmitAnswers[field] = (value || '').trim();
+  _egsProductRepaint();
+}
+
+/* THE BODY'S LIMIT IS WHAT THE HEADLINE HAS NOT SPENT. Epic keeps both in one
+   10,000-character field, so typing a headline shortens the body's allowance
+   as it goes — and the body's counter has to move while the headline is being
+   typed, not only once it is committed. That is why the headline's own
+   handler reads its LIVE value rather than state: state updates on change,
+   and this has to be right on every keystroke. */
+function updateEgsHeadlineCounter(el) {
+  updateIapCharCounter(el, EGS_PAGE_LIMITS.headline);
+  const body = document.getElementById('egs-sp-body');
+  if (body) updateIapCharCounter(body, egsBodyLimit(el.value.length));
+}
+
+function updateEgsBodyCounter(el) {
+  const head = document.getElementById('egs-sp-headline');
+  updateIapCharCounter(el, egsBodyLimit(head ? head.value.length : undefined));
+}
+
 /* ── THE FOUR PICKERS (v8.46) ─────────────────────────────────────────────
    Genres, Features, Audio and Text. One picker is open at a time, because
    the portal has it that way and because two open menus would overlap each
