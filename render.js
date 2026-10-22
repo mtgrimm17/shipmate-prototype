@@ -20343,7 +20343,9 @@ function buildEgsStorePreviewSection() {
   /* Epic prints the short description straight under the carousel, then the
      tag rows, then the long body. Three different fields, in that order. */
   const shortHtml = egsPageField({
-    id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 2,
+    /* Three rows, not two (v8.50): at Epic's 16px/26.4px a two-row box clips
+       the third line of a 280-character blurb and hands back a scrollbar. */
+    id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 3,
     limit: EGS_PAGE_LIMITS.shortDesc, placeholder: 'Short Description',
     onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.shortDesc})`,
     onChange: `setEgsProductShared('description', this.value)` });

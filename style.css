@@ -29244,3 +29244,268 @@ textarea.egs-sp-body {
 /* Product Details' counted fields (Developer / Publisher / Seller name) sit
    in .form-group, where the counter row needs a little air under it. */
 .form-group > .ias-char-counter-row { margin-top: 3px; }
+
+/* ══ EPIC'S REAL TYPE AND COLOUR (v8.50) ═══════════════════════════════════
+   Measured off store.epicgames.com with getComputedStyle rather than matched
+   by eye — Go Ape Ship's page, cross-checked against Rocket League and Alan
+   Wake 2. Everything below is a number read off the live page.
+
+   THE BIGGEST SINGLE DIFFERENCE WAS THE TYPEFACE. This prototype's body runs
+   on IBM Plex Mono; Epic's store runs on Inter, which index.html already
+   loads for the rest of the app. A monospaced store page does not read as a
+   store page no matter what the sizes are, so the whole preview is scoped to
+   Inter and nothing outside it changes.
+
+   THE SECOND WAS THE SCALE. Epic has three sizes and uses them everywhere:
+   40px for the product name, 20px for every h2 (the headline and each
+   section heading alike), 16px for prose, 14px for labels, values and
+   buttons, 12px for tags. This preview had eleven sizes between 10px and
+   26px and no two headings alike.
+
+   THE THIRD WAS THAT EPIC DOES NOT SHOUT. Not one label on the real page is
+   uppercase or letter-spaced-out: "Genres", "Developer", "Follow Us" are all
+   sentence case at the same size as their values, separated by colour alone
+   (0.95 white against 0.65 white). Every small-caps label in here was this
+   file's habit, not Epic's.
+
+   Scoped to .egs-sp, which only Epic's own preview carries — Epic Games Store
+   Full's keeps the old look, because it was not asked to change. */
+.egs-sp {
+  --epic-bg:        #101014;
+  --epic-surface:   #18181c;
+  --epic-line:      rgba(255, 255, 255, 0.15);
+  --epic-fg:        rgba(255, 255, 255, 0.95);
+  --epic-fg-2:      rgba(255, 255, 255, 0.65);
+  --epic-accent:    #33bfff;
+  --epic-on-accent: #0a2633;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--epic-bg);
+  color: var(--epic-fg);
+  box-shadow: inset 0 0 0 1px var(--epic-line);
+  gap: 0;
+  padding: 24px;
+}
+
+/* H1: 40 / 700 / -1px / 48px. The input carries it so the field reads as the
+   heading it replaces. */
+.egs-sp input.egs-sp-title,
+.egs-sp .egs-sp-title {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 48px;
+  color: var(--epic-fg);
+  margin-bottom: 0;
+}
+
+/* The tab strip: 14 / 500, the current one white over a 2px rule, the rest
+   at 0.65. Sentence case, like everything else. */
+.egs-sp .egs-sp-tabs {
+  gap: 24px;
+  border-bottom: 1px solid var(--epic-line);
+  margin: 14px 0 20px;
+}
+.egs-sp .egs-sp-tabs span {
+  padding-bottom: 11px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.28px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-tabs span.is-current { color: var(--epic-fg); border-bottom-color: var(--epic-fg); }
+
+.egs-sp .egs-sp-cols { gap: 32px; grid-template-columns: minmax(0, 1fr) 300px; }
+.egs-sp .egs-sp-main { gap: 20px; }
+.egs-sp .egs-sp-side { gap: 12px; }
+
+/* Prose — short description and body alike: 16 / 400 / 0.16px / 26.4px, and
+   at FULL brightness. Epic does not dim its own copy; this file was printing
+   both at --text-dim. */
+.egs-sp textarea.egs-sp-short,
+.egs-sp textarea.egs-sp-body,
+.egs-sp .egs-spp-p {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  line-height: 26.4px;
+  color: var(--epic-fg);
+}
+
+/* Every h2 on the page is one h2: 20 / 700 / -0.3px / 24px, sentence case.
+   That is the headline, "Body", "Follow Us" and "<title> System
+   Requirements" — the same heading four times, as Epic has it. */
+.egs-sp .egs-spp-h2,
+.egs-sp input.egs-sp-headline {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 24px;
+  text-transform: none;
+  color: var(--epic-fg);
+  margin-bottom: 10px;
+}
+.egs-sp input.egs-sp-headline { margin-bottom: 0; }
+.egs-sp .egs-sp-headline-wrap { margin-bottom: 14px; }
+/* The body block stops being a tinted card: on Epic the body is page, not
+   panel. Only the keyline stays, to keep it a pressable door. */
+.egs-sp .egs-spp-block {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 8px;
+}
+
+/* Tag rows and chips: label 14 / 400 at 0.65, chip 12 / 400 / 0.36px on a
+   0.15 white fill, 24px tall, fully round. */
+.egs-sp .egs-sp-tagcols { padding: 4px 0; border-top: none; }
+.egs-sp .egs-sp-tagcol { gap: 10px; padding-left: 24px; border-left-color: var(--epic-line); }
+.egs-sp .egs-sp-tagcol:first-child { padding-left: 0; }
+.egs-sp .egs-sp-tagrow-label {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.28px;
+  line-height: 19.6px;
+  text-transform: none;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg);
+}
+
+/* The panel. Epic's sits on #18181c, one step up from the page, and its rows
+   carry NO separators — just 10px of air above and below. */
+.egs-sp .egs-sp-rating {
+  border: 1px solid var(--epic-line);
+  border-radius: 10px;
+  padding: 12px;
+  gap: 12px;
+}
+.egs-sp .egs-sp-rating-text b { font-size: 14px; font-weight: 700; letter-spacing: 0.28px; color: var(--epic-fg); }
+.egs-sp .egs-sp-rating-mark {
+  width: 42px; height: 42px;
+  border-color: var(--epic-line);
+  border-radius: 6px;
+}
+.egs-sp .egs-sp-basegame {
+  padding: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg);
+}
+.egs-sp .egs-sp-price .loc-primary-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.16px;
+  color: var(--epic-fg);
+}
+/* Epic's primary is a bright cyan with DARK text — not a blue button with
+   white on it, which is what this file guessed in v8.47. */
+.egs-sp .egs-sp-btn-primary {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--epic-accent);
+  color: var(--epic-on-accent);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.28px;
+}
+.egs-sp .egs-sp-btn-primary:hover { background: #5accff; }
+.egs-sp .egs-sp-btn-ghost,
+.egs-sp .egs-sp-btn-icon {
+  min-height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--epic-fg);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.28px;
+}
+.egs-sp .egs-sp-btn-ghost:hover,
+.egs-sp .egs-sp-btn-icon:hover { background: rgba(255, 255, 255, 0.22); color: var(--epic-fg); }
+.egs-sp .egs-sp-btn-icon { flex: 0 0 40px; }
+.egs-sp .egs-sp-meta-row {
+  padding: 10px 0;
+  border-top: none;
+  font-size: 14px;
+  line-height: 19.6px;
+}
+.egs-sp .egs-sp-meta-row span { color: var(--epic-fg-2); font-weight: 400; letter-spacing: 0.28px; }
+.egs-sp .egs-sp-meta-row b { color: var(--epic-fg); font-weight: 400; letter-spacing: 0.28px; }
+
+/* The foot. Epic separates its sections with one hairline and a lot of air,
+   and its sub-labels are the same 14 / 0.65 as everything else. */
+.egs-sp .egs-sp-foot {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--epic-line);
+}
+.egs-sp .egs-sp-foot-sub {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.28px;
+  text-transform: none;
+  color: var(--epic-fg-2);
+  margin: 18px 0 4px;
+}
+.egs-sp .egs-sp-social-item {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg);
+}
+.egs-sp .egs-sp-sysos-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.28px;
+  color: var(--epic-fg);
+  border-bottom-color: var(--epic-line);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.egs-sp .egs-sp-sysgrid { font-size: 14px; gap: 8px 20px; line-height: 19.6px; }
+.egs-sp .egs-sp-syshead {
+  font-size: 14px;
+  letter-spacing: 0.28px;
+  text-transform: none;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-syslabel { color: var(--epic-fg-2); letter-spacing: 0.28px; }
+.egs-sp .egs-sp-sysval { color: var(--epic-fg); letter-spacing: 0.28px; }
+.egs-sp .egs-sp-langline { font-size: 14px; line-height: 19.6px; padding: 3px 0; }
+.egs-sp .egs-sp-langline > span { flex: 0 0 56px; color: var(--epic-fg-2); letter-spacing: 0.28px; }
+.egs-sp .egs-sp-langline > b { color: var(--epic-fg); font-weight: 400; letter-spacing: 0.28px; }
+.egs-sp .egs-sp-legal {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--epic-line);
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-legal-link { color: var(--epic-accent); }
+
+/* The editable fields keep Epic's type (set above) and only show their own
+   chrome on hover and focus, so the page still reads as the page. */
+.egs-sp .egs-sp-edit:hover { background: rgba(255, 255, 255, 0.06); }
+.egs-sp .egs-sp-edit:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--epic-line); }
+.egs-sp .ias-char-counter-row { font-family: 'Inter', system-ui, sans-serif; }
