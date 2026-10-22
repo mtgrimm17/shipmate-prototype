@@ -19740,20 +19740,37 @@ function egsPortalField(o) {
   /* `quietLimit` suppresses the note on a run of boxes that all share one
      limit — the fourteen Specifications boxes are all 140, and saying so
      fourteen times is noise the section description can carry once. */
-  const limit = (o.max && !o.quietLimit) ? ` <span class="form-hint-inline">max ${o.max}</span>` : '';
-  const cls   = 'form-input' + (val.trim() ? ' is-complete' : '');
-  const cap   = o.max ? ` maxlength="${o.max}"` : '';
+  /* `counter` REPLACES the note with a live count (v8.49), the same one the
+     Store Page Preview's own four fields and both Apple previews use. A
+     counter and a maxlength do not belong on the same field: a hard cap means
+     the count can never go negative, so the magenta and the error line below
+     would be unreachable decoration. Counted fields are therefore uncapped
+     and warn instead, which is Apple's rule here and the reason a developer
+     can paste a long draft and then cut it down. */
+  const over  = !!(o.counter && o.max && val.length > o.max);
+  const limit = (o.max && !o.quietLimit && !o.counter)
+    ? ` <span class="form-hint-inline">max ${o.max}</span>` : '';
+  const cls   = 'form-input' + (val.trim() ? ' is-complete' : '') + (over ? ' is-over-limit' : '');
+  const cap   = (o.max && !o.counter) ? ` maxlength="${o.max}"` : '';
+  const live  = o.counter ? ` oninput="updateIapCharCounter(this, ${o.max})"` : '';
   const body  = o.multiline
     ? `<textarea class="${cls}" id="${id}" rows="${o.rows || 3}"${cap}
-                 placeholder="${escHtml(o.placeholder || '')}"
+                 placeholder="${escHtml(o.placeholder || '')}"${live}
                  onchange="${o.onChange}">${escHtml(val)}</textarea>`
     : `<input class="${cls}" id="${id}" type="${o.type || 'text'}"${cap}
-              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"
+              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"${live}
               onchange="${o.onChange}">`;
+  /* The counter row has to be the input's NEXT SIBLING — updateIapCharCounter
+     finds it that way — so it goes before the hint, not after. */
+  const counterHtml = o.counter ? `
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${over ? `Must be less than ${o.max} characters.` : ''}</span>
+        <span class="ias-char-count${over ? ' is-over' : ''}">${o.max - val.length}</span>
+      </div>` : '';
   return `
     <div class="form-group" data-answered="${val.trim() ? '1' : '0'}">
       <label class="form-label" for="${id}">${escHtml(o.label)}${req}${limit}</label>
-      ${body}
+      ${body}${counterHtml}
       ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
     </div>`;
 }
@@ -19981,10 +19998,10 @@ function buildEgsProductDetailsSection() {
 
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Developer and publisher</div>
-    ${egsPortalField({ id: 'dev', label: 'Developer name', required: true,
+    ${egsPortalField({ id: 'dev', label: 'Developer name', required: true, counter: true,
         value: ws.developer || '', max: 280,
         onChange: `setEgsProductShared('developer', this.value)` })}
-    ${egsPortalField({ id: 'pub', label: 'Publisher name', required: true,
+    ${egsPortalField({ id: 'pub', label: 'Publisher name', required: true, counter: true,
         value: ws.publisher || '', max: 280,
         onChange: `setEgsProductShared('publisher', this.value)` })}
     <!-- SELLER SITS WITH THE OTHER TWO NAMES (v8.45), not with the offer
@@ -19993,7 +20010,7 @@ function buildEgsProductDetailsSection() {
          and then meeting the third six questions later answers it twice.
          An HTML comment, not a JS one: this is inside the template, where a
          /* */ would have been printed on the page. -->
-    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true,
+    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true, counter: true,
         value: a.sellerName, max: 280,
         onChange: `setEgsProductText('sellerName', this.value)`,
         hint: 'The legal entity that receives funds from selling this offer &mdash; often the studio&rsquo;s registered company rather than the name on the store page.' })}
@@ -20319,18 +20336,21 @@ function buildEgsStorePreviewSection() {
       <button class="ias-all-locs-btn" onclick="event.stopPropagation(); openStorePreviewSection('egs','localization')"
               title="Review every localized field side by side">Localizations</button>` : '';
 
-  /* HEADLINE AND BODY, IN THAT ORDER AND IN ONE BLOCK. On Epic's page the
-     headline is an h2 at the top of the body — Go Ape Ship's reads "Co-op
-     monkey mayhem in space" — not a field beside it, which is also why they
-     share the 10,000 characters between them. */
+  /* THE HEADLINE SITS ABOVE THE BODY LABEL (v8.49), outside the block rather
+     than first inside it. On Epic's page it is the h2 at the top of the body
+     — so on a page that labels its blocks, it belongs ahead of the label the
+     way a heading sits ahead of what it heads, not under it. They still share
+     the 10,000 characters, which is what egsBodyLimit is for. */
   const bodyLimit = egsBodyLimit(headline.length);
   const aboutHtml = `
-    <div class="egs-spp-block">
-      <div class="egs-spp-h2">Body${locBtnHtml}</div>
+    <div class="egs-sp-headline-wrap">
       ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
           limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
           onInput: `updateEgsHeadlineCounter(this)`,
           onChange: `setEgsPageField('headline', this.value)` })}
+    </div>
+    <div class="egs-spp-block">
+      <div class="egs-spp-h2">Body${locBtnHtml}</div>
       ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
           limit: bodyLimit, placeholder: 'Long Description.',
           onInput: `updateEgsBodyCounter(this)`,

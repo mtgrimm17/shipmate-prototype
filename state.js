@@ -3270,9 +3270,11 @@ const EGS_PICK_FIELDS = {
     noun: 'feature', get options() { return EGS_FEATURES; },
   },
   audioLanguages: {
+    /* No hint (v8.49). It explained that this list is Epic's rather than the
+       game's own localizations — true, and the reason the field was wrong
+       before v8.45, but an explanation of a bug nobody can see any more. */
     label: 'Audio',
     noun: 'language', get options() { return EGS_LANGUAGES; },
-    hint: "Optional in the portal. Epic's own list, not the languages this game has been localized into &mdash; the two can legitimately differ.",
   },
   textLanguages: {
     label: 'Text', required: true,

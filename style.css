@@ -29236,3 +29236,10 @@ textarea.egs-sp-body {
    set its width. In a column the main axis is vertical, so that same basis
    was setting a 68px HEIGHT and opening a gap under every heading. */
 .egs-sp-tagcol > .egs-sp-tagrow-label { flex: 0 0 auto; }
+
+/* The headline now sits above the Body label rather than inside the block
+   (v8.49), so it needs the spacing the block used to give it. */
+.egs-sp-headline-wrap { margin-bottom: 2px; }
+/* Product Details' counted fields (Developer / Publisher / Seller name) sit
+   in .form-group, where the counter row needs a little air under it. */
+.form-group > .ias-char-counter-row { margin-top: 3px; }
