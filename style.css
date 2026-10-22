@@ -29408,7 +29408,9 @@ textarea.egs-sp-body {
    Pinned here rather than by editing those queries, which Epic Games Store
    Full's preview and Specifications still use. */
 .egs-sp .egs-sp-cols { gap: 56px; grid-template-columns: minmax(0, 1fr) 300px; }
-.egs-sp .egs-sp-tagcols { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 0 24px; }
+/* EQUAL HALVES (v8.59) — Epic's own columns are `flex: 1 1 50%`, measured on
+   go-ape-ship: 367px each of a 750px row. */
+.egs-sp .egs-sp-tagcols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 24px; }
 .egs-sp .egs-sp-sysgrid { grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); }
 .egs-sp .egs-sp-main { gap: 48px; }
 .egs-sp .egs-sp-side { gap: 12px; }
@@ -29543,6 +29545,111 @@ textarea.egs-sp-body {
 }
 .egs-sp .egs-sp-meta-row span { color: var(--epic-fg-2); font-weight: 400; letter-spacing: 0.28px; }
 .egs-sp .egs-sp-meta-row b { color: var(--epic-fg); font-weight: 400; letter-spacing: 0.28px; }
+
+/* ── TYPED WHERE IT IS PRINTED (v8.59) ───────────────────────────────────
+   Developer and Publisher on the panel, and the two tag columns, are fields
+   now rather than read-outs. They wear the same well as every other field on
+   this page (v8.58's tokens) at the padding each one can afford: the panel is
+   300px wide, so its rows take 4px and 8px rather than 6px and 15px, and the
+   tag boxes take 8px and 15px, which puts their line where every other
+   field's line on this page already is. The three resting states — .08
+   filled, .14 empty, .24 hovered — are the same everywhere, which is the
+   whole point of having them. */
+.egs-sp .egs-sp-meta-row.is-edit { gap: 12px; align-items: center; }
+.egs-sp .egs-sp-metafield {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+  padding: 4px 8px;
+  text-align: right;
+  font-size: 14px;
+  line-height: 19.6px;
+  letter-spacing: 0.28px;
+  color: var(--epic-fg);
+  font-weight: 400;
+}
+.egs-sp .egs-sp-metafield::placeholder { color: var(--epic-fg-2); font-style: italic; }
+
+/* The tag box is the column's field, so it takes the field's well and drops
+   the form's own chrome. The column itself stops being a block: it is not a
+   door to a step any more, it IS the field. */
+.egs-sp .egs-sp-tagcol {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  cursor: default;
+  border-left: none;
+}
+/* THE HEADING IS NOT IN THE BOX, so it does not get the box's padding and
+   would otherwise start 16px left of every other word on the page — the row
+   still bleeds 16px into the gutter so that the BOX's line lines up with the
+   fields' lines above and below it. One indent, and the column reads as one
+   thing again. */
+.egs-sp .egs-sp-tagcol > .egs-sp-tagrow-label { padding-left: 16px; }
+.egs-sp .egs-sp-tagnote { padding-left: 16px; }
+.egs-sp .egs-tagbox {
+  background: var(--epic-well-fill);
+  border: 1px solid var(--epic-well-line);
+  border-radius: var(--epic-well-radius);
+  padding: 8px 15px;
+  min-height: 0;
+  gap: 8px;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-tagbox.egs-sp-edit-empty { background: transparent; border-color: var(--epic-well-line-todo); }
+.egs-sp .egs-tagbox:hover,
+.egs-sp .egs-tagbox:focus-within,
+.egs-sp .egs-tagbox.egs-sp-edit-empty:hover,
+.egs-sp .egs-tagbox.egs-sp-edit-empty:focus-within {
+  border-color: var(--epic-well-line-hover);
+  background: var(--epic-well-fill);
+}
+.egs-sp .egs-pick .egs-tagbox { padding-right: 30px; }
+.egs-sp .egs-pick-chev { top: 50%; margin-top: -6px; color: var(--epic-fg-2); }
+.egs-sp .egs-tagbox-input {
+  font-size: 14px;
+  line-height: 19.6px;
+  letter-spacing: 0.28px;
+  color: var(--epic-fg);
+  min-width: 80px;
+}
+.egs-sp .egs-tagbox-input::placeholder { color: var(--epic-fg-2); }
+.egs-sp .egs-sp-tagnote {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg-2);
+}
+/* THE CHIPS ARE STILL EPIC'S TAGS. The picker's chip and the tag this page
+   used to print are now the same element, so the chip takes the tag's
+   measurements rather than the form's: 12 / 400 / 0.36px at 0.95 white on a
+   0.15 fill, 24px tall, fully rounded — read off store.epicgames.com in v8.50
+   and unchanged since. The form's chip wore a border, a dimmer fill and no
+   letter-spacing, none of which is on Epic's page. */
+.egs-sp .egs-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 4px 0 10px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--epic-line);
+  color: var(--epic-fg);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.36px;
+}
+.egs-sp .egs-tag-label { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; }
+.egs-sp .egs-tag-x { color: var(--epic-fg-2); font-size: 14px; }
+.egs-sp .egs-tag-x:hover { color: var(--epic-fg); }
+
+/* The menu is drawn inside a card that is shown small, so it takes this
+   page's own type rather than the form's. */
+.egs-sp .egs-pick-menu { font-size: 14px; }
+
 
 /* The foot. Epic separates its sections with one hairline and a lot of air,
    and its sub-labels are the same 14 / 0.65 as everything else. */

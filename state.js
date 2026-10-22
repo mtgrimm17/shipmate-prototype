@@ -3574,19 +3574,20 @@ function isEgsSectionComplete(sectionId) {
      where they really live rather than from a copy (see
      makeBlankEgsAnswers). */
   if (sectionId === 'productDetails') {
-    const ws = state.webSite || {};
     /* NO SHORT DESCRIPTION TERM (v8.48). The field moved to the Store Page
        Preview, where it is edited in place on the thing that prints it. A
        section cannot be incomplete over a question it no longer asks. */
-    return a.genres.length > 0
-        && a.features.length > 0
-        && a.textLanguages.length > 0
+    /* NO GENRES, FEATURES, DEVELOPER OR PUBLISHER TERM (v8.59). All four
+       moved to the Store Page Preview, where they are chosen and typed on the
+       page that prints them, and a section cannot be incomplete over a
+       question it no longer asks — the rule the short description's own note
+       states just above. They did not stop being required: the preview's
+       roll-up carries them now, exactly as it took Specifications in v8.57. */
+    return a.textLanguages.length > 0
         /* USER SUPPORT IS AN OR, AND EPIC SAYS SO IN WORDS: "Provide at least
            one". A developer with a support site and no support inbox is
            finished, and asking for both would be inventing a requirement. */
         && (!!a.supportPageLink.trim() || !!a.supportEmail.trim())
-        && !!(ws.developer || '').trim()
-        && !!(ws.publisher || '').trim()
         && !!a.sellerName.trim()
         && a.nftBlockchain !== null
         && a.promotionalContent !== null;
@@ -3657,9 +3658,17 @@ function isEgsSectionComplete(sectionId) {
        gate, which the removed row used to apply and which nothing else on
        this card would. Social Media is deliberately absent — Epic calls it
        Optional Information and its only test was ever a visit. */
+    /* GENRES, FEATURES, DEVELOPER AND PUBLISHER JOINED IN v8.59, when they
+       moved onto this page. Epic marks all four required and the page prints
+       all four, which is this arm's whole rule. */
+    const ws = state.webSite || {};
     return platformSectionComplete('egs', 'contentRating')
         && isEgsSectionComplete('specifications')
-        && isEgsSectionComplete('screenshots');
+        && isEgsSectionComplete('screenshots')
+        && a.genres.length > 0
+        && a.features.length > 0
+        && !!(ws.developer || '').trim()
+        && !!(ws.publisher || '').trim();
   }
   return false;
 }

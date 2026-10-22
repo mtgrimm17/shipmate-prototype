@@ -19661,6 +19661,60 @@ function egsPickMenuHtml(fieldId) {
   }).join('');
 }
 
+/* ── PRODUCT DETAILS' PICKER, WEARING THE STORE PAGE (v8.59) ──────────────
+   The same field as egsPickBox below — same list, same limit, same chips,
+   same filtered menu, same four handlers — drawn as Epic's own tag column
+   rather than as a form row: the heading is the column's heading, there is
+   no form label and no "2 of 3" counter, and the hint only appears once the
+   limit is actually reached.
+
+   IT KEEPS egsPickBox'S INPUT ID, and that is load-bearing rather than tidy:
+   openEgsPick repaints the whole step modal and then puts the caret back by
+   looking up `egs-pick-input-<field>` (_egsFocusPickInput, app.js). A second
+   id here would have meant a box that opens and loses the caret, which on a
+   list of thirty-eight genres is the difference between typing three letters
+   and reaching for the mouse. Safe because Product Details no longer draws
+   these two at all, so the id is never in the document twice. */
+function egsPreviewPick(fieldId, label) {
+  const cfg   = EGS_PICK_FIELDS[fieldId];
+  const sel   = state.egsSubmitAnswers[fieldId] || [];
+  const full  = cfg.max && sel.length >= cfg.max;
+  const open  = state.egsPickOpen === fieldId;
+  const inId  = 'egs-pick-input-' + fieldId;
+  const chips = sel.map(v => `
+    <span class="egs-tag">
+      <span class="egs-tag-label">${escHtml(v)}</span>
+      <button type="button" class="egs-tag-x" title="Remove ${escHtml(v)}"
+              aria-label="Remove ${escHtml(v)}"
+              onclick="event.stopPropagation(); toggleEgsProductList('${fieldId}', '${egsJsStr(v)}', false)">&times;</button>
+    </span>`).join('');
+  const chev = `<svg class="egs-pick-chev" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                     stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+  return `
+    <div class="egs-sp-tagcol">
+      <span class="egs-sp-tagrow-label">${escHtml(label)}</span>
+      <div class="egs-pick${open ? ' is-open' : ''}" id="egspick-${fieldId}">
+        <div class="egs-tagbox${full ? ' is-full' : ''}${sel.length ? '' : ' egs-sp-edit-empty'}"
+             onclick="openEgsPick(event, '${fieldId}')">
+          ${chips}
+          <input class="egs-tagbox-input" id="${inId}" type="text" autocomplete="off"
+                 placeholder="${escHtml(full ? '' : (sel.length ? 'Add another' : 'Choose or type'))}"
+                 value="${escHtml(open ? (state.egsPickFilter || '') : '')}"
+                 ${full ? 'disabled' : ''}
+                 onfocus="openEgsPick(event, '${fieldId}')"
+                 oninput="filterEgsPick('${fieldId}', this.value)"
+                 onkeydown="egsPickKey(event, '${fieldId}')">
+          ${chev}
+        </div>
+        <!-- Swallows its own clicks, for the reason egsPickBox's copy gives. -->
+        <div class="egs-pick-menu" id="egspick-menu-${fieldId}"
+             onclick="event.stopPropagation();">${open ? egsPickMenuHtml(fieldId) : ''}</div>
+      </div>
+      ${full ? `<div class="egs-sp-tagnote">Epic's limit of ${cfg.max}. Remove one to choose another.</div>` : ''}
+    </div>`;
+}
+
 function egsPickBox(fieldId) {
   const cfg  = EGS_PICK_FIELDS[fieldId];
   const sel  = state.egsSubmitAnswers[fieldId] || [];
@@ -19748,10 +19802,9 @@ function egsTagBox(o) {
 
 function buildEgsProductDetailsSection() {
   const a  = state.egsSubmitAnswers;
-  /* No `fd` here any more (v8.48). Short description was the one field this
-     section read out of state.formData, and it has moved to the Store Page
-     Preview — edited in place on the thing that prints it. */
-  const ws = state.webSite  || {};
+  /* No `fd` here any more (v8.48), and no `ws` since v8.59: short
+     description, then developer and publisher, each moved to the Store Page
+     Preview — edited in place on the thing that prints them. */
 
   const supportDone = !!(a.supportPageLink || '').trim() || !!(a.supportEmail || '').trim();
 
@@ -19760,11 +19813,12 @@ function buildEgsProductDetailsSection() {
      developer wants on a form of this length is the first field — the same
      reasoning the Store Page Preview section has carried since v8.41. */
   return `
-    <div class="ios-content-step-label">Product info</div>
-    ${egsPickBox('genres')}
-    ${egsPickBox('features')}
-
-    <div class="ios-q-divider"></div>
+    <!-- NO "Product info" GROUP (v8.59). Genres and Features were the whole
+         of it, and both are now chosen on the Store Page Preview, in the two
+         columns that print them. Same move the short description made in
+         v8.48 and for the same reason: a list is easiest to get right while
+         looking at the page it lands on. The lists themselves, their limits
+         and their filtered menus are unchanged — only the door moved. -->
     <div class="ios-content-step-label">Login requirements</div>
     ${egsTagBox({ id: 'egs-login-input', label: 'Login type', values: a.loginTypes,
         max: EGS_LOGIN_TYPE_MAX, entryMax: EGS_LOGIN_TYPE_ENTRY_MAX,
@@ -19801,19 +19855,17 @@ function buildEgsProductDetailsSection() {
         onChange: `setEgsProductText('supportEmail', this.value)` })}
 
     <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Developer and publisher</div>
-    ${egsPortalField({ id: 'dev', label: 'Developer name', required: true, counter: true,
-        value: ws.developer || '', max: 280,
-        onChange: `setEgsProductShared('developer', this.value)` })}
-    ${egsPortalField({ id: 'pub', label: 'Publisher name', required: true, counter: true,
-        value: ws.publisher || '', max: 280,
-        onChange: `setEgsProductShared('publisher', this.value)` })}
-    <!-- SELLER SITS WITH THE OTHER TWO NAMES (v8.45), not with the offer
-         questions below. Epic asks for it on the offer, but a developer
-         reading three name fields in a row answers all three; reading two
-         and then meeting the third six questions later answers it twice.
+    <!-- DEVELOPER AND PUBLISHER LEFT THIS FORM (v8.59) for the Store Page
+         Preview's own panel, where Epic prints them and where they are now
+         typed directly onto the line that shows them. Seller stays: it is
+         the legal entity that receives the money, Epic asks for it on the
+         offer rather than on the page, and the page never prints it — so
+         unlike the other two it has no line of its own to be typed on.
+         That also undoes v8.45's reason for moving Seller up here beside
+         them, which is why the heading is now its own.
          An HTML comment, not a JS one: this is inside the template, where a
          /* */ would have been printed on the page. -->
+    <div class="ios-content-step-label">Seller</div>
     ${egsPortalField({ id: 'seller', label: 'Seller name', required: true, counter: true,
         value: a.sellerName, max: 280,
         onChange: `setEgsProductText('sellerName', this.value)`,
@@ -20146,6 +20198,24 @@ function buildEgsStorePreviewSection() {
       <b>${value ? escHtml(value) : `<span class="egs-spp-placeholder">${empty}</span>`}</b>
     </div>`;
 
+  /* TYPED ON THE LINE THAT PRINTS IT (v8.59). Developer and Publisher used to
+     be two text fields in Product Details and a read-out here; they are one
+     thing now, in the place Epic shows them. The row keeps its shape — label
+     left, value right — so the panel still reads as the panel; only the value
+     is a field.
+
+     The input is right-aligned like the value it replaces, and wears the same
+     well as every other field on this page at a tighter padding, because the
+     panel is 300px wide and a 15px gutter on a 14px line would leave the
+     value nowhere to go. */
+  const metaEdit = (label, id, value, key) => `
+    <div class="egs-sp-meta-row is-edit">
+      <span>${label}</span>
+      <input class="egs-sp-edit egs-sp-metafield${(value || '').trim() ? '' : ' egs-sp-edit-empty'}"
+             id="${id}" type="text" value="${escHtml(value)}" placeholder="Not set"
+             onchange="setEgsProductShared('${key}', this.value)">
+    </div>`;
+
   /* PLATFORM IS EARNED, NOT TYPED. Epic inherits it from the artifact and
      prints it here; this card learns it from whichever operating systems the
      Specifications step says the product supports. A page that claimed
@@ -20171,8 +20241,8 @@ function buildEgsStorePreviewSection() {
       ${isFree ? '' : `
       <div class="egs-sp-meta-row"><span>Epic Rewards</span><b>Earn 5% back</b></div>
       <div class="egs-sp-meta-row"><span>Refund Type</span><b>Self-Refundable</b></div>`}
-      ${metaRow('Developer', developer, 'Not set')}
-      ${metaRow('Publisher', publisher, 'Not set')}
+      ${metaEdit('Developer', 'egs-sp-dev', developer, 'developer')}
+      ${metaEdit('Publisher', 'egs-sp-pub', publisher, 'publisher')}
       ${metaRow('Release Date', (ws.releaseDate || ''), 'Coming soon')}
       ${metaRow('Platform', platforms.join(', '), 'From Specifications')}
     </aside>`;
@@ -20256,18 +20326,21 @@ function buildEgsStorePreviewSection() {
      — Rocket League's shows Genres in a narrow left column and Features in a
      wider right one with a rule between them. Stacked, the two rows read as
      one long list of tags whose headings happen to interrupt it. */
-  const tagCol = (label, items, step) => `
-    <div class="egs-sp-tagcol ${egsHitCls(items.length)}"
-         onclick="openStepModal('egs','${step}')">
-      <span class="egs-sp-tagrow-label">${label}</span>
-      <span class="egs-sp-tags">${items.length
-        ? items.map(t => `<span class="egs-sp-tag">${escHtml(t)}</span>`).join('')
-        : `<span class="egs-spp-placeholder">Chosen in Product Details</span>`}</span>
-    </div>`;
+  /* THE TWO COLUMNS ARE THE PICKERS NOW (v8.59). They used to print the
+     chosen tags and send you to Product Details to change them, which is two
+     places for one answer and the slower of the two to get right — the only
+     reason to look at a genre list is to see it beside the page it lands on.
+     egsPreviewPick draws Product Details' own box here: the same chips, the
+     same filtered menu, the same limits, the same handlers.
+
+     EQUAL HALVES, which is what Epic's page does. Measured on go-ape-ship:
+     both columns are `flex: 1 1 50%` at 367px of a 750px row. This card had
+     them at 0.8fr and 1.2fr, from a reading of Rocket League where Features
+     simply had more tags in it. */
   const tagsHtml = `
     <div class="egs-sp-tagcols">
-      ${tagCol('Genres', a.genres, 'productDetails')}
-      ${tagCol('Features', a.features, 'productDetails')}
+      ${egsPreviewPick('genres', 'Genres')}
+      ${egsPreviewPick('features', 'Features')}
     </div>`;
 
   /* The same door Steam's prototype and both Apple previews carry: the page
