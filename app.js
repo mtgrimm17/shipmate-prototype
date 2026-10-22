@@ -23171,6 +23171,107 @@ function _egsToggleReviewSettingsMenu(ev) {
    pair rather than a bespoke `updateEgsCard`: the surgical per-platform
    updaters exist because three cards were repainting on every keystroke of a
    long questionnaire, and Epic has no field that fires that often. */
+
+/* ── EPIC: PRODUCT CONFIGURATION HANDLERS (v8.44) ─────────────────────────
+   Six of them for three sections, and the split is by what the thing IS
+   rather than by which section it sits in: a pill, a box, a list, an OS
+   switch, a spec box, a social box. Grouping them by section instead would
+   have given Product Details its own copy of all three generic ones.
+
+   They all repaint through the generic `reRenderStepModal`/`renderDashboard`
+   pair. Every text field commits on `change` rather than on `input` (see
+   egsPortalField), so a 10,000-character legal footer costs one repaint when
+   the developer leaves the box, not one per keystroke. */
+
+/* The yes/no rows: logo, icon, early access, NFT, promotional content. Press
+   an answered pill again to clear it, the same as every other pill on this
+   card used to behave before answerEgsField went with Technical Requirements
+   in v8.42. */
+function answerEgsProductField(fieldId, value) {
+  const current = state.egsSubmitAnswers[fieldId];
+  state.egsSubmitAnswers[fieldId] = (current === value) ? null : value;
+  _egsProductRepaint();
+}
+
+/* Epic's own boxes — the ones whose answer lives on this card and nowhere
+   else. Trimmed on write so that a field holding only spaces is empty to
+   every completeness check rather than empty to the eye alone. */
+function setEgsProductText(fieldId, value) {
+  state.egsSubmitAnswers[fieldId] = (value || '').trim();
+  _egsProductRepaint();
+}
+
+/* THE FOUR FIELDS EPIC ASKS FOR THAT SHIPMATE ALREADY HAS. Display name and
+   short description are state.formData; developer and publisher are
+   state.webSite. Product Details edits the originals rather than a copy,
+   because the Store Page Preview on this same card prints the originals —
+   a copy would let the section and the preview disagree about the name of
+   the game. Both writes go through the sanctioned setters so that whatever
+   else they do (autosave, translation triggers) still happens. */
+function setEgsProductShared(key, value) {
+  const v = (value || '').trim();
+  if (key === 'title' || key === 'description') {
+    if (typeof syncField === 'function') syncField(key, v);
+    else (state.formData = state.formData || {})[key] = v;
+  } else if (typeof setWebSiteField === 'function') {
+    setWebSiteField(key, v);                    // 'developer' / 'publisher'
+  } else {
+    (state.webSite = state.webSite || {})[key] = v;
+  }
+  _egsProductRepaint();
+}
+
+/* Genres, Features, Login type, Audio, Text, Device type — six closed lists,
+   one handler. `on` comes straight from the checkbox rather than being
+   toggled here: a checkbox already knows its own new state, and reading it
+   is how the list survives a repaint landing mid-click. */
+function toggleEgsProductList(listId, value, on) {
+  const list = state.egsSubmitAnswers[listId];
+  if (!Array.isArray(list)) return;
+  const i = list.indexOf(value);
+  if (on && i < 0) list.push(value);
+  else if (!on && i >= 0) list.splice(i, 1);
+  _egsProductRepaint();
+}
+
+/* The per-OS support switch. Saying no does NOT clear what was typed: a
+   developer who ticks Mac, fills it in, then unticks it while deciding has
+   not asked to lose the work, and the completeness check already ignores an
+   OS that is switched off. */
+function answerEgsSpecSupported(osId, value) {
+  const sp = state.egsSubmitAnswers.specs[osId];
+  if (!sp) return;
+  sp.supported = (sp.supported === value) ? null : value;
+  _egsProductRepaint();
+}
+
+/* One spec box: OS version / CPU / Memory / GPU / DirectX / Storage / Sound
+   card, minimum or recommended, for one operating system. */
+function setEgsSpecField(osId, rowId, which, value) {
+  const sp = state.egsSubmitAnswers.specs[osId];
+  if (!sp || !sp[rowId]) return;
+  const v = (value || '').trim();
+  /* DirectX is a closed list of pills, so pressing the chosen one again
+     clears it — the press-twice-to-clear every pill on this card has. The
+     free-text boxes cannot behave that way: typing the same thing twice is
+     not a request to erase it. */
+  sp[rowId][which] = (rowId === 'directx' && sp[rowId][which] === v) ? '' : v;
+  _egsProductRepaint();
+}
+
+/* One of Epic's twelve Social Links. */
+function setEgsSocialLink(linkId, value) {
+  const soc = state.egsSubmitAnswers.social;
+  if (!soc || !(linkId in soc)) return;
+  soc[linkId] = (value || '').trim();
+  _egsProductRepaint();
+}
+
+function _egsProductRepaint() {
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
 /* The price, set from the Store Page Preview's buy box (v8.41). It replaces
    answerEgsTier, answerEgsTextField and toggleEgsRegion, which were reachable
    only from the Regions & Pricing section and went with it. */

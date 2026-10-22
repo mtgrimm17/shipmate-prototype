@@ -1221,6 +1221,17 @@ const PLATFORMS = {
     id: 'egs', label: 'Epic Games Store', color: '#313131',
     steps: [
       { id: 'uploadBuild',       label: 'Upload Build'                                 },
+      /* PRODUCT CONFIGURATION, SPLIT THE WAY EPIC SPLITS IT (v8.44). The
+         Developer Portal's Store Settings > Product Configuration screen has
+         exactly these three faces — Product details and Specifications under
+         "Required Information", Social media under "Optional Information" —
+         and they come BEFORE Regions and Ratings in Epic's own Get Started
+         flow, which is what this card calls Content Rating. Keeping Epic's
+         order means a developer working from their docs is never asked for
+         something two screens ahead of where they are. */
+      { id: 'productDetails',    label: 'Product Details'                              },
+      { id: 'specifications',    label: 'Specifications'                               },
+      { id: 'socialMedia',       label: 'Social Media'                                 },
       { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
       { id: 'localizations',     label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Store Page Preview'                           },
@@ -1609,6 +1620,14 @@ function _markStepVisited(pid, stepId) {
   }
   if (stepId === 'dataSafety' && pid === 'steam') {
     state.steamSubmitAnswers.dataSafetySeen = true;
+  }
+  /* Epic's three Product Configuration steps (v8.44). Only socialMedia's flag
+     decides a done state; the other two are recorded because every other
+     step on this card records one and a half-kept habit is worse than none. */
+  if (pid === 'egs') {
+    if (stepId === 'productDetails')      state.egsSubmitAnswers.productDetailsSeen = true;
+    else if (stepId === 'specifications') state.egsSubmitAnswers.specificationsSeen = true;
+    else if (stepId === 'socialMedia')    state.egsSubmitAnswers.socialMediaSeen    = true;
   }
 }
 
@@ -3123,6 +3142,91 @@ function makeBlankAndroidAnswers() {
    Regions & Pricing and Technical Requirements are Epic's own, so they live
    here. The two `*Seen` flags are the visit-based stubs Google Play and Steam
    already use for the same two steps. */
+/* ══ EPIC'S PRODUCT CONFIGURATION TABLES (v8.44) ═══════════════════════════
+   Read off the Developer Portal's own Store Settings > Product Configuration
+   screens rather than from the docs: the docs describe the fields, the form
+   is what actually constrains them. Every list below is complete and in the
+   order the portal shows it, and every character limit is the one the
+   portal's own counter enforces. Where the portal offers a closed list these
+   are the options it offers — adding one here would be inventing a value the
+   store will reject.
+
+   Shared with nothing. Epic Games Store Full has no Product Configuration
+   steps, so unlike EGS_REGION_GROUPS these tables have exactly one caller
+   today; they are module-level anyway because they are data, and data that
+   lives inside a builder is data that gets rebuilt on every repaint. */
+const EGS_GENRES = [
+  'Action', 'Action-Adventure', 'Adventure', 'Card Game', 'Casual',
+  'City Builder', 'Comedy', 'Dungeon Crawler', 'Exploration', 'Fantasy',
+  'Fighting', 'First Person', 'Horror', 'Indie', 'MOBA', 'Music',
+  'Narration', 'Open World', 'Party', 'Platformer', 'Puzzle', 'RPG', 'RTS',
+  'Racing', 'Retro', 'Rhythm', 'Rogue-Lite', 'Shooter', 'Simulation',
+  'Space', 'Sports', 'Stealth', 'Strategy', 'Survival', 'Tower Defense',
+  'Trivia', 'Turn-Based', 'Turn-Based Strategy',
+];
+
+const EGS_FEATURES = [
+  'Alexa Game Control', 'Co-op', 'Competitive', 'Controller Support',
+  'Cross Platform', 'Local Multiplayer', 'MMO', 'Online Multiplayer',
+  'Single Player', 'VR',
+];
+
+/* The portal's Login type picker offers exactly one value and caps the field
+   at three entries. One option and a limit of three reads like an oversight
+   until you see what it is for: a product that needs a second account system
+   adds it as its own entry, and Epic has not opened that list up. */
+const EGS_LOGIN_TYPES = ['Epic ID'];
+const EGS_LOGIN_TYPE_MAX = 3;
+
+const EGS_DIRECTX_VERSIONS = ['DirectX 12', 'DirectX 11', 'DirectX 10', 'DirectX 9'];
+
+const EGS_INPUT_DEVICES = ['Gamepad', 'Steering wheel', 'Joystick',
+                           'Motion sensing', 'Rhythm controller'];
+
+/* The two tabs on the Specifications form. `directx` is what the tab carries
+   rather than what the OS is: Mac's tab is Windows' form with the DirectX
+   pair removed, and nothing else about it differs. */
+const EGS_SPEC_OS = [
+  { id: 'windows', label: 'Windows', directx: true  },
+  { id: 'mac',     label: 'Mac',     directx: false },
+];
+
+/* One row per heading on the Specifications form, each a Minimum and a
+   Recommended box of 140 characters. `winOnly` marks the DirectX pair, which
+   is the only row the Mac tab drops. `hint` is what the portal's own example
+   text leads a developer to write. */
+const EGS_SPEC_ROWS = [
+  { id: 'os',      label: 'OS version',  hint: 'Windows 10 64-bit' },
+  { id: 'cpu',     label: 'CPU',         hint: 'Intel Core i5-8400 / AMD Ryzen 5 2600' },
+  { id: 'memory',  label: 'Memory',      hint: '8 GB RAM' },
+  { id: 'gpu',     label: 'GPU',         hint: 'NVIDIA GTX 1060 / AMD RX 580' },
+  { id: 'directx', label: 'DirectX',     hint: '', winOnly: true, options: EGS_DIRECTX_VERSIONS },
+  { id: 'storage', label: 'Storage',     hint: '20 GB available space' },
+  { id: 'sound',   label: 'Sound card',  hint: 'DirectX compatible' },
+];
+const EGS_SPEC_MAX = 140;
+
+/* Epic's Social Links, in the portal's order. Every box is a 260-character
+   URL and every one is optional. The ids are ours; the labels are the
+   portal's own placeholders, which is why this list says Twitter rather than
+   X — the field is still labelled Twitter in the form, whatever the icon
+   beside it has become. */
+const EGS_SOCIAL_LINKS = [
+  { id: 'website',   label: 'Game website', placeholder: 'https://your-game.com' },
+  { id: 'twitter',   label: 'Twitter',      placeholder: 'https://x.com/yourstudio' },
+  { id: 'facebook',  label: 'Facebook',     placeholder: 'https://facebook.com/yourgame' },
+  { id: 'instagram', label: 'Instagram',    placeholder: 'https://instagram.com/yourgame' },
+  { id: 'twitch',    label: 'Twitch',       placeholder: 'https://twitch.tv/yourstudio' },
+  { id: 'discord',   label: 'Discord',      placeholder: 'https://discord.gg/invite' },
+  { id: 'vkontakte', label: 'Vkontakte',    placeholder: 'https://vk.com/yourgame' },
+  { id: 'youtube',   label: 'YouTube',      placeholder: 'https://youtube.com/@yourstudio' },
+  { id: 'reddit',    label: 'Reddit',       placeholder: 'https://reddit.com/r/yourgame' },
+  { id: 'naver',     label: 'Naver',        placeholder: 'https://cafe.naver.com/yourgame' },
+  { id: 'youku',     label: 'Youku',        placeholder: 'https://youku.com/yourgame' },
+  { id: 'weibo',     label: 'Weibo',        placeholder: 'https://weibo.com/yourgame' },
+];
+const EGS_SOCIAL_MAX = 260;
+
 function makeBlankEgsAnswers() {
   return {
     /* THE PRICE, AND IT IS NOT A TIER ANY MORE (v8.41). It is set on the Store
@@ -3139,6 +3243,56 @@ function makeBlankEgsAnswers() {
        answerEgsField and read by the section and by the preview's Technical
        block, all three of which went together. Epic Games Store Full still
        has all four. */
+
+    /* ── PRODUCT DETAILS (v8.44) ───────────────────────────────────────────
+       Store Settings > Product Configuration > Product details, plus the
+       Base Game offer's General details, which Epic splits across two
+       screens but asks about one product.
+
+       FOUR FIELDS ARE DELIBERATELY NOT HERE: display name, short
+       description, developer name and publisher name. Epic asks for all
+       four, and Shipmate already holds all four — state.formData.title,
+       state.formData.description, state.webSite.developer and .publisher —
+       and the Store Page Preview on this very card already prints them. A
+       second copy under egsSubmitAnswers would be a second truth, and the
+       preview would go on showing the first one. The section edits the
+       originals instead; see setEgsProductShared in app.js. */
+    productLogo:           null,   // 'yes' / 'no' — 960 x 540, required by Epic
+    productIcon:           null,   // 'yes' / 'no' — 512 x 512
+    genres:                [],     // from EGS_GENRES
+    features:              [],     // from EGS_FEATURES
+    loginTypes:            [],     // from EGS_LOGIN_TYPES, max 3
+    audioLanguages:        [],     // a subset of the game's own languages
+    textLanguages:         [],     // ditto; Epic marks this one required
+    legalFooter:           '',
+    privacyLink:           '',
+    eulaLink:              '',
+    supportPageLink:       '',     // Epic wants AT LEAST ONE of these two
+    supportEmail:          '',
+    offerName:             '',     // the Base Game offer's own name...
+    offerShortDesc:        '',     // ...and its own short description
+    earlyAccess:           null,   // 'yes' / 'no' — 'yes' obliges an FAQ page
+    sellerName:            '',     // the legal entity that receives funds
+    nftBlockchain:         null,   // 'yes' / 'no'
+    promotionalContent:    null,   // 'yes' / 'no'
+    productDetailsSeen:    false,
+    /* ── SPECIFICATIONS (v8.44) ────────────────────────────────────────────
+       Epic asks these per operating system behind a Windows/Mac tab strip,
+       with a "My product supports this OS" switch on each. Mac's tab is the
+       same form minus DirectX. */
+    specs: {
+      windows: makeBlankEgsSpecOs(),
+      mac:     makeBlankEgsSpecOs(),
+    },
+    inputDevices:          [],     // from EGS_INPUT_DEVICES
+    specsNotes:            '',
+    specificationsSeen:    false,
+    /* ── SOCIAL MEDIA (v8.44) ──────────────────────────────────────────────
+       Epic's "Social Links", the links shown in the store page's Follow Us
+       section. Every one is optional, which is why this section's done rule
+       is a visit rather than a filled field — see isEgsSectionComplete. */
+    social:                makeBlankEgsSocial(),
+    socialMediaSeen:       false,
     // Store Preview
     storePreviewSeen:      false,
     // Stubs, complete on first view — the same treatment Google Play's and
@@ -3146,6 +3300,29 @@ function makeBlankEgsAnswers() {
     localizationsSeen:     false,
     improveSubmissionSeen: false,
   };
+}
+/* One operating system's column of the Specifications form. Both the minimum
+   and the recommended box are free text in the portal (140 characters each)
+   rather than a parsed number — Epic prints them verbatim on the store page,
+   so "8 GB RAM" and "16 GB" are both things a developer really types. */
+function makeBlankEgsSpecOs() {
+  return {
+    supported: null,                 // 'yes' / 'no'
+    os:      { min: '', rec: '' },
+    cpu:     { min: '', rec: '' },
+    memory:  { min: '', rec: '' },
+    gpu:     { min: '', rec: '' },
+    storage: { min: '', rec: '' },
+    sound:   { min: '', rec: '' },
+    directx: { min: '', rec: '' },   // Windows only; Mac's tab has no DirectX
+  };
+}
+/* The twelve Social Links boxes, keyed by EGS_SOCIAL_LINKS' ids. Built from
+   the table rather than typed out, so the two cannot drift. */
+function makeBlankEgsSocial() {
+  const out = {};
+  EGS_SOCIAL_LINKS.forEach(l => { out[l.id] = ''; });
+  return out;
 }
 /* ══ EPIC GAMES STORE FULL (makeBlankEgsFullAnswers) ══════════════════════════════════════
    A duplicate of Epic Games Store (makeBlankEgsAnswers), kept as its own copy rather than
@@ -3204,6 +3381,54 @@ function isEgsSectionComplete(sectionId) {
   }
 
   const a = state.egsSubmitAnswers;
+
+  /* PRODUCT DETAILS IS DONE WHEN EPIC'S ASTERISKS ARE (v8.44). Every term
+     below is a field the Developer Portal marks required, and nothing that
+     it does not: the logo but not the icon, Genres and Features but not
+     Login type, Text languages but not Audio, and the offer's own name,
+     description and seller. The four shared fields are read from where they
+     really live rather than from a copy (see makeBlankEgsAnswers). */
+  if (sectionId === 'productDetails') {
+    const fd = state.formData || {}, ws = state.webSite || {};
+    return a.productLogo !== null
+        && !!(fd.title || '').trim()
+        && !!(fd.description || '').trim()
+        && a.genres.length > 0
+        && a.features.length > 0
+        && a.textLanguages.length > 0
+        /* USER SUPPORT IS AN OR, AND EPIC SAYS SO IN WORDS: "Provide at least
+           one". A developer with a support site and no support inbox is
+           finished, and asking for both would be inventing a requirement. */
+        && (!!a.supportPageLink.trim() || !!a.supportEmail.trim())
+        && !!(ws.developer || '').trim()
+        && !!(ws.publisher || '').trim()
+        && !!a.offerName.trim()
+        && !!a.offerShortDesc.trim()
+        && !!a.sellerName.trim()
+        && a.nftBlockchain !== null
+        && a.promotionalContent !== null;
+  }
+  /* SPECIFICATIONS NEEDS A DECISION ON EVERY OS AND MINIMUMS FOR THE ONES
+     YOU SHIP ON. "No" to an OS is an answer, not a gap — a Windows-only
+     product is finished the moment it has said so and filled Windows in.
+     Only the minimum column is required: Epic's recommended boxes are
+     optional, and a store page with minimums and no recommendations is a
+     real, shippable page. DirectX is skipped for an OS whose tab has none. */
+  if (sectionId === 'specifications') {
+    const rows = EGS_SPEC_ROWS;
+    return EGS_SPEC_OS.every(o => a.specs[o.id].supported !== null)
+        && EGS_SPEC_OS.some(o => a.specs[o.id].supported === 'yes')
+        && EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes').every(o =>
+             rows.filter(r => !r.winOnly || o.directx)
+                 .every(r => !!(a.specs[o.id][r.id].min || '').trim()));
+  }
+  /* A VISIT IS THE HONEST CLAIM FOR AN OPTIONAL SECTION. Epic files Social
+     media under "Optional Information", so there is no field whose absence
+     is a problem; a game with no Discord is not an unfinished game. Asking
+     for one link anyway would be the "green while empty" failure in reverse
+     — red while correct. */
+  if (sectionId === 'socialMedia') return !!a.socialMediaSeen;
+
   /* NO 'technical' ARM (v8.42). Technical Requirements was removed from this
      card; Epic Games Store Full keeps the step, the section and this arm's
      twin below. Nothing asks this function about 'technical' for 'egs' any

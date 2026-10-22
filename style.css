@@ -28795,3 +28795,19 @@ body.sm-arm-steps #sm-steps-bar .spp-pin {
   border-radius: 0;
   overflow: visible;
 }
+
+/* Epic's Product Configuration lists (v8.44). Genres is 38 options and
+   Features is 10; Epic shows both in a scrolling dropdown, which a section
+   with no scroller of its own cannot copy. Two columns is how 38 fit without
+   pushing the rest of the form a screen and a half down. Single column below
+   560px, where two would be two narrow ones. */
+.cq-check-list.egs-pc-cols .cq-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+}
+@media (max-width: 560px) {
+  .cq-check-list.egs-pc-cols .cq-checkboxes { grid-template-columns: 1fr; }
+}
+.cq-check-row input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.45; }
+.cq-check-row:has(input:disabled) span { color: var(--text-faint); }

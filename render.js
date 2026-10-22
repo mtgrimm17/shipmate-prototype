@@ -7543,6 +7543,9 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
        each other, which is the bug this file has paid for more than once. */
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsStorePreviewSection();
     else if (stepId === 'contentRating')      body = buildEgsContentRatingSection();
+    else if (stepId === 'productDetails')     body = buildEgsProductDetailsSection();
+    else if (stepId === 'specifications')     body = buildEgsSpecificationsSection();
+    else if (stepId === 'socialMedia')        body = buildEgsSocialMediaSection();
     else if (stepId === 'localizations')      body = buildEgsLocalizationsSection();
     else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -19495,6 +19498,15 @@ function buildAndroidLocalizationsSection() {
    not here, because it is IARC and Google Play already draws it (see the
    'egs' arm in _stepBodyFor). */
 
+/* Epic's Product Configuration tables (EGS_GENRES, EGS_FEATURES,
+   EGS_SPEC_OS, EGS_SPEC_ROWS, EGS_SOCIAL_LINKS and friends) live in state.js
+   rather than here (v8.44). They have to: makeBlankEgsAnswers builds the
+   social-links object from EGS_SOCIAL_LINKS and isEgsSectionComplete walks
+   EGS_SPEC_ROWS, both of which run while state.js is still loading — and a
+   `const` in a later script is in its temporal dead zone until that script
+   runs, so the first read throws and takes the whole state object with it.
+   This is not a style choice; it is load order. */
+
 const EGS_REGION_GROUPS = [
   { id: 'na',   label: 'North America' },
   { id: 'eu',   label: 'Europe' },
@@ -19690,6 +19702,303 @@ function buildEgsFullTechnicalSection() {
         "The EOS overlay is what Epic's own Testing Guide exercises. Integrating it is how features such as the in-game store and social panel reach your players.")}`;
 }
 
+
+/* ══ EPIC: PRODUCT CONFIGURATION (v8.44) ══════════════════════════════════
+   Three sections, one per face of the Developer Portal's Store Settings >
+   Product Configuration screen, plus the Base Game offer's General details
+   folded into the first (Epic splits them across two screens; they describe
+   one product, and a developer filling them in does it in one sitting).
+
+   THE SHARED HELPERS BELOW EXIST BECAUSE THESE SECTIONS ARE MOSTLY FORM.
+   Epic's product configuration is 40-odd boxes with character counters and
+   two closed lists; the rest of this card is questions with pill answers.
+   Writing each box out longhand would have been 40 near-identical blocks,
+   and the first typo in one of them would have been invisible. */
+
+/* An apostrophe inside an inline onclick ends the handler. None of Epic's
+   own values contain one today — but the language names do not come from
+   Epic, and "Hawai'i" is a real locale name. */
+function egsJsStr(v) {
+  return String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/* One labelled box. The value is committed on `change`, not on `input` —
+   the same split Epic Full's release date uses, and the reason this card can
+   hold a 10,000-character legal footer without repainting the dashboard on
+   every keystroke.
+
+   THE LIMIT IS ENFORCED, NOT COUNTED. Epic's form counts down beside every
+   box; this prototype hides `.char-count` everywhere ("enforced via
+   maxlength; counter hidden to keep layout clean", style.css) and a counter
+   here would have been a div nobody could see. `maxlength` makes over-limit
+   impossible rather than merely flagged, and the limit is stated beside the
+   label so it is knowable before you hit it. */
+function egsPortalField(o) {
+  const val   = o.value || '';
+  const id    = 'egs-pc-' + o.id;
+  const req   = o.required ? ' <span style="color:#e0555a;">*</span>' : '';
+  /* `quietLimit` suppresses the note on a run of boxes that all share one
+     limit — the fourteen Specifications boxes are all 140, and saying so
+     fourteen times is noise the section description can carry once. */
+  const limit = (o.max && !o.quietLimit) ? ` <span class="form-hint-inline">max ${o.max}</span>` : '';
+  const cls   = 'form-input' + (val.trim() ? ' is-complete' : '');
+  const cap   = o.max ? ` maxlength="${o.max}"` : '';
+  const body  = o.multiline
+    ? `<textarea class="${cls}" id="${id}" rows="${o.rows || 3}"${cap}
+                 placeholder="${escHtml(o.placeholder || '')}"
+                 onchange="${o.onChange}">${escHtml(val)}</textarea>`
+    : `<input class="${cls}" id="${id}" type="${o.type || 'text'}"${cap}
+              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"
+              onchange="${o.onChange}">`;
+  return `
+    <div class="form-group" data-answered="${val.trim() ? '1' : '0'}">
+      <label class="form-label" for="${id}">${escHtml(o.label)}${req}${limit}</label>
+      ${body}
+      ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
+    </div>`;
+}
+
+/* A closed list, as checkboxes. `cols` turns on the two-column layout for the
+   long ones — Epic shows Genres in a scrolling dropdown, which a section with
+   no scroller of its own cannot copy; two columns is how 38 options fit
+   without pushing everything below them off the page. */
+function egsPortalChecks(o) {
+  const sel  = o.selected || [];
+  const full = o.max && sel.length >= o.max;
+  const req  = o.required ? ' <span style="color:#e0555a;">*</span>' : '';
+  return `
+    <div class="form-group" data-answered="${sel.length ? '1' : '0'}">
+      <label class="form-label">${escHtml(o.label)}${req}
+        <span class="form-hint-inline">${sel.length} selected${o.max ? ' of ' + o.max : ''}</span>
+      </label>
+      <div class="cq-check-list${o.cols ? ' egs-pc-cols' : ''}">
+        <div class="cq-checkboxes">
+          ${o.options.map(opt => {
+            const value = typeof opt === 'string' ? opt : opt.value;
+            const label = typeof opt === 'string' ? opt : opt.label;
+            const on    = sel.includes(value);
+            /* A full list disables what is NOT already ticked, so the cap
+               reads as a cap rather than as a click that does nothing. */
+            const dis   = (!on && full) ? ' disabled' : '';
+            return `
+              <label class="cq-check-row">
+                <input type="checkbox" ${on ? 'checked' : ''}${dis}
+                       onchange="${o.onToggle}('${egsJsStr(value)}', this.checked)">
+                <span>${escHtml(label)}</span>
+              </label>`;
+          }).join('')}
+        </div>
+      </div>
+      ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
+    </div>`;
+}
+
+function buildEgsProductDetailsSection() {
+  const a  = state.egsSubmitAnswers;
+  const fd = state.formData || {};
+  const ws = state.webSite  || {};
+
+  /* Audio and Text are offered over the game's OWN languages rather than
+     over every language Epic supports. Epic asks which languages the product
+     is in; Shipmate already knows, because the Localizations step asked. An
+     independent list here would let a developer promise Japanese audio for a
+     product with no Japanese. */
+  const langCodes = (typeof _iasAllPreviewLangCodes === 'function')
+    ? _iasAllPreviewLangCodes()
+    : [state.formData.primaryLanguage || 'en'];
+  const langOptions = langCodes.map(c => ({ value: c, label: (typeof OB_LANG_NAMES !== 'undefined' && OB_LANG_NAMES[c]) || c }));
+
+  const supportDone = !!(a.supportPageLink || '').trim() || !!(a.supportEmail || '').trim();
+
+  return `
+    <div class="ios-section-head">Product Details</div>
+    <p class="ios-section-desc">Epic's Store Settings &rsaquo; Product Configuration &rsaquo; Product details, plus the Base Game offer's General details. This is what the store page says your product <em>is</em>; the Specifications step says what it needs to run.</p>
+
+    <div class="ios-content-step-label">Artwork</div>
+    ${ynRow('Product logo uploaded',
+        a.productLogo,
+        `answerEgsProductField('productLogo','yes')`,
+        `answerEgsProductField('productLogo','no')`,
+        'Epic requires a 960 x 540 product logo before the configuration can be pushed. Upload it in the Developer Portal; this records that it is done.')}
+    ${ynRow('Product icon uploaded',
+        a.productIcon,
+        `answerEgsProductField('productIcon','yes')`,
+        `answerEgsProductField('productIcon','no')`,
+        'A 512 x 512 product icon. Optional in the portal, which is why this row does not gate the step.')}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Product info</div>
+    ${egsPortalField({ id: 'title', label: 'Product display name', required: true,
+        value: fd.title || '', max: 64, placeholder: 'Go Ape Ship!',
+        onChange: `setEgsProductShared('title', this.value)`,
+        hint: 'The same title the rest of Shipmate knows &mdash; editing it here changes it everywhere, because it is the same game.' })}
+    ${egsPortalField({ id: 'desc', label: 'Short description', required: true, multiline: true, rows: 3,
+        value: fd.description || '', max: 280,
+        placeholder: 'One or two sentences, as they appear under the title on the store page.',
+        onChange: `setEgsProductShared('description', this.value)` })}
+    ${egsPortalChecks({ label: 'Genres', required: true, cols: true,
+        options: EGS_GENRES, selected: a.genres, onToggle: "toggleEgsProductList.bind(null, 'genres')" })}
+    ${egsPortalChecks({ label: 'Features', required: true, cols: true,
+        options: EGS_FEATURES, selected: a.features, onToggle: "toggleEgsProductList.bind(null, 'features')" })}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Login requirements</div>
+    ${egsPortalChecks({ label: 'Login type', options: EGS_LOGIN_TYPES, selected: a.loginTypes,
+        max: EGS_LOGIN_TYPE_MAX, onToggle: "toggleEgsProductList.bind(null, 'loginTypes')",
+        hint: 'Account systems a player needs in order to play. Epic lists its own and allows up to three.' })}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Supported languages</div>
+    ${egsPortalChecks({ label: 'Audio', options: langOptions, selected: a.audioLanguages,
+        onToggle: "toggleEgsProductList.bind(null, 'audioLanguages')",
+        hint: 'Optional in the portal. Picked from the languages this game already has, not from every language Epic supports.' })}
+    ${egsPortalChecks({ label: 'Text', required: true, options: langOptions, selected: a.textLanguages,
+        onToggle: "toggleEgsProductList.bind(null, 'textLanguages')" })}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Legal info</div>
+    ${egsPortalField({ id: 'legal', label: 'Legal footer', multiline: true, rows: 4,
+        value: a.legalFooter, max: 10000,
+        placeholder: 'Copyright and trademark lines, shown at the foot of the store page.',
+        onChange: `setEgsProductText('legalFooter', this.value)` })}
+    ${egsPortalField({ id: 'privacy', label: 'Privacy link', value: a.privacyLink, max: 260,
+        type: 'url', placeholder: 'https://your-studio.com/privacy',
+        onChange: `setEgsProductText('privacyLink', this.value)` })}
+    ${egsPortalField({ id: 'eula', label: 'EULA link', value: a.eulaLink, max: 260,
+        type: 'url', placeholder: 'https://your-studio.com/eula',
+        onChange: `setEgsProductText('eulaLink', this.value)` })}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">User support${supportDone ? '' : ' <span style="color:#e0555a;">*</span>'}</div>
+    <div class="form-hint" style="margin-top:-2px;">Contact information in case players have questions. Epic asks for <b>at least one</b> of the two, not both.</div>
+    ${egsPortalField({ id: 'supportpage', label: 'Support page link', value: a.supportPageLink, max: 260,
+        type: 'url', placeholder: 'https://your-studio.com/support',
+        onChange: `setEgsProductText('supportPageLink', this.value)` })}
+    ${egsPortalField({ id: 'supportmail', label: 'Support email', value: a.supportEmail, max: 260,
+        type: 'email', placeholder: 'support@your-studio.com',
+        onChange: `setEgsProductText('supportEmail', this.value)` })}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Developer and publisher</div>
+    ${egsPortalField({ id: 'dev', label: 'Developer name', required: true,
+        value: ws.developer || '', max: 280, placeholder: 'Sound Games',
+        onChange: `setEgsProductShared('developer', this.value)` })}
+    ${egsPortalField({ id: 'pub', label: 'Publisher name', required: true,
+        value: ws.publisher || '', max: 280, placeholder: 'Sound Games',
+        onChange: `setEgsProductShared('publisher', this.value)` })}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Base game offer &rsaquo; General details</div>
+    <div class="form-hint" style="margin-top:-2px;">Epic asks for these on the offer rather than on the product. The portal offers a <b>Use Product Metadata</b> button that copies the fields above down into the offer &mdash; which is why the two short descriptions can differ, and usually should not.</div>
+    ${egsPortalField({ id: 'offername', label: 'Offer name', required: true,
+        value: a.offerName, max: 64, placeholder: 'Go Ape Ship!',
+        onChange: `setEgsProductText('offerName', this.value)` })}
+    ${egsPortalField({ id: 'offerdesc', label: 'Offer short description', required: true, multiline: true, rows: 3,
+        value: a.offerShortDesc, max: 280,
+        placeholder: 'What this particular offer buys. For a base game, usually the product description again.',
+        onChange: `setEgsProductText('offerShortDesc', this.value)` })}
+    ${ynRow('Early access product',
+        a.earlyAccess,
+        `answerEgsProductField('earlyAccess','yes')`,
+        `answerEgsProductField('earlyAccess','no')`,
+        'Epic requires an FAQ page for an early access product, and says so on the switch itself.')}
+    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true,
+        value: a.sellerName, max: 280, placeholder: 'Sound Games Ltd.',
+        onChange: `setEgsProductText('sellerName', this.value)`,
+        hint: 'The legal entity that receives funds from selling this offer &mdash; often the studio\'s registered company rather than the name on the store page.' })}
+    ${ynRow('Contains NFT or blockchain content',
+        a.nftBlockchain,
+        `answerEgsProductField('nftBlockchain','yes')`,
+        `answerEgsProductField('nftBlockchain','no')`,
+        'Yes obliges an FAQ page and the Epic Games Blockchain agreement. Epic requires a choice either way, which is why No is an answer here rather than a default.')}
+    ${ynRow('Contains promotional content',
+        a.promotionalContent,
+        `answerEgsProductField('promotionalContent','yes')`,
+        `answerEgsProductField('promotionalContent','no')`,
+        'Epic notifies players when an offer carries promotional content. A choice is required either way.')}
+    <div class="form-hint" style="margin-top:10px;">
+      <b>Platforms</b> is not asked here. Epic inherits it from the artifact attached to the offer, and the field is read-only in the portal &mdash; it changes in the Upload Build step or not at all.
+    </div>`;
+}
+
+function buildEgsSpecificationsSection() {
+  const a = state.egsSubmitAnswers;
+
+  /* One OS block, rendered twice. Epic uses a tab strip; this card has no tab
+     idiom, and inventing one for two tabs would hide half the form behind a
+     control a developer has to find. Stacking them with the portal's own
+     support switch on each shows the same thing in the same order, and the
+     rows only appear once an OS has been said yes to — the reveal-on-answer
+     pattern Epic Full's region list already uses. */
+  const osBlock = (o) => {
+    const sp   = a.specs[o.id];
+    const rows = EGS_SPEC_ROWS.filter(r => !r.winOnly || o.directx);
+    const body = sp.supported !== 'yes' ? '' : rows.map(r => {
+      const cell = (which, label) => r.options
+        /* A closed four-option row, as pills rather than a dropdown: swSelect
+           takes a bare function name (it embeds the handler inside quotes of
+           its own), and four options fit in a row the way the rest of this
+           card's closed questions do. */
+        ? singleSelectRow(label, sp[r.id][which] || null,
+            r.options.map(v => ({ value: v, label: v,
+              onSelect: `setEgsSpecField('${o.id}','${r.id}','${which}','${egsJsStr(v)}')` })))
+        : egsPortalField({ id: `spec-${o.id}-${r.id}-${which}`, label: label,
+            required: which === 'min', value: sp[r.id][which], max: EGS_SPEC_MAX,
+            quietLimit: true, placeholder: which === 'min' ? r.hint : '',
+            onChange: `setEgsSpecField('${o.id}','${r.id}','${which}', this.value)` });
+      return `
+        <div class="ios-content-step-label">${escHtml(r.label)}</div>
+        ${cell('min', 'Minimum')}
+        ${cell('rec', 'Recommended')}`;
+    }).join('<div class="ios-q-divider"></div>');
+
+    return `
+      <div class="ios-content-step-label" style="font-size:13px;">${escHtml(o.label)}</div>
+      ${ynRow('My product supports this OS',
+          sp.supported,
+          `answerEgsSpecSupported('${o.id}','yes')`,
+          `answerEgsSpecSupported('${o.id}','no')`,
+          o.directx
+            ? "Epic's Specifications form is per operating system. Windows carries the DirectX pair; Mac's tab is the same form without it."
+            : "Mac's tab is Windows' form minus DirectX. Saying no here is a complete answer, not a gap.")}
+      ${body}`;
+  };
+
+  return `
+    <div class="ios-section-head">Specifications</div>
+    <p class="ios-section-desc">Epic's Store Settings &rsaquo; Product Configuration &rsaquo; Specifications: the minimum and recommended machine, per operating system, printed verbatim on the store page. Every box is free text of up to ${EGS_SPEC_MAX} characters &mdash; "8 GB RAM" and "16 GB" are both things a developer really types.</p>
+    ${EGS_SPEC_OS.map(o => osBlock(o)).join('<div class="ios-q-divider"></div>')}
+
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Additional input device</div>
+    ${egsPortalChecks({ label: 'Device type', options: EGS_INPUT_DEVICES, selected: a.inputDevices,
+        onToggle: "toggleEgsProductList.bind(null, 'inputDevices')",
+        hint: 'Controllers beyond keyboard, mouse and gamepad that your product supports.' })}
+
+    <div class="ios-q-divider"></div>
+    ${egsPortalField({ id: 'specnotes', label: 'Additional notes', multiline: true, rows: 3,
+        value: a.specsNotes, max: 260,
+        placeholder: 'Anything the boxes above cannot say &mdash; an SSD requirement, a required peripheral.',
+        onChange: `setEgsProductText('specsNotes', this.value)` })}`;
+}
+
+function buildEgsSocialMediaSection() {
+  const a    = state.egsSubmitAnswers;
+  const soc  = a.social || {};
+  const kept = EGS_SOCIAL_LINKS.filter(l => (soc[l.id] || '').trim()).length;
+
+  return `
+    <div class="ios-section-head">Social Media</div>
+    <p class="ios-section-desc">Epic's Store Settings &rsaquo; Product Configuration &rsaquo; Social media &mdash; the "Social Links" the store page shows in its <b>Follow Us</b> section. Epic files this under Optional Information, so this step goes green once you have been through it, whether you fill any in or not.</p>
+    <div class="form-hint" style="margin-top:4px;margin-bottom:14px;">${kept} of ${EGS_SOCIAL_LINKS.length} filled in. Each is a full URL, up to ${EGS_SOCIAL_MAX} characters.</div>
+    ${EGS_SOCIAL_LINKS.map(l => egsPortalField({
+        id: 'soc-' + l.id, label: l.label, value: soc[l.id] || '', max: EGS_SOCIAL_MAX,
+        /* All twelve share one limit, and the line above states it once. */
+        quietLimit: true, type: 'url', placeholder: l.placeholder,
+        onChange: `setEgsSocialLink('${l.id}', this.value)` })).join('')}`;
+}
+
+
 /* The step now renders the review itself rather than describing it (v7.31). */
 function buildEgsLocalizationsSection() {
   return buildEgsLocalizationReviewSection();
@@ -19744,7 +20053,11 @@ function buildEgsStorePreviewSection() {
   const desc       = (fd.description || '').trim();
   const developer  = (ws.developer || '').trim();
   const publisher  = (ws.publisher || developer || '').trim();
-  const genres     = (ws.genres || '').trim();
+  /* EPIC'S OWN GENRES WIN WHEN THERE ARE ANY (v8.44). Product Details picks
+     from Epic's closed list of 38; ws.genres is the web site's free-text
+     field. Printing the web site's string on Epic's page while Epic's own
+     taxonomy sat unused in state was two truths on one card. */
+  const genres     = a.genres.length ? a.genres.join(', ') : (ws.genres || '').trim();
 
   const keyArt = pool.find(x => x.kind === 'art-land' && x.src)
               || pool.find(x => x.kind === 'screenshot' && x.src) || null;
