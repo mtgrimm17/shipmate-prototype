@@ -23044,6 +23044,65 @@ function answerGIARCTypeRow(key, idx, yes) {
   updateAndroidCard();
 }
 
+/* A YES THAT OPENS QUESTIONS SCROLLS THEM INTO VIEW (v8.54). Jaco: "if we
+   select yes and things expand, please auto scroll to that new expanded
+   section." Answering "Against humans: Yes" opens eight questions below the
+   fold, and nothing on screen said so.
+
+   Wrapped around the three answer handlers rather than written into each:
+   what changed is read off the tree — the follow-ups a question reveals
+   before and after the click — so a handler added later is covered by adding
+   its name. Epic only (Google Play's card has no pinned bar to clear and was
+   not asked to change).
+
+   IT SCROLLS AS LITTLE AS IT CAN. Only if the new block runs past the bottom
+   of the scroller, only far enough to show its end, and never so far that the
+   row you just pressed slides up under the pinned Unanswered/All bar — a long
+   branch shows its start and the row that opened it, not its last line. The
+   travel is _smScrollTo, the app's own eased scroll, not the browser's. */
+function _egsRevealNew(key, before, opt) {
+  if (state.stepModal?.platformId !== 'egs') return;
+  const added = giarcActiveChildKeys(key).filter(k => !before.includes(k));
+  if (!added.length) return;
+  /* The step re-renders after the handler returns and restores its own
+     scroll position on the way, so the new rows may not be in the document
+     on the next tick. Look for them for up to ten short ticks (timers, not
+     frames, so a background tab still settles), and measure only once they
+     are there. */
+  let tries = 0;
+  const attempt = () => {
+    const scope = (typeof _smStepScope === 'function' && _smStepScope()) || document;
+    const row = opt != null
+      ? scope.querySelector(`[data-key="${key}"][data-opt="${opt}"]`)
+      : scope.querySelector(`[data-key="${key}"]`);
+    const lastEls = scope.querySelectorAll(`[data-key="${added[added.length - 1]}"]`);
+    const last = lastEls[lastEls.length - 1];
+    const sc = row && row.closest('.submit-modal-scroll, .sub-pane, .sm-steps-card');
+    if (!row || !last || !sc) { if (++tries < 10) setTimeout(attempt, 30); return; }
+    const scR    = sc.getBoundingClientRect();
+    const pin    = sc.querySelector('.cr-pinned');
+    const ceil   = (pin ? pin.getBoundingClientRect().bottom : scR.top) + 8;
+    const over   = last.getBoundingClientRect().bottom - (scR.bottom - 24);
+    if (over <= 0) return;
+    const room   = row.getBoundingClientRect().top - ceil;
+    const delta  = Math.min(over, Math.max(0, room));
+    if (delta <= 0) return;
+    if (typeof _smScrollTo === 'function') _smScrollTo(sc, sc.scrollTop + delta);
+    else sc.scrollTop += delta;
+  };
+  setTimeout(attempt, 0);
+}
+['answerGIARCSingle', 'answerGIARCMultiOpt', 'answerGIARCTypeRow'].forEach(name => {
+  const orig = window[name];
+  if (typeof orig !== 'function') return;
+  window[name] = function (key, idx) {
+    const before = giarcActiveChildKeys(key);
+    const out = orig.apply(this, arguments);
+    _egsRevealNew(key, before, name === 'answerGIARCTypeRow' ? idx : null);
+    return out;
+  };
+});
+
 function toggleGiarcPicker(event, key) {
   event.stopPropagation();
   const wasOpen = state.giarcPickerOpen === key;
