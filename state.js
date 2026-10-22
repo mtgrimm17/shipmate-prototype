@@ -5410,6 +5410,12 @@ const state = {
      picker above — the tab strip was always drawn and never pressable, so
      half the page Epic publishes had no preview at all. */
   egsPreviewTab: 'overview',
+
+  /* WHICH ITEM THE MEDIA CAROUSEL IS SHOWING (v8.56). Epic's carousel is one
+     list seen two ways — a stage and a strip of thumbnails under it — so the
+     index belongs to the page, not to either half. Surface state, like the
+     tab above. */
+  egsMediaIndex: 0,
   egsSubmitAnswers: makeBlankEgsAnswers(),
 
   /* Epic's Localizations surface state (v7.31). Which field is on screen,

@@ -29397,7 +29397,7 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-cols { gap: 56px; grid-template-columns: minmax(0, 1fr) 300px; }
 .egs-sp .egs-sp-tagcols { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 0 24px; }
 .egs-sp .egs-sp-sysgrid { grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); }
-.egs-sp .egs-sp-main { gap: 24px; }
+.egs-sp .egs-sp-main { gap: 48px; }
 .egs-sp .egs-sp-side { gap: 12px; }
 
 /* Prose — short description and body alike: 16 / 400 / 0.16px / 26.4px, and
@@ -29443,7 +29443,7 @@ textarea.egs-sp-body {
 
 /* Tag rows and chips: label 14 / 400 at 0.65, chip 12 / 400 / 0.36px on a
    0.15 white fill, 24px tall, fully round. */
-.egs-sp .egs-sp-tagcols { padding: 4px 0; border-top: none; }
+.egs-sp .egs-sp-tagcols { padding: 0; border-top: none; }
 .egs-sp .egs-sp-tagcol { gap: 10px; padding-left: 24px; border-left-color: var(--epic-line); }
 .egs-sp .egs-sp-tagcol:first-child { padding-left: 0; }
 .egs-sp .egs-sp-tagrow-label {
@@ -29591,9 +29591,142 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-legal-link { color: var(--epic-accent); }
 
 /* The editable fields keep Epic's type (set above) and only show their own
-   chrome on hover and focus, so the page still reads as the page. */
-.egs-sp .egs-sp-edit:hover { background: rgba(255, 255, 255, 0.06); }
+   chrome on hover and focus, so the page still reads as the page. The hover
+   is Mac App Store's: the field's own border to rgba(255,255,255,.24) over
+   .12s, not a tint that appears with no transition at all. */
+.egs-sp .egs-sp-edit {
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-sp-edit:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.24);
+}
 .egs-sp .egs-sp-edit:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--epic-line); }
+/* ── THE COLUMN'S RHYTHM IS EPIC'S, AND IT IS ONE NUMBER (v8.56) ──────────
+   store.epicgames.com/p/go-ape-ship-53158b lays its main column out as
+   `display: flex; flex-direction: column; gap: 48px` over exactly four
+   children — carousel, short description, Genres+Features, long description
+   — and that 48 is the only vertical measure between blocks on the whole
+   page. Set above on .egs-sp-main; the long description's own internals are
+   below. A block must therefore pay no margin of its own, or the gap stops
+   being the gap: that is why .egs-sp-tagcols lost its 4px padding and why
+   the headline/body pair became one block in render.js rather than two
+   siblings that each bought 48px. */
+.egs-sp .egs-sp-long { display: block; }
+/* The headline is an h2 with 20px under it, measured on the same page. */
+.egs-sp .egs-sp-long .egs-sp-headline-wrap { margin: 0 0 20px; }
+.egs-sp .egs-sp-locrow { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
+/* ── EPIC'S MEDIA CAROUSEL (v8.56) ───────────────────────────────────────
+   Stage 16:9 with the viewport clipped; two 56px arrow zones parked past the
+   edges at opacity 0, faded in by a hover anywhere on the carousel and only
+   then able to take a click — Epic's own rule, copied with its own timings
+   (`transition: transform .2s, opacity .2s`). The strip sits 16px under the
+   stage: 16:9 thumbnails 8px apart, each a 2px transparent border so the
+   active and hover states cost no layout, the inactive ones at half opacity.
+   Centred, because Epic centres a strip that fits — with the five shots this
+   preview draws it always does, which is also why Epic's two strip-scrolling
+   arrows are not here: they would never have anything to scroll. */
+.egs-sp .egs-sp-car { position: relative; }
+.egs-sp .egs-sp-car-stage {
+  position: relative;
+  cursor: pointer;
+}
+.egs-sp .egs-sp-car-viewport {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--epic-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.egs-sp .egs-sp-car-viewport img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.egs-sp .egs-sp-car-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .2s, opacity .2s;
+  z-index: 1;
+}
+.egs-sp .egs-sp-car-edge.is-prev { right: 100%; transform: translateX(8px); }
+.egs-sp .egs-sp-car-edge.is-next { left: 100%; transform: translateX(-8px); }
+.egs-sp .egs-sp-car:hover .egs-sp-car-edge { opacity: 1; transform: translateX(0); }
+.egs-sp .egs-sp-car:hover .egs-sp-car-edge .egs-sp-car-btn { pointer-events: auto; }
+.egs-sp .egs-sp-car-btn {
+  display: flex;
+  padding: 10px;
+  border: none;
+  background: none;
+  color: var(--epic-fg);
+  cursor: pointer;
+}
+.egs-sp .egs-sp-car-thumbs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  overflow: hidden;
+}
+.egs-sp .egs-sp-car-thumb {
+  flex: 0 0 100px;
+  width: 100px;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.egs-sp .egs-sp-car-thumb img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  opacity: .5;
+  transition: opacity .2s;
+}
+.egs-sp .egs-sp-car-thumb:hover { border-color: rgba(255, 255, 255, .5); }
+.egs-sp .egs-sp-car-thumb:hover img,
+.egs-sp .egs-sp-car-thumb:focus-visible img,
+.egs-sp .egs-sp-car-thumb.is-current img { opacity: 1; }
+.egs-sp .egs-sp-car-thumb.is-current { border-color: #fff; }
+
+/* ── ONE HOVER, EVERYWHERE SOMETHING CAN BE PRESSED (v8.56) ──────────────
+   Mac App Store's Product Page Preview answers "what here is mine to set?"
+   the same way for every region: pointer cursor, and on hover the region's
+   own box brightens to rgba(255,255,255,.24) over .12s — a border on the
+   text fields (.mac-spp-page .ias-editable:hover) and a box-shadow on the
+   blocks that open another step (.ias-section, .ias-privacy-block,
+   .spp-shots-row, all `box-shadow .12s`). Epic's page had neither: the
+   fields flashed a flat tint with `transition: all` (no duration, so no
+   transition at all), and the blocks that open a step — the media, the
+   rating card, Genres, Features, the three foot blocks — said nothing
+   whatever under the pointer.
+
+   SAME BEHAVIOUR, NOT SAME RESTING STATE. Mac's regions wear the box all the
+   time; Epic's do not, and must not — v8.54 took the glow boxes off this page
+   on purpose, and a page that draws a box around every block is not the page
+   it is previewing. So the box is transparent at rest and is exactly Mac's on
+   hover, with Mac's own .12s. box-shadow rather than a border on the blocks
+   for the reason Mac uses it there too: it costs no layout, so hovering a
+   block cannot move the page under the pointer. */
+.egs-sp .egs-sp-hit {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: box-shadow .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-sp-hit:hover { box-shadow: 0 0 0 1px rgba(255, 255, 255, .24); }
+/* The rating card already wears Epic's own 1px line, so it brightens that
+   line instead of growing a second one outside it. */
+.egs-sp .egs-sp-rating.egs-sp-hit { transition: border-color .12s ease; }
+.egs-sp .egs-sp-rating.egs-sp-hit:hover { box-shadow: none; border-color: rgba(255, 255, 255, .24); }
+
 .egs-sp .ias-char-counter-row { font-family: 'Inter', system-ui, sans-serif; }
 
 /* ── EPIC: THE ACHIEVEMENTS TAB (v8.55) ───────────────────────────────────

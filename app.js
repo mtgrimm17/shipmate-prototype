@@ -23587,6 +23587,85 @@ function _egsProductRepaint() {
   if (state.egsPickOpen) _egsFocusPickInput();
 }
 
+/* ── A Textarea THAT IS AS TALL AS ITS TEXT (v8.56) ───────────────────────
+   Epic's short description and long description are paragraphs — one line of
+   text is one line of page — and this preview's whole claim is its vertical
+   rhythm, so a box that reserves three rows for a one-line blurb breaks the
+   claim even though the 48px gap around it is exactly right.
+
+   WHY AN OBSERVER AND NOT A CALL AT THE END OF THE RENDER. The step modal is
+   repainted from several places and reRenderStepModal returns early on three
+   different paths (a focused inline editor, and the two surfaces that paint
+   instead of it), so "size the fields after rendering" would have to be
+   correct at four call sites and stay correct. The field announces itself
+   instead: one observer, installed once, sizes any data-egs-grow textarea the
+   moment it enters the document, however it got there. Typing is handled by
+   the field's own oninput, which runs before the handler that repaints. */
+function egsGrowField(el) {
+  if (!el || el.tagName !== 'TEXTAREA') return;
+  /* Collapse first or the box can only ever grow: a textarea's scrollHeight
+     is never less than its own client height, so measuring a tall box tells
+     you how tall it already is. (The markup pairs this with rows="1" for the
+     same reason — see egsPageField, render.js.) */
+  el.style.height = 'auto';
+  /* AND ADD THE BORDER BACK. These fields are border-box, so `height` has to
+     cover the border as well, while scrollHeight measures only the padding
+     box — set height to scrollHeight alone and the last line is clipped by
+     exactly the two border widths, which is a scrollbar on a box that was
+     supposed to have grown past needing one. */
+  const borderY = el.offsetHeight - el.clientHeight;
+  el.style.height = (el.scrollHeight + borderY) + 'px';
+  el.style.overflowY = 'hidden';
+}
+function _egsGrowAll(root) {
+  const scope = root && root.querySelectorAll ? root : document;
+  scope.querySelectorAll('textarea[data-egs-grow]').forEach(egsGrowField);
+}
+(function _armEgsGrow() {
+  const arm = () => {
+    if (window._egsGrowArmed) return;
+    window._egsGrowArmed = true;
+    _egsGrowAll(document);
+    new MutationObserver(muts => {
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          if (n.matches && n.matches('textarea[data-egs-grow]')) egsGrowField(n);
+          else _egsGrowAll(n);
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arm);
+  else arm();
+})();
+
+/* DRIVING EPIC'S CAROUSEL (v8.56). Two ways in, one index: a thumbnail says
+   which item, an arrow says which way. stepEgsMedia wraps at both ends, as
+   Epic's does. The list the index points into is rebuilt by the renderer from
+   the asset pool, so the length is read back off the page rather than kept
+   in state — one source, and no stale count after a screenshot is deleted. */
+function _egsMediaCount() {
+  const scope = document.querySelector('.submit-modal') || document;
+  const thumbs = scope.querySelectorAll('.egs-sp-car-thumb');
+  return thumbs.length;
+}
+function setEgsMedia(i) {
+  const n = _egsMediaCount();
+  if (!n) return;
+  const next = Math.min(Math.max(0, i | 0), n - 1);
+  if (state.egsMediaIndex === next) return;
+  state.egsMediaIndex = next;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+function stepEgsMedia(dir) {
+  const n = _egsMediaCount();
+  if (!n) return;
+  const cur = Math.min(Math.max(0, parseInt(state.egsMediaIndex, 10) || 0), n - 1);
+  state.egsMediaIndex = (cur + (dir > 0 ? 1 : -1) + n) % n;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 /* WHICH TAB THE PREVIEW IS SHOWING (v8.55). Epic's product page has two,
    and until now so did this card — drawn, and dead. The whole page is one
    render, so switching tabs is a state flag and a repaint. */

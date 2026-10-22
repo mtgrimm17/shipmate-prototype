@@ -19941,10 +19941,25 @@ function egsPageField(o) {
   const empty = !val.trim();
   const cls   = [o.cls, 'egs-sp-edit', empty ? 'egs-sp-edit-empty' : '',
                  over ? 'is-over-limit' : ''].filter(Boolean).join(' ');
+  /* THE BOX IS AS TALL AS WHAT IS IN IT (v8.56), which is the other half of
+     matching Epic's rhythm. Epic's short description is a paragraph: one line
+     of text is one line tall. A textarea fixed at three rows put two empty
+     rows under a one-line blurb, so the 48px gap BELOW it measured 48 and
+     looked like a hundred — the uneven spacing this version was asked to fix,
+     and no amount of adjusting the gap would have fixed it, because the gap
+     was already even.
+
+     ROWS IS 1, AND THAT IS NOT A GUESS AT THE HEIGHT. On a textarea `rows`
+     sets the height that `height: auto` resolves to, so it is also the FLOOR
+     that scrollHeight can report: with rows=3 the grower measured 3 rows and
+     "grew" the box to exactly the 3 rows it was trying to shrink. One row is
+     the only floor that lets the measurement be the content's. egsGrowField
+     (app.js) sizes the field the moment it enters the document, so the single
+     row is never painted. */
   const body  = o.multiline
-    ? `<textarea class="${cls}" id="${o.id}" rows="${o.rows || 4}"
+    ? `<textarea class="${cls}" id="${o.id}" rows="1" data-egs-grow="1"
                  placeholder="${escHtml(o.placeholder)}"
-                 oninput="${o.onInput}"
+                 oninput="egsGrowField(this); ${o.onInput}"
                  onchange="${o.onChange}">${escHtml(val)}</textarea>`
     : `<input class="${cls}" id="${o.id}" type="text"
               placeholder="${escHtml(o.placeholder)}" value="${escHtml(val)}"
@@ -20019,7 +20034,7 @@ function buildEgsAchievementsPanel() {
 
   const bandHtml = `
     <div class="egs-sp-ach-band">
-      <div class="egs-sp-ach-art"
+      <div class="egs-sp-ach-art egs-sp-hit"
            onclick="openStorePreviewSection('egs','screenshots')">${keyArt
         ? `<img src="${escHtml(keyArt.src)}" alt="">`
         : `<div class="egs-spp-hero-empty">Key art appears here</div>`}</div>
@@ -20090,7 +20105,7 @@ function buildEgsStorePreviewSection() {
   const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
   const ratingDone = cq.total > 0 && cq.answered === cq.total;
   const ratingHtml = `
-    <div class="egs-sp-rating"
+    <div class="egs-sp-rating egs-sp-hit"
          onclick="openStorePreviewSection('egs','content')">
       <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
       <!-- JUST THE NAME OF THE THING (v8.48). This card used to report how
@@ -20148,23 +20163,69 @@ function buildEgsStorePreviewSection() {
       ${metaRow('Platform', platforms.join(', '), 'From Specifications')}
     </aside>`;
 
-  /* The media strip, which on Epic's page is the largest thing above the fold.
-     It borrows the pool rather than a listing of its own so a developer who
-     has already chosen screenshots for another store does not choose them
-     twice — the same well every other preview reads. */
-  const heroSrc = keyArt ? keyArt.src : '';
-  const stripHtml = shots.length
-    ? shots.slice(0, 5).map(sh => `<div class="egs-spp-thumb"><img src="${escHtml(_screenshotSrc(sh) || sh.src || '')}" alt=""></div>`).join('')
-    : '';
+  /* ── THE CAROUSEL IS EPIC'S CAROUSEL (v8.56) ───────────────────────────
+     Measured off store.epicgames.com/p/go-ape-ship-53158b. It is ONE LIST
+     SEEN TWICE, which is the thing the old block got wrong: the hero showed
+     the key art and the strip underneath showed the screenshots, so the
+     thumbnails were a caption for a picture that was not among them and
+     pressing one did nothing. Epic's stage and strip are the same items in
+     the same order — thumbnail n IS slide n — and pressing a thumbnail puts
+     it on the stage.
+
+     THE ARROWS LIVE OUTSIDE THE PICTURE AND ONLY WHILE THE POINTER IS OVER
+     IT. Epic parks a 56px zone past each edge of the stage at opacity 0 with
+     `transition: transform .2s, opacity .2s`, and `._carousel:hover` fades
+     both in; the buttons themselves only take clicks while they are visible.
+     That is drawn in style.css, not here — the markup just has to put the
+     edges inside the element that is hovered.
+
+     THE STAGE STILL OPENS THE SCREENSHOTS STEP, because on this page every
+     block is a door to wherever it is filled in. The thumbnails and arrows
+     stop the click from reaching it, so driving the carousel never kicks the
+     developer into a step they did not ask for. */
+  const mediaSrcs = [];
+  const seenMedia  = new Set();
+  const pushMedia  = (src) => {
+    const s = (src || '').trim();
+    if (s && !seenMedia.has(s)) { seenMedia.add(s); mediaSrcs.push(s); }
+  };
+  if (keyArt) pushMedia(keyArt.src);
+  shots.forEach(sh => pushMedia(_screenshotSrc(sh) || sh.src || ''));
+  /* Clamped on read, never written back: a screenshot deleted in the step
+     would otherwise leave the index pointing past the end of the list. */
+  const mediaIdx = mediaSrcs.length
+    ? Math.min(Math.max(0, parseInt(state.egsMediaIndex, 10) || 0), mediaSrcs.length - 1)
+    : 0;
+  const chevSvg = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${d}"/></svg>`;
   const mediaHtml = `
-    <div class="egs-spp-media"
-         onclick="openStorePreviewSection('egs','screenshots')">
-      <div class="egs-spp-hero">
-        ${heroSrc
-          ? `<img src="${escHtml(heroSrc)}" alt="">`
-          : `<div class="egs-spp-hero-empty">Key art and screenshots appear here</div>`}
+    <div class="egs-sp-car egs-sp-hit">
+      <div class="egs-sp-car-stage"
+           onclick="openStorePreviewSection('egs','screenshots')"
+           title="Open Screenshots">
+        <div class="egs-sp-car-viewport">
+          ${mediaSrcs.length
+            ? `<img src="${escHtml(mediaSrcs[mediaIdx])}" alt="">`
+            : `<div class="egs-spp-hero-empty">Key art and screenshots appear here</div>`}
+        </div>
+        ${mediaSrcs.length > 1 ? `
+        <div class="egs-sp-car-edge is-prev">
+          <button class="egs-sp-car-btn" type="button" aria-label="Previous image"
+                  onclick="event.stopPropagation(); stepEgsMedia(-1)">${chevSvg('15 18 9 12 15 6')}</button>
+        </div>
+        <div class="egs-sp-car-edge is-next">
+          <button class="egs-sp-car-btn" type="button" aria-label="Next image"
+                  onclick="event.stopPropagation(); stepEgsMedia(1)">${chevSvg('9 18 15 12 9 6')}</button>
+        </div>` : ''}
       </div>
-      ${stripHtml ? `<div class="egs-spp-strip">${stripHtml}</div>` : ''}
+      ${mediaSrcs.length > 1 ? `
+      <div class="egs-sp-car-thumbs">
+        ${mediaSrcs.map((src, i) => `
+          <button class="egs-sp-car-thumb${i === mediaIdx ? ' is-current' : ''}" type="button"
+                  aria-label="${i === mediaIdx ? 'Current item' : `Slide ${i + 1}`}"
+                  onclick="event.stopPropagation(); setEgsMedia(${i})">
+            <img src="${escHtml(src)}" alt="">
+          </button>`).join('')}
+      </div>` : ''}
     </div>`;
 
   /* Epic prints the short description straight under the carousel, then the
@@ -20182,7 +20243,7 @@ function buildEgsStorePreviewSection() {
      wider right one with a rule between them. Stacked, the two rows read as
      one long list of tags whose headings happen to interrupt it. */
   const tagCol = (label, items, step) => `
-    <div class="egs-sp-tagcol"
+    <div class="egs-sp-tagcol egs-sp-hit"
          onclick="openStepModal('egs','${step}')">
       <span class="egs-sp-tagrow-label">${label}</span>
       <span class="egs-sp-tags">${items.length
@@ -20216,19 +20277,30 @@ function buildEgsStorePreviewSection() {
      right-aligned, and still only when there is a second language to review.
      It is Shipmate's affordance rather than Epic's chrome, which is why it
      sits beside the text rather than in it. */
+  /* ONE BLOCK, NOT THREE (v8.56). Epic's main column is four blocks with an
+     even 48px between them — carousel, short description, Genres+Features,
+     long description — and the headline is INSIDE the last of those, 20px
+     above the prose it introduces (h2 margin-bottom, measured on go-ape-ship).
+     Emitted as three siblings, the headline took a full inter-block gap of
+     its own, so the body drifted away from its own heading and the spacing
+     either side of the short description stopped matching. The Localizations
+     button rides along inside the block for the same reason: it is Shipmate's
+     chrome and must not buy a 48px gap with it. */
   const bodyLimit = egsBodyLimit(headline.length);
   const aboutHtml = `
-    ${locBtnHtml ? `<div class="egs-sp-locrow">${locBtnHtml}</div>` : ''}
-    <div class="egs-sp-headline-wrap">
-      ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
-          limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
-          onInput: `updateEgsHeadlineCounter(this)`,
-          onChange: `setEgsPageField('headline', this.value)` })}
-    </div>
-    ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
-        limit: bodyLimit, placeholder: 'Long Description',
-        onInput: `updateEgsBodyCounter(this)`,
-        onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}`;
+    <div class="egs-sp-long">
+      ${locBtnHtml ? `<div class="egs-sp-locrow">${locBtnHtml}</div>` : ''}
+      <div class="egs-sp-headline-wrap">
+        ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
+            limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
+            onInput: `updateEgsHeadlineCounter(this)`,
+            onChange: `setEgsPageField('headline', this.value)` })}
+      </div>
+      ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
+          limit: bodyLimit, placeholder: 'Long Description',
+          onInput: `updateEgsBodyCounter(this)`,
+          onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}
+    </div>`;
 
   /* ── THE FOOT OF THE PAGE, which on Epic is where everything the developer
      has declared about the build ends up: who to follow, what it runs on,
@@ -20240,7 +20312,7 @@ function buildEgsStorePreviewSection() {
      is for instead — and says it in the heading rather than in a sentence
      underneath, which is what the glow is already for. */
   const followHtml = `
-    <div class="egs-sp-foot"
+    <div class="egs-sp-foot egs-sp-hit"
          onclick="openStepModal('egs','socialMedia')">
       <div class="egs-spp-h2">${socialLinks.length ? 'Follow Us' : 'Social Media Links'}</div>
       ${socialLinks.length
@@ -20271,7 +20343,7 @@ function buildEgsStorePreviewSection() {
   };
   const specTables = supported.map(specTable).filter(Boolean).join('');
   const sysHtml = `
-    <div class="egs-sp-foot"
+    <div class="egs-sp-foot egs-sp-hit"
          onclick="openStepModal('egs','specifications')">
       <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
       ${specTables}
@@ -20284,7 +20356,7 @@ function buildEgsStorePreviewSection() {
     </div>`;
   const detailsDone = a.loginTypes.length || a.textLanguages.length || a.audioLanguages.length;
   const loginHtml = `
-    <div class="egs-sp-foot"
+    <div class="egs-sp-foot egs-sp-hit"
          onclick="openStepModal('egs','productDetails')">
       <div class="egs-sp-foot-sub">Login Accounts Required</div>
       <div class="egs-sp-langline is-plain"><b>${a.loginTypes.length
@@ -20296,7 +20368,7 @@ function buildEgsStorePreviewSection() {
     </div>`;
 
   const legalHtml = (a.legalFooter || '').trim() || (a.privacyLink || '').trim() ? `
-    <div class="egs-sp-legal" onclick="openStepModal('egs','productDetails')">
+    <div class="egs-sp-legal egs-sp-hit" onclick="openStepModal('egs','productDetails')">
       ${(a.legalFooter || '').trim() ? `<span>${escHtml(a.legalFooter)}</span>` : ''}
       ${(a.privacyLink || '').trim() ? `<span class="egs-sp-legal-link">Privacy Policy</span>` : ''}
     </div>` : '';
