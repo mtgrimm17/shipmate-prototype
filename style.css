@@ -16579,8 +16579,11 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    became the questions' parent for a labelled run — without it, exactly the
    runs that have a heading lost their hairlines and their breathing room, and
    Setting sat flush against Pixelated or Childlike Style. */
-.giarc-flat .giarc-children > .giarc-card + .giarc-card,
-.giarc-flat .giarc-run > .giarc-card + .giarc-card,
+/* ONLY BETWEEN TOPICS (v8.51). Jaco: "no me separes con rayas horizontales
+   las preguntas dentro de cada grupo." The hairline stays between top-level
+   topics, where it marks a change of subject; inside a group the rail on the
+   left and the row spacing already say the questions belong together, and a
+   rule under every one cut the group into a stack of slips. */
 .giarc-flat .giarc-root > .giarc-card + .giarc-card { border-top: 1px solid var(--border); }
 /* The hairline needs the breathing room the padding used to give. */
 .giarc-flat .giarc-children > .giarc-card,
@@ -16732,6 +16735,40 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
    summaries are excluded — they are one ellipsed line by design. */
 .giarc-flat .giarc-title:not(.giarc-title-collapsed) { max-width: 500px; }
 .giarc-tseg { display: inline-block; }   /* break between comma phrases — egsTitleHTML */
+
+/* THE APP STORE'S VERTICAL RHYTHM (v8.51). Jaco: "verticalmente espacia las
+   preguntas/pills igual que tenemos las de iOS/Mac." Measured: an App Store
+   row is 34px tall with 8px between rows (42px pitch); Epic's one-line rows
+   were 40px plus 12px of padding above and below (64px pitch). Now the same
+   34 + 8. A question that wraps to two lines grows the row, as on the App
+   Store; stacked cards keep their own padding. */
+.giarc-flat .giarc-children > .giarc-card.giarc-inline,
+.giarc-flat .giarc-run > .giarc-card.giarc-inline { padding: 0; margin-bottom: 8px; }
+.giarc-flat .giarc-card.giarc-inline > .giarc-row { min-height: 34px; }
+/* Presentation's multi-picker (v8.51): swSelect's pill and dropdown, with
+   tick boxes, sized as the answer pills beside it. The dropdown is one wide
+   column so IARC's full option text reads on one line. */
+.giarc-picker { position: relative; flex-shrink: 0; min-width: 200px; max-width: 55%; }
+.giarc-picker .loc-primary-pill { max-width: 100%; height: auto; padding: 7px 12px; }
+.giarc-picker .loc-primary-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.giarc-picker .loc-primary-pill.is-empty {
+  --ring-top: transparent; --ring-bottom: transparent;
+  background: var(--pill-off-bg); border-color: var(--pill-off-border); color: var(--pill-off-color);
+}
+.giarc-picker .loc-primary-pill.is-empty:hover { background: var(--pill-off-bg-hover); border-color: var(--border-hover); color: var(--text-dim); }
+.giarc-picker .loc-primary-pill.ai-confident { background: var(--pill-ai-bg); color: var(--pill-ai-color); }
+.giarc-picker .loc-dropdown { min-width: 360px; max-height: none; padding: 4px 0; }
+.giarc-dd-box {
+  flex-shrink: 0; width: 14px; height: 14px; border-radius: 4px;
+  border: 1.5px solid var(--border-hover); position: relative;
+}
+.giarc-dd-item.is-on { color: var(--text); }
+.giarc-dd-item.is-on .giarc-dd-box { background: var(--sel-color); border-color: var(--sel-color); }
+.giarc-dd-item.is-on.is-ai .giarc-dd-box { background: var(--pill-ai-color); border-color: var(--pill-ai-color); }
+.giarc-dd-item.is-on .giarc-dd-box::after {
+  content: ''; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px;
+  border: solid #fff; border-width: 0 1.75px 1.75px 0; transform: rotate(45deg);
+}   /* break between comma phrases — egsTitleHTML */
 
 /* ── THE PINNED LABEL IS CHROME, NOT A LINE OF TEXT (v8.38) ─────────────
    Distinct by KIND rather than by type size: a raised surface, bled out to the

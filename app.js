@@ -18893,6 +18893,9 @@ function answerQuestion(key, value) {
 /* ── Project bar dropdowns ───────────────────────────── */
 
 function closeAllDropdowns() {
+  // Epic's Presentation picker keeps its open key in state so a tick (which
+  // re-renders the step) does not shut it — see buildEgsPresentation.
+  state.giarcPickerOpen = null;
   document.getElementById('projectSelectorWrap')?.classList.remove('open');
   document.getElementById('versionSelectorWrap')?.classList.remove('open');
   document.getElementById('versionMenu')?.classList.remove('open');
@@ -22986,6 +22989,61 @@ function answerGIARCMultiOpt(key, optIndex) {
     state.cqAnswers[key] = current;
   }
   state.cqAnswerMeta[key] = { humanConfirmed: true };
+  reRenderAndroidStepModal();
+  updateAndroidCard();
+}
+
+/* One type of a "select all that apply" drawn as a YES/NO row (Epic,
+   buildEgsTypeRows). YES ticks IARC's option, NO un-ticks it and clears what
+   it revealed; pressing the lit pill again un-sets it, and pressing a lit
+   violet one confirms it, as everywhere else. IARC has no "no" to store, so an
+   explicit NO is remembered in state.egsTypeNo[key]. */
+function answerGIARCTypeRow(key, idx, yes) {
+  const q    = GOOGLE_IARC_BY_KEY[key];
+  if (!q) return;
+  const cur  = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key].slice() : [];
+  const m    = state.cqAnswerMeta[key];
+  if (!state.egsTypeNo) state.egsTypeNo = {};
+  const no   = new Set(state.egsTypeNo[key] || []);
+  const isOn = cur.includes(idx);
+  const lit  = yes ? isOn : (!isOn && (no.has(idx) || cur.length > 0));
+  if (lit && m && m.source && !m.humanConfirmed) {
+    state.cqAnswerMeta[key] = { ...m, humanConfirmed: true };
+  } else {
+    const opt = giarcOptionEntries(q).find(o => o.index === idx);
+    const drop = () => {
+      cur.splice(cur.indexOf(idx), 1);
+      if (opt) giarcChildKeysForOption(opt.child).forEach(giarcClearAnswersRecursively);
+    };
+    if (yes) { if (isOn) drop(); else { cur.push(idx); no.delete(idx); } }
+    else     { if (isOn) { drop(); no.add(idx); } else if (no.has(idx)) no.delete(idx); else no.add(idx); }
+    state.cqAnswers[key]    = cur.sort((a, b) => a - b);
+    state.egsTypeNo[key]    = [...no];
+    state.cqAnswerMeta[key] = { ...(m || {}), humanConfirmed: true };
+  }
+  reRenderAndroidStepModal();
+  updateAndroidCard();
+}
+
+function toggleGiarcPicker(event, key) {
+  event.stopPropagation();
+  const wasOpen = state.giarcPickerOpen === key;
+  closeAllDropdowns();
+  if (wasOpen) return;
+  state.giarcPickerOpen = key;
+  document.querySelector(`[data-giarc-picker="${key}"]`)?.classList.add('is-open');
+}
+
+/* Epic's Presentation picker (buildEgsPresentation, render.js): Rarely and
+   Often for the same distance are exclusive, so ticking one unticks its
+   partner; ticking a lit one clears it. Stored as IARC's indices in one array. */
+function answerGIARCPresentation(key, group, idx) {
+  const pair = group === 'distant' ? [3, 4] : [5, 6];
+  const cur  = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key] : [];
+  const next = cur.filter(i => !pair.includes(i));
+  if (idx && !cur.includes(idx)) next.push(idx);
+  state.cqAnswers[key] = next.sort((a, b) => a - b);
+  state.cqAnswerMeta[key] = { ...(state.cqAnswerMeta[key] || {}), humanConfirmed: true };
   reRenderAndroidStepModal();
   updateAndroidCard();
 }

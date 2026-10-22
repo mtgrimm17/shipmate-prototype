@@ -19067,7 +19067,130 @@ function buildEgsContentRatingSection() {
      scroll, at 183px each. Mac App Store asks its questions on 34px rows,
      label left and answers right. That shape is what this restores, and it is
      the whole of the saving: 2,171px, 3.0 screens, same answers. */
+  /* QUESTIONS REWORDED SO THEY FIT A ROW (v8.51). Jaco: "la pregunta de
+     pixelated, childlike, podría ser sin más STYLE: None, Pixelated,
+     Childlike? con pills?" IARC asks it as a sentence with sentence-long
+     answers ("Yes, it has a childlike style (e.g., likely to appeal to younger
+     children)"), which sent it to the stacked card. Said as a property it is a
+     three-pill row like Setting and Reactions beside it.
+
+     PRESENTATION ONLY. `opts` maps IARC's option index to the label shown and
+     its order lists the indices left to right — None first, the way the App
+     Store puts its own None — so the stored answer is still IARC's index (3 =
+     No, 2 = pixelated, 1 = childlike) and inference, the iOS mapping and the
+     summary all read it unchanged. IARC's own wording stays in the hint and on
+     each pill's. */
+  const EGS_ROW_OVERRIDES = {
+    'google.content.humanstyle':    { title: 'Style', order: [3, 2, 1], opts: { 3: 'None', 2: 'Pixelated', 1: 'Childlike' } },
+    'google.content.nonhumanstyle': { title: 'Style', order: [3, 2, 1], opts: { 3: 'None', 2: 'Pixelated', 1: 'Childlike' } },
+    // Jaco: "¿podemos convertir esta en triple pill también?" The question
+    // keeps IARC's wording; only the two "Yes, …" answers are shortened.
+    'google.content.humaninnocents': { title: 'Innocent or Defenseless Characters Can Be Seriously Injured or Killed',
+                                       order: [1, 2, 3], opts: { 1: 'No', 2: 'With penalties', 3: 'Without penalties' } },
+  };
+
+  /* PRESENTATION IS A MULTI-PICKER (v8.51). Jaco: "¿me puedes poner la de
+     presentation en tipo multipicker? con una columna ancha." The row is the
+     same one-line shape as Setting and Reactions — the question left, one pill
+     right — and the pill opens a single wide column of IARC's six options
+     with tick boxes, wide enough that each reads in full without wrapping.
+
+     A grid of two None / Rarely / Often rows was tried first in the same
+     batch and dropped for this; the one rule it carried survives: Rarely and Often
+     for the same distance are exclusive, so ticking one unticks its partner
+     (answerGIARCPresentation, app.js). "Referred to" and "Implied" stay
+     independent ticks, as IARC has them.
+
+     The picker stays open while you tick — state.giarcPickerOpen survives the
+     re-render each tick causes — and closes on the app's usual outside click
+     (closeAllDropdowns). Storage is unchanged: IARC's indices in one array. */
+  /* A "SELECT ALL THAT APPLY" AS ONE YES/NO ROW PER TYPE (v8.51). Jaco: "el
+     violence against humans debería desplegarse bajo su correspondiente
+     pregunta, ¿no?" It was a list of four checkboxes with every follow-up
+     they opened stacked BELOW the whole list, under a label — so the eight
+     questions "against humans" opens were two screens away from the box that
+     opened them, after the three boxes that did not.
+
+     Now each option is a row with the App Store's YES / NO pair, and its
+     follow-ups hang directly under it:
+
+       Against humans                 YES · NO
+         Setting · Style · … (its 8)
+       Against non-humans             YES · NO
+       …
+
+     YES is IARC's tick on that option; NO is its absence. IARC cannot store a
+     "no", so one pressed on an otherwise untouched question is remembered in
+     state.egsTypeNo — the same reason Presentation's None needed a home. Once
+     any type is YES, the rest read as NO. Storage is unchanged: IARC's indices
+     in one array. Violence only for now; the same table takes the other
+     Types questions when wanted. */
+  const EGS_TYPE_ROWS = {
+    'google.content.bloodviolencegoretypes': { 1: 'Against humans', 2: 'Against non-humans (animals, creatures, robots…)',
+                                               3: 'Gory images without a violent act', 4: 'Blood unrelated to violence' },
+  };
+  function buildEgsTypeRows(q, key, depth) {
+    const labels = EGS_TYPE_ROWS[key];
+    const cur    = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key] : [];
+    const said   = ((state.egsTypeNo || {})[key]) || [];
+    const m      = state.cqAnswerMeta && state.cqAnswerMeta[key];
+    const ai     = !!(m && m.source && !m.humanConfirmed && cur.length);
+    return giarcOptionEntries(q).map(o => {
+      const yes = cur.includes(o.index);
+      const no  = !yes && (said.includes(o.index) || cur.length > 0);
+      const pill = (isYes, lit) => `<button type="button" class="yn-btn ${isYes ? 'yn-yes' : 'yn-no'}${lit ? ' is-selected' + (ai ? ' ai-confident' : '') : ''}"
+                 onclick="answerGIARCTypeRow('${key}',${o.index},${isYes})">${isYes ? 'YES' : 'NO'}</button>`;
+      return `
+        <div class="giarc-card giarc-depth-${depth} giarc-inline giarc-typerow" data-key="${key}" data-opt="${o.index}">
+          <div class="giarc-row">
+            <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(labels[o.index] || o.text)}</span>${giarcTooltip(o.text)}</div>
+            <div class="question-yn">${pill(true, yes)}${pill(false, no)}</div>
+          </div>
+        </div>
+        ${yes ? renderChildren(key, depth + 1, giarcChildKeysForOption(o.child)) : ''}`;
+    }).join('');
+  }
+
+  const EGS_PRESENTATION_KEYS = ['google.content.humanpresented', 'google.content.nonhumanpresented'];
+  const EGS_PRES_SHORT = { 1: 'Referred to', 2: 'Implied', 3: 'Rarely, distant', 4: 'Often, distant',
+                           5: 'Rarely, close-up', 6: 'Often, close-up' };
+  function buildEgsPresentation(q, key, depth) {
+    const cur   = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key].slice().sort((a, b) => a - b) : [];
+    const m     = state.cqAnswerMeta && state.cqAnswerMeta[key];
+    const ai    = !!(m && m.source && !m.humanConfirmed && cur.length);
+    const names = cur.map(i => EGS_PRES_SHORT[i]).filter(Boolean);
+    const summary = !names.length ? 'Select all that apply'
+                  : names.length <= 2 ? names.join(', ') : `${names.length} selected`;
+    const open  = state.giarcPickerOpen === key;
+    const items = giarcOptionEntries(q).map(o => {
+      const on = cur.includes(o.index);
+      const fn = o.index >= 3
+        ? `answerGIARCPresentation('${key}','${o.index <= 4 ? 'distant' : 'close'}',${o.index})`
+        : `answerGIARCMultiOpt('${key}',${o.index})`;
+      return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${on && ai ? ' is-ai' : ''}"
+                      onclick="event.stopPropagation(); ${fn}">
+                <span class="giarc-dd-box"></span><span class="loc-dd-name">${escHtml(o.text)}</span>
+              </button>`;
+    }).join('');
+    const tip = q.tooltip ? giarcTooltip(q.tooltip) : '';
+    return `
+      <div class="giarc-card giarc-depth-${depth} giarc-inline" data-key="${key}">
+        <div class="giarc-row">
+          <div class="giarc-row-label"><span class="giarc-title">Presentation</span>${tip}</div>
+          <div class="loc-primary-wrap sw-select-wrap align-right giarc-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
+            <button type="button" class="loc-primary-pill${!names.length ? ' is-empty' : ai ? ' ai-confident' : ''}"
+                    onclick="toggleGiarcPicker(event,'${key}')">
+              <span class="loc-primary-name">${escHtml(summary)}</span>
+              <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="loc-dropdown">${items}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   function egsInlineable(q) {
+    if (EGS_ROW_OVERRIDES[q.key]) return true;
     const o = giarcOptionEntries(q).map(x => x.text || '');
     if (!o.length) return false;
     let longest = 0, total = 0;
@@ -19228,8 +19351,10 @@ function buildEgsContentRatingSection() {
        answer set (Rarely/Often, None/Mild/Moderate/High…) is the App Store's
        `.intensity-btn`. Both already carry `.ai-confident` for the violet, so
        egsAiClass plugs straight in. */
-    const opts  = giarcOptionEntries(q);
-    const yesNo = !isMulti && opts.length === 2 && opts[0].text === 'Yes' && opts[1].text === 'No';
+    const ovr   = EGS_ROW_OVERRIDES[key];
+    let opts    = giarcOptionEntries(q);
+    if (ovr) opts = ovr.order.map(i => opts.find(o => o.index === i)).filter(Boolean);
+    const yesNo = !ovr && !isMulti && opts.length === 2 && opts[0].text === 'Yes' && opts[1].text === 'No';
     const segs = opts.map(opt => {
       const on = isMulti ? (Array.isArray(cur) && cur.includes(opt.index)) : cur === opt.index;
       const fn = isMulti ? `answerGIARCMultiOpt('${key}',${opt.index})`
@@ -19237,14 +19362,16 @@ function buildEgsContentRatingSection() {
       const cls = yesNo
         ? `yn-btn ${opt.index === 1 ? 'yn-yes' : 'yn-no'}${on ? ' is-selected' : ''}`
         : `intensity-btn giarc-pill${on ? ' is-sel-none' : ''}`;
-      return `<button type="button" class="${cls}${egsAiClass(key, opt.index)}"
-                      onclick="${fn}">${escHtml(yesNo ? opt.text.toUpperCase() : opt.text)}</button>`;
+      const label = ovr ? ovr.opts[opt.index] : opt.text;
+      const hint  = ovr ? ` data-tip="${escHtml(opt.text)}"` : '';
+      return `<button type="button" class="${cls}${egsAiClass(key, opt.index)}"${hint}
+                      onclick="${fn}">${escHtml(yesNo ? label.toUpperCase() : label)}</button>`;
     }).join('');
     const shell = `giarc-card giarc-depth-${depth} giarc-inline`;
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${egsTitleHTML(egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
+          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${egsTitleHTML(ovr ? ovr.title : egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
           <div class="${yesNo ? 'question-yn' : 'intensity-group'}">${segs}</div>
           ${collapseBtnHTML}
         </div>
@@ -19307,6 +19434,10 @@ function buildEgsContentRatingSection() {
        App Store's rows have always said it. So these rows are drawn the same
        answered or not; only the stacked cards (options too long for a row)
        still fold away. */
+    if (EGS_TYPE_ROWS[key]) return buildEgsTypeRows(q, key, depth);
+    if (EGS_PRESENTATION_KEYS.includes(key)) {
+      return buildEgsPresentation(q, key, depth);
+    }
     if (egsInlineable(q)) {
       const tip = q.tooltip ? giarcTooltip(q.tooltip) : '';
       return buildGIARCInlineRow(q, key, title, tip, '', '', depth, index)
@@ -19369,8 +19500,11 @@ function buildEgsContentRatingSection() {
      back here. The label is a line in the flow, the way Mac App Store's own
      category headers are, and each question underneath stays exactly as
      independent as it was. */
-  function renderChildren(key, depth) {
-    const kids = giarcActiveChildKeys(key);
+  function renderChildren(key, depth, only) {
+    // `only` (v8.51): a single option's children, for a type row that hangs
+    // its own follow-ups directly under itself (buildEgsTypeRows). Those runs
+    // get no label — the row right above them already names the subject.
+    const kids = only || giarcActiveChildKeys(key);
     if (!kids.length) return '';
 
     /* Consecutive children that share an opening are one run. The grouping is
@@ -19400,7 +19534,7 @@ function buildEgsContentRatingSection() {
        wording has no label to stick, so it gets no wrapper either. */
     const html = runs.map(r => {
       const body = r.keys.map(ck => renderGIARCQuestion(ck, depth)).join('');
-      if (!r.pre) return body;
+      if (!r.pre || only) return body;
       return `<div class="giarc-run">`
            + `<div class="giarc-sec-label">${escHtml(r.pre.slice(0, -2))}</div>`
            + body

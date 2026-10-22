@@ -6130,6 +6130,12 @@ const state = {
   // re-opened after their subtree auto-collapsed (fully answered). Purely a
   // display override; clearing an answer removes the key from this set too.
   // Applies to 'radio' questions, which auto-collapse once answered.
+  // Key of Epic's open Presentation picker, so ticking an option (which
+  // re-renders) does not close it. Cleared by closeAllDropdowns.
+  giarcPickerOpen: null,
+  // Epic's type rows (buildEgsTypeRows): option indices the developer
+  // explicitly answered NO, per question key. IARC stores only the ticks.
+  egsTypeNo: {},
   giarcManuallyExpanded: new Set(),
   // Same idea in reverse, for 'picklist_multi' ("select all that apply")
   // questions: those never auto-collapse just because one option was
