@@ -523,7 +523,7 @@ async function toggleStepSection(pid, stepId) {
   }
   _markStepVisited(pid, stepId);
 
-  const step = PLATFORMS[pid].steps.find(s => s.id === stepId);
+  const step = platformStep(pid, stepId);
   if (!state.submission.infer) state.submission.infer = {};
   state.submission.infer[pid] = { step: stepId, status: null, error: null };
 
@@ -3388,7 +3388,9 @@ async function openStepModal(pid, stepId) {
   document.body.style.overflow = 'hidden';
 
   // For inference steps: re-run every open to use latest accumulated knowledge
-  const step = PLATFORMS[pid].steps.find(s => s.id === stepId);
+  // platformStep, not p.steps.find (v8.57) — a step opened from a preview's
+  // block may not be on its card at all. See PLATFORM_OFF_CARD_STEPS, state.js.
+  const step = platformStep(pid, stepId);
   if (step?.hasInference) {
     state.stepModal.inferenceStatus = 'loading';
     renderStepModal();

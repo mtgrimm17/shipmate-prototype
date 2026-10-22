@@ -1249,9 +1249,31 @@ const PLATFORMS = {
          order means a developer working from their docs is never asked for
          something two screens ahead of where they are. */
       { id: 'productDetails',    label: 'Product Details'                              },
-      { id: 'specifications',    label: 'Specifications'                               },
-      { id: 'socialMedia',       label: 'Social Media'                                 },
-      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
+      /* NO 'specifications', 'socialMedia' OR 'contentRating' ROW (v8.57) —
+         removed as Submission steps per request, now that the Store Page
+         Preview carries a door to each of them: the System Requirements block
+         opens Specifications, the Follow Us / Social Media Links block opens
+         Social Media, and the rating card opens Content Rating. Same move Mac
+         App Store made for Content Rating and App Privacy (see
+         PLATFORMS.macos's own comment above), and the same three facts hold.
+
+         THE SECTIONS ARE UNTOUCHED. buildEgsSpecificationsSection,
+         buildEgsSocialMediaSection and Epic's content-rating tree still
+         render, openStepModal('egs', <id>) still opens them — that is what the
+         preview's blocks call — and isEgsSectionComplete still answers for all
+         three. They are simply no longer counted among this platform's own
+         steps (platformStepCount, and every list that maps over
+         PLATFORMS.egs.steps). Their step definitions live on in
+         PLATFORM_OFF_CARD_STEPS below so the modal still knows their titles.
+
+         AND TWO OF THEM STAY MANDATORY. isEgsSectionComplete('storePreview')
+         is not complete until Content Rating and Specifications are, so
+         Submit cannot bypass what the page prints. The content-rating visit
+         gate (STEP_REQUIRES_VISIT) still applies and is still stamped, by
+         openStorePreviewSection's own 'content' -> 'contentRating' mapping.
+         Social Media is the exception and always was: Epic files it under
+         "Optional Information", its completeness was only ever "has been
+         looked at", and a game with no Discord is not an unfinished game. */
       { id: 'localizations',     label: 'Localizations'                                },
       { id: 'storePreview',      label: 'Store Page Preview'                           },
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
@@ -1639,6 +1661,49 @@ function _markStepVisited(pid, stepId) {
    So the pid check is gone and the condition is the one that was always
    doing the work. It is a no-op for a platform with no such step, since the
    filter then removes nothing. */
+/* ── STEPS A CARD NO LONGER DRAWS, BUT THE APP STILL KNOWS (v8.57) ────────
+   A step can be taken off a platform's card and stay completely alive — its
+   section still renders, openStepModal still opens it, its completeness still
+   answers — because the only thing the card's list decides is what gets a
+   numbered row and what platformStepCount counts. Mac App Store did it first
+   with Game Center; Epic now does it with Specifications, Social Media and
+   Content Rating, all three reached through the Store Page Preview's own
+   blocks.
+
+   WHAT BREAKS WITHOUT THIS REGISTER is small and invisible until you see it:
+   the step modal reads its title (and whether to run inference) from
+   `PLATFORMS[pid].steps.find(...)`, so a step that is no longer in that array
+   opens with a BLANK HEADING. Game Center answered that with a hardcoded
+   label at the point of use, which works once; at four steps across four
+   platforms it is a list of special cases in the middle of a render function.
+   So the definitions move here, `platformStep` is the one lookup that knows
+   about both lists, and the callers stop caring which list a step is in. */
+const PLATFORM_OFF_CARD_STEPS = {
+  ios:        [{ id: 'gameCenter',     label: 'Game Center' }],
+  macos:      [{ id: 'gameCenter',     label: 'Game Center' }],
+  macos_full: [{ id: 'gameCenter',     label: 'Game Center' }],
+  egs: [
+    { id: 'specifications', label: 'Specifications'                      },
+    { id: 'socialMedia',    label: 'Social Media'                        },
+    /* hasInference rides along with the definition, not with the row. Epic's
+       content rating is inferred on the way in through the preview's own
+       door (openStorePreviewSection's `needsInference`, app.js) as well, but
+       the flag belongs to the step either way. */
+    { id: 'contentRating',  label: 'Content Rating', hasInference: true  },
+  ],
+};
+
+/* THE ONE LOOKUP. Asks the card's list first — an id in both would be a
+   mistake, and this way the card's own definition wins — then the off-card
+   register. Returns null for an id neither list knows, which is what every
+   caller's `step?.` already expects. */
+function platformStep(pid, stepId) {
+  const p = PLATFORMS[pid];
+  return (p && p.steps.find(s => s.id === stepId))
+      || (PLATFORM_OFF_CARD_STEPS[pid] || []).find(s => s.id === stepId)
+      || null;
+}
+
 function _visiblePlatformSteps(pid) {
   const p = PLATFORMS[pid];
   if (!p) return [];
@@ -3581,7 +3646,19 @@ function isEgsSectionComplete(sectionId) {
   /* The page is done when everything it PRINTS is done — the same roll-up
      Google Play's own storePreview arm makes, over Epic's fields instead. */
   if (sectionId === 'storePreview') {
-    return isEgsSectionComplete('contentRating')
+    /* SPECIFICATIONS JOINED THE ROLL-UP IN v8.57, when it stopped being a row
+       of its own. It belonged here from v8.44 in any case: the page has
+       printed a System Requirements block since then, and the rule this arm
+       states is "done when everything it PRINTS is done". Without it, taking
+       the row away would have quietly made a required section optional.
+
+       platformSectionComplete, not isEgsSectionComplete, for the content
+       rating alone: that is the wrapper that applies the STEP_REQUIRES_VISIT
+       gate, which the removed row used to apply and which nothing else on
+       this card would. Social Media is deliberately absent — Epic calls it
+       Optional Information and its only test was ever a visit. */
+    return platformSectionComplete('egs', 'contentRating')
+        && isEgsSectionComplete('specifications')
         && isEgsSectionComplete('screenshots');
   }
   return false;

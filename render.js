@@ -7726,7 +7726,10 @@ function renderStepModal() {
   if (!platformId || !stepId) return;
 
   const p    = PLATFORMS[platformId];
-  const step = p.steps.find(s => s.id === stepId);
+  /* platformStep, not p.steps.find (v8.57): a step can be off the card and
+     still open here — Game Center, and now Epic's Specifications, Social
+     Media and Content Rating. See PLATFORM_OFF_CARD_STEPS, state.js. */
+  const step = platformStep(platformId, stepId);
 
   // Inference banners — success note goes to footer; error stays in scroll area
   let inferenceBanner     = '';
@@ -7770,13 +7773,12 @@ function renderStepModal() {
     : null;
   const FLIP_LABELS = SM_FLIP_LABELS;
   const isFlipped = !!flipTarget;
-  // Game Center (macos, ios, and now macos_full too) is not one of
-  // PLATFORMS.macos.steps/PLATFORMS.ios.steps/PLATFORMS.macos_full.steps at
-  // all — reached instead via Product Page Preview's Achievements card (see
-  // those arrays' own comments, state.js) — so `step` above is undefined
-  // whenever it's opened this way, and step?.label alone would render a
-  // blank modal title. Falls back to its own still-accurate, hardcoded
-  // label in that one case.
+  // Game Center, and Epic's Specifications/Social Media/Content Rating, are
+  // not in their platforms' own steps arrays at all — they are reached
+  // through a preview's blocks instead. They used to leave `step` undefined
+  // and the modal heading blank; PLATFORM_OFF_CARD_STEPS (state.js) carries
+  // their definitions now, platformStep above finds them there, and the
+  // heading is the step's own label for every step either way.
   /* "SCREENSHOTS" IS CALLED "MEDIA CAROUSEL" ON THE TWO APPLE PREVIEWS
      (v7.15, by request). The strip stopped being only screenshots the moment
      the trailer led it, and the section behind it now selects between both —
@@ -7795,7 +7797,7 @@ function renderStepModal() {
   const stepTitle = step ? stepLabel(platformId, step) : '';   // same single source as the card row (locale → array fallback)
   const displayStepLabel = isFlipped
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || stepTitle)
-    : (stepTitle || (stepId === 'gameCenter' && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full') ? 'Game Center' : ''));
+    : stepTitle;
 
   // Step body — one dispatcher, shared with the inline Submission pane.
   const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
