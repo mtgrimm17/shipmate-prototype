@@ -19157,7 +19157,7 @@ function buildEgsContentRatingSection() {
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label">${depth === 1 ? `<span class="giarc-index">${index}</span>` : ''}<span class="giarc-title">${egsTitleHTML(ovr ? ovr.title : egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
+          <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(ovr ? ovr.title : egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
           <div class="${yesNo ? 'question-yn' : 'intensity-group'}">${segs}</div>
           ${collapseBtnHTML}
         </div>
@@ -19176,7 +19176,7 @@ function buildEgsContentRatingSection() {
   function buildGIARCCollapsedRow(key, depth, index) {
     const q = GOOGLE_IARC_BY_KEY[key] || {};
     const title = q.title || '';
-    const indexBadge = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
+    const indexBadge = ''  /* no topic numbers since v8.53 — groups order the card, as on the App Store */;
     const summary = escHtml(giarcAnswerSummaryText(key));
     const shell = `giarc-card giarc-depth-${depth}` + (q.data_type && egsInlineable(q) ? ' giarc-inline' : '');
     /* A COLLAPSED ROW IS WHERE PROVENANCE MATTERS MOST, which is easy to get
@@ -19236,7 +19236,7 @@ function buildEgsContentRatingSection() {
     if (showCollapsedRow) return buildGIARCCollapsedRow(key, depth, index);
 
     const answered    = giarcIsAnswered(key);
-    const indexBadge  = depth === 1 ? `<span class="giarc-index">${index}</span>` : '';
+    const indexBadge  = ''  /* no topic numbers since v8.53 — groups order the card, as on the App Store */;
     const tooltipHTML = q.tooltip ? giarcTooltip(q.tooltip) : '';
     const checkHTML   = `<span class="giarc-check${answered ? ' is-visible' : ''}">${CHECK_SVG}</span>`;
 
@@ -19364,7 +19364,20 @@ function buildEgsContentRatingSection() {
       </div>
     </div>`;
 
-  const body = shown.map(key => renderGIARCQuestion(key, 1, topics.indexOf(key) + 1)).join('');
+  /* GROUP HEADERS, NO TOPIC NUMBERS (v8.53). Jaco, comparing with the App
+     Store: "en iOS no tenemos un índice a la izquierda, ¿no?" Right — Apple's
+     questionnaire is rows under category headers (.ios-content-step-label),
+     and Shippy already lists Epic's seven groups. The 1–14 badges were left
+     from when the topics were fourteen loose cards; ordered by group they
+     said nothing a header does not, and cost 28px of every row's width. So
+     each group prints its header, App Store style, over its topics; a group
+     whose topics are all hidden by the Unanswered filter prints nothing. */
+  const body = GIARC_RAIL_GROUPS.map(g => {
+    const keys = g.keys.map(k => 'google.content.' + k).filter(k => shown.includes(k));
+    if (!keys.length) return '';
+    return `<div class="ios-q-divider"></div><div class="ios-content-step-label giarc-group-head">${escHtml(g.label)}</div>`
+         + keys.map(key => renderGIARCQuestion(key, 1)).join('');
+  }).join('');
   const emptyNote = shown.length ? '' :
     `<div class="giarc-card giarc-depth-1"><div class="giarc-title">Every topic is answered. Press All to review them.</div></div>`;
   /* `giarc-flat` is what scopes v8.35's chromeless rows to THIS card. Epic's

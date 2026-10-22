@@ -29634,3 +29634,10 @@ textarea.egs-sp-body {
    padding so nothing below moves — the deeper rails, which mark a type's own
    questions, stay. */
 .giarc-root.giarc-flat > .giarc-children { border-left: none; padding-left: 16px; }
+
+/* No topic badge since v8.53, so the first level no longer starts 28px in to
+   clear one: it is the same 16px step as every other level. */
+.giarc-root.giarc-flat > .giarc-children { margin-left: 0; }
+/* The group header is the App Store's own band label; its first one sits
+   right under the pinned bar, so the divider before it is not drawn. */
+.giarc-root.giarc-flat > .cr-pinned + .ios-q-divider { display: none; }
