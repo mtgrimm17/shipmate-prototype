@@ -79,11 +79,11 @@ const CQ_QUESTIONS = [
   // ── Blood, Violence, or Gory Images ──────────────────
   { id:'cq_violence', section:'Blood, Violence, or Gory Images',
     text:'Does the game contain inferences of, references to, or depictions of violence, blood, or gory images? This includes violence directed at the players\' character. (Does not refer to user-generated content.)',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_violence_types', section:'Blood, Violence, or Gory Images',
     text:'Please select all that the game includes:',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Violence or implied violence against humans',
              'Violence against anything other than humans (e.g., animals, fantasy creatures, robots, vehicles)',
              'Disturbing or gory images','Blood'],
@@ -91,7 +91,7 @@ const CQ_QUESTIONS = [
 
   { id:'cq_violence_setting', section:'Blood, Violence, or Gory Images',
     text:'In what kind of setting (context, storyline) does the violence occur?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Fantastical','Realistic'],
     parent:'cq_violence_types',
     parentHas:['Violence or implied violence against humans',
@@ -100,7 +100,7 @@ const CQ_QUESTIONS = [
 
   { id:'cq_violence_pixelated', section:'Blood, Violence, or Gory Images',
     text:'Does the game have a pixelated or childlike style?',
-    platforms:['android','egs','egs_full'], type:'single',
+    platforms:['android','egs'], type:'single',
     options:['Yes, it has a childlike style (e.g., likely to appeal to younger children)',
              'Yes, it has a pixelated style','No'],
     parent:'cq_violence_types',
@@ -122,14 +122,14 @@ const CQ_QUESTIONS = [
   // Violence Against Humans
   { id:'cq_vh_reactions', section:'Blood, Violence, or Gory Images',
     text:'How would you describe the reactions to violence?',
-    platforms:['ios','android','egs','egs_full'], type:'multi',
+    platforms:['ios','android','egs'], type:'multi',
     options:['Unrealistic','Realistic'],
     parent:'cq_violence_types', parentHas:['Violence or implied violence against humans'],
     indent:1, subsection:'Violence Against Humans' },
 
   { id:'cq_vh_presentation', section:'Blood, Violence, or Gory Images',
     text:'How is this violence presented in the game?',
-    platforms:['android','egs','egs_full'], type:'single',
+    platforms:['android','egs'], type:'single',
     options:['Referred to','Implied but not seen',
              'Rarely depicted from a distant perspective','Often depicted from a distant perspective',
              'Rarely depicted from a close-up perspective','Often depicted from a close-up perspective'],
@@ -138,20 +138,20 @@ const CQ_QUESTIONS = [
 
   { id:'cq_vh_gore_level', section:'Blood, Violence, or Gory Images',
     text:'What is the level of blood and/or gore associated with this violence?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'single',
+    platforms:['ios','android','egs','steam'], type:'single',
     options:['None','Mild/Limited','Moderate','High'],
     parent:'cq_violence_types', parentHas:['Violence or implied violence against humans'],
     indent:1, subsection:'Violence Against Humans' },
 
   { id:'cq_vh_war', section:'Blood, Violence, or Gory Images',
     text:'Does the game take place in a realistic or historical war setting?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_violence_types', parentHas:['Violence or implied violence against humans'],
     indent:1, subsection:'Violence Against Humans' },
 
   { id:'cq_vh_innocents', section:'Blood, Violence, or Gory Images',
     text:'Can innocent or defenseless characters be seriously injured or killed?',
-    platforms:['android','egs','egs_full'], type:'single',
+    platforms:['android','egs'], type:'single',
     options:['No','Yes, with penalties','Yes, without penalties'],
     parent:'cq_violence_types', parentHas:['Violence or implied violence against humans'],
     indent:1, subsection:'Violence Against Humans' },
@@ -164,14 +164,14 @@ const CQ_QUESTIONS = [
 
   { id:'cq_vh_fierce', section:'Blood, Violence, or Gory Images',
     text:'Are there any fierce sounds, sinister or intimidating characters, or dark overtones associated with this violence?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_violence_types', parentHas:['Violence or implied violence against humans'],
     indent:1, subsection:'Violence Against Humans' },
 
   // Violence Against Non-Humans
   { id:'cq_vnh_reactions', section:'Blood, Violence, or Gory Images',
     text:'How would you describe the reactions to violence?',
-    platforms:['ios','android','egs','egs_full'], type:'multi',
+    platforms:['ios','android','egs'], type:'multi',
     options:['Unrealistic','Realistic'],
     parent:'cq_violence_types',
     parentHas:['Violence against anything other than humans (e.g., animals, fantasy creatures, robots, vehicles)'],
@@ -179,7 +179,7 @@ const CQ_QUESTIONS = [
 
   { id:'cq_vnh_gore_level', section:'Blood, Violence, or Gory Images',
     text:'What is the level of blood and/or gore associated with this violence?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'single',
+    platforms:['ios','android','egs','steam'], type:'single',
     options:['None','Mild/Limited','Moderate','High'],
     parent:'cq_violence_types',
     parentHas:['Violence against anything other than humans (e.g., animals, fantasy creatures, robots, vehicles)'],
@@ -187,14 +187,14 @@ const CQ_QUESTIONS = [
 
   { id:'cq_vnh_human_like', section:'Blood, Violence, or Gory Images',
     text:'Do any of these creatures behave or respond like humans?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_violence_types',
     parentHas:['Violence against anything other than humans (e.g., animals, fantasy creatures, robots, vehicles)'],
     indent:1, subsection:'Violence Against Non-Humans' },
 
   { id:'cq_vnh_real_animals', section:'Blood, Violence, or Gory Images',
     text:'Is any of this violence against real-world animals?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_violence_types',
     parentHas:['Violence against anything other than humans (e.g., animals, fantasy creatures, robots, vehicles)'],
     indent:1, subsection:'Violence Against Non-Humans' },
@@ -202,13 +202,13 @@ const CQ_QUESTIONS = [
   // Disturbing or Gory Images
   { id:'cq_gore_assoc', section:'Blood, Violence, or Gory Images',
     text:'Are these disturbing or gory images associated with a violent act that is shown?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn',
+    platforms:['ios','android','egs','steam'], type:'yn',
     parent:'cq_violence_types', parentHas:['Disturbing or gory images'],
     indent:1, subsection:'Disturbing or Gory Images' },
 
   { id:'cq_gore_explicitness', section:'Blood, Violence, or Gory Images',
     text:'How explicitly depicted are these disturbing or gory images?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'single',
+    platforms:['ios','android','egs','steam'], type:'single',
     options:['Limited detail','Moderate detail','Graphic detail'],
     parent:'cq_violence_types', parentHas:['Disturbing or gory images'],
     indent:1, subsection:'Disturbing or Gory Images' },
@@ -222,13 +222,13 @@ const CQ_QUESTIONS = [
 
   { id:'cq_blood_violent', section:'Blood, Violence, or Gory Images',
     text:'Is the blood related to violent acts?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_violence_types', parentHas:['Blood'],
     indent:1, subsection:'Blood' },
 
   { id:'cq_blood_amount', section:'Blood, Violence, or Gory Images',
     text:'What best describes this type of blood in the game?',
-    platforms:['android','egs','egs_full'], type:'single',
+    platforms:['android','egs'], type:'single',
     options:['Small and infrequent','Large or frequent'],
     parent:'cq_violence_types', parentHas:['Blood'],
     indent:1, subsection:'Blood' },
@@ -236,39 +236,39 @@ const CQ_QUESTIONS = [
   // ── Fear ─────────────────────────────────────────────
   { id:'cq_fear', section:'Fear',
     text:'Does the game contain pictures or sounds likely to be scary, horrifying, or disturbing? (Does not refer to user-generated content.)',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_fear_types', section:'Fear',
     text:'Please select all that the game includes:',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Scary elements','Horrifying elements'],
     parent:'cq_fear', parentIs:'yes' },
 
   { id:'cq_fear_scary_freq', section:'Fear',
     text:'How frequent are the scary elements?',
-    platforms:['ios','android','egs','egs_full'], type:'single',
+    platforms:['ios','android','egs'], type:'single',
     options:['Rare','Often'],
     parent:'cq_fear_types', parentHas:['Scary elements'], indent:1 },
 
   { id:'cq_fear_horror_freq', section:'Fear',
     text:'How frequent are the horrifying elements?',
-    platforms:['ios','android','egs','egs_full'], type:'single',
+    platforms:['ios','android','egs'], type:'single',
     options:['Rare','Often'],
     parent:'cq_fear_types', parentHas:['Horrifying elements'], indent:1 },
 
   { id:'cq_fear_imminent', section:'Fear',
     text:'Is there an intense and unrelenting sense of imminent threat?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_fear_horror_freq', parentIs:'Often', indent:2 },
 
   // ── Language ──────────────────────────────────────────
   { id:'cq_language', section:'Language',
     text:'Does the game contain any potentially offensive language? (Does not refer to user-generated content.)',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_language_types', section:'Language',
     text:'Please select all that the game includes:',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Minor profanities (e.g., "go to hell")',
              'Moderate swearing or other language or gestures that could be considered moderately or significantly offensive',
              'Discriminatory language (against race, religion, sex, etc.)','Sexual expletives'],
@@ -276,30 +276,30 @@ const CQ_QUESTIONS = [
 
   { id:'cq_lang_minor_freq', section:'Language',
     text:'How frequently do minor profanities occur?',
-    platforms:['ios','android','egs','egs_full'], type:'single', options:['Rarely','Often'],
+    platforms:['ios','android','egs'], type:'single', options:['Rarely','Often'],
     parent:'cq_language_types', parentHas:['Minor profanities (e.g., "go to hell")'], indent:1 },
 
   { id:'cq_lang_moderate_freq', section:'Language',
     text:'How frequently does moderate swearing occur?',
-    platforms:['ios','android','egs','egs_full'], type:'single', options:['Rarely','Often'],
+    platforms:['ios','android','egs'], type:'single', options:['Rarely','Often'],
     parent:'cq_language_types',
     parentHas:['Moderate swearing or other language or gestures that could be considered moderately or significantly offensive'],
     indent:1 },
 
   { id:'cq_lang_discrim_freq', section:'Language',
     text:'How frequently does discriminatory language occur?',
-    platforms:['ios','android','egs','egs_full'], type:'single', options:['Rarely','Often'],
+    platforms:['ios','android','egs'], type:'single', options:['Rarely','Often'],
     parent:'cq_language_types', parentHas:['Discriminatory language (against race, religion, sex, etc.)'], indent:1 },
 
   { id:'cq_lang_sexual_freq', section:'Language',
     text:'How frequently do sexual expletives occur?',
-    platforms:['ios','android','egs','egs_full'], type:'single', options:['Rarely','Often'],
+    platforms:['ios','android','egs'], type:'single', options:['Rarely','Often'],
     parent:'cq_language_types', parentHas:['Sexual expletives'], indent:1 },
 
   // ── Crude Humor ───────────────────────────────────────
   { id:'cq_crude', section:'Crude Humor',
     text:'Please select all crude humor that the game includes:',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Adult humor: Comedic references to death, killing, crime, mental health, substance abuse, social and/or political issues including racial and personal beliefs',
              'Adult humor with sexual connotations',
              'Bodily functions (e.g., belching, flatulence, or vomiting) for humorous purposes',
@@ -307,7 +307,7 @@ const CQ_QUESTIONS = [
 
   { id:'cq_crude_bodily', section:'Crude Humor',
     text:'What bodily functions are used for humorous purposes in the game? Please check all that apply.',
-    platforms:['android','egs','egs_full'], type:'multi',
+    platforms:['android','egs'], type:'multi',
     options:['Mucus, belching, flatulence sounds',
              'Flatulence (with depiction of "flatulence cloud"), whimsical depictions of feces ("poo coils"), vomiting',
              'Urination, urine, realistically depicted feces',
@@ -319,11 +319,11 @@ const CQ_QUESTIONS = [
   // ── Nudity or Sexual Content ──────────────────────────
   { id:'cq_sexual', section:'Nudity or Sexual Content',
     text:'Does the game contain inferences of, references to, or depictions of sexuality, sexual violence, suggestiveness, dating games, revealing attire, or nudity? (Does not refer to user-generated content.)',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_sexual_types', section:'Nudity or Sexual Content',
     text:'Please select all that the game includes:',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Sexual activity (including both moving and still images of sexual activity)',
              'Suggestive/sexual themes or references',
              'Dating games (interactive dating, marriage, or other romantic relationships between game characters)',
@@ -333,14 +333,14 @@ const CQ_QUESTIONS = [
 
   { id:'cq_sex_act_freq', section:'Nudity or Sexual Content',
     text:'How often do sexual acts occur?',
-    platforms:['ios','android','egs','egs_full'], type:'single', options:['Rarely','Often'],
+    platforms:['ios','android','egs'], type:'single', options:['Rarely','Often'],
     parent:'cq_sexual_types',
     parentHas:['Sexual activity (including both moving and still images of sexual activity)'],
     indent:1, subsection:'Sexual Activity' },
 
   { id:'cq_sex_act_depiction', section:'Nudity or Sexual Content',
     text:'How would you describe the depiction of these scenes? Please check all that apply.',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Obscured/innuendo: Sex act is entirely off-camera or completely blocked from view',
              'Shown with no nudity: Characters are depicted in a sexual act but no nudity is shown',
              'Shown with partial nudity: Breasts, buttocks',
@@ -351,14 +351,14 @@ const CQ_QUESTIONS = [
 
   { id:'cq_sex_act_minors', section:'Nudity or Sexual Content',
     text:'Do any of these sex acts feature characters that appear to be younger than 18?',
-    platforms:['android','egs','egs_full','steam'], type:'yn',
+    platforms:['android','egs','steam'], type:'yn',
     parent:'cq_sexual_types',
     parentHas:['Sexual activity (including both moving and still images of sexual activity)'],
     indent:1, subsection:'Sexual Activity' },
 
   { id:'cq_sex_suggestive_desc', section:'Nudity or Sexual Content',
     text:'How would you describe the suggestive/sexual themes contained in the game? Please check all that apply.',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Suggestive references and innuendo in text, dialogue, or heard',
              'Overtly sexual situations or visually depicted innuendo',
              'References to sexual activity without descriptive detail',
@@ -370,21 +370,21 @@ const CQ_QUESTIONS = [
 
   { id:'cq_sex_dating_focus', section:'Nudity or Sexual Content',
     text:'Are these games prominently featured or a strong focus of the product?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_sexual_types',
     parentHas:['Dating games (interactive dating, marriage, or other romantic relationships between game characters)'],
     indent:1, subsection:'Dating Games' },
 
   { id:'cq_sex_nudity_types', section:'Nudity or Sexual Content',
     text:'Please select all that the game includes:',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Revealing outfits','Nudity'],
     parent:'cq_sexual_types', parentHas:['Nudity or revealing outfits'],
     indent:1, subsection:'Nudity or Revealing Outfits' },
 
   { id:'cq_sex_violence_pres', section:'Nudity or Sexual Content',
     text:'How is the sexual violence in the game presented?',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Visually depicted','Referred to only'],
     parent:'cq_sexual_types', parentHas:['Depictions of or references to sexual violence'],
     indent:1, subsection:'Sexual Violence' },
@@ -392,52 +392,52 @@ const CQ_QUESTIONS = [
   // ── Controlled Substances ─────────────────────────────
   { id:'cq_substances', section:'Controlled Substances',
     text:'Does the game contain any reference to or use of drugs, alcohol, or tobacco? (Does not refer to user-generated content.)',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_sub_types', section:'Controlled Substances',
     text:'Please select all that the game includes:',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Illegal or recreational drugs','Fantasy drugs','Medical drugs','Alcohol','Tobacco'],
     parent:'cq_substances', parentIs:'yes' },
 
   { id:'cq_sub_drugs', section:'Controlled Substances',
     text:'How are illegal or recreational drugs present in the game?',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Reference','Use','Encourages/glamorizes','Detailed instruction for use'],
     parent:'cq_sub_types', parentHas:['Illegal or recreational drugs'], indent:1 },
 
   { id:'cq_sub_fantasy', section:'Controlled Substances',
     text:'How are fantasy drugs present in the game?',
-    platforms:['ios','android','egs','egs_full'], type:'multi',
+    platforms:['ios','android','egs'], type:'multi',
     options:['Reference','Use','Encourages/glamorizes'],
     parent:'cq_sub_types', parentHas:['Fantasy drugs'], indent:1 },
 
   { id:'cq_sub_medical', section:'Controlled Substances',
     text:'How are medical drugs present in the game?',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Reference','Use','Encourages/glamorizes'],
     parent:'cq_sub_types', parentHas:['Medical drugs'], indent:1 },
 
   { id:'cq_sub_alcohol', section:'Controlled Substances',
     text:'How is alcohol present in the game?',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Reference','Use','Encourages/glamorizes'],
     parent:'cq_sub_types', parentHas:['Alcohol'], indent:1 },
 
   { id:'cq_sub_tobacco', section:'Controlled Substances',
     text:'How is tobacco present in the game?',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Reference','Use','Encourages/glamorizes'],
     parent:'cq_sub_types', parentHas:['Tobacco'], indent:1 },
 
   // ── Gambling & Speculative Acts ───────────────────────
   { id:'cq_gambling', section:'Gambling & Speculative Acts',
     text:'Does the game contain gambling, simulations of casino gambling/bingo, or gambling themes? (Does not refer to user-generated content.)',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_gamb_types', section:'Gambling & Speculative Acts',
     text:'Please select all that the game includes:',
-    platforms:['ios','android','egs','egs_full','steam'], type:'multi',
+    platforms:['ios','android','egs','steam'], type:'multi',
     options:['Gambling themes','Playable bingo games',
              'Playable casino games, lotteries, or racetrack betting',
              'Any other games that use in-game currency/tokens to play and can reward the same currency through gameplay'],
@@ -445,7 +445,7 @@ const CQ_QUESTIONS = [
 
   { id:'cq_gamb_themes_focus', section:'Gambling & Speculative Acts',
     text:'Are these gambling themes prominently featured or a strong focus of the product?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_gamb_types', parentHas:['Gambling themes'], indent:1 },
 
   { id:'cq_gamb_steam_refs', section:'Gambling & Speculative Acts',
@@ -460,22 +460,22 @@ const CQ_QUESTIONS = [
 
   { id:'cq_gamb_bingo_cash', section:'Gambling & Speculative Acts',
     text:'Can playing these bingo games reward cash payouts or rewards of significant monetary value?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn',
+    platforms:['ios','android','egs','steam'], type:'yn',
     parent:'cq_gamb_types', parentHas:['Playable bingo games'], indent:1 },
 
   { id:'cq_gamb_casino_cash', section:'Gambling & Speculative Acts',
     text:'Can playing these casino games, lotteries, or racetrack betting games reward cash payouts or rewards of significant monetary value?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn',
+    platforms:['ios','android','egs','steam'], type:'yn',
     parent:'cq_gamb_types', parentHas:['Playable casino games, lotteries, or racetrack betting'], indent:1 },
 
   // ── Digital Purchases, Cash Convertible Rewards, or NFTs ──
   { id:'cq_digital', section:'Digital Purchases, Cash Convertible Rewards, or NFTs',
     text:'Does the game include the purchase or sale of digital goods, cash rewards, gift cards, play-to-earn features, convertible cryptocurrency rewards, or the issuance of transferable digital assets (e.g., NFTs)?',
-    platforms:['android','egs','egs_full'], type:'yn' },
+    platforms:['android','egs'], type:'yn' },
 
   { id:'cq_digital_types', section:'Digital Purchases, Cash Convertible Rewards, or NFTs',
     text:'Please select all that the game includes:',
-    platforms:['android','egs','egs_full'], type:'multi',
+    platforms:['android','egs'], type:'multi',
     options:['Purchases of digital goods',
              'Cash convertible rewards (e.g., cash rewards, real-world items of monetary value, convertible cryptocurrency rewards, or other play-to-earn mechanics)',
              'Issuance (e.g., minting) of transferable digital assets (e.g., NFTs)'],
@@ -483,7 +483,7 @@ const CQ_QUESTIONS = [
 
   { id:'cq_digital_lootbox', section:'Digital Purchases, Cash Convertible Rewards, or NFTs',
     text:'Can these purchases include random items where the purchaser doesn\'t know what specific items or features they will receive (e.g., loot boxes), or any other chance-based purchases?',
-    platforms:['android','egs','egs_full'], type:'yn',
+    platforms:['android','egs'], type:'yn',
     parent:'cq_digital_types', parentHas:['Purchases of digital goods'], indent:1 },
 
   // ── Mature Content (Steam only) ───────────────────────
@@ -548,15 +548,15 @@ const CQ_QUESTIONS = [
   // ── Interactive Elements ───────────────────────────────
   { id:'cq_location', section:'Interactive Elements',
     text:'Does the game share the user\'s current and precise physical location with other users?',
-    platforms:['android','egs','egs_full'], type:'yn' },
+    platforms:['android','egs'], type:'yn' },
 
   { id:'cq_user_interact', section:'Interactive Elements',
     text:'Does the game natively allow users to interact or exchange content with other users through voice communication, text, or sharing images or audio?',
-    platforms:['ios','android','egs','egs_full','steam'], type:'yn' },
+    platforms:['ios','android','egs','steam'], type:'yn' },
 
   { id:'cq_interact_types', section:'Interactive Elements',
     text:'Select all that the game includes:',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['The ability to block users or user-generated content',
              'The ability to report users or user-generated content',
              'Chat moderation',
@@ -567,7 +567,7 @@ const CQ_QUESTIONS = [
   // ── Elements of Extremism ─────────────────────────────
   { id:'cq_extremism', section:'Elements of Extremism',
     text:'Select all that the game contains:',
-    platforms:['android','egs','egs_full','steam'], type:'multi',
+    platforms:['android','egs','steam'], type:'multi',
     options:['Any swastikas, other Nazi symbols, or propaganda deemed unconstitutional in Germany',
              'Any glorification, denial, or gross trivialization of the Holocaust or other events of genocide',
              'Any content that can substantially erode the national identity of the Republic of Korea by describing anti-national acts or distorting historical facts',
@@ -988,7 +988,6 @@ const PLATFORM_ICONS = {
   egs:      'M0 0v16.021h6.241v2.088H12V24h12V0zm19.017 19.818h-4.776v-4.06H9.225V24H4.449V4.182h4.776v4.06h5.016V4.182h4.776z',
   // Same glyph as egs, by its own copy rather than a reference — platformIcon
   // does a flat PLATFORM_ICONS[pid] lookup, exactly as macos_full does above.
-  egs_full: 'M0 0v16.021h6.241v2.088H12V24h12V0zm19.017 19.818h-4.776v-4.06H9.225V24H4.449V4.182h4.776v4.06h5.016V4.182h4.776z',
   // psn/xbox/nintendo (replaced): the previous three paths here weren't
   // actually those brands' logos at all — psn's path was some other PS
   // artifact (rendered as an unrelated "1D"-like glyph), xbox's was a
@@ -1258,23 +1257,6 @@ const PLATFORMS = {
       { id: 'improveSubmission', label: 'Improve Your Submission'                      },
     ],
   },
-  /* EPIC GAMES STORE FULL — a copy of the entry above, step for step.
-     Its own id is the whole point: every table that resolves behaviour by pid
-     (answers, completeness, step count, visited flags) now has a second row to
-     answer for, and the two cards share nothing but the shared-by-design IARC
-     questionnaire. Steps are identical today and are meant to diverge. */
-  egs_full: {
-    id: 'egs_full', label: 'Epic Games Store Full', color: '#313131',
-    steps: [
-      { id: 'uploadBuild',       label: 'Upload Build'                                 },
-      { id: 'contentRating',     label: 'Content Rating',            hasInference: true },
-      { id: 'regionsPricing',    label: 'Regions & Pricing'                            },
-      { id: 'technical',         label: 'Technical Requirements'                       },
-      { id: 'localizations',     label: 'Localizations'                                },
-      { id: 'storePreview',      label: 'Store Page Preview'                           },
-      { id: 'improveSubmission', label: 'Improve Your Submission'                      },
-    ],
-  },
   psn: {
     id: 'psn', label: 'PlayStation Store', color: '#003791',
     steps: [
@@ -1351,12 +1333,6 @@ const PLATFORM_LOGIN = {
     userLabel: 'Steam Account', userType: 'text', userPlaceholder: 'account name or email',
   },
   egs: {
-    portal: 'Epic Developer Portal', provider: 'Epic',
-    userLabel: 'Epic Account', userType: 'email', userPlaceholder: 'you@studio.com',
-  },
-  // Same portal and credentials as egs — Epic Games Store Full signs into the
-  // same Epic Developer Portal, it just covers more of it.
-  egs_full: {
     portal: 'Epic Developer Portal', provider: 'Epic',
     userLabel: 'Epic Account', userType: 'email', userPlaceholder: 'you@studio.com',
   },
@@ -1621,7 +1597,6 @@ function _markStepVisited(pid, stepId) {
     else if (pid === 'ios')        state.iosStorePreviewSeen     = true;
     else if (pid === 'android')    state.androidSubmitAnswers.storePreviewSeen = true;
       else if (pid === 'egs')        state.egsSubmitAnswers.storePreviewSeen     = true;
-    else if (pid === 'egs_full')   state.egsFullSubmitAnswers.storePreviewSeen = true;
   }
   if (stepId === 'storePreviewPrototype' && pid === 'steam') {
     state.steamSubmitAnswers.storePreviewPrototypeSeen = true;
@@ -1632,9 +1607,8 @@ function _markStepVisited(pid, stepId) {
     else if (pid === 'android')    state.androidSubmitAnswers.localizationsSeen = true;
     else if (pid === 'steam')      state.steamSubmitAnswers.localizationsSeen   = true;
       /* NOT OPTIONAL, unlike the arm above it. This chain ends in a bare
-         `else` that writes state.iosLocalizationsSeen, so an egs_full with no
-         arm here would tick the APP STORE's Localizations step. */
-      else if (pid === 'egs_full')   state.egsFullSubmitAnswers.localizationsSeen = true;
+         `else` that writes state.iosLocalizationsSeen, so a card with no arm
+         here would tick the APP STORE's Localizations step. */
     else if (pid === 'egs')        state.egsSubmitAnswers.localizationsSeen     = true;
     else                           state.iosLocalizationsSeen     = true;
   }
@@ -1791,7 +1765,6 @@ function stepVisitSatisfied(pid, stepId) {
 
 function _platformAnswersComplete(pid, stepId) {
   if (pid === 'egs')        return isEgsSectionComplete(stepId);
-  if (pid === 'egs_full')   return isEgsFullSectionComplete(stepId);
   if (pid === 'android')    return isAndroidSectionComplete(stepId);
   if (pid === 'steam')      return isSteamSectionComplete(stepId);
   if (pid === 'macos_full') return isMacFullSectionComplete(stepId);
@@ -1836,6 +1809,13 @@ function platformAccountReady(pid) {
 
 function platformStepCount(platformId) {
   const p = PLATFORMS[platformId];
+  /* AN ID NOBODY KNOWS COUNTS AS NOTHING (v8.52). _visiblePlatformSteps has
+     always guarded this; four of the arms below read p.steps directly and
+     would throw. That cost nothing while every id in the file was real —
+     removing Epic Games Store Full made 'egs_full' an id that can still
+     arrive from an older saved selection, and a dashboard that throws on one
+     stale string is worse than one that shows it as empty. */
+  if (!p) return { total: 0, complete: 0, submitDone: false, allRequired: false };
   // Binary build upload is required for submit unlock on iOS/Android/Steam
   const hasBuild = !!(state.platformBuilds?.[platformId]);
   // iOS: completion is computed from submission answers, not manual task status
@@ -1878,16 +1858,6 @@ function platformStepCount(platformId) {
   // comes from its own answers (and, for Content Rating, from the shared IARC
   // tree), never from platformStepStatus, which nothing sets for its steps.
   if (platformId === 'egs') {
-    const steps = _visiblePlatformSteps(platformId);
-    const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
-    return { total: steps.length, complete, submitDone: false,
-             allRequired: complete === steps.length && platformAccountReady(platformId) };
-  }
-  // Epic Games Store Full: the same branch, for the same reason — its steps
-  // are answered in its own egsFullSubmitAnswers, and platformStepStatus is
-  // never written for them, so the fall-through would read 0 / N forever and
-  // allRequired would never go true (Submit could never unlock).
-  if (platformId === 'egs_full') {
     const steps = _visiblePlatformSteps(platformId);
     const complete = steps.filter(s => platformSectionComplete(platformId, s.id)).length;
     return { total: steps.length, complete, submitDone: false,
@@ -3172,7 +3142,7 @@ function makeBlankAndroidAnswers() {
    store will reject.
 
    Shared with nothing. Epic Games Store Full has no Product Configuration
-   steps, so unlike EGS_REGION_GROUPS these tables have exactly one caller
+   steps, so these tables have exactly one caller
    today; they are module-level anyway because they are data, and data that
    lives inside a builder is data that gets rebuilt on every repaint. */
 const EGS_GENRES = [
@@ -3430,45 +3400,6 @@ function makeBlankEgsSocial() {
   EGS_SOCIAL_LINKS.forEach(l => { out[l.id] = ''; });
   return out;
 }
-/* ══ EPIC GAMES STORE FULL (makeBlankEgsFullAnswers) ══════════════════════════════════════
-   A duplicate of Epic Games Store (makeBlankEgsAnswers), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function makeBlankEgsFullAnswers() {
-  return {
-    // Regions & Pricing — Store Settings: Regions, and the Base Product Offer
-    distribution:          null,   // 'worldwide' / 'select'
-    excludedRegions:       [],     // ISO-ish region ids when distribution === 'select'
-    korea:                 null,   // 'yes' / 'no' — Epic documents Korea separately (GRAC)
-    priceModel:            null,   // 'paid' / 'free'
-    priceTier:             '',     // the tier label, or a custom tier's name
-    releaseDate:           '',     // the offer's start date
-    // Technical Requirements — Epic's own distribution requirements
-    crossPlatformMultiplayer: null, // 'yes' / 'no' / 'noMultiplayer'
-    achievements:          null,   // 'yes' / 'no'
-    patchNotes:            null,   // 'yes' / 'no'
-    eosOverlay:            null,   // 'yes' / 'no'
-    // Store Preview
-    storePreviewSeen:      false,
-    // Stubs, complete on first view — the same treatment Google Play's and
-    // Steam's Localizations rows get, and for the same reason.
-    localizationsSeen:     false,
-    improveSubmissionSeen: false,
-  };
-}
 
 function isEgsSectionComplete(sectionId) {
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('egs');
@@ -3569,90 +3500,6 @@ function isEgsSectionComplete(sectionId) {
   if (sectionId === 'storePreview') {
     return isEgsSectionComplete('contentRating')
         && isEgsSectionComplete('screenshots');
-  }
-  return false;
-}
-/* ══ EPIC GAMES STORE FULL (isEgsFullSectionComplete) ══════════════════════════════════════
-   A duplicate of Epic Games Store (isEgsSectionComplete), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function isEgsFullSectionComplete(sectionId) {
-  if (sectionId === 'uploadBuild') return _uploadBuildComplete('egs_full');
-
-  /* ONE IARC QUESTIONNAIRE, TWO STOREFRONTS, and that is how IARC actually
-     works rather than a convenience. A developer fills in the International
-     Age Rating Coalition questionnaire ONCE and the coalition issues ratings
-     for each participating storefront's own board from those same answers —
-     which is why Epic's own docs point at IARC rather than defining a
-     questionnaire of their own. `state.cqAnswers` was already global (it was
-     never namespaced per platform), so this arm is literally Google Play's,
-     and answering either card completes both. */
-  if (sectionId === 'contentRating') {
-    const { total, answered } = androidCqProgress();
-    return total > 0 && answered === total;
-  }
-
-  const a = state.egsFullSubmitAnswers;
-  if (sectionId === 'regionsPricing') {
-    if (a.distribution === null) return false;
-    if (a.distribution === 'select' && !a.excludedRegions.length) return false;
-    if (a.korea === null) return false;
-    if (a.priceModel === null) return false;
-    if (a.priceModel === 'paid' && !a.priceTier.trim()) return false;
-    return !!a.releaseDate.trim();
-  }
-  if (sectionId === 'technical') {
-    return a.crossPlatformMultiplayer !== null
-        && a.achievements !== null
-        && a.patchNotes !== null
-        && a.eosOverlay !== null;
-  }
-  /* LOCALIZATIONS IS NO LONGER A VISIT (v7.31). It was `localizationsSeen`
-     while it was a stub, which is the only claim a placeholder can honestly
-     make. Now that the step is a real review, ticking it for having glanced
-     at it would be the "green while empty" failure this file keeps fighting —
-     so it asks for the two fields Epic's product page actually prints, in
-     every supporting language. Auto-translate fills them the moment a
-     language is added, so a developer who does nothing still sees this go
-     green; one who turns auto-translate off sees it wait, correctly. */
-  if (sectionId === 'localizations') {
-    const langs = (state.formData.localizations || [])
-      .filter(l => l !== (state.formData.primaryLanguage || 'en'));
-    if (!langs.length) return !!a.localizationsSeen;   // nothing to translate yet
-    const store = (state.webSite && state.webSite.localizedStoreText) || {};
-    return langs.every(l => {
-      const e = store[l] || {};
-      return !!(e.description || '').trim() && !!(e.aboutGame || '').trim();
-    });
-  }
-  if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;
-
-  if (sectionId === 'screenshots') {
-    if (typeof platformStoreShots === 'function') return platformStoreShots('egs_full').length > 0;
-    const ps = state.platformScreenshots?.egs_full;
-    return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
-  }
-
-  /* The page is done when everything it PRINTS is done — the same roll-up
-     Google Play's own storePreview arm makes, over Epic's fields instead. */
-  if (sectionId === 'storePreview') {
-    return isEgsFullSectionComplete('contentRating')
-        && isEgsFullSectionComplete('regionsPricing')
-        && isEgsFullSectionComplete('technical')
-        && isEgsFullSectionComplete('screenshots');
   }
   return false;
 }
@@ -4264,7 +4111,6 @@ const SUB_NUDGE_PLATFORM = {
   macos_full: 'Mac',
   android:    'Android',
   egs:        'Epic Games',
-  egs_full:   'Epic Games',
   psn:        'PlayStation',
   xbox:       'Xbox',
   nintendo:   'Switch',
@@ -5476,9 +5322,6 @@ const state = {
   egsPickOpen: null,
   egsPickFilter: '',
   egsSubmitAnswers: makeBlankEgsAnswers(),
-  // Epic Games Store Full's own answers. Separate from egsSubmitAnswers on
-  // purpose: answering a step on one card must not answer it on the other.
-  egsFullSubmitAnswers: makeBlankEgsFullAnswers(),
 
   /* Epic's Localizations surface state (v7.31). Which field is on screen,
      whether the cards are flipped to review, and whether the gear is open —
@@ -5489,11 +5332,6 @@ const state = {
   egsLocReviewField:     'title',
   egsLocReviewMode:      'all',    // 'all' | 'review'
   egsReviewSettingsOpen: false,
-  // Epic Games Store Full's own copy of the three, by the comment above's own
-  // argument: flipping one store's review must not flip the other's.
-  egsFullLocReviewField:     'title',
-  egsFullLocReviewMode:      'all',    // 'all' | 'review'
-  egsFullReviewSettingsOpen: false,
 
   // Per-field AI inference metadata for Steam (mirrors iosAnswerMeta)
   steamAnswerMeta: {},

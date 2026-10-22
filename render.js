@@ -47,7 +47,7 @@ function renderLangMenu() {
 
 // Icons that use multi-subpath "cutout" designs need evenodd winding rule.
 // iOS and PSN are solid compound paths — nonzero (default) renders them correctly.
-const EVENODD_ICONS = new Set(['android', 'steam', 'egs', 'egs_full', 'xbox', 'nintendo']);
+const EVENODD_ICONS = new Set(['android', 'steam', 'egs', 'xbox', 'nintendo']);
 
 // Color and white asset variants — keyed by platform ID.
 // Missing entries fall back to the inline SVG from PLATFORM_ICONS.
@@ -376,7 +376,6 @@ const OB_PLATFORM_TIMING = {
   android:  { days: 4.3, color: '#4ade80', label: 'Google Play'   },
   steam:    { days: 7.1, color: '#38bdf8', label: 'Steam Store'   },
   egs:      { days: 3.0, color: '#e2e2e2', label: 'Epic Games'    },
-  egs_full: { days: 3.0, color: '#e2e2e2', label: 'Epic Full'     },
   xbox:     { days: 5.0, color: '#22c55e', label: 'Xbox'          },
   nintendo: { days: 5.0, color: '#ef4444', label: 'Nintendo'      },
   psn:      { days: 4.0, color: '#818cf8', label: 'PlayStation'   },
@@ -911,7 +910,7 @@ function buildScenarioWidget() {
 
   // Found — result card
   if (ls && ls.status === 'done' && ls.found) {
-    const storeLabels = { ios: 'App Store', steam: 'Steam', android: 'Google Play', egs: 'Epic', egs_full: 'Epic Full', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PlayStation' };
+    const storeLabels = { ios: 'App Store', steam: 'Steam', android: 'Google Play', egs: 'Epic', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PlayStation' };
     const stores = (ls.allStores || []).map(pid => storeLabels[pid] || pid);
     const desc = ls.description
       ? (ls.description.length > 220 ? ls.description.slice(0, 220) + '…' : ls.description)
@@ -1226,7 +1225,6 @@ function buildObExcludedChips() {
 const SM_TILE_MARK_ALIAS = {
   playstation: 'psn',
   egs:         'epic',
-  egs_full:    'epic',
   macos:       'ios',
   macos_full:  'ios',
 };
@@ -1297,9 +1295,6 @@ function buildObPlatTilesHTML() {
     // monochrome/currentColor and evenodd-correct (EVENODD_ICONS, above),
     // same as every other tile here.
     { id:'egs',      iconKey:'epic',        label:'Epic',        comingSoon: false },
-    // Same icon-reuse treatment as the Mac App Store pair above — the fuller
-    // Epic flow, with its own tile/id keeping it independent of 'egs'.
-    { id:'egs_full', iconKey:'epic',        label:'Epic Full',   comingSoon: false },
     { id:'nintendo', iconKey:'nintendo',    label:'Nintendo',    comingSoon: true  },
     { id:'psn',      iconKey:'playstation', label:'PlayStation', comingSoon: true  },
     { id:'xbox',     iconKey:'xbox',        label:'XBOX',        comingSoon: true  },
@@ -2206,7 +2201,7 @@ function buildDashboardTimeline() {
   // Short display names for the compact timeline label column
   const DASH_TL_LABEL = {
     ios: 'Apple', android: 'Google', steam: 'Steam',
-    egs: 'Epic', egs_full: 'Epic Full', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PSN',
+    egs: 'Epic', xbox: 'Xbox', nintendo: 'Nintendo', psn: 'PSN',
   };
 
   // Active platforms with timing data, sorted shortest → longest review time
@@ -2401,7 +2396,7 @@ function buildConsolidatedBanner() {
 // platforms (COMING_SOON_PLATFORMS, further below) — kept alphabetical by
 // name (Epic, Nintendo, PlayStation, Xbox) among themselves, by request;
 // the five live platforms ahead of them keep their own existing order.
-const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web', 'egs', 'egs_full', 'nintendo', 'psn', 'xbox'];
+const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web', 'egs', 'nintendo', 'psn', 'xbox'];
 
 // Platforms that stay fully defined in PLATFORMS (state.js) — steps, their
 // own answers/listing state, everything — but are deliberately hidden from
@@ -2504,7 +2499,7 @@ const BIN_FINDINGS = {
 
 // Distribution platform id → its storefront channel id.
 const BC_STORE_FROM_PLATFORM = {
-  ios: 'appstore', android: 'googleplay', steam: 'steam', egs: 'epic', egs_full: 'epic',
+  ios: 'appstore', android: 'googleplay', steam: 'steam', egs: 'epic',
   xbox: 'msstore', nintendo: 'nintendo', psn: 'psn',
 };
 
@@ -6608,7 +6603,6 @@ function buildActiveCard(pid, force) {
   if (pid === 'android') return buildAndroidActiveCard(pid, force);
   if (pid === 'steam')   return buildSteamActiveCard(pid, force);
   if (pid === 'egs')     return buildEgsActiveCard(pid, force);
-  if (pid === 'egs_full') return buildEgsFullActiveCard(pid, force);
 
   // Deploy/Submit flip: once flipped, show the submitted (post-deploy) card
   if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
@@ -7523,17 +7517,6 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     else if (stepId === 'localizations')      body = buildSteamLocalizationsSection();
     else if (stepId === 'storeTags')          body = buildSteamStoreTagsSection();
     else if (stepId === 'technical')          body = buildSteamTechnicalSection();
-  } else if (platformId === 'egs_full') {
-    /* Epic Games Store Full's own arm, pointing at its own builders. Content
-       Rating is still Google Play's builder over the shared IARC answers,
-       exactly as Epic's arm below does. */
-    if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsFullStorePreviewSection();
-    else if (stepId === 'contentRating')      body = buildAndroidContentRatingSection();
-    else if (stepId === 'regionsPricing')     body = buildEgsFullRegionsPricingSection();
-    else if (stepId === 'technical')          body = buildEgsFullTechnicalSection();
-    else if (stepId === 'localizations')      body = buildEgsFullLocalizationsSection();
-    else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
-    else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
   } else if (platformId === 'egs') {
     /* CONTENT RATING IS GOOGLE PLAY'S BUILDER, CALLED BY NAME. Both stores use
        IARC, `buildAndroidContentRatingSection` renders the IARC tree out of the
@@ -8058,10 +8041,9 @@ function buildStorePreviewFlipSection(platformId, target) {
     /* Epic gets Google Play's builder for the same reason the step does: one
        IARC questionnaire, one set of answers. See the 'egs' arm in
        _stepBodyFor. */
-    /* Epic only — Epic Games Store Full and Google Play keep the original
-       one-card-per-question layout (buildAndroidContentRatingSection). */
+    /* Epic only — Google Play keeps the original one-card-per-question
+       layout (buildAndroidContentRatingSection). */
     if (platformId === 'egs')      return buildEgsContentRatingSection();
-    if (platformId === 'egs_full') return buildAndroidContentRatingSection();
     if (platformId === 'android') return buildAndroidContentRatingSection();
     if (platformId === 'steam')   return buildSteamContentRatingSection();
     return buildContentRatingSection(platformId);
@@ -8133,7 +8115,6 @@ function buildStorePreviewFlipSection(platformId, target) {
   // internal header, same as 'tags'/'steamAssets' — the modal's own title
   // (FLIP_LABELS.technical, above) already reads "Technical".
   if (target === 'technical') {
-    if (platformId === 'egs_full') return `<div class="qs-section">${buildEgsFullTechnicalSection()}</div>`;
     /* EPIC GETS NOTHING HERE (v8.42). Its Technical Requirements step went,
        and with it the preview block that was this face's only door. The line
        below is Steam's, and without this guard Epic would fall through to it
@@ -8143,14 +8124,9 @@ function buildStorePreviewFlipSection(platformId, target) {
     if (platformId === 'egs') return '';
     return `<div class="qs-section">${buildSteamTechnicalSection()}</div>`;
   }
-  /* Epic's own — Store Settings' regions plus the Base Product Offer. Its own
-     target rather than 'business' because Epic has no business questionnaire:
-     what the buy box on its page is missing is a region, a tier and a date. */
-  if (target === 'pricing') {
-    /* Epic Games Store Full is the only card with a pricing face now — Epic's
-       own section was removed in v8.41 and its price lives in the buy box. */
-    return `<div class="qs-section">${buildEgsFullRegionsPricingSection()}</div>`;
-  }
+  /* NO 'pricing' FACE AT ALL (v8.52). Epic's own Regions & Pricing section
+     went in v8.41 and its price moved to the buy box; Epic Games Store Full,
+     the only card that still had one, went with the platform. */
   // Steam-only: the Store Page Preview - Prototype's "Languages" block (see
   // languagesHtml, buildSteamStorePreviewPrototypeSection) — the editable
   // Interface/Full Audio/Subtitles checkbox table (buildSteamLanguagesEditSection),
@@ -8187,7 +8163,6 @@ function buildStorePreviewFlipSection(platformId, target) {
   // Store; see buildMacLocalizationReviewSection's/buildSteamLocalizationReviewSection's
   // own header comments for why).
   if (target === 'localization') {
-    if (platformId === 'egs_full') return buildEgsFullLocalizationReviewSection();
     if (platformId === 'egs') return buildEgsLocalizationReviewSection();
     if (platformId === 'macos') return buildMacLocalizationReviewSection();
     if (platformId === 'macos_full') return buildMacFullLocalizationReviewSection();
@@ -8257,7 +8232,7 @@ function buildStorePreviewFlipSection(platformId, target) {
    read-only from state.activePlatforms, keyed the same as PLATFORM_ORDER. */
 const PK_PLATFORM_LABELS = {
   steam: 'PC (Steam)', ios: 'iOS', macos: 'macOS', android: 'Android', web: 'Web',
-  egs: 'PC (Epic Games Store)', egs_full: 'PC (Epic Games Store Full)', psn: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo Switch',
+  egs: 'PC (Epic Games Store)', psn: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo Switch',
 };
 
 /* Split a textarea's contents into trimmed, non-empty lines. */
@@ -9532,7 +9507,6 @@ function buildImproveSubmissionSection(platformId) {
   /* Needed, not tidy: this chain ends in a bare `else` that writes STEAM's
      flag, so without this arm opening Improve on Epic Games Store Full would
      tick Steam's. */
-  else if (platformId === 'egs_full') state.egsFullSubmitAnswers.improveSubmissionSeen = true;
   else                state.steamSubmitAnswers.improveSubmissionSeen   = true;
 
   const spi = state.storePageInsights;
@@ -13526,194 +13500,6 @@ function buildEgsLocalizationReviewSection() {
       <div class="loc-review-header-controls">
         <button class="loc-review-toggle-btn" onclick="toggleEgsLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
         ${swSelect('egs-loc-review-field', field, fieldOptions, 'setEgsLocReviewField', '170px', 'right')}
-      </div>
-    </div>
-    <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
-}
-/* ══ EPIC GAMES STORE FULL (buildEgsFullLocalizationReviewSection) ══════════════════════════════════════
-   A duplicate of Epic Games Store (buildEgsLocalizationReviewSection), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function buildEgsFullLocalizationReviewSection() {
-  const langCodes = _iasAllPreviewLangCodes();
-  const field     = state.egsFullLocReviewField || 'title';
-  const limit     = STEAM_FIELD_CHAR_LIMITS[field];
-  const primary   = state.formData.primaryLanguage || 'en';
-  const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
-  const reviewMode  = state.egsFullLocReviewMode === 'review';
-  const isLongField = field === 'description' || field === 'aboutGame';
-
-  const fieldOptions = EGS_LOC_REVIEW_FIELDS.map(f => ({
-    value: f.value,
-    label: f.label,
-    warning: _steamFieldHasOverLimitLang(f.value, langCodes),
-  }));
-
-  const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const redoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 15l6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 9H9.5A6.5 6.5 0 1 0 9.5 22H14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const undoRedoGroup = (kind, forField, lang) => {
-    const st = _steamLocReviewUndoState(kind, forField, lang);
-    return `
-        <span class="loc-review-undo-redo">
-          <button type="button" class="loc-review-undo-btn"${st.canUndo ? '' : ' disabled'}
-                  onclick="event.stopPropagation(); steamLocReviewUndo('${kind}','${forField}','${lang}')"
-                  title="Undo" aria-label="Undo">${undoIconSvg}</button>
-          <button type="button" class="loc-review-redo-btn"${st.canRedo ? '' : ' disabled'}
-                  onclick="event.stopPropagation(); steamLocReviewRedo('${kind}','${forField}','${lang}')"
-                  title="Redo" aria-label="Redo">${redoIconSvg}</button>
-        </span>`;
-  };
-
-  const spinnerHtml = `<span class="loc-review-status loc-review-status--loading" title="Translating…"><span class="loc-review-spinner"><span class="inf-ring inf-ring-1"></span><span class="inf-ring inf-ring-2"></span><span class="inf-ring inf-ring-3"></span></span></span>`;
-  const errorHtml   = `<span class="loc-review-status is-error">Translation failed</span>`;
-  const statusHtml  = (s) => s === 'loading' ? spinnerHtml : s === 'error' ? errorHtml : '';
-
-  const fieldBlockNoLimit = (value, onclickAttr, undoRedoHtml) => {
-    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
-    return `
-        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}"
-             onclick="${onclickAttr}" title="Click to edit">${display}</div>
-        <div class="ias-char-counter-row loc-review-counter-row--no-count">
-          ${undoRedoHtml}
-        </div>`;
-  };
-
-  const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
-    if (limit == null) return fieldBlockNoLimit(value, onclickAttr, undoRedoHtml);
-    const overLimit = value.length > limit;
-    const remaining = limit - value.length;
-    const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
-    return `
-        <div class="loc-review-field ias-editable${value ? '' : ' ias-placeholder'}${overLimit ? ' is-over-limit' : ''}"
-             onclick="${onclickAttr}" title="Click to edit">${display}</div>
-        <div class="ias-char-counter-row">
-          ${undoRedoHtml}
-          <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
-          <span class="ias-char-count${overLimit ? ' is-over' : ''}">${remaining}</span>
-        </div>`;
-  };
-
-  const cards = langCodes.map(lang => {
-    const isPrimary = lang === primary;
-    const langName  = escHtml(OB_LANG_NAMES[lang] || lang);
-    const raw       = _steamFieldValue(field, lang);
-
-    if (reviewMode && !isPrimary) {
-      const back = _steamLocReviewBackTranslationValue(field, lang);
-      const topStatusHtml = _steamFieldTranslatePending(field, lang) ? spinnerHtml : statusHtml(back.forwardStatus);
-      return `
-      <div class="loc-review-card">
-        <div class="loc-review-side">
-          <div class="loc-review-half loc-review-half--top">
-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${langName}</div>${topStatusHtml}</div>
-            ${fieldBlock(raw, `startSteamLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
-          </div>
-          <div class="loc-review-half loc-review-half--bottom">
-            <div class="loc-review-card-head"><div class="loc-review-card-lang">${primaryName}</div>${statusHtml(back.status)}</div>
-            ${fieldBlockNoLimit(back.text, `startSteamLocReviewBackTranslationEdit('${field}','${lang}',this,event)`, undoRedoGroup('draft', field, lang))}
-          </div>
-        </div>
-      </div>`;
-    }
-
-    /* THE BADGE SAYS WHERE THE WORDS CAME FROM, and on Epic that matters more
-       than it does on Steam: text pulled off a Steam store page is a real
-       human translation the studio already paid for, and seeing Steam's mark
-       on an Epic card is how a developer knows this line is not a machine
-       guess. `_steamLocReviewSourceBadge` returns 'steam' for exactly that,
-       so the mark drawn is Steam's — the source, not the surface. */
-    const isPending = !isPrimary && _steamFieldTranslatePending(field, lang);
-    const srcBadge  = _steamLocReviewSourceBadge(field, lang);
-    const badgeHtml = isPending
-      ? spinnerHtml
-      : srcBadge === 'steam'
-        ? `<span class="loc-review-source-badge loc-review-source-badge--steam" title="Pulled from Steam">${platformIcon('steam', 13, 'white')}</span>`
-        : srcBadge === 'ai'
-          ? `<span class="loc-review-source-badge loc-review-source-badge--ai" title="Auto-translated">✦</span>`
-          : '';
-
-    return `
-      <div class="loc-review-card${isPrimary ? ' loc-review-card--primary' : ''}">
-        <div class="loc-review-card-head">
-          <div class="loc-review-card-lang">${langName}</div>
-          ${badgeHtml}
-        </div>
-        ${fieldBlock(raw, `startSteamLocReviewInlineEdit('${field}','${lang}',this,event)`, undoRedoGroup('real', field, lang))}
-      </div>`;
-  }).join('');
-
-  /* The gear writes the SHARED settings, for the same reason the values are
-     shared: "translate Short Description automatically" is a fact about the
-     copy, not about which store page you happen to be looking at. Product
-     Name is the App Store's own shared setting, exactly as Steam's gear has
-     it. */
-  const autoCfg = state.steamAutoTranslateFields
-    || { description: true, developer: false, publisher: false, aboutGame: true };
-  const iasAutoCfg = state.iasAutoTranslateFields
-    || { title: false, subtitle: true, description: true, releaseNotes: true };
-  const settingsOpen = !!state.egsFullReviewSettingsOpen;
-  const settingsRow = (key, label) => `
-        <label class="cq-check-row loc-review-settings-row">
-          <input type="checkbox" ${autoCfg[key] ? 'checked' : ''} onchange="_steamToggleAutoTranslateField('${key}')">
-          <span>${label}</span>
-        </label>`;
-  const settingsGearSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>`;
-  const settingsMenu = `
-      <div class="loc-review-settings-wrap sw-select-wrap${settingsOpen ? ' is-open' : ''}" id="egs_full-loc-review-settings-wrap">
-        <button class="loc-review-settings-btn" type="button" onclick="_egsFullToggleReviewSettingsMenu(event)" title="Choose which fields are automatically translated" aria-label="Automatic translation settings">${settingsGearSvg}</button>
-        <div class="loc-dropdown loc-review-settings-dropdown">
-          <div class="loc-review-settings-heading">Automatically translated fields</div>
-          <label class="cq-check-row loc-review-settings-row">
-            <input type="checkbox" ${iasAutoCfg.title ? 'checked' : ''} onchange="_iasToggleAutoTranslateField('title')">
-            <span>Product Name</span>
-          </label>
-          ${settingsRow('description', 'Short Description')}
-          ${settingsRow('developer', 'Developer')}
-          ${settingsRow('publisher', 'Publisher')}
-          ${settingsRow('aboutGame', 'Description')}
-        </div>
-      </div>`;
-
-  /* NO LANGUAGES, NO TABLE. `_visiblePlatformSteps` already hides this row
-     until a supporting language exists, so this is the belt to that braces —
-     reached only through the Store Page Preview's own Localizations button,
-     which has no such gate. A row of one card saying "English" is not a
-     localization review. */
-  if (langCodes.length <= 1) {
-    return buildStepStubSection(
-      'Localizations',
-      'Pick the languages your Epic Games Store Full page will carry under Game Details, and every localizable field will appear here to review — translated from your primary language, or pulled from your Steam page where you already have a real translation.'
-    );
-  }
-
-  return `
-    <div class="loc-review-header">
-      <div class="loc-review-title-group">
-        <!-- Not "Localizations": the step modal's header says that two lines
-             up. This row still needs a label, because the gear beside it has
-             to be about something — so it says what the cards below are. -->
-        <div class="loc-review-title">Store copy by language</div>
-        ${settingsMenu}
-      </div>
-      <div class="loc-review-header-controls">
-        <button class="loc-review-toggle-btn" onclick="toggleEgsFullLocReviewMode()" title="${reviewMode ? 'Flip back to the normal side' : 'Flip supporting languages to review a back-translation'}">${reviewMode ? 'All locs' : 'Review'}</button>
-        ${swSelect('egs_full-loc-review-field', field, fieldOptions, 'setEgsFullLocReviewField', '170px', 'right')}
       </div>
     </div>
     <div class="loc-review-cards${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}">${cards}</div>`;
@@ -18674,8 +18460,8 @@ function buildCQQuestion(q) {
   const isAIHigh    = isAI && meta.confidence >= 90;   // auto-confirmed look
   const isAILow     = isAI && meta.confidence < 90;    // badge + dim
   const activePlats = q.platforms.filter(p => state.activePlatforms.has(p));
-  const platColors  = { ios:'#007AFF', android:'#34A853', egs:'#888', egs_full:'#888', steam:'#4c6b8a' };
-  const platLabels  = { ios:'iOS', android:'Android', egs:'EGS', egs_full:'EGS Full', steam:'Steam' };
+  const platColors  = { ios:'#007AFF', android:'#34A853', egs:'#888', steam:'#4c6b8a' };
+  const platLabels  = { ios:'iOS', android:'Android', egs:'EGS', steam:'Steam' };
 
   const badges = activePlats.map(p =>
     `<span class="cq-plat-badge" style="color:${platColors[p]};border-color:${platColors[p]}40;background:${platColors[p]}12;">${platLabels[p]}</span>`
@@ -19675,42 +19461,12 @@ function buildAndroidLocalizationsSection() {
    not here, because it is IARC and Google Play already draws it (see the
    'egs' arm in _stepBodyFor). */
 
-/* Epic's Product Configuration tables (EGS_GENRES, EGS_FEATURES,
-   EGS_SPEC_OS, EGS_SPEC_ROWS, EGS_SOCIAL_LINKS and friends) live in state.js
-   rather than here (v8.44). They have to: makeBlankEgsAnswers builds the
-   social-links object from EGS_SOCIAL_LINKS and isEgsSectionComplete walks
-   EGS_SPEC_ROWS, both of which run while state.js is still loading — and a
-   `const` in a later script is in its temporal dead zone until that script
-   runs, so the first read throws and takes the whole state object with it.
-   This is not a style choice; it is load order. */
-
-const EGS_REGION_GROUPS = [
-  { id: 'na',   label: 'North America' },
-  { id: 'eu',   label: 'Europe' },
-  { id: 'uk',   label: 'United Kingdom' },
-  { id: 'latam',label: 'Latin America' },
-  { id: 'apac', label: 'Asia-Pacific' },
-  { id: 'kr',   label: 'South Korea' },
-  { id: 'jp',   label: 'Japan' },
-  { id: 'cn',   label: 'Mainland China' },
-  { id: 'mena', label: 'Middle East & North Africa' },
-];
 
 /* EPIC'S OWN PRICE POINTS (v8.41). Not tiers any more and not a sample: this
    is the list the developer picks the game's price from, in the order Epic
    publishes it. It has gaps on purpose — 14.99 is followed by 16.99, and
    19.99 by 24.99 — so do not "tidy" the run; a missing point here is a price
    the store does not offer. Free is first because it is the default. */
-/* EPIC GAMES STORE FULL KEEPS THE OLD TIERS (v8.41). Its Regions & Pricing
-   section was not asked to change, and it gates the picker behind a Free/Paid
-   radio — so handing it the new list would put a "Free" option inside a tier
-   picker whose parent question already asks that, and let a developer answer
-   Paid and then pick Free. The two cards have been free to diverge since v8.30
-   and this is the first table where they have to: one list is Epic's real
-   prices, the other is the short sample that section was built around. */
-const EGS_FULL_PRICE_TIERS = ['$4.99', '$9.99', '$14.99', '$19.99', '$24.99', '$29.99',
-                              '$39.99', '$49.99', '$59.99', '$69.99', 'Custom tier'];
-
 const EGS_PRICE_TIERS = [
   'Free', 'USD 0.99', 'USD 1.99', 'USD 2.49', 'USD 2.99', 'USD 3.99',
   'USD 4.99', 'USD 5.99', 'USD 6.99', 'USD 7.99', 'USD 8.99', 'USD 9.99',
@@ -19729,155 +19485,9 @@ const EGS_PRICE_TIERS = [
    so it moved to where it is actually read — the buy box on the Store Page
    Preview, which previously showed it and sent you here to change it.
 
-   Epic Games Store Full keeps its own copy (buildEgsFullRegionsPricingSection,
-   below) — the two cards have been free to diverge since v8.30, and only Epic
-   was asked to change. */
-/* ══ EPIC GAMES STORE FULL (buildEgsFullRegionsPricingSection) ══════════════════════════════════════
-   A duplicate of Epic Games Store (buildEgsRegionsPricingSection), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
+   Epic Games Store Full kept its own copy of it until v8.52, when the whole
+   platform was removed. Nothing prices by tier any more. */
 
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function buildEgsFullRegionsPricingSection() {
-  const a = state.egsFullSubmitAnswers;
-
-  const distHtml = singleSelectRow(
-    'Distribution',
-    a.distribution,
-    [{ value: 'worldwide', label: 'Worldwide', onSelect: `answerEgsFullField('distribution','worldwide')` },
-     { value: 'select',    label: 'Selected regions', onSelect: `answerEgsFullField('distribution','select')` }],
-    'Epic asks which regions your product is sold in when you configure Store Settings. Worldwide is every region Epic operates in; Selected regions lets you exclude individual ones.');
-
-  /* The exclusion list only exists once "Selected regions" is the answer —
-     the same reveal-on-answer pattern Steam's multiplayer breakdown uses. A
-     region list shown under "Worldwide" would be a control with nothing to do. */
-  const regionsHtml = a.distribution === 'select' ? `
-    <div class="ios-content-step-label">Exclude from</div>
-    <div class="cq-check-list">
-      ${EGS_REGION_GROUPS.map(r => `
-        <label class="cq-check-row">
-          <input type="checkbox" ${a.excludedRegions.includes(r.id) ? 'checked' : ''}
-                 onchange="toggleEgsFullRegion('${r.id}', this.checked)">
-          <span>${escHtml(r.label)}</span>
-        </label>`).join('')}
-    </div>
-    ${a.excludedRegions.length === 0
-      ? `<div class="steam-spp-muted" style="margin-top:6px;">Select at least one region to exclude, or switch back to Worldwide.</div>` : ''}
-    <div class="ios-q-divider"></div>` : '';
-
-  /* KOREA IS ITS OWN QUESTION BECAUSE EPIC MAKES IT ONE. Their Ratings and
-     Content Guidelines carry a separate "Distribution in Korea" page: the GRAC
-     requires its own rating, which IARC does not issue, so shipping there is a
-     decision with paperwork attached rather than a tick on a region list. */
-  const koreaHtml = ynRow(
-    'Distributing in South Korea',
-    a.korea,
-    `answerEgsFullField('korea','yes')`,
-    `answerEgsFullField('korea','no')`,
-    'South Korea requires a Game Rating and Administration Committee (GRAC) rating, which IARC does not issue. Epic documents this separately from the rest of your regions.');
-
-  const priceHtml = singleSelectRow(
-    'Price model',
-    a.priceModel,
-    [{ value: 'paid', label: 'Paid',      onSelect: `answerEgsFullField('priceModel','paid')` },
-     { value: 'free', label: 'Free',      onSelect: `answerEgsFullField('priceModel','free')` }],
-    "Epic's Base Product Offer is either free or set to a price tier. Custom regional tiers can be created in the Developer Portal.");
-
-  const tierHtml = a.priceModel === 'paid' ? `
-    <div class="ios-q-row" data-answered="${a.priceTier.trim() ? '1' : '0'}">
-      <div class="ios-q-left"><div class="ios-q-label">Price tier</div></div>
-      ${swSelect('egs_full-tier', a.priceTier || null,
-        EGS_FULL_PRICE_TIERS.map(t => ({ value: t, label: t })),
-        'answerEgsFullTier', '180px', 'right', 'Select tier')}
-    </div>` : '';
-
-  /* Epic's "Offer Dates" sub-step, which is the offer's own start date and not
-     the same thing as the build going live — a product can be purchasable
-     before, at, or after the moment its artifact is released. */
-  const dateHtml = `
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Release date <span style="color:#e0555a;">*</span></label>
-      <input type="date" class="form-input${a.releaseDate.trim() ? ' is-complete' : ''}"
-             value="${escHtml(a.releaseDate)}"
-             onchange="answerEgsFullTextField('releaseDate', this.value)">
-      <div class="form-hint">The start date on your Base Product Offer. Epic calls this the offer's date rather than the build's.</div>
-    </div>`;
-
-  return `
-    <div class="ios-section-head">Regions &amp; Pricing</div>
-    <p class="ios-section-desc">Epic's Store Settings and Base Product Offer: where the product is sold, what it costs, and when the offer starts. Set in the Developer Portal under Store Presence.</p>
-    ${distHtml}
-    ${regionsHtml}
-    ${koreaHtml}
-    <div class="ios-q-divider"></div>
-    ${priceHtml}
-    ${tierHtml}
-    <div class="ios-q-divider"></div>
-    ${dateHtml}`;
-}
-
-/* ══ EPIC GAMES STORE FULL (buildEgsFullTechnicalSection) ══════════════════════════════════════
-   Was a duplicate of Epic Games Store's buildEgsTechnicalSection, which was
-   removed in v8.42 along with Epic's Technical Requirements step; this copy
-   is now the only one. It was kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function buildEgsFullTechnicalSection() {
-  const a = state.egsFullSubmitAnswers;
-
-  const crossHtml = singleSelectRow(
-    'Cross-platform multiplayer (PC)',
-    a.crossPlatformMultiplayer,
-    [{ value: 'yes',           label: 'Supported',    onSelect: `answerEgsFullField('crossPlatformMultiplayer','yes')` },
-     { value: 'no',            label: 'Not yet',      onSelect: `answerEgsFullField('crossPlatformMultiplayer','no')` },
-     { value: 'noMultiplayer', label: 'No multiplayer', onSelect: `answerEgsFullField('crossPlatformMultiplayer','noMultiplayer')` }],
-    "Epic asks that PC multiplayer titles let Epic Games Store Full players play with players who bought the game on other PC stores. Their Cross-Platform Multiplayer Guidelines page sets out what qualifies.");
-
-  return `
-    <div class="ios-section-head">Technical Requirements</div>
-    <p class="ios-section-desc">Epic's distribution requirements for the build itself. The Epic Games Store Full team confirms these when you submit for review.</p>
-    ${crossHtml}
-    <div class="ios-q-divider"></div>
-    ${ynRow('Epic Games Store Full Achievements',
-        a.achievements,
-        `answerEgsFullField('achievements','yes')`,
-        `answerEgsFullField('achievements','no')`,
-        'Epic Games Store Full Achievements are configured through Epic Online Services. Declaring none is a valid answer; declaring some means they must be live at launch.')}
-    ${ynRow('Patch notes prepared',
-        a.patchNotes,
-        `answerEgsFullField('patchNotes','yes')`,
-        `answerEgsFullField('patchNotes','no')`,
-        'Epic requires patch notes with product updates, and documents what they must contain. A launch build still needs the first set written.')}
-    ${ynRow('Epic Online Services overlay integrated',
-        a.eosOverlay,
-        `answerEgsFullField('eosOverlay','yes')`,
-        `answerEgsFullField('eosOverlay','no')`,
-        "The EOS overlay is what Epic's own Testing Guide exercises. Integrating it is how features such as the in-game store and social panel reach your players.")}`;
-}
 
 
 /* ══ EPIC: PRODUCT CONFIGURATION (v8.44) ══════════════════════════════════
@@ -20292,26 +19902,6 @@ function buildEgsSocialMediaSection() {
 function buildEgsLocalizationsSection() {
   return buildEgsLocalizationReviewSection();
 }
-/* ══ EPIC GAMES STORE FULL (buildEgsFullLocalizationsSection) ══════════════════════════════════════
-   A duplicate of Epic Games Store (buildEgsLocalizationsSection), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function buildEgsFullLocalizationsSection() {
-  return buildEgsFullLocalizationReviewSection();
-}
 
 
 /* ── THE PAGE'S OWN WRITABLE FIELDS (v8.48) ───────────────────────────────
@@ -20512,43 +20102,52 @@ function buildEgsStorePreviewSection() {
   const locCount = (state.formData.localizations || [])
     .filter(l => l !== (state.formData.primaryLanguage || 'en')).length;
   const locBtnHtml = locCount ? `
-      <button class="ias-all-locs-btn" onclick="event.stopPropagation(); openStorePreviewSection('egs','localization')"
+      <button class="ias-all-locs-btn" onclick="openStorePreviewSection('egs','localization')"
               title="Review every localized field side by side">Localizations</button>` : '';
 
-  /* THE HEADLINE SITS ABOVE THE BODY LABEL (v8.49), outside the block rather
-     than first inside it. On Epic's page it is the h2 at the top of the body
-     — so on a page that labels its blocks, it belongs ahead of the label the
-     way a heading sits ahead of what it heads, not under it. They still share
-     the 10,000 characters, which is what egsBodyLimit is for. */
+  /* HEADLINE STRAIGHT ONTO BODY, WITH NO LABEL BETWEEN THEM (v8.52). On
+     Epic's page the headline IS the body's heading — Go Ape Ship's "Co-op
+     monkey mayhem in space" sits immediately above the paragraph it
+     introduces — so a "Body" label between the two was this preview
+     explaining a structure the page already shows. They still share the
+     10,000 characters, which is what egsBodyLimit is for.
+
+     THE LOCALIZATIONS BUTTON LOST ITS PERCH and keeps its job. It lived on
+     the label; with the label gone it gets a row of its own above the pair,
+     right-aligned, and still only when there is a second language to review.
+     It is Shipmate's affordance rather than Epic's chrome, which is why it
+     sits beside the text rather than in it. */
   const bodyLimit = egsBodyLimit(headline.length);
   const aboutHtml = `
+    ${locBtnHtml ? `<div class="egs-sp-locrow">${locBtnHtml}</div>` : ''}
     <div class="egs-sp-headline-wrap">
       ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
           limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
           onInput: `updateEgsHeadlineCounter(this)`,
           onChange: `setEgsPageField('headline', this.value)` })}
     </div>
-    <div class="egs-spp-block">
-      <div class="egs-spp-h2">Body${locBtnHtml}</div>
-      ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
-          limit: bodyLimit, placeholder: 'Long Description.',
-          onInput: `updateEgsBodyCounter(this)`,
-          onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}
-    </div>`;
+    ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
+        limit: bodyLimit, placeholder: 'Long Description',
+        onInput: `updateEgsBodyCounter(this)`,
+        onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}`;
 
   /* ── THE FOOT OF THE PAGE, which on Epic is where everything the developer
      has declared about the build ends up: who to follow, what it runs on,
      what you need to log in with, what languages it speaks, and the legal
      line. All of it comes from steps this card now has. */
   const socialLinks = EGS_SOCIAL_LINKS.filter(l => (a.social[l.id] || '').trim());
+  /* "FOLLOW US" IS EPIC'S HEADING FOR LINKS THAT EXIST (v8.52). With none
+     given there is nobody to follow, so the empty state says what the block
+     is for instead — and says it in the heading rather than in a sentence
+     underneath, which is what the glow is already for. */
   const followHtml = `
     <div class="egs-sp-foot${socialLinks.length ? '' : ' egs-spp-glow-empty'}"
          onclick="openStepModal('egs','socialMedia')">
-      <div class="egs-spp-h2">Follow Us</div>
+      <div class="egs-spp-h2">${socialLinks.length ? 'Follow Us' : 'Social Media Links'}</div>
       ${socialLinks.length
         ? `<div class="egs-sp-social">${socialLinks.map(l =>
              `<span class="egs-sp-social-item">${escHtml(l.label)}</span>`).join('')}</div>`
-        : `<p class="egs-spp-p"><span class="egs-spp-placeholder">Epic shows a Follow Us row for every social link you give it. The Social Media step collects them.</span></p>`}
+        : ''}
     </div>`;
 
   const supported = EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes');
@@ -20603,32 +20202,18 @@ function buildEgsStorePreviewSection() {
       ${(a.privacyLink || '').trim() ? `<span class="egs-sp-legal-link">Privacy Policy</span>` : ''}
     </div>` : '';
 
-  /* The bar at the top, which is the Apple previews' idea and earns its place
-     here for the same reason: the page shows you what is missing only where
-     the missing thing would have been, and a required element with no block of
-     its own (a title, say) has nowhere to glow. It grew in v8.47 because the
-     page did: genres, system requirements and the text languages are all
-     printed now, so all three can be missing from it visibly. */
-  const elements = [
-    { label: 'Title',        done: !!title },
-    { label: 'Description',  done: !!desc },
-    { label: 'Media',        done: shots.length > 0 },
-    { label: 'Age Rating',   done: ratingDone },
-    { label: 'Genres',       done: a.genres.length > 0 },
-    { label: 'Specs',        done: !!specTables },
-    { label: 'Languages',    done: a.textLanguages.length > 0 },
-  ];
-  const barHtml = `
-    <div class="egs-spp-bar">
-      ${elements.map(e => `<span class="egs-spp-pill${e.done ? ' is-done' : ''}">${e.done ? smCheckSVG(11) : ''}${e.label}</span>`).join('')}
-    </div>`;
+  /* NO STATUS BAR AND NO BLURB (v8.52). The bar listed seven things the page
+     might be missing — Title, Description, Media, Age Rating, Genres, Specs,
+     Languages — above a page that already says all seven itself, by glowing
+     exactly where the missing thing would have been. Two answers to one
+     question, and the pills were the one that could not be pressed. The line
+     of instructions above them went for the same reason: a page that has to
+     be captioned is not finished being designed.
 
   /* NO SECTION HEADING. The step modal's own header already says "Store Page
      Preview" two lines above, and a preview that repeats its own name is one
      more row between the developer and the page they came to look at. */
   return `
-    <p class="ios-section-desc" style="margin-top:0;">Your Epic Games Store product page as players will see it. Press any block to fill in what it needs.</p>
-    ${barHtml}
     <div class="egs-spp egs-sp">
       ${egsPageField({ id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
@@ -20650,181 +20235,6 @@ function buildEgsStorePreviewSection() {
       ${sysHtml}
       ${loginHtml}
       ${legalHtml}
-    </div>`;
-}
-/* ══ EPIC GAMES STORE FULL (buildEgsFullStorePreviewSection) ══════════════════════════════════════
-   A duplicate of Epic Games Store (buildEgsStorePreviewSection), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function buildEgsFullStorePreviewSection() {
-  const fd   = state.formData || {};
-  const ws   = state.webSite || {};
-  const a    = state.egsFullSubmitAnswers;
-  const pool = (typeof smPool === 'function') ? smPool() : [];
-
-  const title      = (fd.title || '').trim();
-  const desc       = (fd.description || '').trim();
-  const developer  = (ws.developer || '').trim();
-  const publisher  = (ws.publisher || developer || '').trim();
-  const genres     = (ws.genres || '').trim();
-
-  const keyArt = pool.find(x => x.kind === 'art-land' && x.src)
-              || pool.find(x => x.kind === 'screenshot' && x.src) || null;
-  const shots  = (typeof platformStoreShots === 'function') ? platformStoreShots('egs_full') : [];
-
-  /* THE RATING SHOWN IS THE ONE THE QUESTIONNAIRE HAS EARNED, not a guess and
-     not a placeholder that looks like an answer. IARC issues per-territory
-     marks and Shipmate does not compute them, so while the tree is unfinished
-     this says how much of it is left — a number the developer can act on —
-     and once it is finished it says the questionnaire is complete and the
-     boards will issue. Inventing an ESRB letter here would be inventing the
-     one thing on this page nobody may invent. */
-  const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
-  const ratingDone = cq.total > 0 && cq.answered === cq.total;
-  const ratingHtml = `
-    <div class="egs-spp-block egs-spp-rating${ratingDone ? '' : ' egs-spp-glow-empty'}"
-         onclick="openStorePreviewSection('egs_full','content')">
-      <div class="egs-spp-h2">Age Rating</div>
-      <div class="egs-spp-rating-row">
-        <div class="egs-spp-rating-badge${ratingDone ? ' is-done' : ''}">IARC</div>
-        <div class="egs-spp-rating-text">
-          ${ratingDone
-            ? `<b>Questionnaire complete.</b><span>Ratings boards issue their own marks from these answers.</span>`
-            : `<b>${cq.total - cq.answered} question${cq.total - cq.answered === 1 ? '' : 's'} left.</b><span>Epic uses the IARC questionnaire — the same one Google Play asks.</span>`}
-        </div>
-      </div>
-    </div>`;
-
-  /* The buy box. Epic's Base Product Offer decides all three things in it —
-     whether there is a price at all, which tier, and the date the offer
-     starts — so the whole box is one door into Regions & Pricing. */
-  const priceSet = a.priceModel === 'free' || (a.priceModel === 'paid' && a.priceTier.trim());
-  const priceLabel = a.priceModel === 'free' ? 'Free'
-                   : a.priceTier.trim() ? escHtml(a.priceTier)
-                   : '<span class="egs-spp-placeholder">Price not set</span>';
-  const dateLabel = a.releaseDate.trim() ? escHtml(a.releaseDate) : (ws.releaseDate || 'Coming soon');
-  const regionLabel = a.distribution === 'worldwide' ? 'Worldwide'
-                    : a.distribution === 'select'
-                      ? `${EGS_REGION_GROUPS.length - a.excludedRegions.length} of ${EGS_REGION_GROUPS.length} regions`
-                      : '<span class="egs-spp-placeholder">Regions not set</span>';
-
-  const buyHtml = `
-    <div class="egs-spp-buy${priceSet ? '' : ' egs-spp-glow-empty'}"
-         onclick="openStorePreviewSection('egs_full','pricing')">
-      <div class="egs-spp-buy-price">${priceLabel}</div>
-      <button class="egs-spp-btn" type="button">Get</button>
-      <div class="egs-spp-buy-meta">
-        <div><span>Release</span><b>${dateLabel}</b></div>
-        <div><span>Availability</span><b>${regionLabel}</b></div>
-      </div>
-    </div>`;
-
-  /* The media strip, which on Epic's page is the largest thing above the fold.
-     It borrows the pool rather than a listing of its own so a developer who
-     has already chosen screenshots for another store does not choose them
-     twice — the same well every other preview reads. */
-  const heroSrc = keyArt ? keyArt.src : '';
-  const stripHtml = shots.length
-    ? shots.slice(0, 5).map(sh => `<div class="egs-spp-thumb"><img src="${escHtml(_screenshotSrc(sh) || sh.src || '')}" alt=""></div>`).join('')
-    : '';
-  const mediaHtml = `
-    <div class="egs-spp-media${(heroSrc || shots.length) ? '' : ' egs-spp-glow-empty'}"
-         onclick="openStorePreviewSection('egs_full','screenshots')">
-      <div class="egs-spp-hero">
-        ${heroSrc
-          ? `<img src="${escHtml(heroSrc)}" alt="">`
-          : `<div class="egs-spp-hero-empty">Key art and screenshots appear here</div>`}
-      </div>
-      ${stripHtml ? `<div class="egs-spp-strip">${stripHtml}</div>` : ''}
-    </div>`;
-
-  /* The same door Steam's prototype and both Apple previews carry: the page
-     is where you notice a language is missing something, so the way into the
-     review belongs on the page. */
-  const locCount = (state.formData.localizations || [])
-    .filter(l => l !== (state.formData.primaryLanguage || 'en')).length;
-  const locBtnHtml = locCount ? `
-      <button class="ias-all-locs-btn" onclick="openStorePreviewSection('egs_full','localization')"
-              title="Review every localized field side by side">Localizations</button>` : '';
-
-  const aboutHtml = `
-    <div class="egs-spp-block${desc ? '' : ' egs-spp-glow-empty'}">
-      <div class="egs-spp-h2">About${locBtnHtml}</div>
-      <p class="egs-spp-p">${desc
-        ? escHtml(desc)
-        : '<span class="egs-spp-placeholder">Your description appears here once it is filled in under Game Details.</span>'}</p>
-    </div>`;
-
-  const techDone = a.crossPlatformMultiplayer !== null && a.achievements !== null
-                && a.patchNotes !== null && a.eosOverlay !== null;
-  const specRow = (label, value) => `<div class="egs-spp-spec-row"><span>${label}</span><b>${value}</b></div>`;
-  const yn = v => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '<span class="egs-spp-placeholder">—</span>';
-  const techHtml = `
-    <div class="egs-spp-block egs-spp-specs${techDone ? '' : ' egs-spp-glow-empty'}"
-         onclick="openStorePreviewSection('egs_full','technical')">
-      <div class="egs-spp-h2">Technical</div>
-      ${specRow('Cross-platform multiplayer',
-          a.crossPlatformMultiplayer === 'yes' ? 'Supported'
-        : a.crossPlatformMultiplayer === 'no' ? 'Not yet'
-        : a.crossPlatformMultiplayer === 'noMultiplayer' ? 'Single-player'
-        : '<span class="egs-spp-placeholder">—</span>')}
-      ${specRow('Achievements', yn(a.achievements))}
-      ${specRow('Patch notes', yn(a.patchNotes))}
-      ${specRow('EOS overlay', yn(a.eosOverlay))}
-    </div>`;
-
-  /* The bar at the top, which is the Apple previews' idea and earns its place
-     here for the same reason: the page shows you what is missing only where
-     the missing thing would have been, and a required element with no block of
-     its own (a title, say) has nowhere to glow. */
-  const elements = [
-    { label: 'Title',        done: !!title },
-    { label: 'Description',  done: !!desc },
-    { label: 'Media',        done: shots.length > 0 },
-    { label: 'Age Rating',   done: ratingDone },
-    { label: 'Pricing',      done: isEgsFullSectionComplete('regionsPricing') },
-    { label: 'Technical',    done: techDone },
-  ];
-  const barHtml = `
-    <div class="egs-spp-bar">
-      ${elements.map(e => `<span class="egs-spp-pill${e.done ? ' is-done' : ''}">${e.done ? smCheckSVG(11) : ''}${e.label}</span>`).join('')}
-    </div>`;
-
-  /* NO SECTION HEADING. The step modal's own header already says "Store Page
-     Preview" two lines above, and a preview that repeats its own name is one
-     more row between the developer and the page they came to look at. */
-  return `
-    <p class="ios-section-desc" style="margin-top:0;">Your Epic Games Store Full product page as players will see it. Press any block to fill in what it needs.</p>
-    ${barHtml}
-    <div class="egs-spp">
-      ${mediaHtml}
-      <div class="egs-spp-head">
-        <div class="egs-spp-titlewrap">
-          <div class="egs-spp-title${title ? '' : ' egs-spp-glow-empty'}">${title || '<span class="egs-spp-placeholder">Untitled</span>'}</div>
-          <div class="egs-spp-byline">
-            ${developer ? `<span><span>Developer</span><b>${escHtml(developer)}</b></span>` : ''}
-            ${publisher ? `<span><span>Publisher</span><b>${escHtml(publisher)}</b></span>` : ''}
-            ${genres ? `<span><span>Genres</span><b>${escHtml(genres)}</b></span>` : ''}
-          </div>
-        </div>
-        ${buyHtml}
-      </div>
-      ${aboutHtml}
-      ${ratingHtml}
-      ${techHtml}
     </div>`;
 }
 
@@ -21216,72 +20626,6 @@ function buildEgsActiveCard(pid, force) {
       : SM_STEP_CHEVRON;
     return `
       <div class="ios-step-card ${done ? 'is-complete' : ''}" id="egs-step-card-${step.id}"
-           onclick="openStepModal('${pid}','${step.id}')">
-        <div class="${numClass}">${done ? checkSVG : i + 1}</div>
-        <div class="ios-step-info">
-          <div class="ios-step-name">${stepLabel(pid, step)}</div>
-        </div>
-        ${trailingEl}
-      </div>`;
-  }).join('');
-
-  const submitStepCard = buildSubmitStepCard(pid, steps.length, locked, submitDone);
-
-  return `
-    <div class="active-card ${!locked ? 'submit-ready' : ''}" id="active-card-${pid}">
-      ${platformCardHead(pid, 'steps')}
-      ${buildReleasePills(pid)}
-      <div class="ios-step-cards">${stepCards}${submitStepCard}</div>
-    </div>`;
-}
-/* ══ EPIC GAMES STORE FULL (buildEgsFullActiveCard) ══════════════════════════════════════
-   A duplicate of Epic Games Store (buildEgsActiveCard), kept as its own copy rather than
-   folded into the original behind a `pid` parameter. That was the explicit
-   choice: the two cards are meant to be able to diverge step by step, and a
-   shared builder makes the first divergence a refactor instead of an edit.
-
-   WHAT THIS COPY CHANGES AND NOTHING ELSE: its own answers
-   (state.egsFullSubmitAnswers), its own surface state, its own DOM ids, and
-   its own completeness function. The shared tables (EGS_REGION_GROUPS,
-   EGS_PRICE_TIERS, EGS_LOC_REVIEW_FIELDS) and the whole `.egs-spp-*` stylesheet
-   are deliberately NOT duplicated — they are data and paint, and two copies of
-   either would drift without anyone noticing. Keep it that way until a real
-   difference needs one of them forked.
-
-   The IARC content rating stays shared too, as it already is between Google
-   Play and Epic: one questionnaire, one set of answers, by IARC's own design
-   (see isEgsFullSectionComplete's contentRating arm). */
-function buildEgsFullActiveCard(pid, force) {
-  if (!force && showAccountFace(pid)) return buildAccountCard(pid);
-  if (state.platformFlipped?.[pid]) return buildSubmittedCard(pid, state.platformFlipped[pid]);
-  const p      = PLATFORMS[pid];
-  const steps  = _visiblePlatformSteps(pid);
-  const counts = platformStepCount(pid);
-  const locked = !counts.allRequired;
-  const submitDone = state.platformStepStatus?.[pid]?.['submit'] === 'complete';
-  const checkSVG = smCheckSVG(20);
-  const binProc  = !!(state.platformBuildProcessing?.[pid]);
-
-  const stepCards = steps.map((step, i) => {
-    const done     = isEgsFullSectionComplete(step.id);
-    const numClass = 'ios-step-num' + (done ? ' is-done' : '');
-
-    if (step.id === 'uploadBuild') {
-      return `
-        <div class="ios-step-card ${done ? 'is-complete' : ''} ios-step-card--inline" id="egs_full-step-card-${step.id}">
-          <div class="${numClass}">${done ? checkSVG : i + 1}</div>
-          <div class="ios-step-info">
-            <div class="ios-step-name">${stepLabel(pid, step)}</div>
-          </div>
-          ${buildBuildDropdown(pid)}
-        </div>`;
-    }
-
-    const trailingEl = (step.id === 'improveSubmission' && binProc)
-      ? `<span class="build-proc-spin" style="flex-shrink:0;margin-left:auto;"></span>`
-      : SM_STEP_CHEVRON;
-    return `
-      <div class="ios-step-card ${done ? 'is-complete' : ''}" id="egs_full-step-card-${step.id}"
            onclick="openStepModal('${pid}','${step.id}')">
         <div class="${numClass}">${done ? checkSVG : i + 1}</div>
         <div class="ios-step-info">
