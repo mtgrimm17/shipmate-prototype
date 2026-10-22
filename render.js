@@ -20036,7 +20036,7 @@ function buildEgsAchievementsPanel() {
 
   const bandHtml = `
     <div class="egs-sp-ach-band">
-      <div class="egs-sp-ach-art egs-sp-hit"
+      <div class="egs-sp-ach-art ${egsHitCls(!!keyArt)}"
            onclick="openStorePreviewSection('egs','screenshots')">${keyArt
         ? `<img src="${escHtml(keyArt.src)}" alt="">`
         : `<div class="egs-spp-hero-empty">Key art appears here</div>`}</div>
@@ -20076,6 +20076,18 @@ function buildEgsAchievementsPanel() {
   return `${bandHtml}<div class="egs-sp-ach-list">${rows}</div>`;
 }
 
+/* WHICH WELL A BLOCK WEARS (v8.58). Mac App Store draws a brighter resting
+   line around a region that still wants something — `.ias-placeholder` on a
+   field, `--ask` on a privacy block — and the dimmer one around a region that
+   is done. Epic's blocks say it with this, one class, decided by whatever that
+   particular block PRINTS: Genres by its genres, the carousel by whether there
+   is any art, Login by whether anything has been declared. Per block and not
+   per step, because a page where Genres is filled and Features is empty has
+   one of each and should look like it. */
+function egsHitCls(filled) {
+  return 'egs-sp-hit' + (filled ? '' : ' is-todo');
+}
+
 function buildEgsStorePreviewSection() {
   const fd   = state.formData || {};
   const ws   = state.webSite || {};
@@ -20107,7 +20119,7 @@ function buildEgsStorePreviewSection() {
   const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
   const ratingDone = cq.total > 0 && cq.answered === cq.total;
   const ratingHtml = `
-    <div class="egs-sp-rating egs-sp-hit"
+    <div class="egs-sp-rating ${egsHitCls(ratingDone)}"
          onclick="openStorePreviewSection('egs','content')">
       <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
       <!-- JUST THE NAME OF THE THING (v8.48). This card used to report how
@@ -20200,7 +20212,7 @@ function buildEgsStorePreviewSection() {
     : 0;
   const chevSvg = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${d}"/></svg>`;
   const mediaHtml = `
-    <div class="egs-sp-car egs-sp-hit">
+    <div class="egs-sp-car ${egsHitCls(mediaSrcs.length)}">
       <div class="egs-sp-car-stage"
            onclick="openStorePreviewSection('egs','screenshots')"
            title="Open Screenshots">
@@ -20245,7 +20257,7 @@ function buildEgsStorePreviewSection() {
      wider right one with a rule between them. Stacked, the two rows read as
      one long list of tags whose headings happen to interrupt it. */
   const tagCol = (label, items, step) => `
-    <div class="egs-sp-tagcol egs-sp-hit"
+    <div class="egs-sp-tagcol ${egsHitCls(items.length)}"
          onclick="openStepModal('egs','${step}')">
       <span class="egs-sp-tagrow-label">${label}</span>
       <span class="egs-sp-tags">${items.length
@@ -20314,7 +20326,7 @@ function buildEgsStorePreviewSection() {
      is for instead — and says it in the heading rather than in a sentence
      underneath, which is what the glow is already for. */
   const followHtml = `
-    <div class="egs-sp-foot egs-sp-hit"
+    <div class="egs-sp-foot ${egsHitCls(socialLinks.length)}"
          onclick="openStepModal('egs','socialMedia')">
       <div class="egs-spp-h2">${socialLinks.length ? 'Follow Us' : 'Social Media Links'}</div>
       ${socialLinks.length
@@ -20345,7 +20357,7 @@ function buildEgsStorePreviewSection() {
   };
   const specTables = supported.map(specTable).filter(Boolean).join('');
   const sysHtml = `
-    <div class="egs-sp-foot egs-sp-hit"
+    <div class="egs-sp-foot ${egsHitCls(specTables)}"
          onclick="openStepModal('egs','specifications')">
       <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
       ${specTables}
@@ -20358,7 +20370,7 @@ function buildEgsStorePreviewSection() {
     </div>`;
   const detailsDone = a.loginTypes.length || a.textLanguages.length || a.audioLanguages.length;
   const loginHtml = `
-    <div class="egs-sp-foot egs-sp-hit"
+    <div class="egs-sp-foot ${egsHitCls(detailsDone)}"
          onclick="openStepModal('egs','productDetails')">
       <div class="egs-sp-foot-sub">Login Accounts Required</div>
       <div class="egs-sp-langline is-plain"><b>${a.loginTypes.length
@@ -20370,7 +20382,7 @@ function buildEgsStorePreviewSection() {
     </div>`;
 
   const legalHtml = (a.legalFooter || '').trim() || (a.privacyLink || '').trim() ? `
-    <div class="egs-sp-legal egs-sp-hit" onclick="openStepModal('egs','productDetails')">
+    <div class="egs-sp-legal ${egsHitCls(true)}" onclick="openStepModal('egs','productDetails')">
       ${(a.legalFooter || '').trim() ? `<span>${escHtml(a.legalFooter)}</span>` : ''}
       ${(a.privacyLink || '').trim() ? `<span class="egs-sp-legal-link">Privacy Policy</span>` : ''}
     </div>` : '';

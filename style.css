@@ -29325,6 +29325,19 @@ textarea.egs-sp-body {
   --epic-fg-2:      rgba(255, 255, 255, 0.65);
   --epic-accent:    #33bfff;
   --epic-on-accent: #0a2633;
+  /* ── THE WELL'S THREE LINES AND TWO FILLS (v8.58) ──────────────────────
+     Read off Mac App Store's Product Page Preview with getComputedStyle, not
+     chosen: a region that is FILLED rests on rgba(255,255,255,.08) over a
+     ground one step up from the page; one that is still EMPTY rests on .14
+     over the page's own ground, so "this one still wants you" is visible
+     without hovering anything; and anything under the pointer goes to .24.
+     Radius 8 and .12s are Mac's too. Only the ground changes for Epic, from
+     Apple's #121212 over #0a0a0a to Epic's own surface over its own page. */
+  --epic-well-line:       rgba(255, 255, 255, .08);
+  --epic-well-line-todo:  rgba(255, 255, 255, .14);
+  --epic-well-line-hover: rgba(255, 255, 255, .24);
+  --epic-well-fill:       var(--epic-surface);
+  --epic-well-radius:     8px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background: var(--epic-bg);
   color: var(--epic-fg);
@@ -29590,18 +29603,9 @@ textarea.egs-sp-body {
 }
 .egs-sp .egs-sp-legal-link { color: var(--epic-accent); }
 
-/* The editable fields keep Epic's type (set above) and only show their own
-   chrome on hover and focus, so the page still reads as the page. The hover
-   is Mac App Store's: the field's own border to rgba(255,255,255,.24) over
-   .12s, not a tint that appears with no transition at all. */
-.egs-sp .egs-sp-edit {
-  transition: border-color .12s ease, background-color .12s ease;
-}
-.egs-sp .egs-sp-edit:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.24);
-}
-.egs-sp .egs-sp-edit:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--epic-line); }
+/* The fields' own resting well, hover and focus are all in the v8.58 block
+   below — this is where they used to be announced, and the note stays as the
+   pointer to it. */
 /* ── THE COLUMN'S RHYTHM IS EPIC'S, AND IT IS ONE NUMBER (v8.56) ──────────
    store.epicgames.com/p/go-ape-ship-53158b lays its main column out as
    `display: flex; flex-direction: column; gap: 48px` over exactly four
@@ -29716,16 +29720,148 @@ textarea.egs-sp-body {
    hover, with Mac's own .12s. box-shadow rather than a border on the blocks
    for the reason Mac uses it there too: it costs no layout, so hovering a
    block cannot move the page under the pointer. */
+/* ── THE FULL MAC TREATMENT: A RESTING WELL ON EVERY REGION (v8.58) ───────
+   v8.56 matched Mac App Store's hover and left the resting state alone, on
+   the argument that Epic's page should look like Epic's page. Asked for the
+   whole treatment instead, so here it is, with Mac's own numbers (the tokens
+   above) in Epic's own colours.
+
+   WHY A WELL AT ALL, in the words the Mac preview earned them with: hover is
+   not a resting mark. A page whose only answer to "what here is mine to set?"
+   arrives under the pointer says nothing at all in a screenshot, and nothing
+   to somebody who has not thought to sweep the mouse across it. The well is
+   that answer, drawn.
+
+   THE BOX NEVER TOUCHES THE TEXT. Every region below pays real padding — 6px
+   and 10px on a field, 14px and 16px on a block — so there is always air
+   between the line and the first glyph, on all four sides. That is also why
+   the padding is not cosmetic: a 1px line hard against a 26.4px line of type
+   reads as a clipped input, which is the opposite of the "this is yours"
+   this is for.
+
+   AND THE PAGE DOES NOT MOVE SIDEWAYS. Each region cancels its own
+   HORIZONTAL padding with a matching negative margin, so the text still
+   starts exactly where Epic's does and the wells bleed out into the gutters
+   the canvas already has. Vertical padding is NOT cancelled: v8.56's 48px is
+   the distance between the blocks, and with wells the block is the box, so
+   the gap stays 48 between boxes rather than being eaten from both ends. */
+
+/* ── Fields ─────────────────────────────────────────────────────────────── */
+.egs-sp .egs-sp-edit {
+  background: var(--epic-well-fill);
+  border: 1px solid var(--epic-well-line);
+  border-radius: var(--epic-well-radius);
+  /* 15 + the 1px line = 16, which is the blocks' own padding — so a field's
+     line and a block's line start at the SAME x and the column of wells is
+     flush down its left edge. Matching the TEXT was never the hard part (any
+     pair of numbers can do that); matching the LINES is, and a 1px stagger
+     between a field and the block above it is the kind of thing that reads
+     as sloppy without ever being nameable. */
+  padding: 6px 15px;
+  /* Vertical only: the row below pays the horizontal side for the pair, so
+     the counter beside the box is not dragged in over it. */
+  margin: -7px 0;
+  /* These are live inputs, not Mac's click-to-edit divs, so they keep the
+     I-beam: the well says "this is yours", the caret says "type here". */
+  cursor: text;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-sp-fieldrow { margin-left: -16px; margin-right: -16px; }
+/* An empty field keeps the page's own ground and wears the brighter line —
+   Mac's `.ias-placeholder` treatment exactly. */
+.egs-sp .egs-sp-edit.egs-sp-edit-empty {
+  background: transparent;
+  border-color: var(--epic-well-line-todo);
+}
+.egs-sp .egs-sp-edit:hover,
+.egs-sp .egs-sp-edit.egs-sp-edit-empty:hover {
+  border-color: var(--epic-well-line-hover);
+  background: var(--epic-well-fill);
+}
+.egs-sp .egs-sp-edit:focus,
+.egs-sp .egs-sp-edit.egs-sp-edit-empty:focus {
+  outline: none;
+  border-color: var(--epic-well-line-hover);
+  background: var(--epic-well-fill);
+}
+
+/* ── Blocks that open a step ─────────────────────────────────────────────
+   An INSET ring rather than a border, which is Mac's choice here too and for
+   the same reason: a border on a block would add a pixel to its box and move
+   the page, where a ring is painted inside the padding and costs nothing. */
 .egs-sp .egs-sp-hit {
+  background: var(--epic-well-fill);
+  box-shadow: inset 0 0 0 1px var(--epic-well-line);
+  border-radius: var(--epic-well-radius);
+  padding: 14px 16px;
+  margin-left: -16px;
+  margin-right: -16px;
   cursor: pointer;
-  border-radius: 8px;
   transition: box-shadow .12s ease, background-color .12s ease;
 }
-.egs-sp .egs-sp-hit:hover { box-shadow: 0 0 0 1px rgba(255, 255, 255, .24); }
-/* The rating card already wears Epic's own 1px line, so it brightens that
-   line instead of growing a second one outside it. */
-.egs-sp .egs-sp-rating.egs-sp-hit { transition: border-color .12s ease; }
-.egs-sp .egs-sp-rating.egs-sp-hit:hover { box-shadow: none; border-color: rgba(255, 255, 255, .24); }
+/* STILL EMPTY, AND THE BLOCK IS TOLD SO RATHER THAN GUESSING.
+   The first pass read the block's own markup with :has(.egs-spp-placeholder),
+   which is the CSS-only trick and is wrong here: a Social Media block with no
+   links prints a changed HEADING and no list at all — no placeholder element
+   anywhere in it — so it claimed to be filled while being empty, and System
+   Requirements with no tables did the same. The builder already knows; it
+   computes exactly these values a line above. So it says so (egsHitCls,
+   render.js) and this rule only has to draw it. */
+.egs-sp .egs-sp-hit.is-todo {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--epic-well-line-todo);
+}
+.egs-sp .egs-sp-hit:hover,
+.egs-sp .egs-sp-hit.is-todo:hover {
+  box-shadow: inset 0 0 0 1px var(--epic-well-line-hover);
+}
+
+/* The rating card already wore a line of its own, so it keeps a border and
+   only joins the scheme's three values. */
+.egs-sp .egs-sp-rating.egs-sp-hit {
+  box-shadow: none;
+  border: 1px solid var(--epic-well-line-todo);
+  padding: 14px 16px;
+  margin-left: 0;
+  margin-right: 0;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-sp-rating.egs-sp-hit.is-todo {
+  border-color: var(--epic-well-line-todo);
+  background: transparent;
+}
+.egs-sp .egs-sp-rating.egs-sp-hit:not(.is-todo) {
+  border-color: var(--epic-well-line);
+  background: var(--epic-well-fill);
+}
+/* LAST, AND THAT IS THE WHOLE RULE. The two resting states above carry the
+   same specificity as a :hover written before them, so the later one wins and
+   an unfinished rating card sat on its resting line with the pointer right on
+   top of it. Hover is a state ON a resting state, so it is declared after
+   both. */
+.egs-sp .egs-sp-rating.egs-sp-hit:hover,
+.egs-sp .egs-sp-rating.egs-sp-hit.is-todo:hover,
+.egs-sp .egs-sp-rating.egs-sp-hit:not(.is-todo):hover {
+  box-shadow: none;
+  border-color: var(--epic-well-line-hover);
+}
+
+/* THE TAG COLUMNS LOSE THEIR DIVIDER, because they have grown a box each and
+   a rule between two boxes is a third line saying what the two already say.
+   The grid's own 24px gap is what separates them now; the row cancels 16 of
+   its own padding so Genres still starts on the page's left edge. */
+.egs-sp .egs-sp-tagcol.egs-sp-hit { border-left: none; padding-left: 16px; margin-left: 0; margin-right: 0; }
+.egs-sp .egs-sp-tagcols { margin-left: -16px; margin-right: -16px; }
+
+/* The foot blocks already paid a top border and 24px above it to separate
+   themselves. With a well around each, that rule is the same third line the
+   tag columns just lost, so it goes and the margin becomes plain air. */
+.egs-sp .egs-sp-foot.egs-sp-hit {
+  border-top: none;
+  padding-top: 14px;
+  margin-top: 24px;
+}
+.egs-sp .egs-sp-legal.egs-sp-hit { border-top: none; padding-top: 14px; margin-top: 24px; }
 
 .egs-sp .ias-char-counter-row { font-family: 'Inter', system-ui, sans-serif; }
 
