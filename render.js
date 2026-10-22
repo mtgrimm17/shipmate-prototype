@@ -20122,39 +20122,36 @@ function buildEgsFullLocalizationsSection() {
 }
 
 
-/* ══════════════════════════════════════════════════════════════════════════
-   EPIC GAMES STORE — STORE PAGE PREVIEW  (v7.30)
-   ══════════════════════════════════════════════════════════════════════════
-   Epic's "Product Home Page", drawn as the page rather than described as a
-   form. Same argument the Steam prototype and the two Apple previews are
-   written under: a store listing is a PICTURE, and the only honest way to ask
-   "is this ready" is to show the developer the thing their players will see
-   with the gaps still in it.
+/* ══ EPIC'S PRODUCT PAGE, REBUILT TO MATCH IT (v8.47) ═════════════════════
+   Read off store.epicgames.com rather than imagined: Go Ape Ship's own page,
+   Alan Wake 2 and Rocket League. The shape is a two-column one — everything
+   you look at on the left, everything you act on in a panel down the right —
+   and the panel's order is Epic's exactly: age rating, Base Game, price, the
+   buy button, Wishlist, then Developer, Publisher, Release Date, Platform.
 
-   EVERY BLOCK IS A DOOR. Press the buy box and you land in Regions & Pricing;
-   press the ratings block and you land in the IARC questionnaire; press the
-   media strip and you land in the Media Carousel. That is what
-   `openStorePreviewSection(pid, target)` is for, and it is why this preview
-   costs no extra navigation — the page is its own table of contents.
+   WHAT CHANGED IS NOT ONLY THE LAYOUT. The old preview showed four things,
+   because four things were all this card knew. Since v8.44 it knows genres,
+   features, login accounts, supported languages, per-OS system requirements,
+   a legal footer, a privacy link and twelve social links — and Epic's real
+   page prints every one of them. So the page below is now a preview of the
+   whole card rather than of its first two steps, and each block is a door
+   into the step that fills it.
 
-   WHAT IS EMPTY SAYS SO. `egs-spp-glow-empty` is the same treatment Steam's
-   prototype uses: a block with nothing in it glows rather than collapsing, so
-   a half-finished page reads as half-finished instead of as a shorter page. */
+   THE FREE PAGE AND THE PAID PAGE DIFFER, AND NOT ONLY IN THE BUTTON. Go Ape
+   Ship (free) carries Get, Add to Cart and Wishlist. Alan Wake 2 (paid) adds
+   Gift, an Epic Rewards line and a Refund Type line. Those three are printed
+   only on a paid product, because that is where Epic prints them. */
 function buildEgsStorePreviewSection() {
   const fd   = state.formData || {};
   const ws   = state.webSite || {};
   const a    = state.egsSubmitAnswers;
   const pool = (typeof smPool === 'function') ? smPool() : [];
 
-  const title      = (fd.title || '').trim();
-  const desc       = (fd.description || '').trim();
-  const developer  = (ws.developer || '').trim();
-  const publisher  = (ws.publisher || developer || '').trim();
-  /* EPIC'S OWN GENRES WIN WHEN THERE ARE ANY (v8.44). Product Details picks
-     from Epic's closed list of 38; ws.genres is the web site's free-text
-     field. Printing the web site's string on Epic's page while Epic's own
-     taxonomy sat unused in state was two truths on one card. */
-  const genres     = a.genres.length ? a.genres.join(', ') : (ws.genres || '').trim();
+  const title     = (fd.title || '').trim();
+  const desc      = (fd.description || '').trim();
+  const aboutText = (ws.aboutGame || '').trim();
+  const developer = (ws.developer || '').trim();
+  const publisher = (ws.publisher || developer || '').trim();
 
   const keyArt = pool.find(x => x.kind === 'art-land' && x.src)
               || pool.find(x => x.kind === 'screenshot' && x.src) || null;
@@ -20170,48 +20167,61 @@ function buildEgsStorePreviewSection() {
   const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
   const ratingDone = cq.total > 0 && cq.answered === cq.total;
   const ratingHtml = `
-    <div class="egs-spp-block egs-spp-rating${ratingDone ? '' : ' egs-spp-glow-empty'}"
+    <div class="egs-sp-rating${ratingDone ? '' : ' egs-spp-glow-empty'}"
          onclick="openStorePreviewSection('egs','content')">
-      <div class="egs-spp-h2">Age Rating</div>
-      <div class="egs-spp-rating-row">
-        <div class="egs-spp-rating-badge${ratingDone ? ' is-done' : ''}">IARC</div>
-        <div class="egs-spp-rating-text">
-          ${ratingDone
-            ? `<b>Questionnaire complete.</b><span>Ratings boards issue their own marks from these answers.</span>`
-            : `<b>${cq.total - cq.answered} question${cq.total - cq.answered === 1 ? '' : 's'} left.</b><span>Epic uses the IARC questionnaire — the same one Google Play asks.</span>`}
-        </div>
+      <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
+      <div class="egs-sp-rating-text">
+        ${ratingDone
+          ? `<b>Questionnaire complete</b><span>Ratings boards issue their own marks from these answers.</span>`
+          : `<b>${cq.total - cq.answered} question${cq.total - cq.answered === 1 ? '' : 's'} left</b><span>Epic uses the IARC questionnaire — the same one Google Play asks.</span>`}
       </div>
     </div>`;
 
-  /* THE BUY BOX IS WHERE THE PRICE IS SET NOW (v8.41), not a read-out of a
-     question asked three steps away. It used to print the price and send you
-     to Regions & Pricing to change it; that section is gone, so the price is
-     chosen here, on the thing that shows it.
-
-     FREE IS THE DEFAULT AND NOT A BLANK. The old box had a "Price not set"
-     placeholder and a glow around the whole thing, because nothing had been
-     answered yet. A price always has a value now — a game nobody has priced
-     is free, which is a real answer and the commonest one — so there is
-     nothing to nag about and the glow is gone with it.
-
-     AND THE BUTTON SAYS WHAT THE PRICE MEANS. Epic's own store writes Get on a
-     free product and Buy Now on a paid one; printing Get over a 59.99 game was
-     the kind of detail a developer checks this preview to catch. */
-  const price = (a.price || 'Free');
+  /* THE BUY BOX IS WHERE THE PRICE IS SET (v8.41), not a read-out of a
+     question asked three steps away; and the button says what the price means
+     — Get while the game is free, Buy Now once it is not, exactly as Epic's
+     own store writes it. */
+  const price  = (a.price || 'Free');
   const isFree = price === 'Free';
-  const dateLabel = ws.releaseDate || 'Coming soon';
+  const cartSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>`;
+  const markSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
 
-  const buyHtml = `
-    <div class="egs-spp-buy">
-      <div class="egs-spp-buy-price egs-spp-price-pick" onclick="event.stopPropagation();">
-        ${swSelect('egs-spp-price', price, EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
-                   'answerEgsPrice', '100%', 'left', 'Free')}
-      </div>
-      <button class="egs-spp-btn" type="button">${isFree ? 'Get' : 'Buy Now'}</button>
-      <div class="egs-spp-buy-meta">
-        <div><span>Release</span><b>${escHtml(dateLabel)}</b></div>
-      </div>
+  const metaRow = (label, value, empty) => `
+    <div class="egs-sp-meta-row">
+      <span>${label}</span>
+      <b>${value ? escHtml(value) : `<span class="egs-spp-placeholder">${empty}</span>`}</b>
     </div>`;
+
+  /* PLATFORM IS EARNED, NOT TYPED. Epic inherits it from the artifact and
+     prints it here; this card learns it from whichever operating systems the
+     Specifications step says the product supports. A page that claimed
+     Windows while Specifications said otherwise would be the kind of
+     disagreement this preview exists to catch. */
+  const platforms = EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes')
+                               .map(o => o.id === 'mac' ? 'macOS' : o.label);
+
+  const sideHtml = `
+    <aside class="egs-sp-side">
+      ${ratingHtml}
+      <span class="egs-sp-basegame">Base Game</span>
+      <div class="egs-sp-price egs-spp-price-pick" onclick="event.stopPropagation();">
+        ${swSelect('egs-spp-price', price, EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
+                   'answerEgsPrice', '100%', 'center', 'Free')}
+      </div>
+      <div class="egs-sp-buyrow">
+        <button class="egs-sp-btn-primary" type="button">${isFree ? 'Get' : 'Buy Now'}</button>
+        <button class="egs-sp-btn-icon" type="button" title="Add to Cart" aria-label="Add to Cart">${cartSvg}</button>
+      </div>
+      ${isFree ? '' : `<button class="egs-sp-btn-ghost" type="button">Gift</button>`}
+      <button class="egs-sp-btn-ghost" type="button">${markSvg}Wishlist</button>
+      ${isFree ? '' : `
+      <div class="egs-sp-meta-row"><span>Epic Rewards</span><b>Earn 5% back</b></div>
+      <div class="egs-sp-meta-row"><span>Refund Type</span><b>Self-Refundable</b></div>`}
+      ${metaRow('Developer', developer, 'Not set')}
+      ${metaRow('Publisher', publisher, 'Not set')}
+      ${metaRow('Release Date', (ws.releaseDate || ''), 'Coming soon')}
+      ${metaRow('Platform', platforms.join(', '), 'From Specifications')}
+    </aside>`;
 
   /* The media strip, which on Epic's page is the largest thing above the fold.
      It borrows the pool rather than a listing of its own so a developer who
@@ -20232,44 +20242,121 @@ function buildEgsStorePreviewSection() {
       ${stripHtml ? `<div class="egs-spp-strip">${stripHtml}</div>` : ''}
     </div>`;
 
+  /* Epic prints the short description straight under the carousel, then the
+     tag rows, then the long body. Three different fields, in that order. */
+  const shortHtml = `
+    <p class="egs-sp-short${desc ? '' : ' egs-spp-glow-empty'}"
+       onclick="openStepModal('egs','productDetails')">${desc
+      ? escHtml(desc)
+      : '<span class="egs-spp-placeholder">Your short description appears here. Product Details asks for it.</span>'}</p>`;
+
+  const tagRow = (label, items, step) => `
+    <div class="egs-sp-tagrow${items.length ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStepModal('egs','${step}')">
+      <span class="egs-sp-tagrow-label">${label}</span>
+      <span class="egs-sp-tags">${items.length
+        ? items.map(t => `<span class="egs-sp-tag">${escHtml(t)}</span>`).join('')
+        : `<span class="egs-spp-placeholder">Chosen in Product Details</span>`}</span>
+    </div>`;
+
   /* The same door Steam's prototype and both Apple previews carry: the page
      is where you notice a language is missing something, so the way into the
      review belongs on the page. */
   const locCount = (state.formData.localizations || [])
     .filter(l => l !== (state.formData.primaryLanguage || 'en')).length;
   const locBtnHtml = locCount ? `
-      <button class="ias-all-locs-btn" onclick="openStorePreviewSection('egs','localization')"
+      <button class="ias-all-locs-btn" onclick="event.stopPropagation(); openStorePreviewSection('egs','localization')"
               title="Review every localized field side by side">Localizations</button>` : '';
 
   const aboutHtml = `
-    <div class="egs-spp-block${desc ? '' : ' egs-spp-glow-empty'}">
+    <div class="egs-spp-block${aboutText ? '' : ' egs-spp-glow-empty'}">
       <div class="egs-spp-h2">About${locBtnHtml}</div>
-      <p class="egs-spp-p">${desc
-        ? escHtml(desc)
-        : '<span class="egs-spp-placeholder">Your description appears here once it is filled in under Game Details.</span>'}</p>
+      <p class="egs-spp-p">${aboutText
+        ? escHtml(aboutText)
+        : '<span class="egs-spp-placeholder">The long description appears here once it is filled in under Game Details.</span>'}</p>
     </div>`;
 
-  /* NO TECHNICAL BLOCK (v8.42). It printed the four Technical Requirements
-     answers and was the door into that section; both went. A block that can
-     only ever print four dashes, over a door that opens onto nothing, is
-     worse than no block — so specRow and yn went with it (Epic Games Store
-     Full keeps its own copies). */
+  /* ── THE FOOT OF THE PAGE, which on Epic is where everything the developer
+     has declared about the build ends up: who to follow, what it runs on,
+     what you need to log in with, what languages it speaks, and the legal
+     line. All of it comes from steps this card now has. */
+  const socialLinks = EGS_SOCIAL_LINKS.filter(l => (a.social[l.id] || '').trim());
+  const followHtml = `
+    <div class="egs-sp-foot${socialLinks.length ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStepModal('egs','socialMedia')">
+      <div class="egs-spp-h2">Follow Us</div>
+      ${socialLinks.length
+        ? `<div class="egs-sp-social">${socialLinks.map(l =>
+             `<span class="egs-sp-social-item">${escHtml(l.label)}</span>`).join('')}</div>`
+        : `<p class="egs-spp-p"><span class="egs-spp-placeholder">Epic shows a Follow Us row for every social link you give it. The Social Media step collects them.</span></p>`}
+    </div>`;
+
+  const supported = EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes');
+  const specTable = (o) => {
+    const sp   = a.specs[o.id];
+    const rows = EGS_SPEC_ROWS.filter(r => !r.winOnly || o.directx)
+                              .filter(r => (sp[r.id].min || '').trim() || (sp[r.id].rec || '').trim());
+    if (!rows.length) return '';
+    return `
+      <div class="egs-sp-sysos">
+        <div class="egs-sp-sysos-name">${escHtml(o.id === 'mac' ? 'macOS' : o.label)}</div>
+        <div class="egs-sp-sysgrid">
+          <div class="egs-sp-syshead"></div>
+          <div class="egs-sp-syshead">Minimum</div>
+          <div class="egs-sp-syshead">Recommended</div>
+          ${rows.map(r => `
+            <div class="egs-sp-syslabel">${escHtml(r.label)}</div>
+            <div class="egs-sp-sysval">${(sp[r.id].min || '').trim() ? escHtml(sp[r.id].min) : '<span class="egs-spp-placeholder">—</span>'}</div>
+            <div class="egs-sp-sysval">${(sp[r.id].rec || '').trim() ? escHtml(sp[r.id].rec) : '<span class="egs-spp-placeholder">—</span>'}</div>`).join('')}
+        </div>
+      </div>`;
+  };
+  const specTables = supported.map(specTable).filter(Boolean).join('');
+  const sysHtml = `
+    <div class="egs-sp-foot${specTables ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStepModal('egs','specifications')">
+      <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
+      ${specTables || `<p class="egs-spp-p"><span class="egs-spp-placeholder">Epic prints the minimum and recommended machine here, per operating system. The Specifications step collects them.</span></p>`}
+    </div>`;
+
+  const langList = (label, items) => `
+    <div class="egs-sp-langline">
+      <span>${label}</span>
+      <b>${items.length ? escHtml(items.join(', ')) : '<span class="egs-spp-placeholder">—</span>'}</b>
+    </div>`;
+  const detailsDone = a.loginTypes.length || a.textLanguages.length || a.audioLanguages.length;
+  const loginHtml = `
+    <div class="egs-sp-foot${detailsDone ? '' : ' egs-spp-glow-empty'}"
+         onclick="openStepModal('egs','productDetails')">
+      <div class="egs-sp-foot-sub">Login Accounts Required</div>
+      <div class="egs-sp-langline is-plain"><b>${a.loginTypes.length
+        ? escHtml(a.loginTypes.join(', '))
+        : '<span class="egs-spp-placeholder">None declared</span>'}</b></div>
+      <div class="egs-sp-foot-sub">Languages Supported</div>
+      ${langList('Audio:', a.audioLanguages)}
+      ${langList('Text:', a.textLanguages)}
+    </div>`;
+
+  const legalHtml = (a.legalFooter || '').trim() || (a.privacyLink || '').trim() ? `
+    <div class="egs-sp-legal" onclick="openStepModal('egs','productDetails')">
+      ${(a.legalFooter || '').trim() ? `<span>${escHtml(a.legalFooter)}</span>` : ''}
+      ${(a.privacyLink || '').trim() ? `<span class="egs-sp-legal-link">Privacy Policy</span>` : ''}
+    </div>` : '';
 
   /* The bar at the top, which is the Apple previews' idea and earns its place
      here for the same reason: the page shows you what is missing only where
      the missing thing would have been, and a required element with no block of
-     its own (a title, say) has nowhere to glow. */
+     its own (a title, say) has nowhere to glow. It grew in v8.47 because the
+     page did: genres, system requirements and the text languages are all
+     printed now, so all three can be missing from it visibly. */
   const elements = [
     { label: 'Title',        done: !!title },
     { label: 'Description',  done: !!desc },
     { label: 'Media',        done: shots.length > 0 },
     { label: 'Age Rating',   done: ratingDone },
-    /* No Pricing pill (v8.41). It reported isEgsSectionComplete('regionsPricing'),
-       a section that no longer exists — so it would have sat permanently
-       un-done over a price that is always set, and nagged about the one thing
-       on this page a developer cannot get wrong. */
-    /* No Technical pill (v8.42), for the reason the block above is gone:
-       nothing on this card answers those four questions any more. */
+    { label: 'Genres',       done: a.genres.length > 0 },
+    { label: 'Specs',        done: !!specTables },
+    { label: 'Languages',    done: a.textLanguages.length > 0 },
   ];
   const barHtml = `
     <div class="egs-spp-bar">
@@ -20282,21 +20369,25 @@ function buildEgsStorePreviewSection() {
   return `
     <p class="ios-section-desc" style="margin-top:0;">Your Epic Games Store product page as players will see it. Press any block to fill in what it needs.</p>
     ${barHtml}
-    <div class="egs-spp">
-      ${mediaHtml}
-      <div class="egs-spp-head">
-        <div class="egs-spp-titlewrap">
-          <div class="egs-spp-title${title ? '' : ' egs-spp-glow-empty'}">${title || '<span class="egs-spp-placeholder">Untitled</span>'}</div>
-          <div class="egs-spp-byline">
-            ${developer ? `<span><span>Developer</span><b>${escHtml(developer)}</b></span>` : ''}
-            ${publisher ? `<span><span>Publisher</span><b>${escHtml(publisher)}</b></span>` : ''}
-            ${genres ? `<span><span>Genres</span><b>${escHtml(genres)}</b></span>` : ''}
-          </div>
-        </div>
-        ${buyHtml}
+    <div class="egs-spp egs-sp">
+      <div class="egs-sp-title${title ? '' : ' egs-spp-glow-empty'}">${title || '<span class="egs-spp-placeholder">Untitled</span>'}</div>
+      <div class="egs-sp-tabs">
+        <span class="is-current">Overview</span><span>Add-Ons</span><span>Achievements</span>
       </div>
-      ${aboutHtml}
-      ${ratingHtml}
+      <div class="egs-sp-cols">
+        <div class="egs-sp-main">
+          ${mediaHtml}
+          ${shortHtml}
+          ${tagRow('Genres', a.genres, 'productDetails')}
+          ${tagRow('Features', a.features, 'productDetails')}
+          ${aboutHtml}
+        </div>
+        ${sideHtml}
+      </div>
+      ${followHtml}
+      ${sysHtml}
+      ${loginHtml}
+      ${legalHtml}
     </div>`;
 }
 /* ══ EPIC GAMES STORE FULL (buildEgsFullStorePreviewSection) ══════════════════════════════════════
