@@ -19559,8 +19559,12 @@ function buildEgsContentRatingSection() {
      can no longer see. Topic numbers stay put when the list is filtered — the
      row is still "5", so the one you were looking at is still the one you
      find when you press All. */
-  const topics = GOOGLE_IARC_TOP_LEVEL_KEYS;
-  const doneTopics = topics.filter(k => giarcIsSubtreeComplete(k)).length;
+  const topics = (typeof GIARC_TOPIC_ORDER !== 'undefined' && GIARC_TOPIC_ORDER.length === GOOGLE_IARC_TOP_LEVEL_KEYS.length)
+    ? GIARC_TOPIC_ORDER : GOOGLE_IARC_TOP_LEVEL_KEYS;
+  /* THE COUNT IS GROUPS, the same seven Shippy lists (v8.52) — a group is done
+     when every topic in it is, so the bar and the rail can never disagree. */
+  const groups     = GIARC_RAIL_GROUPS.map(g => g.keys.map(k => 'google.content.' + k));
+  const doneGroups = groups.filter(ks => ks.every(k => giarcIsSubtreeComplete(k))).length;
   const showAll = state.egsCrShowAll !== false;
   const shown = showAll ? topics : topics.filter(k => !giarcIsSubtreeComplete(k));
 
@@ -19568,9 +19572,9 @@ function buildEgsContentRatingSection() {
     <div class="cr-pinned">
       <div class="sw-tip-box cr-pinned-bar">
         ${buildCRTogglePill(true, showAll, 'toggleEgsCrExpanded(false)', 'toggleEgsCrExpanded(true)')}
-        <div class="sw-tip-text">${doneTopics === topics.length
-          ? `All ${topics.length} topics answered.`
-          : `${doneTopics} of ${topics.length} topics answered.`}</div>
+        <div class="sw-tip-text">${doneGroups === groups.length
+          ? `All ${groups.length} groups answered.`
+          : `${doneGroups} of ${groups.length} groups answered.`}</div>
       </div>
     </div>`;
 

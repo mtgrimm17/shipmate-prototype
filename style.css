@@ -16745,6 +16745,19 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .giarc-flat .giarc-children > .giarc-card.giarc-inline,
 .giarc-flat .giarc-run > .giarc-card.giarc-inline { padding: 0; margin-bottom: 8px; }
 .giarc-flat .giarc-card.giarc-inline > .giarc-row { min-height: 34px; }
+
+/* THE APP STORE'S QUESTION TYPE (v8.52). Jaco: "mira la tipografía y grosor
+   de las preguntas, que la hagas igual que las de iOS content rating."
+   Measured: an App Store question (.ios-q-label) is IBM Plex Mono 14px / 500,
+   line-height 1.4, in --text-dim. Epic's were 15px / 600 white at the top
+   level and 13.5px / 600 white below it. Every Epic question now takes the
+   App Store's values, at every depth; the run labels ("VIOLENCE AGAINST
+   HUMANS") stay as they are, since they are headings, not questions. Placed
+   after the run rules so equal specificity resolves to this. */
+.giarc-flat .giarc-card .giarc-row-label,
+.giarc-flat .giarc-card .giarc-title {
+  font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--text-dim);
+}
 /* Presentation's multi-picker (v8.51): swSelect's pill and dropdown, with
    tick boxes, sized as the answer pills beside it. The dropdown is one wide
    column so IARC's full option text reads on one line. */
@@ -16768,7 +16781,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 .giarc-dd-item.is-on .giarc-dd-box::after {
   content: ''; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px;
   border: solid #fff; border-width: 0 1.75px 1.75px 0; transform: rotate(45deg);
-}   /* break between comma phrases — egsTitleHTML */
+}
 
 /* ── THE PINNED LABEL IS CHROME, NOT A LINE OF TEXT (v8.38) ─────────────
    Distinct by KIND rather than by type size: a raised surface, bled out to the
@@ -29581,3 +29594,42 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-edit:hover { background: rgba(255, 255, 255, 0.06); }
 .egs-sp .egs-sp-edit:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--epic-line); }
 .egs-sp .ias-char-counter-row { font-family: 'Inter', system-ui, sans-serif; }
+
+/* ── EPIC: ONE INDENT STEP, RAIL UNDER THE PARENT'S TITLE (v8.52) ──────────
+   Jaco: "podríamos hacer un indent consistente, quizás sin la raya vertical,
+   así ganaríamos espacio." Measured before: each level cost 42px (20px
+   margin + 2px rail + 20px padding), and the first level looked like only
+   14px because the topic's number badge ate the rest — so the steps read as
+   14, 42, 42. Now every level is the same 16px further in than the title it
+   hangs from, and nothing is drawn: the indent alone says "belongs to".
+
+   THE RAILS CAME BACK THE SAME DAY. Jaco, after seeing it bare: "quizás
+   vuelve a traer las líneas verticales." They return INSIDE the 16px rather
+   than on top of it: a 2px rail plus 14px of padding, so the step is still
+   16 and the rail now sits exactly under the first letter of the title it
+   hangs from — at 42px a level it had floated in the gutter, belonging to
+   nothing in particular.
+
+   The first level starts 28px in — the topic's number badge and gap — so its
+   rail lands under the topic's title, not under the badge. Placed last in the
+   file so it outranks the older rail rules; the brightened rail beside a
+   labelled run (:has(> .giarc-run)) still wins on specificity, and the sticky
+   run label bleeds back exactly 16px so its accent continues the rail. */
+.giarc-flat .giarc-children { margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--border); }
+.giarc-root.giarc-flat > .giarc-children { margin-left: 28px; }
+.giarc-flat .giarc-run > .giarc-sec-label { margin-left: -16px; padding-left: 14px; border-left: 2px solid var(--border-hover); }
+
+/* AIR AFTER AN OPEN TOPIC (v8.52). Jaco: "mete 10px de separación antes de
+   empezar la pregunta siguiente si la anterior está desplegada." An open
+   topic ends on its last indented question, and the next topic's number
+   started right under it; 10px marks where one topic's branch stops and the
+   next topic begins. A closed topic (no children) keeps the plain rhythm. */
+.giarc-root.giarc-flat > .giarc-children + .giarc-card { margin-top: 10px; }
+
+/* NO RAIL ON THE FIRST LEVEL (v8.52). Jaco: "¿quizás sobra la primera línea
+   divisoria vertical?" Under a topic, the numbered badge and the 10px of air
+   around an open topic already say where its branch is; the rail there was a
+   third mark for the same thing. It goes, and its 2px are given back as
+   padding so nothing below moves — the deeper rails, which mark a type's own
+   questions, stay. */
+.giarc-root.giarc-flat > .giarc-children { border-left: none; padding-left: 16px; }

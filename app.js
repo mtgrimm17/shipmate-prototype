@@ -23020,6 +23020,25 @@ function answerGIARCTypeRow(key, idx, yes) {
     state.cqAnswers[key]    = cur.sort((a, b) => a - b);
     state.egsTypeNo[key]    = [...no];
     state.cqAnswerMeta[key] = { ...(m || {}), humanConfirmed: true };
+
+    /* EVERY TYPE NO MEANS THE QUESTION ABOVE IS NO (v8.52). Jaco: "debería
+       cambiar a NO si todo es no." IARC will not take a Yes with no type
+       ticked, so four NOs under "Blood, Violence, or Gory Images: Yes" left a
+       topic that could never complete and never said why. The parent is the
+       question whose answer revealed this one; it takes its own "No", which
+       closes the branch exactly as pressing it would. */
+    const all = giarcOptionEntries(q).map(o => o.index);
+    if (!cur.length && all.every(i => no.has(i))) {
+      const parent = GOOGLE_IARC_QUESTIONS.find(p =>
+        giarcOptionEntries(p).some(o => giarcChildKeysForOption(o.child).includes(key)));
+      const pNo = parent && giarcOptionEntries(parent).find(o => o.text === 'No');
+      if (pNo) {
+        giarcActiveChildKeys(parent.key).forEach(giarcClearAnswersRecursively);
+        state.cqAnswers[parent.key]    = pNo.index;
+        state.cqAnswerMeta[parent.key] = { ...(state.cqAnswerMeta[parent.key] || {}), humanConfirmed: true };
+        delete state.egsTypeNo[key];
+      }
+    }
   }
   reRenderAndroidStepModal();
   updateAndroidCard();
@@ -27397,18 +27416,24 @@ const GIARC_RAIL_LABELS = {
   'google.content.crimes':            'Crime Techniques',
 };
 
-/* Epic's fourteen topics as rail rows. `done` is giarcIsSubtreeComplete — the
-   same predicate the card's "N of 14 topics answered" counts and the Unanswered
-   filter hides by, so the rail cannot disagree with either. */
+/* EPIC'S RAIL IS SEVEN GROUPS, NOT FOURTEEN TOPICS (v8.52). Jaco: "¿sería
+   posible categorizar en Shippy en vez de 14, aglutinarlo igual que la
+   checklist de iOS?" The App Store's rail is six categories plus Age; Epic's
+   was one row per IARC topic, twice as long and with no grouping the eye
+   could sweep. These are themes, the way Apple's are — each row is done when
+   every topic in it is (giarcIsSubtreeComplete, the same predicate the card's
+   count and the Unanswered filter use), and pressing it goes to the FIRST
+   topic in it that is still open, or to its first topic when all are done.
+   GIARC_RAIL_LABELS above stays as the per-topic vocabulary. */
+/* GIARC_RAIL_GROUPS lives in state.js (v8.52) — the card orders and counts by it too. */
 function _smEgsContentItems() {
   if (typeof GOOGLE_IARC_TOP_LEVEL_KEYS === 'undefined'
    || typeof giarcIsSubtreeComplete !== 'function') return null;
-  return GOOGLE_IARC_TOP_LEVEL_KEYS.map(key => ({
-    label: GIARC_RAIL_LABELS[key] || (GOOGLE_IARC_BY_KEY[key] || {}).title || key,
-    step:  'cr:' + key,
-    done:  giarcIsSubtreeComplete(key),
-    bad:   false,
-  }));
+  return GIARC_RAIL_GROUPS.map(g => {
+    const keys = g.keys.map(k => 'google.content.' + k);
+    const open = keys.find(k => !giarcIsSubtreeComplete(k));
+    return { label: g.label, step: 'cr:' + (open || keys[0]), done: !open, bad: false };
+  });
 }
 
 function _smContentItems(pid) {

@@ -699,6 +699,26 @@ function giarcSubtreeKeys(key, out = []) {
    giarcSeedFromIos prunes anything else. */
 const _giarcSev = v => v === 'frequent' ? 2 : v === 'infrequent' ? 1 : v === 'none' ? 0 : null;
 
+/* THE SEVEN GROUPS EPIC'S FOURTEEN TOPICS ARE SHOWN IN (v8.52), one list
+   for every surface: Shippy's checklist rows (_smEgsContentItems, app.js),
+   the card's topic ORDER and its "N of 7" count (buildEgsContentRatingSection,
+   render.js). Jaco: "debería poner 2/7 si consideramos todas juntas, y
+   deberías agrupar por orden las de los distintos grupos." IARC's own order
+   scattered a group across the card (Gambling 4th, its partner Purchases
+   8th); the card now walks the topics group by group, so the rail and the
+   card read in the same sequence. IARC's order is not stored anywhere, so
+   nothing else depends on it. */
+const GIARC_RAIL_GROUPS = [
+  { label: 'Violence & Fear',        keys: ['bloodviolencegore', 'fear'] },
+  { label: 'Sexuality & Dating',     keys: ['sexsuggestdate'] },
+  { label: 'Language & Humor',       keys: ['offlang', 'crude'] },
+  { label: 'Drugs & Alcohol',        keys: ['drugs'] },
+  { label: 'Gambling & Purchases',   keys: ['gambling', 'crypto'] },
+  { label: 'Online Features',        keys: ['interact', 'location'] },
+  { label: 'Sensitive Content',      keys: ['nazi', 'korea', 'terrorism', 'crimes'] },
+];
+const GIARC_TOPIC_ORDER = GIARC_RAIL_GROUPS.flatMap(g => g.keys.map(k => 'google.content.' + k));
+
 const GIARC_FROM_IOS = [
   { top: 'bloodviolencegore', from: ['cartoonViolence', 'realisticViolence', 'extendedViolence'],
     derive(a) {
