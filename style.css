@@ -29351,8 +29351,43 @@ textarea.egs-sp-body {
 }
 .egs-sp .egs-sp-tabs span.is-current { color: var(--epic-fg); border-bottom-color: var(--epic-fg); }
 
-.egs-sp .egs-sp-cols { gap: 32px; grid-template-columns: minmax(0, 1fr) 300px; }
-.egs-sp .egs-sp-main { gap: 20px; }
+/* ── THE PAGE IS DRAWN AT DESKTOP WIDTH AND SHOWN SMALL (v8.51) ───────────
+   The modal gives the preview 751px. Epic's product page, measured off
+   Rocket League in a standard window, runs about 1093px of content with a
+   309px panel beside it — 28% of the width. Drawn straight into 751px the
+   same 300px panel took 43%, which is the complaint: not one element was
+   wrong, the CANVAS was, and a page whose panel is nearly half of it is not
+   the page it is previewing however well its type is set.
+
+   So the page is laid out at 1104px — Epic's content column at a standard
+   window — and zoomed to 0.6803, which renders 1104 x 0.6803 = 751px. Every
+   proportion is then Epic's and everything shrinks together.
+
+   ZOOM RATHER THAN TRANSFORM, FOR THREE REASONS. It takes part in layout, so
+   the block below it needs no measured height and no JavaScript; the text is
+   re-laid-out at the smaller size rather than rasterised down, so it stays
+   crisp; and Chromium reports the AUTHORED lengths from getComputedStyle
+   under zoom, so style850.py's thirteen measurements still read as Epic's
+   own numbers instead of becoming 0.68 of them.
+
+   THE TWO NUMBERS HAVE TO AGREE WITH THE MODAL, and nothing in CSS can check
+   that — zoom cannot be computed from a container. style851.py asserts the
+   rendered width lands on the available width, so a modal that changes size
+   fails a test rather than silently overflowing or underfilling. */
+.egs-sp {
+  --egs-page-w: 1104px;
+  width: var(--egs-page-w);
+  zoom: 0.6803;                 /* 751 / 1104 */
+}
+/* At 1104px the canvas is always wide enough for two columns, so the
+   viewport-width media queries that collapse these three grids no longer
+   apply to this page — the viewport is not what it is being drawn into.
+   Pinned here rather than by editing those queries, which Epic Games Store
+   Full's preview and Specifications still use. */
+.egs-sp .egs-sp-cols { gap: 56px; grid-template-columns: minmax(0, 1fr) 300px; }
+.egs-sp .egs-sp-tagcols { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 0 24px; }
+.egs-sp .egs-sp-sysgrid { grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); }
+.egs-sp .egs-sp-main { gap: 24px; }
 .egs-sp .egs-sp-side { gap: 12px; }
 
 /* Prose — short description and body alike: 16 / 400 / 0.16px / 26.4px, and
