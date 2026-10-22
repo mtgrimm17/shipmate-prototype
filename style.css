@@ -28811,3 +28811,65 @@ body.sm-arm-steps #sm-steps-bar .spp-pin {
 }
 .cq-check-row input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.45; }
 .cq-check-row:has(input:disabled) span { color: var(--text-faint); }
+
+/* Epic's Login type tag field (v8.45). Built to read as one form-input with
+   things inside it rather than as a box with a box in it: the wrapper carries
+   the border and background, the caret inside carries neither, and clicking
+   anywhere on the wrapper lands in the caret. */
+.egs-tagbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 8px;
+  background: var(--panel-2, rgba(255,255,255,0.03));
+  cursor: text;
+  transition: border-color 0.15s;
+}
+.egs-tagbox:focus-within { border-color: var(--accent, #0a84ff); }
+.egs-tagbox.is-full { cursor: default; }
+.egs-tagbox-input {
+  flex: 1 1 120px;
+  min-width: 80px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text, #eee);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 2px 0;
+}
+.egs-tagbox-input::placeholder { color: var(--text-faint); }
+.egs-tagbox-input:disabled { cursor: default; }
+.egs-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text, #eee);
+  white-space: nowrap;
+}
+.egs-tag-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.egs-tag-x:hover { background: rgba(255, 255, 255, 0.14); color: var(--text, #eee); }

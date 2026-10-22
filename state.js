@@ -3171,12 +3171,36 @@ const EGS_FEATURES = [
   'Single Player', 'VR',
 ];
 
-/* The portal's Login type picker offers exactly one value and caps the field
-   at three entries. One option and a limit of three reads like an oversight
-   until you see what it is for: a product that needs a second account system
-   adds it as its own entry, and Epic has not opened that list up. */
-const EGS_LOGIN_TYPES = ['Epic ID'];
-const EGS_LOGIN_TYPE_MAX = 3;
+/* Epic caps Genres at three (v8.45). The portal's own counter reads "1/3"
+   beside the field and stops taking ticks at the third. */
+const EGS_GENRE_MAX = 3;
+
+/* LOGIN TYPE IS TYPED, NOT PICKED (v8.45). It looks like a closed list
+   because its suggestion menu holds one value, but the portal's field is a
+   tag input: you type a login service, press Enter, and it becomes a chip
+   with an x on it. Epic ID is there by default and can be taken off — which
+   is the giveaway, since nothing in a closed one-option list would be
+   removable. Three entries, fifty characters each, both the portal's. */
+const EGS_LOGIN_TYPE_DEFAULT   = 'Epic ID';
+const EGS_LOGIN_TYPE_MAX       = 3;
+const EGS_LOGIN_TYPE_ENTRY_MAX = 50;
+
+/* EPIC'S OWN SUPPORTED LANGUAGES (v8.45), as the Audio and Text pickers
+   offer them — one list, used by both. These are NOT the game's languages:
+   until v8.45 this section offered the languages Shipmate's Localizations
+   step knew about, which meant a product with only English could not say it
+   had Japanese audio. Epic asks what the product supports; the answer is
+   picked from Epic's list, and the two can legitimately differ. */
+const EGS_LANGUAGES = [
+  'Arabic', 'Bulgarian', 'Catalan', 'Chinese (Simplified)',
+  'Chinese (Traditional)', 'Croatian', 'Czech', 'Danish', 'Dutch', 'English',
+  'Finnish', 'French', 'German', 'Greek', 'Hebrew', 'Hindi', 'Hungarian',
+  'Indonesian', 'Italian', 'Japanese', 'Korean', 'Lithuanian', 'Malay',
+  'Norwegian', 'Persian', 'Polish', 'Portuguese', 'Portuguese (Brazil)',
+  'Romanian', 'Russian', 'Serbian', 'Slovak', 'Spanish (Latin America)',
+  'Spanish (Spain)', 'Swedish', 'Tagalog', 'Thai', 'Turkish', 'Ukrainian',
+  'Vietnamese', 'Welsh',
+];
 
 const EGS_DIRECTX_VERSIONS = ['DirectX 12', 'DirectX 11', 'DirectX 10', 'DirectX 9'];
 
@@ -3257,20 +3281,20 @@ function makeBlankEgsAnswers() {
        second copy under egsSubmitAnswers would be a second truth, and the
        preview would go on showing the first one. The section edits the
        originals instead; see setEgsProductShared in app.js. */
-    productLogo:           null,   // 'yes' / 'no' — 960 x 540, required by Epic
-    productIcon:           null,   // 'yes' / 'no' — 512 x 512
-    genres:                [],     // from EGS_GENRES
+    /* Gone with their questions (v8.45): productLogo and productIcon, which
+       asked a developer to confirm an upload this prototype does not do, and
+       offerName and offerShortDesc, which asked the base game offer to name
+       itself a second time. Nothing reads them now. */
+    genres:                [],     // from EGS_GENRES, max EGS_GENRE_MAX
     features:              [],     // from EGS_FEATURES
-    loginTypes:            [],     // from EGS_LOGIN_TYPES, max 3
-    audioLanguages:        [],     // a subset of the game's own languages
+    loginTypes:            [EGS_LOGIN_TYPE_DEFAULT],  // typed, max 3; Epic ID by default
+    audioLanguages:        [],     // from EGS_LANGUAGES
     textLanguages:         [],     // ditto; Epic marks this one required
     legalFooter:           '',
     privacyLink:           '',
     eulaLink:              '',
     supportPageLink:       '',     // Epic wants AT LEAST ONE of these two
     supportEmail:          '',
-    offerName:             '',     // the Base Game offer's own name...
-    offerShortDesc:        '',     // ...and its own short description
     earlyAccess:           null,   // 'yes' / 'no' — 'yes' obliges an FAQ page
     sellerName:            '',     // the legal entity that receives funds
     nftBlockchain:         null,   // 'yes' / 'no'
@@ -3384,15 +3408,13 @@ function isEgsSectionComplete(sectionId) {
 
   /* PRODUCT DETAILS IS DONE WHEN EPIC'S ASTERISKS ARE (v8.44). Every term
      below is a field the Developer Portal marks required, and nothing that
-     it does not: the logo but not the icon, Genres and Features but not
-     Login type, Text languages but not Audio, and the offer's own name,
-     description and seller. The four shared fields are read from where they
-     really live rather than from a copy (see makeBlankEgsAnswers). */
+     it does not: Genres and Features but not Login type, Text languages but
+     not Audio, and the offer's seller. Short description, developer and
+     publisher are read from where they really live rather than from a copy
+     (see makeBlankEgsAnswers). */
   if (sectionId === 'productDetails') {
     const fd = state.formData || {}, ws = state.webSite || {};
-    return a.productLogo !== null
-        && !!(fd.title || '').trim()
-        && !!(fd.description || '').trim()
+    return !!(fd.description || '').trim()
         && a.genres.length > 0
         && a.features.length > 0
         && a.textLanguages.length > 0
@@ -3402,8 +3424,6 @@ function isEgsSectionComplete(sectionId) {
         && (!!a.supportPageLink.trim() || !!a.supportEmail.trim())
         && !!(ws.developer || '').trim()
         && !!(ws.publisher || '').trim()
-        && !!a.offerName.trim()
-        && !!a.offerShortDesc.trim()
         && !!a.sellerName.trim()
         && a.nftBlockchain !== null
         && a.promotionalContent !== null;

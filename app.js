@@ -23228,10 +23228,73 @@ function setEgsProductShared(key, value) {
 function toggleEgsProductList(listId, value, on) {
   const list = state.egsSubmitAnswers[listId];
   if (!Array.isArray(list)) return;
+  /* THE CAP IS ENFORCED HERE AS WELL AS IN THE MARKUP (v8.45). Genres stops
+     at three, and egsPortalChecks already disables the unticked boxes once
+     it is full — but a disabled checkbox is a thing the SCREEN knows, and
+     this function is reachable without one. A rule enforced only where it is
+     drawn is a rule that holds until the first caller that does not draw. */
+  const max = EGS_PRODUCT_LIST_MAX[listId];
   const i = list.indexOf(value);
-  if (on && i < 0) list.push(value);
-  else if (!on && i >= 0) list.splice(i, 1);
+  if (on && i < 0) {
+    if (max && list.length >= max) return;
+    list.push(value);
+  } else if (!on && i >= 0) {
+    list.splice(i, 1);
+  }
   _egsProductRepaint();
+}
+/* Only Genres has one today. Named rather than inlined so the next capped
+   list is an entry here instead of a second copy of the check above. */
+const EGS_PRODUCT_LIST_MAX = { genres: (typeof EGS_GENRE_MAX !== 'undefined' ? EGS_GENRE_MAX : 3) };
+
+/* ── EPIC'S LOGIN TYPE TAG FIELD (v8.45) ──────────────────────────────────
+   Type a service, press Enter, it becomes a chip. The portal's own field
+   behaves this way; what made it look like a closed list is that its
+   suggestion menu holds exactly one value. */
+function egsLoginTypeKey(ev, el) {
+  if (!ev) return;
+  if (ev.key === 'Enter') {
+    /* An Enter inside a form submits it. This field is inside the step
+       modal, which is not a form today — but it has been one before, and a
+       tag field that submits the page the first time somebody wraps it is a
+       bug nobody will connect to this line. */
+    ev.preventDefault();
+    addEgsLoginType(el.value);
+    el.value = '';
+  } else if (ev.key === 'Backspace' && !el.value) {
+    const list = state.egsSubmitAnswers.loginTypes;
+    if (list.length) removeEgsLoginType(list[list.length - 1]);
+  }
+}
+
+function addEgsLoginType(value) {
+  const v = (value || '').trim().slice(0, EGS_LOGIN_TYPE_ENTRY_MAX);
+  if (!v) return;
+  const list = state.egsSubmitAnswers.loginTypes;
+  if (list.length >= EGS_LOGIN_TYPE_MAX) return;
+  /* Case-insensitively unique: "Epic ID" and "epic id" are the same login
+     service, and two chips that read almost alike is worse than one. */
+  if (list.some(x => x.toLowerCase() === v.toLowerCase())) return;
+  list.push(v);
+  _egsProductRepaint();
+  _egsFocusLoginInput();
+}
+
+function removeEgsLoginType(value) {
+  const list = state.egsSubmitAnswers.loginTypes;
+  const i = list.indexOf(value);
+  if (i < 0) return;
+  list.splice(i, 1);
+  _egsProductRepaint();
+  _egsFocusLoginInput();
+}
+
+/* The repaint rebuilds the whole modal, which throws the caret away. Putting
+   it back is what makes adding three services in a row feel like typing
+   rather than like three separate errands. */
+function _egsFocusLoginInput() {
+  const el = document.getElementById('egs-login-input');
+  if (el && !el.disabled) { try { el.focus(); } catch (e) {} }
 }
 
 /* The per-OS support switch. Saying no does NOT clear what was typed: a

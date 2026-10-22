@@ -19793,66 +19793,80 @@ function egsPortalChecks(o) {
     </div>`;
 }
 
+/* A TAG INPUT, BECAUSE EPIC'S LOGIN TYPE IS ONE (v8.45). Chips live inside
+   the box with the caret, not above or below it: type a name, press Enter,
+   and it joins the row ahead of the caret. Each chip carries an x. The box
+   is a div rather than an input, so the whole of it has to forward a click to
+   the real caret inside — which is what the outer onclick does.
+
+   Backspace on an empty caret removes the last chip. Every tag field people
+   use behaves this way, and a developer who has just typed a name wrong
+   expects to be able to back out of it without reaching for the mouse. */
+function egsTagBox(o) {
+  const vals  = o.values || [];
+  const full  = o.max && vals.length >= o.max;
+  const req   = o.required ? ' <span style="color:#e0555a;">*</span>' : '';
+  const chips = vals.map(v => `
+    <span class="egs-tag">
+      <span class="egs-tag-label">${escHtml(v)}</span>
+      <button type="button" class="egs-tag-x" title="Remove ${escHtml(v)}"
+              aria-label="Remove ${escHtml(v)}"
+              onclick="event.stopPropagation(); ${o.onRemove}('${egsJsStr(v)}')">&times;</button>
+    </span>`).join('');
+  return `
+    <div class="form-group" data-answered="${vals.length ? '1' : '0'}">
+      <label class="form-label" for="${o.id}">${escHtml(o.label)}${req}
+        <span class="form-hint-inline">${vals.length} of ${o.max}</span>
+      </label>
+      <div class="egs-tagbox${full ? ' is-full' : ''}"
+           onclick="const i=document.getElementById('${o.id}'); if (i) i.focus();">
+        ${chips}
+        <input class="egs-tagbox-input" id="${o.id}" type="text"
+               maxlength="${o.entryMax}" ${full ? 'disabled' : ''}
+               placeholder="${escHtml(full ? '' : (o.placeholder || ''))}"
+               onkeydown="${o.onKey}(event, this)">
+      </div>
+      ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
+    </div>`;
+}
+
 function buildEgsProductDetailsSection() {
   const a  = state.egsSubmitAnswers;
   const fd = state.formData || {};
   const ws = state.webSite  || {};
 
-  /* Audio and Text are offered over the game's OWN languages rather than
-     over every language Epic supports. Epic asks which languages the product
-     is in; Shipmate already knows, because the Localizations step asked. An
-     independent list here would let a developer promise Japanese audio for a
-     product with no Japanese. */
-  const langCodes = (typeof _iasAllPreviewLangCodes === 'function')
-    ? _iasAllPreviewLangCodes()
-    : [state.formData.primaryLanguage || 'en'];
-  const langOptions = langCodes.map(c => ({ value: c, label: (typeof OB_LANG_NAMES !== 'undefined' && OB_LANG_NAMES[c]) || c }));
-
   const supportDone = !!(a.supportPageLink || '').trim() || !!(a.supportEmail || '').trim();
 
+  /* NO SECTION HEADING AND NO BLURB (v8.45). The step modal's own header
+     already says "Product Details" two lines above, and the first thing a
+     developer wants on a form of this length is the first field — the same
+     reasoning the Store Page Preview section has carried since v8.41. */
   return `
-    <div class="ios-section-head">Product Details</div>
-    <p class="ios-section-desc">Epic's Store Settings &rsaquo; Product Configuration &rsaquo; Product details, plus the Base Game offer's General details. This is what the store page says your product <em>is</em>; the Specifications step says what it needs to run.</p>
-
-    <div class="ios-content-step-label">Artwork</div>
-    ${ynRow('Product logo uploaded',
-        a.productLogo,
-        `answerEgsProductField('productLogo','yes')`,
-        `answerEgsProductField('productLogo','no')`,
-        'Epic requires a 960 x 540 product logo before the configuration can be pushed. Upload it in the Developer Portal; this records that it is done.')}
-    ${ynRow('Product icon uploaded',
-        a.productIcon,
-        `answerEgsProductField('productIcon','yes')`,
-        `answerEgsProductField('productIcon','no')`,
-        'A 512 x 512 product icon. Optional in the portal, which is why this row does not gate the step.')}
-
-    <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Product info</div>
-    ${egsPortalField({ id: 'title', label: 'Product display name', required: true,
-        value: fd.title || '', max: 64, placeholder: 'Go Ape Ship!',
-        onChange: `setEgsProductShared('title', this.value)`,
-        hint: 'The same title the rest of Shipmate knows &mdash; editing it here changes it everywhere, because it is the same game.' })}
     ${egsPortalField({ id: 'desc', label: 'Short description', required: true, multiline: true, rows: 3,
         value: fd.description || '', max: 280,
         placeholder: 'One or two sentences, as they appear under the title on the store page.',
         onChange: `setEgsProductShared('description', this.value)` })}
-    ${egsPortalChecks({ label: 'Genres', required: true, cols: true,
-        options: EGS_GENRES, selected: a.genres, onToggle: "toggleEgsProductList.bind(null, 'genres')" })}
+    ${egsPortalChecks({ label: 'Genres', required: true, cols: true, max: EGS_GENRE_MAX,
+        options: EGS_GENRES, selected: a.genres, onToggle: "toggleEgsProductList.bind(null, 'genres')",
+        hint: `Epic takes up to ${EGS_GENRE_MAX}. Once you have ${EGS_GENRE_MAX}, the rest stop being tickable rather than silently doing nothing.` })}
     ${egsPortalChecks({ label: 'Features', required: true, cols: true,
         options: EGS_FEATURES, selected: a.features, onToggle: "toggleEgsProductList.bind(null, 'features')" })}
 
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Login requirements</div>
-    ${egsPortalChecks({ label: 'Login type', options: EGS_LOGIN_TYPES, selected: a.loginTypes,
-        max: EGS_LOGIN_TYPE_MAX, onToggle: "toggleEgsProductList.bind(null, 'loginTypes')",
-        hint: 'Account systems a player needs in order to play. Epic lists its own and allows up to three.' })}
+    ${egsTagBox({ id: 'egs-login-input', label: 'Login type', values: a.loginTypes,
+        max: EGS_LOGIN_TYPE_MAX, entryMax: EGS_LOGIN_TYPE_ENTRY_MAX,
+        placeholder: 'Type a login service and press Enter',
+        onKey: 'egsLoginTypeKey', onRemove: 'removeEgsLoginType',
+        hint: `Account systems a player needs in order to play. Epic suggests its own and lets you type any other, up to ${EGS_LOGIN_TYPE_MAX} entries of ${EGS_LOGIN_TYPE_ENTRY_MAX} characters.` })}
 
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Supported languages</div>
-    ${egsPortalChecks({ label: 'Audio', options: langOptions, selected: a.audioLanguages,
+    ${egsPortalChecks({ label: 'Audio', cols: true, options: EGS_LANGUAGES, selected: a.audioLanguages,
         onToggle: "toggleEgsProductList.bind(null, 'audioLanguages')",
-        hint: 'Optional in the portal. Picked from the languages this game already has, not from every language Epic supports.' })}
-    ${egsPortalChecks({ label: 'Text', required: true, options: langOptions, selected: a.textLanguages,
+        hint: "Optional in the portal. Epic's own list, not the languages this game has been localized into &mdash; the two can legitimately differ." })}
+    ${egsPortalChecks({ label: 'Text', required: true, cols: true, options: EGS_LANGUAGES, selected: a.textLanguages,
         onToggle: "toggleEgsProductList.bind(null, 'textLanguages')" })}
 
     <div class="ios-q-divider"></div>
@@ -19881,31 +19895,28 @@ function buildEgsProductDetailsSection() {
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Developer and publisher</div>
     ${egsPortalField({ id: 'dev', label: 'Developer name', required: true,
-        value: ws.developer || '', max: 280, placeholder: 'Sound Games',
+        value: ws.developer || '', max: 280,
         onChange: `setEgsProductShared('developer', this.value)` })}
     ${egsPortalField({ id: 'pub', label: 'Publisher name', required: true,
-        value: ws.publisher || '', max: 280, placeholder: 'Sound Games',
+        value: ws.publisher || '', max: 280,
         onChange: `setEgsProductShared('publisher', this.value)` })}
+    <!-- SELLER SITS WITH THE OTHER TWO NAMES (v8.45), not with the offer
+         questions below. Epic asks for it on the offer, but a developer
+         reading three name fields in a row answers all three; reading two
+         and then meeting the third six questions later answers it twice.
+         An HTML comment, not a JS one: this is inside the template, where a
+         /* */ would have been printed on the page. -->
+    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true,
+        value: a.sellerName, max: 280,
+        onChange: `setEgsProductText('sellerName', this.value)`,
+        hint: 'The legal entity that receives funds from selling this offer &mdash; often the studio&rsquo;s registered company rather than the name on the store page.' })}
 
     <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Base game offer &rsaquo; General details</div>
-    <div class="form-hint" style="margin-top:-2px;">Epic asks for these on the offer rather than on the product. The portal offers a <b>Use Product Metadata</b> button that copies the fields above down into the offer &mdash; which is why the two short descriptions can differ, and usually should not.</div>
-    ${egsPortalField({ id: 'offername', label: 'Offer name', required: true,
-        value: a.offerName, max: 64, placeholder: 'Go Ape Ship!',
-        onChange: `setEgsProductText('offerName', this.value)` })}
-    ${egsPortalField({ id: 'offerdesc', label: 'Offer short description', required: true, multiline: true, rows: 3,
-        value: a.offerShortDesc, max: 280,
-        placeholder: 'What this particular offer buys. For a base game, usually the product description again.',
-        onChange: `setEgsProductText('offerShortDesc', this.value)` })}
     ${ynRow('Early access product',
         a.earlyAccess,
         `answerEgsProductField('earlyAccess','yes')`,
         `answerEgsProductField('earlyAccess','no')`,
         'Epic requires an FAQ page for an early access product, and says so on the switch itself.')}
-    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true,
-        value: a.sellerName, max: 280, placeholder: 'Sound Games Ltd.',
-        onChange: `setEgsProductText('sellerName', this.value)`,
-        hint: 'The legal entity that receives funds from selling this offer &mdash; often the studio\'s registered company rather than the name on the store page.' })}
     ${ynRow('Contains NFT or blockchain content',
         a.nftBlockchain,
         `answerEgsProductField('nftBlockchain','yes')`,
@@ -19915,10 +19926,7 @@ function buildEgsProductDetailsSection() {
         a.promotionalContent,
         `answerEgsProductField('promotionalContent','yes')`,
         `answerEgsProductField('promotionalContent','no')`,
-        'Epic notifies players when an offer carries promotional content. A choice is required either way.')}
-    <div class="form-hint" style="margin-top:10px;">
-      <b>Platforms</b> is not asked here. Epic inherits it from the artifact attached to the offer, and the field is read-only in the portal &mdash; it changes in the Upload Build step or not at all.
-    </div>`;
+        'Epic notifies players when an offer carries promotional content. A choice is required either way.')}`;
 }
 
 function buildEgsSpecificationsSection() {
