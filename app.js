@@ -3632,7 +3632,9 @@ function updateIOSCard(pid) {
   steps.forEach((step, i) => {
     const done   = _appStoreSectionComplete(pid, step.id);
     const locked = !gateOpen;
-    if (step.id === 'connect' && !done) gateOpen = false;   // lock everything after
+    /* Same exception the card itself draws (v8.55) — appStoreStepGateOn,
+       state.js. The two must agree or this patch repaints over the card. */
+    if (step.id === 'connect' && !done && appStoreStepGateOn(pid)) gateOpen = false;
     const card = document.getElementById(`${pid}-step-card-${step.id}`);
     if (!card) return;
     card.classList.toggle('is-complete', done && !locked);
@@ -23583,6 +23585,16 @@ function _egsProductRepaint() {
      caret. Without this the menu stays open and the caret does not, so the
      second genre has to be reached for with the mouse again. */
   if (state.egsPickOpen) _egsFocusPickInput();
+}
+
+/* WHICH TAB THE PREVIEW IS SHOWING (v8.55). Epic's product page has two,
+   and until now so did this card — drawn, and dead. The whole page is one
+   render, so switching tabs is a state flag and a repaint. */
+function setEgsPreviewTab(tab) {
+  const next = (tab === 'achievements') ? 'achievements' : 'overview';
+  if (state.egsPreviewTab === next) return;
+  state.egsPreviewTab = next;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
 /* The price, set from the Store Page Preview's buy box (v8.41). It replaces

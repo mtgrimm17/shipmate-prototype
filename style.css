@@ -29596,6 +29596,116 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-edit:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--epic-line); }
 .egs-sp .ias-char-counter-row { font-family: 'Inter', system-ui, sans-serif; }
 
+/* ── EPIC: THE ACHIEVEMENTS TAB (v8.55) ───────────────────────────────────
+   Every number below was read off store.epicgames.com/achievements/alan-wake-2
+   with getComputedStyle, not estimated: the band is 255px of #202024 split
+   between a key-art panel on #18181C and two statistics in 30px/40px padding;
+   each row is 20px/0 with a 100px icon, a 30px gutter and a #404044 rule
+   under it; the name is 16/700 at full white, the description 16/400 at 0.65,
+   the XP line 14/400/0.28px with 8px of air above it. */
+.egs-sp .egs-sp-ach-band {
+  display: flex;
+  height: 255px;
+  background: #202024;
+  margin-bottom: 10px;
+}
+.egs-sp .egs-sp-ach-art {
+  flex: 0 0 42%;
+  background: #18181c;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.egs-sp .egs-sp-ach-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.egs-sp .egs-sp-ach-stats {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 30px 40px;
+}
+.egs-sp .egs-sp-ach-stat {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 0;
+}
+.egs-sp .egs-sp-ach-stat > span {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.28px;
+  line-height: 19.6px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-ach-stat > b {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 30px;
+  color: var(--epic-fg);
+}
+/* Epic insets the list well inside the band above it — 907px of a 1134px
+   page, which is the 80% below. */
+.egs-sp .egs-sp-ach-list { width: 80%; margin: 0 auto; }
+.egs-sp .egs-sp-ach-row {
+  display: flex;
+  padding: 20px 0;
+  border-bottom: 1px solid #404044;
+}
+.egs-sp .egs-sp-ach-icon {
+  flex: 0 0 100px;
+  width: 100px;
+  height: 100px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #18181c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.egs-sp .egs-sp-ach-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.egs-sp .egs-sp-ach-icon-empty { display: flex; color: rgba(255, 255, 255, 0.25); }
+.egs-sp .egs-sp-ach-icon-empty svg { width: 28px; height: 28px; }
+.egs-sp .egs-sp-ach-text { flex: 1 1 0%; min-width: 0; padding-left: 30px; }
+.egs-sp .egs-sp-ach-name {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 26.4px;
+  color: #fff;
+}
+.egs-sp .egs-sp-ach-desc {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 26.4px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-ach-xp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.28px;
+  line-height: 19.6px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-ach-empty {
+  width: 80%;
+  margin: 0 auto;
+  padding: 40px 0;
+  font-size: 16px;
+  line-height: 26.4px;
+  color: var(--epic-fg-2);
+}
+/* The strip was decoration until the tabs did something (v8.55). */
+.egs-sp .egs-sp-tabs span { cursor: pointer; }
+.egs-sp .egs-sp-tabs span:hover { color: var(--epic-fg); }
+
+
 /* ── EPIC: ONE INDENT STEP, RAIL UNDER THE PARENT'S TITLE (v8.52) ──────────
    Jaco: "podríamos hacer un indent consistente, quizás sin la raya vertical,
    así ganaríamos espacio." Measured before: each level cost 42px (20px

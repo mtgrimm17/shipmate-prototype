@@ -3310,6 +3310,76 @@ function egsBodyText() {
   return ((state.formData || {}).description || '').trim();
 }
 
+/* ── THE CONNECT GATE, AND WHO IT STILL APPLIES TO (v8.55) ────────────────
+   An App Store-shaped card used to lock every step under an incomplete
+   Connect Account step: padlock, no onclick, nothing to press. Mac App Store
+   is the exception from here on — its steps are reachable in any order, so
+   Product Page Preview, Age Rating and the rest can be opened and filled in
+   before the account is connected, and the work is no longer held behind a
+   step that has nothing to do with it.
+
+   WHICH, IN PRACTICE, RETIRES THE GATE. Mac App Store is the only platform
+   whose steps include 'connect' (App Store, Mac App Store Full and the rest
+   start at Upload Build), so nothing else was ever gated by it. The
+   predicate stays rather than the gate coming out, because it is the one
+   place the rule is written down: a platform that grows a Connect step later
+   gets the lock back by name, not by accident.
+
+   ONE PREDICATE, TWO CALLERS. buildIOSActiveCard (render.js) draws the cards
+   and updateIOSStepNumbers (app.js) patches them in place right after first
+   paint; when the two disagreed about the gate the second overwrote the
+   first, which is the lock→number flicker that patch exists to avoid. */
+function appStoreStepGateOn(pid) {
+  return pid !== 'macos';
+}
+
+/* ── EPIC: THE ACHIEVEMENTS THE PAGE SHOWS (v8.55) ────────────────────────
+   One import, read from where it landed. Steam's achievements arrive once
+   (_applySteamAchievements, app.js) and are written into each platform's own
+   Game Center list; Epic has no list of its own to write to, so its page
+   reads the Mac App Store import — the same records, carrying the icon Steam
+   served — and falls back to the raw fetch cache
+   (state.steamAchievementsBaseline), which has the names and descriptions
+   but no artwork, if that list has since been emptied.
+
+   SORTED BY NAME, because Epic's own achievements pages are: alan-wake-2
+   opens on "Accessorize!" and runs alphabetically to the end.
+
+   XP IS NOT INVENTED. Epic prints an XP value on every row and a total above
+   them. Steam has no such field and Shipmate never asks for one, so a number
+   appears here only where the developer has typed a point value into Game
+   Center, and the row says plainly that it is unset otherwise. The "% of
+   players unlock" line Epic prints beside it is live telemetry from a
+   published product — not submission data — so it is not on this page at
+   all, the same reason the content rating card prints no ESRB letter. */
+function egsAchievements() {
+  const gc = (state.macGameCenterAchievements || [])
+    .filter(x => x && ((x.displayName || '').trim() || (x.refName || '').trim()));
+  let out;
+  if (gc.length) {
+    out = gc.map(x => {
+      const xp = parseInt(x.pointValue, 10);
+      return {
+        name:        ((x.displayName || x.refName) || '').trim(),
+        description: (x.earnedDescription || '').trim(),
+        hidden:      x.hidden === true,
+        icon:        ((x.image || {}).dataUrl) || '',
+        xp:          (isFinite(xp) && xp > 0) ? xp : null,
+      };
+    });
+  } else {
+    const base = ((state.steamAchievementsBaseline || {}).achievements) || [];
+    out = base.filter(x => x && (x.name || '').trim()).map(x => ({
+      name:        (x.name || '').trim(),
+      description: (x.description || '').trim(),
+      hidden:      false,
+      icon:        '',
+      xp:          null,
+    }));
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function makeBlankEgsAnswers() {
   return {
     /* THE PRICE, AND IT IS NOT A TIER ANY MORE (v8.41). It is set on the Store
@@ -5334,6 +5404,12 @@ const state = {
      closeAllDropdowns resets both, for the reason its own comment gives. */
   egsPickOpen: null,
   egsPickFilter: '',
+
+  /* WHICH TAB OF THE STORE PAGE PREVIEW IS ON SCREEN (v8.55): 'overview' or
+     'achievements', the two Epic itself shows. Surface state, like the
+     picker above — the tab strip was always drawn and never pressable, so
+     half the page Epic publishes had no preview at all. */
+  egsPreviewTab: 'overview',
   egsSubmitAnswers: makeBlankEgsAnswers(),
 
   /* Epic's Localizations surface state (v7.31). Which field is on screen,

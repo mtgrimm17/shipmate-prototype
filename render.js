@@ -6928,7 +6928,9 @@ function buildIOSActiveCard(pid, force) {
     const done      = _appStoreSectionComplete(pid, step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
     const locked    = !gateOpen;
-    if (step.id === 'connect' && !done) gateOpen = false;   // lock everything after
+    /* Mac App Store no longer closes the gate (v8.55) — appStoreStepGateOn,
+       state.js, holds the rule and the reason. */
+    if (step.id === 'connect' && !done && appStoreStepGateOn(pid)) gateOpen = false;
     if (locked) {
       return `
         <div class="ios-step-card is-locked" id="${pid}-step-card-${step.id}" title="Connect your account first">
@@ -19984,11 +19986,86 @@ function egsPageField(o) {
    Ship (free) carries Get, Add to Cart and Wishlist. Alan Wake 2 (paid) adds
    Gift, an Epic Rewards line and a Refund Type line. Those three are printed
    only on a paid product, because that is where Epic prints them. */
+/* ── EPIC: THE ACHIEVEMENTS TAB (v8.55) ───────────────────────────────────
+   Measured off store.epicgames.com/achievements/alan-wake-2, which is the
+   whole page: a 255px band split between the key art and two statistics,
+   then one row per achievement — a 100px icon with a 4px radius, the name at
+   16/700 white, the description at 16/400 on 0.65, and the XP line at
+   14/400/0.28px under it, rows separated by a single #404044 rule and no
+   heading between the band and the first of them.
+
+   NOTHING ON THIS TAB IS TYPED HERE. Every achievement on it came from the
+   Steam import (egsAchievements, state.js); Epic's own portal takes them
+   from the developer's Epic Online Services product, not from this page, so
+   the rows are a read-out and the empty state says where the data comes from
+   rather than offering a field that would write to nothing. */
+function buildEgsAchievementsPanel() {
+  const list   = (typeof egsAchievements === 'function') ? egsAchievements() : [];
+  const pool   = (typeof smPool === 'function') ? smPool() : [];
+  const keyArt = pool.find(x => x.kind === 'art-land' && x.src)
+              || pool.find(x => x.kind === 'screenshot' && x.src) || null;
+
+  /* Epic's own trophy glyph sits to the right of the XP on every row. */
+  const trophySvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/></svg>`;
+
+  const xpTotal = list.reduce((n, x) => n + (x.xp || 0), 0);
+  const anyXp   = list.some(x => x.xp);
+
+  const stat = (label, value, empty) => `
+    <div class="egs-sp-ach-stat">
+      <span>${label}</span>
+      <b>${value ? escHtml(value) : `<span class="egs-spp-placeholder">${empty}</span>`}</b>
+    </div>`;
+
+  const bandHtml = `
+    <div class="egs-sp-ach-band">
+      <div class="egs-sp-ach-art"
+           onclick="openStorePreviewSection('egs','screenshots')">${keyArt
+        ? `<img src="${escHtml(keyArt.src)}" alt="">`
+        : `<div class="egs-spp-hero-empty">Key art appears here</div>`}</div>
+      <div class="egs-sp-ach-stats">
+        ${stat('Available Achievements',
+               list.length ? `${list.length} Achievement${list.length === 1 ? '' : 's'}` : '',
+               'None yet')}
+        ${stat('Available XP', anyXp ? `${xpTotal} XP` : '', 'Not set')}
+      </div>
+    </div>`;
+
+  if (!list.length) {
+    return `
+      ${bandHtml}
+      <div class="egs-sp-ach-empty">
+        Achievements arrive with the Steam import. Pick the game's Steam title in
+        Game Details and its achievements — names, descriptions and icons — land here.
+      </div>`;
+  }
+
+  const rows = list.map(x => `
+    <div class="egs-sp-ach-row">
+      <div class="egs-sp-ach-icon">${x.icon
+        ? `<img src="${escHtml(x.icon)}" alt="">`
+        : `<span class="egs-sp-ach-icon-empty">${trophySvg}</span>`}</div>
+      <div class="egs-sp-ach-text">
+        <div class="egs-sp-ach-name">${escHtml(x.name)}</div>
+        <div class="egs-sp-ach-desc">${x.description
+          ? escHtml(x.description)
+          : `<span class="egs-spp-placeholder">${x.hidden ? 'Hidden achievement' : 'No description'}</span>`}</div>
+        <div class="egs-sp-ach-xp">${x.xp
+          ? `${x.xp} XP`
+          : `<span class="egs-spp-placeholder">XP not set</span>`}${trophySvg}</div>
+      </div>
+    </div>`).join('');
+
+  return `${bandHtml}<div class="egs-sp-ach-list">${rows}</div>`;
+}
+
 function buildEgsStorePreviewSection() {
   const fd   = state.formData || {};
   const ws   = state.webSite || {};
   const a    = state.egsSubmitAnswers;
   const pool = (typeof smPool === 'function') ? smPool() : [];
+
+  const tab       = (state.egsPreviewTab === 'achievements') ? 'achievements' : 'overview';
 
   const title     = (fd.title || '').trim();
   /* Steam's cached blurb stands in until somebody types their own, resolved
@@ -20245,8 +20322,11 @@ function buildEgsStorePreviewSection() {
         <!-- No Add-Ons tab (v8.54). Epic shows one only for a product that
              HAS add-ons; this card has no notion of them, so it was a tab
              that could never be pressed and never be right. -->
-        <span class="is-current">Overview</span><span>Achievements</span>
+        <span class="${tab === 'overview' ? 'is-current' : ''}"
+              onclick="setEgsPreviewTab('overview')">Overview</span><span class="${tab === 'achievements' ? 'is-current' : ''}"
+              onclick="setEgsPreviewTab('achievements')">Achievements</span>
       </div>
+      ${tab === 'achievements' ? buildEgsAchievementsPanel() : `
       <div class="egs-sp-cols">
         <div class="egs-sp-main">
           ${mediaHtml}
@@ -20258,7 +20338,7 @@ function buildEgsStorePreviewSection() {
       </div>
       ${followHtml}
       ${sysHtml}
-      ${loginHtml}
+      ${loginHtml}`}
       ${legalHtml}
     </div>`;
 }
