@@ -3886,6 +3886,370 @@ function androidCqProgress() {
   return { total: GOOGLE_IARC_TOP_LEVEL_KEYS.length, answered };
 }
 
+/* ══ AN ESTIMATED ESRB RATING FROM THE IARC ANSWERS (v8.81) ═══════════════
+   Adam: "build the estimator." The store page preview printed the IARC mark
+   and the words "Content Rating" because, as the note on that card used to
+   say, "inventing an ESRB letter here would be inventing the one thing on
+   this page nobody may invent." That still holds for a RATING. It does not
+   hold for an ESTIMATE that says so on its face, which is what this is and
+   what the card now prints: "Likely Everyone 10+", never "Everyone 10+".
+
+   WHY AN ESTIMATE IS POSSIBLE AT ALL. IARC is not a rating, it is a routing
+   layer: the developer answers one questionnaire and each participating
+   authority's own rules engine issues its own rating from those same
+   answers. ESRB's process page puts it plainly — the questionnaire "assigns
+   the rating category, content descriptors, and interactive elements". So
+   the function from these 95 answers to an ESRB rating exists and is
+   deterministic.
+
+   WHY IT CAN ONLY BE AN ESTIMATE. The per-authority rule sets are not
+   published; that is the point of IARC, and the boards deliberately
+   disagree with each other. Three of the fourteen top-level questions in
+   this very tree are nobody's business but one board's — Nazi symbols is
+   USK, "erode the national identity of the Republic of Korea" is GRAC,
+   terrorism advocacy is ClassInd — and this function ignores all three,
+   because they do not touch an ESRB rating. And even IARC's own answer is
+   provisional: ESRB monitors assignments, tests products after release and
+   corrects ratings that do not match the content.
+
+   SO THE TWO HALVES OF THE OUTPUT ARE NOT EQUALLY CERTAIN, and the card
+   draws them differently for that reason:
+
+     - INTERACTIVE ELEMENTS are a direct read. "Users Interact", "Shares
+       Location" and "In-Game Purchases" are three questions answered yes,
+       restated in ESRB's words. They carry no estimate and no hedge.
+       (ESRB's "In-Game Purchases (Includes Random Items)" is NOT derivable:
+       this tree never asks whether a purchase is randomised, so the plain
+       descriptor is the honest one.)
+
+     - THE AGE CATEGORY AND DESCRIPTORS are inferred, by the model below.
+
+   THE MODEL IS A FLOOR, NOT A SCORE. Every answer that matters raises a
+   MINIMUM rating and may name a descriptor; the estimate is the highest
+   minimum any single answer demands. That is how the published rating
+   definitions read — Teen "may contain violence, suggestive themes, crude
+   humor, minimal blood, simulated gambling, and/or infrequent strong
+   language", so one piece of content at Teen level makes the whole product
+   at least Teen — and it is why the card can say WHICH answers drove the
+   result: they are exactly the signals sitting at the winning floor.
+
+   Every threshold below is traceable to ESRB's own published wording, in
+   the rating definitions and the content-descriptor list. Where the
+   questionnaire is finer-grained than ESRB's words (it asks about distance
+   and frequency; ESRB says "intense"), the comment on that rule says which
+   way it rounds. It rounds DOWN in doubt: an estimate that comes in under
+   the real rating is a developer surprised once at submission, and an
+   estimate that comes in over it is a developer who redesigns content that
+   never needed it. */
+
+const ESRB_ORDER  = ['E', 'E10', 'T', 'M', 'AO'];
+
+/* ── ONE DESCRIPTOR PER FAMILY, THE STRONGEST (v8.81) ────────────────────
+   ESRB's descriptor list is a set of ladders, and a box prints the top rung
+   it has reached, not the whole climb: Cyberpunk 2077 says "Intense
+   Violence" and not "Violence, Intense Violence", and a game with cash
+   payouts says "Real Gambling" and not "Simulated Gambling, Real Gambling".
+   The rules above fire per answer and will happily emit two rungs of one
+   ladder — realistic violence shown close up earns Violence at Teen and
+   Intense Violence at Mature — so the ladders are stated here and the
+   weaker rung is dropped at the end.
+
+   Sexual Violence is deliberately absent: ESRB prints it ALONGSIDE the
+   sexuality ladder rather than instead of it. */
+const ESRB_LADDERS = [
+  ['Violent References', 'Fantasy Violence', 'Violence', 'Intense Violence'],
+  ['Animated Blood', 'Blood', 'Blood and Gore'],
+  ['Comic Mischief', 'Crude Humor', 'Mature Humor'],
+  ['Gambling Themes', 'Simulated Gambling', 'Real Gambling'],
+  ['Language', 'Strong Language'],
+  ['Lyrics', 'Strong Lyrics'],
+  ['Partial Nudity', 'Nudity'],
+  ['Suggestive Themes', 'Sexual Themes', 'Sexual Content', 'Strong Sexual Content'],
+  ['Drug Reference', 'Use of Drugs'],
+  ['Alcohol Reference', 'Use of Alcohol'],
+  ['Tobacco Reference', 'Use of Tobacco'],
+];
+
+/* Returns the printed list, and a map from every descriptor that was
+   emitted to the one that ends up standing for it — so "what drove the
+   rating" can name something the card actually shows. */
+function _esrbPrintable(raw) {
+  const keep = raw.slice();
+  const became = {};
+  raw.forEach(d => { became[d] = d; });
+  ESRB_LADDERS.forEach(ladder => {
+    const on = ladder.filter(d => raw.indexOf(d) >= 0);
+    if (on.length < 2) return;
+    const top = on[on.length - 1];
+    on.slice(0, -1).forEach(weak => {
+      became[weak] = top;
+      const i = keep.indexOf(weak);
+      if (i >= 0) keep.splice(i, 1);
+    });
+  });
+  /* ESRB prints "Use of Drugs and Alcohol" as one descriptor when both are
+     present — Cyberpunk 2077 and Red Dead Redemption 2 both do on Epic — so
+     the pair is merged rather than printed twice. After the ladders, not
+     before: it is the top rung of each that gets merged. */
+  if (keep.indexOf('Use of Drugs') >= 0 && keep.indexOf('Use of Alcohol') >= 0) {
+    const both = 'Use of Drugs and Alcohol';
+    [keep.indexOf('Use of Drugs'), keep.indexOf('Use of Alcohol')]
+      .sort((a, b) => b - a).forEach(i => keep.splice(i, 1));
+    keep.push(both);
+    Object.keys(became).forEach(k => {
+      if (became[k] === 'Use of Drugs' || became[k] === 'Use of Alcohol') became[k] = both;
+    });
+  }
+  keep.sort();
+  return { keep, became };
+}
+const ESRB_LABELS = {
+  E:   { short: 'E',    label: 'Everyone' },
+  E10: { short: 'E10+', label: 'Everyone 10+' },
+  T:   { short: 'T',    label: 'Teen' },
+  M:   { short: 'M',    label: 'Mature 17+' },
+  AO:  { short: 'AO',   label: 'Adults Only 18+' },
+};
+
+/* Reading an answer. state.cqAnswers[key] is a 1-based option index for a
+   radio and an array of them for a picklist_multi; an unanswered question
+   and one whose parent was answered "No" both read as undefined, which is
+   what makes every test below safe to run unconditionally. */
+function _esrbVal(key) {
+  return (state.cqAnswers || {})[key];
+}
+function _esrbIs(key, i)  { return _esrbVal(key) === i; }
+function _esrbHas(key, i) {
+  const v = _esrbVal(key);
+  return Array.isArray(v) ? v.indexOf(i) >= 0 : v === i;
+}
+
+/* One side of the violence questions, asked twice: the tree asks the same
+   eight questions about humans and about everything else, and ESRB's
+   distinction is not WHO but whether it reads as real. So the two share a
+   function and differ only in the two questions that exist on one side. */
+function _esrbViolence(p, sig) {
+  const presented = _esrbVal(p + 'presented');     // 1 referred … 6 often close-up
+  const blood     = _esrbVal(p + 'bloodlevel');    // 1 none … 4 high
+  if (presented === undefined && blood === undefined) return;
+
+  /* Fantasy unless the questionnaire says otherwise. "Fantasy Violence" is
+     ESRB's "easily distinguishable from real life", which is what a
+     fantastical setting, a childlike or pixelated style, or a non-human
+     that does not behave like one all say. */
+  const stylised = _esrbIs(p + 'setting', 1)       // fantastical
+                || _esrbIs(p + 'style', 1)         // childlike
+                || _esrbIs(p + 'style', 2)         // pixelated
+                || (p === 'google.content.nonhuman' && _esrbIs(p + 'behavior', 2));
+  const shown    = presented >= 3;                 // depicted at all
+  const closeUp  = presented === 6;                // often, close up
+  const real     = !stylised && _esrbIs(p + 'reactions', 2);
+
+  if (presented === 1 || presented === 2) {
+    /* Referred to or implied but never seen: ESRB's "Violent References". */
+    sig('E', 'Violent References');
+  } else if (shown && stylised) {
+    sig('E10', 'Fantasy Violence');
+  } else if (shown) {
+    sig('T', 'Violence');
+  }
+
+  /* INTENSE VIOLENCE IS ESRB'S TOP VIOLENCE DESCRIPTOR and its definition
+     names three things together: "graphic, realistic-looking physical
+     conflict, which may involve extreme blood, gore, weapons, and human
+     injury or death". So it takes realistic violence AND one of the two
+     things the questionnaire has that mean graphic: seen close up and often,
+     or a high level of blood and gore. One alone is not it. */
+  if (real && (closeUp || blood === 4)) sig('M', 'Intense Violence');
+
+  /* A war setting, or innocents who can be killed with no penalty, is the
+     questionnaire's way of asking the same question ESRB answers with
+     Mature. Neither names a descriptor of its own. */
+  if (real && _esrbIs(p + 'warsetting', 1)) sig('M', null);
+  if (_esrbIs(p + 'innocents', 3))          sig('M', null);
+  if (_esrbIs(p + 'innocents', 2))          sig('T', null);
+
+  /* Blood, and ESRB has three words for it by realism and degree:
+     "Animated Blood" is discoloured or unrealistic, "Blood" is depictions,
+     "Blood and Gore" adds mutilated body parts. */
+  if (blood === 2 && stylised)  sig('E10', 'Animated Blood');
+  else if (blood === 2)         sig('T',   'Blood');
+  else if (blood === 3)         sig('T',   stylised ? 'Animated Blood' : 'Blood');
+  else if (blood === 4)         sig('M',   'Blood and Gore');
+
+  if (_esrbIs(p + 'overtones', 1)) sig('E10', null);
+  if (p === 'google.content.nonhuman' && _esrbIs(p + 'animal', 1)) sig('T', null);
+}
+
+/* THE ESTIMATE. Returns null until the questionnaire is finished — a partial
+   tree would give a confidently low answer, which is the one failure mode
+   this is not allowed to have. */
+function egsEsrbEstimate() {
+  if (typeof androidCqProgress !== 'function') return null;
+  const cq = androidCqProgress();
+  if (!(cq.total > 0 && cq.answered === cq.total)) return null;
+
+  let floor = 'E';
+  const descriptors = [];
+  const drivers     = [];
+  const sig = (level, descriptor) => {
+    if (ESRB_ORDER.indexOf(level) > ESRB_ORDER.indexOf(floor)) floor = level;
+    if (descriptor && descriptors.indexOf(descriptor) < 0) descriptors.push(descriptor);
+    drivers.push({ level, descriptor: descriptor || null });
+  };
+
+  /* ── a questionnaire that cannot be rated ──────────────────────────────
+     Sexual activity involving minors is not a rating question; it is the
+     screening question IARC asks so that the submission stops. An estimator
+     that answered it with a cheerful "Likely Adults Only" would be the
+     wrong kind of helpful, so this returns no estimate at all and the card
+     says the questionnaire needs IARC's own review. */
+  if (_esrbIs('google.content.sexminor', 1)) {
+    return { ratable: false, code: null, short: null, label: null,
+             descriptors: [], interactive: _esrbInteractive(), drivers: [] };
+  }
+
+  // ── violence, blood and gore ──────────────────────────────────────────
+  if (_esrbHas('google.content.bloodviolencegoretypes', 1)) _esrbViolence('google.content.human', sig);
+  if (_esrbHas('google.content.bloodviolencegoretypes', 2)) _esrbViolence('google.content.nonhuman', sig);
+  if (_esrbIs('google.content.nonviolentgore', 1)) sig('T', 'Blood');
+  if (_esrbIs('google.content.nonviolentgore', 2)) sig('M', 'Blood and Gore');
+  if (_esrbIs('google.content.nonviolentgore', 3)) sig('M', 'Blood and Gore');
+  if (_esrbIs('google.content.nonviolentblood', 1)) sig('E10', 'Blood');
+  if (_esrbIs('google.content.nonviolentblood', 2)) sig('T',   'Blood');
+
+  /* ── fear ──────────────────────────────────────────────────────────────
+     ESRB has no horror descriptor, so this raises the floor and names
+     nothing. Saying it with a descriptor ESRB does not print would be
+     inventing vocabulary, and leaving it out of the floor would let a
+     genuinely frightening game read as Everyone. */
+  if (_esrbIs('google.content.scaryfreq', 1))      sig('E',   null);
+  if (_esrbIs('google.content.scaryfreq', 2))      sig('E10', null);
+  if (_esrbIs('google.content.horrifyingfreq', 1)) sig('T',   null);
+  if (_esrbIs('google.content.horrifyingfreq', 2)) sig('T',   null);
+  if (_esrbIs('google.content.imminentthreat', 1)) sig('M',   null);
+
+  // ── sexuality and nudity ──────────────────────────────────────────────
+  /* ESRB's ladder here is Suggestive Themes → Sexual Themes → Sexual
+     Content → Strong Sexual Content, and the questionnaire's own ladder
+     lines up with it almost word for word. */
+  if (_esrbHas('google.content.suggestivetypes', 1)) sig('E10', 'Suggestive Themes');
+  if (_esrbHas('google.content.suggestivetypes', 2)) sig('T',   'Sexual Themes');
+  if (_esrbHas('google.content.suggestivetypes', 3)) sig('T',   'Sexual Themes');
+  if (_esrbHas('google.content.suggestivetypes', 4)) sig('M',   'Sexual Themes');
+  if (_esrbIs('google.content.sexdepiction', 1))     sig('T',   'Sexual Themes');
+  if (_esrbIs('google.content.sexdepiction', 2))     sig('M',   'Sexual Content');
+  if (_esrbIs('google.content.sexdepiction', 3))     sig('M',   'Strong Sexual Content');
+  if (_esrbIs('google.content.sexdepiction', 4))     sig('M',   'Strong Sexual Content');
+  /* Adults Only is "graphic sexual content", and the questionnaire spells
+     out graphic three ways at once: shown in full, often, and at length. */
+  if (_esrbIs('google.content.sexdepiction', 4)
+      && _esrbIs('google.content.sexfreq', 2)
+      && _esrbIs('google.content.sexlength', 2)) sig('AO', 'Strong Sexual Content');
+
+  if (_esrbIs('google.content.datingfocus', 1)) sig('E10', 'Suggestive Themes');
+  if (_esrbIs('google.content.revealnudity', 1)) {
+    sig(_esrbIs('google.content.revealcontext', 1) ? 'T' : 'E10', 'Suggestive Themes');
+  }
+  /* ESRB splits nudity at how much: "Partial Nudity" is brief and/or mild,
+     "Nudity" is graphic or prolonged. The questionnaire splits it by what is
+     shown, so buttocks and covered breasts are the partial end and nipples
+     or genitalia the other. */
+  if (_esrbHas('google.content.nuditytypes', 1)) sig('T', 'Partial Nudity');
+  if (_esrbHas('google.content.nuditytypes', 2)) sig('T', 'Partial Nudity');
+  if (_esrbHas('google.content.nuditytypes', 3)) sig('T', 'Partial Nudity');
+  if (_esrbHas('google.content.nuditytypes', 4)) sig('M', 'Nudity');
+  if (_esrbHas('google.content.nuditytypes', 5)) sig('M', 'Nudity');
+  if (_esrbIs('google.content.nuditycontext', 1)) sig('M', null);
+  if (_esrbIs('google.content.sexualviolence', 2)) sig('M',  'Sexual Violence');
+  if (_esrbIs('google.content.sexualviolence', 1)) sig('AO', 'Sexual Violence');
+
+  // ── gambling ──────────────────────────────────────────────────────────
+  /* "Gambling Themes" is images or activities associated with gambling
+     WITHOUT simulating it; "Simulated Gambling" is playing without real
+     money; "Real Gambling" is betting real cash, which the Adults Only
+     definition names outright. */
+  if (_esrbIs('google.content.gamblingthemes', 1)) sig('T',   'Gambling Themes');
+  if (_esrbIs('google.content.gamblingthemes', 2)) sig('E10', 'Gambling Themes');
+  if (_esrbHas('google.content.gamblingtypes', 2)) sig('T', 'Simulated Gambling');
+  if (_esrbHas('google.content.gamblingtypes', 3)) sig('T', 'Simulated Gambling');
+  if (_esrbHas('google.content.gamblingtypes', 4)) sig('E10', 'Simulated Gambling');
+  if (_esrbIs('google.content.bingorewards', 1))   sig('AO', 'Real Gambling');
+  if (_esrbIs('google.content.casinorewards', 1))  sig('AO', 'Real Gambling');
+
+  // ── language ──────────────────────────────────────────────────────────
+  /* ESRB: "Language" is mild to moderate profanity, "Strong Language" is
+     explicit and/or frequent. Everyone already allows "infrequent mild
+     language" and Teen "infrequent strong language", which is where the
+     rarely/often split lands on each row. */
+  if (_esrbIs('google.content.profanities', 1))    sig('E',   'Language');
+  if (_esrbIs('google.content.profanities', 2))    sig('E10', 'Language');
+  if (_esrbIs('google.content.swearing', 1))       sig('T',   'Language');
+  if (_esrbIs('google.content.swearing', 2))       sig('T',   'Strong Language');
+  if (_esrbIs('google.content.sexexpletives', 1))  sig('T',   'Strong Language');
+  if (_esrbIs('google.content.sexexpletives', 2))  sig('M',   'Strong Language');
+  if (_esrbIs('google.content.discrimlang', 1))    sig('T',   'Strong Language');
+  if (_esrbIs('google.content.discrimlang', 2))    sig('M',   'Strong Language');
+
+  // ── controlled substances ─────────────────────────────────────────────
+  /* ESRB has a reference/use pair for each of drugs, alcohol and tobacco,
+     and the questionnaire asks presentation in exactly those terms. */
+  const subst = (key, refName, useName, refFloor, useFloor) => {
+    if (_esrbIs(key, 1)) sig(refFloor, refName);
+    if (_esrbIs(key, 2)) sig(useFloor, useName);
+    if (_esrbIs(key, 3)) sig('M', useName);          // encourages/glamorises
+    if (_esrbIs(key, 4)) sig('M', useName);          // detailed instruction
+  };
+  subst('google.content.illegaldrugs', 'Drug Reference', 'Use of Drugs', 'T', 'M');
+  subst('google.content.fantdrugs',    'Drug Reference', 'Use of Drugs', 'E10', 'T');
+  subst('google.content.meddrugs',     'Drug Reference', 'Use of Drugs', 'E10', 'T');
+  subst('google.content.alcohol',      'Alcohol Reference', 'Use of Alcohol', 'E10', 'T');
+  subst('google.content.tobacco',      'Tobacco Reference', 'Use of Tobacco', 'E10', 'T');
+
+  // ── crude humour ──────────────────────────────────────────────────────
+  /* "Comic Mischief" is slapstick or suggestive humour, "Crude Humor" is
+     vulgar antics including bathroom humour, "Mature Humor" is adult. The
+     questionnaire's four rows climb that ladder in order. */
+  if (_esrbHas('google.content.crudetypes', 1)) sig('E',   'Comic Mischief');
+  if (_esrbHas('google.content.crudetypes', 2)) sig('E10', 'Crude Humor');
+  if (_esrbHas('google.content.crudetypes', 3)) sig('T',   'Crude Humor');
+  if (_esrbHas('google.content.crudetypes', 4)) sig('M',   'Mature Humor');
+
+  /* Crime: imitable by children raises the floor, detailed technique more
+     so. Neither is an ESRB descriptor. */
+  if (_esrbIs('google.content.crimekids', 1)) sig('T', null);
+  if (_esrbIs('google.content.crimetech', 1)) sig('M', null);
+
+  const { keep: out, became } = _esrbPrintable(descriptors);
+
+  /* WHAT DROVE IT: the signals sitting at the winning floor, named — and
+     named with the descriptor the card PRINTS, which after the ladders
+     above may not be the one the rule emitted. A descriptor that only
+     reached Teen is still printed on a Mature product (ESRB prints all of
+     them) but it did not drive the rating. */
+  const driving = drivers.filter(d => d.level === floor && d.descriptor)
+                         .map(d => became[d.descriptor] || d.descriptor)
+                         .filter(d => out.indexOf(d) >= 0)
+                         .filter((d, i, a) => a.indexOf(d) === i)
+                         .sort();
+
+  return { ratable: true, code: floor,
+           short: ESRB_LABELS[floor].short, label: ESRB_LABELS[floor].label,
+           descriptors: out, driving, interactive: _esrbInteractive(), drivers };
+}
+
+/* THE PART THAT IS NOT AN ESTIMATE. Three questions, restated in ESRB's own
+   words. ESRB is explicit that interactive elements "don't affect the
+   rating", which is why they are computed apart from the floor above and
+   drawn under a rule on the card. */
+function _esrbInteractive() {
+  const out = [];
+  if (_esrbIs('google.content.interact', 1)) out.push('Users Interact');
+  if (_esrbIs('google.content.location', 1)) out.push('Shares Location');
+  if (_esrbHas('google.content.cryptotypes', 1)) out.push('In-Game Purchases');
+  return out;
+}
+
 function isAndroidSectionComplete(sectionId) {
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('android');
 

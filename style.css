@@ -29549,6 +29549,40 @@ textarea.egs-sp-body {
   gap: 12px;
 }
 .egs-sp .egs-sp-rating-text b { font-size: 14px; font-weight: 700; letter-spacing: 0.28px; color: var(--epic-fg); }
+/* ── THE RATED CARD (v8.81) ──────────────────────────────────────────────
+   Measured on Epic's own pages. Unrated the card is one line and centres on
+   it; rated it is three or four, so the mark goes to the top and the text
+   column carries the rest. */
+.egs-sp .egs-sp-rating.is-rated { align-items: flex-start; }
+.egs-sp .egs-sp-rating-text { gap: 4px; flex: 1 1 auto; }
+.egs-sp .egs-sp-rating-desc {
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0.13px;
+  color: var(--epic-fg-2);
+}
+/* The interactive elements sit under a hairline, inside the text column and
+   not across the whole card — Epic draws the rule from the descriptors' own
+   left edge, because the elements belong to the rating block rather than to
+   the card. They do not affect the rating, which is the reason for the line.
+   16px above it and 12 below is Go Ape Ship's spacing. */
+.egs-sp .egs-sp-rating-ie {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--epic-line);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0.13px;
+  color: var(--epic-fg-2);
+}
+/* The letter, where the IARC mark was. Bigger than the four-character
+   "IARC" it replaces, because "M" alone at 9px reads as a smudge. */
+.egs-sp .egs-sp-rating-mark.is-rated {
+  font-size: 15px;
+  letter-spacing: 0;
+  color: var(--epic-fg);
+  border-color: var(--epic-fg-2);
+}
 .egs-sp .egs-sp-rating-mark {
   width: 42px; height: 42px;
   border-color: var(--epic-line);

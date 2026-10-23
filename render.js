@@ -20671,17 +20671,70 @@ function buildEgsStorePreviewSection() {
      marked element to its opener and clicks it, so Content opens the Content
      Rating face and Media Carousel opens Screenshots — the same doors the
      card and the carousel already are. */
+  /* ── AND ONCE IT IS FINISHED, THE ESTIMATE (v8.81) ──────────────────
+     The note above says inventing an ESRB letter here would be inventing
+     the one thing on this page nobody may invent, and that is still true of
+     a RATING. This is not one. egsEsrbEstimate (state.js) reads the
+     finished questionnaire the way ESRB's own engine would, the card says
+     "Likely" in the line you cannot miss, and the word is in the markup
+     rather than in a tooltip for exactly that reason.
+
+     DRAWN AS EPIC DRAWS IT, measured on three of its own pages — Go Ape
+     Ship, Cyberpunk 2077, Red Dead Redemption 2. All three put the mark on
+     the left, the rating name in bold beside it, the descriptors under that
+     as one comma-separated run, and — where there are any — the interactive
+     elements under a hairline rule, in the text column rather than across
+     the card.
+
+     THE MARK IS NOT ESRB'S BADGE. Epic prints the real one; that artwork is
+     a registered mark and Shipmate does not reproduce it, so the letter goes
+     in the same small box the IARC mark was already using. It says what the
+     badge would say without pretending to be it, which on a page that is
+     openly a preview is the right side of that line anyway. */
+  const esrb = (typeof egsEsrbEstimate === 'function') ? egsEsrbEstimate() : null;
+  const ieHtml = (list) => list && list.length
+    ? `<div class="egs-sp-rating-ie">${escHtml(list.join(', '))}</div>` : '';
+  let ratingInner;
+  if (esrb && esrb.ratable) {
+    ratingInner = `
+      <div class="egs-sp-rating-mark is-rated">${escHtml(esrb.short)}</div>
+      <div class="egs-sp-rating-text">
+        <b>Likely ${escHtml(esrb.label)}</b>
+        ${esrb.descriptors.length
+          ? `<span class="egs-sp-rating-desc">${escHtml(esrb.descriptors.join(', '))}</span>`
+          : `<span class="egs-sp-rating-desc">No content descriptors</span>`}
+        ${ieHtml(esrb.interactive)}
+      </div>`;
+  } else if (esrb) {
+    /* The one answer that is not a rating question (see egsEsrbEstimate). */
+    ratingInner = `
+      <div class="egs-sp-rating-mark">&mdash;</div>
+      <div class="egs-sp-rating-text">
+        <b>Needs IARC review</b>
+        <span class="egs-sp-rating-desc">One answer puts this outside what an
+          estimate may state. The boards decide this one.</span>
+        ${ieHtml(esrb.interactive)}
+      </div>`;
+  } else {
+    /* JUST THE NAME OF THE THING (v8.48). This card used to report how
+       much of the IARC questionnaire was left and where the questionnaire
+       came from — a progress read-out in the one place on the page that
+       is meant to look like the finished store page. The glow already
+       says it is unfinished, and the Content Rating step says how much
+       by. */
+    ratingInner = `
+      <div class="egs-sp-rating-mark">IARC</div>
+      <div class="egs-sp-rating-text"><b>Content Rating</b></div>`;
+  }
   const ratingHtml = `
-    <div class="egs-sp-rating ${egsHitCls(ratingDone)}" data-spp-el="content"
+    <div class="egs-sp-rating ${egsHitCls(ratingDone)}${esrb ? ' is-rated' : ''}"
+         data-spp-el="content"
+         title="${esrb && esrb.ratable && esrb.driving.length
+                   ? escHtml('Estimated from your IARC answers. ' +
+                             esrb.driving.join(', ') + ' set the age category.')
+                   : 'Estimated from your IARC answers, not an issued rating.'}"
          onclick="openStorePreviewSection('egs','content')">
-      <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
-      <!-- JUST THE NAME OF THE THING (v8.48). This card used to report how
-           much of the IARC questionnaire was left and where the questionnaire
-           came from — a progress read-out in the one place on the page that
-           is meant to look like the finished store page. The glow already
-           says it is unfinished, and the Content Rating step says how much
-           by. -->
-      <div class="egs-sp-rating-text"><b>Content Rating</b></div>
+      ${ratingInner}
     </div>`;
 
   /* THE BUY BOX IS WHERE THE PRICE IS SET (v8.41), not a read-out of a
