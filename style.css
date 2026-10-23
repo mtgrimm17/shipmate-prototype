@@ -29445,6 +29445,19 @@ textarea.egs-sp-body {
    the carousel's while the cell itself stretched — aligned boxes, unaligned
    lines, which is the only part anyone can see. */
 .egs-sp .egs-sp-side > .egs-sp-biz { flex: 1 1 auto; }
+/* AND THE LINE IT HAS TO REACH IS 13px LOWER THAN ITS BOX (v8.77). Jaco:
+   "el fondo de la caja del carrusel queda un poco más alto que el de Base
+   Game." Base Game's visible frame is not its border — it is a ::before
+   laid over it at `inset: -13px`, so the frame is painted 13px outside the
+   element on every side and its bottom edge falls 13px BELOW the box that
+   v8.73 lined the carousel up with. Both boxes ended on 860.52 and the two
+   edges a reader sees were 13px apart; a measurement of the boxes could
+   never have caught it, which is why align873 now reads the ::before.
+
+   The column pays that 13px as padding, so the box stops 13px short of the
+   row's bottom line and the frame drawn around it lands exactly on it —
+   where the carousel's own ring, which IS its edge, already is. */
+.egs-sp .egs-sp-cols > .egs-sp-side { padding-bottom: 13px; }
 /* The picture sits in the middle of whatever height the row hands over,
    rather than at the top with the slack below it. 16:9 is untouched: the
    stage is still sized from the column's width (car856 owns that). */

@@ -19988,7 +19988,11 @@ function buildEgsProductDetailsSection() {
          decoration. Counted fields are uncapped and warn instead, which is
          what lets a developer paste a long URL and then cut it down. -->
     ${egsPortalField({ id: 'eula', label: 'EULA link', value: a.eulaLink, max: 260, counter: true,
-        type: 'url', placeholder: 'https://your-studio.com/eula',
+        /* JUST THE SCHEME (v8.77). A whole specimen address reads as a
+           value already filled in — the same thing v8.72 said about the
+           privacy link's. "https://" says the one thing a placeholder on a
+           URL field can usefully say: this is where the address goes. */
+        type: 'url', placeholder: 'https://',
         onChange: `setEgsProductText('eulaLink', this.value)` })}
 
     <div class="ios-q-divider"></div>
@@ -19998,9 +20002,15 @@ function buildEgsProductDetailsSection() {
          every time they look at the pair. The explanation moved to the
          heading's tooltip; the rule stays on the page, as a rule. -->
     <div class="ios-content-step-label">User support${supportDone ? '' : ' <span style="color:#e0555a;">*</span>'}${egsAchTip('Contact information in case users have questions about the product or need assistance.')}</div>
-    <div class="form-hint" style="margin-top:-2px;">Provide at least one option.</div>
+    <!-- 16px UNDER IT, NOT 6 (v8.77). .form-hint pays 6px, which is right
+         for a note explaining the field directly above it; this one sits
+         ABOVE a pair of fields, where the 6 made Support page link ride up
+         against it while Support email sat a full 16 below its neighbour.
+         Matching .form-group's own bottom margin makes the two fields
+         equally spaced, which is what they are. -->
+    <div class="form-hint" style="margin-top:-2px;margin-bottom:16px;">Provide at least one option.</div>
     ${egsPortalField({ id: 'supportpage', label: 'Support page link', value: a.supportPageLink, max: 260, counter: true,
-        type: 'url', placeholder: 'https://your-studio.com/support',
+        type: 'url', placeholder: 'https://',
         onChange: `setEgsProductText('supportPageLink', this.value)` })}
     ${egsPortalField({ id: 'supportmail', label: 'Support email', value: a.supportEmail, max: 260, counter: true,
         type: 'email', placeholder: 'support@your-studio.com',
@@ -20930,7 +20940,11 @@ function buildEgsStorePreviewSection() {
         <div class="egs-sp-chip-part" data-spp-el="productDetails">
           <div class="egs-sp-foot-sub">Legal</div>
           ${egsSysField({ id: 'egs-sp-legalfooter', value: a.legalFooter, multiline: true,
-              placeholder: 'Copyright and trademark lines, shown at the foot of the page.',
+              /* NAMES THE FIELD FIRST (v8.77). The part's heading is
+                 "Legal", which covers this box and the privacy link under
+                 it; the old placeholder described what goes in without ever
+                 saying which of the two it was. */
+              placeholder: 'Legal footer (e.g., copyright and trademark information).',
               onChange: `setEgsProductText('legalFooter', this.value)` })}
           ${egsSysField({ id: 'egs-sp-privacy', value: a.privacyLink, type: 'url',
               /* "Optional" rather than a specimen URL (v8.72): Epic does not
