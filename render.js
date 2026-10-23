@@ -20055,6 +20055,154 @@ function egsPageField(o) {
    Ship (free) carries Get, Add to Cart and Wishlist. Alan Wake 2 (paid) adds
    Gift, an Epic Rewards line and a Refund Type line. Those three are printed
    only on a paid product, because that is where Epic prints them. */
+/* ── ONE ACHIEVEMENT'S EDITOR (v8.60) ─────────────────────────────────────
+   Epic's Create achievement form, drawn inside the row it belongs to. The
+   field set and every limit are the portal's; the only thing invented here is
+   the arrangement — the portal lists all six player-facing fields flat and
+   this splits them into the Locked and Unlocked tabs that were asked for,
+   each tab holding the icon, the display name and the description for that
+   one state so the pairing is visible instead of remembered. */
+function egsAchField(o) {
+  const val  = o.value || '';
+  const over = val.length > EGS_ACH_CHAR_MAX;
+  const dis  = o.disabled ? ' disabled' : '';
+  const body = o.multiline
+    ? `<textarea class="egs-ach-input${over ? ' is-over-limit' : ''}" id="${o.id}" rows="2"${dis}
+                 placeholder="${escHtml(o.placeholder || '')}"
+                 oninput="updateIapCharCounter(this, ${EGS_ACH_CHAR_MAX})"
+                 onchange="${o.onChange}">${escHtml(val)}</textarea>`
+    : `<input class="egs-ach-input${over ? ' is-over-limit' : ''}" id="${o.id}" type="text"${dis}
+              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"
+              oninput="updateIapCharCounter(this, ${EGS_ACH_CHAR_MAX})"
+              onchange="${o.onChange}">`;
+  return `
+    <div class="egs-ach-field${o.disabled ? ' is-disabled' : ''}">
+      <label class="egs-ach-label" for="${o.id}">${escHtml(o.label)}${
+        o.required ? ' <span class="egs-ach-req">*</span>' : ''}</label>
+      ${body}
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${over ? `Must be less than ${EGS_ACH_CHAR_MAX} characters.` : ''}</span>
+        <span class="ias-char-count${over ? ' is-over' : ''}">${EGS_ACH_CHAR_MAX - val.length}</span>
+      </div>
+      ${o.note ? `<div class="egs-ach-note">${o.note}</div>` : ''}
+    </div>`;
+}
+
+function egsAchIconWell(a, which) {
+  const icon  = (which === 'locked' ? a.lockedIcon : a.unlockedIcon) || null;
+  const label = which === 'locked' ? 'Locked Icon' : 'Unlocked Icon';
+  const id    = `egs-ach-icon-${which}-${a.id}`;
+  return `
+    <div class="egs-ach-field">
+      <label class="egs-ach-label" for="${id}">${label} <span class="egs-ach-req">*</span></label>
+      <div class="egs-ach-icon-well${icon && icon.dataUrl ? ' has-file' : ''}${icon && icon.error ? ' is-bad' : ''}">
+        ${icon && icon.dataUrl
+          ? `<img class="egs-ach-icon-thumb" src="${escHtml(icon.dataUrl)}" alt="">`
+          : `<span class="egs-ach-icon-slot"></span>`}
+        <div class="egs-ach-icon-text">
+          <label class="egs-ach-icon-browse" for="${id}">${icon && icon.dataUrl
+            ? escHtml(icon.name || 'Replace') : 'Drag file(s) here or <u>browse</u>'}</label>
+          <div class="egs-ach-icon-note">${EGS_ACH_ICON.note}</div>
+          ${icon && icon.error ? `<div class="egs-ach-icon-err">${escHtml(icon.error)}</div>` : ''}
+          ${icon && icon.warn  ? `<div class="egs-ach-icon-warn">${escHtml(icon.warn)}</div>` : ''}
+        </div>
+        ${icon ? `<button type="button" class="egs-ach-icon-x" title="Remove"
+                          onclick="event.stopPropagation(); removeEgsAchIcon('${a.id}','${which}')">&times;</button>` : ''}
+        <input class="egs-ach-icon-input" id="${id}" type="file"
+               accept="${EGS_ACH_ICON.accept}"
+               onchange="handleEgsAchIcon(event, '${a.id}', '${which}')">
+      </div>
+    </div>`;
+}
+
+function buildEgsAchEditor(a) {
+  const hidden = a.visibility === 'hidden';
+  const tab    = (a.tab === 'locked') ? 'locked' : 'unlocked';
+  const xpErr  = egsAchXpError(a.xp);
+  const tier   = egsAchXpTier(a.xp);
+
+  /* THE PORTAL'S OWN WORDS, from the (i) beside Visibility. Quoted rather
+     than paraphrased: it is the only place that says what Hidden does to a
+     player, and a paraphrase of a rule is how a prototype teaches a rule
+     wrong. */
+  const visNote = hidden
+    ? `Hidden achievements are presented to the user without a title and description until they are unlocked. In a locked state, they are presented to users as a &ldquo;Hidden Achievement&rdquo; with the icon that was uploaded for them. Only unlocked title and description are available to edit.`
+    : `Shown achievements are visible to players. For locked and unlocked achievements, their titles and descriptions are available to edit.`;
+
+  const seg = (v, label) => `
+    <button type="button" class="egs-ach-seg${a.visibility === v ? ' is-on' : ''}"
+            onclick="event.stopPropagation(); setEgsAchVisibility('${a.id}','${v}')">${label}</button>`;
+
+  const tabBtn = (v, label) => `
+    <button type="button" class="egs-ach-tab${tab === v ? ' is-on' : ''}"
+            onclick="event.stopPropagation(); setEgsAchTab('${a.id}','${v}')">${label}</button>`;
+
+  const lockedPane = `
+    ${egsAchIconWell(a, 'locked')}
+    ${hidden ? `<div class="egs-ach-note is-lead">A hidden achievement shows no name or description
+      until it is unlocked, so Epic does not take either here. The locked icon is still yours to
+      set &mdash; it is what a player sees on the &ldquo;Hidden Achievement&rdquo; row.</div>` : ''}
+    ${egsAchField({ id: `egs-ach-lockedDisplayName-${a.id}`, label: 'Locked display name',
+        value: a.lockedDisplayName, disabled: hidden,
+        placeholder: hidden ? '' : 'What the row says before it is unlocked',
+        onChange: `commitEgsAchField('${a.id}','lockedDisplayName', this.value)` })}
+    ${egsAchField({ id: `egs-ach-lockedDescription-${a.id}`, label: 'Locked description',
+        value: a.lockedDescription, disabled: hidden, multiline: true,
+        placeholder: hidden ? '' : 'How to earn it, as much as you want to give away',
+        onChange: `commitEgsAchField('${a.id}','lockedDescription', this.value)` })}`;
+
+  const unlockedPane = `
+    ${egsAchIconWell(a, 'unlocked')}
+    ${egsAchField({ id: `egs-ach-unlockedDisplayName-${a.id}`, label: 'Unlocked display name',
+        value: a.unlockedDisplayName, required: true,
+        placeholder: 'The achievement’s name',
+        onChange: `commitEgsAchField('${a.id}','unlockedDisplayName', this.value)` })}
+    ${egsAchField({ id: `egs-ach-unlockedDescription-${a.id}`, label: 'Unlocked description',
+        value: a.unlockedDescription, required: true, multiline: true,
+        placeholder: 'What the player did to earn it',
+        onChange: `commitEgsAchField('${a.id}','unlockedDescription', this.value)` })}`;
+
+  return `
+    <div class="egs-ach-editor" onclick="event.stopPropagation();">
+      ${egsAchField({ id: `egs-ach-achievementId-${a.id}`, label: 'Achievement ID', required: true,
+          value: a.achievementId, placeholder: 'e.g. first_win_achievement',
+          note: 'Internal backend identifier &mdash; cannot contain spaces or special characters.',
+          onChange: `commitEgsAchField('${a.id}','achievementId', this.value)` })}
+
+      <div class="egs-ach-field">
+        <span class="egs-ach-label">Visibility</span>
+        <div class="egs-ach-segs">${seg('shown', 'Shown')}${seg('hidden', 'Hidden')}</div>
+        <div class="egs-ach-note">${visNote}</div>
+      </div>
+
+      <div class="egs-ach-tabs">${tabBtn('locked', 'Locked')}${tabBtn('unlocked', 'Unlocked')}</div>
+      <div class="egs-ach-pane">${tab === 'locked' ? lockedPane : unlockedPane}</div>
+
+      ${egsAchField({ id: `egs-ach-flavorText-${a.id}`, label: 'Flavor text',
+          value: a.flavorText, placeholder: 'Optional. Yours to use however you like.',
+          onChange: `commitEgsAchField('${a.id}','flavorText', this.value)` })}
+
+      <div class="egs-ach-field">
+        <label class="egs-ach-label" for="egs-ach-xp-${a.id}">XP <span class="egs-ach-req">*</span></label>
+        <div class="egs-ach-xprow">
+          <input class="egs-ach-input egs-ach-xpinput${xpErr ? ' is-over-limit' : ''}"
+                 id="egs-ach-xp-${a.id}" type="text" inputmode="numeric" value="${escHtml(a.xp || '')}"
+                 placeholder="5"
+                 onchange="setEgsAchXp('${a.id}', this.value)">
+          ${tier ? `<span class="egs-ach-tier is-${tier.id}">${tier.label}</span>` : ''}
+        </div>
+        <div class="egs-ach-note${xpErr ? ' is-err' : ''}">${xpErr
+          ? escHtml(xpErr)
+          : `A multiple of 5, from ${EGS_ACH_XP.min} to ${EGS_ACH_XP.max}. Bronze ${EGS_ACH_TIERS[0].min}&ndash;${EGS_ACH_TIERS[0].max}, Silver ${EGS_ACH_TIERS[1].min}&ndash;${EGS_ACH_TIERS[1].max}, Gold ${EGS_ACH_TIERS[2].min}&ndash;${EGS_ACH_TIERS[2].max}.`}</div>
+      </div>
+
+      <div class="egs-ach-editor-foot">
+        <button type="button" class="egs-ach-remove"
+                onclick="event.stopPropagation(); removeEgsAchievement('${a.id}')">Remove achievement</button>
+      </div>
+    </div>`;
+}
+
 /* ── EPIC: THE ACHIEVEMENTS TAB (v8.55) ───────────────────────────────────
    Measured off store.epicgames.com/achievements/alan-wake-2, which is the
    whole page: a 255px band split between the key art and two statistics,
@@ -20079,11 +20227,22 @@ function buildEgsAchievementsPanel() {
 
   const xpTotal = list.reduce((n, x) => n + (x.xp || 0), 0);
   const anyXp   = list.some(x => x.xp);
+  const own     = (state.egsAchievements || []).filter(Boolean);
 
-  const stat = (label, value, empty) => `
+  /* EPIC REQUIRES EXACTLY 1,000, so the total says how far off it is rather
+     than only what it is. Silent until there is something to be wrong about:
+     a product with no XP yet is unfinished, which the rows already say. */
+  const xpOff = own.length && anyXp && xpTotal !== EGS_ACH_XP.total
+    ? (xpTotal > EGS_ACH_XP.total
+        ? `${xpTotal - EGS_ACH_XP.total} over Epic's 1,000`
+        : `${EGS_ACH_XP.total - xpTotal} short of Epic's 1,000`)
+    : '';
+
+  const stat = (label, value, empty, note) => `
     <div class="egs-sp-ach-stat">
       <span>${label}</span>
       <b>${value ? escHtml(value) : `<span class="egs-spp-placeholder">${empty}</span>`}</b>
+      ${note ? `<span class="egs-sp-ach-statnote">${escHtml(note)}</span>` : ''}
     </div>`;
 
   const bandHtml = `
@@ -20096,36 +20255,65 @@ function buildEgsAchievementsPanel() {
         ${stat('Available Achievements',
                list.length ? `${list.length} Achievement${list.length === 1 ? '' : 's'}` : '',
                'None yet')}
-        ${stat('Available XP', anyXp ? `${xpTotal} XP` : '', 'Not set')}
+        ${stat('Available XP', anyXp ? `${xpTotal} XP` : '', 'Not set', xpOff)}
       </div>
+    </div>`;
+
+  /* ADD IS ALWAYS THERE (v8.60), including on an empty tab — Epic's portal
+     is where achievements are really defined and the Steam import is only a
+     head start, so a product that has never touched Steam must still be able
+     to write one here. */
+  const addHtml = `
+    <div class="egs-sp-ach-add">
+      <button type="button" class="egs-sp-ach-addbtn" onclick="addEgsAchievement()">
+        + Add achievement</button>
+      ${own.length ? `<span class="egs-sp-ach-addnote">${own.length} achievement${
+        own.length === 1 ? '' : 's'}, ${xpTotal} of ${EGS_ACH_XP.total} XP</span>` : ''}
     </div>`;
 
   if (!list.length) {
     return `
       ${bandHtml}
+      ${addHtml}
       <div class="egs-sp-ach-empty">
-        Achievements arrive with the Steam import. Pick the game's Steam title in
-        Game Details and its achievements — names, descriptions and icons — land here.
+        No achievements yet. Add one here, or pick the game&rsquo;s Steam title in Game
+        Details and its achievements &mdash; names, descriptions and icons &mdash; land here
+        to start from.
       </div>`;
   }
 
-  const rows = list.map(x => `
-    <div class="egs-sp-ach-row">
-      <div class="egs-sp-ach-icon">${x.icon
-        ? `<img src="${escHtml(x.icon)}" alt="">`
-        : `<span class="egs-sp-ach-icon-empty">${trophySvg}</span>`}</div>
-      <div class="egs-sp-ach-text">
-        <div class="egs-sp-ach-name">${escHtml(x.name)}</div>
-        <div class="egs-sp-ach-desc">${x.description
-          ? escHtml(x.description)
-          : `<span class="egs-spp-placeholder">${x.hidden ? 'Hidden achievement' : 'No description'}</span>`}</div>
-        <div class="egs-sp-ach-xp">${x.xp
-          ? `${x.xp} XP`
-          : `<span class="egs-spp-placeholder">XP not set</span>`}${trophySvg}</div>
+  /* ONE ROW SHAPE, EDITABLE OR NOT. While the list is still the Steam import
+     the rows are a read-out, exactly as in v8.55; once it is Epic's own list
+     every row carries its id and opens its editor. The difference is the
+     `recordId` the resolver puts on an editable row, so there is no second
+     mode flag to get wrong. */
+  const rows = list.map(x => {
+    const rec  = x.recordId ? own.find(a => a.id === x.recordId) : null;
+    const open = !!(rec && rec.open);
+    return `
+    <div class="egs-sp-ach-row${rec ? ' is-editable' : ''}${open ? ' is-open' : ''}"
+         ${rec ? `onclick="toggleEgsAchievement('${rec.id}')"` : ''}>
+      <div class="egs-sp-ach-rowhead">
+        <div class="egs-sp-ach-icon">${x.icon
+          ? `<img src="${escHtml(x.icon)}" alt="">`
+          : `<span class="egs-sp-ach-icon-empty">${trophySvg}</span>`}</div>
+        <div class="egs-sp-ach-text">
+          <div class="egs-sp-ach-name">${x.name
+            ? escHtml(x.name)
+            : `<span class="egs-spp-placeholder">Untitled achievement</span>`}</div>
+          <div class="egs-sp-ach-desc">${x.description
+            ? escHtml(x.description)
+            : `<span class="egs-spp-placeholder">${x.hidden ? 'Hidden until unlocked' : 'No description'}</span>`}</div>
+          <div class="egs-sp-ach-xp">${x.xp
+            ? `${x.xp} XP`
+            : `<span class="egs-spp-placeholder">XP not set</span>`}${trophySvg}</div>
+        </div>
       </div>
-    </div>`).join('');
+      ${open ? buildEgsAchEditor(rec) : ''}
+    </div>`;
+  }).join('');
 
-  return `${bandHtml}<div class="egs-sp-ach-list">${rows}</div>`;
+  return `${bandHtml}${addHtml}<div class="egs-sp-ach-list">${rows}</div>`;
 }
 
 /* WHICH WELL A BLOCK WEARS (v8.58). Mac App Store draws a brighter resting

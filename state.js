@@ -3398,6 +3398,100 @@ function appStoreStepGateOn(pid) {
   return pid !== 'macos';
 }
 
+/* ── EPIC'S ACHIEVEMENT RULES, AS EPIC STATES THEM (v8.60) ────────────────
+   Every number here is quoted from Epic rather than chosen. The field set,
+   the 255s and the icon line are read off Create achievement in the Developer
+   Portal (Game Services > Achievements > Epic Online Services > Create
+   achievement, single achievement without stat); the XP rules are quoted from
+   dev.epicgames.com/docs/epic-games-store/services/epic-achievements/achievements-setup
+   under "XP Requirements for Epic Games Store Achievements":
+
+     Each product must have exactly 1,000 XP in total, regardless of how many
+     achievements are defined. The XP value for individual achievements must
+     be a multiple of 5. The minimum XP for a single achievement is 5, and the
+     maximum is 200. Bronze: 5-45 XP. Silver: 50-95 XP. Gold: 100-200 XP.
+
+   THE PLATINUM TIER IS NOT A VALUE YOU SET, which is why it is not in the
+   table below: Epic awards it to a player who earns the full 1,000 XP from
+   one product. A fourth row here would have invited a developer to pick it.
+
+   The 1,000 total can be raised — Epic grants up to 2,000 XP for each year a
+   product has been on the store, to a maximum of 5,000, on request. That is a
+   conversation with Epic rather than a field, so this card states the default
+   and says the request exists rather than pretending to grant it. */
+const EGS_ACH_CHAR_MAX = 255;
+const EGS_ACH_XP = { min: 5, max: 200, step: 5, total: 1000 };
+const EGS_ACH_TIERS = [
+  { id: 'bronze', label: 'Bronze', min: 5,   max: 45  },
+  { id: 'silver', label: 'Silver', min: 50,  max: 95  },
+  { id: 'gold',   label: 'Gold',   min: 100, max: 200 },
+];
+/* "256x256 px. PNG, JPG, BMP or GIF. 256KB maximum" — the portal's own line,
+   under both icon wells, verbatim. */
+const EGS_ACH_ICON = {
+  px: 256,
+  bytes: 256 * 1024,
+  accept: 'image/png,image/jpeg,image/bmp,image/gif',
+  types: ['image/png', 'image/jpeg', 'image/bmp', 'image/gif'],
+  note: '256x256 px. PNG, JPG, BMP or GIF. 256KB maximum',
+};
+
+/* Which tier an XP value falls in, or null for one that is not a legal value
+   at all. Used for the badge on the row and nothing else — the tier is a
+   read-out of the number, never a second place to set it. */
+function egsAchXpTier(xp) {
+  const n = parseInt(xp, 10);
+  if (!isFinite(n)) return null;
+  return EGS_ACH_TIERS.find(t => n >= t.min && n <= t.max) || null;
+}
+
+/* WHY AN XP VALUE IS REFUSED, in Epic's words, or null when it is fine. A
+   blank is not an error here: an achievement nobody has priced yet is
+   unfinished, which the row already says, and shouting at an empty field as
+   soon as it is drawn is how a form reads as broken. */
+function egsAchXpError(xp) {
+  const raw = (xp === null || xp === undefined) ? '' : String(xp).trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!isFinite(n) || !Number.isInteger(n)) return 'XP must be a whole number.';
+  if (n < EGS_ACH_XP.min || n > EGS_ACH_XP.max)
+    return `Epic allows ${EGS_ACH_XP.min} to ${EGS_ACH_XP.max} XP per achievement.`;
+  if (n % EGS_ACH_XP.step !== 0) return `XP must be a multiple of ${EGS_ACH_XP.step}.`;
+  return null;
+}
+
+/* THE PRODUCT'S TOTAL, which Epic requires to be exactly 1,000. Reads the
+   editable list only: the Steam import carries no XP at all (Steam has no
+   such field), so a total taken over it would always be 0 and would always
+   be wrong. */
+function egsAchXpTotal() {
+  return (state.egsAchievements || []).reduce((n, a) => {
+    const v = parseInt(a.xp, 10);
+    return n + (isFinite(v) ? v : 0);
+  }, 0);
+}
+
+/* A BLANK ACHIEVEMENT, in the portal's own shape. `tab` and `open` are
+   surface state riding on the record rather than a parallel map keyed by id:
+   there is one editor per achievement and it dies with it. */
+function makeBlankEgsAchievement() {
+  return {
+    id: (typeof generateId === 'function') ? generateId('egsach') : 'egsach' + Date.now(),
+    achievementId:       '',
+    visibility:          'shown',
+    lockedIcon:          null,
+    unlockedIcon:        null,
+    lockedDisplayName:   '',
+    lockedDescription:   '',
+    unlockedDisplayName: '',
+    unlockedDescription: '',
+    flavorText:          '',
+    xp:                  '',
+    tab:                 'unlocked',
+    open:                true,
+  };
+}
+
 /* ── EPIC: THE ACHIEVEMENTS THE PAGE SHOWS (v8.55) ────────────────────────
    One import, read from where it landed. Steam's achievements arrive once
    (_applySteamAchievements, app.js) and are written into each platform's own
@@ -3418,6 +3512,40 @@ function appStoreStepGateOn(pid) {
    published product — not submission data — so it is not on this page at
    all, the same reason the content rating card prints no ESRB letter. */
 function egsAchievements() {
+  /* EPIC'S OWN LIST WINS ONCE THERE IS ONE (v8.60). Until the developer adds
+     or edits an achievement there is nothing to show but the Steam import, so
+     the two paths below are unchanged and this card behaves exactly as it did
+     in v8.55. The moment they press Add, adoptEgsAchievements (app.js) copies
+     whatever was on screen into state.egsAchievements and that list is the
+     page from then on — one source, the rule this file keeps.
+
+     IN THE ORDER THEY WERE ADDED, not sorted. Epic's live page is
+     alphabetical and the two paths below still sort, because they are
+     read-outs; an EDITABLE row that jumps up the page as you type its name is
+     a row you cannot type into. */
+  const own = (state.egsAchievements || []).filter(Boolean);
+  if (own.length) {
+    return own.map(a => {
+      const hidden = a.visibility === 'hidden';
+      const xp = parseInt(a.xp, 10);
+      return {
+        /* WHAT A PLAYER SEES BEFORE UNLOCKING IT, because that is what a
+           store page shows. Epic's tooltip: a Hidden achievement is
+           "presented to users as a 'Hidden Achievement' with the icon that
+           was uploaded for them". So the row prints the locked face, and the
+           unlocked name a developer typed stays where it was typed. */
+        name:        hidden ? 'Hidden Achievement'
+                            : ((a.unlockedDisplayName || '').trim()
+                               || (a.lockedDisplayName || '').trim()),
+        description: hidden ? '' : (a.lockedDescription || '').trim()
+                                   || (a.unlockedDescription || '').trim(),
+        hidden,
+        icon:        ((hidden ? a.lockedIcon : (a.lockedIcon || a.unlockedIcon)) || {}).dataUrl || '',
+        xp:          (isFinite(xp) && xp > 0) ? xp : null,
+        recordId:    a.id,
+      };
+    });
+  }
   const gc = (state.macGameCenterAchievements || [])
     .filter(x => x && ((x.displayName || '').trim() || (x.refName || '').trim()));
   let out;
@@ -5502,6 +5630,12 @@ const state = {
      index belongs to the page, not to either half. Surface state, like the
      tab above. */
   egsMediaIndex: 0,
+
+  /* EPIC'S OWN ACHIEVEMENTS (v8.60) — the ones added and edited on the Store
+     Page Preview's Achievements tab, in the Developer Portal's own shape.
+     Empty until the developer adds one or adopts the Steam import; see
+     egsAchievements() for which list the page reads. */
+  egsAchievements: [],
   egsSubmitAnswers: makeBlankEgsAnswers(),
 
   /* Epic's Localizations surface state (v7.31). Which field is on screen,

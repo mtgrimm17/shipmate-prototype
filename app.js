@@ -23642,6 +23642,170 @@ function _egsGrowAll(root) {
   else arm();
 })();
 
+/* ══ EPIC'S ACHIEVEMENTS, ADDED AND EDITED ON THE PAGE (v8.60) ════════════
+   The Developer Portal's Create achievement form, moved onto the Store Page
+   Preview's Achievements tab. Every field, limit and rule is Epic's — see the
+   table at the top of state.js for where each number is quoted from. */
+
+/* ADOPTING WHAT IS ALREADY ON SCREEN. Until the first Add, this tab shows the
+   Steam import (egsAchievements, state.js) and shows it read-only. Pressing
+   Add cannot simply append to an empty list: the page would lose the eleven
+   achievements it was showing a moment ago and the developer would have to
+   retype them. So the first Add copies them in first, with their names,
+   descriptions and Steam's own icons, and from then on there is one list. */
+function adoptEgsAchievements() {
+  if (!state.egsAchievements) state.egsAchievements = [];
+  if (state.egsAchievements.length) return;
+  const shown = (typeof egsAchievements === 'function') ? egsAchievements() : [];
+  state.egsAchievements = shown.map(x => {
+    const a = makeBlankEgsAchievement();
+    a.open = false;
+    a.visibility          = x.hidden ? 'hidden' : 'shown';
+    a.unlockedDisplayName = x.name || '';
+    a.unlockedDescription = x.description || '';
+    /* Steam serves ONE icon per achievement and says nothing about locked or
+       unlocked, so it seeds the unlocked face — the one Epic requires — and
+       the locked well stays empty rather than claiming an answer Steam never
+       gave. */
+    a.unlockedIcon        = x.icon ? { name: 'Imported from Steam', dataUrl: x.icon } : null;
+    a.xp                  = x.xp ? String(x.xp) : '';
+    return a;
+  });
+}
+
+function addEgsAchievement() {
+  adoptEgsAchievements();
+  const a = makeBlankEgsAchievement();
+  state.egsAchievements.forEach(x => { x.open = false; });
+  state.egsAchievements.push(a);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  /* The new row is at the bottom of a list that may be long; put the caret in
+     its first field so Add is a thing you can keep doing from the keyboard. */
+  setTimeout(() => {
+    const el = document.getElementById('egs-ach-unlockedDisplayName-' + a.id);
+    if (el) { try { el.focus(); } catch (e) {} }
+  }, 0);
+}
+
+function _egsAch(id) {
+  return (state.egsAchievements || []).find(a => a && a.id === id) || null;
+}
+
+function removeEgsAchievement(id) {
+  state.egsAchievements = (state.egsAchievements || []).filter(a => a && a.id !== id);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function toggleEgsAchievement(id) {
+  const a = _egsAch(id);
+  if (!a) return;
+  const wasOpen = a.open;
+  state.egsAchievements.forEach(x => { x.open = false; });
+  a.open = !wasOpen;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* LOCKED AND UNLOCKED ARE TABS, by request. The portal lists all six fields
+   flat under PLAYER-FACING DETAILS; two tabs say the same thing in half the
+   height and make the pairing obvious — this name goes with this icon, in
+   this state. */
+function setEgsAchTab(id, tab) {
+  const a = _egsAch(id);
+  if (!a) return;
+  a.tab = (tab === 'locked') ? 'locked' : 'unlocked';
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* A FIELD EDIT DOES NOT REPAINT THE PAGE. These are live inputs inside a card
+   that re-renders wholesale, and a repaint per keystroke would take the caret
+   with it. The row above only shows the unlocked name, the icon and the XP,
+   so those three repaint on `change` (committed on blur) and the rest simply
+   store. */
+function setEgsAchField(id, key, value) {
+  const a = _egsAch(id);
+  if (!a) return;
+  a[key] = (value === null || value === undefined) ? '' : String(value);
+}
+function commitEgsAchField(id, key, value) {
+  setEgsAchField(id, key, value);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* HIDDEN DISABLES THE LOCKED TEXT, and that is Epic's own behaviour rather
+   than a reading of it: switching Visibility to Hidden in the portal disables
+   lockedDisplayName and lockedDescription on the spot and leaves both icons
+   and everything else alone. The text already typed is KEPT, not cleared —
+   switching back to Shown in the portal brings it back, and a control that
+   silently destroys what you wrote is not one anybody should copy. */
+function setEgsAchVisibility(id, visibility) {
+  const a = _egsAch(id);
+  if (!a) return;
+  a.visibility = (visibility === 'hidden') ? 'hidden' : 'shown';
+  /* AND IT DOES NOT MOVE YOU OFF THE LOCKED TAB. The first version jumped to
+     Unlocked on the grounds that the tab you were on had just lost its two
+     text fields — but the Locked tab still has the icon, which for a hidden
+     achievement is the ONLY thing a player sees, and the greyed pair with the
+     note under it is what teaches the rule. Jumping away hides the
+     explanation at the exact moment it is relevant. */
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function setEgsAchXp(id, value) {
+  const a = _egsAch(id);
+  if (!a) return;
+  a.xp = (value || '').toString().replace(/[^0-9]/g, '').slice(0, 4);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* THE ICON WELLS. Same FileReader → dataUrl path as every other image in this
+   app (handleMacGcAchievementImage above), with Epic's three conditions
+   checked against the file rather than taken on trust: the type, the 256KB,
+   and the 256x256. The first two REFUSE — Epic's upload does — and the third
+   warns, because the dimensions are only knowable once the image has decoded
+   and a developer who has just dropped a 512px icon is better served by being
+   told than by a well that silently stays empty. */
+function handleEgsAchIcon(event, id, which) {
+  const file = event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  const a = _egsAch(id);
+  if (!a) return;
+  const key = (which === 'locked') ? 'lockedIcon' : 'unlockedIcon';
+  if (EGS_ACH_ICON.types.indexOf(file.type) < 0) {
+    a[key] = { name: file.name, dataUrl: '', error: 'Epic takes PNG, JPG, BMP or GIF.' };
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    return;
+  }
+  if (file.size > EGS_ACH_ICON.bytes) {
+    a[key] = { name: file.name, dataUrl: '',
+               error: `That file is ${Math.round(file.size / 1024)}KB. Epic's limit is 256KB.` };
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const bad = (img.naturalWidth !== EGS_ACH_ICON.px || img.naturalHeight !== EGS_ACH_ICON.px)
+        ? `That icon is ${img.naturalWidth}x${img.naturalHeight}. Epic asks for 256x256.` : '';
+      a[key] = { name: file.name, dataUrl, warn: bad };
+      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    };
+    img.onerror = () => {
+      a[key] = { name: file.name, dataUrl };
+      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+function removeEgsAchIcon(id, which) {
+  const a = _egsAch(id);
+  if (!a) return;
+  a[(which === 'locked') ? 'lockedIcon' : 'unlockedIcon'] = null;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 /* DRIVING EPIC'S CAROUSEL (v8.56). Two ways in, one index: a thumbnail says
    which item, an arrow says which way. stepEgsMedia wraps at both ends, as
    Epic's does. The list the index points into is rebuilt by the renderer from

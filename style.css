@@ -30069,6 +30069,234 @@ textarea.egs-sp-body {
   line-height: 19.6px;
   color: var(--epic-fg-2);
 }
+/* ── THE ACHIEVEMENT EDITOR (v8.60) ──────────────────────────────────────
+   Epic's Create achievement form inside the row it belongs to. It takes this
+   page's own well (v8.58's tokens) rather than the app's form chrome, because
+   it is drawn on the store page and not in a step modal. */
+.egs-sp .egs-sp-ach-add {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 80%;
+  margin: 0 auto 8px;
+  padding: 16px 0 4px;
+}
+.egs-sp .egs-sp-ach-addbtn {
+  border: 1px solid var(--epic-well-line-todo);
+  background: transparent;
+  color: var(--epic-fg);
+  border-radius: var(--epic-well-radius);
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.28px;
+  cursor: pointer;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-sp-ach-addbtn:hover {
+  border-color: var(--epic-well-line-hover);
+  background: var(--epic-well-fill);
+}
+.egs-sp .egs-sp-ach-addnote {
+  font-size: 14px;
+  letter-spacing: 0.28px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-sp-ach-statnote {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  letter-spacing: 0.36px;
+  color: #ffb44d;
+}
+.egs-sp .egs-sp-ach-row.is-editable { cursor: pointer; }
+.egs-sp .egs-sp-ach-row { flex-direction: column; }
+.egs-sp .egs-sp-ach-rowhead { display: flex; width: 100%; }
+.egs-sp .egs-sp-ach-row.is-open { background: var(--epic-well-fill); }
+
+/* The editor itself */
+.egs-sp .egs-ach-editor {
+  width: 100%;
+  margin-top: 20px;
+  padding: 20px 0 4px;
+  border-top: 1px solid var(--epic-well-line);
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.egs-sp .egs-ach-field { display: flex; flex-direction: column; gap: 6px; }
+.egs-sp .egs-ach-field.is-disabled { opacity: .45; }
+.egs-sp .egs-ach-label {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.28px;
+  line-height: 19.6px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-ach-req { color: #e0555a; }
+.egs-sp .egs-ach-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--epic-well-fill);
+  border: 1px solid var(--epic-well-line-todo);
+  border-radius: var(--epic-well-radius);
+  padding: 8px 12px;
+  color: var(--epic-fg);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 19.6px;
+  letter-spacing: 0.28px;
+  resize: vertical;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-ach-input:hover:not(:disabled),
+.egs-sp .egs-ach-input:focus { outline: none; border-color: var(--epic-well-line-hover); }
+.egs-sp .egs-ach-input:disabled { cursor: not-allowed; }
+.egs-sp .egs-ach-input::placeholder { color: var(--epic-fg-2); }
+.egs-sp .egs-ach-input.is-over-limit { border-color: #ff2d9b; }
+.egs-sp .egs-ach-note {
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-ach-note.is-err { color: #ff2d9b; }
+.egs-sp .egs-ach-note.is-lead { margin-bottom: 2px; }
+
+/* Visibility, and the Locked / Unlocked pair */
+.egs-sp .egs-ach-segs {
+  display: flex;
+  padding: 3px;
+  gap: 3px;
+  background: rgba(255, 255, 255, .06);
+  border-radius: 9999px;
+}
+.egs-sp .egs-ach-seg {
+  flex: 1 1 0%;
+  border: none;
+  background: none;
+  color: var(--epic-fg-2);
+  border-radius: 9999px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.28px;
+  cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.egs-sp .egs-ach-seg:hover { color: var(--epic-fg); }
+.egs-sp .egs-ach-seg.is-on { background: #fff; color: #101014; }
+.egs-sp .egs-ach-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--epic-well-line);
+}
+.egs-sp .egs-ach-tab {
+  border: none;
+  background: none;
+  padding: 0 0 10px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--epic-fg-2);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.28px;
+  cursor: pointer;
+  transition: color .12s ease, border-color .12s ease;
+}
+.egs-sp .egs-ach-tab:hover { color: var(--epic-fg); }
+.egs-sp .egs-ach-tab.is-on { color: var(--epic-fg); border-bottom-color: var(--epic-fg); }
+.egs-sp .egs-ach-pane { display: flex; flex-direction: column; gap: 18px; }
+
+/* The icon wells */
+.egs-sp .egs-ach-icon-well {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--epic-well-line-todo);
+  border-radius: var(--epic-well-radius);
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-ach-icon-well:hover { border-color: var(--epic-well-line-hover); background: var(--epic-well-fill); }
+.egs-sp .egs-ach-icon-well.has-file { border-style: solid; background: var(--epic-well-fill); }
+.egs-sp .egs-ach-icon-well.is-bad { border-color: #ff2d9b; }
+.egs-sp .egs-ach-icon-thumb,
+.egs-sp .egs-ach-icon-slot {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .06);
+  object-fit: cover;
+  display: block;
+}
+.egs-sp .egs-ach-icon-text { flex: 1 1 0%; min-width: 0; }
+.egs-sp .egs-ach-icon-browse {
+  display: block;
+  font-size: 14px;
+  letter-spacing: 0.28px;
+  color: var(--epic-fg);
+  cursor: pointer;
+}
+.egs-sp .egs-ach-icon-browse u { color: var(--epic-accent); text-decoration: none; }
+.egs-sp .egs-ach-icon-note {
+  margin-top: 2px;
+  font-size: 12px;
+  letter-spacing: 0.36px;
+  color: var(--epic-fg-2);
+}
+.egs-sp .egs-ach-icon-err  { margin-top: 4px; font-size: 12px; color: #ff2d9b; }
+.egs-sp .egs-ach-icon-warn { margin-top: 4px; font-size: 12px; color: #ffb44d; }
+.egs-sp .egs-ach-icon-input { position: absolute; width: 0; height: 0; opacity: 0; }
+.egs-sp .egs-ach-icon-x {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--epic-fg-2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.egs-sp .egs-ach-icon-x:hover { color: var(--epic-fg); }
+
+/* XP and its tier */
+.egs-sp .egs-ach-xprow { display: flex; align-items: center; gap: 10px; }
+.egs-sp .egs-ach-xpinput { width: 96px; flex: 0 0 96px; }
+.egs-sp .egs-ach-tier {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  letter-spacing: 0.36px;
+  color: #101014;
+  font-weight: 500;
+}
+.egs-sp .egs-ach-tier.is-bronze { background: #cd7f44; }
+.egs-sp .egs-ach-tier.is-silver { background: #c8ccd4; }
+.egs-sp .egs-ach-tier.is-gold   { background: #e8b64c; }
+
+.egs-sp .egs-ach-editor-foot { display: flex; justify-content: flex-end; }
+.egs-sp .egs-ach-remove {
+  border: 1px solid var(--epic-well-line);
+  background: none;
+  color: var(--epic-fg-2);
+  border-radius: var(--epic-well-radius);
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.28px;
+  cursor: pointer;
+  transition: border-color .12s ease, color .12s ease;
+}
+.egs-sp .egs-ach-remove:hover { border-color: #ff2d9b; color: #ff2d9b; }
 .egs-sp .egs-sp-ach-empty {
   width: 80%;
   margin: 0 auto;
