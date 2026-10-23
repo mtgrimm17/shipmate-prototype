@@ -31516,7 +31516,7 @@ document.addEventListener('pointerdown', e => {
 (() => {
   const rowId = el => {
     const row = el && el.closest && el.closest('#app-guide .gd-task');
-    const m = row && /chkGoStep\('spp:([a-z]+)'\)/.exec(row.getAttribute('onclick') || '');
+    const m = row && /chkGoStep\('spp:([A-Za-z]+)'\)/.exec(row.getAttribute('onclick') || '');
     return m ? m[1] : null;
   };
   const paint = (id, on) => document.querySelectorAll(`.egs-sp [data-spp-el="${id}"]`)

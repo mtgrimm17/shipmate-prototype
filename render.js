@@ -10343,13 +10343,29 @@ function sppRequiredElements(pid, lang) {
     const shots = (typeof platformStoreShots === 'function') ? platformStoreShots('egs') : [];
     const pool  = (typeof smPool === 'function') ? smPool() : [];
     return [
+      /* IN THE ORDER THE PAGE READS (v8.70). Jaco: "¿puedes ordenar los
+         conceptos de Shippy según salen en la store?" Top to bottom, left
+         before right, as Epic lays it out (measured y on the page: name 173,
+         Achievements tab 224, carousel 269 beside the Content Rating card
+         259, buy box 327, short description 574, long description 739,
+         Social Media 778, System Requirements 837). */
       { id: 'title',        label: 'Title',             required: true,  done: !!(fd.title || '').trim() },
-      { id: 'subtitle',     label: 'Short Description', required: true,  done: !!(typeof egsShortDesc === 'function' && (egsShortDesc() || '').trim()) },
-      { id: 'business',     label: 'Business',          required: true,  done: !!(a.price && dev && pub) },
-      { id: 'content',      label: 'Content',           required: true,  done: cq.total > 0 && cq.answered === cq.total },
-      { id: 'screenshots',  label: 'Media Carousel',    required: true,  done: shots.length > 0 || pool.some(x => x.kind === 'art-land' && x.src), short: 'Media Carousel' },
-      { id: 'description',  label: 'Description',       required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
       { id: 'achievements', label: 'Achievements',      required: false, done: true },
+      { id: 'screenshots',  label: 'Media Carousel',    required: true,  done: shots.length > 0 || pool.some(x => x.kind === 'art-land' && x.src), short: 'Media Carousel' },
+      { id: 'content',      label: 'Content',           required: true,  done: cq.total > 0 && cq.answered === cq.total },
+      { id: 'business',     label: 'Business',          required: true,  done: !!(a.price && dev && pub) },
+      { id: 'subtitle',     label: 'Short Description', required: true,  done: !!(typeof egsShortDesc === 'function' && (egsShortDesc() || '').trim()) },
+      { id: 'description',  label: 'Description',       required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
+      /* Two more of Epic's own sections, as rows (v8.70). Jaco: "añade Social
+         Media y System Requirements como pasos de Shippy." Each row's tick is
+         its step's own (isEgsSectionComplete): Social Media is optional and
+         goes green once visited; System Requirements once every supported OS
+         has its minimums. The footers on the page carry data-spp-el, so the
+         row opens the step and hover outlines the footer like the others. */
+      { id: 'socialMedia',    label: 'Social Media',        required: false,
+        done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('socialMedia') },
+      { id: 'specifications', label: 'System Requirements', required: true,
+        done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('specifications') },
     ];
   }
   const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
@@ -20785,7 +20801,7 @@ function buildEgsStorePreviewSection() {
      is for instead — and says it in the heading rather than in a sentence
      underneath, which is what the glow is already for. */
   const followHtml = `
-    <div class="egs-sp-foot ${egsHitCls(socialLinks.length)}"
+    <div class="egs-sp-foot ${egsHitCls(socialLinks.length)}" data-spp-el="socialMedia"
          onclick="openStepModal('egs','socialMedia')">
       <div class="egs-spp-h2">${socialLinks.length ? 'Follow Us' : 'Social Media Links'}</div>
       ${socialLinks.length
@@ -20816,7 +20832,7 @@ function buildEgsStorePreviewSection() {
   };
   const specTables = supported.map(specTable).filter(Boolean).join('');
   const sysHtml = `
-    <div class="egs-sp-foot ${egsHitCls(specTables)}"
+    <div class="egs-sp-foot ${egsHitCls(specTables)}" data-spp-el="specifications"
          onclick="openStepModal('egs','specifications')">
       <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
       ${specTables}

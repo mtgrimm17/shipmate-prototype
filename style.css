@@ -30688,3 +30688,7 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-tabs [data-spp-el="achievements"].is-spp-hover {
   outline: 1px solid var(--purple); outline-offset: 5px; border-radius: 6px;
 }
+/* Social Media and System Requirements footers under Shippy's hover (v8.70):
+   they are .egs-sp-hit blocks whose line is an inset ring, so the ring is
+   what turns purple. */
+.egs-sp .egs-sp-foot.egs-sp-hit.is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple); }
