@@ -18876,7 +18876,15 @@ function buildEgsContentRatingSection() {
     // Jaco: "¿podemos convertir esta en triple pill también?" The question
     // keeps IARC's wording; only the two "Yes, …" answers are shortened.
     'google.content.humaninnocents': { title: 'Innocent or Defenseless Characters Can Be Seriously Injured or Killed',
-                                       order: [1, 2, 3], opts: { 1: 'No', 2: 'With penalties', 3: 'Without penalties' } },
+                                       order: [1, 2, 3], opts: { 1: 'No', 2: 'Penalized', 3: 'Unpenalized' } },
+    /* Level of blood: "Mild/Limited" was the one label wider than the pill
+       column (v8.65); IARC's wording stays in the hint. */
+    'google.content.humanbloodlevel':    { opts: { 1: 'None', 2: 'Mild', 3: 'Moderate', 4: 'High' } },
+    /* Fear's two frequency questions say "Rare"; every other frequency row
+       says "Rarely". Same word, same pill size. */
+    'google.content.scaryfreq':      { opts: { 1: 'Rarely', 2: 'Often' } },
+    'google.content.horrifyingfreq': { opts: { 1: 'Rarely', 2: 'Often' } },
+    'google.content.nonhumanbloodlevel': { opts: { 1: 'None', 2: 'Mild', 3: 'Moderate', 4: 'High' } },
 
     /* THE REST OF THE QUESTIONNAIRE, SAME TREATMENT (v8.61). Jaco: "igual que
        ayer adaptamos violencia al nuevo estilo, ¿puedes adaptar el resto de
@@ -18887,11 +18895,11 @@ function buildEgsContentRatingSection() {
     'google.content.nonviolentgore':  { title: 'Gory Images Without a Violent Act: Level of Detail',
                                         opts: { 1: 'Limited', 2: 'Moderate', 3: 'Graphic' } },
     'google.content.nonviolentblood': { title: 'Blood Unrelated to Violence: Amount',
-                                        opts: { 1: 'Small, infrequent', 2: 'Large or frequent' } },
-    'google.content.sexdepiction':    { title: 'Depiction', opts: { 1: 'Obscured', 2: 'No nudity', 3: 'Partial', 4: 'Full frontal' } },
-    'google.content.sexualviolence':  { title: 'Sexual Violence: Presentation', opts: { 1: 'Depicted', 2: 'Referred to only' } },
+                                        opts: { 1: 'Small', 2: 'Large' } },
+    'google.content.sexdepiction':    { title: 'Depiction', opts: { 1: 'Obscured', 2: 'No nudity', 3: 'Partial', 4: 'Full nudity' } },
+    'google.content.sexualviolence':  { title: 'Sexual Violence: Presentation', opts: { 1: 'Depicted', 2: 'Referred to' } },
     'google.content.illegaldrugs':    { title: 'Illegal or Recreational Drugs: Presentation',
-                                        opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages', 4: 'Instructions' } },
+                                        opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages', 4: 'How-to' } },
     'google.content.fantdrugs':       { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
     'google.content.meddrugs':        { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
     'google.content.alcohol':         { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
@@ -19047,6 +19055,16 @@ function buildEgsContentRatingSection() {
     return `<div class="giarc-children giarc-preview">${kids.map(k => renderGIARCQuestion(k, depth)).join('')}</div>`;
   }
 
+  /* Questions whose IARC title would need three lines in the modal (v8.65):
+     a third line grows the row and breaks the even pill spacing. The subject
+     is already named by the row above (the "Casino games…" type row), so the
+     title can start at what is actually being asked; IARC's full wording
+     stays in the hint. */
+  const EGS_SHORT_TITLES = {
+    'google.content.casinorewards': 'Cash Payouts or Rewards of Significant Monetary Value',
+    'google.content.bingorewards':  'Cash Payouts or Rewards of Significant Monetary Value',
+  };
+
   function egsInlineable(q) {
     if (EGS_ROW_OVERRIDES[q.key]) return true;
     const o = giarcOptionEntries(q).map(x => x.text || '');
@@ -19197,6 +19215,20 @@ function buildEgsContentRatingSection() {
   }
 
   /* Label left, answers right, one line — see the note on egsInlineable. */
+  /* THREE PILL SIZES, PER PILL (v8.65). Jaco: "un tamaño predefinido para
+     palabras largas, otro para medias y otro para las yes/no" — and then, of
+     a row-wide size: "no utilices el mismo ancho en cada fila si no hace
+     falta, solo si las palabras son semejantes. En No, Penalized,
+     Unpenalized, No claramente debería ser pill tipo No." So each pill takes
+     the size of its OWN label (the type is monospaced, so characters are
+     width): up to 4 → S 52px (the App Store's Yes/No), up to 9 → M 90px,
+     longer → L 105px. Similar words land in the same size and line up;
+     a short word next to long ones stays short. */
+  function egsPillTier(label) {
+    const n = String(label).length;
+    return n <= 4 ? 's' : n <= 9 ? 'm' : 'l';
+  }
+
   function buildGIARCInlineRow(q, key, title, tooltipHTML, checkHTML, collapseBtnHTML, depth, index) {
     const isMulti = q.data_type === 'picklist_multi';
     const cur = state.cqAnswers[key];
@@ -19219,7 +19251,7 @@ function buildEgsContentRatingSection() {
                          : `answerGIARCSingle('${key}',${opt.index})`;
       const cls = yesNo
         ? `yn-btn ${opt.index === 1 ? 'yn-yes' : 'yn-no'}${on ? ' is-selected' : ''}`
-        : `intensity-btn giarc-pill${on ? ' is-sel-none' : ''}`;
+        : `intensity-btn giarc-pill giarc-pill-${egsPillTier(ovr ? ovr.opts[opt.index] : opt.text)}${on ? ' is-sel-none' : ''}`;
       const label = ovr ? ovr.opts[opt.index] : opt.text;
       const hint  = ovr ? ` data-tip="${escHtml(opt.text)}"` : '';
       return `<button type="button" class="${cls}${egsAiClass(key, opt.index)}"${hint}
@@ -19229,7 +19261,7 @@ function buildEgsContentRatingSection() {
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(ovr && ovr.title ? ovr.title : egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
+          <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(ovr && ovr.title ? ovr.title : (EGS_SHORT_TITLES[key] || egsOwnTitle(key, title)))}</span>${tooltipHTML}</div>
           <div class="${yesNo ? 'question-yn' : 'intensity-group'}">${segs}</div>
           ${collapseBtnHTML}
         </div>
@@ -19393,7 +19425,11 @@ function buildEgsContentRatingSection() {
        wording has no label to stick, so it gets no wrapper either. */
     const html = runs.map(r => {
       const body = r.keys.map(ck => renderGIARCQuestion(ck, depth)).join('');
-      if (!r.pre || only) return body;
+      /* No run labels inside Epic's blocks any more (v8.65): every follow-up
+         now hangs directly under the row that opened it, which already names
+         the subject, and a label at the top of a block pushed the rail's
+         start 39px above the first pill. */
+      if (!r.pre || only || true) return body;
       return `<div class="giarc-run">`
            + `<div class="giarc-sec-label">${escHtml(r.pre.slice(0, -2))}</div>`
            + body

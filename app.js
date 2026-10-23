@@ -23132,20 +23132,129 @@ function _egsEnsureRevealed(key) {
     giarcActiveChildKeys(parent.key).forEach(giarcClearAnswersRecursively);
     state.cqAnswers[parent.key] = opt.index;
   }
-  state.cqAnswerMeta[parent.key] = { ...(state.cqAnswerMeta[parent.key] || {}), humanConfirmed: true };
+  // `egsAuto`: Shipmate set this on the developer's behalf, so it can be
+  // taken back when what caused it is taken back (_egsCollapseAuto).
+  state.cqAnswerMeta[parent.key] = { ...(state.cqAnswerMeta[parent.key] || {}), humanConfirmed: true, egsAuto: true };
 }
+
+/* …AND TAKING THAT ANSWER BACK TAKES THE YES BACK (v8.65). Jaco: "si
+   selecciono en una subpregunta NO, automáticamente me pone la parent YES,
+   pero si quito el NO, me debería quitar también el YES de arriba." Walks up
+   from the question just changed: an ancestor whose answer Shipmate set
+   (`egsAuto`), that is still on the path to it, and none of whose revealed
+   follow-ups now holds any answer — a tick, a value or an explicit NO — goes
+   back to unanswered. It stops at the first ancestor the developer answered
+   themselves, or that still has something under it. */
+function _egsParentOf(key) {
+  const p = GOOGLE_IARC_QUESTIONS.find(q =>
+    giarcOptionEntries(q).some(o => giarcChildKeysForOption(o.child).includes(key)));
+  if (!p) return null;
+  return { q: p, opt: giarcOptionEntries(p).find(o => giarcChildKeysForOption(o.child).includes(key)) };
+}
+function _egsHasAnyAnswer(k) {
+  return giarcIsAnswered(k) || ((state.egsTypeNo || {})[k] || []).length > 0;
+}
+function _egsCollapseAuto(key) {
+  let changed = false, k = key;
+  for (let up = _egsParentOf(k); up; up = _egsParentOf(k)) {
+    const p = up.q, m = state.cqAnswerMeta[p.key];
+    if (!m || !m.egsAuto) break;
+    const cur = state.cqAnswers[p.key];
+    const onPath = Array.isArray(cur) ? cur.includes(up.opt.index) : cur === up.opt.index;
+    if (!onPath) break;
+    if (giarcActiveChildKeys(p.key).some(_egsHasAnyAnswer)) break;
+    giarcActiveChildKeys(p.key).forEach(c => { if (state.egsTypeNo) delete state.egsTypeNo[c]; });
+    if (Array.isArray(cur) && cur.length > 1) {
+      state.cqAnswers[p.key] = cur.filter(i => i !== up.opt.index);   // a type among others: untick just it
+    } else {
+      delete state.cqAnswers[p.key];
+      delete state.cqAnswerMeta[p.key];
+    }
+    changed = true;
+    k = p.key;
+  }
+  return changed;
+}
+
 
 ['answerGIARCSingle', 'answerGIARCMultiOpt', 'answerGIARCTypeRow'].forEach(name => {
   const orig = window[name];
   if (typeof orig !== 'function') return;
   window[name] = function (key, idx) {
-    if (state.stepModal?.platformId === 'egs') _egsEnsureRevealed(key);
+    const egs = state.stepModal?.platformId === 'egs';
+    if (egs) {
+      // A press on this question itself makes it the developer's answer.
+      if (state.cqAnswerMeta[key]) delete state.cqAnswerMeta[key].egsAuto;
+      _egsEnsureRevealed(key);
+    }
     const before = giarcActiveChildKeys(key);
     const out = orig.apply(this, arguments);
+    if (egs && _egsCollapseAuto(key)) { reRenderAndroidStepModal(); updateAndroidCard(); }
     _egsRevealNew(key, before, name === 'answerGIARCTypeRow' ? idx : null);
     return out;
   };
 });
+
+/* THE "?" SITS AFTER THE FIRST LINE'S LAST WORD (v8.65). Jaco: "¿podemos
+   hacer que el tooltip de interrogación siempre esté a x píxeles de la
+   última palabra de la línea primera? Veo desfases."
+
+   The desfase is a CSS fact, not a bug in any rule: a box whose text WRAPS
+   takes the full width it was offered, not the width of its longest line, so
+   a flex sibling placed after it lands at the box's edge — 40px past "Can
+   Be" on one row, 2px past "Characters," on the next. No CSS property sizes
+   a wrapped box to its lines.
+
+   So the line is measured instead. For each wrapped question, the first
+   line's right edge is read off a Range over the title's text, and the "?" is
+   placed 6px after it — the same 6px gap a one-line question already gets
+   from the label's flex gap — on that line's centre. One-line questions are
+   left exactly as they are. The label keeps 22px of right padding so a long
+   first line can never run under the "?". Runs after every change to the
+   Epic step and on resize; costs one Range per wrapped row. */
+function _egsPinTips(root) {
+  const scope = root || document;
+  scope.querySelectorAll('.giarc-flat .giarc-row-label').forEach(label => {
+    const title = label.querySelector('.giarc-title');
+    const tip   = label.querySelector(':scope > .tooltip-anchor');
+    if (!title || !tip) return;
+    tip.style.position = ''; tip.style.left = ''; tip.style.top = '';
+    label.classList.remove('giarc-tip-pinned');
+    const range = document.createRange();
+    range.selectNodeContents(title);
+    const rects = [...range.getClientRects()].filter(r => r.width > 0);
+    if (!rects.length) return;
+    const top0 = Math.min(...rects.map(r => r.top));
+    const first = rects.filter(r => Math.abs(r.top - top0) < 3);
+    if (first.length === rects.length) return;            // one line: flex gap already does it
+    const lb = label.getBoundingClientRect();
+    const right = Math.max(...first.map(r => r.right));
+    const lineH = Math.max(...first.map(r => r.height));
+    label.classList.add('giarc-tip-pinned');
+    const tb = tip.getBoundingClientRect();
+    tip.style.position = 'absolute';
+    tip.style.left = Math.round(right - lb.left + 6) + 'px';
+    tip.style.top  = Math.round(top0 - lb.top + (lineH - tb.height) / 2) + 'px';
+  });
+}
+(() => {
+  let queued = false;
+  const run = () => { queued = false; _egsPinTips(); };
+  /* A MICROTASK, NOT A TIMER (v8.65). Jaco: "veo bailar el tooltip de la
+     siguiente pregunta cuando cambio choices de la primera." Every answer
+     re-renders the step, which draws each "?" in the flow first; a timer then
+     moved it to its pinned place one frame LATER, so a frame was painted with
+     the "?" at the box edge — a jump on every click. Microtasks run before the
+     browser paints, so the first frame drawn already has it in place. */
+  const queue = () => { if (!queued) { queued = true; queueMicrotask(run); } };
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver(muts => {
+      if (muts.some(m => [...m.addedNodes].some(n => n.nodeType === 1 &&
+          (n.matches?.('.giarc-flat, .giarc-flat *') || n.querySelector?.('.giarc-flat'))))) queue();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+  window.addEventListener('resize', queue);
+})();
 
 function toggleGiarcPicker(event, key) {
   event.stopPropagation();

@@ -30404,3 +30404,79 @@ textarea.egs-sp-body {
 .giarc-flat .giarc-preview > .giarc-card:hover { opacity: .58; }
 .giarc-flat .giarc-preview .is-selected,
 .giarc-flat .giarc-preview .is-sel-none { background: var(--pill-off-bg); color: var(--pill-off-color); }
+
+/* THE SECOND LAYER BREATHES (v8.65). Jaco: "la segunda capa de indented
+   (pregunta de sub pregunta) podría tener un poco más de espacio vertical para
+   que se leyera distinto." A type's own questions (Setting, Style… under
+   "Against humans") sat at the same 8px rhythm as the type rows around them,
+   so the block read as more of the same list. 8px above and 14px below set it
+   apart as a unit that belongs to the row over it, and mark where the next
+   type row resumes. The first level (type rows under a topic) is unchanged. */
+.giarc-flat .giarc-children .giarc-children { margin: 8px 0 14px; }
+
+/* THREE PILL SIZES, CHOSEN PER PILL (v8.65). Measured, Epic's answer pills
+   ran 52–150px wide and no two rows lined up. Passes tried and dropped in
+   this batch: one 105px size for every pill ("None, Mild, Moderate, High son
+   demasiado anchas"), then one size per row ("No, Penalized, Unpenalized —
+   No claramente debería ser pill tipo No"). What stays is Jaco's rule, per
+   pill: egsPillTier (render.js) sizes each pill by its own label —
+     S  52px   No, None, High, Mild, Use      (the App Store's Yes/No)
+     M  90px   Rarely, Often, Moderate, Pixelated, Realistic
+     L 105px   Fantastical, Unrealistic, Unpenalized, Encourages
+   Rows stay right-aligned, so pills of the same size stack in columns
+   wherever the words are alike, and a short word is never padded out. */
+.giarc-flat .intensity-btn.giarc-pill-s { width: 52px;  min-width: 52px;  padding-left: 0; padding-right: 0; }
+.giarc-flat .intensity-btn.giarc-pill-m { width: 90px;  min-width: 90px;  padding-left: 0; padding-right: 0; }
+.giarc-flat .intensity-btn.giarc-pill-l { min-width: 105px; }
+/* The Presentation picker is as wide as Setting's and Reactions' pair
+   (105 + 6 + 105), the rows it sits between. */
+.giarc-flat .giarc-row .giarc-picker { width: 216px; min-width: 216px; max-width: 216px; }
+
+/* The "?" of a wrapped question is placed by _egsPinTips (app.js) just after
+   its first line; the label is its positioning box, and keeps 22px clear on
+   the right so a first line can never run under it. */
+.giarc-flat .giarc-row-label { position: relative; }
+.giarc-flat .giarc-row-label.giarc-tip-pinned { padding-right: 22px; }
+
+/* The second-level questions (Setting, Style… under "Against humans") were
+   10px apart pill to pill, against 12px from a topic's pills to its first
+   type row's. Jaco asked for the same spacing; 2px more margin evens it. */
+.giarc-flat .giarc-children .giarc-children > .giarc-card.giarc-inline { margin-bottom: 10px; }
+
+/* EVERY PILL THE SAME DISTANCE FROM THE NEXT (v8.65). Jaco: "veo
+   separaciones verticales entre pills que varían entre 12, 15 y 17px,
+   deberían ser iguales siempre." Measured: a row is 34px and its pills are
+   centred in it, so pill-to-pill is 12px — until a question wraps. Two lines
+   at the App Store's 1.4 line-height are 39px, the row grows to fit, the
+   pills re-centre, and the gaps on either side become 15 and 17.
+
+   A wrapped question now sets at 17px a line, so two lines are exactly the
+   34px a row already is and nothing re-centres: 12px between every pair of
+   pills. One-line questions look the same as before (a single line is
+   centred either way); only the space between a question's own two lines
+   tightens, from 19.6 to 17. A question that needs three lines — only in a
+   narrow window — still grows its row. */
+.giarc-flat .giarc-card .giarc-row-label,
+.giarc-flat .giarc-card .giarc-row-label .giarc-title { line-height: 17px; }
+/* …and the same 12px between EVERY pair of one-line rows, not only inside a
+   type's block: first-level type rows were still 10px apart. */
+.giarc-flat .giarc-children > .giarc-card.giarc-inline { margin-bottom: 10px; }
+
+/* THE RAIL RUNS PILL TO PILL (v8.65). Jaco: "la barra lateral que va marcando
+   la indentación debería ocupar de altura desde el top de la primera pill
+   hasta el bottom de la última pill." Measured, it was a border on the block,
+   so it began 1px above the first pill (the row is 34px, the pill 32 and
+   centred) and ran 11px past the last one (that row's 10px margin, kept inside
+   a flex column). Now it is drawn as its own 2px line, inset 1px at each end,
+   and the block's last row gives its margin to the block instead — so the
+   line starts and stops exactly with the pills, and the space after the block
+   is unchanged (14 + 10 = 24px). */
+.giarc-flat .giarc-children .giarc-children {
+  border-left: none; position: relative; padding-left: 16px; margin: 8px 0 24px;
+}
+.giarc-flat .giarc-children .giarc-children > .giarc-card.giarc-inline:last-child,
+.giarc-flat .giarc-children .giarc-children > .giarc-children:last-child { margin-bottom: 0; }
+.giarc-flat .giarc-children .giarc-children::before {
+  content: ''; position: absolute; left: 0; top: 1px; bottom: 1px; width: 2px;
+  background: var(--border); border-radius: 1px;
+}
