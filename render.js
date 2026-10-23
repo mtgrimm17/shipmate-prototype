@@ -10325,6 +10325,33 @@ function _sppIsFocused(pid, elements, id) {
    business — a supporting language's translation belongs to the Localizations
    step. Same rules, stated once, asked of whichever language the caller means. */
 function sppRequiredElements(pid, lang) {
+  /* EPIC'S PAGE ANSWERS FOR ITSELF (v8.69). Jaco: "si completo los campos de
+     Business, márcalo en Shippy como completado." Every row here used to be
+     the App Store's — its listing's title, its Business step — so on Epic's
+     page Shippy's ticks reflected an App Store nobody was editing and never
+     moved. Epic's rows read Epic's own fields, the ones on this page:
+       Business  — a price chosen (the picker, not its "Free" placeholder),
+                   a Developer, and a Publisher (which shows the Developer
+                   until set, so either counts);
+       Content   — every IARC topic complete;
+       the rest  — the title, short description, media and long description
+                   this page shows. Epic has no App Privacy section. */
+  if (pid === 'egs') {
+    const fd = state.formData || {}, ws = state.webSite || {}, a = state.egsSubmitAnswers || {};
+    const dev = (ws.developer || '').trim(), pub = (ws.publisher || dev || '').trim();
+    const cq  = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
+    const shots = (typeof platformStoreShots === 'function') ? platformStoreShots('egs') : [];
+    const pool  = (typeof smPool === 'function') ? smPool() : [];
+    return [
+      { id: 'title',        label: 'Title',             required: true,  done: !!(fd.title || '').trim() },
+      { id: 'subtitle',     label: 'Short Description', required: true,  done: !!(typeof egsShortDesc === 'function' && (egsShortDesc() || '').trim()) },
+      { id: 'business',     label: 'Business',          required: true,  done: !!(a.price && dev && pub) },
+      { id: 'content',      label: 'Content',           required: true,  done: cq.total > 0 && cq.answered === cq.total },
+      { id: 'screenshots',  label: 'Media Carousel',    required: true,  done: shots.length > 0 || pool.some(x => x.kind === 'art-land' && x.src), short: 'Media Carousel' },
+      { id: 'description',  label: 'Description',       required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
+      { id: 'achievements', label: 'Achievements',      required: false, done: true },
+    ];
+  }
   const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
   const fieldValue = pid === 'macos' ? _masFieldValue       : _iasFieldValue;
   const seen       = state.storePreviewSectionSeen?.[pid] || {};
@@ -20120,8 +20147,13 @@ function egsPageField(o) {
   const val   = o.value || '';
   const over  = val.length > o.limit;
   const empty = !val.trim();
+  /* `spp` (v8.69): the Shippy row this field answers to. It marks the field
+     data-spp-el so the row can find it, and paints the purple "selected"
+     stroke while that row is the preview's focus. */
+  const sppOn = o.spp && (state.storePreviewFocus || {}).egs === o.spp;
   const cls   = [o.cls, 'egs-sp-edit', empty ? 'egs-sp-edit-empty' : '',
-                 over ? 'is-over-limit' : ''].filter(Boolean).join(' ');
+                 over ? 'is-over-limit' : '', sppOn ? 'is-spp-focus' : ''].filter(Boolean).join(' ');
+  const sppAttr = o.spp ? ` data-spp-el="${o.spp}"` : '';
   /* THE BOX IS AS TALL AS WHAT IS IN IT (v8.56), which is the other half of
      matching Epic's rhythm. Epic's short description is a paragraph: one line
      of text is one line tall. A textarea fixed at three rows put two empty
@@ -20138,11 +20170,11 @@ function egsPageField(o) {
      (app.js) sizes the field the moment it enters the document, so the single
      row is never painted. */
   const body  = o.multiline
-    ? `<textarea class="${cls}" id="${o.id}" rows="1" data-egs-grow="1"
+    ? `<textarea class="${cls}" id="${o.id}"${sppAttr} rows="1" data-egs-grow="1"
                  placeholder="${escHtml(o.placeholder)}"
                  oninput="egsGrowField(this); ${o.onInput}"
                  onchange="${o.onChange}">${escHtml(val)}</textarea>`
-    : `<input class="${cls}" id="${o.id}" type="text"
+    : `<input class="${cls}" id="${o.id}"${sppAttr} type="text"
               placeholder="${escHtml(o.placeholder)}" value="${escHtml(val)}"
               oninput="${o.onInput}"
               onchange="${o.onChange}">`;
@@ -20516,8 +20548,14 @@ function buildEgsStorePreviewSection() {
      one thing on this page nobody may invent. */
   const cq = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
   const ratingDone = cq.total > 0 && cq.answered === cq.total;
+  /* data-spp-el (v8.69): how Shippy's rows find their element. Jaco: "si doy
+     a Content Rating en Shippy, debería llevarme al modal directamente,
+     navegando como ya hacemos en la store." _smRowAction walks up from the
+     marked element to its opener and clicks it, so Content opens the Content
+     Rating face and Media Carousel opens Screenshots — the same doors the
+     card and the carousel already are. */
   const ratingHtml = `
-    <div class="egs-sp-rating ${egsHitCls(ratingDone)}"
+    <div class="egs-sp-rating ${egsHitCls(ratingDone)}" data-spp-el="content"
          onclick="openStorePreviewSection('egs','content')">
       <div class="egs-sp-rating-mark${ratingDone ? ' is-done' : ''}">IARC</div>
       <!-- JUST THE NAME OF THE THING (v8.48). This card used to report how
@@ -20573,6 +20611,7 @@ function buildEgsStorePreviewSection() {
   const sideHtml = `
     <aside class="egs-sp-side">
       ${ratingHtml}
+      <div class="egs-sp-biz${(state.storePreviewFocus || {}).egs === 'business' ? ' is-focus' : ''}" data-spp-el="business">
       <span class="egs-sp-basegame">Base Game</span>
       <div class="egs-sp-price egs-spp-price-pick" onclick="event.stopPropagation();">
         ${swSelect('egs-spp-price', price, EGS_PRICE_TIERS.map(t => ({ value: t, label: t })),
@@ -20591,6 +20630,7 @@ function buildEgsStorePreviewSection() {
       ${metaEdit('Publisher', 'egs-sp-pub', publisher, 'publisher')}
       ${metaRow('Release Date', (ws.releaseDate || ''), 'Coming soon')}
       ${metaRow('Platform', platforms.join(', '), 'From Specifications')}
+      </div>
     </aside>`;
 
   /* ── THE CAROUSEL IS EPIC'S CAROUSEL (v8.56) ───────────────────────────
@@ -20629,7 +20669,7 @@ function buildEgsStorePreviewSection() {
   const chevSvg = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${d}"/></svg>`;
   const mediaHtml = `
     <div class="egs-sp-car ${egsHitCls(mediaSrcs.length)}">
-      <div class="egs-sp-car-stage"
+      <div class="egs-sp-car-stage" data-spp-el="screenshots"
            onclick="openStorePreviewSection('egs','screenshots')"
            title="Open Screenshots">
         <div class="egs-sp-car-viewport">
@@ -20660,7 +20700,7 @@ function buildEgsStorePreviewSection() {
 
   /* Epic prints the short description straight under the carousel, then the
      tag rows, then the long body. Three different fields, in that order. */
-  const shortHtml = egsPageField({
+  const shortHtml = egsPageField({ spp: 'subtitle',
     /* Three rows, not two (v8.50): at Epic's 16px/26.4px a two-row box clips
        the third line of a 280-character blurb and hands back a scrollbar. */
     id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 3,
@@ -20729,7 +20769,7 @@ function buildEgsStorePreviewSection() {
             onInput: `updateEgsHeadlineCounter(this)`,
             onChange: `setEgsPageField('headline', this.value)` })}
       </div>
-      ${egsPageField({ id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
+      ${egsPageField({ spp: 'description', id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
           limit: bodyLimit, placeholder: 'Long Description',
           onInput: `updateEgsBodyCounter(this)`,
           onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}
@@ -20819,7 +20859,7 @@ function buildEgsStorePreviewSection() {
      more row between the developer and the page they came to look at. */
   return `
     <div class="egs-spp egs-sp">
-      ${egsPageField({ id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
+      ${egsPageField({ spp: 'title', id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
           onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
           onChange: `setEgsProductShared('title', this.value)` })}
@@ -20829,7 +20869,7 @@ function buildEgsStorePreviewSection() {
              that could never be pressed and never be right. -->
         <span class="${tab === 'overview' ? 'is-current' : ''}"
               onclick="setEgsPreviewTab('overview')">Overview</span><span class="${tab === 'achievements' ? 'is-current' : ''}"
-              onclick="setEgsPreviewTab('achievements')">Achievements</span>
+              data-spp-el="achievements" onclick="setEgsPreviewTab('achievements')">Achievements</span>
       </div>
       ${tab === 'achievements' ? buildEgsAchievementsPanel() : `
       <div class="egs-sp-cols">

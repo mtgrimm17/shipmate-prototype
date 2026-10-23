@@ -27332,7 +27332,10 @@ window._chkGroups = function () {
    Screenshots' lives two levels above it, on .spp-shots-row. And it accepts
    only NAVIGATION, so a stray ancestor handler cannot turn a text field into a
    door: four levels, and the action has to be one of the two openers. */
-const SM_ROW_NAV = /^\s*(openStorePreviewSection|openStepModal)\s*\(/;
+/* setEgsPreviewTab joins the openers (v8.69): on Epic's page Shippy's
+   Achievements row is the Achievements TAB beside Overview, so pressing the
+   row switches to it, and hovering it outlines the tab. */
+const SM_ROW_NAV = /^\s*(openStorePreviewSection|openStepModal|setEgsPreviewTab)\s*\(/;
 
 function _smRowAction(id) {
   let n = document.querySelector('[data-spp-el="' + id + '"]');
@@ -31467,4 +31470,66 @@ function _smStepsStatus(pid, stepId) {
       } catch (_) { return out; }
     };
   }
+})();
+
+/* CLICKING OFF THE BUSINESS FRAME PUTS IT BACK (v8.69). Jaco: "si toco fuera
+   de Business, que pase otra vez de stroke morado a normal." Shippy's row sets
+   Epic's preview focus to 'business' (setStorePreviewFocus) and the frame
+   stays black-and-purple while it is set. A press anywhere that is not the
+   frame itself, and not Shippy's panel (whose own rows set focus), clears it
+   and drops the class in place — no re-render, so nothing under the pointer
+   moves. */
+/* ON POINTERDOWN, IN THE CAPTURE PHASE (v8.69). Jaco: "si toco por ejemplo
+   Long Description debería salir del focus de Business." A click came too
+   late: pressing a field focuses it first, and focusing one of Epic's fields
+   re-renders the page, so by the click the field was detached and was skipped
+   as "a control redrawing itself". pointerdown fires before focus, before any
+   handler can stop it, while every node is still where it was pressed. */
+document.addEventListener('pointerdown', e => {
+  const f = state.storePreviewFocus;
+  if (!f || !f.egs) return;      // any Epic element Shippy selected, not only Business
+  /* THE PATH AS IT WAS WHEN THE CLICK HAPPENED, not e.target.closest(). The
+     Shippy row that turns the frame on re-renders the panel inside its own
+     handler, so by the time the click bubbles here its row is detached —
+     closest('#app-guide') found nothing and the frame was switched off by the
+     very press that switched it on. composedPath() is fixed at dispatch, so
+     it still says "this came from Shippy". A press on anything else that has
+     left the document is skipped too: it was a control redrawing itself. */
+  const path = e.composedPath ? e.composedPath() : [];
+  const id = f.egs;
+  if (path.some(n => n && n.getAttribute && (n.getAttribute('data-spp-el') === id || n.id === 'app-guide'))) return;
+  if (e.target && e.target.isConnected === false) return;
+  f.egs = null;
+  document.querySelectorAll('.egs-sp-biz.is-focus, .egs-sp .is-spp-focus').forEach(el => el.classList.remove('is-focus', 'is-spp-focus'));
+}, true);
+
+/* HOVERING A SHIPPY ROW OUTLINES WHAT IT POINTS AT (v8.69). Jaco: "hacer
+   hover sobre los conceptos de Shippy, ¿debería marcar temporalmente el
+   stroke focused de lo que toque?" — agreed on four rules: the purple line
+   only (the black fill stays the click's), no scrolling (a list that moves
+   the page under a passing pointer is unusable), every row with something on
+   the page (Title, Short Description, Business, Content, Media Carousel,
+   Description), gone the moment the pointer leaves. Rows are `.gd-task`
+   buttons whose onclick is chkGoStep('spp:<id>'), and the page marks each
+   target data-spp-el="<id>" — read off both, nothing listed here. Scoped to
+   Epic's page (.egs-sp) so the App Store and Mac previews are untouched. */
+(() => {
+  const rowId = el => {
+    const row = el && el.closest && el.closest('#app-guide .gd-task');
+    const m = row && /chkGoStep\('spp:([a-z]+)'\)/.exec(row.getAttribute('onclick') || '');
+    return m ? m[1] : null;
+  };
+  const paint = (id, on) => document.querySelectorAll(`.egs-sp [data-spp-el="${id}"]`)
+    .forEach(el => el.classList.toggle('is-spp-hover', on));
+  document.addEventListener('mouseover', e => {
+    const id = rowId(e.target); if (!id) return;
+    const from = rowId(e.relatedTarget); if (from === id) return;
+    if (from) paint(from, false);
+    paint(id, true);
+  });
+  document.addEventListener('mouseout', e => {
+    const id = rowId(e.target); if (!id) return;
+    if (rowId(e.relatedTarget) === id) return;
+    paint(id, false);
+  });
 })();

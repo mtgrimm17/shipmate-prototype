@@ -30553,3 +30553,138 @@ textarea.egs-sp-body {
   content: ''; position: absolute; left: 0; top: 1px; bottom: 1px; width: 2px;
   background: var(--border); border-radius: 1px;
 }
+
+/* SHIPPY'S "BUSINESS" ROW FRAMES THE BUY BOX (v8.69). Jaco: "si doy a
+   Business, que me marque con un recuadro la zona del precio hasta el
+   Platform, con un stroke y un fondo negro." Everything from Base Game down
+   to Platform is one wrapper, `.egs-sp-biz` (data-spp-el="business", which is
+   how Shippy's row finds it — setStorePreviewFocus scrolls to it and dims the
+   rest). At rest it draws nothing and keeps the side column's 12px rhythm;
+   while Business is the focused element it is a black panel with a stroke,
+   bled 12px outward so the content inside does not move. */
+.egs-sp .egs-sp-biz { display: flex; flex-direction: column; gap: 12px; position: relative; isolation: isolate; }
+/* The frame is its own layer, 13px outside the content, so its corner can be
+   the page's 8px. (A box-shadow spread rounds its outer corner to radius +
+   spread — the first version's 12px radius drew a 25px curve, the only
+   rounder corner on the page.) Shippy's purple, --purple, as his row is. */
+.egs-sp .egs-sp-biz::before {
+  content: ''; position: absolute; inset: -13px; z-index: -1; border-radius: 8px;
+  /* At rest it is one more box on the page, with the same line as the
+     Content Rating card and the wells (--epic-well-line-todo); only Shippy's
+     Business turns it black and purple (Jaco, v8.69). */
+  background: transparent; border: 1px solid var(--epic-well-line-todo);
+  transition: background .2s ease, border-color .2s ease;
+}
+.egs-sp .egs-sp-biz.is-focus::before { background: #000; border-color: var(--purple); }
+
+/* The Content Rating card is as wide as the Business frame under it (v8.69):
+   both reach 13px past the side column (the frame's 12px bleed + its 1px
+   stroke), so the two boxes share left and right edges. Padding grows by the
+   same 13px, so the card's own content stays where it was. */
+.egs-sp .egs-sp-side > .egs-sp-rating { margin-left: -13px; margin-right: -13px; padding-left: 29px; padding-right: 29px; }
+
+/* ONE CORNER FOR EVERY BOX ON EPIC'S PAGE (v8.69). Jaco: "mismo corner radius
+   para todos los recuadros." Measured, every box on the preview was 8px —
+   title, carousel, wells, buttons, footers, the Content Rating card — except
+   the carousel's inner viewport (4px, visible as a tighter corner inside the
+   8px frame) and the Business frame (now 8px, above). */
+.egs-sp .egs-sp-car-viewport { border-radius: 8px; }
+/* 15px of air between the Content Rating card and the Business frame
+   (Jaco, v8.69). The frame reaches 13px above the wrapper and the column's
+   gap is 12px, so the wrapper drops 16px: 12 + 16 − 13 = 15. */
+.egs-sp .egs-sp-biz { margin-top: 16px; }
+
+/* "BASE GAME" IS A PILL ON EPIC (v8.69). Jaco, with a screenshot of Epic's
+   own page: "Base Game va metido en una pill." The rule above had taken the
+   pill off and left bare 12px text; Epic draws a rounded grey capsule with the
+   label in near-white. Read off that screenshot: full-round, a soft grey fill
+   one step above the page, ~6×12px padding, 14px text. */
+.egs-sp .egs-sp-basegame {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 14px;
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  color: var(--epic-fg);
+}
+
+/* THE PRICE IS VISIBLY A CONTROL (v8.69). Jaco: "el Free debería verse en un
+   recuadro tipo Get o Wishlist, para que sea obvio que hay que tocar ahí,
+   igual que en Developer y Publisher." It was bare bold text with a faint
+   chevron — the one editable thing in the buy box that drew no edge. It now
+   wears the same well as Developer and Publisher (1px --epic-well-line-todo,
+   8px corner, lifting to --epic-well-line-hover under the pointer) at the
+   Get / Wishlist height (40px), with the label left and the chevron right. */
+.egs-sp .egs-sp-price { margin: 0; text-align: left; }
+.egs-sp .egs-sp-price .loc-primary-wrap { display: block; width: 100%; }
+.egs-sp .egs-sp-price .loc-primary-pill {
+  height: 40px; padding: 0 15px; justify-content: space-between;
+  background: transparent; border: 1px solid var(--epic-well-line-todo); border-radius: 8px;
+  --ring-top: transparent; --ring-bottom: transparent;
+  transition: border-color .12s ease;
+}
+.egs-sp .egs-sp-price .loc-primary-pill:hover,
+.egs-sp .egs-sp-price .loc-primary-wrap.is-open .loc-primary-pill { border-color: var(--epic-well-line-hover); background: transparent; }
+.egs-sp .egs-sp-price .loc-primary-name { flex: 0 1 auto; }
+.egs-sp .egs-sp-price .loc-chevron { color: var(--epic-fg); opacity: .6; }
+
+/* EPIC'S WELLS ARE MAC'S WELLS (v8.69). Jaco: "¿puedes copiar el estilo de
+   subtítulo y descripción de la store en Mac App?" Measured on Mac App
+   Store's preview: Subtitle and Description are a #0a0a0a well (--bg) with a
+   1px rgba(255,255,255,.14) line and an 8px corner, empty or filled — a well
+   one step DARKER than the page, which is what reads as "type here". Epic's
+   were transparent while empty and #18181c (lighter than its #101014 page)
+   once filled, so an empty field was a bare outline and a filled one looked
+   like a raised card. Every editable box on Epic's page — title, short
+   description, headline, body, Developer/Publisher, Genres/Features and the
+   price — now takes Mac's well, at rest and empty alike; the line lifts on
+   hover and focus as before. Epic's own type stays: this is the box, not the
+   letters. */
+.egs-sp .egs-sp-edit,
+.egs-sp .egs-sp-edit.egs-sp-edit-empty,
+.egs-sp .egs-tagbox,
+.egs-sp .egs-tagbox.egs-sp-edit-empty,
+.egs-sp .egs-sp-price .loc-primary-pill {
+  background: var(--bg);
+  border-color: var(--epic-well-line-todo);
+}
+.egs-sp .egs-sp-edit:hover, .egs-sp .egs-sp-edit:focus,
+.egs-sp .egs-sp-edit.egs-sp-edit-empty:hover, .egs-sp .egs-sp-edit.egs-sp-edit-empty:focus,
+.egs-sp .egs-tagbox:hover, .egs-sp .egs-tagbox:focus-within,
+.egs-sp .egs-tagbox.egs-sp-edit-empty:hover, .egs-sp .egs-tagbox.egs-sp-edit-empty:focus-within,
+.egs-sp .egs-sp-price .loc-primary-pill:hover,
+.egs-sp .egs-sp-price .loc-primary-wrap.is-open .loc-primary-pill {
+  background: var(--bg);
+  border-color: var(--epic-well-line-hover);
+}
+
+/* Developer and Publisher boxes are the same width (Jaco, v8.69). Each label
+   took its own text width ("Developer" 70px, "Publisher" 64px), so the boxes
+   started 6px apart and ended up 218 and 224 wide. The label column is now
+   one fixed width, so both boxes start on the same x and match. */
+.egs-sp .egs-sp-meta-row.is-edit > span:first-child { flex: 0 0 76px; }
+
+/* Shippy's hover outline and the fields' selected state on Epic's page
+   (v8.69; see the hover note in app.js). Hover is the purple LINE only;
+   a field selected from Shippy keeps the line while it is the focus. The
+   Business frame draws its line on its own layer (::before), so it takes the
+   hover there; the carousel stage has no border of its own, so it gets an
+   inset ring. */
+.egs-sp .egs-sp-edit.is-spp-hover,
+.egs-sp .egs-sp-edit.is-spp-focus,
+.egs-sp .egs-sp-rating.is-spp-hover { border-color: var(--purple) !important; }
+.egs-sp .egs-sp-biz.is-spp-hover::before { border-color: var(--purple); }
+/* The carousel's visible edge is the OUTER box's inset ring (.egs-sp-car,
+   an .egs-sp-hit); Shippy marks the stage inside it, because the stage is
+   the door. So the outer ring is the one that turns purple — an inner ring
+   on the stage drew a second line inside the first (Jaco: "Media Carousel
+   tiene un contorno exterior que no se convierte morado, solo el interior"). */
+.egs-sp .egs-sp-car:has(.egs-sp-car-stage.is-spp-hover),
+.egs-sp .egs-sp-car.egs-sp-hit:has(.egs-sp-car-stage.is-spp-hover) { box-shadow: inset 0 0 0 1px var(--purple); }
+/* The Achievements tab under Shippy's hover: a ring drawn OUTSIDE the label
+   (outline + offset), so the tab row does not move. */
+.egs-sp .egs-sp-tabs [data-spp-el="achievements"].is-spp-hover {
+  outline: 1px solid var(--purple); outline-offset: 5px; border-radius: 6px;
+}
