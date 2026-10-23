@@ -30395,7 +30395,12 @@ textarea.egs-sp-body {
 
 /* The greyed preview of what a topic's Yes would ask (v8.62, egsPreviewChildren).
    Same indent and rail as the real follow-ups, so pressing Yes lights the rows
-   in place rather than inserting them; dimmed, and `inert` in the markup. */
-.giarc-flat .giarc-preview { opacity: .38; }
+   in place rather than inserting them; dimmed, and pressable since v8.63. */
+.giarc-flat .giarc-preview > .giarc-card { opacity: .38; transition: opacity .25s ease; }
+/* Pressable since v8.63 — answering one sets the topic to Yes. */
+/* A nudge, not a switch (Jaco: "no hace falta que el hover lighting sea tan
+   tosco"): the row under the pointer rises from .38 to .58 over a quarter
+   second — enough to say "this one", still clearly not yet answered. */
+.giarc-flat .giarc-preview > .giarc-card:hover { opacity: .58; }
 .giarc-flat .giarc-preview .is-selected,
 .giarc-flat .giarc-preview .is-sel-none { background: var(--pill-off-bg); color: var(--pill-off-color); }

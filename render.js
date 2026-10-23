@@ -19030,15 +19030,15 @@ function buildEgsContentRatingSection() {
      cuando no has dado a yes/no las preguntas principales? Pero estando
      visibles siempre." So a topic that is unanswered — or answered No — still
      draws the next level its Yes would open (for Violence, the four type
-     rows), at the App Store's disabled weight and with `inert`, so it can be
-     read but not pressed or tabbed into. Only that one level: a type's own
+     rows), dimmed. Since v8.63 they are pressable: answering one sets the
+     topic to Yes first (_egsEnsureRevealed, app.js). Only that one level: a type's own
      questions still arrive when the type is YES, or the page would carry all
      ninety-five questions at once. Nothing is stored for a preview. */
   function egsPreviewChildren(q, depth) {
     const yes = giarcOptionEntries(q).find(o => o.child);
     if (!yes) return '';
     const kids = giarcChildKeysForOption(yes.child);
-    return `<div class="giarc-children giarc-preview" inert aria-hidden="true">${kids.map(k => renderGIARCQuestion(k, depth)).join('')}</div>`;
+    return `<div class="giarc-children giarc-preview">${kids.map(k => renderGIARCQuestion(k, depth)).join('')}</div>`;
   }
 
   function egsInlineable(q) {

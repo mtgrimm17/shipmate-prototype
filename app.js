@@ -23109,10 +23109,37 @@ function _egsRevealNew(key, before, opt) {
   };
   setTimeout(attempt, 0);
 }
+/* ANSWERING A GREYED FOLLOW-UP ANSWERS ITS PARENT YES (v8.63). Jaco: "si
+   toco alguna yes de las subpreguntas, debería ponerse en yes lo de arriba,
+   ¿no?" The preview rows (egsPreviewChildren, render.js) are pressable now;
+   before the click lands, every ancestor that is not already revealing this
+   question is set to the option that does — Yes on a topic, the tick on a
+   type — exactly as if pressed by hand. Any press counts, NO included: a NO
+   on a type is still an answer to the topic's Yes, and four NOs flip it back
+   (answerGIARCTypeRow's auto-No). */
+function _egsEnsureRevealed(key) {
+  const parent = GOOGLE_IARC_QUESTIONS.find(p =>
+    giarcOptionEntries(p).some(o => giarcChildKeysForOption(o.child).includes(key)));
+  if (!parent) return;
+  const opt = giarcOptionEntries(parent).find(o => giarcChildKeysForOption(o.child).includes(key));
+  const cur = state.cqAnswers[parent.key];
+  const shown = Array.isArray(cur) ? cur.includes(opt.index) : cur === opt.index;
+  if (shown) return;
+  _egsEnsureRevealed(parent.key);
+  if (parent.data_type === 'picklist_multi') {
+    state.cqAnswers[parent.key] = [...(Array.isArray(cur) ? cur : []), opt.index].sort((a, b) => a - b);
+  } else {
+    giarcActiveChildKeys(parent.key).forEach(giarcClearAnswersRecursively);
+    state.cqAnswers[parent.key] = opt.index;
+  }
+  state.cqAnswerMeta[parent.key] = { ...(state.cqAnswerMeta[parent.key] || {}), humanConfirmed: true };
+}
+
 ['answerGIARCSingle', 'answerGIARCMultiOpt', 'answerGIARCTypeRow'].forEach(name => {
   const orig = window[name];
   if (typeof orig !== 'function') return;
   window[name] = function (key, idx) {
+    if (state.stepModal?.platformId === 'egs') _egsEnsureRevealed(key);
     const before = giarcActiveChildKeys(key);
     const out = orig.apply(this, arguments);
     _egsRevealNew(key, before, name === 'answerGIARCTypeRow' ? idx : null);
