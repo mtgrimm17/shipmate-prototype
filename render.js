@@ -18930,8 +18930,8 @@ function buildEgsContentRatingSection() {
 
      YES is IARC's tick on that option; NO is its absence. IARC cannot store a
      "no", so one pressed on an otherwise untouched question is remembered in
-     state.egsTypeNo — the same reason Presentation's None needed a home. Once
-     any type is YES, the rest read as NO. Storage is unchanged: IARC's indices
+     state.egsTypeNo — the same reason Presentation's None needed a home. A row
+     nobody answered stays dark (v8.64). Storage is unchanged: IARC's indices
      in one array. Violence only for now; the same table takes the other
      Types questions when wanted. */
   const EGS_TYPE_ROWS = {
@@ -18963,7 +18963,13 @@ function buildEgsContentRatingSection() {
     const ai     = !!(m && m.source && !m.humanConfirmed && cur.length);
     return giarcOptionEntries(q).map(o => {
       const yes = cur.includes(o.index);
-      const no  = !yes && (said.includes(o.index) || cur.length > 0);
+      /* NO IS LIT ONLY WHEN SOMEONE SAID NO (v8.64). Jaco: "al dar yes a
+         alguna de las subpreguntas, las otras se ponen en no." They read as
+         NO because IARC stores only ticks, so an unticked type WAS treated as
+         answered — which made one YES look like three NOs nobody gave. An
+         untouched row stays dark now; the topic still counts as answered once
+         one type is ticked (giarcIsAnswered), which is IARC's own rule. */
+      const no  = !yes && said.includes(o.index);
       const pill = (isYes, lit) => `<button type="button" class="yn-btn ${isYes ? 'yn-yes' : 'yn-no'}${lit ? ' is-selected' + (ai ? ' ai-confident' : '') : ''}"
                  onclick="answerGIARCTypeRow('${key}',${o.index},${isYes})">${isYes ? 'YES' : 'NO'}</button>`;
       return `

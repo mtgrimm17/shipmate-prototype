@@ -23010,7 +23010,7 @@ function answerGIARCTypeRow(key, idx, yes) {
   if (!state.egsTypeNo) state.egsTypeNo = {};
   const no   = new Set(state.egsTypeNo[key] || []);
   const isOn = cur.includes(idx);
-  const lit  = yes ? isOn : (!isOn && (no.has(idx) || cur.length > 0));
+  const lit  = yes ? isOn : (!isOn && no.has(idx));   // only an explicit NO is lit (v8.64)
   if (lit && m && m.source && !m.humanConfirmed) {
     state.cqAnswerMeta[key] = { ...m, humanConfirmed: true };
   } else {
