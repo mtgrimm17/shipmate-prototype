@@ -18877,6 +18877,25 @@ function buildEgsContentRatingSection() {
     // keeps IARC's wording; only the two "Yes, …" answers are shortened.
     'google.content.humaninnocents': { title: 'Innocent or Defenseless Characters Can Be Seriously Injured or Killed',
                                        order: [1, 2, 3], opts: { 1: 'No', 2: 'With penalties', 3: 'Without penalties' } },
+
+    /* THE REST OF THE QUESTIONNAIRE, SAME TREATMENT (v8.61). Jaco: "igual que
+       ayer adaptamos violencia al nuevo estilo, ¿puedes adaptar el resto de
+       categorías?" Every remaining answer set short enough to say as pills.
+       No `title` means the row keeps IARC's own (with the shared prefix
+       trimmed, as everywhere else); multi-selects stay multi — several pills
+       can be lit. */
+    'google.content.nonviolentgore':  { title: 'Gory Images Without a Violent Act: Level of Detail',
+                                        opts: { 1: 'Limited', 2: 'Moderate', 3: 'Graphic' } },
+    'google.content.nonviolentblood': { title: 'Blood Unrelated to Violence: Amount',
+                                        opts: { 1: 'Small, infrequent', 2: 'Large or frequent' } },
+    'google.content.sexdepiction':    { title: 'Depiction', opts: { 1: 'Obscured', 2: 'No nudity', 3: 'Partial', 4: 'Full frontal' } },
+    'google.content.sexualviolence':  { title: 'Sexual Violence: Presentation', opts: { 1: 'Depicted', 2: 'Referred to only' } },
+    'google.content.illegaldrugs':    { title: 'Illegal or Recreational Drugs: Presentation',
+                                        opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages', 4: 'Instructions' } },
+    'google.content.fantdrugs':       { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
+    'google.content.meddrugs':        { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
+    'google.content.alcohol':         { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
+    'google.content.tobacco':         { opts: { 1: 'Reference', 2: 'Use', 3: 'Encourages' } },
   };
 
   /* PRESENTATION IS A MULTI-PICKER (v8.51). Jaco: "¿me puedes poner la de
@@ -18918,6 +18937,23 @@ function buildEgsContentRatingSection() {
   const EGS_TYPE_ROWS = {
     'google.content.bloodviolencegoretypes': { 1: 'Against humans', 2: 'Against non-humans (animals, creatures, robots…)',
                                                3: 'Gory images without a violent act', 4: 'Blood unrelated to violence' },
+    // v8.61: every other "Types" question takes the same rows.
+    'google.content.feartypes':           { 1: 'Scary elements', 2: 'Horrifying elements' },
+    'google.content.sexsuggestdatetypes': { 1: 'Sexual activity', 2: 'Suggestive or sexual themes', 3: 'Dating games',
+                                            4: 'Nudity or revealing outfits', 5: 'Sexual violence' },
+    'google.content.revealnudity':        { 1: 'Revealing outfits', 2: 'Nudity' },
+    'google.content.nuditytypes':         { 1: 'Human buttocks', 2: 'Breasts without nipples', 3: "Fantasy creatures' breasts",
+                                            4: 'Breasts with nipples', 5: 'Genitalia' },
+    'google.content.gamblingtypes':       { 1: 'Gambling themes', 2: 'Playable bingo', 3: 'Casino games, lotteries or betting',
+                                            4: 'Other games played and won with in-game currency' },
+    'google.content.offlangtypes':        { 1: 'Minor profanities', 2: 'Moderate swearing or gestures', 3: 'Discriminatory language',
+                                            4: 'Sexual expletives' },
+    'google.content.drugtypes':           { 1: 'Illegal or recreational drugs', 2: 'Fantasy drugs', 3: 'Medical drugs',
+                                            4: 'Alcohol', 5: 'Tobacco' },
+    'google.content.crudetypes':          { 1: 'Belching or flatulence sounds', 2: 'Whimsical flatulence, poo or vomit',
+                                            3: 'Urine or realistic feces', 4: 'Defecation shown' },
+    'google.content.cryptotypes':         { 1: 'Purchases of digital goods', 2: 'Cash-convertible rewards',
+                                            3: 'Transferable digital assets (NFTs)' },
   };
   function buildEgsTypeRows(q, key, depth) {
     const labels = EGS_TYPE_ROWS[key];
@@ -18941,20 +18977,30 @@ function buildEgsContentRatingSection() {
     }).join('');
   }
 
-  const EGS_PRESENTATION_KEYS = ['google.content.humanpresented', 'google.content.nonhumanpresented'];
   const EGS_PRES_SHORT = { 1: 'Referred to', 2: 'Implied', 3: 'Rarely, distant', 4: 'Often, distant',
                            5: 'Rarely, close-up', 6: 'Often, close-up' };
+  /* Every multi-select whose options are sentences is a picker (v8.61), with
+     a short name per option for the pill's summary. `pairs` is Presentation's
+     own rule (Rarely/Often per distance are exclusive); others tick freely. */
+  const EGS_PICKERS = {
+    'google.content.humanpresented':    { title: 'Presentation', short: EGS_PRES_SHORT, pairs: true },
+    'google.content.nonhumanpresented': { title: 'Presentation', short: EGS_PRES_SHORT, pairs: true },
+    'google.content.suggestivetypes':   { title: 'Types',
+                                          short: { 1: 'Innuendo in text or dialogue', 2: 'Overt or visual', 3: 'References, no detail', 4: 'References, detailed' } },
+  };
+  const EGS_PRESENTATION_KEYS = Object.keys(EGS_PICKERS);
   function buildEgsPresentation(q, key, depth) {
+    const cfg = EGS_PICKERS[key];
     const cur   = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key].slice().sort((a, b) => a - b) : [];
     const m     = state.cqAnswerMeta && state.cqAnswerMeta[key];
     const ai    = !!(m && m.source && !m.humanConfirmed && cur.length);
-    const names = cur.map(i => EGS_PRES_SHORT[i]).filter(Boolean);
+    const names = cur.map(i => cfg.short[i]).filter(Boolean);
     const summary = !names.length ? 'Select all that apply'
                   : names.length <= 2 ? names.join(', ') : `${names.length} selected`;
     const open  = state.giarcPickerOpen === key;
     const items = giarcOptionEntries(q).map(o => {
       const on = cur.includes(o.index);
-      const fn = o.index >= 3
+      const fn = cfg.pairs && o.index >= 3
         ? `answerGIARCPresentation('${key}','${o.index <= 4 ? 'distant' : 'close'}',${o.index})`
         : `answerGIARCMultiOpt('${key}',${o.index})`;
       return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${on && ai ? ' is-ai' : ''}"
@@ -18966,7 +19012,7 @@ function buildEgsContentRatingSection() {
     return `
       <div class="giarc-card giarc-depth-${depth} giarc-inline" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label"><span class="giarc-title">Presentation</span>${tip}</div>
+          <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(cfg.title)}</span>${tip}</div>
           <div class="loc-primary-wrap sw-select-wrap align-right giarc-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
             <button type="button" class="loc-primary-pill${!names.length ? ' is-empty' : ai ? ' ai-confident' : ''}"
                     onclick="toggleGiarcPicker(event,'${key}')">
@@ -19143,7 +19189,7 @@ function buildEgsContentRatingSection() {
        egsAiClass plugs straight in. */
     const ovr   = EGS_ROW_OVERRIDES[key];
     let opts    = giarcOptionEntries(q);
-    if (ovr) opts = ovr.order.map(i => opts.find(o => o.index === i)).filter(Boolean);
+    if (ovr) opts = (ovr.order || Object.keys(ovr.opts).map(Number)).map(i => opts.find(o => o.index === i)).filter(Boolean);
     const yesNo = !ovr && !isMulti && opts.length === 2 && opts[0].text === 'Yes' && opts[1].text === 'No';
     const segs = opts.map(opt => {
       const on = isMulti ? (Array.isArray(cur) && cur.includes(opt.index)) : cur === opt.index;
@@ -19161,7 +19207,7 @@ function buildEgsContentRatingSection() {
     return `
       <div class="${shell}" data-key="${key}">
         <div class="giarc-row">
-          <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(ovr ? ovr.title : egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
+          <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(ovr && ovr.title ? ovr.title : egsOwnTitle(key, title))}</span>${tooltipHTML}</div>
           <div class="${yesNo ? 'question-yn' : 'intensity-group'}">${segs}</div>
           ${collapseBtnHTML}
         </div>

@@ -23036,6 +23036,19 @@ function answerGIARCTypeRow(key, idx, yes) {
       const parent = GOOGLE_IARC_QUESTIONS.find(p =>
         giarcOptionEntries(p).some(o => giarcChildKeysForOption(o.child).includes(key)));
       const pNo = parent && giarcOptionEntries(parent).find(o => o.text === 'No');
+      /* A Types question nested under ANOTHER Types question (Nudity under
+         "Nudity or revealing outfits") has no "No" above it to set; the
+         equivalent is un-ticking the option that opened it (v8.61). */
+      const pOpt = parent && !pNo && parent.data_type === 'picklist_multi'
+        && giarcOptionEntries(parent).find(o => giarcChildKeysForOption(o.child).includes(key));
+      if (pOpt) {
+        const pc = Array.isArray(state.cqAnswers[parent.key]) ? state.cqAnswers[parent.key] : [];
+        giarcChildKeysForOption(pOpt.child).forEach(giarcClearAnswersRecursively);
+        state.cqAnswers[parent.key] = pc.filter(i => i !== pOpt.index);
+        state.egsTypeNo[parent.key] = [...new Set([...(state.egsTypeNo[parent.key] || []), pOpt.index])];
+        state.cqAnswerMeta[parent.key] = { ...(state.cqAnswerMeta[parent.key] || {}), humanConfirmed: true };
+        delete state.egsTypeNo[key];
+      }
       if (pNo) {
         giarcActiveChildKeys(parent.key).forEach(giarcClearAnswersRecursively);
         state.cqAnswers[parent.key]    = pNo.index;
