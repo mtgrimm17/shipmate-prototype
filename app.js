@@ -28034,12 +28034,49 @@ function _smEgsCrGo(key) {
   /* The topic's own run: the row, plus everything its answer revealed, up to
      the next topic. Same shape of answer as _smCrSectionEls gives Apple, read
      off a different marker because this body nests and Apple's does not. */
-  const run = [el];
+  let run = [el];
   let n = el.nextElementSibling;
   while (n && !n.hasAttribute('data-key')) { run.push(n); n = n.nextElementSibling; }
+  /* A SHIPPY ROW IS A GROUP, SO THE GROUP LIGHTS (v8.66). Jaco: "cuando doy
+     a Online Features en Shippy, solo se marca la primera pregunta de las 2."
+     Since the rail became seven groups (v8.52) a row has stood for every
+     topic in its group, while this still lit the one topic it scrolls to.
+     Now everything from the group's header to the next group's divider is
+     lit; the scroll still lands on the first open topic. */
+  const g = (typeof GIARC_RAIL_GROUPS !== 'undefined')
+    && GIARC_RAIL_GROUPS.find(gr => gr.keys.some(k => 'google.content.' + k === key));
+  const head = g && _smStepQA('.giarc-group-head').find(h => h.textContent.trim() === g.label);
+  if (head) {
+    run = [head];
+    for (let m = head.nextElementSibling; m && !m.matches('.ios-q-divider, .giarc-group-head'); m = m.nextElementSibling) run.push(m);
+  }
   _smCrSpot(run);
-  _smCrScrollWhenSettled(el);
+  _smEgsScrollToTop(head || el);
   return true;
+}
+
+/* EPIC'S GROUPS ARRIVE NEAR THE TOP, NOT CENTRED (v8.67). Jaco: "¿puedes
+   hacer que en el scroll desde Shippy el content salga un poco más arriba?
+   Ahora se queda un poco centrado." Centring suits a single row; a group is
+   a header and a block of questions that reads downward, so centring it left
+   half the screen above it spent on the dimmed group before. The header now
+   lands 100px under the pinned Unanswered/All bar — high enough that the
+   group fills the space below, low enough that the end of the group before
+   still shows ("que se vea que hay cosas arriba"). Same eased travel (_smScrollTo), same wait for the layout
+   to settle as _smCrScrollWhenSettled. */
+function _smEgsScrollToTop(el, tries) {
+  if (!el) return;
+  const t0 = el.offsetTop;
+  requestAnimationFrame(() => {
+    if (el.offsetTop !== t0 && (tries || 0) < 12) return _smEgsScrollToTop(el, (tries || 0) + 1);
+    const sc = typeof _smNearestScroller === 'function' && _smNearestScroller(el);
+    if (!sc) return el.scrollIntoView({ block: 'start' });
+    const pin  = sc.querySelector('.cr-pinned');
+    const ceil = pin ? pin.getBoundingClientRect().bottom : sc.getBoundingClientRect().top;
+    const max  = Math.max(0, sc.scrollHeight - sc.clientHeight);
+    const to   = sc.scrollTop + (el.getBoundingClientRect().top - ceil - 100);
+    _smScrollTo(sc, Math.max(0, Math.min(max, Math.round(to))));
+  });
 }
 
 function _smCrGo(label) {
