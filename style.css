@@ -30485,7 +30485,17 @@ textarea.egs-sp-body {
 /* The spec table is the one part that still opens a step, so it alone wears
    the well — inset, so the chip's own corners stay the only rounded ones. */
 .egs-sp .egs-sp-chip-part.egs-sp-hit {
-  margin: -14px -16px;
+  /* VERTICAL BLEED ONLY (v8.80). It was `-14px -16px`, which cancelled the
+     well's padding on all four sides so the table sat exactly where it would
+     with no well at all — and left the well itself 32px wider than every
+     other box in the chip, overhanging the Legal and Languages fields by 16
+     on each side. The vertical half still earns its keep: without it the
+     well's 14px of padding would be added to the chip's own 32px gaps and
+     the spec part would stand further from its neighbours than they do from
+     each other. The horizontal half only bought flush TEXT, at the cost of a
+     line that matched nothing; the text is inset by the well's padding now,
+     which is what a box with a line around it is supposed to do (v8.58). */
+  margin: -14px 0;
   background: none;
 }
 .egs-sp .egs-sp-chip-part.egs-sp-hit.is-todo { background: none; }

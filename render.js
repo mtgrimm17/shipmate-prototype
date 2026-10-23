@@ -19804,7 +19804,7 @@ function egsPortalField(o) {
       </div>` : '';
   return `
     <div class="form-group" data-answered="${val.trim() ? '1' : '0'}">
-      <label class="form-label" for="${id}">${escHtml(o.label)}${req}${limit}</label>
+      <label class="form-label" for="${id}">${escHtml(o.label)}${req}${limit}${o.tip ? egsAchTip(o.tip) : ''}</label>
       ${body}${counterHtml}
       ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
     </div>`;
@@ -19865,11 +19865,24 @@ function egsPickMenuHtml(fieldId) {
   const sel  = state.egsSubmitAnswers[fieldId] || [];
   const full = cfg.max && sel.length >= cfg.max;
   const q    = (state.egsPickFilter || '').trim().toLowerCase();
-  const hits = cfg.options.filter(o => !q || o.toLowerCase().indexOf(q) >= 0);
+  /* egsPickOptions, not cfg.options (v8.80): the two language fields offer
+     the languages Game Details names, plus anything already chosen here. */
+  const pool = (typeof egsPickOptions === 'function') ? egsPickOptions(fieldId) : cfg.options;
+  const hits = pool.filter(o => !q || o.toLowerCase().indexOf(q) >= 0);
 
   /* Epic simply closes the menu when nothing matches, which leaves a box
      that has silently stopped answering. Saying so costs one row. */
   if (!hits.length) {
+    /* Two different emptinesses, and they need different sentences. A query
+       with no hit is the developer's typing; a list that is empty before
+       anything is typed means the narrowed pool has run out, and the row
+       says where the list comes from rather than blaming a search nobody
+       made. (It cannot happen today — the primary language is always in the
+       pool — but a row reading `No language matches ""` would be the kind of
+       nonsense that outlives the reason for it.) */
+    if (!q) {
+      return `<div class="egs-pick-empty">Every ${escHtml(cfg.noun)} from Game Details is already chosen</div>`;
+    }
     return `<div class="egs-pick-empty">No ${escHtml(cfg.noun)} matches &ldquo;${escHtml(state.egsPickFilter)}&rdquo;</div>`;
   }
   return hits.map(o => {
@@ -20041,9 +20054,17 @@ function buildEgsProductDetailsSection() {
          its heading stranded at the bottom of the form. Of what is left on
          this step it is the only REQUIRED field, and a form that opens on
          its one asterisk is a form you can finish from the top down. -->
-    <div class="ios-content-step-label">Seller${egsAchTip('The legal entity that receives funds from selling this offer \u2014 often the studio\u2019s registered company rather than the name on the store page.')}</div>
+    <!-- ON THE FIELD, NOT THE GROUP (v8.80). v8.73 hung it off "Seller"
+         because that was where the paragraph it replaced had sat. But the
+         group holds one field and the sentence is about that field — which
+         of the studio's names goes in THIS box — so the mark belongs beside
+         the thing it qualifies. The User support tooltip stays on its
+         heading for the opposite reason: that group holds two fields and
+         the sentence is about both of them. -->
+    <div class="ios-content-step-label">Seller</div>
     ${egsPortalField({ id: 'seller', label: 'Seller name', required: true, counter: true,
         value: a.sellerName, max: 280,
+        tip: 'The legal entity that receives funds from selling this offer \u2014 often the studio\u2019s registered company rather than the name on the store page.',
         onChange: `setEgsProductText('sellerName', this.value)` })}
 
     <div class="ios-q-divider"></div>
@@ -20071,13 +20092,16 @@ function buildEgsProductDetailsSection() {
          every time they look at the pair. The explanation moved to the
          heading's tooltip; the rule stays on the page, as a rule. -->
     <div class="ios-content-step-label">User support${supportDone ? '' : ' <span style="color:#e0555a;">*</span>'}${egsAchTip('Contact information in case users have questions about the product or need assistance.')}</div>
-    <!-- 16px UNDER IT, NOT 6 (v8.77). .form-hint pays 6px, which is right
-         for a note explaining the field directly above it; this one sits
-         ABOVE a pair of fields, where the 6 made Support page link ride up
-         against it while Support email sat a full 16 below its neighbour.
-         Matching .form-group's own bottom margin makes the two fields
-         equally spaced, which is what they are. -->
-    <div class="form-hint" style="margin-top:-2px;margin-bottom:16px;">Provide at least one option.</div>
+    <!-- 16px ON BOTH SIDES (v8.77 under it, v8.80 over it). .form-hint pays
+         6px below and -2px above, which is right for a note tucked under the
+         field it explains; this one sits ABOVE a pair of fields and belongs
+         to the heading, not to either box. v8.77 gave it .form-group's own
+         16px underneath so Support page link and Support email were equally
+         spaced from their neighbours. The -2px above was still pulling the
+         line up against the heading, so Support page link's label had 16px
+         over it and the field below it, while the pair of them had less than
+         that over the label. Even on both sides, the block reads as one. -->
+    <div class="form-hint" style="margin-top:16px;margin-bottom:16px;">Provide at least one option.</div>
     ${egsPortalField({ id: 'supportpage', label: 'Support page link', value: a.supportPageLink, max: 260, counter: true,
         type: 'url', placeholder: 'https://',
         onChange: `setEgsProductText('supportPageLink', this.value)` })}

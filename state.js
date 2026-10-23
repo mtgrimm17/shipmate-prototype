@@ -3315,6 +3315,56 @@ const EGS_SOCIAL_MAX = 260;
    `options` is a getter rather than the array itself only so this table can
    sit above EGS_GENRES and friends without caring which order the consts
    happen to be declared in. */
+/* ── THE GAME'S LANGUAGES, IN EPIC'S WORDS (v8.80) ────────────────────────
+   Game Details' Languages page writes CODES (state.formData.primaryLanguage
+   and .localizations, keyed like OB_LANG_NAMES in render.js); Epic's lists
+   are NAMES. This is the join, and it is a table rather than a name match
+   because three of them do not match: Game Details' "Portuguese (Brazilian)"
+   is Epic's "Portuguese (Brazil)", and its one plain "Spanish" has to choose
+   between Epic's two — Spain, since es-419 already carries Latin America.
+   Codes with no Epic equivalent simply have no row; Epic names with no code
+   (Catalan, Welsh, Tagalog…) are reachable only by picking them. */
+const EGS_LANG_BY_CODE = {
+  en: 'English', zh: 'Chinese (Simplified)', 'zh-TW': 'Chinese (Traditional)',
+  ja: 'Japanese', ko: 'Korean', pt: 'Portuguese', 'pt-BR': 'Portuguese (Brazil)',
+  es: 'Spanish (Spain)', 'es-419': 'Spanish (Latin America)', de: 'German',
+  fr: 'French', ru: 'Russian', ar: 'Arabic', tr: 'Turkish', id: 'Indonesian',
+  th: 'Thai', nl: 'Dutch', pl: 'Polish', it: 'Italian', sv: 'Swedish',
+  nb: 'Norwegian', da: 'Danish', fi: 'Finnish', cs: 'Czech', hu: 'Hungarian',
+  ro: 'Romanian', uk: 'Ukrainian', vi: 'Vietnamese', ms: 'Malay',
+  he: 'Hebrew', el: 'Greek',
+};
+
+/* The primary language is ALWAYS in it, so the two pickers can never come up
+   empty: Game Details defaults it to 'en' and a project cannot clear it. */
+function egsGameLanguageNames() {
+  const fd  = state.formData || {};
+  const out = [];
+  [fd.primaryLanguage || 'en', ...(fd.localizations || [])].forEach(c => {
+    const n = EGS_LANG_BY_CODE[c];
+    if (n && out.indexOf(n) < 0) out.push(n);
+  });
+  return out;
+}
+
+/* WHAT A PICKER OFFERS, WHICH IS NOT ALWAYS WHAT EPIC ALLOWS (v8.80).
+   `cfg.options` stays Epic's own table — a fact about the storefront, and
+   what the Developer Portal would accept. This is the narrower question the
+   two language fields now ask: which of them has this game actually been
+   made in? Genres and Features are unfiltered and go straight through.
+
+   ANYTHING ALREADY CHOSEN STAYS ON THE LIST even once Game Details stops
+   naming it. A value the developer can see on the page and cannot untick is
+   worse than a list one row too long, and removing it for them would be
+   deleting an answer they never withdrew. */
+function egsPickOptions(fieldId) {
+  const cfg = EGS_PICK_FIELDS[fieldId];
+  if (!cfg || !cfg.gameLanguages) return cfg ? cfg.options : [];
+  const sel   = state.egsSubmitAnswers[fieldId] || [];
+  const allow = egsGameLanguageNames();
+  return cfg.options.filter(o => allow.indexOf(o) >= 0 || sel.indexOf(o) >= 0);
+}
+
 const EGS_PICK_FIELDS = {
   genres: {
     label: 'Genres', required: true, max: EGS_GENRE_MAX,
@@ -3325,14 +3375,20 @@ const EGS_PICK_FIELDS = {
     noun: 'feature', get options() { return EGS_FEATURES; },
   },
   audioLanguages: {
-    /* No hint (v8.49). It explained that this list is Epic's rather than the
-       game's own localizations — true, and the reason the field was wrong
-       before v8.45, but an explanation of a bug nobody can see any more. */
-    label: 'Audio',
+    /* AND IN v8.80 IT BECAME THE GAME'S AFTER ALL, by request. v8.45 put
+       these two on Epic's full forty-one on the argument that an audio track
+       is not a store localization — a game shipped only in English can still
+       have Japanese voice-over. That is still true of Epic, and `options`
+       below is still Epic's table; what changed is which question Shipmate
+       asks here. Game Details already knows the languages this game is made
+       in, and asking again, against a list eleven longer, was asking the
+       developer to repeat themselves. `gameLanguages` is the flag that says
+       so; egsPickOptions above does the narrowing. */
+    label: 'Audio', gameLanguages: true,
     noun: 'language', get options() { return EGS_LANGUAGES; },
   },
   textLanguages: {
-    label: 'Text', required: true,
+    label: 'Text', required: true, gameLanguages: true,
     noun: 'language', get options() { return EGS_LANGUAGES; },
   },
 };
