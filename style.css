@@ -30948,3 +30948,8 @@ body.sm-guide-mid    .submit-modal.is-flip-enter > *:not(.sm-rail),
 body.sm-guide-panel  .submit-modal.is-flip-enter > *:not(.sm-rail) { animation: none !important; }
 .sm-ios-window { pointer-events: auto; }
 
+
+/* Shippy's checklist is frozen under a photograph while a step pushes — see
+   _smGuideFreeze in app.js. The class sits on <body> because the guide is
+   rebuilt with innerHTML; the card's frame stays, only its contents hide. */
+body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; transition: none !important; }

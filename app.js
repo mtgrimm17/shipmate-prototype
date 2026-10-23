@@ -27372,6 +27372,7 @@ async function _smDoorGo(id, act) {
   const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   if (!el || still) return act.click();
   _smDoorBusy = true;
+  if (typeof _smGuideFreeze === 'function') _smGuideFreeze();
   const wait = ms => new Promise(r => setTimeout(r, ms));
   try {
     /* 1. POINT, THE MOMENT THE ROW IS PRESSED. Jaco: "que el dimming empiece
@@ -31713,6 +31714,7 @@ function _smIosReleaseFades(m) {
 }
 function _smIosPlay(m, oldBox, back) {
   _smIosSettleFades(m);
+  _smGuidePlay(back);
   const area = _smIosArea(m);
   const newBox = _smIosSnap(m, area);
   const bg = getComputedStyle(m).backgroundColor;
@@ -31762,6 +31764,116 @@ function _smIosPlay(m, oldBox, back) {
   Promise.all(anims.map(a => a.finished.catch(() => {}))).then(done);
   setTimeout(done, SM_IOS_MS + 400);          // never strand the real step hidden
 }
+
+/* SHIPPY'S CHECKLIST RIDES THE SAME PUSH (v8.75). Jaco: "me gustaría que el
+   panel de Shippy se animase al transicionar, ahora los checklist cambian muy
+   bruscos" — and then "it animates before the slide has happened". The guide
+   re-renders whenever the state under it moves, which on a door is at the
+   PRESS, long before the step pushes; so its list swapped in one cut while the
+   page was still scrolling.
+
+   So the card's contents are frozen from the moment a push is on its way: a
+   photograph of them sits in a window laid over the card (inside its 1px
+   frame, its radius, its fill), and the real contents are hidden under it —
+   by a body class, because the guide is rebuilt with innerHTML and an inline
+   style would go with it. When the step pushes, the card pushes too: same
+   380ms, same curve, same direction, the new list sliding in over the old one
+   as it drifts 30% and darkens. The frame never moves — only what is in it. */
+let _smGuideFrz = null;
+function _smGuideCard() { return document.querySelector('#app-guide .guide-card'); }
+function _smGuideSnap(card, r) {
+  const k = card.cloneNode(true);
+  k.removeAttribute('id'); k.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+  const bl = card.clientLeft, bt = card.clientTop;
+  Object.assign(k.style, { position: 'absolute', left: -bl + 'px', top: -bt + 'px', width: r.width + 'px', height: r.height + 'px',
+    margin: '0', boxSizing: 'border-box', borderColor: 'transparent', transition: 'none', animation: 'none', transform: 'none', opacity: '1' });
+  k.querySelectorAll('*').forEach(e => { e.style.transition = 'none'; e.style.animation = 'none'; });
+  const box = document.createElement('div');
+  Object.assign(box.style, { position: 'absolute', inset: '0' });
+  box.appendChild(k);
+  // Every scroller in it, not just the card — the task list scrolls on its own.
+  const scrolls = card.scrollTop ? [[k, -1, card.scrollTop]] : [];
+  [...card.querySelectorAll('*')].forEach((e, i) => { if (e.scrollTop) scrolls.push([k, i, e.scrollTop]); });
+  box._scrolls = scrolls;
+  return box;
+}
+/* Inside #app-guide, not over it: the card's rules are scoped under
+   `#submit-overlay .sm-rail .app-guide`, so a photograph hung anywhere else
+   is styled as some other card (the hidden tip line grew 228px tall in one).
+   The guide is rebuilt with innerHTML, which takes the window with it — so it
+   is put straight back, before the frame paints, by an observer. */
+function _smGuideBox(g, card) {
+  const gr = g.getBoundingClientRect(), r = card.getBoundingClientRect();
+  return { left: (r.left - gr.left - g.clientLeft + card.clientLeft) + 'px', top: (r.top - gr.top - g.clientTop + card.clientTop) + 'px',
+           width: card.clientWidth + 'px', height: card.clientHeight + 'px' };
+}
+function _smGuideFreeze() {
+  if (!_smIosArm()) return;
+  if (_smGuideFrz) { clearTimeout(_smGuideFrz.safety); _smGuideFrz.safety = setTimeout(_smGuideThaw, 3000); return; }
+  const g = document.getElementById('app-guide'), card = _smGuideCard(); if (!g || !card) return;
+  const r = card.getBoundingClientRect(); if (!r.width || !r.height) return;
+  const cs = getComputedStyle(card);
+  const win = document.createElement('div');
+  win.className = 'sm-guide-window'; win.setAttribute('aria-hidden', 'true');
+  Object.assign(win.style, _smGuideBox(g, card), { position: 'absolute', overflow: 'hidden', zIndex: '3',
+    borderRadius: Math.max(0, parseFloat(cs.borderTopLeftRadius) - card.clientLeft) + 'px', background: cs.backgroundColor, pointerEvents: 'none' });
+  const box = _smGuideSnap(card, r);
+  win.appendChild(box);
+  g.appendChild(win);
+  _smIosRestoreScroll(box);
+  document.body.classList.add('sm-guide-frozen');
+  const mo = new MutationObserver(() => {
+    const gg = document.getElementById('app-guide');
+    if (gg && win.parentNode !== gg) gg.appendChild(win);
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+  _smGuideFrz = { win, box, mo, safety: setTimeout(_smGuideThaw, 3000) };
+}
+function _smGuideThaw() {
+  const f = _smGuideFrz; _smGuideFrz = null;
+  if (f) { clearTimeout(f.safety); f.mo.disconnect(); f.win.remove(); }
+  document.body.classList.remove('sm-guide-frozen');
+}
+function _smGuidePlay(back) {
+  const f = _smGuideFrz; if (!f) return;
+  clearTimeout(f.safety);
+  const g = document.getElementById('app-guide'), card = _smGuideCard();
+  if (!g || !card) return _smGuideThaw();
+  if (f.win.parentNode !== g) g.appendChild(f.win);
+  const r = card.getBoundingClientRect();
+  const newBox = _smGuideSnap(card, r);
+  const oldBox = f.box, win = f.win;
+  /* The card can change height with its list; the window follows it. */
+  const W = card.clientWidth;
+  const from = { left: win.style.left, top: win.style.top, width: win.style.width, height: win.style.height };
+  const to = _smGuideBox(g, card);
+  Object.assign(win.style, to);
+  if (back) win.insertBefore(newBox, oldBox); else win.appendChild(newBox);
+  _smIosRestoreScroll(newBox);
+  const d = Math.round(W * 0.3);
+  const o = { duration: SM_IOS_MS, easing: SM_IOS_EASE, fill: 'both' };
+  const anims = [win.animate([from, to], o)].concat(back
+    ? [oldBox.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${W}px)` }], o),
+       newBox.animate([{ transform: `translateX(${-d}px)`, filter: 'brightness(.6)' }, { transform: 'translateX(0)', filter: 'brightness(1)' }], o)]
+    : [newBox.animate([{ transform: `translateX(${W}px)` }, { transform: 'translateX(0)' }], o),
+       oldBox.animate([{ transform: 'translateX(0)', filter: 'brightness(1)' }, { transform: `translateX(${-d}px)`, filter: 'brightness(.6)' }], o)]);
+  let over = false;
+  const done = () => { if (over) return; over = true; if (_smGuideFrz === f) _smGuideThaw(); };
+  Promise.all(anims.map(a => a.finished.catch(() => {}))).then(done);
+  setTimeout(done, SM_IOS_MS + 400);
+}
+/* A page sub-section opened straight from the page re-renders the guide on
+   its way to the exit too, so it freezes on the call, not on the exit. */
+(() => {
+  const orig = window.openStorePreviewSection;
+  if (typeof orig !== 'function') return;
+  window.openStorePreviewSection = function () {
+    const ov = document.getElementById('submit-overlay');
+    if (ov && !ov.classList.contains('hidden')) _smGuideFreeze();
+    return orig.apply(this, arguments);
+  };
+})();
+
 if (typeof MutationObserver === 'function') {
   new MutationObserver(muts => {
     for (const mu of muts) {
@@ -31778,9 +31890,11 @@ if (typeof MutationObserver === 'function') {
         const pre = _smIosPre && performance.now() - _smIosPre.t < 1500 ? _smIosPre.box : null;
         _smIosPre = null;
         _smIosGhost = { box: pre || _smIosSnap(m), back: document.body.classList.contains('sm-nav-back'), t: performance.now() };
+        _smGuideFreeze();
       } else if (m.classList.contains('is-flip-enter') && !/\bis-flip-enter\b/.test(was) && _smIosGhost) {
         const { box, back, t } = _smIosGhost; _smIosGhost = null;
         if (performance.now() - t < 2500) _smIosPlay(m, box, back || document.body.classList.contains('sm-nav-back'));
+        else _smGuideThaw();
       }
     }
   }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], attributeOldValue: true, subtree: true });
@@ -31815,6 +31929,7 @@ if (typeof MutationObserver === 'function') {
                 && !document.getElementById('submit-modal')?.classList.contains('is-flip-exit')
                 && _smIosArm();
     if (!change) return orig.apply(this, arguments);
+    _smGuideFreeze();
     if (typeof _smNavDir === 'function') _smNavDir(stepId === 'storePreview');
     const m = document.getElementById('submit-modal');
     if (m) { m.classList.add('is-flip-exit'); await new Promise(r => setTimeout(r, 160)); m.classList.remove('is-flip-exit'); }
